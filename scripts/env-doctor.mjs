@@ -24,6 +24,11 @@ export const contracts = {
       production: [
         'NEXT_PUBLIC_APP_URL',
         'NEXT_PUBLIC_API_URL',
+        // Unset, artifacts silently fall back to a same-page srcDoc frame. The
+        // fallback is not unsafe (it drops allow-same-origin), but the isolation
+        // the trust and security pages describe is the cross-origin renderer, so
+        // a production environment without this origin has to be visible drift.
+        'NEXT_PUBLIC_SANDBOX_ORIGIN',
         'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
         'CLERK_SECRET_KEY',
         'STRIPE_SECRET_KEY',
@@ -62,6 +67,10 @@ export const contracts = {
       development: [['DATABASE_URL', 'AGI_DATABASE_URL']],
     },
     productionForbiddenKeys: ['ACCOUNT_STATUS_FAIL_OPEN'],
+    productionForbiddenValues: {
+      AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY: ['fail-open'],
+      AGI_DURABLE_INITIAL_TURNS: ['0', 'false', 'off'],
+    },
     // or reached through an exported constant (`E2B_COMPUTE_RATE_ENV`). Pinning
     documentedKeys: [
       'AGI_SUPPORT_FROM_EMAIL',
@@ -78,6 +87,7 @@ export const contracts = {
       'AGI_MANAGED_COMPUTE_PRIVATE_BETA',
       'AGI_WEB_MCP_PRIVATE_BETA',
       'ACCOUNT_STATUS_FAIL_OPEN',
+      'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
       'PAGER_WEBHOOK_URL',
     ],
     urlKeys: ['NEXT_PUBLIC_APP_URL', 'NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_SANDBOX_ORIGIN'],
@@ -130,25 +140,6 @@ export const contracts = {
     required: { production: [], development: [] },
     documentedKeys: ['AGI_PLUGIN_REGISTRY_URL'],
     urlKeys: ['AGIWORKFORCE_API_BASE', 'AGI_API_URL', 'AGI_AUTH_BASE'],
-  },
-  gateway: {
-    productionExample: 'services/api-gateway/.env.example',
-    developmentExample: 'services/api-gateway/.env.example',
-    required: {
-      production: [
-        'JWT_SECRET',
-        'CLERK_SECRET_KEY',
-        'SIGNALING_HTTP_URL',
-        'SIGNALING_INTERNAL_SECRET',
-        'RATE_LIMIT_REDIS_URL',
-      ],
-      development: ['JWT_SECRET', 'CLERK_SECRET_KEY', 'SIGNALING_INTERNAL_SECRET'],
-    },
-    requiredGroups: {
-      production: [['NEON_DATABASE_URL', 'DATABASE_URL']],
-      development: [['NEON_DATABASE_URL', 'DATABASE_URL']],
-    },
-    urlKeys: ['SIGNALING_HTTP_URL', 'RATE_LIMIT_REDIS_URL'],
   },
   signaling: {
     productionExample: 'services/signaling-server/.env.example',
@@ -210,7 +201,6 @@ const sourceScans = [
 const staleExampleKeys = new Map([
   ['apps/desktop/.env.example', new Set(['VITE_SIGNALING_URL', 'VITE_SIGNALING_HTTP_URL'])],
   ['apps/desktop/.env.local.example', new Set(['VITE_SIGNALING_URL', 'VITE_SIGNALING_HTTP_URL'])],
-  ['services/api-gateway/.env.example', new Set(['UPSTASH_REDIS_REST_URL'])],
 ]);
 
 function isSet(env, name) {
@@ -419,6 +409,14 @@ function validateScope(scope, mode, env) {
         errors.push(`${name} is a security escape hatch and must not be enabled in production`);
       }
     }
+    for (const [name, values] of Object.entries(contract.productionForbiddenValues ?? {})) {
+      const configured = env[name]?.trim().toLowerCase();
+      if (configured && values.includes(configured)) {
+        errors.push(
+          `${name}=${configured} disables a production safety default and must not be set in production`,
+        );
+      }
+    }
   }
 
   if (scope === 'web') {
@@ -466,12 +464,6 @@ function validateScope(scope, mode, env) {
   if (scope === 'extension' && mode === 'production') {
     if (isSet(env, 'CLERK_PUBLISHABLE_KEY') && !env.CLERK_PUBLISHABLE_KEY.startsWith('pk_live_')) {
       errors.push('CLERK_PUBLISHABLE_KEY must be a live key in production');
-    }
-  }
-
-  if (scope === 'gateway' && isSet(env, 'RATE_LIMIT_REDIS_URL')) {
-    if (!/^rediss?:\/\//.test(env.RATE_LIMIT_REDIS_URL)) {
-      errors.push('RATE_LIMIT_REDIS_URL must be an ioredis-compatible redis:// or rediss:// URL');
     }
   }
 

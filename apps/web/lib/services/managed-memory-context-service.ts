@@ -1,7 +1,7 @@
-
 import { createHash } from 'node:crypto';
 import { classifyMemoryCategory, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
+import { withSpan } from '@/lib/observability/span';
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 
 export interface ManagedMemoryContextDb {
@@ -92,6 +92,42 @@ export async function loadMemoryExclusions(
   return normalizeMemoryExclusions(memory['excludedTerms']);
 }
 
+export const MEMORY_SOURCES = ['mobile', 'desktop', 'web', 'auto'] as const;
+
+export type MemorySource = (typeof MEMORY_SOURCES)[number];
+
+export const AUTO_MEMORY_SOURCE: MemorySource = 'auto';
+
+export function normalizeSuppressedMemorySources(value: unknown): MemorySource[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<MemorySource>();
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    const source = entry.trim().toLowerCase();
+    const known = MEMORY_SOURCES.find((candidate) => candidate === source);
+    if (known) seen.add(known);
+  }
+  return [...seen];
+}
+
+export async function loadSuppressedMemorySources(
+  db: ManagedMemoryContextDb,
+  params: { userId: string },
+): Promise<MemorySource[]> {
+  const [row] = await db.query<{ memory: unknown }>(
+    `select coalesce(settings -> 'memory', '{}'::jsonb) as memory
+       from user_settings
+      where user_id = $1
+      limit 1`,
+    [params.userId],
+  );
+  const memory =
+    row?.memory && typeof row.memory === 'object' && !Array.isArray(row.memory)
+      ? (row.memory as Record<string, unknown>)
+      : {};
+  return normalizeSuppressedMemorySources(memory['suppressedSources']);
+}
+
 export function isMemoryExcluded(content: string, exclusions: readonly string[]): boolean {
   if (exclusions.length === 0) return false;
   const haystack = content.toLowerCase();
@@ -100,24 +136,35 @@ export function isMemoryExcluded(content: string, exclusions: readonly string[])
 
 export async function loadManagedMemoryContext(
   db: ManagedMemoryContextDb,
-  params: { userId: string },
+  params: { userId: string; suppressedSources?: readonly MemorySource[] },
 ): Promise<ManagedMemoryContextItem[]> {
-  const rows = await db.query<{
-    content: string;
-    category: string | null;
-    pinned: boolean;
-  }>(
-    `select content,
+  return withSpan(
+    'memory.context.load',
+    { domain: 'retrieval', attributes: { 'retrieval.source': 'user_memories' } },
+    async (span) => {
+      const suppressed = normalizeSuppressedMemorySources(params.suppressedSources ?? []);
+      const sourceFilter = suppressed.length
+        ? "and coalesce(source, 'web') <> all($2::text[])"
+        : '';
+      const rows = await db.query<{
+        content: string;
+        category: string | null;
+        pinned: boolean;
+      }>(
+        `select content,
             category,
             coalesce((to_jsonb(user_memories)->>'pinned')::boolean, false) as pinned
        from user_memories
-      where user_id = $1 and is_deleted = false
+      where user_id = $1 and is_deleted = false ${sourceFilter}
       order by pinned desc, updated_at desc
       limit ${MAX_MEMORIES}`,
-    [params.userId],
-  );
+        suppressed.length ? [params.userId, suppressed] : [params.userId],
+      );
 
-  return rows;
+      span.setAttributes({ 'retrieval.result_count': rows.length });
+      return rows;
+    },
+  );
 }
 
 export function formatManagedMemorySystemPrompt(
@@ -178,7 +225,25 @@ export async function persistManagedAutoMemoryFacts(
   const extracted = params.candidates.length;
   if (extracted === 0) return { extracted: 0, inserted: 0, excluded: 0 };
 
-  const exclusions = await loadMemoryExclusions(db, { userId: params.userId });
+  const [row] = await db.query<{ memory: unknown }>(
+    `select coalesce(settings -> 'memory', '{}'::jsonb) as memory
+       from user_settings
+      where user_id = $1
+      limit 1`,
+    [params.userId],
+  );
+  const memorySettings =
+    row?.memory && typeof row.memory === 'object' && !Array.isArray(row.memory)
+      ? (row.memory as Record<string, unknown>)
+      : {};
+  const exclusions = normalizeMemoryExclusions(memorySettings['excludedTerms']);
+  if (
+    normalizeSuppressedMemorySources(memorySettings['suppressedSources']).includes(
+      AUTO_MEMORY_SOURCE,
+    )
+  ) {
+    return { extracted, inserted: 0, excluded: extracted };
+  }
 
   const seen = new Set<string>();
   const batch: Array<{

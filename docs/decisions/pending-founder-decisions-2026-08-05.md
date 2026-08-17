@@ -54,9 +54,11 @@ recommendation and what it unblocks. Nothing here was faked past.
    connector-bound artifact polling every N minutes has an ongoing cost profile
    unlike any existing feature). NOTE: script execution already shipped (Aug 1
    sandbox origin); CAP-050 is _auto-refresh-from-connector_, a narrower build.
-10. **#13 AI-powered artifacts — go/no-go.** Its security precondition cited a
-    non-existent "WEB-13" finding, so the required review was **authored + adversarially
-    red-teamed** (`docs/design/cap-052-artifact-runtime-bridge-security-review-2026-08-05.md`).
+10. **#13 AI-powered artifacts — go/no-go.** Its security precondition is WEB-13,
+    the 2026-05-19 `apps/web` iframe-sandbox-escape finding, so the required review was
+    **authored + adversarially red-teamed**
+    (`docs/design/cap-052-artifact-runtime-bridge-security-review-2026-08-05.md`, §0 and §4
+    condition 5).
     Verdict: **NO-GO as currently designed; GO-WITH-CONDITIONS after fixes.** The
     red-team (§5) found a high-severity billing-attribution error — the natural
     bridge bills the artifact _publisher_, enabling an anonymous wallet-DoS on a

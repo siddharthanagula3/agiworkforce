@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -56,6 +55,7 @@ describe('Device Poll API', () => {
   const basePendingRow = {
     device_id: 'device-123',
     device_fingerprint: 'abc123def456',
+    user_code: 'A1B2C3D4E5F60718',
     status: 'pending',
     user_id: null,
     expires_at: new Date(Date.now() + 60000).toISOString(),
@@ -65,6 +65,7 @@ describe('Device Poll API', () => {
   const baseApprovedRow = {
     device_id: 'device-123',
     device_fingerprint: 'abc123def456',
+    user_code: 'A1B2C3D4E5F60718',
     status: 'approved',
     user_id: 'user-456',
     expires_at: new Date(Date.now() + 60000).toISOString(),
@@ -201,6 +202,28 @@ describe('Device Poll API', () => {
         const data = await response.json();
         expect(data.error).toBe('Not found');
         expect(data.status).toBeUndefined();
+      });
+
+      it('refuses to consume a CLI device-code row parked on the shared table', async () => {
+        mockNeonQuery.mockResolvedValueOnce([
+          {
+            ...baseApprovedRow,
+            device_fingerprint: null,
+            user_code: 'ABCD-2345',
+          },
+        ]);
+
+        const request = new NextRequest('http://localhost/api/device/poll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validRequest),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(404);
+        await expect(response.json()).resolves.toEqual({ error: 'Not found' });
+        expect(mockNeonExecute).not.toHaveBeenCalled();
+        expect(mockNeonQuery).toHaveBeenCalledTimes(1);
       });
     });
   });

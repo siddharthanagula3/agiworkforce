@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ContentBlock, ProviderMessage } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { withSpan } from '@/lib/observability/span';
 import { CLOUD_CODE_RUN_COMMAND_TOOL } from './cloud-code-agent-tools';
 import { truncateToolOutput } from './cloud-code-agent-loop';
 import {
@@ -162,7 +163,23 @@ export interface DecideCloudCodeAgentApprovalInput {
   signal: AbortSignal;
 }
 
-export async function decideCloudCodeAgentApproval(
+export function decideCloudCodeAgentApproval(
+  input: DecideCloudCodeAgentApprovalInput,
+): Promise<CloudCodeAgentTurnRecord> {
+  return withSpan(
+    'approval.decide',
+    {
+      domain: 'approval',
+      attributes: {
+        'approval.decision': input.decision,
+        'approval.step_index': input.stepIndex,
+      },
+    },
+    () => resolveCloudCodeAgentApproval(input),
+  );
+}
+
+async function resolveCloudCodeAgentApproval(
   input: DecideCloudCodeAgentApprovalInput,
 ): Promise<CloudCodeAgentTurnRecord> {
   const { db, owner, sessionId, decision, planTier } = input;

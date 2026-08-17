@@ -47,7 +47,6 @@ vi.mock('react-i18next', () => ({
         'capModal.subtitle': 'Switch model or wait for reset.',
         'capModal.dismiss': 'Dismiss',
         'capModal.switchModel': 'Switch model',
-        'capModal.buyTopUp': 'Buy top-up',
         'capModal.waitReset': 'Wait for reset',
       };
       return labels[key] ?? key;

@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify';
+import { closeUnterminatedCodeFence } from '@agiworkforce/utils/markdown-source';
 
 let domPurifyHookInstalled = false;
 
@@ -85,9 +86,12 @@ export function sanitizeHtml(dirty: string): string {
 }
 
 export function renderMarkdown(text: string): string {
-  let html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let html = closeUnterminatedCodeFence(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, _lang, code: string) => {
+  html = html.replace(/```([^\n]*)\n?([\s\S]*?)```/g, (_m, _info, code: string) => {
     return `<pre><code>${code.trimEnd()}</code></pre>`;
   });
 
@@ -118,17 +122,9 @@ export function renderMarkdown(text: string): string {
     (_match: string, text: string, url: string) => {
       const rawUrl = url.trim();
       const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
-      const encodedHref = safeUrl
-        .replace(/"/g, '%22')
-        .replace(/'/g, '%27')
-        .replace(/</g, '%3C')
-        .replace(/>/g, '%3E');
-      const encodedText = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+      // & < > are already entity-escaped by the first pass; only quotes can still break the attribute.
+      const encodedHref = safeUrl.replace(/"/g, '%22').replace(/'/g, '%27');
+      const encodedText = text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
       return `<a href="${encodedHref}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
     },
   );

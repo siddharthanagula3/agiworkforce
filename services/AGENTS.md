@@ -8,7 +8,9 @@ Read root `AGENTS.md`, then this file, then the service README closest to the co
 
 ## Scope
 
-`services/` owns API gateway, signaling, and future managed/private compute services.
+`services/` owns signaling and future managed/private compute services. The
+Express API gateway was deleted on 2026-08-17; its LLM proxy, auth, and rate
+limiting now live in `apps/web/app/api/**`.
 
 ## Lane Contract
 
@@ -32,6 +34,5 @@ Read root `AGENTS.md`, then this file, then the service README closest to the co
 
 ## Verification
 
-- API gateway: `pnpm --filter @agiworkforce/api-gateway test`
 - Signaling: `pnpm --filter @agiworkforce/signaling-server test`
 - Boundary changes: `pnpm check:boundaries`

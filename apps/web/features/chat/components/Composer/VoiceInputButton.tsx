@@ -174,7 +174,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
 
       {/* Timer badge while listening */}
       {isListening && (
-        <span className="absolute -top-1.5 -right-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm">
+        <span className="absolute -top-1.5 -right-1 rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm">
           {formatTimer(elapsedSeconds)}
         </span>
       )}

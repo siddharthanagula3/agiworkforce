@@ -4,7 +4,7 @@
     "managed-cloud/gateway": {
       "provider": "managed_cloud",
       "apiFamily": "managed_gateway",
-      "adapter": "services/api-gateway",
+      "adapter": "apps/web/app/api/llm",
       "trustModes": ["managed_cloud"],
       "features": {
         "webSearch": {
@@ -288,7 +288,8 @@
       "google/media",
       "runway/media",
       "open_router/media"
-    ]
+    ],
+    "local-text": ["ollama/chat", "lmstudio/chat-completions"]
   },
   "runtimeProfiles": {
     "web/cloud-chat": {
@@ -355,7 +356,7 @@
       "executionMode": "local",
       "trustMode": "local",
       "status": "partial",
-      "allowedHarnessGroups": []
+      "allowedHarnessGroups": ["local-text"]
     },
     "mobile/cloud-chat": {
       "family": "consumer",

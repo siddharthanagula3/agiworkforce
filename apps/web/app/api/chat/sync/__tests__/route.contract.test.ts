@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   ChatSyncPullResponseSchema,
@@ -172,6 +171,34 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
 
     expect(res.status).toBe(400);
     expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('issues the three delta pulls concurrently, not one round trip after another', async () => {
+    let inFlight = 0;
+    let peakInFlight = 0;
+    const rowsFor = (sql: string) => {
+      if (sql.includes('from web_conversations')) return [conversationRow];
+      if (sql.includes('from web_messages')) return [messageRow];
+      return [artifactRow];
+    };
+
+    mockQuery.mockImplementation(async (sql: string) => {
+      inFlight += 1;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return rowsFor(sql);
+    });
+
+    const res = await GET(makeGet());
+
+    expect(res.status).toBe(200);
+    expect(mockQuery).toHaveBeenCalledTimes(3);
+    expect(peakInFlight).toBe(3);
+
+    const parsed = ChatSyncPullResponseSchema.safeParse(await res.json());
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.cursor).toBe('44');
   });
 });
 

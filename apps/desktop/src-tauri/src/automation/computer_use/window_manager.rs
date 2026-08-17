@@ -690,11 +690,12 @@ impl WindowCoordinator {
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
             .unwrap_or_default();
 
-        // bundle_id stays None on Linux — no reliable cross-DE bundle-id source.
+        // No cross-DE bundle-id source on Linux; the process name is the matching
+        // key the permission gate and the refuse-list are checked against.
         Some(ActiveWindow {
+            bundle_id: Some(app_name.to_lowercase()),
             app_name,
             window_title,
-            bundle_id: None,
         })
     }
 

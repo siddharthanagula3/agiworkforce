@@ -52,6 +52,26 @@ const MINIMAL_EFFORT_MODEL = requireModel(
   (model) => model.reasoning?.supportedEfforts?.includes('minimal') === true,
 );
 
+const EFFORT_LADDER = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+const TIER_CLAMP_MODEL = requireModel(
+  'reasoning model whose catalog ladder rises above its default effort',
+  (model) => {
+    const reasoning = model.reasoning;
+    const request = reasoning?.request;
+    if (!reasoning?.defaultEffort) return false;
+    if (!request?.effortPath && !request?.responsesEffortPath) return false;
+    if (model.provider === 'openai') return false;
+    const defaultRank = EFFORT_LADDER.indexOf(reasoning.defaultEffort);
+    return (reasoning.supportedEfforts ?? []).some(
+      (effort) => EFFORT_LADDER.indexOf(effort) > defaultRank,
+    );
+  },
+);
+const TIER_CLAMP_DEFAULT_EFFORT = TIER_CLAMP_MODEL.reasoning!.defaultEffort!;
+const TIER_CLAMP_TOP_EFFORT = [...(TIER_CLAMP_MODEL.reasoning!.supportedEfforts ?? [])].sort(
+  (a, b) => EFFORT_LADDER.indexOf(a) - EFFORT_LADDER.indexOf(b),
+)[(TIER_CLAMP_MODEL.reasoning!.supportedEfforts ?? []).length - 1]!;
+
 describe('anthropicUsesAdaptiveThinking (control-driven)', () => {
   it('returns adaptive for the first catalog-backed effort-level model', () => {
     expect(anthropicUsesAdaptiveThinking(PRIMARY_ADAPTIVE_MODEL.id)).toBe(true);
@@ -137,25 +157,78 @@ describe('buildThinkingConfig (Anthropic)', () => {
 
 describe('resolveRequestEffort (catalog-driven)', () => {
   it('preserves max for an OpenAI model whose registry entry supports it', () => {
-    expect(resolveRequestEffort('openai', MAX_EFFORT_MODEL.id, 'max')).toBe('max');
+    expect(resolveRequestEffort('openai', MAX_EFFORT_MODEL.id, 'max', 'pro')).toBe('max');
   });
 
   it('drops an effort for a model without a registry entry (fail closed)', () => {
-    expect(resolveRequestEffort('openai', 'unregistered-openai-model', 'max')).toBeUndefined();
+    expect(
+      resolveRequestEffort('openai', 'unregistered-openai-model', 'max', 'pro'),
+    ).toBeUndefined();
   });
 
   it('does not attach reasoning effort to a catalog non-reasoning model', () => {
     expect(
-      resolveRequestEffort(NON_REASONING_MODEL.provider, NON_REASONING_MODEL.id, 'high'),
+      resolveRequestEffort(NON_REASONING_MODEL.provider, NON_REASONING_MODEL.id, 'high', 'pro'),
     ).toBeUndefined();
   });
 
   it('preserves provider-supported none and minimal effort values', () => {
-    expect(resolveRequestEffort(NONE_EFFORT_MODEL.provider, NONE_EFFORT_MODEL.id, 'none')).toBe(
-      'none',
-    );
     expect(
-      resolveRequestEffort(MINIMAL_EFFORT_MODEL.provider, MINIMAL_EFFORT_MODEL.id, 'minimal'),
+      resolveRequestEffort(NONE_EFFORT_MODEL.provider, NONE_EFFORT_MODEL.id, 'none', 'pro'),
+    ).toBe('none');
+    expect(
+      resolveRequestEffort(
+        MINIMAL_EFFORT_MODEL.provider,
+        MINIMAL_EFFORT_MODEL.id,
+        'minimal',
+        'pro',
+      ),
     ).toBe('minimal');
+  });
+});
+
+describe('resolveRequestEffort (entitlement clamp)', () => {
+  it('clamps a caller without manual model selection down to the model default', () => {
+    expect(
+      resolveRequestEffort(
+        TIER_CLAMP_MODEL.provider,
+        TIER_CLAMP_MODEL.id,
+        TIER_CLAMP_TOP_EFFORT,
+        'free',
+      ),
+    ).toBe(TIER_CLAMP_DEFAULT_EFFORT);
+  });
+
+  it('clamps an unknown or missing plan tier the same way as free', () => {
+    expect(
+      resolveRequestEffort(
+        TIER_CLAMP_MODEL.provider,
+        TIER_CLAMP_MODEL.id,
+        TIER_CLAMP_TOP_EFFORT,
+        null,
+      ),
+    ).toBe(TIER_CLAMP_DEFAULT_EFFORT);
+  });
+
+  it('leaves an entitled caller at the requested effort', () => {
+    expect(
+      resolveRequestEffort(
+        TIER_CLAMP_MODEL.provider,
+        TIER_CLAMP_MODEL.id,
+        TIER_CLAMP_TOP_EFFORT,
+        'pro',
+      ),
+    ).toBe(TIER_CLAMP_TOP_EFFORT);
+  });
+
+  it('never clamps an effort at or below the model default', () => {
+    expect(
+      resolveRequestEffort(
+        TIER_CLAMP_MODEL.provider,
+        TIER_CLAMP_MODEL.id,
+        TIER_CLAMP_DEFAULT_EFFORT,
+        'free',
+      ),
+    ).toBe(TIER_CLAMP_DEFAULT_EFFORT);
   });
 });

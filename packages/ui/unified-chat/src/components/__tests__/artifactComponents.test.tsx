@@ -276,6 +276,42 @@ describe('PresentationArtifact', () => {
   });
 });
 
+describe('panel-hosted artifact renderers size to their container, not the viewport', () => {
+  const viewportBreakpoint = /(?:^|\s)(?:sm|md|lg|xl|2xl):/;
+
+  function elementsWithViewportBreakpoints(root: HTMLElement): string[] {
+    return [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))]
+      .map((el) => el.getAttribute('class') ?? '')
+      .filter((className) => viewportBreakpoint.test(className));
+  }
+
+  it('sizes presentation slides against the deck container', () => {
+    const artifact = makeArtifact({
+      id: 'panel-presentation',
+      type: 'presentation',
+      content: '# Slide 1\nContent one\n---\n# Slide 2\nContent two',
+    });
+    const { container } = render(
+      <PresentationArtifact artifact={artifact} className="h-full rounded-none" />,
+    );
+    const deck = screen.getByTestId('presentation-artifact');
+
+    expect(elementsWithViewportBreakpoints(container as unknown as HTMLElement)).toEqual([]);
+    expect(deck.className).toContain('@container');
+  });
+
+  it('keeps spreadsheet artifacts free of viewport breakpoints', () => {
+    const artifact = makeArtifact({
+      id: 'panel-spreadsheet',
+      type: 'spreadsheet',
+      content: JSON.stringify([{ Name: 'Alice', Age: 30 }]),
+    });
+    const { container } = render(<SpreadsheetArtifact artifact={artifact} />);
+
+    expect(elementsWithViewportBreakpoints(container as unknown as HTMLElement)).toEqual([]);
+  });
+});
+
 describe('SpreadsheetArtifact', () => {
   const spreadsheetData = JSON.stringify([
     { Name: 'Alice', Age: 30, City: 'NY' },

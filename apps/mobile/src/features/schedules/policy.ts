@@ -12,10 +12,16 @@ export type MobileSupportedScheduleRecurrence =
 
 const MOBILE_SUPPORTED_RECURRENCE_SET = new Set<string>(MOBILE_SUPPORTED_SCHEDULE_RECURRENCES);
 
-export const CLOUD_SCHEDULE_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const CLOUD_SCHEDULE_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 
 export function describeCloudScheduleSweep(): { cadence: string; window: string } {
   const hours = CLOUD_SCHEDULE_SWEEP_INTERVAL_MS / (60 * 60 * 1000);
+  if (hours < 1) {
+    const minutes = CLOUD_SCHEDULE_SWEEP_INTERVAL_MS / (60 * 1000);
+    return minutes === 1
+      ? { cadence: 'once a minute', window: '1-minute' }
+      : { cadence: `every ${minutes} minutes`, window: `${minutes}-minute` };
+  }
   if (hours >= 24) {
     const days = hours / 24;
     return days === 1

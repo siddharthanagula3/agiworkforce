@@ -1,4 +1,3 @@
-
 import * as assert from 'assert';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -333,6 +332,13 @@ suite('AGI Workforce extension — smoke', () => {
         assert.ok(
           commands.includes('workbench.action.chat.open'),
           'pinned VS Code does not expose workbench.action.chat.open',
+        );
+        const resolvableModels = await vscode.lm.selectChatModels({});
+        assert.ok(
+          resolvableModels.length > 0,
+          'VS Code resolves a language model before it invokes any chat participant, so a clean profile with no ' +
+            'resolvable model fails the turn with "Language model unavailable" and never reaches @agi. The E2E ' +
+            'runner extension must register its stub language model provider.',
         );
         await vscode.workspace
           .getConfiguration('agiWorkforce')

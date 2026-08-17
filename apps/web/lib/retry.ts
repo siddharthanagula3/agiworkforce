@@ -1,10 +1,12 @@
-
-class AbortError extends Error {
-  constructor(message = 'Aborted') {
-    super(message);
-    this.name = 'AbortError';
-  }
-}
+import {
+  RetryStoppedError,
+  classifyRetryError,
+  computeRetryDelayMs,
+  runWithRetryPolicy,
+  type RetryBudget,
+  type RetryPolicy,
+  type RetryTelemetryEvent,
+} from '@agiworkforce/utils/retry-policy';
 
 export interface RetryOptions {
   maxRetries?: number;
@@ -14,8 +16,11 @@ export interface RetryOptions {
   jitter?: boolean;
   jitterFactor?: number;
   signal?: AbortSignal;
+  idempotent?: boolean;
+  budget?: RetryBudget;
   isRetryable?: (error: unknown, attempt: number) => boolean;
   onRetry?: (error: unknown, attempt: number, delayMs: number) => void;
+  onEvent?: (event: RetryTelemetryEvent) => void;
 }
 
 export interface RetryResult<T> {
@@ -26,16 +31,6 @@ export interface RetryResult<T> {
   totalDelayMs: number;
 }
 
-const DEFAULT_OPTIONS: Required<Omit<RetryOptions, 'signal' | 'onRetry'>> = {
-  maxRetries: 3,
-  initialDelayMs: 1000,
-  maxDelayMs: 30000,
-  backoffMultiplier: 2,
-  jitter: true,
-  jitterFactor: 0.25,
-  isRetryable: () => true,
-};
-
 export function calculateDelay(
   attempt: number,
   options: {
@@ -43,126 +38,68 @@ export function calculateDelay(
     maxDelayMs: number;
     backoffMultiplier: number;
     jitter: boolean;
-    jitterFactor: number;
   },
 ): number {
-  const baseDelay = options.initialDelayMs * Math.pow(options.backoffMultiplier, attempt - 1);
-
-  const cappedDelay = Math.min(baseDelay, options.maxDelayMs);
-
-  if (options.jitter) {
-    const jitterRange = cappedDelay * options.jitterFactor;
-
-    const jitter = (Math.random() - 0.5) * 2 * jitterRange;
-    return Math.max(0, Math.round(cappedDelay + jitter));
-  }
-
-  return Math.round(cappedDelay);
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new AbortError());
-      return;
-    }
-
-    const timer = setTimeout(resolve, ms);
-
-    if (signal) {
-      const abortHandler = () => {
-        clearTimeout(timer);
-        reject(new AbortError());
-      };
-      signal.addEventListener('abort', abortHandler, { once: true });
-    }
+  return computeRetryDelayMs(attempt, {
+    baseDelayMs: options.initialDelayMs,
+    maxDelayMs: options.maxDelayMs,
+    multiplier: options.backoffMultiplier,
+    jitter: options.jitter ? 'equal' : 'none',
   });
 }
 
 /**
- * Retry an async operation with exponential backoff
+ * Retry an async operation under the shared retry policy.
  *
- * @example
- * ```ts
- * const result = await retryWithBackoff(
- *   () => fetch('/api/data'),
- *   {
- *     maxRetries: 5,
- *     initialDelayMs: 500,
- *     isRetryable: (err) => err instanceof NetworkError,
- *     onRetry: (err, attempt) => console.log(`Retry ${attempt}...`),
- *   }
- * );
- * ```
+ * Never throws: the caller reads `success` and decides. `isRetryable` still
+ * decides first, so a caller that already classifies its own errors keeps that
+ * classification; everything else comes from the shared policy.
  */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   options: RetryOptions = {},
 ): Promise<RetryResult<T>> {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
-  let attempt = 0;
+  const maxRetries = options.maxRetries ?? 3;
   let totalDelayMs = 0;
-  let lastError: unknown;
+  let attempts = 0;
 
-  while (attempt <= opts.maxRetries) {
-    try {
-      if (opts.signal?.aborted) {
-        return {
-          success: false,
-          error: new AbortError(),
-          attempts: attempt,
-          totalDelayMs,
-        };
+  const policy: RetryPolicy = {
+    operation: 'web.retryWithBackoff',
+    maxAttempts: maxRetries + 1,
+    baseDelayMs: options.initialDelayMs ?? 1000,
+    maxDelayMs: options.maxDelayMs ?? 30000,
+    multiplier: options.backoffMultiplier ?? 2,
+    jitter: options.jitter === false ? 'none' : 'equal',
+    idempotent: options.idempotent ?? true,
+    classify: (error, attempt) => {
+      if (options.isRetryable && !options.isRetryable(error, attempt)) {
+        return { disposition: 'terminal', reason: 'caller_not_retryable' };
       }
-
-      const data = await fn();
-      return {
-        success: true,
-        data,
-        attempts: attempt + 1,
-        totalDelayMs,
-      };
-    } catch (error) {
-      lastError = error;
-      attempt++;
-
-      if (attempt > opts.maxRetries) {
-        break;
+      const shared = classifyRetryError(error);
+      if (shared.disposition === 'terminal' && shared.reason === 'unclassified') {
+        return { disposition: 'retry', reason: 'unclassified' };
       }
-
-      if (!opts.isRetryable(error, attempt)) {
-        break;
+      return shared;
+    },
+    onEvent: (event) => {
+      if (event.type === 'attempt') attempts = event.attempt;
+      if (event.type === 'scheduled') {
+        totalDelayMs += event.delayMs;
+        options.onRetry?.(event.error, event.attempt, event.delayMs);
       }
-
-      const delay = calculateDelay(attempt, {
-        initialDelayMs: opts.initialDelayMs,
-        maxDelayMs: opts.maxDelayMs,
-        backoffMultiplier: opts.backoffMultiplier,
-        jitter: opts.jitter,
-        jitterFactor: opts.jitterFactor,
-      });
-
-      totalDelayMs += delay;
-
-      opts.onRetry?.(error, attempt, delay);
-
-      try {
-        await sleep(delay, opts.signal);
-      } catch {
-        return {
-          success: false,
-          error: new AbortError(),
-          attempts: attempt,
-          totalDelayMs,
-        };
-      }
-    }
-  }
-
-  return {
-    success: false,
-    error: lastError,
-    attempts: attempt,
-    totalDelayMs,
+      options.onEvent?.(event);
+    },
   };
+  if (options.signal) policy.signal = options.signal;
+  if (options.budget) policy.budget = options.budget;
+
+  try {
+    const data = await runWithRetryPolicy(fn, policy);
+    return { success: true, data, attempts, totalDelayMs };
+  } catch (error) {
+    if (error instanceof RetryStoppedError) {
+      return { success: false, error: error.lastError, attempts, totalDelayMs };
+    }
+    return { success: false, error, attempts, totalDelayMs };
+  }
 }

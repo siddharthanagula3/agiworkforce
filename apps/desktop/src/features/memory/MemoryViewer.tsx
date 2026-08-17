@@ -4,38 +4,26 @@ import { ArrowDownAZ, ArrowUpDown, Brain, Clock, RefreshCw, Star } from 'lucide-
 import { Button } from '@/ui/Button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/Tabs';
 import { ScrollArea } from '@/ui/ScrollArea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Skeleton } from '@/ui/Skeleton';
 import { cn } from '@/lib/utils';
 import { useShallow } from 'zustand/react/shallow';
-import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
-import {
-  useMemoryStore,
-  selectPreferences,
-  selectFacts,
-  selectDecisions,
-  selectContextMemories,
-} from '@/stores/memoryStore';
+import type { MemoryEntry } from '@/stores/memoryStore';
+import { useMemoryStore } from '@/stores/memoryStore';
 
 import { MemoryCard } from './MemoryCard';
 import { MemorySearch, useMemorySearch } from './MemorySearch';
+import {
+  MEMORY_TAB_EMPTY_LABELS,
+  MEMORY_TAB_OPTIONS,
+  countMemoriesByCategory,
+  type MemoryTabValue,
+} from './categories';
 
 type SortOption = 'importance-desc' | 'importance-asc' | 'date-desc' | 'date-asc' | 'topic-asc';
-type TabValue = 'all' | MemoryCategory;
+type TabValue = MemoryTabValue;
 
-const TAB_OPTIONS: { value: TabValue; label: string; icon?: React.ReactNode }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'preference', label: 'Preferences' },
-  { value: 'fact', label: 'Facts' },
-  { value: 'decision', label: 'Decisions' },
-  { value: 'context', label: 'Context' },
-];
+const TAB_OPTIONS = MEMORY_TAB_OPTIONS;
 
 const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[] = [
   { value: 'importance-desc', label: 'Most Important', icon: <Star className="h-4 w-4" /> },
@@ -100,11 +88,6 @@ export const MemoryViewer = memo(function MemoryViewer({
     })),
   );
 
-  const preferences = useMemoryStore(selectPreferences);
-  const facts = useMemoryStore(selectFacts);
-  const decisions = useMemoryStore(selectDecisions);
-  const contextMemories = useMemoryStore(selectContextMemories);
-
   const { query, results, handleSearch, handleResults } = useMemorySearch();
 
   useEffect(() => {
@@ -117,16 +100,7 @@ export const MemoryViewer = memo(function MemoryViewer({
     return sortMemories(filtered, sortBy);
   }, [memories, results, query, activeTab, sortBy]);
 
-  const categoryCounts = useMemo(
-    () => ({
-      all: memories.length,
-      preference: preferences.length,
-      fact: facts.length,
-      decision: decisions.length,
-      context: contextMemories.length,
-    }),
-    [memories.length, preferences.length, facts.length, decisions.length, contextMemories.length],
-  );
+  const categoryCounts = useMemo(() => countMemoriesByCategory(memories), [memories]);
 
   const handleRefresh = useCallback(() => {
     loadAll();
@@ -261,13 +235,7 @@ function EmptyState({ query, category }: { query: string; category: TabValue }) 
     );
   }
 
-  const categoryLabels: Record<TabValue, string> = {
-    all: 'memories',
-    preference: 'preferences',
-    fact: 'facts',
-    decision: 'decisions',
-    context: 'context memories',
-  };
+  const categoryLabels = MEMORY_TAB_EMPTY_LABELS;
 
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">

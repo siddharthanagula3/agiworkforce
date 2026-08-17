@@ -1,4 +1,3 @@
-
 import { getExtensionTokensCssAuto } from './tokens';
 import { clearAuthToken, getAuthToken } from './features/cloud-bridge/freeTrialClient';
 import { isClerkExtensionAuthConfigured, openClerkSignIn } from './features/cloud-bridge/clerkAuth';
@@ -8,10 +7,22 @@ import {
   sanitizeApprovedSiteOrigins,
   selectApprovedSiteOrigin,
 } from './features/options/site-allowlist';
+import { createSitePermissionPolicySection } from './features/options/site-permission-policy';
+import { createDataHandlingSection } from './features/options/data-handling-section';
 import { SITE_ALLOWLIST_STORAGE_KEY } from './background/policy';
+import {
+  BROWSER_CONTROL_CONSENT_BODY,
+  BROWSER_CONTROL_CONSENT_HEADLINE,
+  grantBrowserControlConsent,
+  readBrowserControlConsent,
+  revokeBrowserControlConsent,
+} from './features/computer-use/browserControlConsent';
+import {
+  AUTOFILL_PROFILE_STORAGE_KEY as AUTOFILL_PROFILE_KEY,
+  clearAutofillProfile,
+} from './features/content/autofill/profile-storage';
 
 const API_KEY_STORAGE_KEY = 'agi_api_key';
-const AUTOFILL_PROFILE_KEY = 'agi_autofill_profile';
 const DEV_BEARER_KEY = 'agi_dev_bearer_token';
 
 function injectStyles(): void {
@@ -148,6 +159,22 @@ function injectStyles(): void {
     .opt-toggle:checked::after { transform: translateX(16px); }
     .opt-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
+    .opt-policy-select {
+      flex-shrink: 0;
+      max-width: 260px;
+      background: var(--agi-ext-bg);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--agi-ext-text);
+      font-family: inherit;
+      outline: none;
+    }
+
+    .opt-policy-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+    .opt-policy-select:disabled { opacity: 0.6; cursor: not-allowed; }
+
     /* Respect the OS "reduce motion" setting. Five infinite animations (typing
        dots, spinners, pulse states) plus smooth scrolling ran unconditionally,
        which is a vestibular-trigger risk and an accessibility failure. Motion is
@@ -224,6 +251,26 @@ function injectStyles(): void {
 
     .opt-allowlist-toggle-btn.remove:hover {
       background: color-mix(in srgb, var(--agi-ext-danger) 10%, transparent);
+    }
+
+    .opt-allowlist-consent {
+      border: 1px solid var(--agi-ext-danger-border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+
+    .opt-allowlist-consent-headline {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--agi-ext-danger);
+      margin-bottom: 4px;
+    }
+
+    .opt-allowlist-consent-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
     }
 
     .opt-allowlist-list {
@@ -879,6 +926,7 @@ function buildPage(): void {
   const nav = el('nav', { class: 'opt-nav' });
   const navItems: Array<{ label: string; target: string }> = [
     { label: 'Permissions', target: 'opt-permissions' },
+    { label: 'Privacy', target: 'opt-privacy' },
     { label: 'Account', target: 'opt-account' },
     { label: 'Preferences', target: 'opt-preferences' },
     { label: 'Shortcuts', target: 'opt-shortcuts' },
@@ -1017,18 +1065,24 @@ function buildPage(): void {
     el(
       'div',
       { class: 'opt-row-hint' },
-      'Computer use uses Chrome DevTools Protocol (CDP) only after you start a run on an approved site. Ask before acting is on by default in the side panel; the debugger attaches for one bounded action and detaches afterward. AGI does not expose an unrestricted CDP developer mode.',
+      'Computer use uses Chrome DevTools Protocol (CDP) only after you start a run on an approved site that you have separately granted full browser control, once, in the approved-sites list below. Ask before acting is on by default in the side panel; the debugger attaches for one bounded action and detaches afterward. AGI does not expose an unrestricted CDP developer mode.',
     ),
   );
   browserControlBoundary.appendChild(browserControlBoundaryText);
   permSection.appendChild(browserControlBoundary);
+
+  const sitePolicySection = createSitePermissionPolicySection({
+    get: (key) => chrome.storage.local.get(key),
+    set: (items) => chrome.storage.local.set(items),
+  });
+  permSection.appendChild(sitePolicySection.element);
 
   const allowlistBody = el('div', { class: 'opt-allowlist-body' });
   allowlistBody.appendChild(
     el(
       'p',
       { class: 'opt-allowlist-help' },
-      'Approved origins can run AGI browser automation in their tab. The optional page assistant can also send up to 30,000 characters of redacted visible page text from an approved origin to AGI Managed Cloud. Add the current site, then reload it.',
+      'Approving a site lets the optional page assistant send up to 30,000 characters of redacted visible page text from that origin to AGI Managed Cloud. Adding a site asks you to confirm full browser control for it once; computer use refuses to start on an origin you have not confirmed. Add the current site, then reload it.',
     ),
   );
 
@@ -1048,6 +1102,48 @@ function buildPage(): void {
   currentRow.appendChild(currentOriginLabel);
   currentRow.appendChild(addBtn);
   allowlistBody.appendChild(currentRow);
+
+  const consentPrompt = el('div', {
+    class: 'opt-allowlist-consent',
+    id: 'opt-browser-control-consent',
+    role: 'group',
+    'aria-labelledby': 'opt-browser-control-consent-headline',
+  });
+  consentPrompt.hidden = true;
+  consentPrompt.appendChild(
+    el(
+      'div',
+      {
+        class: 'opt-allowlist-consent-headline',
+        id: 'opt-browser-control-consent-headline',
+      },
+      BROWSER_CONTROL_CONSENT_HEADLINE,
+    ),
+  );
+  const consentOriginLine = el('div', { class: 'opt-allowlist-help' }, '');
+  consentPrompt.appendChild(consentOriginLine);
+  consentPrompt.appendChild(
+    el('div', { class: 'opt-allowlist-help' }, BROWSER_CONTROL_CONSENT_BODY),
+  );
+  const consentActions = el('div', { class: 'opt-allowlist-consent-actions' });
+  const consentGrantBtn = el(
+    'button',
+    { class: 'opt-allowlist-toggle-btn', id: 'opt-browser-control-grant-btn', type: 'button' },
+    'Grant full browser control',
+  ) as HTMLButtonElement;
+  const consentCancelBtn = el(
+    'button',
+    {
+      class: 'opt-allowlist-toggle-btn remove',
+      id: 'opt-browser-control-cancel-btn',
+      type: 'button',
+    },
+    'Cancel',
+  ) as HTMLButtonElement;
+  consentActions.appendChild(consentGrantBtn);
+  consentActions.appendChild(consentCancelBtn);
+  consentPrompt.appendChild(consentActions);
+  allowlistBody.appendChild(consentPrompt);
 
   const allowlistUl = el('ul', { class: 'opt-allowlist-list', id: 'opt-allowlist-list' });
   const allowlistEmpty = el(
@@ -1072,11 +1168,16 @@ function buildPage(): void {
 
   async function refreshAllowlist(): Promise<void> {
     const origins = await loadAllowlist();
+    const controlled = await readBrowserControlConsent();
     allowlistUl.replaceChildren();
     allowlistEmpty.hidden = origins.length > 0;
     for (const origin of origins) {
       const li = el('li', { class: 'opt-allowlist-item' });
-      const originSpan = el('span', { class: 'opt-allowlist-item-origin' }, origin);
+      const originSpan = el(
+        'span',
+        { class: 'opt-allowlist-item-origin' },
+        controlled.includes(origin) ? `${origin} — browser control granted` : origin,
+      );
       const removeBtn = el(
         'button',
         {
@@ -1092,8 +1193,9 @@ function buildPage(): void {
         try {
           const list = await loadAllowlist();
           await saveAllowlist(list.filter((o) => o !== origin));
+          await revokeBrowserControlConsent(origin);
           await refreshAllowlist();
-          setAllowlistStatus(`${origin} removed.`);
+          setAllowlistStatus(`${origin} removed. Browser control for it was revoked.`);
         } catch (error: unknown) {
           removeBtn.disabled = false;
           setAllowlistStatus(
@@ -1106,9 +1208,8 @@ function buildPage(): void {
       li.appendChild(removeBtn);
       allowlistUl.appendChild(li);
     }
-    const stored = await loadAllowlist();
     if (currentSiteOrigin) {
-      const isAdded = stored.includes(currentSiteOrigin);
+      const isAdded = origins.includes(currentSiteOrigin);
       addBtn.textContent = isAdded ? 'Remove' : 'Add';
       addBtn.className = isAdded ? 'opt-allowlist-toggle-btn remove' : 'opt-allowlist-toggle-btn';
       addBtn.disabled = false;
@@ -1139,22 +1240,58 @@ function buildPage(): void {
     });
   });
 
-  addBtn.addEventListener('click', async () => {
+  function closeConsentPrompt(): void {
+    consentPrompt.hidden = true;
+    consentGrantBtn.disabled = false;
+    addBtn.disabled = false;
+  }
+
+  consentCancelBtn.addEventListener('click', () => {
+    closeConsentPrompt();
+    setAllowlistStatus('Nothing was approved. Browser control was not granted.');
+  });
+
+  consentGrantBtn.addEventListener('click', async () => {
     const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
     if (!origin) return;
-    addBtn.disabled = true;
+    consentGrantBtn.disabled = true;
     setAllowlistStatus('Saving approved sites…');
     try {
       const list = await loadAllowlist();
-      const isAdded = list.includes(origin);
-      if (isAdded) {
-        await saveAllowlist(list.filter((o) => o !== origin));
-      } else {
-        list.push(origin);
-        await saveAllowlist(list);
-      }
+      if (!list.includes(origin)) list.push(origin);
+      await saveAllowlist(list);
+      await grantBrowserControlConsent(origin);
+      closeConsentPrompt();
       await refreshAllowlist();
-      setAllowlistStatus(isAdded ? `${origin} removed.` : `${origin} approved.`);
+      setAllowlistStatus(`${origin} approved with full browser control.`);
+    } catch (error: unknown) {
+      consentGrantBtn.disabled = false;
+      setAllowlistStatus(
+        error instanceof Error ? error.message : 'Could not update approved sites.',
+        true,
+      );
+    }
+  });
+
+  addBtn.addEventListener('click', async () => {
+    const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
+    if (!origin) return;
+    const list = await loadAllowlist();
+    if (!list.includes(origin)) {
+      consentOriginLine.textContent = origin;
+      consentPrompt.hidden = false;
+      addBtn.disabled = true;
+      setAllowlistStatus(`Confirm browser control for ${origin} to approve it.`);
+      consentGrantBtn.focus();
+      return;
+    }
+    addBtn.disabled = true;
+    setAllowlistStatus('Saving approved sites…');
+    try {
+      await saveAllowlist(list.filter((o) => o !== origin));
+      await revokeBrowserControlConsent(origin);
+      await refreshAllowlist();
+      setAllowlistStatus(`${origin} removed. Browser control for it was revoked.`);
     } catch (error: unknown) {
       addBtn.disabled = false;
       setAllowlistStatus(
@@ -1166,6 +1303,13 @@ function buildPage(): void {
 
   permSection.appendChild(allowlistBody);
   page.appendChild(permSection);
+
+  page.appendChild(
+    createDataHandlingSection({
+      get: (key) => chrome.storage.local.get(key),
+      set: (items) => chrome.storage.local.set(items),
+    }).element,
+  );
 
   const accountSection = el('section', { class: 'opt-section', id: 'opt-account' });
   const accountHeader = el('div', { class: 'opt-section-header' });
@@ -1236,7 +1380,11 @@ function buildPage(): void {
 
     accountLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Log out'));
     accountLeft.appendChild(
-      el('div', { class: 'opt-row-hint' }, 'Remove your AGI account session from this device.'),
+      el(
+        'div',
+        { class: 'opt-row-hint' },
+        'Remove your AGI account session and saved autofill profile from this device.',
+      ),
     );
     accountRow.appendChild(accountLeft);
 
@@ -1272,7 +1420,7 @@ function buildPage(): void {
     el(
       'div',
       { class: 'opt-row-hint', style: 'padding-top:4px' },
-      'Stored only on this device. Used by the deterministic fast-path filler and the AGI computer-use agent.',
+      'Stored only on this device. Used by the deterministic fast-path filler and the AGI computer-use agent. Deleted when you log out, or immediately with Delete profile.',
     ),
   );
   profileSection.appendChild(profileHeader);
@@ -1356,7 +1504,13 @@ function buildPage(): void {
     },
     '',
   );
+  const deleteProfileBtn = el(
+    'button',
+    { class: 'opt-btn-danger', id: 'opt-delete-profile-btn' },
+    'Delete profile',
+  ) as HTMLButtonElement;
   profileActions.appendChild(saveProfileBtn);
+  profileActions.appendChild(deleteProfileBtn);
   profileActions.appendChild(saveStatus);
   profileSection.appendChild(profileActions);
   let profileStatusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1403,6 +1557,35 @@ function buildPage(): void {
       saveStatus.className = 'opt-save-status error';
     } finally {
       saveProfileBtn.disabled = false;
+    }
+  });
+
+  deleteProfileBtn.addEventListener('click', async () => {
+    deleteProfileBtn.disabled = true;
+    if (profileStatusTimer !== null) {
+      clearTimeout(profileStatusTimer);
+      profileStatusTimer = null;
+    }
+    saveStatus.textContent = 'Deleting…';
+    saveStatus.className = 'opt-save-status';
+    try {
+      await clearAutofillProfile();
+      for (const field of PROFILE_FIELDS) {
+        const input = profileInputs[field.key];
+        if (input) input.value = '';
+      }
+      saveStatus.textContent = 'Deleted from this device';
+      saveStatus.className = 'opt-save-status saved';
+      profileStatusTimer = setTimeout(() => {
+        saveStatus.textContent = '';
+        saveStatus.className = 'opt-save-status';
+        profileStatusTimer = null;
+      }, 2000);
+    } catch {
+      saveStatus.textContent = 'Could not delete this profile. Please try again.';
+      saveStatus.className = 'opt-save-status error';
+    } finally {
+      deleteProfileBtn.disabled = false;
     }
   });
 

@@ -1,8 +1,9 @@
+import {
+  EMBEDDINGS_GENERATE_TIMEOUT_MS,
+  EMBEDDINGS_INDEX_TIMEOUT_MS,
+  EMBEDDINGS_TIMEOUT_MS,
+} from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
-
-const EMBEDDINGS_TIMEOUT_MS = 30000;
-const EMBEDDINGS_GENERATE_TIMEOUT_MS = 120000;
-const EMBEDDINGS_INDEX_TIMEOUT_MS = 600000;
 
 async function invokeWithTimeout<T>(
   command: string,

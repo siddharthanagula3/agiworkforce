@@ -9,8 +9,9 @@ import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import {
   deletePrivateObject,
-  getPrivateObject,
+  getBoundedPrivateObject,
   isPrivateObjectStorageConfigured,
+  StoredObjectTooLargeError,
 } from '@/lib/server/object-storage';
 import { scanUploadBytes } from '@/lib/security/upload-scan';
 import { matchDenylistedUpload, recordModerationEvent } from '@/lib/moderation';
@@ -99,7 +100,18 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const object = await getPrivateObject(storageKey);
+  let object: { data: Buffer; contentType: string | undefined } | null;
+  try {
+    object = await getBoundedPrivateObject(storageKey, byteCount);
+  } catch (error) {
+    if (!(error instanceof StoredObjectTooLargeError)) throw error;
+    logger.warn(
+      { userId, storageKey, byteCount, storedBytes: error.contentLength },
+      '[uploads] rejected an upload whose stored object exceeded its declared size',
+    );
+    await purgeRejectedUpload(userId, storageKey);
+    throw createError.validation('Uploaded file size does not match the selected file.');
+  }
   if (!object) throw createError.notFound('Uploaded file bytes were not found');
   if (object.data.byteLength !== byteCount) {
     throw createError.validation('Uploaded file size does not match the selected file.');

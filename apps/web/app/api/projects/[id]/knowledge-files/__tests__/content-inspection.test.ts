@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { NextRequest } from 'next/server';
@@ -36,8 +35,9 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 vi.mock('@/lib/server/object-storage', () => ({
-  getObject: vi.fn(),
-  getPrivateObject: mockGetPrivateObject,
+  getBoundedObject: vi.fn(),
+  getBoundedPrivateObject: mockGetPrivateObject,
+  StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
   deleteObject: mockDeleteObject,
   deletePrivateObject: mockDeletePrivateObject,
   isObjectStorageConfigured: () => true,

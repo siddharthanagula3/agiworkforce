@@ -1,6 +1,5 @@
-
 import type Anthropic from '@anthropic-ai/sdk';
-import type { StreamChunk } from '@agiworkforce/types';
+import type { StreamChunk, StreamChunkStop } from '@agiworkforce/types';
 
 type MessageStreamEvent = Anthropic.MessageStreamEvent;
 
@@ -12,7 +11,7 @@ void stopReasonMap;
 
 function mapStopReason(
   reason: Anthropic.Message['stop_reason'] | null | undefined,
-): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'refusal' | 'error' | 'cancel' {
+): StreamChunkStop['reason'] {
   switch (reason) {
     case 'end_turn':
       return 'end_turn';
@@ -25,6 +24,9 @@ function mapStopReason(
     case 'refusal':
       // Anthropic's streaming safety classifiers intervened mid-generation
       return 'refusal';
+    case 'pause_turn':
+      // A long-running server tool suspended a turn that is still resumable
+      return 'pause_turn';
     default:
       return 'end_turn';
   }

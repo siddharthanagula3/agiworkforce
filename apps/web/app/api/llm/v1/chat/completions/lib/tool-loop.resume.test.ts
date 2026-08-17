@@ -473,4 +473,75 @@ describe('runToolLoop — manual approval resume', () => {
     expect(output).toContain('The PR renames a function.');
     expect(output).toContain('data: [DONE]');
   });
+
+  it('steers the run with resume guidance, appended after every tool result', async () => {
+    const continuation = sseStreamFrom([
+      chunk({ content: 'Focusing on the migration file only.' }),
+      chunk({}, 'stop'),
+    ]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(continuation);
+
+    const connectorExecutor: ConnectorToolExecutor = vi.fn(async () => ({
+      handled: true,
+      content: 'diff --git a/x b/x',
+      isError: false,
+    }));
+
+    const output = await drain(
+      runToolLoop(makeResumeProcessed(), {
+        approvalMode: 'manual',
+        userId: 'user-1',
+        mcpTools: [githubToolDef],
+        connectorExecutor,
+        resume: {
+          approvals: [{ toolCallId: 'call_1', decision: 'approved' }],
+          guidance: '  Only review the migration file.  ',
+        },
+      }),
+    );
+
+    const contRequest = mockBuildToolLoopStream.mock.calls[0]?.[2] as {
+      messages: Array<{ role: string; content: string; tool_call_id?: string }>;
+    };
+    const roles = contRequest.messages.map((message) => message.role);
+    const lastMessage = contRequest.messages.at(-1);
+    expect(lastMessage).toEqual({ role: 'user', content: 'Only review the migration file.' });
+    expect(roles.lastIndexOf('tool')).toBeLessThan(roles.lastIndexOf('user'));
+
+    const guidanceEvent = agentEvents(output).find(
+      (entry) => entry.event.type === 'progress-update',
+    );
+    expect(guidanceEvent?.event).toMatchObject({
+      summary: 'Applied your guidance',
+      detail: 'Only review the migration file.',
+      status: 'completed',
+    });
+    expect(output).toContain('Focusing on the migration file only.');
+  });
+
+  it('leaves the resumed thread untouched when no guidance is supplied', async () => {
+    const continuation = sseStreamFrom([chunk({ content: 'done' }), chunk({}, 'stop')]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(continuation);
+
+    const connectorExecutor: ConnectorToolExecutor = vi.fn(async () => ({
+      handled: true,
+      content: 'diff --git a/x b/x',
+      isError: false,
+    }));
+
+    await drain(
+      runToolLoop(makeResumeProcessed(), {
+        approvalMode: 'manual',
+        userId: 'user-1',
+        mcpTools: [githubToolDef],
+        connectorExecutor,
+        resume: { approvals: [{ toolCallId: 'call_1', decision: 'approved' }] },
+      }),
+    );
+
+    const contRequest = mockBuildToolLoopStream.mock.calls[0]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(contRequest.messages.at(-1)?.role).toBe('tool');
+  });
 });

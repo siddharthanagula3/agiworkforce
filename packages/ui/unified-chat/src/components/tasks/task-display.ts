@@ -21,6 +21,16 @@ export function workModeLabel(mode: CloudAgentWorkMode): string {
   }
 }
 
+export function formatTaskCost(costCents: number): string {
+  return `$${(costCents / 100).toFixed(2)}`;
+}
+
+export function formatTaskTokens(tokens: number): string {
+  if (tokens < 1_000) return String(tokens);
+  if (tokens < 1_000_000) return `${(tokens / 1_000).toFixed(1)}K`;
+  return `${(tokens / 1_000_000).toFixed(2)}M`;
+}
+
 export function taskStateLabel(state: AgentTaskState): string {
   switch (state) {
     case 'queued':

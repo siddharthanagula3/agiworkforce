@@ -8,6 +8,15 @@
  * @packageDocumentation
  */
 
+import {
+  RetryStoppedError,
+  classifyRetryError,
+  runWithRetryPolicy,
+  type RetryBudget,
+  type RetryPolicy,
+  type RetryTelemetryEvent,
+} from './retryPolicy';
+
 /**
  * Sleep for a specified duration.
  *
@@ -173,6 +182,10 @@ export interface RetryOptions {
   abortOnErrorMessages?: string[];
   onRetry?: (attempt: number, error: Error) => void;
   shouldRetry?: (error: Error, attempt: number) => boolean;
+  idempotent?: boolean;
+  budget?: RetryBudget;
+  signal?: AbortSignal;
+  onEvent?: (event: RetryTelemetryEvent) => void;
 }
 
 export class RetryError extends Error {
@@ -187,44 +200,20 @@ export class RetryError extends Error {
   }
 }
 
-/**
- * Calculate delay for a retry attempt with exponential backoff.
- *
- * @param attempt - Current attempt number (0-indexed)
- * @param initialDelay - Initial delay in milliseconds
- * @param backoffMultiplier - Multiplier for each retry
- * @param maxDelay - Maximum delay cap
- * @returns Delay in milliseconds
- */
-function calculateDelay(
-  attempt: number,
-  initialDelay: number,
-  backoffMultiplier: number,
-  maxDelay: number,
-): number {
-  const delay = initialDelay * Math.pow(backoffMultiplier, attempt);
-  return Math.min(delay, maxDelay);
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
 }
 
 /**
- * Retry an async operation with exponential backoff.
+ * Retry an async operation using the shared retry policy.
  *
- * @param operation - Async function to retry
- * @param options - Retry configuration
- * @returns Result of the operation
- * @throws RetryError if all attempts fail
+ * Caller-supplied `shouldRetry` and `abortOnErrorMessages` still decide first,
+ * so the pre-policy contract is preserved. Everything the policy adds —
+ * jittered backoff, Retry-After, idempotency awareness, budget, cancellation
+ * and telemetry — applies to every caller without opting in.
  *
- * @example
- * ```typescript
- * const result = await retry(
- *   async () => fetch('/api/data').then(r => r.json()),
- *   {
- *     maxAttempts: 5,
- *     initialDelay: 500,
- *     onRetry: (attempt, error) => console.log(`Retry ${attempt}: ${error.message}`),
- *   }
- * );
- * ```
+ * @throws RetryError when every attempt fails, the caller's own error when the
+ *   caller classified it as terminal.
  */
 export async function retry<T>(
   operation: () => Promise<T>,
@@ -238,43 +227,59 @@ export async function retry<T>(
     abortOnErrorMessages = [],
     onRetry,
     shouldRetry,
+    idempotent = true,
+    budget,
+    signal,
+    onEvent,
   } = options;
 
-  let lastError: Error = new Error('Unknown error');
+  const callerRejected = new WeakSet<object>();
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-
-      if (abortOnErrorMessages.some((msg) => lastError.message.includes(msg))) {
-        throw lastError;
-      }
-
-      if (shouldRetry && !shouldRetry(lastError, attempt + 1)) {
-        throw lastError;
-      }
-
-      if (attempt === maxAttempts - 1) {
-        break;
-      }
-
-      const delay = calculateDelay(attempt, initialDelay, backoffMultiplier, maxDelay);
-
-      if (onRetry) {
-        onRetry(attempt + 1, lastError);
-      }
-
-      await sleep(delay);
-    }
-  }
-
-  throw new RetryError(
-    `Operation failed after ${maxAttempts} attempts: ${lastError.message}`,
+  const policy: RetryPolicy = {
+    operation: 'utils.retry',
     maxAttempts,
-    lastError,
-  );
+    baseDelayMs: initialDelay,
+    maxDelayMs: maxDelay,
+    multiplier: backoffMultiplier,
+    idempotent,
+    classify: (error, attempt) => {
+      const normalized = toError(error);
+      if (abortOnErrorMessages.some((message) => normalized.message.includes(message))) {
+        callerRejected.add(normalized);
+        return { disposition: 'terminal', reason: 'caller_abort_message' };
+      }
+      if (shouldRetry && !shouldRetry(normalized, attempt)) {
+        callerRejected.add(normalized);
+        return { disposition: 'terminal', reason: 'caller_should_not_retry' };
+      }
+      const shared = classifyRetryError(error);
+      // Legacy contract: an error the shared classifier cannot recognise is
+      // still retried, because callers rely on `shouldRetry` to narrow it.
+      if (shared.disposition === 'terminal' && shared.reason === 'unclassified') {
+        return { disposition: 'retry', reason: 'unclassified' };
+      }
+      return shared;
+    },
+    onEvent: (event) => {
+      if (event.type === 'scheduled') onRetry?.(event.attempt, toError(event.error));
+      onEvent?.(event);
+    },
+  };
+  if (budget) policy.budget = budget;
+  if (signal) policy.signal = signal;
+
+  try {
+    return await runWithRetryPolicy(operation, policy);
+  } catch (error) {
+    if (!(error instanceof RetryStoppedError)) throw error;
+    const cause = toError(error.lastError);
+    if (callerRejected.has(cause)) throw cause;
+    throw new RetryError(
+      `Operation failed after ${error.attempts} attempts: ${cause.message}`,
+      error.attempts,
+      cause,
+    );
+  }
 }
 
 export const retryStrategies = {

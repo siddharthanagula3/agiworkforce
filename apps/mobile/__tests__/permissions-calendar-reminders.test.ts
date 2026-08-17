@@ -21,7 +21,6 @@ jest.mock('expo-camera', () => ({
 
 jest.mock('expo-image-picker', () => ({}));
 jest.mock('expo-notifications', () => ({}));
-jest.mock('expo-contacts', () => ({}));
 
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);

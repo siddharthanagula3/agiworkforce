@@ -14,40 +14,20 @@ import {
 import { Input } from '@/ui/Input';
 import { Label } from '@/ui/Label';
 import { Textarea } from '@/ui/Textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Slider } from '@/ui/Slider';
 import { cn } from '@/lib/utils';
-import { useMemoryStore, type MemoryCategory } from '@/stores/memoryStore';
+import { MEMORY_CATEGORIES, useMemoryStore, type MemoryCategory } from '@/stores/memoryStore';
 import { toast } from 'sonner';
 
-const CATEGORY_OPTIONS: { value: MemoryCategory; label: string; description: string }[] = [
-  {
-    value: 'preference',
-    label: 'Preference',
-    description: 'User preferences and settings',
-  },
-  {
-    value: 'fact',
-    label: 'Fact',
-    description: 'Factual information about the user or project',
-  },
-  {
-    value: 'decision',
-    label: 'Decision',
-    description: 'Past decisions and their context',
-  },
-  {
-    value: 'context',
-    label: 'Context',
-    description: 'Contextual information for better understanding',
-  },
-];
+import { MEMORY_CATEGORY_PRESENTATION } from './categories';
+
+const CATEGORY_OPTIONS: { value: MemoryCategory; label: string; description: string }[] =
+  MEMORY_CATEGORIES.map((category) => ({
+    value: category,
+    label: MEMORY_CATEGORY_PRESENTATION[category].label,
+    description: MEMORY_CATEGORY_PRESENTATION[category].description,
+  }));
 
 export interface CreateMemoryDialogProps {
   trigger?: React.ReactNode;

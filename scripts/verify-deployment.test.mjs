@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { verifyDeployedCommit, verifyDeployment } from './verify-deployment.mjs';
+import {
+  apiHostUrlFor,
+  verifyApiHost,
+  verifyDeployedCommit,
+  verifyDeployment,
+} from './verify-deployment.mjs';
 
 const HEAD_SHA = 'e15df56e3a1b4c5d6e7f8091a2b3c4d5e6f70819';
 const OLDER_SHA = '4bfc99dc1f0e9d8c7b6a5948372615043f2e1d0c';
@@ -209,4 +214,122 @@ test('an expected commit that is not a git SHA is rejected before any request', 
     verifyDeployedCommit('https://example.com', 'main', { attempts: 1 }),
     /is not a git SHA/,
   );
+});
+
+const MODEL_LIST_BODY = { object: 'list', data: [] };
+const NOT_FOUND_PAGE = '<!DOCTYPE html><html><body>This page could not be found.</body></html>';
+
+const SERVED_API_HOST = {
+  '/health': { status: 200, contentType: 'application/json', body: HEALTHY_BODY },
+  '/v1/models': { status: 200, contentType: 'application/json', body: MODEL_LIST_BODY },
+};
+
+async function startApiHost(t, routes) {
+  const hits = [];
+  const server = createServer((request, response) => {
+    const path = request.url ?? '';
+    hits.push(path);
+    const route = routes[path];
+    if (!route) {
+      response.statusCode = 404;
+      response.setHeader('content-type', 'text/html; charset=utf-8');
+      response.end(NOT_FOUND_PAGE);
+      return;
+    }
+    response.statusCode = route.status;
+    if (route.location) response.setHeader('location', route.location);
+    response.setHeader('content-type', route.contentType);
+    response.end(typeof route.body === 'string' ? route.body : JSON.stringify(route.body));
+  });
+
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected TCP address');
+  return { url: `http://127.0.0.1:${address.port}`, hits };
+}
+
+test('an API host that serves both OpenAI-compatible aliases passes', async (t) => {
+  const { url } = await startApiHost(t, SERVED_API_HOST);
+
+  const result = await verifyApiHost(url, { attempts: 1 });
+
+  assert.deepEqual(result.probes, ['/health', '/v1/models']);
+});
+
+test('a /v1 alias bounced back to the app host fails as an inert rewrite', async (t) => {
+  const { url, hits } = await startApiHost(t, {
+    ...SERVED_API_HOST,
+    '/v1/models': {
+      status: 307,
+      contentType: 'text/plain',
+      location: 'https://agiworkforce.com/v1/models',
+      body: '',
+    },
+  });
+
+  await assert.rejects(
+    verifyApiHost(url, { attempts: 5, retryDelayMs: 1 }),
+    /the host-scoped rewrite never ran/,
+  );
+  assert.equal(
+    hits.filter((path) => path === '/v1/models').length,
+    1,
+    'an inert rewrite is a settled fact, not a transient failure to retry',
+  );
+});
+
+test('a /v1 alias answered with the app not-found page does not pass as the API', async (t) => {
+  const { url } = await startApiHost(t, {
+    ...SERVED_API_HOST,
+    '/v1/models': { status: 200, contentType: 'text/html; charset=utf-8', body: NOT_FOUND_PAGE },
+  });
+
+  await assert.rejects(verifyApiHost(url, { attempts: 1 }), /serving the app shell, not the API/);
+});
+
+test('a JSON 404 from a /v1 alias fails instead of counting as served', async (t) => {
+  const { url } = await startApiHost(t, {
+    ...SERVED_API_HOST,
+    '/v1/models': {
+      status: 404,
+      contentType: 'application/json',
+      body: { error: { code: 'NOT_FOUND' } },
+    },
+  });
+
+  await assert.rejects(verifyApiHost(url, { attempts: 1 }), /returned 404, expected 200/);
+});
+
+test('a /v1/models 200 without the OpenAI list envelope fails the gate', async (t) => {
+  const { url } = await startApiHost(t, {
+    ...SERVED_API_HOST,
+    '/v1/models': { status: 200, contentType: 'application/json', body: { models: [] } },
+  });
+
+  await assert.rejects(
+    verifyApiHost(url, { attempts: 1 }),
+    /answered without the OpenAI-compatible model list envelope/,
+  );
+});
+
+test('an API host /health answering as something other than this app fails', async (t) => {
+  const { url } = await startApiHost(t, {
+    ...SERVED_API_HOST,
+    '/health': { status: 200, contentType: 'application/json', body: { ok: true } },
+  });
+
+  await assert.rejects(
+    verifyApiHost(url, { attempts: 1 }),
+    /is not this app’s health-check contract/,
+  );
+});
+
+test('the probed host is the api. subdomain of the app host, not the app host', () => {
+  assert.equal(apiHostUrlFor('https://agiworkforce.com').href, 'https://api.agiworkforce.com/');
+  assert.equal(apiHostUrlFor('https://agiworkforce.com/chat').host, 'api.agiworkforce.com');
+});
+
+test('an app URL that is not http or https is rejected before any API host probe', () => {
+  assert.throws(() => apiHostUrlFor('ftp://agiworkforce.com'), /must use http or https/);
 });

@@ -50,6 +50,50 @@ describe('managed usage public contract', () => {
     });
   });
 
+  it('carries a published credit balance and whether it is spendable', () => {
+    const parsed = parseManagedUsageSummaryResponse({
+      plan_tier: 'pro',
+      usage_percentage: 25,
+      usage_reset_at: null,
+      has_usage_remaining: true,
+      period_start: null,
+      period_end: null,
+      subscription_status: 'active',
+      session_usage_percentage: 0,
+      session_reset_at: null,
+      weekly_usage_percentage: 0,
+      weekly_reset_at: null,
+      flagship_weekly_usage_percentage: 0,
+      flagship_weekly_reset_at: null,
+      credit_balance_cents: 1_234,
+      overage_enabled: true,
+    });
+
+    expect(parsed.credit_balance_cents).toBe(1_234);
+    expect(parsed.overage_enabled).toBe(true);
+  });
+
+  it('rejects a credit balance that is not a whole non-negative cent count', () => {
+    expect(() =>
+      parseManagedUsageSummaryResponse({
+        plan_tier: 'pro',
+        usage_percentage: 25,
+        usage_reset_at: null,
+        has_usage_remaining: true,
+        period_start: null,
+        period_end: null,
+        subscription_status: 'active',
+        session_usage_percentage: 0,
+        session_reset_at: null,
+        weekly_usage_percentage: 0,
+        weekly_reset_at: null,
+        flagship_weekly_usage_percentage: 0,
+        flagship_weekly_reset_at: null,
+        credit_balance_cents: -5,
+      }),
+    ).toThrow(/credit_balance_cents/i);
+  });
+
   it('rejects invalid public summary values at runtime', () => {
     expect(() =>
       parseManagedUsageSummaryResponse({

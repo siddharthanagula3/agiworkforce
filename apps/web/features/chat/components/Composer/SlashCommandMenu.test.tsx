@@ -13,6 +13,8 @@ const baseProps = {
   onSelect: vi.fn(),
   onClose: vi.fn(),
   skills: [],
+  imageCommandAvailable: true,
+  codeCommandAvailable: true,
 };
 
 describe('SlashCommandMenu media admission', () => {
@@ -32,5 +34,33 @@ describe('SlashCommandMenu media admission', () => {
       </CapabilityProvider>,
     );
     expect(screen.getByText('/image')).toBeInTheDocument();
+  });
+
+  it('omits /code when the selected model cannot run code', () => {
+    const { rerender } = render(
+      <CapabilityProvider platform="web">
+        <SlashCommandMenu {...baseProps} codeCommandAvailable={false} />
+      </CapabilityProvider>,
+    );
+
+    expect(screen.queryByText('/code')).toBeNull();
+
+    rerender(
+      <CapabilityProvider platform="web">
+        <SlashCommandMenu {...baseProps} codeCommandAvailable />
+      </CapabilityProvider>,
+    );
+    expect(screen.getByText('/code')).toBeInTheDocument();
+  });
+
+  it('describes /code by what selecting it does', () => {
+    render(
+      <CapabilityProvider platform="web">
+        <SlashCommandMenu {...baseProps} />
+      </CapabilityProvider>,
+    );
+
+    expect(screen.getByText('Run code in a sandbox')).toBeInTheDocument();
+    expect(screen.queryByText(/explain code/i)).toBeNull();
   });
 });

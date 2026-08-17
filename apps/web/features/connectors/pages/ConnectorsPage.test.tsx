@@ -8,6 +8,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -504,5 +506,21 @@ describe('ConnectorsPage — OAuth-granted connectors', () => {
 
     expect(screen.queryByRole('button', { name: /^Connect$/ })).toBeNull();
     expect(screen.getAllByText('Not available here').length).toBeGreaterThan(0);
+  });
+});
+
+describe('ConnectorsPage light-theme colour', () => {
+  const source = readFileSync(resolve(__dirname, './ConnectorsPage.tsx'), 'utf-8');
+
+  // bg-white/[0.0x] reads as a raised surface on the dark ground and as
+  // white-on-white in light theme, where the panel disappears entirely.
+  it('uses no unprefixed white overlay surfaces', () => {
+    expect(source).not.toMatch(/(?<!dark:)bg-white\//);
+  });
+
+  // 200-400 status text is legible on the dark ground and washes out on the
+  // light one, so it may only appear behind a `dark:` prefix.
+  it('never sets pale status text without a dark: prefix', () => {
+    expect(source).not.toMatch(/(?<!dark:)text-(?:emerald|amber|green|red|blue)-[234]00/);
   });
 });

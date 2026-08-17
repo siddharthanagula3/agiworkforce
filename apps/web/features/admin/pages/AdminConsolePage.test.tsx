@@ -6,6 +6,10 @@ vi.mock('../components/SecurityOperationsPanel', () => ({
   default: () => <div data-testid="security-operations-panel">Live security operations</div>,
 }));
 
+vi.mock('../components/ContentReportQueuePanel', () => ({
+  default: () => <div data-testid="content-report-queue-panel">Content report queue</div>,
+}));
+
 const FORBIDDEN_PATTERNS = [/waitlist/i, /private beta/i, /launch gate/i, /public_launch_blocked/i];
 
 afterEach(() => {

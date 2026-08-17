@@ -1,11 +1,22 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { CreditService, type CreditSettlementQueueSummary } from '@/lib/services/credit-service';
 import { deliverDueVideoIncidentAlerts } from '@/lib/services/video-incident-alert-service';
+import {
+  reconcileStripeSettlement,
+  STRIPE_RECONCILIATION_ALERT_RATIO,
+  type StripeReconciliationSummary,
+} from '@/lib/services/stripe-settlement-reconciliation-service';
+import {
+  importStripeCogsAdjustments,
+  type StripeCogsImportSummary,
+} from '@/lib/services/cogs-ledger-service';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
@@ -17,6 +28,20 @@ interface ReconcileSummary {
   alerted: boolean;
   delivery: 'not_needed' | 'delivered' | 'undeliverable';
   reason?: string;
+  stripe?: {
+    examined: number;
+    diverged: number;
+    repaired: number;
+    unrepaired: number;
+    missingInStripe: number;
+    alert: boolean;
+  };
+  cogs?: {
+    examined: number;
+    feesRecorded: number;
+    adjustmentsRecorded: number;
+    discountsRecorded: number;
+  };
 }
 
 function environmentLabel(): string {
@@ -58,6 +83,76 @@ function buildDriftAlert(summary: {
     text,
     html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(text)}</pre>`,
   };
+}
+
+function buildStripeDivergenceAlert(summary: StripeReconciliationSummary): {
+  subject: string;
+  text: string;
+  html: string;
+} {
+  const environment = environmentLabel();
+  const percent = (summary.divergenceRatio * 100).toFixed(1);
+  const threshold = (STRIPE_RECONCILIATION_ALERT_RATIO * 100).toFixed(1);
+  const text = [
+    `Environment: ${environment}`,
+    `Observed at: ${new Date().toISOString()}`,
+    `Subscriptions compared against Stripe: ${summary.examined}`,
+    `Diverged: ${summary.diverged} (${percent}%, threshold ${threshold}%)`,
+    `Repaired from Stripe: ${summary.repaired} · could not repair: ${summary.unrepaired}`,
+    `Unknown to Stripe: ${summary.missingInStripe}`,
+    '',
+    'Stripe is the authoritative record of subscription state. Divergence above the',
+    'threshold means this deployment is entitling accounts on terms Stripe does not',
+    'agree with, in one direction or the other.',
+    '',
+    'AFFECTED',
+    summary.drifts
+      .slice(0, 25)
+      .map(
+        (drift) =>
+          `${drift.stripeSubscriptionId} · user ${drift.userId} · ${drift.fields.join(', ')}` +
+          (drift.repaired
+            ? ' · repaired'
+            : ` · NOT repaired${drift.repairError ? `: ${drift.repairError}` : ''}`),
+      )
+      .join('\n'),
+    '',
+    'Follow docs/runbooks/incident-response.md.',
+  ].join('\n');
+
+  return {
+    subject: `[AGI WARNING] ${environment} Stripe subscription divergence · ${summary.diverged}/${summary.examined}`,
+    text,
+    html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(text)}</pre>`,
+  };
+}
+
+async function runStripeReconciliation(): Promise<StripeReconciliationSummary | null> {
+  const stripeKey = process.env['STRIPE_SECRET_KEY'];
+  if (!stripeKey) {
+    logger.warn('STRIPE_SECRET_KEY is not set; subscription state was not compared against Stripe');
+    return null;
+  }
+
+  return reconcileStripeSettlement({
+    db: getNeonDb(),
+    stripe: new Stripe(stripeKey, { apiVersion: STRIPE_API_VERSION }),
+  });
+}
+
+const COGS_IMPORT_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
+
+async function runCogsImport(): Promise<StripeCogsImportSummary | null> {
+  const stripeKey = process.env['STRIPE_SECRET_KEY'];
+  if (!stripeKey) return null;
+
+  const until = new Date();
+  return importStripeCogsAdjustments({
+    stripe: new Stripe(stripeKey, { apiVersion: STRIPE_API_VERSION }),
+    since: new Date(until.getTime() - COGS_IMPORT_LOOKBACK_MS),
+    until,
+    db: getNeonDb(),
+  });
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -106,11 +201,70 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     videoAlertFailure = 'video_incident_alert_recovery_failed';
   }
 
+  let stripeSummary: StripeReconciliationSummary | null = null;
+  let stripeFailure:
+    | 'stripe_reconciliation_failed'
+    | 'stripe_divergence_undeliverable'
+    | 'cogs_import_failed'
+    | null = null;
+  try {
+    stripeSummary = await runStripeReconciliation();
+  } catch (error) {
+    logger.error(
+      {
+        event: 'stripe_settlement_reconciliation_failed',
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Subscription state could not be compared against Stripe',
+    );
+    stripeFailure = 'stripe_reconciliation_failed';
+  }
+
+  let cogsSummary: StripeCogsImportSummary | null = null;
+  try {
+    cogsSummary = await runCogsImport();
+  } catch (error) {
+    logger.error(
+      {
+        event: 'cogs_stripe_import_failed',
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Stripe fees, refunds and chargebacks were not imported into the COGS ledger',
+    );
+    stripeFailure ??= 'cogs_import_failed';
+  }
+
+  if (stripeSummary?.alert) {
+    const alert = buildStripeDivergenceAlert(stripeSummary);
+    const sent = await sendSupportEmail({
+      to: getHandoffConfig().fallbackEmail,
+      subject: alert.subject,
+      text: alert.text,
+      html: alert.html,
+    });
+    logger.error(
+      {
+        event: 'stripe_subscription_divergence',
+        examined: stripeSummary.examined,
+        diverged: stripeSummary.diverged,
+        repaired: stripeSummary.repaired,
+        unrepaired: stripeSummary.unrepaired,
+        missingInStripe: stripeSummary.missingInStripe,
+        delivered: sent.delivered,
+      },
+      sent.delivered
+        ? 'Stripe subscription divergence alert dispatched'
+        : 'Stripe subscription divergence alert could NOT be delivered · no human has been told',
+    );
+    if (!sent.delivered) stripeFailure = 'stripe_divergence_undeliverable';
+  }
+
   if (creditError || !summary) {
     return NextResponse.json(
       {
         error: 'Internal server error',
         ...(videoAlertFailure ? { reason: videoAlertFailure } : {}),
+        ...(stripeFailure && !videoAlertFailure ? { reason: stripeFailure } : {}),
       },
       { status: 500 },
     );
@@ -159,8 +313,33 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  if (stripeSummary) {
+    responseBody.stripe = {
+      examined: stripeSummary.examined,
+      diverged: stripeSummary.diverged,
+      repaired: stripeSummary.repaired,
+      unrepaired: stripeSummary.unrepaired,
+      missingInStripe: stripeSummary.missingInStripe,
+      alert: stripeSummary.alert,
+    };
+  }
+
+  if (cogsSummary) {
+    responseBody.cogs = {
+      examined: cogsSummary.examined,
+      feesRecorded: cogsSummary.feesRecorded,
+      adjustmentsRecorded: cogsSummary.adjustmentsRecorded,
+      discountsRecorded: cogsSummary.discountsRecorded,
+    };
+  }
+
   if (videoAlertFailure) {
     responseBody.reason ??= videoAlertFailure;
+    responseStatus = 500;
+  }
+
+  if (stripeFailure) {
+    responseBody.reason ??= stripeFailure;
     responseStatus = 500;
   }
 

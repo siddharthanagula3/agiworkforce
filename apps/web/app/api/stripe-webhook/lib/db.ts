@@ -17,6 +17,7 @@ import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constant
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { applySubscriptionOwnerHandoff } from '@/lib/server/subscription-owner-handoff';
 import { isValidTopUpPurchase } from '@agiworkforce/types';
 import { describeSessionTax } from '@/lib/billing/tax-policy';
 import {
@@ -695,6 +696,8 @@ export async function upsertSubscriptionFromSession(
 
   logger.info({ subscriptionData: subData }, 'Upserting subscription');
 
+  await applySubscriptionOwnerHandoff(db, resolvedUserId, 'stripe');
+
   const upserted = await db
     .query<{ id: string }>(
       `insert into subscriptions (user_id, status, plan_tier, stripe_customer_id, stripe_subscription_id, stripe_price_id, stripe_coupon_id, current_period_start, current_period_end, cancel_at_period_end, canceled_at)
@@ -831,8 +834,14 @@ export async function updateSubscriptionFromStripeSubscription(
   db: DatabaseAdapter,
   stripe: Stripe,
   subscription: Stripe.Subscription,
+  options: { eventSequence?: number | null } = {},
 ): Promise<void> {
-  logger.info({ subscriptionId: subscription.id }, 'Processing subscription update');
+  const eventSequence =
+    typeof options.eventSequence === 'number' && Number.isFinite(options.eventSequence)
+      ? options.eventSequence
+      : null;
+
+  logger.info({ subscriptionId: subscription.id, eventSequence }, 'Processing subscription update');
 
   if (subscription.pending_update) {
     logger.info(
@@ -928,8 +937,9 @@ export async function updateSubscriptionFromStripeSubscription(
         plan_tier: string | null;
         status: string | null;
         current_period_start: string | null;
+        last_stripe_event_at: string | null;
       }>(
-        'select id, user_id, plan_tier, status, current_period_start from subscriptions where stripe_subscription_id = $1 limit 1',
+        'select id, user_id, plan_tier, status, current_period_start, last_stripe_event_at from subscriptions where stripe_subscription_id = $1 limit 1',
         [stripeSubId],
       )
       .catch((fetchError: unknown) => {
@@ -941,6 +951,23 @@ export async function updateSubscriptionFromStripeSubscription(
 
     if (existingSub) {
       resolvedUserId = existingSub.user_id;
+
+      const appliedSequence = existingSub.last_stripe_event_at
+        ? Date.parse(existingSub.last_stripe_event_at)
+        : null;
+
+      if (
+        eventSequence !== null &&
+        appliedSequence !== null &&
+        Number.isFinite(appliedSequence) &&
+        appliedSequence > eventSequence * 1000
+      ) {
+        logger.warn(
+          { stripeSubId, eventSequence, appliedAt: existingSub.last_stripe_event_at },
+          'Ignoring out-of-order subscription snapshot older than the one already applied',
+        );
+        return;
+      }
 
       if (existingSub.status === 'canceled' && updateData.status !== 'canceled') {
         logger.warn(
@@ -982,8 +1009,14 @@ export async function updateSubscriptionFromStripeSubscription(
             cancel_at_period_end = $5,
             canceled_at = $6,
             stripe_coupon_id = $7,
-            plan_tier = $8
+            plan_tier = $8,
+            last_stripe_event_at = coalesce(to_timestamp($10::double precision), last_stripe_event_at)
           where stripe_subscription_id = $9
+            and (
+              $10::double precision is null
+              or last_stripe_event_at is null
+              or last_stripe_event_at <= to_timestamp($10::double precision)
+            )
           returning id`,
           [
             updateData.status,
@@ -995,6 +1028,7 @@ export async function updateSubscriptionFromStripeSubscription(
             updateData.stripe_coupon_id,
             updateData.plan_tier,
             stripeSubId,
+            eventSequence,
           ],
         )
         .catch((updateError: unknown) => {
@@ -1211,10 +1245,12 @@ export async function updateSubscriptionFromStripeSubscription(
         };
         logger.info({ createData }, 'Upserting subscription (will INSERT or UPDATE as needed)');
 
+        await applySubscriptionOwnerHandoff(db, resolvedUserId, 'stripe');
+
         const upserted = await db
           .query<{ id: string }>(
-            `insert into subscriptions (user_id, status, plan_tier, stripe_customer_id, stripe_subscription_id, stripe_price_id, stripe_coupon_id, current_period_start, current_period_end, cancel_at_period_end, canceled_at)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            `insert into subscriptions (user_id, status, plan_tier, stripe_customer_id, stripe_subscription_id, stripe_price_id, stripe_coupon_id, current_period_start, current_period_end, cancel_at_period_end, canceled_at, last_stripe_event_at)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, to_timestamp($12::double precision))
              on conflict (user_id) do update set
                status = excluded.status,
                plan_tier = excluded.plan_tier,
@@ -1225,7 +1261,14 @@ export async function updateSubscriptionFromStripeSubscription(
                current_period_start = excluded.current_period_start,
                current_period_end = excluded.current_period_end,
                cancel_at_period_end = excluded.cancel_at_period_end,
-               canceled_at = excluded.canceled_at
+               canceled_at = excluded.canceled_at,
+               last_stripe_event_at = coalesce(
+                 excluded.last_stripe_event_at,
+                 subscriptions.last_stripe_event_at
+               )
+             where subscriptions.last_stripe_event_at is null
+                or excluded.last_stripe_event_at is null
+                or subscriptions.last_stripe_event_at <= excluded.last_stripe_event_at
              returning id`,
             [
               createData.user_id,
@@ -1239,6 +1282,7 @@ export async function updateSubscriptionFromStripeSubscription(
               createData.current_period_end,
               createData.cancel_at_period_end,
               createData.canceled_at,
+              eventSequence,
             ],
           )
           .catch((error: unknown) => {

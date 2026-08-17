@@ -1,72 +1,11 @@
 import 'server-only';
 
 import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
-
-interface ManagedUsageLimit {
-  monthlyUnits: number;
-  weeklyUnits: number;
-  fiveHourUnits: number;
-  dailyUnits: number;
-  unlimited: boolean;
-}
+import { MANAGED_USAGE_LIMITS, type ManagedUsageLimit } from '@/lib/billing/managed-usage-caps';
 
 export type ManagedUsageCapCents = number | null;
 
 export const MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS = 100_000_000;
-
-const MANAGED_USAGE_LIMITS: Readonly<Record<BillingPlanTier, ManagedUsageLimit>> = Object.freeze({
-  'local-only': {
-    monthlyUnits: 0,
-    weeklyUnits: 0,
-    fiveHourUnits: 0,
-    dailyUnits: 0,
-    unlimited: false,
-  },
-  byok: { monthlyUnits: 0, weeklyUnits: 0, fiveHourUnits: 0, dailyUnits: 0, unlimited: false },
-  free: { monthlyUnits: 20, weeklyUnits: 15, fiveHourUnits: 5, dailyUnits: 0, unlimited: false },
-  basic: {
-    monthlyUnits: 400,
-    weeklyUnits: 100,
-    fiveHourUnits: 20,
-    dailyUnits: 0,
-    unlimited: false,
-  },
-  pro: {
-    monthlyUnits: 2_000,
-    weeklyUnits: 500,
-    fiveHourUnits: 100,
-    dailyUnits: 0,
-    unlimited: false,
-  },
-  max: {
-    monthlyUnits: 10_000,
-    weeklyUnits: 2_500,
-    fiveHourUnits: 500,
-    dailyUnits: 0,
-    unlimited: false,
-  },
-  max_15x: {
-    monthlyUnits: 30_000,
-    weeklyUnits: 7_500,
-    fiveHourUnits: 1_500,
-    dailyUnits: 0,
-    unlimited: false,
-  },
-  team: {
-    monthlyUnits: 2_000,
-    weeklyUnits: 500,
-    fiveHourUnits: 100,
-    dailyUnits: 0,
-    unlimited: false,
-  },
-  enterprise: {
-    monthlyUnits: 0,
-    weeklyUnits: 0,
-    fiveHourUnits: 0,
-    dailyUnits: 0,
-    unlimited: true,
-  },
-});
 
 const INTERNAL_USAGE_UNITS_PER_LEDGER_CENT = 2;
 const MICROUSD_PER_INTERNAL_USAGE_UNIT = 5_000;
@@ -170,7 +109,25 @@ export function getPlanFlagshipWeeklyUsageCapCents(
 export const QUOTA_WARNING_THRESHOLD_PERCENT = 80;
 export const QUOTA_CRITICAL_THRESHOLD_PERCENT = 95;
 
-export type QuotaWarningScope = 'billing_period' | 'rolling_five_hour' | 'rolling_weekly';
+export type QuotaWarningScope =
+  | 'billing_period'
+  | 'rolling_five_hour'
+  | 'rolling_weekly'
+  | 'computer_use_soft_cap';
+
+export function buildComputerUseSoftCapWarningHeader(input: {
+  usedUnits: number;
+  softLimitUnits: number;
+}): string | null {
+  if (!Number.isFinite(input.softLimitUnits) || input.softLimitUnits <= 0) return null;
+  const percent = toPublicUsagePercentage(Math.max(0, input.usedUnits), input.softLimitUnits);
+  return [
+    'level=warning',
+    'scope=computer_use_soft_cap',
+    `used_percent=${Math.round(percent)}`,
+    'threshold_percent=100',
+  ].join('; ');
+}
 
 export interface QuotaWarningInput {
   planTier: string | null | undefined;

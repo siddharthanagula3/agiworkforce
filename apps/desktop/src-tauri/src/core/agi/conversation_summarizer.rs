@@ -566,6 +566,11 @@ pub struct HttpSummaryLLM {
     openai_api_key: Option<String>,
 }
 
+fn openai_endpoint(path: &str) -> std::result::Result<String, String> {
+    crate::core::llm::providers::direct_api_provider::provider_endpoint(Provider::OpenAI, path)
+        .ok_or_else(|| "The provider registry has no OpenAI base URL".to_string())
+}
+
 impl HttpSummaryLLM {
     /// Create a new HttpSummaryLLM with optional OpenAI API key.
     pub fn new(openai_api_key: Option<String>) -> Self {
@@ -678,7 +683,7 @@ impl HttpSummaryLLM {
 
         let response = self
             .http_client
-            .post("https://api.openai.com/v1/chat/completions")
+            .post(openai_endpoint("chat/completions")?)
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&serde_json::json!({
                 "model": Provider::OpenAI.get_model_for_task(TaskType::FastCompletion),
@@ -754,7 +759,7 @@ impl HttpSummaryLLM {
 
         let response = self
             .http_client
-            .post("https://api.openai.com/v1/embeddings")
+            .post(openai_endpoint("embeddings")?)
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&body)
             .timeout(StdDuration::from_secs(10))
@@ -1479,5 +1484,37 @@ mod tests {
         let extraction = second.unwrap();
         assert_eq!(extraction.memories.len(), 1);
         assert_eq!(extraction.memories[0].topic, "Retry success");
+    }
+}
+
+/// AI-01. Both summarizer calls used to retype the OpenAI host, so re-hosting the
+/// provider needed an edit here as well as in the registry.
+#[cfg(test)]
+mod provider_endpoint_resolution_tests {
+    use super::*;
+
+    #[test]
+    fn the_provider_host_is_not_retyped_in_this_module() {
+        let source = include_str!("conversation_summarizer.rs");
+        let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            !production.contains("api.openai.com"),
+            "the summarizer must resolve its endpoint through provider_endpoint()"
+        );
+    }
+
+    #[test]
+    fn both_endpoints_hang_off_the_registered_base_url() {
+        let base =
+            crate::core::llm::providers::direct_api_provider::default_base_url(Provider::OpenAI)
+                .expect("OpenAI must have a registered base URL");
+        assert_eq!(
+            openai_endpoint("chat/completions").unwrap(),
+            format!("{}/chat/completions", base)
+        );
+        assert_eq!(
+            openai_endpoint("embeddings").unwrap(),
+            format!("{}/embeddings", base)
+        );
     }
 }

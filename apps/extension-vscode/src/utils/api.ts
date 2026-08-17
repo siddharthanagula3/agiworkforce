@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
@@ -7,8 +6,14 @@ import { URL } from 'url';
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getTokenCounter } from '../data/tokenCounter';
-import { TierInfoSchema } from '../protocol/apiResponses';
-import { effectivePlanTier, type AccountAuthState } from '@agiworkforce/types';
+import { TierInfoSchema, type TierInfoResponse } from '../protocol/apiResponses';
+import {
+  effectivePlanTier,
+  normalizeUsagePercentage,
+  type AccountAuthState,
+  type ManagedUsageBucket,
+  type ManagedUsageBucketReading,
+} from '@agiworkforce/types';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
 import { Config } from '../platform/config';
 import { getExtensionUserAgent } from '../platform/version';
@@ -556,6 +561,10 @@ export interface TierInfo {
   subscriptionStatus?: string;
   usagePercentage?: number;
   resetsAt?: string;
+  hasUsageRemaining?: boolean;
+  usageBuckets?: ManagedUsageBucketReading[];
+  creditBalanceCents?: number;
+  overageEnabled?: boolean;
 }
 
 export interface AccountIdentity {
@@ -606,6 +615,43 @@ export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | un
   };
 }
 
+function readUsageBuckets(summary: TierInfoResponse): ManagedUsageBucketReading[] {
+  const windows: ReadonlyArray<{
+    bucket: ManagedUsageBucket;
+    usedPercentage: number | undefined;
+    resetAt: string | null | undefined;
+  }> = [
+    {
+      bucket: 'session',
+      usedPercentage: summary.session_usage_percentage,
+      resetAt: summary.session_reset_at,
+    },
+    {
+      bucket: 'weekly',
+      usedPercentage: summary.weekly_usage_percentage,
+      resetAt: summary.weekly_reset_at,
+    },
+    {
+      bucket: 'weeklyFlagship',
+      usedPercentage: summary.flagship_weekly_usage_percentage,
+      resetAt: summary.flagship_weekly_reset_at,
+    },
+    {
+      bucket: 'period',
+      usedPercentage: summary.usage_percentage,
+      resetAt: summary.usage_reset_at,
+    },
+  ];
+
+  return windows
+    .filter((window) => typeof window.usedPercentage === 'number')
+    .map((window) => ({
+      bucket: window.bucket,
+      percentRemaining: 100 - normalizeUsagePercentage(window.usedPercentage),
+      resetAt: window.resetAt ?? null,
+    }));
+}
+
 export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
   const parsed = TierInfoSchema.safeParse(raw);
   if (!parsed.success) return undefined;
@@ -623,6 +669,17 @@ export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
   }
   if (typeof parsed.data.usage_reset_at === 'string') {
     tierInfo.resetsAt = parsed.data.usage_reset_at;
+  }
+  if (typeof parsed.data.has_usage_remaining === 'boolean') {
+    tierInfo.hasUsageRemaining = parsed.data.has_usage_remaining;
+  }
+  const usageBuckets = readUsageBuckets(parsed.data);
+  if (usageBuckets.length > 0) {
+    tierInfo.usageBuckets = usageBuckets;
+  }
+  if (typeof parsed.data.credit_balance_cents === 'number') {
+    tierInfo.creditBalanceCents = parsed.data.credit_balance_cents;
+    tierInfo.overageEnabled = parsed.data.overage_enabled === true;
   }
   return tierInfo;
 }

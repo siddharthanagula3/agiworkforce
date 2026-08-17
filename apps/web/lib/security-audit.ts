@@ -10,7 +10,8 @@ export type SecurityEventType =
   | 'admin_action'
   | 'csrf_validation_failed'
   | 'invalid_signature'
-  | 'content_notice';
+  | 'content_notice'
+  | 'retention_purge';
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high' | 'critical';
 
@@ -86,10 +87,15 @@ export async function logAuthFailure(
   });
 }
 
+// Every automated block names the page a user can appeal it on; a block with
+// no route out is indistinguishable from a bug.
+export const BLOCK_APPEAL_PATH = '/support';
+
 export async function logRateLimitExceeded(
   request: Request,
   identifier: string,
   userId?: string,
+  reason?: string,
 ): Promise<void> {
   await logSecurityEvent({
     userId,
@@ -98,7 +104,7 @@ export async function logRateLimitExceeded(
     ipAddress: getClientIp(request),
     userAgent: request.headers.get('user-agent') || undefined,
     endpoint: new URL(request.url).pathname,
-    details: { identifier },
+    details: { identifier, ...(reason ? { reason, appealPath: BLOCK_APPEAL_PATH } : {}) },
   });
 }
 

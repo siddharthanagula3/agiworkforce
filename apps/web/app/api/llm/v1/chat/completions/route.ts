@@ -9,6 +9,7 @@ import {
   getCorsHeaders,
   withCorsRoute,
 } from '@/lib/cors';
+import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
 // GOV-3: per-plan concurrent-turn admission (see handleChatCompletions).
@@ -41,6 +42,8 @@ import {
   loadConnectorToolPermissions,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
 } from './lib/connector-tool-permissions';
+import { loadToolApprovalPolicy } from './lib/tool-approval-policy';
+import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import type { StreamChunk } from '@agiworkforce/types';
 import { getModelMetadataById } from '@agiworkforce/types';
 import {
@@ -82,11 +85,12 @@ export const maxDuration = 300;
  * are journaled durably either way.
  *
  * Transport: a turn that holds a managed-usage reservation starts on the Vercel
- * Workflow transport when explicitly enabled (`AGI_DURABLE_INITIAL_TURNS`) so the run
- * outlives the request that started it — the client can disconnect and later
- * reattach through the run journal, and its approvals stay claimable from any
- * surface. Free-trial turns and a workflow that fails to start use the
- * request-scoped inline stream, which emits the identical SSE wire.
+ * Workflow transport unless the `AGI_DURABLE_INITIAL_TURNS` kill-switch is
+ * engaged, so the run outlives the request that started it — the client can
+ * disconnect and later reattach through the run journal, and its approvals stay
+ * claimable from any surface. Free-trial turns, an engaged kill-switch, and a
+ * workflow that fails to start use the request-scoped inline stream, which
+ * emits the identical SSE wire.
  * The approval_mode query parameter controls gating: ?approval_mode=auto skips
  * the per-tool prompt; the default 'manual' persists a signed checkpoint before
  * emitting x_tool_approval_request events.
@@ -365,8 +369,12 @@ async function dispatchChatCompletions(
                   ...(source.snippet ? { snippet: source.snippet } : {}),
                 })),
                 priorSteps: processed.researchResume.steps,
+                approvedPlan: processed.researchResume.approvedSteps,
               }
             : {}),
+          // A first attempt shows its plan and waits for Start; the approved
+          // plan the client sends back IS that decision, so it searches at once.
+          requirePlanApproval: (processed.researchResume?.approvedSteps.length ?? 0) === 0,
           isCancellationRequested: () =>
             isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
           // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
@@ -415,6 +423,7 @@ async function dispatchChatCompletions(
       if (processed.quotaWarningHeader) {
         researchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }
+      addFallbackReasonHeader(researchHeaders, processed);
 
       // AUDIT-FIX BUG-8: the idle heartbeat was applied inside
       // stream-transform.ts but NOT here -- the research loop goes silent for
@@ -448,12 +457,15 @@ async function dispatchChatCompletions(
     // (so a Blocked tool is never advertised to the model and stops re-surfacing
     // an approval card every turn), and the full verdict map is handed to the
     // tool loop, which enforces it before any execution.
-    const connectorPermissions = modelSupportsTools
-      ? await loadConnectorToolPermissions(
-          processed.managedUsage?.db ?? (await getUserScopedDb(request)).db,
-          userId,
-        )
+    const toolPolicyDb = modelSupportsTools
+      ? (processed.managedUsage?.db ?? (await getUserScopedDb(request)).db)
+      : null;
+    const connectorPermissions = toolPolicyDb
+      ? await loadConnectorToolPermissions(toolPolicyDb, userId)
       : EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+    const toolApprovalPolicy = toolPolicyDb
+      ? await loadToolApprovalPolicy(toolPolicyDb, userId)
+      : DEFAULT_TOOL_APPROVAL_POLICY;
     // GOV-7: the connector-tool ceiling is now the caller's PLAN ceiling, not a
     // flat 32 for everybody, and the truncation it causes is reported back
     // rather than only logged — a "Connected" connector whose tools were
@@ -509,6 +521,7 @@ async function dispatchChatCompletions(
         if (processed.quotaWarningHeader) {
           headers['X-Quota-Warning'] = processed.quotaWarningHeader;
         }
+        addFallbackReasonHeader(headers, processed);
         // GOV-7: name the connectors whose tools did not fit under this plan's
         // ceiling so the client can surface it. Header-encoded because this is
         // decided before the first SSE frame and applies to the whole turn.
@@ -547,6 +560,7 @@ async function dispatchChatCompletions(
             processed,
             mcpTools,
             approvalMode: loopInputs.approvalMode,
+            toolApprovalPolicy,
           });
           const durableHeaders = baseAgentHeaders();
           durableHeaders['X-AGI-Tool-Loop'] = 'durable';
@@ -597,6 +611,7 @@ async function dispatchChatCompletions(
         usage: toolLoopUsage,
         // AUDIT-FIX CON-1: server-side enforcement of the user's saved verdicts.
         connectorPermissions,
+        toolApprovalPolicy,
         // AUDIT-FIX BUG-1: a client cancel aborts the in-flight provider call
         // instead of billing a full agentic turn nobody sees.
         signal: request.signal,

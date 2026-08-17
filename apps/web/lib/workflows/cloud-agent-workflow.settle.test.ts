@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   transition: vi.fn(),
   completeCheckpoint: vi.fn(),
   assistantText: vi.fn(),
+  recordRunUsage: vi.fn(),
 }));
 
 const db = {
@@ -42,6 +43,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   getCloudAgentRun: vi.fn(),
   isCloudAgentRunCancellationRequested: vi.fn(),
   readCloudAgentRunAssistantText: mocks.assistantText,
+  recordCloudAgentRunSettledUsage: mocks.recordRunUsage,
   saveCloudAgentApprovalCheckpoint: vi.fn(),
   transitionCloudAgentRun: mocks.transition,
 }));
@@ -111,7 +113,13 @@ describe('durable cloud agent workflow settlement', () => {
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
       cacheWrite1hTokens: 0,
-      reasoningTokens: 0,
+      reasoningTokens: 96,
+    });
+    mocks.finalize.mockResolvedValue({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 37,
     });
     mocks.assistantText.mockResolvedValue({
       text: 'The audit is clean.',
@@ -229,6 +237,48 @@ describe('durable cloud agent workflow settlement', () => {
     expect(persistedTurn()).toBeNull();
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect(mocks.transition).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the charged cost and observed usage on the run under its billing key', async () => {
+    await settleWorkflowInvocation(makeInput(), 'completed');
+
+    expect(mocks.recordRunUsage).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      billingIdempotencyKey: 'agi.chat.desktop.turn-1',
+      usage: {
+        providerCalls: 2,
+        inputTokens: 1_200,
+        outputTokens: 340,
+        reasoningTokens: 96,
+        costCents: 37,
+      },
+    });
+  });
+
+  it('prices a run that was cancelled before any provider call at zero', async () => {
+    mocks.usage.mockResolvedValue({
+      providerCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      reasoningTokens: 0,
+    });
+    mocks.finalize.mockResolvedValue({
+      requestStatus: 'released',
+      operationResult: 'finalized',
+      settlementStatus: null,
+      actualCostCents: 0,
+    });
+
+    await settleWorkflowInvocation(makeInput(), 'cancelled');
+
+    expect(mocks.recordRunUsage).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ usage: expect.objectContaining({ costCents: 0 }) }),
+    );
   });
 
   it('never persists a Temporary Chat turn', async () => {

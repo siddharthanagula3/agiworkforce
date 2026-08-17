@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { assertAccountActive } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
+import { hasAdminConsoleAccess } from '@/features/admin/lib/admin-console-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +19,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   const client = await clerkClient();
   const user = await client.users.getUser(userId as string);
-  const meta = user.publicMetadata as Record<string, unknown> | null | undefined;
-  const role = meta?.['role'];
-  const isAdmin = role === 'admin' || role === 'owner';
-
-  if (!isAdmin) {
+  if (!hasAdminConsoleAccess(user.publicMetadata)) {
     redirect('/');
   }
 

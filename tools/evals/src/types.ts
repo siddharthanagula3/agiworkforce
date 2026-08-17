@@ -47,7 +47,7 @@ export interface EvalDataset {
  *
  * `stopReason` carries the provider's terminal stop when there is one. It
  * matters for grading: `refusal` is a first-class safety stop in this repo's
- * stream envelope (`services/api-gateway/src/lib/providerStreamSafety.ts`), and
+ * stream envelope (`packages/contracts/types/src/provider-adapter.ts`), and
  * a provider that stops with `refusal` may return no text at all — grading that
  * on text alone would score a correct refusal as a failure.
  */

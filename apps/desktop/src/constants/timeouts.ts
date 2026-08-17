@@ -1,5 +1,3 @@
-
-
 export const DEFAULT_API_TIMEOUT_MS = 30_000;
 
 export const DEVICE_LINK_POLL_TIMEOUT_MS = 60_000;
@@ -46,6 +44,8 @@ export const OLLAMA_TIMEOUT_MS = 10_000;
 
 export const OLLAMA_PULL_TIMEOUT_MS = 60_000;
 
+export const OLLAMA_MODEL_PULL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
 export const PRIVACY_TIMEOUT_MS = 30_000;
 
 export const EXPORT_TIMEOUT_MS = 60_000;
@@ -79,6 +79,10 @@ export const AUTH_RESEND_TICK_MS = 1_000;
 export const SESSION_TIMER_INTERVAL_MS = 1_000;
 
 export const DEFAULT_MAX_RETRIES = 3;
+
+export const RETRY_BASE_DELAY_MS = 1_000;
+
+export const RETRY_BACKOFF_MULTIPLIER = 2;
 
 export const CIRCUIT_BREAKER_MAX_FAILURES = 5;
 

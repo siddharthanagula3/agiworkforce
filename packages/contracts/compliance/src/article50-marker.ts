@@ -1,50 +1,17 @@
+import {
+  buildAiActProvenanceClaim,
+  serialiseAiActProvenanceClaim,
+  type AiActProvenanceClaim,
+  type SyntheticContentKind,
+} from '@agiworkforce/types';
 
-export type SyntheticContentKind = 'text' | 'audio' | 'image' | 'video';
+export type { SyntheticContentKind };
 
-export interface C2paStyleClaim {
-  readonly version: 1;
-  readonly claim_generator: string;
-  readonly kind: SyntheticContentKind;
-  readonly generated_at: string;
-  readonly provider: string;
-  readonly model: string;
-  readonly content_hash_sha256: string;
-  readonly assertions: ReadonlyArray<{
-    readonly label: string;
-    readonly action: string;
-  }>;
-  readonly signature: string | null;
-}
+export type C2paStyleClaim = AiActProvenanceClaim;
 
-export function buildProvenanceClaim(args: {
-  kind: SyntheticContentKind;
-  provider: string;
-  model: string;
-  contentHashSha256?: string;
-  generatedAt?: string;
-  claimGenerator?: string;
-}): C2paStyleClaim {
-  return {
-    version: 1,
-    claim_generator: args.claimGenerator ?? 'AGI',
-    kind: args.kind,
-    generated_at: args.generatedAt ?? new Date().toISOString(),
-    provider: args.provider,
-    model: args.model,
-    content_hash_sha256: args.contentHashSha256 ?? '',
-    assertions: Object.freeze([
-      Object.freeze({
-        label: 'c2pa.actions',
-        action: 'c2pa.created:trainedAlgorithmicMedia',
-      }),
-    ]),
-    signature: null,
-  };
-}
+export const buildProvenanceClaim = buildAiActProvenanceClaim;
 
-export function serialiseClaim(claim: C2paStyleClaim): string {
-  return JSON.stringify(claim, Object.keys(claim).sort());
-}
+export const serialiseClaim = serialiseAiActProvenanceClaim;
 
 export function renderAiGeneratedMetaTag(args: {
   kind: SyntheticContentKind;

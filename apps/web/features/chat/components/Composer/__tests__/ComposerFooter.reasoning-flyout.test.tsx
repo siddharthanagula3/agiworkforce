@@ -131,9 +131,14 @@ vi.mock('@shared/stores/model-store', () => ({
   AVAILABLE_MODELS: MODELS,
 }));
 
+const billing = vi.hoisted(() => ({ tier: 'max' }));
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ subscription: { tier: 'max' }, dailyUsage_cents: 0, dailyLimit_cents: 0 }),
+    selector({
+      subscription: { tier: billing.tier },
+      dailyUsage_cents: 0,
+      dailyLimit_cents: 0,
+    }),
 }));
 
 vi.mock('@shared/config/llm', async (importOriginal) => {
@@ -245,6 +250,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
   beforeEach(() => {
     thinking.enabled = true;
     thinking.effort = 'medium';
+    billing.tier = 'max';
   });
 
   it('(a) Six-Level Fixture exposes its six exact levels through one compact slider', () => {
@@ -324,6 +330,34 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     expect(row).not.toBeDisabled();
     expect(row).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
+  });
+
+  it('trims the slider to the entitled levels and names the gated ones for an unentitled tier', () => {
+    sel.id = 'fixture-six-level';
+    billing.tier = 'free';
+    const onUpgradeRequest = vi.fn();
+    render(<ComposerFooter onUpgradeRequest={onUpgradeRequest} />);
+
+    expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute('max', '2');
+    expect(
+      screen.getByText('High, xHigh, Max effort levels are not included in your plan.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+    expect(onUpgradeRequest).toHaveBeenCalled();
+  });
+
+  it('does not present a persisted gated effort as active for an unentitled tier', () => {
+    sel.id = 'fixture-six-level';
+    billing.tier = 'free';
+    thinking.effort = 'max';
+    render(<ComposerFooter />);
+
+    expect(screen.getByRole('slider', { name: 'Reasoning effort' })).toHaveAttribute(
+      'aria-valuetext',
+      'Medium',
+    );
+    expect(screen.getByRole('button', { name: 'Change model' })).toHaveTextContent('Medium');
   });
 
   it('keeps a synthetic future preview non-selectable and non-focusable', () => {

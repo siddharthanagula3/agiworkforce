@@ -5,6 +5,16 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type ChatTextSize = 'small' | 'default' | 'large';
 
+export type AccentColor = 'default' | 'green' | 'blue' | 'violet' | 'rose';
+
+export const ACCENT_COLORS: ReadonlyArray<{ value: AccentColor; label: string }> = [
+  { value: 'default', label: 'AGI amber' },
+  { value: 'green', label: 'Green' },
+  { value: 'blue', label: 'Blue' },
+  { value: 'violet', label: 'Violet' },
+  { value: 'rose', label: 'Rose' },
+];
+
 export interface CustomCommand {
   id: string;
   name: string;
@@ -15,9 +25,13 @@ export interface CustomCommand {
 interface SettingsState {
   chatTextSize: ChatTextSize;
   codeBlockWrap: boolean;
+  accentColor: AccentColor;
+  highContrast: boolean;
   customCommands: CustomCommand[];
   setChatTextSize: (size: ChatTextSize) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
+  setAccentColor: (accent: AccentColor) => void;
+  setHighContrast: (on: boolean) => void;
   addCustomCommand: (cmd: Omit<CustomCommand, 'id'>) => void;
   updateCustomCommand: (id: string, cmd: Partial<Omit<CustomCommand, 'id'>>) => void;
   deleteCustomCommand: (id: string) => void;
@@ -28,9 +42,13 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       chatTextSize: 'default',
       codeBlockWrap: false,
+      accentColor: 'default',
+      highContrast: false,
       customCommands: [],
       setChatTextSize: (size) => set({ chatTextSize: size }),
       setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
+      setAccentColor: (accent) => set({ accentColor: accent }),
+      setHighContrast: (on) => set({ highContrast: on }),
       addCustomCommand: (cmd) =>
         set((s) => ({
           customCommands: [

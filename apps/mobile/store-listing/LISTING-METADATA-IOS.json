@@ -57,10 +57,24 @@
         "purpose": "App Functionality",
         "optional": true,
         "collected_when": "Only when the user signs in to use AGI Cloud (public alpha). Email is required to create the account; name is collected if provided by the sign-in method."
+      },
+      {
+        "category": "User Content",
+        "data_types": ["Other User Content", "Photos or Videos"],
+        "purpose": "App Functionality",
+        "optional": true,
+        "collected_when": "Only in AGI Cloud: the messages the user sends and any photos or files attached to them are uploaded to AGI Cloud and forwarded to the model provider serving the request. Local Mode uploads nothing."
+      },
+      {
+        "category": "Identifiers",
+        "data_types": ["User ID", "Device ID"],
+        "purpose": "App Functionality",
+        "optional": true,
+        "collected_when": "Only after sign-in: the account identifier on every authenticated cloud request, and an app-generated device UUID registered with the push token so notifications reach the right install. No advertising identifier is collected."
       }
     ],
     "data_not_linked_to_you": [],
-    "note": "Local Mode collects no personal data by default. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email and optional name."
+    "note": "Local Mode collects no personal data by default and uploads nothing. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors on AGI's behalf; it is never used to track the user across other companies' apps or websites."
   },
   "urls": {
     "privacy_policy": "https://agiworkforce.com/privacy",

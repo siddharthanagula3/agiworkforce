@@ -76,15 +76,16 @@ export default function EnterprisePage() {
           first-party SSO sign-in (lib/server/sso/clerk-enterprise-connections.ts,
           /api/admin/sso) and SCIM provisioning (/api/scim/v2) are live code
           paths, gated on the `enterprise_controls` billing capability rather
-          than aspirational. The org audit trail is ALSO implemented and
-          live — services/api-gateway/src/routes/enterprise.ts's
-          `/organizations/:orgId/audit-events` and its `/export` sibling read
-          the (now-writable, see db/neon/0087_enterprise_audit_event_writes.sql)
-          `enterprise_audit_events` table — but it is gated on
-          organization-admin membership, NOT the `enterprise_controls`
-          capability, so its row must not claim that same gate. Only
-          org-configurable RETENTION WINDOWS remain unbuilt — that row is
-          unchanged. Calling shipped, gated controls "roadmap" is the same
+          than aspirational. The org audit trail RECORDS but is not readable:
+          writes land in `enterprise_audit_events` (see
+          db/neon/0087_enterprise_audit_event_writes.sql), but the
+          `/organizations/:orgId/audit-events` read and `/export` endpoints
+          lived in the Express gateway that was deleted on 2026-08-17, and
+          nothing in apps/web replaced them — /api/settings/audit-logs reads
+          `security_audit_logs`, a different table. So the row must say events
+          are captured and export is unavailable, and must NOT claim the read
+          path is live. Org-configurable RETENTION WINDOWS also remain
+          unbuilt — that row is unchanged. Calling shipped, gated controls "roadmap" is the same
           honesty bug as overclaiming them; this page must not repeat it in
           either direction, so re-verify each row here against the code
           before editing.
@@ -95,7 +96,7 @@ export default function EnterprisePage() {
           rows={[
             {
               k: 'Status',
-              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan — your org's owner configures both directly once that entitlement is on the account. Audit logging and export are implemented too, gated separately on organization-admin membership. Data retention windows and dedicated capacity remain contract-scoped commitments, not self-serve toggles; we state dates for those in writing during procurement.`,
+              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan — your org's owner configures both directly once that entitlement is on the account. Org audit events are recorded, but self-serve audit read and export are not available yet; we supply audit extracts on request under contract. Data retention windows and dedicated capacity remain contract-scoped commitments, not self-serve toggles; we state dates for those in writing during procurement.`,
             },
             {
               k: 'SSO',
@@ -107,7 +108,7 @@ export default function EnterprisePage() {
             },
             {
               k: 'Audit',
-              v: 'Implemented. Organization admins can read and export the audit trail (NDJSON or CSV) covering administrative and identity events, gated on org-admin membership rather than a separate entitlement. We will tell you precisely which events are captured rather than implying full coverage.',
+              v: 'Partially implemented. Administrative and identity events are recorded to an append-only org audit table, but there is no self-serve read or export surface today — we supply extracts on request under contract. We will tell you precisely which events are captured rather than implying full coverage.',
             },
             {
               k: 'Retention',

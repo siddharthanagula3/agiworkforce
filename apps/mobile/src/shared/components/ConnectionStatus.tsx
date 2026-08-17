@@ -55,8 +55,20 @@ export function ConnectionStatusBar() {
   const router = useRouter();
   const status = useConnectionStore((s) => s.status);
   const desktopName = useConnectionStore((s) => s.desktopName);
+  const unacknowledgedControls = useConnectionStore((s) => s.unacknowledgedControls);
+  const lastControlDelivery = useConnectionStore((s) => s.lastControlDelivery);
 
-  const config = getConfig(status, desktopName, colors);
+  const base = getConfig(status, desktopName, colors);
+  const config =
+    lastControlDelivery?.outcome === 'dropped' && unacknowledgedControls === 0
+      ? { ...base, label: 'Desktop never confirmed your last command', color: colors.agentError }
+      : unacknowledgedControls > 0
+        ? {
+            ...base,
+            label: `${base.label} · ${unacknowledgedControls} unconfirmed`,
+            color: colors.agentWarning,
+          }
+        : base;
   const Icon = config.icon;
 
   return (

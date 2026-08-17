@@ -1,4 +1,3 @@
-
 import { storage } from '@/lib/mmkv';
 
 export type AgeGateRecord = {
@@ -120,9 +119,16 @@ export function isMinorMode(): boolean {
 /**
  * Record the user's age confirmation.
  *
+ * A device already in minor-safe mode keeps its record: nothing in this app
+ * verifies the typed age, so accepting a higher one would let the protected
+ * user switch the protection off. Only clearAgeGate lifts it.
+ *
  * @param ageEntered The age the user entered (integer years).
  */
 export function confirmAgeGate(ageEntered: number): AgeGateRecord {
+  const existing = readRecord();
+  if (existing?.confirmed === true && existing.isMinor === true) return existing;
+
   const rule = detectRegionRule();
   const isMinor = ageEntered < rule.threshold;
   const record: AgeGateRecord = {

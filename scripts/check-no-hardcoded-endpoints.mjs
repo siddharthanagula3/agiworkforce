@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-const SCAN_ROOTS = ['apps', 'packages', 'services', 'crates', 'shared'];
+const SCAN_ROOTS = ['apps', 'packages', 'services', 'crates', 'shared', 'examples', 'tools'];
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.rs'];
 
 const SKIP_DIR_NAMES = new Set([
@@ -125,8 +125,8 @@ const BUDGETS = [
   },
   {
     file: 'apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs',
-    max: 13,
-    why: "Desktop's default_base_url() provider table — the canonical desktop declaration.",
+    max: 14,
+    why: "Desktop's default_base_url() provider table plus RETIRED_PROVIDER_HOSTS — the canonical desktop declaration.",
   },
   {
     file: 'apps/cli/src/models/mod.rs',
@@ -143,27 +143,19 @@ const BUDGETS = [
     max: 1,
     why: 'Wire-shape detection: the vendor host selects the OpenAI request dialect.',
   },
+  {
+    file: 'crates/agiworkforce-llm/src/speech.rs',
+    max: 1,
+    why: 'Shared transcription contract — the single BYOK speech endpoint both Rust binaries read.',
+  },
+  {
+    file: 'tools/evals/src/anthropic.ts',
+    max: 1,
+    why: 'Eval harness endpoint declaration, overridable via ANTHROPIC_BASE_URL; not shipped code.',
+  },
 
   {
-    file: 'apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs',
-    max: 2,
-    residue: true,
-    why: 'HARD-001 — summarizer still posts to hardcoded OpenAI chat/embeddings endpoints.',
-  },
-  {
     file: 'apps/desktop/src-tauri/src/features/speech/tts.rs',
-    max: 1,
-    residue: true,
-    why: 'HARD-004 — speech endpoints not yet moved into a shared provider contract.',
-  },
-  {
-    file: 'apps/desktop/src-tauri/src/sys/commands/voice.rs',
-    max: 1,
-    residue: true,
-    why: 'HARD-004 — speech endpoints not yet moved into a shared provider contract.',
-  },
-  {
-    file: 'apps/cli/src/voice.rs',
     max: 1,
     residue: true,
     why: 'HARD-004 — speech endpoints not yet moved into a shared provider contract.',
@@ -239,12 +231,6 @@ const BUDGETS = [
     max: 1,
     residue: true,
     why: 'HARD-002 — Perplexity search host duplicated in the web-search tool.',
-  },
-  {
-    file: 'services/api-gateway/src/services/providerHealth.ts',
-    max: 8,
-    residue: true,
-    why: 'HARD-005 follow-up — gateway health pings need their own endpoint declaration.',
   },
 ];
 

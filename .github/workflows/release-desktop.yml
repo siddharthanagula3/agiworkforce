@@ -57,6 +57,7 @@ jobs:
       tag: ${{ steps.get-version.outputs.tag }}
       channel: ${{ steps.get-version.outputs.channel }}
       prerelease: ${{ steps.get-version.outputs.prerelease }}
+      previous_tag: ${{ steps.changelog.outputs.previous_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -430,6 +431,21 @@ jobs:
           NODE
           minisign -Vm "${appimages[0]}" -x "${signatures[0]}" -p "$public_key_file"
 
+      - name: Generate Linux release SBOM
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          pnpm --filter @agiworkforce/desktop list --prod --depth Infinity --json > sbom/linux-npm-tree.json
+          node scripts/generate-sbom.mjs \
+            --component agiworkforce-desktop-linux-x86_64 \
+            --version "$VERSION" \
+            --cargo-lock Cargo.lock \
+            --node-tree sbom/linux-npm-tree.json \
+            --out "sbom/agiworkforce-desktop-${VERSION}-linux-x86_64.cdx.json"
+          rm sbom/linux-npm-tree.json
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -438,6 +454,7 @@ jobs:
             target/release/bundle/appimage/*.AppImage
             target/release/bundle/appimage/*.AppImage.sig
             target/release/bundle/deb/*.deb
+            sbom/*.cdx.json
           retention-days: 7
 
   # ==========================================================================
@@ -598,6 +615,21 @@ jobs:
           NODE
           minisign -Vm "${updaters[0]}" -x "${signatures[0]}" -p "$public_key_file"
 
+      - name: Generate macOS release SBOM
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p sbom
+          pnpm --filter @agiworkforce/desktop list --prod --depth Infinity --json > sbom/macos-npm-tree.json
+          node scripts/generate-sbom.mjs \
+            --component agiworkforce-desktop-universal-apple-darwin \
+            --version "$VERSION" \
+            --cargo-lock Cargo.lock \
+            --node-tree sbom/macos-npm-tree.json \
+            --out "sbom/agiworkforce-desktop-${VERSION}-universal-apple-darwin.cdx.json"
+          rm sbom/macos-npm-tree.json
+
       - name: Upload verified macOS artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -606,8 +638,195 @@ jobs:
             target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
             target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
             target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            sbom/*.cdx.json
           if-no-files-found: error
           retention-days: 7
+
+  # ==========================================================================
+  # Clean-machine install - install the built package on a bare Ubuntu image
+  # ==========================================================================
+  clean-install-linux:
+    name: Install on a clean machine
+    needs: [prepare-release, build-linux]
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:24.04
+    timeout-minutes: 30
+    steps:
+      - name: Download the built Linux artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-x64-artifacts
+          path: artifacts
+
+      - name: Install the Debian package with no build toolchain present
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          EXPECTED_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates
+
+          deb=$(find artifacts -name '*.deb' -type f | head -1)
+          if [ -z "$deb" ]; then
+            echo "ERROR: no Debian package was published for this release" >&2
+            exit 1
+          fi
+
+          package_name=$(dpkg-deb -f "$deb" Package)
+          package_version=$(dpkg-deb -f "$deb" Version)
+          if [ "${package_version%%-*}" != "$EXPECTED_VERSION" ]; then
+            echo "ERROR: package version ${package_version} does not match release ${EXPECTED_VERSION}" >&2
+            exit 1
+          fi
+
+          apt-get install -y "./${deb#./}"
+          installed=$(dpkg-query -W -f='${Version}' "$package_name")
+          if [ "$installed" != "$package_version" ]; then
+            echo "ERROR: dpkg reports ${installed} after installing ${package_version}" >&2
+            exit 1
+          fi
+
+          echo "PACKAGE_NAME=${package_name}" >> "$GITHUB_ENV"
+
+      - name: Prove the installed binary resolves every shared library
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary=$(dpkg -L "$PACKAGE_NAME" | grep '^/usr/bin/' | head -1)
+          if [ -z "$binary" ] || [ ! -x "$binary" ]; then
+            echo "ERROR: the package installed no executable under /usr/bin" >&2
+            exit 1
+          fi
+          missing=$(ldd "$binary" | grep 'not found' || true)
+          if [ -n "$missing" ]; then
+            echo "ERROR: the release depends on libraries a clean machine does not have:" >&2
+            printf '%s\n' "$missing" >&2
+            exit 1
+          fi
+          if ! dpkg -L "$PACKAGE_NAME" | grep -q '\.desktop$'; then
+            echo "ERROR: the package installs no desktop entry, so it is unlaunchable" >&2
+            exit 1
+          fi
+
+      - name: Require an SBOM alongside the installable artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          sbom=$(find artifacts -name '*.cdx.json' -type f | head -1)
+          if [ -z "$sbom" ] || [ ! -s "$sbom" ]; then
+            echo "ERROR: the Linux release shipped without an SBOM" >&2
+            exit 1
+          fi
+          grep -q '"bomFormat": "CycloneDX"' "$sbom"
+
+  # ==========================================================================
+  # Upgrade path - install the previous published release, upgrade, roll back
+  # ==========================================================================
+  upgrade-from-previous-linux:
+    name: Upgrade from the previous release and roll back
+    needs: [prepare-release, build-linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download the built Linux artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-x64-artifacts
+          path: artifacts
+
+      - name: Install the previously published release
+        id: previous
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIOUS_TAG: ${{ needs.prepare-release.outputs.previous_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "No previously published desktop release exists; nothing to upgrade from."
+            echo "have_previous=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p previous
+          gh release download "$PREVIOUS_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.deb' --dir previous
+          previous_deb=$(find previous -name '*.deb' -type f | head -1)
+          if [ -z "$previous_deb" ]; then
+            echo "ERROR: ${PREVIOUS_TAG} published no Debian package to upgrade from" >&2
+            exit 1
+          fi
+          sudo apt-get update
+          sudo apt-get install -y xvfb "./${previous_deb#./}"
+          echo "have_previous=true" >> "$GITHUB_OUTPUT"
+          echo "previous_deb=${previous_deb}" >> "$GITHUB_OUTPUT"
+
+      - name: Seed user data with the previous release
+        if: steps.previous.outputs.have_previous == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          identifier=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').identifier")
+          data_root="${RUNNER_TEMP}/xdg-data"
+          data_dir="${data_root}/${identifier}"
+          mkdir -p "$data_dir/upgrade-probe"
+          printf 'model-cache-payload' > "$data_dir/upgrade-probe/model-cache.bin"
+          printf '{"theme":"dark"}' > "$data_dir/upgrade-probe/config.json"
+          echo "XDG_DATA_HOME=${data_root}" >> "$GITHUB_ENV"
+          echo "AGI_DATA_DIR=${data_dir}" >> "$GITHUB_ENV"
+
+          package_name=$(dpkg-deb -f "${{ steps.previous.outputs.previous_deb }}" Package)
+          binary=$(dpkg -L "$package_name" | grep '^/usr/bin/' | head -1)
+          echo "AGI_BINARY=${binary}" >> "$GITHUB_ENV"
+          xvfb-run -a timeout 120 "$binary" || true
+          node scripts/verify-desktop-upgrade.mjs snapshot \
+            --data-dir "$data_dir" \
+            --database agiworkforce.db \
+            --out "${RUNNER_TEMP}/before.json"
+
+      - name: Upgrade to this release and prove nothing was lost
+        if: steps.previous.outputs.have_previous == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb=$(find artifacts -name '*.deb' -type f | head -1)
+          sudo apt-get install -y "./${deb#./}"
+          xvfb-run -a timeout 120 "$AGI_BINARY" || true
+          node scripts/verify-desktop-upgrade.mjs snapshot \
+            --data-dir "$AGI_DATA_DIR" \
+            --database agiworkforce.db \
+            --out "${RUNNER_TEMP}/after.json"
+          node scripts/verify-desktop-upgrade.mjs compare \
+            --before "${RUNNER_TEMP}/before.json" \
+            --after "${RUNNER_TEMP}/after.json" \
+            --preserve upgrade-probe/model-cache.bin,upgrade-probe/config.json
+
+      - name: Roll back to the previous release and prove it still opens the data
+        if: steps.previous.outputs.have_previous == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --allow-downgrades "./${{ steps.previous.outputs.previous_deb }}"
+          xvfb-run -a timeout 120 "$AGI_BINARY" || true
+          node scripts/verify-desktop-upgrade.mjs snapshot \
+            --data-dir "$AGI_DATA_DIR" \
+            --database agiworkforce.db \
+            --out "${RUNNER_TEMP}/rollback.json"
+          node scripts/verify-desktop-upgrade.mjs compare --rollback true \
+            --before "${RUNNER_TEMP}/after.json" \
+            --after "${RUNNER_TEMP}/rollback.json" \
+            --preserve upgrade-probe/model-cache.bin,upgrade-probe/config.json
 
   # ==========================================================================
   # Update Release Database - Store release info in Neon
@@ -733,7 +952,8 @@ jobs:
   # ==========================================================================
   publish-release:
     name: Publish Release
-    needs: [prepare-release, build-linux, build-macos]
+    needs:
+      [prepare-release, build-linux, build-macos, clean-install-linux, upgrade-from-previous-linux]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

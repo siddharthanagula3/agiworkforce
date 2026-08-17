@@ -26,6 +26,10 @@ describe('isContinuableFinishReason', () => {
     expect(isContinuableFinishReason('stopped')).toBe(true);
   });
 
+  it('accepts a provider-paused turn, which is suspended rather than finished', () => {
+    expect(isContinuableFinishReason('pause_turn')).toBe(true);
+  });
+
   it('rejects normal completion and every other reason', () => {
     expect(isContinuableFinishReason('stop')).toBe(false);
     expect(isContinuableFinishReason('end_turn')).toBe(false);

@@ -1,10 +1,11 @@
-
 import * as fs from 'node:fs';
 
 const SCREEN_DIR =
   '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens';
 
 fs.mkdirSync(SCREEN_DIR, { recursive: true });
+
+const SIDEBAR_VISIBLE_PROJECT_CAP = 6;
 
 function clickSelector(selector: string) {
   return browser.execute((sel) => {
@@ -62,10 +63,11 @@ describe('AGI Desktop v3 Sidebar', () => {
       const aside = document.querySelector('aside[data-v3-sidebar]');
       return {
         collapsedAttr: aside?.getAttribute('data-collapsed'),
-        width: aside ? getComputedStyle(aside).width : null,
+        width: aside ? parseFloat(getComputedStyle(aside).width) : null,
       };
     });
-    console.log('COLLAPSE: initial state', JSON.stringify(before));
+    expect(before.collapsedAttr).toBe('false');
+    expect(before.width).toBeGreaterThan(0);
 
     await clickSelector('aside[data-v3-sidebar] button[title="Collapse sidebar"]');
     await browser.pause(400);
@@ -74,10 +76,11 @@ describe('AGI Desktop v3 Sidebar', () => {
       const aside = document.querySelector('aside[data-v3-sidebar]');
       return {
         collapsedAttr: aside?.getAttribute('data-collapsed'),
-        width: aside ? getComputedStyle(aside).width : null,
+        width: aside ? parseFloat(getComputedStyle(aside).width) : null,
       };
     });
-    console.log('COLLAPSE: after clicking collapse', JSON.stringify(afterCollapse));
+    expect(afterCollapse.collapsedAttr).toBe('true');
+    expect(afterCollapse.width).toBeLessThan(before.width as number);
 
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-01-collapsed.png`);
 
@@ -88,13 +91,11 @@ describe('AGI Desktop v3 Sidebar', () => {
       const aside = document.querySelector('aside[data-v3-sidebar]');
       return {
         collapsedAttr: aside?.getAttribute('data-collapsed'),
-        width: aside ? getComputedStyle(aside).width : null,
+        width: aside ? parseFloat(getComputedStyle(aside).width) : null,
       };
     });
-    console.log(
-      'COLLAPSE: still collapsed after full page reload (persisted, not just in-memory):',
-      JSON.stringify(afterReload),
-    );
+    expect(afterReload.collapsedAttr).toBe('true');
+    expect(afterReload.width).toBe(afterCollapse.width);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-02-collapsed-after-reload.png`);
 
     await clickSelector('aside[data-v3-sidebar] button[title="Expand sidebar"]');
@@ -103,7 +104,7 @@ describe('AGI Desktop v3 Sidebar', () => {
       const aside = document.querySelector('aside[data-v3-sidebar]');
       return aside?.getAttribute('data-collapsed');
     });
-    console.log('COLLAPSE: restored to expanded for remaining tests:', restoredExpanded);
+    expect(restoredExpanded).toBe('false');
   });
 
   it('New Chat: creates a fresh conversation, clears prior draft, focuses composer', async function () {
@@ -114,7 +115,7 @@ describe('AGI Desktop v3 Sidebar', () => {
     await draftInput.waitForDisplayed({ timeout: 10000 });
     await draftInput.setValue('QA draft that should be discarded by New Chat');
     const draftBefore = await draftInput.getValue();
-    console.log('NEW CHAT: draft set before clicking New chat:', JSON.stringify(draftBefore));
+    expect(draftBefore).toBe('QA draft that should be discarded by New Chat');
 
     await clickSelector('aside[data-v3-sidebar] button[title="New chat"]');
     await browser.pause(600);
@@ -129,7 +130,9 @@ describe('AGI Desktop v3 Sidebar', () => {
         exists: !!ta,
       };
     });
-    console.log('NEW CHAT: composer state after New Chat click:', JSON.stringify(state));
+    expect(state.exists).toBe(true);
+    expect(state.value).toBe('');
+    expect(state.isFocused).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-03-new-chat.png`);
   });
 
@@ -149,7 +152,7 @@ describe('AGI Desktop v3 Sidebar', () => {
 
     await clickSelector('aside[data-v3-sidebar] button[title="Search (⌘K)"]');
     const dialogAppeared = await waitForSelector('div[role="dialog"][aria-modal="true"]', 5000);
-    console.log('SEARCH: dialog opened from sidebar button:', dialogAppeared);
+    expect(dialogAppeared).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-04-search-open.png`);
 
     const searchInput = await $('input[role="searchbox"]');
@@ -168,7 +171,9 @@ describe('AGI Desktop v3 Sidebar', () => {
       },
       seedTitle.slice(0, 18),
     );
-    console.log('SEARCH: live filter result:', JSON.stringify(filtered));
+    expect(filtered.count).toBeGreaterThan(0);
+    expect(filtered.matchesQuery).toBe(true);
+    expect(filtered.firstResultText).toContain(seedTitle.slice(0, 18));
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-05-search-filtered.png`);
 
     await clickSelector('#search-results [role="option"]');
@@ -178,7 +183,7 @@ describe('AGI Desktop v3 Sidebar', () => {
       3000,
       'disappear',
     );
-    console.log('SEARCH: modal closed after clicking a result:', closedAfterClick);
+    expect(closedAfterClick).toBe(true);
 
     await clickSelector('aside[data-v3-sidebar] button[title="Search (⌘K)"]');
     await waitForSelector('div[role="dialog"][aria-modal="true"]', 5000);
@@ -188,7 +193,7 @@ describe('AGI Desktop v3 Sidebar', () => {
       3000,
       'disappear',
     );
-    console.log('SEARCH: modal closed after Escape:', closedAfterEscape);
+    expect(closedAfterEscape).toBe(true);
   });
 
   it('Conversation list: grouping headers render and hover reveals per-row actions', async function () {
@@ -208,7 +213,7 @@ describe('AGI Desktop v3 Sidebar', () => {
       candidates.forEach((c) => headers.add(c.textContent!.trim()));
       return Array.from(headers);
     });
-    console.log('GROUPING: time-group headers present:', JSON.stringify(groupHeaders));
+    expect(groupHeaders.length).toBeGreaterThan(0);
 
     const activeRowActions = await browser.execute(() => {
       const row = document.querySelector(
@@ -219,10 +224,8 @@ describe('AGI Desktop v3 Sidebar', () => {
         moreButtonVisibleOnActive: !!row?.querySelector('button[aria-label="More options"]'),
       };
     });
-    console.log(
-      'HOVER-EQUIVALENT: active row always shows the more-options trigger:',
-      JSON.stringify(activeRowActions),
-    );
+    expect(activeRowActions.rowFound).toBe(true);
+    expect(activeRowActions.moreButtonVisibleOnActive).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-06-conversation-list.png`);
   });
 
@@ -239,25 +242,17 @@ describe('AGI Desktop v3 Sidebar', () => {
     const countAfterCreate = await browser.execute(
       () => document.querySelectorAll('[data-testid="project-row"]').length,
     );
-    console.log(
-      'PROJECT CREATE: rows before/after:',
-      countBefore,
-      countAfterCreate,
-      'appeared-selector-wait:',
-      appeared,
-    );
+    expect(appeared).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-07-project-created.png`);
 
-    if (countAfterCreate <= countBefore) {
-      console.log(
-        'PROJECT CREATE: WARNING — new project did not appear in the sidebar list. ' +
-          'Sidebar caps visibleProjects to the first 6 by array order (no recency re-sort), ' +
-          'so if 6+ projects already existed, a newly created one is invisible until an ' +
-          'older one is archived/deleted. See Sidebar.tsx visibleProjects.',
-      );
+    // Sidebar.tsx caps visibleProjects to the first 6 by array order with no recency
+    // re-sort, so at the cap a newly created project is invisible until an older one
+    // is archived. Report that as pending rather than asserting against a known cap.
+    if (countBefore >= SIDEBAR_VISIBLE_PROJECT_CAP) {
       await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-07b-project-not-visible-BUG.png`);
-      return;
+      this.skip();
     }
+    expect(countAfterCreate).toBeGreaterThan(countBefore);
 
     const renamedName = `QA Project ${Date.now()}`;
     await browser.execute(() => {
@@ -282,7 +277,7 @@ describe('AGI Desktop v3 Sidebar', () => {
       moreBtn?.click();
     });
     const menuOpened = await waitForSelector('div[role="menu"]', 5000);
-    console.log('PROJECT RENAME: 3-dot menu opened:', menuOpened);
+    expect(menuOpened).toBe(true);
     await clickButtonWithText('div[role="menu"]', 'Rename');
 
     const renameInput = await $('[data-testid="project-row"] input');
@@ -299,7 +294,7 @@ describe('AGI Desktop v3 Sidebar', () => {
         ),
       renamedName,
     );
-    console.log('PROJECT RENAME: renamed row present:', renamed);
+    expect(renamed).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-08-project-renamed.png`);
 
     await browser.execute((name) => {
@@ -319,12 +314,8 @@ describe('AGI Desktop v3 Sidebar', () => {
     }, renamedName);
     await waitForSelector('div[role="menu"]', 5000);
     const archiveClicked = await clickButtonWithText('div[role="menu"]', 'Archive');
-    console.log(
-      'PROJECT ARCHIVE: menu opened:',
-      archiveMenuOpened,
-      'Archive item found+clicked:',
-      archiveClicked,
-    );
+    expect(archiveMenuOpened).toBe(true);
+    expect(archiveClicked).toBe(true);
 
     const goneAfterArchive = await browser.execute(
       (name) =>
@@ -333,7 +324,7 @@ describe('AGI Desktop v3 Sidebar', () => {
         ),
       renamedName,
     );
-    console.log('PROJECT ARCHIVE: row hidden immediately after archiving:', goneAfterArchive);
+    expect(goneAfterArchive).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-09-project-archived.png`);
 
     await browser.refresh();
@@ -346,10 +337,7 @@ describe('AGI Desktop v3 Sidebar', () => {
         ),
       renamedName,
     );
-    console.log(
-      'PROJECT ARCHIVE: stays hidden after reload (persisted via updateProject, not just local state):',
-      stillGoneAfterReload,
-    );
+    expect(stillGoneAfterReload).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-10-project-archived-after-reload.png`);
 
     await clickSelector('aside[data-v3-sidebar] button[aria-label="New project"]');
@@ -373,18 +361,14 @@ describe('AGI Desktop v3 Sidebar', () => {
     await clickButtonWithText('div[role="menu"]', 'Delete');
     await waitForSelector('div[role="menu"]', 3000);
     const confirmDeleteClicked = await clickButtonWithText('div[role="menu"]', 'Confirm delete');
-    console.log(
-      'PROJECT DELETE: confirm-delete clicked:',
-      confirmDeleteClicked,
-      'target id:',
-      deleteRowId,
-    );
+    expect(deleteRowId).not.toBe(null);
+    expect(confirmDeleteClicked).toBe(true);
     await browser.pause(400);
     const deletedRowGone = await browser.execute(
       (id) => !document.querySelector(`[data-testid="project-row"][data-project-id="${id}"]`),
       deleteRowId,
     );
-    console.log('PROJECT DELETE: row removed immediately:', deletedRowGone);
+    expect(deletedRowGone).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-10b-project-deleted.png`);
 
     await browser.refresh();
@@ -393,7 +377,7 @@ describe('AGI Desktop v3 Sidebar', () => {
       (id) => !document.querySelector(`[data-testid="project-row"][data-project-id="${id}"]`),
       deleteRowId,
     );
-    console.log('PROJECT DELETE: stays gone after reload:', deletedStaysGone);
+    expect(deletedStaysGone).toBe(true);
   });
 
   it('Local/Cloud toggle: shows a clear, non-confusing coming-soon message for Cloud (PA-3 gate, live-driven)', async function () {
@@ -435,7 +419,6 @@ describe('AGI Desktop v3 Sidebar', () => {
         selected: t.getAttribute('aria-selected'),
       }));
     });
-    console.log('CLOUD TOGGLE: tab state after click:', JSON.stringify(modeAfterClick));
     expect(modeAfterClick[1]?.selected).toBe('true');
     const offersSignIn =
       bodyText.includes('Sign in') ||
@@ -468,7 +451,8 @@ describe('AGI Desktop v3 Sidebar', () => {
         primaryLabel: primaryBtn?.textContent?.trim() ?? null,
       };
     });
-    console.log('ACCOUNT FOOTER: state before click:', JSON.stringify(footerState));
+    expect(footerState.footerFound).toBe(true);
+    expect(footerState.primaryLabel).not.toBe(null);
 
     await browser.execute(() => {
       const aside = document.querySelector('aside[data-v3-sidebar]');
@@ -486,7 +470,7 @@ describe('AGI Desktop v3 Sidebar', () => {
         anyDialogOpen: !!settingsDialog,
       };
     });
-    console.log('ACCOUNT FOOTER: result of clicking primary control:', JSON.stringify(afterClick));
+    expect(afterClick.accountMenuOpen || afterClick.anyDialogOpen).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-12-account-footer.png`);
 
     await browser.keys('Escape');
@@ -494,7 +478,7 @@ describe('AGI Desktop v3 Sidebar', () => {
 
     await clickSelector('aside[data-v3-sidebar] button[aria-label="Settings"]');
     const settingsOpened = await waitForSelector('[role="dialog"]', 5000);
-    console.log('ACCOUNT FOOTER: gear icon opens Settings dialog:', settingsOpened);
+    expect(settingsOpened).toBe(true);
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-13-settings-from-gear.png`);
     await browser.keys('Escape');
   });
@@ -513,7 +497,8 @@ describe('AGI Desktop v3 Sidebar', () => {
     const menuOpen = await waitForSelector('div[role="menu"]', 5000);
     await browser.keys('Escape');
     const menuClosed = await waitForSelector('div[role="menu"]', 3000, 'disappear');
-    console.log('KEYBOARD: conversation-row menu opened then Escape-closed:', menuOpen, menuClosed);
+    expect(menuOpen).toBe(true);
+    expect(menuClosed).toBe(true);
 
     const tabFocusable = await browser.execute(() => {
       const newChatBtn = document.querySelector(
@@ -528,10 +513,8 @@ describe('AGI Desktop v3 Sidebar', () => {
       const searchFocused = document.activeElement === searchBtn;
       return { newChatFocused, searchFocused };
     });
-    console.log(
-      'KEYBOARD: sidebar buttons are programmatically focusable:',
-      JSON.stringify(tabFocusable),
-    );
+    expect(tabFocusable.newChatFocused).toBe(true);
+    expect(tabFocusable.searchFocused).toBe(true);
   });
 
   it('Visual polish: long conversation/project titles truncate instead of overflowing', async function () {
@@ -568,7 +551,10 @@ describe('AGI Desktop v3 Sidebar', () => {
         scrollWidthExceedsClientWidth: titleSpan.scrollWidth > titleSpan.clientWidth,
       };
     }, longTitle);
-    console.log('VISUAL: long title truncation CSS:', JSON.stringify(overflowCheck));
+    expect(overflowCheck).not.toBe(null);
+    expect(overflowCheck?.textOverflow).toBe('ellipsis');
+    expect(overflowCheck?.whiteSpace).toBe('nowrap');
+    expect(overflowCheck?.overflow).toBe('hidden');
     await browser.saveScreenshot(`${SCREEN_DIR}/sidebar-14-long-title-truncation.png`);
   });
 });

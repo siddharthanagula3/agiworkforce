@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { ManagedCloudProjectResponseSchema } from '@agiworkforce/cloud-contracts';
@@ -72,6 +71,10 @@ vi.mock('@/lib/server/neon-db', () => ({
     adapter.transaction.mockImplementation((fn: (db: typeof adapter) => unknown) => fn(adapter));
     return adapter;
   }),
+}));
+
+vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  deleteProjectKnowledgeObject: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -399,6 +402,7 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
     const organizationId = '11111111-1111-4111-8111-111111111111';
     mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
     mockNeonExecute.mockResolvedValue(1);
+    mockNeonQuery.mockResolvedValue([]);
 
     const res = await DELETE(makeProjectRequest('proj-1', 'DELETE'), {
       params: Promise.resolve({ id: 'proj-1' }),

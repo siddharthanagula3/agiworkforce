@@ -7,15 +7,22 @@ import {
   applyArtifactDeltas as applySharedArtifactDeltas,
   createArtifactStore,
   mergeCloudArtifacts,
+  wireToCloudArtifact,
   type CloudArtifact,
 } from '@agiworkforce/artifacts';
-import type { ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
+import {
+  ArtifactSyncPushItemSchema,
+  type ArtifactSyncPushItem,
+  type ArtifactWireDelta,
+  type ChatSyncPushResponse,
+} from '@agiworkforce/cloud-contracts';
 import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 import { logger } from '@shared/lib/logger';
 import { useChatStore } from '@shared/stores/web-chat-store';
 
 const MAX_RETAINED_ARTIFACTS = 200;
+const MAX_ARTIFACTS_PER_PUSH = 500;
 
 /** @internal The shared vanilla store: the live engine for collection + UI state. */
 export const _sharedArtifactStore = createArtifactStore({
@@ -44,6 +51,8 @@ let _sideMap: Record<string, WebSideEntry> = {};
 let _cloudArtifacts: CloudArtifact[] = [];
 let _cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error' = 'idle';
 let _cloudSyncError: string | null = null;
+let _inFlightPushById = new Map<string, CloudArtifact>();
+let _rejectedPushContentById: Record<string, string> = {};
 
 function getSideEntry(id: string): WebSideEntry {
   return _sideMap[id] ?? {};
@@ -125,6 +134,51 @@ function artifactsContentEqual(a: ArtifactInput, b: ArtifactInput): boolean {
     a.generatedFile === b.generatedFile &&
     a.artifactManifest === b.artifactManifest
   );
+}
+
+function cloudCopyOf(id: string): CloudArtifact | undefined {
+  return _cloudArtifacts.find((artifact) => artifact.id === id);
+}
+
+function cloudBaseVersion(cloud: CloudArtifact | undefined): string {
+  const serverVersion = cloud?.metadata?.['serverVersion'];
+  return typeof serverVersion === 'string' ? serverVersion : '0';
+}
+
+function revisedAt(artifact: { updatedAt?: string; createdAt?: string }, fallback: number): number {
+  const parsed = Date.parse(artifact.updatedAt ?? artifact.createdAt ?? '');
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function supersedesCloudCopy(local: SharedArtifact, cloud: CloudArtifact): boolean {
+  const sameContent =
+    local.content === cloud.content &&
+    local.title === cloud.title &&
+    (local.language ?? null) === (cloud.language ?? null);
+  if (sameContent) return false;
+  return revisedAt(local, Number.POSITIVE_INFINITY) > revisedAt(cloud, 0);
+}
+
+function toArtifactPushItem(
+  artifact: SharedArtifact,
+  baseVersion: string,
+): ArtifactSyncPushItem | null {
+  const parsed = ArtifactSyncPushItemSchema.safeParse({
+    id: artifact.id,
+    conversationId: artifact.conversationId,
+    messageId: artifact.messageId || null,
+    title: artifact.title,
+    artifactType: artifact.type,
+    language: artifact.language ?? null,
+    content: artifact.content,
+    currentVersion: artifact.version && artifact.version > 0 ? artifact.version : 1,
+    baseVersion,
+  });
+  return parsed.success ? parsed.data : null;
+}
+
+function recordCloudCopy(artifact: CloudArtifact): void {
+  _cloudArtifacts = [..._cloudArtifacts.filter((a) => a.id !== artifact.id), artifact];
 }
 
 interface PersistedShape {
@@ -283,6 +337,8 @@ type ArtifactsStoreReturn = {
   getArtifactVersions: (id: string) => SharedArtifact[];
   restoreArtifactVersion: (id: string, versionIndex: number) => boolean;
   applyCloudArtifactDeltas: (deltas: ReadonlyArray<ArtifactWireDelta>) => void;
+  collectArtifactPushBatch: () => ArtifactSyncPushItem[];
+  applyArtifactPushResult: (result: ChatSyncPushResponse) => void;
   clearCloudArtifacts: () => void;
   setCloudSyncStatus: (
     status: 'idle' | 'syncing' | 'synced' | 'error',
@@ -392,6 +448,8 @@ const actions = {
     _cloudArtifacts = [];
     _cloudSyncStatus = 'idle';
     _cloudSyncError = null;
+    _inFlightPushById = new Map();
+    _rejectedPushContentById = {};
   },
 
   addArtifactForMessage(messageId: string, artifact: ArtifactData, conversationId?: string): void {
@@ -503,7 +561,53 @@ const actions = {
     }
   },
 
+  collectArtifactPushBatch(): ArtifactSyncPushItem[] {
+    const batch: ArtifactSyncPushItem[] = [];
+    const snapshots = new Map<string, CloudArtifact>();
+
+    for (const artifact of _sharedArtifactStore.getState().artifacts) {
+      if (batch.length >= MAX_ARTIFACTS_PER_PUSH) break;
+      if (_rejectedPushContentById[artifact.id] === artifact.content) continue;
+      const cloud = cloudCopyOf(artifact.id);
+      if (cloud?.deletedAt) continue;
+      if (cloud && !supersedesCloudCopy(artifact, cloud)) continue;
+      const item = toArtifactPushItem(artifact, cloudBaseVersion(cloud));
+      if (!item) continue;
+      batch.push(item);
+      snapshots.set(artifact.id, { ...artifact });
+    }
+
+    _inFlightPushById = snapshots;
+    return batch;
+  },
+
+  applyArtifactPushResult(result: ChatSyncPushResponse): void {
+    for (const row of result.applied.artifacts) {
+      const pushed = _inFlightPushById.get(row.id);
+      if (!pushed) continue;
+      recordCloudCopy({
+        ...pushed,
+        metadata: { ...pushed.metadata, serverVersion: row.server_version },
+      });
+      delete _rejectedPushContentById[row.id];
+    }
+
+    for (const conflict of result.conflicts.artifacts) {
+      if (conflict.current) {
+        recordCloudCopy(wireToCloudArtifact(conflict.current));
+        continue;
+      }
+      const pushed = _inFlightPushById.get(conflict.id);
+      if (pushed) _rejectedPushContentById[conflict.id] = pushed.content;
+    }
+
+    _inFlightPushById = new Map();
+    notifyArtifactSubscribers();
+  },
+
   clearCloudArtifacts(): void {
+    _inFlightPushById = new Map();
+    _rejectedPushContentById = {};
     if (_cloudArtifacts.length === 0 && _cloudSyncStatus === 'idle' && !_cloudSyncError) return;
     _cloudArtifacts = [];
     _cloudSyncStatus = 'idle';
@@ -526,6 +630,8 @@ const actions = {
     _cloudArtifacts = [];
     _cloudSyncStatus = 'idle';
     _cloudSyncError = null;
+    _inFlightPushById = new Map();
+    _rejectedPushContentById = {};
   },
 };
 

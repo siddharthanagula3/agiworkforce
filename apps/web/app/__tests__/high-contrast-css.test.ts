@@ -13,6 +13,12 @@ describe('Web system contrast preferences', () => {
     expect(css).toContain('outline-width: 3px');
   });
 
+  it('gives the in-app High contrast switch the same treatment as the OS setting', () => {
+    expect(css).toContain("html[data-contrast='more'] {");
+    expect(css).toContain("html[data-contrast='more'].dark {");
+    expect(css).toContain("html[data-contrast='more'] *:focus-visible {");
+  });
+
   it('uses Windows forced-color system tokens instead of brand-only effects', () => {
     expect(css).toContain('@media (forced-colors: active)');
     expect(css).toContain('ButtonBorder');

@@ -103,6 +103,7 @@ describe('options page — Help', () => {
     );
     expect(targets).toEqual([
       'opt-permissions',
+      'opt-privacy',
       'opt-account',
       'opt-preferences',
       'opt-shortcuts',

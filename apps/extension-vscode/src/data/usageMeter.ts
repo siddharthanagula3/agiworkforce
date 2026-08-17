@@ -1,8 +1,10 @@
-
 import * as vscode from 'vscode';
 import {
   canUseBillingPlanCapability,
   formatPrivacyModeLabel,
+  MANAGED_USAGE_BUCKET_ORDER,
+  type ManagedUsageBucket,
+  type ManagedUsageBucketReading,
   type UsageMeter,
   type UIPlanTier,
 } from '@agiworkforce/types';
@@ -43,7 +45,30 @@ export type ExtensionUsageMeter = UsageMeter & {
   accountPlanTier?: UIPlanTier;
   managedDeveloperEligible?: boolean;
   subscriptionStatus?: string;
+  hasUsageRemaining?: boolean;
+  buckets?: ManagedUsageBucketReading[];
+  bindingBucket?: ManagedUsageBucket;
+  creditBalanceCents?: number;
+  overageEnabled?: boolean;
 };
+
+export function selectBindingUsageBucket(
+  buckets: readonly ManagedUsageBucketReading[],
+): ManagedUsageBucketReading | undefined {
+  let binding: ManagedUsageBucketReading | undefined;
+  for (const bucket of MANAGED_USAGE_BUCKET_ORDER) {
+    const reading = buckets.find((candidate) => candidate.bucket === bucket);
+    if (!reading || !Number.isFinite(reading.percentRemaining)) continue;
+    if (binding === undefined || reading.percentRemaining < binding.percentRemaining) {
+      binding = reading;
+    }
+  }
+  return binding;
+}
+
+function bucketResetTimestamp(reading: ManagedUsageBucketReading): string | null {
+  return typeof reading.resetAt === 'string' ? reading.resetAt : null;
+}
 
 function buildManagedMeter(tierInfo: TierInfo): ExtensionUsageMeter | null {
   const tier = coercePlanTier(tierInfo.tier);
@@ -63,6 +88,40 @@ function buildManagedMeter(tierInfo: TierInfo): ExtensionUsageMeter | null {
     };
   }
 
+  const hasUsageRemaining =
+    tierInfo.hasUsageRemaining === undefined
+      ? {}
+      : { hasUsageRemaining: tierInfo.hasUsageRemaining };
+  const subscriptionStatus =
+    tierInfo.subscriptionStatus === undefined
+      ? {}
+      : { subscriptionStatus: tierInfo.subscriptionStatus };
+
+  const credits =
+    tierInfo.creditBalanceCents === undefined
+      ? {}
+      : {
+          creditBalanceCents: tierInfo.creditBalanceCents,
+          overageEnabled: tierInfo.overageEnabled === true,
+        };
+
+  const buckets = tierInfo.usageBuckets ?? [];
+  const binding = selectBindingUsageBucket(buckets);
+  if (binding !== undefined) {
+    return {
+      remaining: Math.max(0, Math.min(1, binding.percentRemaining / 100)),
+      resetsAt: bucketResetTimestamp(binding),
+      source: 'managed-plan',
+      accountPlanTier,
+      managedDeveloperEligible: true,
+      buckets,
+      bindingBucket: binding.bucket,
+      ...hasUsageRemaining,
+      ...subscriptionStatus,
+      ...credits,
+    };
+  }
+
   if (typeof tierInfo.usagePercentage === 'number') {
     const remaining = Math.max(0, Math.min(1, 1 - tierInfo.usagePercentage / 100));
     return {
@@ -71,9 +130,9 @@ function buildManagedMeter(tierInfo: TierInfo): ExtensionUsageMeter | null {
       source: 'managed-plan',
       accountPlanTier,
       managedDeveloperEligible: true,
-      ...(tierInfo.subscriptionStatus === undefined
-        ? {}
-        : { subscriptionStatus: tierInfo.subscriptionStatus }),
+      ...hasUsageRemaining,
+      ...subscriptionStatus,
+      ...credits,
     };
   }
 
@@ -83,9 +142,9 @@ function buildManagedMeter(tierInfo: TierInfo): ExtensionUsageMeter | null {
     source: 'managed-plan',
     accountPlanTier,
     managedDeveloperEligible: true,
-    ...(tierInfo.subscriptionStatus === undefined
-      ? {}
-      : { subscriptionStatus: tierInfo.subscriptionStatus }),
+    ...hasUsageRemaining,
+    ...subscriptionStatus,
+    ...credits,
   };
 }
 
@@ -148,6 +207,17 @@ export function formatManagedUsageLabel(
 ): string {
   const usedTokens = reportedUsedTokens ?? Math.round((1 - remaining) * limitTokens);
   return `${fmtK(usedTokens)}/${fmtK(limitTokens)} tokens`;
+}
+
+export const CREDIT_BALANCE_LABEL = 'Credits';
+
+export function formatCreditBalance(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+export function formatCreditSpendability(cents: number, overageEnabled: boolean): string {
+  if (cents <= 0) return 'Buy credits to work past a limit';
+  return overageEnabled ? 'Spent when a limit stops you' : 'Off - enable in billing to spend';
 }
 
 export function formatUsageMeterFallbackLabel(source: UsageMeter['source']): string {

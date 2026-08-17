@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
@@ -11,6 +10,9 @@ import {
 } from '../model-picker/modelConstants';
 import {
   PROVIDER_DISPLAY,
+  formatUsageRemaining,
+  formatUsageResetIn,
+  managedUsageBucketLabel,
   type AgentEventToolCategory,
   type AgentMode,
   type DeveloperReasoningEffort,
@@ -53,7 +55,10 @@ import {
   type PlanVisualization,
 } from '../../integrations/planVisualization';
 import {
+  CREDIT_BALANCE_LABEL,
   daysUntilReset,
+  formatCreditBalance,
+  formatCreditSpendability,
   formatManagedUsageLabel,
   formatUsageMeterFallbackLabel,
   resolveUsageMeter,
@@ -287,6 +292,19 @@ function hasVisibleReferenceToken(text: string, reference: WorkspaceFileReferenc
   return false;
 }
 
+export interface UsageMeterBucketRow {
+  label: string;
+  remainingLabel: string;
+  resetsIn: string | null;
+  binding: boolean;
+}
+
+export interface UsageMeterCreditsRow {
+  label: string;
+  balanceLabel: string;
+  spendabilityLabel: string;
+}
+
 export interface UsageMeterWebviewPayload {
   source: UsageMeter['source'];
   remaining: number | null;
@@ -294,6 +312,9 @@ export interface UsageMeterWebviewPayload {
   resetsIn: string | null;
   showUpgrade: boolean;
   collapsed: boolean;
+  buckets: UsageMeterBucketRow[];
+  bucketsEmptyLabel: string | null;
+  credits: UsageMeterCreditsRow | null;
   accountPlanTier?: string;
   managedDeveloperEligible?: boolean;
   subscriptionStatus?: string;
@@ -331,13 +352,43 @@ function formatResetsIn(resetsAt: string | null): string | null {
  * the non-managed branches reuse the shared trust-mode vocabulary so the banner
  * and the header pill cannot disagree about the boundary.
  */
+const USAGE_BUCKETS_EMPTY_LABEL = 'Per-limit breakdown unavailable';
+
+function buildUsageMeterBuckets(meter: ExtensionUsageMeter, nowMs: number): UsageMeterBucketRow[] {
+  if (meter.source !== 'managed-plan' || meter.buckets === undefined) return [];
+  return meter.buckets.map((reading) => ({
+    label: managedUsageBucketLabel(reading.bucket),
+    remainingLabel: formatUsageRemaining(reading.percentRemaining),
+    resetsIn: formatUsageResetIn(reading.resetAt ?? null, nowMs),
+    binding: reading.bucket === meter.bindingBucket,
+  }));
+}
+
+function buildUsageMeterCredits(meter: ExtensionUsageMeter): UsageMeterCreditsRow | null {
+  if (meter.source !== 'managed-plan' || meter.creditBalanceCents === undefined) return null;
+  return {
+    label: CREDIT_BALANCE_LABEL,
+    balanceLabel: formatCreditBalance(meter.creditBalanceCents),
+    spendabilityLabel: formatCreditSpendability(
+      meter.creditBalanceCents,
+      meter.overageEnabled === true,
+    ),
+  };
+}
+
 export function buildUsageMeterPayload(
   meter: ExtensionUsageMeter,
   collapsed: boolean,
+  nowMs: number = Date.now(),
 ): UsageMeterWebviewPayload {
+  const buckets = buildUsageMeterBuckets(meter, nowMs);
+  const bindingRow = buckets.find((row) => row.binding);
+
   let usageLabel: string;
   if (meter.source !== 'managed-plan') {
     usageLabel = formatUsageMeterFallbackLabel(meter.source);
+  } else if (bindingRow !== undefined) {
+    usageLabel = `${bindingRow.label} - ${bindingRow.remainingLabel}`;
   } else if (meter.limitTokens !== undefined) {
     usageLabel = formatManagedUsageLabel(meter.remaining ?? 0, meter.limitTokens, meter.usedTokens);
   } else if (meter.remaining !== null) {
@@ -350,7 +401,14 @@ export function buildUsageMeterPayload(
     source: meter.source,
     remaining: meter.remaining,
     usageLabel,
-    resetsIn: meter.source === 'managed-plan' ? formatResetsIn(meter.resetsAt) : null,
+    resetsIn:
+      meter.source !== 'managed-plan'
+        ? null
+        : (bindingRow?.resetsIn ?? formatResetsIn(meter.resetsAt)),
+    buckets,
+    bucketsEmptyLabel:
+      meter.source === 'managed-plan' && buckets.length === 0 ? USAGE_BUCKETS_EMPTY_LABEL : null,
+    credits: buildUsageMeterCredits(meter),
     showUpgrade:
       meter.source === 'managed-plan' &&
       meter.remaining !== null &&

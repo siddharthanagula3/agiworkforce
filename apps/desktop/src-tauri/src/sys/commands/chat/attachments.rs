@@ -1,4 +1,5 @@
 use crate::core::llm::{ContentPart, ImageDetail, ImageFormat, ImageInput};
+use crate::features::document::extract_office_text;
 use crate::sys::commands::chat::intent::should_attach_screen_context;
 use crate::sys::commands::chat::prompt_context::model_likely_supports_vision;
 use crate::sys::commands::chat::state::MAX_FILE_EXTRACT_CHARS;
@@ -319,6 +320,53 @@ pub(super) fn extract_text_from_attachments(
                     );
                 }
             }
+        } else if let Some(extension) = office_extension(&name_lower) {
+            match decode_attachment_bytes(content) {
+                Ok(bytes) => match extract_office_text(&bytes, extension) {
+                    Ok(text) if !text.trim().is_empty() => {
+                        let truncated = truncate_extracted(text, extension);
+                        info!(
+                            "[Chat] Extracted text from {} '{}' ({} chars)",
+                            extension,
+                            attachment.name,
+                            truncated.len()
+                        );
+                        extracted.push((attachment.name.clone(), truncated));
+                    }
+                    Ok(_) => {
+                        warn!(
+                            "[Chat] {} '{}' contains no extractable text",
+                            extension, attachment.name
+                        );
+                        extracted.push((
+                            attachment.name.clone(),
+                            format!(
+                                "[{} attached but it contains no extractable text]",
+                                extension
+                            ),
+                        ));
+                    }
+                    Err(error) => {
+                        warn!(
+                            "[Chat] Failed to extract text from {} '{}': {}",
+                            extension, attachment.name, error
+                        );
+                        extracted.push((
+                            attachment.name.clone(),
+                            format!(
+                                "[{} attached but text extraction failed: {}]",
+                                extension, error
+                            ),
+                        ));
+                    }
+                },
+                Err(error) => {
+                    warn!(
+                        "[Chat] Failed to decode {} '{}': {}",
+                        extension, attachment.name, error
+                    );
+                }
+            }
         } else {
             debug!(
                 "[Chat] Unsupported file type for text extraction: '{}' (type: {})",
@@ -335,6 +383,41 @@ pub(super) fn extract_text_from_attachments(
     }
 
     extracted
+}
+
+fn office_extension(name_lower: &str) -> Option<&'static str> {
+    for extension in ["docx", "xlsx", "xls", "pptx"] {
+        if name_lower.ends_with(&format!(".{}", extension)) {
+            return Some(extension);
+        }
+    }
+    None
+}
+
+fn decode_attachment_bytes(content: &str) -> Result<Vec<u8>, base64::DecodeError> {
+    let base64_data = if content.starts_with("data:") {
+        content.split(',').nth(1).unwrap_or(content)
+    } else {
+        content
+    };
+    base64::engine::general_purpose::STANDARD.decode(base64_data)
+}
+
+fn truncate_extracted(text: String, label: &str) -> String {
+    if text.len() <= MAX_FILE_EXTRACT_CHARS {
+        return text;
+    }
+    let mut boundary = MAX_FILE_EXTRACT_CHARS;
+    while boundary > 0 && !text.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    format!(
+        "{}\n\n... [{} truncated - showing first {} characters of {}]",
+        &text[..boundary],
+        label,
+        boundary,
+        text.len()
+    )
 }
 
 pub(super) fn extract_pdf_text(pdf_bytes: &[u8]) -> Result<String, String> {
@@ -460,6 +543,59 @@ mod tests {
         assert_eq!(extracted.len(), 1);
         assert_eq!(extracted[0].0, "notes.txt");
         assert_eq!(extracted[0].1, "hello");
+    }
+
+    fn docx_attachment(name: &str, body: &str) -> ChatAttachment {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+
+        let document_xml = format!(
+            r#"<?xml version="1.0"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body><w:p><w:r><w:t>{}</w:t></w:r></w:p></w:body>
+</w:document>"#,
+            body
+        );
+
+        let mut buffer = Vec::new();
+        {
+            let mut writer = zip::ZipWriter::new(Cursor::new(&mut buffer));
+            writer
+                .start_file(
+                    "word/document.xml",
+                    SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
+                )
+                .unwrap();
+            writer.write_all(document_xml.as_bytes()).unwrap();
+            writer.finish().unwrap();
+        }
+
+        ChatAttachment {
+            id: "att-docx".to_string(),
+            attachment_type: "file".to_string(),
+            name: name.to_string(),
+            mime_type: Some(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    .to_string(),
+            ),
+            content: Some(base64::engine::general_purpose::STANDARD.encode(&buffer)),
+            path: None,
+        }
+    }
+
+    #[test]
+    fn extracts_docx_attachment_content() {
+        let extracted =
+            extract_text_from_attachments(&[docx_attachment("plan.docx", "Roadmap for Q4")]);
+
+        assert_eq!(extracted.len(), 1);
+        assert_eq!(extracted[0].0, "plan.docx");
+        assert!(
+            extracted[0].1.contains("Roadmap for Q4"),
+            "expected docx body text, got: {}",
+            extracted[0].1
+        );
+        assert!(!extracted[0].1.contains("extraction not supported"));
     }
 
     #[test]

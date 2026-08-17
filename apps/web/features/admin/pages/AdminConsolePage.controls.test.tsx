@@ -1,9 +1,13 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import AdminConsolePage from './AdminConsolePage';
+import AdminConsolePage, { READINESS_ATTESTED_AS_OF } from './AdminConsolePage';
 
 vi.mock('../components/SecurityOperationsPanel', () => ({
   default: () => <div data-testid="security-operations-panel">Live security operations</div>,
+}));
+
+vi.mock('../components/ContentReportQueuePanel', () => ({
+  default: () => <div data-testid="content-report-queue-panel">Content report queue</div>,
 }));
 
 afterEach(() => {
@@ -94,5 +98,64 @@ describe('AdminConsolePage — readiness status tone', () => {
       const badge = within(row as HTMLElement).getByText(/.+/, { selector: '[data-tone]' });
       expect(['ok', 'warn']).toContain(badge.getAttribute('data-tone'));
     }
+  });
+});
+
+describe('AdminConsolePage — readiness ledger provenance', () => {
+  function ledgerRows(container: HTMLElement): HTMLElement[] {
+    const section = container.querySelector('[aria-labelledby="readiness-ledger-title"]');
+    if (!(section instanceof HTMLElement)) throw new Error('Readiness ledger section is missing');
+    return Array.from(section.querySelectorAll('tbody tr'));
+  }
+
+  it('tells the operator the ledger is not a live health check', () => {
+    const { container } = render(<AdminConsolePage />);
+    const disclaimer = screen.getByTestId('readiness-ledger-disclaimer').textContent ?? '';
+
+    expect(disclaimer).toMatch(/not a live health check/i);
+    expect(disclaimer).toContain(READINESS_ATTESTED_AS_OF);
+    expect(ledgerRows(container).length).toBeGreaterThan(0);
+  });
+
+  it('carries a machine-readable as-of date rather than an undated claim', () => {
+    render(<AdminConsolePage />);
+    const stamp = screen.getByText(READINESS_ATTESTED_AS_OF, { selector: 'time' });
+
+    expect(stamp.getAttribute('dateTime')).toBe(READINESS_ATTESTED_AS_OF);
+    expect(READINESS_ATTESTED_AS_OF).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('labels every row as either live configuration or a dated self-attestation', () => {
+    const { container } = render(<AdminConsolePage />);
+
+    for (const row of ledgerRows(container)) {
+      const badge = within(row).getByText(/.+/, { selector: '[data-source]' });
+      const source = badge.getAttribute('data-source');
+
+      expect(['config', 'attested']).toContain(source);
+      if (source === 'attested') {
+        expect(badge.textContent).toContain(READINESS_ATTESTED_AS_OF);
+      }
+    }
+  });
+
+  it('does not pass prose-only claims off as live configuration', () => {
+    const { container } = render(<AdminConsolePage />);
+    const attested = ledgerRows(container)
+      .filter((row) => row.querySelector('[data-source="attested"]'))
+      .map((row) => row.querySelector('td')?.textContent ?? '');
+
+    expect(attested).toEqual(['Identity', 'Audit logs', 'Support loop']);
+  });
+
+  it('marks the env-driven managed-compute row as live configuration', () => {
+    vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', 'off');
+    const { container } = render(<AdminConsolePage />);
+    const row = ledgerRows(container).find((candidate) =>
+      candidate.textContent?.startsWith('Managed compute'),
+    );
+
+    expect(row).toBeDefined();
+    expect(row?.querySelector('[data-source]')?.getAttribute('data-source')).toBe('config');
   });
 });

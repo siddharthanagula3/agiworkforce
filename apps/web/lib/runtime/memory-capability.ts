@@ -1,14 +1,32 @@
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 
-let cached: Promise<boolean> | null = null;
+interface CapabilityFlags {
+  memory: boolean;
+  searchPastChats: boolean;
+}
 
-export function isMemoryCapabilityEnabled(): Promise<boolean> {
+const ALL_DISABLED: CapabilityFlags = { memory: false, searchPastChats: false };
+
+let cached: Promise<CapabilityFlags> | null = null;
+
+function capabilityFlags(): Promise<CapabilityFlags> {
   if (!cached) {
-    cached = fetchPreferenceNamespace<{ memory: boolean }>('capabilities', { memory: false })
-      .then((settings) => settings.memory === true)
-      .catch(() => false);
+    cached = fetchPreferenceNamespace<CapabilityFlags>('capabilities', ALL_DISABLED)
+      .then((settings) => ({
+        memory: settings.memory === true,
+        searchPastChats: settings.searchPastChats === true,
+      }))
+      .catch(() => ALL_DISABLED);
   }
   return cached;
+}
+
+export function isMemoryCapabilityEnabled(): Promise<boolean> {
+  return capabilityFlags().then((flags) => flags.memory);
+}
+
+export function isPastChatSearchEnabled(): Promise<boolean> {
+  return capabilityFlags().then((flags) => flags.searchPastChats);
 }
 
 export function resetMemoryCapabilityCache(): void {

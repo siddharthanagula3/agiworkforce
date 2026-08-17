@@ -12,6 +12,13 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import {
+  METERING_EVIDENCE_RETENTION_DAYS,
+  STATUTORY_RECORD_RETENTION_DAYS,
+} from '@/lib/billing/financial-record-retention';
+
+const STATUTORY_RECORD_RETENTION_YEARS = Math.round(STATUTORY_RECORD_RETENTION_DAYS / 365.25);
+const METERING_EVIDENCE_RETENTION_YEARS = Math.round(METERING_EVIDENCE_RETENTION_DAYS / 365.25);
 
 export const metadata = buildMetadata({
   title: 'Privacy policy',
@@ -59,11 +66,28 @@ export const metadata = buildMetadata({
  * three), while `organization_usage_ledger.user_id` is nulled and the row kept
  * (ANONYMIZED_USER_COLUMNS), and `credit_idempotency_keys` /
  * `credit_settlement_jobs` are kept by BOTH paths (UNDELETED_USER_TABLES). None
- * of that was disclosed. The row says so, and says the part that is still not
- * true of any code: nothing ages billing rows out — `credit_idempotency_keys`
- * carries a 24-hour `expires_at` and `cleanup_expired_idempotency_keys()`
- * exists, but no cron route calls it, so do not describe a window here until
- * one runs.
+ * of that was disclosed. The row says so.
+ *
+ * CLAIM ADDED 2026-08-17: maximum age on billing rows (BILL-35). The earlier
+ * version of this row said no job ages billing rows out, which was true then.
+ * `lib/billing/financial-record-retention.ts` is now the schedule and
+ * `/api/cron/enforce-billing-retention` runs it daily from vercel.json. Every
+ * window quoted in the row below is either read from that module or matches one
+ * of its rules; the two tables it deliberately leaves ageless
+ * (FINANCIAL_TABLES_WITHOUT_MAXIMUM_AGE) are named in the row as ageless. If a
+ * rule changes, change the row — a guard in
+ * __tests__/billing-record-retention-disclosure.test.ts fails otherwise.
+ *
+ * CLAIM CORRECTED 2026-08-17: audit-log immutability (DOCS-17). The row on what
+ * survives erasure said the application role "is blocked from writing to" both
+ * audit trails. That is false for `security_audit_logs`: app_rls holds INSERT
+ * and SELECT — writing the entry is its job — and only UPDATE and DELETE were
+ * revoked (db/neon/0043_audit_log_immutability.sql, backstopped by the
+ * non-owner trigger in 0123). It is true only of `enterprise_audit_events`,
+ * where 0087 revokes INSERT too and writes go through
+ * record_enterprise_audit_event(). The row now states the two grants
+ * separately; __tests__/audit-log-immutability-disclosure.test.ts derives the
+ * privileges from the migrations and fails if the prose drifts from them.
  *
  * CLAIM CORRECTED: object storage. Clients now receive only the same-origin
  * `/api/files/{mediaAssetId}` address from `authenticatedMediaUrl()`. That route
@@ -362,6 +386,56 @@ export default function PrivacyPage() {
             </Link>
             . BYOK routes from your client directly to the provider; Local contacts none of them.
           </p>
+
+          <div className="agi-callout" style={{ marginTop: 28 }}>
+            <h3 className="agi-callout-h">
+              If you never opened an account and your data is in here anyway
+            </h3>
+            <p className="agi-callout-p">
+              The rest of this notice is written to the person holding the account. This part is
+              written to everyone else. Text typed or pasted into a chat, files uploaded to it, and
+              whatever a connector fetches when an account holder points the agent at a mailbox,
+              calendar, drive or CRM routinely carries personal data about people who never signed
+              up &mdash; a colleague on the thread, a guest on the invite, a name in the
+              spreadsheet. So do the identities an employer&rsquo;s directory provisions for people
+              who may never sign in. We do not ask those people for anything and we do not contact
+              them; nothing in the product does.
+            </p>
+            <p className="agi-callout-p">
+              <strong>What happens to it.</strong> It is kept as part of the record it arrived in
+              and gets that record&rsquo;s treatment &mdash; the storage described in the table
+              above and the clock in section 05, nothing separate. In Local it never reaches us. In
+              BYOK it goes from the account holder&rsquo;s client to their provider, not to us.
+            </p>
+            <p className="agi-callout-p">
+              <strong>On what basis.</strong> In Managed Cloud we hold it as the account
+              holder&rsquo;s processor and act on their instruction under the{' '}
+              <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
+                DPA
+              </Link>
+              ; they are the controller, and bringing your data in was their decision, not ours. Our
+              own processing rests on our contract with them rather than on any consent from you,
+              and the{' '}
+              <Link href="/terms" style={{ color: 'var(--agi-ink)' }}>
+                terms
+              </Link>{' '}
+              make them confirm they were entitled to give it to us, including having given any
+              notice or obtained any consent your law required first. That duty is theirs and we
+              cannot discharge it for them.
+            </p>
+            <p className="agi-callout-p">
+              <strong>What you can do about it.</strong> File an access, correction, erasure or
+              grievance request at{' '}
+              <Link href="/privacy/requests" style={{ color: 'var(--agi-ink)' }}>
+                /privacy/requests
+              </Link>{' '}
+              without signing in &mdash; the form asks for a contact address, not an account. Two
+              limits, said here rather than discovered later: we can only act on a record we can
+              locate, so the request needs enough detail to find it; and where the data sits inside
+              a customer&rsquo;s account we hold it on that customer&rsquo;s instruction, so we will
+              usually have to route your request to them rather than act on it ourselves.
+            </p>
+          </div>
         </section>
 
         <section className="agi-section" id="s-02">
@@ -579,8 +653,9 @@ export default function PrivacyPage() {
               <tr>
                 <td style={{ width: '22%', verticalAlign: 'top' }}>Billing records</td>
                 <td style={{ verticalAlign: 'top' }}>
-                  Kept while your account exists. Most of it is erased with the account; some of it
-                  deliberately is not.
+                  Erased with the account, or aged out at the end of the statutory record-keeping
+                  period &mdash; {STATUTORY_RECORD_RETENTION_YEARS} years &mdash; whichever comes
+                  first for that row.
                 </td>
                 <td>
                   Your subscription, credit ledger and usage rows are erased with everything else.
@@ -590,9 +665,21 @@ export default function PrivacyPage() {
                   double-charge protection keys and any payment still moving when you delete are
                   kept, because deleting those can charge you twice or lose money we owe you; and
                   Stripe holds its own record of your payments and invoices under its retention, not
-                  ours &mdash; card numbers go to Stripe directly and never reach us. No maximum age
-                  is enforced on billing rows today, and we will not publish one until a job deletes
-                  them.
+                  ours &mdash; card numbers go to Stripe directly and never reach us. A daily
+                  scheduled job now enforces a maximum age on the rows that outlive an account.
+                  Books of account &mdash; the credit ledger and the organisation usage ledger
+                  &mdash; are kept {STATUTORY_RECORD_RETENTION_YEARS} years and then deleted, and
+                  the request-shaped metadata beside them is emptied after{' '}
+                  {METERING_EVIDENCE_RETENTION_YEARS} years because the amount, the type and the
+                  date are the record, not the routing detail. Metering events are deleted after{' '}
+                  {METERING_EVIDENCE_RETENTION_YEARS} years and their metadata emptied after 180
+                  days. Double-charge protection keys are deleted once their 24-hour window closes,
+                  completed settlement jobs 90 days after they finish, and payment-webhook receipts
+                  180 days after processing, with any error text they captured cleared after 30
+                  days. Two things carry no maximum age and we will not pretend otherwise: your
+                  current plan row and your current credit balance, because ageing those out would
+                  cancel a live subscription or delete credits you paid for. They go when the
+                  account goes.
                 </td>
               </tr>
               <tr>
@@ -679,11 +766,13 @@ export default function PrivacyPage() {
                   Security and organisation audit log entries naming you
                 </td>
                 <td>
-                  Both audit trails are append-only integrity controls &mdash; the application role
-                  is blocked from writing to them at the database level, which is the point of an
-                  audit trail. Erasure does not purge them. We are recording that as a gap rather
-                  than describing the erasure as total: a separate privileged routine exists to
-                  purge them, and it is not part of the automatic path.
+                  Both audit trails are append-only integrity controls, enforced by database
+                  privilege rather than by our code. On the security trail the application role can
+                  add an entry but cannot update or delete one; on the organisation trail it cannot
+                  insert either, and writes go through a privileged routine instead. That is the
+                  point of an audit trail. Erasure does not purge them. We are recording that as a
+                  gap rather than describing the erasure as total: a separate privileged routine
+                  exists to purge them, and it is not part of the automatic path.
                 </td>
               </tr>
               <tr>

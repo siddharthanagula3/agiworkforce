@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn, debounce } from '../../lib/utils';
+import { FILTER_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { invoke } from '../../utils/ipc';
 import { Button } from '@/ui/Button';
 import { useConfirm } from '@/ui/ConfirmDialog';
@@ -80,7 +81,11 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
   const { prompt, dialog: promptDialog } = usePrompt();
 
   const debouncedSearch = useMemo(
-    () => debounce<[string], void>((value: string) => setDebouncedSearchQuery(value), 300),
+    () =>
+      debounce<[string], void>(
+        (value: string) => setDebouncedSearchQuery(value),
+        FILTER_INPUT_DEBOUNCE_MS,
+      ),
     [],
   );
 

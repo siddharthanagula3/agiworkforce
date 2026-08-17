@@ -60,6 +60,8 @@ import { useAgentTaskStore } from '../../stores/agentTaskStore';
 import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
+import { useConnectorsStore } from '../../stores/connectorsStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { selectHasCloudAccountSession, selectPlan, useUnifiedAuthStore } from '../../stores/auth';
@@ -75,6 +77,7 @@ import { revokeCloudHandoffGrant } from '../context-handoff/cloudHandoffGrant';
 import { canUseDesktopCloudAgiWork } from '../../services/desktopCloudEntitlements';
 import { CloudVoiceActionDialog } from '../voice/CloudVoiceActionDialog';
 import { useCloudVoiceController } from '../voice/useCloudVoiceController';
+import { ComputerUseConsentDialog } from '../settings/ComputerUseConsentDialog';
 import { createDesktopCloudShare } from '../../services/desktopCloudShares';
 import { deriveDesktopMessageArtifacts } from '../../runtime/desktopArtifactProjection';
 import { McpToolConfirmationPrompt } from '../chat/McpToolConfirmationPrompt';
@@ -119,6 +122,19 @@ type V3Panel =
   | 'scheduled'
   | 'record-skill';
 
+const DEVICE_ONLY_PANELS: readonly V3Panel[] = [
+  'artifacts',
+  'code',
+  'design',
+  'research',
+  'automation',
+  'scheduled',
+  'record-skill',
+  'agent-tasks',
+];
+
+const CLOUD_ONLY_PANELS: readonly V3Panel[] = ['library', 'tasks', 'cloud-schedules'];
+
 export interface DesktopShellV3Props {
   runtime: ChatRuntime | null;
   className?: string;
@@ -127,7 +143,6 @@ export interface DesktopShellV3Props {
   onModelSelectorClick?: () => void;
   onNavigateView?: ChatInterfaceProps['onNavigateView'];
   onOpenSearch?: () => void;
-  onBuyTopUp?: () => void;
 }
 
 const panelFallback = (
@@ -144,7 +159,6 @@ export function DesktopShellV3({
   onModelSelectorClick,
   onNavigateView,
   onOpenSearch,
-  onBuyTopUp,
 }: DesktopShellV3Props) {
   const { mode } = useV3Mode();
   const [activePanel, setActivePanel] = useState<V3Panel>('chat');
@@ -187,6 +201,7 @@ export function DesktopShellV3({
       privacyMode === 'local' &&
       !state.models.some((model) => model.isLocal === true && model.availability !== 'unavailable'),
   );
+  const hasConnectedTools = useConnectorsStore((state) => state.connectedIds.length > 0);
   const [managedSkills, setManagedSkills] = useState<ChatInterfaceProps['skills']>([]);
   const cloudVoice = useCloudVoiceController(isManagedCloud);
   const selectedModel = useChatModelStore((state) => state.getSelectedModel());
@@ -201,6 +216,18 @@ export function DesktopShellV3({
       : localAgiTaskEligibility.reason;
   const composerSendShortcut = useSettingsStore(
     (state) => state.chatPreferences.sendShortcut ?? 'enter',
+  );
+  const matchLocalSkillsForMessage = useSkillMarketplaceStore((state) => state.matchForMessage);
+  const suggestLocalSkills = useCallback(
+    async (content: string) => {
+      const matches = await matchLocalSkillsForMessage(content);
+      return matches.map((match) => ({
+        name: match.skillName,
+        description: match.description,
+        reason: match.matchReason,
+      }));
+    },
+    [matchLocalSkillsForMessage],
   );
 
   useEffect(() => {
@@ -325,19 +352,11 @@ export function DesktopShellV3({
     pendingAttachments?.ownerKey === composerAttachmentOwnerKey ? pendingAttachments : null;
 
   useEffect(() => {
-    if (
-      privacyMode === 'managed' &&
-      [
-        'artifacts',
-        'code',
-        'design',
-        'research',
-        'automation',
-        'scheduled',
-        'record-skill',
-        'agent-tasks',
-      ].includes(activePanel)
-    ) {
+    // A panel the new trust boundary cannot render otherwise fell through to the
+    // Projects fallback while the sidebar still highlighted the panel the user
+    // left — the content silently became something they never asked for.
+    const stranded = privacyMode === 'local' ? CLOUD_ONLY_PANELS : DEVICE_ONLY_PANELS;
+    if (stranded.includes(activePanel)) {
       setActivePanel('chat');
     }
   }, [activePanel, privacyMode]);
@@ -678,6 +697,7 @@ export function DesktopShellV3({
                   />
                 }
                 skills={managedSkills}
+                suggestSkills={isManagedCloud ? undefined : suggestLocalSkills}
                 composerSendShortcut={composerSendShortcut}
                 onNavigateView={handleNavigateView}
                 sidebarSlot={null}
@@ -688,6 +708,8 @@ export function DesktopShellV3({
                     onOpenScheduled={() => handleNavigateView('work-scheduled')}
                     onSetUpLocalModel={isManagedCloud ? undefined : onModelSelectorClick}
                     needsLocalModelSetup={needsLocalModelSetup}
+                    onOpenConnectors={() => handleNavigateView('connectors')}
+                    hasConnectedTools={hasConnectedTools}
                   />
                 }
                 enableSearchOverlay={false}
@@ -767,7 +789,7 @@ export function DesktopShellV3({
                 onOpenConversation={handleOpenProjectConversation}
               />
             )}
-            <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
+            <CapModal onSwitchModel={handleSwitchModel} />
 
             {/* Artifact viewer panel — mounts when the artifact store requests it open.
             Shares the same artifactStore instance that AgiWorkArtifacts writes,
@@ -827,6 +849,13 @@ export function DesktopShellV3({
               onApprove={() => void cloudVoice.approveAction()}
               onUseAsText={cloudVoice.useActionAsText}
               onCancel={cloudVoice.cancelAction}
+            />
+            <ComputerUseConsentDialog
+              open={cloudVoice.consentPromptOpen}
+              onOpenChange={(open) => {
+                if (!open) cloudVoice.dismissComputerUseConsent();
+              }}
+              onAccept={() => void cloudVoice.acceptComputerUseConsent()}
             />
             <McpToolConfirmationPrompt />
           </div>

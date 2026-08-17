@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   deleteStoredMediaObjects: vi.fn(),
   deleteObject: vi.fn(),
   objectStorageConfigured: vi.fn(() => true),
+  deleteE2BSessionsForUser: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -46,6 +47,9 @@ vi.mock('@/lib/server/object-storage', () => ({
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: (...args: unknown[]) => mocks.deleteObject(...args),
   isProjectKnowledgeObjectStorageConfigured: () => mocks.objectStorageConfigured(),
+}));
+vi.mock('@/lib/e2b/session-store', () => ({
+  deleteE2BSessionsForUser: (...args: unknown[]) => mocks.deleteE2BSessionsForUser(...args),
 }));
 
 process.env['JWT_SECRET'] = 'test-developer-jwt-secret-at-least-32-bytes';
@@ -245,6 +249,30 @@ describe('eraseUserAccountData', () => {
     mocks.objectStorageConfigured.mockReturnValue(true);
     mocks.deleteObject.mockResolvedValue(undefined);
     mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 0, failedPathnames: [] });
+    mocks.deleteE2BSessionsForUser.mockResolvedValue({ deleted: 0, failed: 0, reachable: true });
+  });
+
+  it('purges the sandbox cache for the subject instead of waiting out its TTL', async () => {
+    primeDb({});
+    mocks.deleteE2BSessionsForUser.mockResolvedValue({ deleted: 3, failed: 0, reachable: true });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.deleteE2BSessionsForUser).toHaveBeenCalledWith('user-1');
+    expect(report.cacheKeysDeleted).toBe(3);
+    expect(report.cacheKeysFailed).toBe(0);
+    expect(report.complete).toBe(true);
+  });
+
+  it('keeps the account open for retry when cached sandbox state survived', async () => {
+    primeDb({});
+    mocks.deleteE2BSessionsForUser.mockResolvedValue({ deleted: 0, failed: 2, reachable: true });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.cacheKeysFailed).toBe(2);
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
   });
 
   it('erases every listed table, anonymizes shared rows, and removes the profile last', async () => {

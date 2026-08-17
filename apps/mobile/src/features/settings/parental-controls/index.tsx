@@ -1,4 +1,4 @@
-import { Baby, Shield } from 'lucide-react-native';
+import { Baby, Lock, Shield } from 'lucide-react-native';
 import { isMinorMode } from '@/src/features/auth/services/ageGate';
 import {
   SettingsGroup,
@@ -28,19 +28,28 @@ export default function ParentalControlsScreen() {
         body="This release does not link parent and teen accounts or provide remote usage, quiet-hour, model, or content controls. Reviewing age changes only this device."
         icon={Shield}
       />
-      <SettingsGroup>
-        <SettingsRow
-          label="Review Device Age Settings"
-          icon={Shield}
-          isLast
-          onPress={() =>
-            router.push({
-              pathname: '/(public)/age-gate',
-              params: { returnTo: '/(app)/settings/parental-controls' },
-            } as Parameters<typeof router.push>[0])
-          }
+      {minorMode ? (
+        <SettingsInfo
+          testID="parental-controls-minor-lock"
+          title="Minor-safe mode cannot be turned off here"
+          body="AGI cannot verify a new age, so entering a higher one would let this device switch its own protection off. An adult can lift it by reinstalling AGI, which clears the stored age record and everything saved with it."
+          icon={Lock}
         />
-      </SettingsGroup>
+      ) : (
+        <SettingsGroup>
+          <SettingsRow
+            label="Review Device Age Settings"
+            icon={Shield}
+            isLast
+            onPress={() =>
+              router.push({
+                pathname: '/(public)/age-gate',
+                params: { returnTo: '/(app)/settings/parental-controls' },
+              } as Parameters<typeof router.push>[0])
+            }
+          />
+        </SettingsGroup>
+      )}
     </SettingsScreenShell>
   );
 }

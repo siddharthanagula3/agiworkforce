@@ -122,6 +122,22 @@ const ALLOWLIST = [
       'so there is no owner to constrain by',
   },
   {
+    match: /lib\/server\/security-log-retention\.ts$/,
+    tables: ['security_audit_logs'],
+    reason:
+      'retention sweep over the whole audit log, reached only from api/cron and api/admin ' +
+      '(both already retired above). It deletes by age, not by subject: constraining by owner ' +
+      "would leave every other tenant's expired rows unpurged",
+  },
+  {
+    match: /lib\/server\/content-report-triage\.ts$/,
+    tables: ['content_reports'],
+    reason:
+      'moderation triage queue, reached only from api/admin/content-reports (which the ' +
+      "api/admin entry already retires). Reading every reporter's rows is the queue's " +
+      'purpose: constraining by owner would show a moderator only their own reports',
+  },
+  {
     match: /lib\/server\/account-erasure\.ts$/,
     tables: ['media_assets'],
     reason:

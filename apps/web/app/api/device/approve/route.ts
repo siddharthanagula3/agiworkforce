@@ -12,14 +12,10 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { encryptToken } from '@/lib/device-token-crypto';
+import { QrLinkCodeSchema } from '@/lib/validations/device';
 
 const DeviceApproveRequestSchema = z.object({
-  code: z
-    .string()
-    .min(1, 'code is required')
-    .max(64, 'code is too long')
-    .transform((v) => v.trim().toUpperCase())
-    .refine((v) => /^[A-F0-9]+$/.test(v), 'code must be a hex string'),
+  code: QrLinkCodeSchema,
   action: z.enum(['approve', 'deny']).optional(),
 });
 

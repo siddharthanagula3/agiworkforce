@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { SecurityMonitoringService } from '@/lib/services/security-monitoring-service';
 import { logSecurityEvent } from '@/lib/security-audit';
+import { purgeExpiredSecurityAuditLogs } from '@/lib/server/security-log-retention';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -210,11 +211,14 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'cleanup': {
-        const deletedCount = await SecurityMonitoringService.cleanupOldLogs();
+        const run = await purgeExpiredSecurityAuditLogs('admin');
         return NextResponse.json({
           success: true,
-          message: `Cleaned up ${deletedCount} old security log entries`,
-          deleted_count: deletedCount,
+          message: `Cleaned up ${run.deleted} old security log entries`,
+          deleted_count: run.deleted,
+          retention_days: run.retentionDays,
+          oldest_remaining_age_days: run.oldestRemainingAgeDays,
+          retention_holds: run.retentionHolds,
         });
       }
 

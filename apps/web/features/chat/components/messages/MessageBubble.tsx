@@ -58,7 +58,13 @@ import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
-import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  type ArtifactManifest,
+  type ComputeSession,
+  type GeneratedFile,
+} from '@agiworkforce/types';
+import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import {
   AgentActivityTimeline,
   BranchNavigator,
@@ -100,7 +106,7 @@ import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
-import { ResearchActivity } from '../research/ResearchActivity';
+import { ResearchActivity, type ResearchPlanDecision } from '../research/ResearchActivity';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { dedupeResearchSources } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
@@ -282,6 +288,8 @@ interface Message {
     inputTokens?: number;
     outputTokens?: number;
     model?: string;
+    /** `X-AGI-Fallback-Reason` code for a turn served on a substituted model. */
+    fallbackReason?: string;
     provider?: string;
     cost?: number;
     reasoningTokens?: number;
@@ -408,7 +416,12 @@ interface MessageBubbleProps {
    * Absent when the surface cannot send, so no dead Retry control is rendered.
    */
   onRetryResearch?: (messageId: string) => void;
-  /** True while a research retry for THIS message is in flight. */
+  /**
+   * Answer a Deep Research run paused for plan approval: start the searches the
+   * plan lists, or drop the plan. Absent when the surface cannot send.
+   */
+  onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
+  /** True while a research retry or approved start for THIS message is in flight. */
   isRetryingResearch?: boolean;
   onDelete?: (messageId: string) => void;
   onPin?: (messageId: string) => void;
@@ -451,6 +464,7 @@ const MessageBubbleComponent = function MessageBubble({
   onEdit,
   onRegenerate,
   onRetryResearch,
+  onResearchPlanDecision,
   isRetryingResearch = false,
   onDelete,
   onPin,
@@ -468,6 +482,11 @@ const MessageBubbleComponent = function MessageBubble({
   onRetryVideo,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
+  const [fallbackNoticeDismissed, setFallbackNoticeDismissed] = useState(false);
+  const fallbackNotice = describeFallbackReason(
+    message.metadata?.fallbackReason,
+    getModelMetadataById(message.model ?? message.metadata?.model)?.name,
+  );
   const [showThinking, setShowThinking] = useState(false);
   const [showContributions, setShowContributions] = useState(false);
   const [videoError, setVideoError] = useState(false);
@@ -1191,6 +1210,12 @@ const MessageBubbleComponent = function MessageBubble({
               isStreaming={message.isStreaming ?? false}
               isRetrying={isRetryingResearch}
               {...(onRetryResearch ? { onRetry: () => onRetryResearch(message.id) } : {})}
+              {...(onResearchPlanDecision
+                ? {
+                    onPlanDecision: (decision: ResearchPlanDecision) =>
+                      onResearchPlanDecision(message.id, decision),
+                  }
+                : {})}
             />
           )}
 
@@ -1868,6 +1893,25 @@ const MessageBubbleComponent = function MessageBubble({
             </Collapsible>
           )}
 
+          {!isUser && !message.isStreaming && !fallbackNoticeDismissed && fallbackNotice && (
+            <div
+              role="status"
+              data-testid="fallback-reason-notice"
+              className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] text-[var(--chat-text-muted)]"
+            >
+              <AlertCircle className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="flex-1">{fallbackNotice}</span>
+              <button
+                type="button"
+                onClick={() => setFallbackNoticeDismissed(true)}
+                aria-label="Dismiss model substitution notice"
+                className="shrink-0 rounded underline-offset-2 hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* Model name · shown under completed assistant messages, hidden while streaming.
               Read from top-level message.model first (set by useChatStream), then fall
               back to message.metadata.model (set on messages loaded from DB). */}
@@ -1990,7 +2034,7 @@ const MessageBubbleComponent = function MessageBubble({
                           className={cn(
                             ACTION_BUTTON_SIZE,
                             message.metadata?.reaction === 'thumbsUp' &&
-                              'text-[var(--chat-accent-primary)]',
+                              'text-[var(--chat-accent-primary-text)]',
                           )}
                           onClick={() =>
                             onReact(
@@ -2028,7 +2072,7 @@ const MessageBubbleComponent = function MessageBubble({
                           className={cn(
                             ACTION_BUTTON_SIZE,
                             message.metadata?.reaction === 'thumbsDown' &&
-                              'text-[var(--chat-accent-primary)]',
+                              'text-[var(--chat-accent-primary-text)]',
                           )}
                           onClick={() =>
                             onReact(

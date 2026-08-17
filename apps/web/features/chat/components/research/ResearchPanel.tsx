@@ -123,7 +123,13 @@ function SourcesEmptyState() {
  * one as an artifact-style view. Nothing is rendered optimistically: until the
  * server confirms a persisted report exists, the tab says so plainly.
  */
-function ReportTab({ conversationId }: { conversationId: string | null }) {
+function ReportTab({
+  conversationId,
+  onAskFollowUp,
+}: {
+  conversationId: string | null;
+  onAskFollowUp?: (prompt: string) => void;
+}) {
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -206,14 +212,29 @@ function ReportTab({ conversationId }: { conversationId: string | null }) {
       />
     );
   }
-  return <ResearchReportView report={report} onCreateArtifact={createArtifact} />;
+  return (
+    <ResearchReportView
+      report={report}
+      onCreateArtifact={createArtifact}
+      {...(onAskFollowUp ? { onAskFollowUp } : {})}
+    />
+  );
 }
 
 // ============================================================================
 // Main panel
 // ============================================================================
 
-export function ResearchPanel() {
+interface ResearchPanelProps {
+  /**
+   * Send a grounded follow-up into the chat this panel sits beside. Supplied
+   * only while the page can actually start a turn, so a report never shows a
+   * composer whose question would go nowhere.
+   */
+  onAskFollowUp?: (prompt: string) => void;
+}
+
+export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
   const panelOpen = useResearchPanelStore((s) => s.panelOpen);
   const closePanel = useResearchPanelStore((s) => s.closePanel);
   const sourcesFor = useResearchPanelStore((s) => s.sourcesFor);
@@ -225,6 +246,15 @@ export function ResearchPanel() {
   // (CAP-045 slice 3), and every report the user owns across all conversations
   // (the gallery — `GET /api/research/reports` with no conversationId).
   const [tab, setTab] = useState<'sources' | 'report' | 'library'>('sources');
+
+  // The follow-up lands in the transcript behind this panel, so the panel gets
+  // out of the way to show it arriving.
+  const askFollowUpAndClose = onAskFollowUp
+    ? (prompt: string) => {
+        onAskFollowUp(prompt);
+        closePanel();
+      }
+    : undefined;
 
   if (!panelOpen) return null;
 
@@ -318,11 +348,16 @@ export function ResearchPanel() {
 
         {tab === 'library' ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <ResearchReportsGallery />
+            <ResearchReportsGallery
+              {...(askFollowUpAndClose ? { onAskFollowUp: askFollowUpAndClose } : {})}
+            />
           </div>
         ) : tab === 'report' ? (
           <div className="min-h-0 flex-1">
-            <ReportTab conversationId={activeConversationId} />
+            <ReportTab
+              conversationId={activeConversationId}
+              {...(askFollowUpAndClose ? { onAskFollowUp: askFollowUpAndClose } : {})}
+            />
           </div>
         ) : (
           <>

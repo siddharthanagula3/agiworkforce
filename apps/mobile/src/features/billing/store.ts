@@ -1,12 +1,16 @@
-
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { effectivePlanTier, normalizeBillingPlanTier } from '@agiworkforce/types';
-import type { BillingPlanTier } from '@agiworkforce/types';
+import {
+  effectivePlanTier,
+  normalizeBillingPlanTier,
+  resolveCapabilityDecision,
+} from '@agiworkforce/types';
+import type { BillingPlanTier, CapabilityDecision, PlatformCapability } from '@agiworkforce/types';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import type { EffectiveCapabilityDocumentWire } from '@agiworkforce/cloud-contracts';
 import type { MobileBillingSource } from './subscriptionSource';
 import {
   captureCloudAccountEpoch,
@@ -25,6 +29,7 @@ interface TierState {
   codeExecutionAvailable: boolean;
   genericWebSearchAvailable: boolean;
   grantedCapabilities: string[];
+  capabilityDocument: EffectiveCapabilityDocumentWire | null;
   capabilityHandshakeVersion: string | null;
   capabilityHandshakeReceived: boolean;
   currentConversationProvider: string | null;
@@ -49,6 +54,7 @@ export const useTierStore = create<TierState>()(
       codeExecutionAvailable: false,
       genericWebSearchAvailable: false,
       grantedCapabilities: [],
+      capabilityDocument: null,
       capabilityHandshakeVersion: null,
       capabilityHandshakeReceived: false,
       currentConversationProvider: null,
@@ -83,6 +89,7 @@ export const useTierStore = create<TierState>()(
                 grantedCapabilities.includes('canUseCloudExecution')),
             genericWebSearchAvailable: data.feature_flags.generic_web_search ?? false,
             grantedCapabilities,
+            capabilityDocument: data.capability_handshake ?? null,
             capabilityHandshakeVersion: data.capability_handshake?.version ?? null,
             capabilityHandshakeReceived: data.capability_handshake !== undefined,
           });
@@ -111,6 +118,7 @@ export const useTierStore = create<TierState>()(
           codeExecutionAvailable: false,
           genericWebSearchAvailable: false,
           grantedCapabilities: [],
+          capabilityDocument: null,
           capabilityHandshakeVersion: null,
           capabilityHandshakeReceived: false,
           currentConversationProvider: null,
@@ -136,6 +144,7 @@ export const useTierStore = create<TierState>()(
         codeExecutionAvailable: state.codeExecutionAvailable,
         genericWebSearchAvailable: state.genericWebSearchAvailable,
         grantedCapabilities: state.grantedCapabilities,
+        capabilityDocument: state.capabilityDocument,
         capabilityHandshakeVersion: state.capabilityHandshakeVersion,
         capabilityHandshakeReceived: state.capabilityHandshakeReceived,
       }),
@@ -148,9 +157,30 @@ export const useTierStore = create<TierState>()(
 
 rehydrateWhenMmkvReady(useTierStore, 'tier-store');
 
+export function resolveMobileCapabilityDecision(
+  capability: PlatformCapability,
+): CapabilityDecision | null {
+  const { capabilityDocument } = useTierStore.getState();
+  if (!capabilityDocument) return null;
+  return resolveCapabilityDecision(
+    {
+      granted: capabilityDocument.granted as PlatformCapability[],
+      deniedBy: capabilityDocument.deniedBy,
+      sources: capabilityDocument.sources,
+      limits: capabilityDocument.limits.map((limit) => ({
+        ...limit,
+        capabilityId: limit.capabilityId as PlatformCapability | null,
+      })),
+    },
+    capability,
+  );
+}
+
 export function isCapabilityRequestable(capability: string): boolean {
   const { capabilityHandshakeReceived, grantedCapabilities } = useTierStore.getState();
   if (!capabilityHandshakeReceived) return true;
+  const decision = resolveMobileCapabilityDecision(capability as PlatformCapability);
+  if (decision) return decision.allowed;
   return grantedCapabilities.includes(capability);
 }
 

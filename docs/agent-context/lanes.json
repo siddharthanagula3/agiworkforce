@@ -136,8 +136,6 @@
       "ownedWritePaths": [
         "apps/web/app/admin/**",
         "apps/web/features/admin/**",
-        "services/api-gateway/src/routes/enterprise.ts",
-        "services/api-gateway/__tests__/routes/enterprise.test.ts",
         "docs/enterprise/**"
       ],
       "readOnlyContextPaths": [
@@ -147,17 +145,8 @@
         "docs/current/commercial-and-launch.md",
         "docs/current/technical-architecture.md"
       ],
-      "blockedPaths": [
-        "packages/contracts/types/**",
-        "apps/web/db/neon/**",
-        "services/api-gateway/src/middleware/**",
-        "pnpm-lock.yaml"
-      ],
-      "requiredChecks": [
-        "pnpm --filter @agiworkforce/web typecheck",
-        "pnpm --filter @agiworkforce/api-gateway test -- enterprise",
-        "pnpm check:llm-operability"
-      ],
+      "blockedPaths": ["packages/contracts/types/**", "apps/web/db/neon/**", "pnpm-lock.yaml"],
+      "requiredChecks": ["pnpm --filter @agiworkforce/web typecheck", "pnpm check:llm-operability"],
       "escalationOwners": ["Backend/data owner", "Billing owner", "Security/privacy lead"]
     },
     {
@@ -316,10 +305,7 @@
         "packages/platform/data-layer/**"
       ],
       "blockedPaths": ["apps/web/db/neon/**", "packages/contracts/types/**"],
-      "requiredChecks": [
-        "pnpm --filter @agiworkforce/api-gateway test",
-        "pnpm --filter @agiworkforce/signaling-server test"
-      ],
+      "requiredChecks": ["pnpm --filter @agiworkforce/signaling-server test"],
       "escalationOwners": ["Security/privacy lead", "Billing owner"]
     },
     {

@@ -1,4 +1,3 @@
-
 import { View, Linking, ScrollView, Alert } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
@@ -10,6 +9,12 @@ import {
 } from '@/src/features/chat/utils/externalUrls';
 import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+
+const MIN_TABLE_COLUMN_WIDTH = 120;
+const MAX_TABLE_COLUMN_WIDTH = 260;
+const TABLE_COLUMN_CHARACTER_WIDTH = 8;
+const TABLE_COLUMN_PADDING = 16;
 
 function openAssistantLink(url: string): void {
   const kind = classifyExternalLink(url);
@@ -140,6 +145,45 @@ export function renderInlineMarkdown(
   return parts;
 }
 
+const listItemPattern = /^(\s*)(?:([-*])|(\d+)\.)\s+(.+)$/;
+const nestedBullets = ['•', '◦', '▪'];
+
+type ParsedListItem = { depth: number; marker: string; ordered: boolean; text: string };
+
+function collectListItems(
+  lines: string[],
+  start: number,
+): { items: ParsedListItem[]; next: number } {
+  const items: ParsedListItem[] = [];
+  const indentStack: number[] = [];
+  let idx = start;
+
+  while (idx < lines.length) {
+    const match = lines[idx]!.match(listItemPattern);
+    if (!match) break;
+
+    const indent = match[1]!.replace(/\t/g, '  ').length;
+    while (indentStack.length > 0 && indent < indentStack[indentStack.length - 1]!) {
+      indentStack.pop();
+    }
+    if (indentStack.length === 0 || indent > indentStack[indentStack.length - 1]!) {
+      indentStack.push(indent);
+    }
+
+    const depth = indentStack.length - 1;
+    const ordered = match[3] !== undefined;
+    items.push({
+      depth,
+      ordered,
+      marker: ordered ? `${match[3]}.` : nestedBullets[Math.min(depth, nestedBullets.length - 1)]!,
+      text: match[4]!,
+    });
+    idx++;
+  }
+
+  return { items, next: idx };
+}
+
 function renderTextSegment(
   text: string,
   keyBase: string,
@@ -215,31 +259,27 @@ function renderTextSegment(
       continue;
     }
 
-    const ulMatch = line.match(/^[-*]\s+(.+)$/);
-    if (ulMatch) {
-      const listItems: string[] = [];
-      while (idx < lines.length && /^[-*]\s+/.test(lines[idx]!)) {
-        const m = lines[idx]!.match(/^[-*]\s+(.+)$/);
-        if (m) listItems.push(m[1]!);
-        idx++;
-      }
+    if (listItemPattern.test(line)) {
+      const { items, next } = collectListItems(lines, idx);
+      idx = next;
       nodes.push(
-        <View key={`${keyBase}-ul-${idx}`} style={{ marginVertical: 4, gap: 2 }}>
-          {listItems.map((item, i) => (
+        <View key={`${keyBase}-list-${idx}`} style={{ marginVertical: 4, gap: 2 }}>
+          {items.map((item, i) => (
             <View
-              key={`${keyBase}-uli-${idx}-${i}`}
-              style={{ flexDirection: 'row', gap: 8, paddingLeft: 4 }}
+              key={`${keyBase}-li-${idx}-${i}`}
+              style={{ flexDirection: 'row', gap: 8, paddingLeft: 4 + item.depth * 16 }}
             >
               <Text
                 style={{
                   fontSize: 15,
                   color: renderColors.teal,
                   lineHeight: 22,
-                  width: 12,
-                  textAlign: 'center',
+                  ...(item.ordered
+                    ? { minWidth: 18, textAlign: 'right' as const }
+                    : { width: 12, textAlign: 'center' as const }),
                 }}
               >
-                {'\u2022'}
+                {item.marker}
               </Text>
               <Text
                 style={{
@@ -250,51 +290,7 @@ function renderTextSegment(
                 }}
                 selectable
               >
-                {renderInlineMarkdown(item, `${keyBase}-ulil-${idx}-${i}`, renderColors)}
-              </Text>
-            </View>
-          ))}
-        </View>,
-      );
-      continue;
-    }
-
-    const olMatch = line.match(/^(\d+)\.\s+(.+)$/);
-    if (olMatch) {
-      const listItems: { num: string; text: string }[] = [];
-      while (idx < lines.length && /^\d+\.\s+/.test(lines[idx]!)) {
-        const m = lines[idx]!.match(/^(\d+)\.\s+(.+)$/);
-        if (m) listItems.push({ num: m[1]!, text: m[2]! });
-        idx++;
-      }
-      nodes.push(
-        <View key={`${keyBase}-ol-${idx}`} style={{ marginVertical: 4, gap: 2 }}>
-          {listItems.map((item, i) => (
-            <View
-              key={`${keyBase}-oli-${idx}-${i}`}
-              style={{ flexDirection: 'row', gap: 8, paddingLeft: 4 }}
-            >
-              <Text
-                style={{
-                  fontSize: 15,
-                  color: renderColors.teal,
-                  lineHeight: 22,
-                  minWidth: 18,
-                  textAlign: 'right',
-                }}
-              >
-                {item.num}.
-              </Text>
-              <Text
-                style={{
-                  fontSize: 15,
-                  color: renderColors.textPrimary,
-                  lineHeight: 22,
-                  flex: 1,
-                }}
-                selectable
-              >
-                {renderInlineMarkdown(item.text, `${keyBase}-olil-${idx}-${i}`, renderColors)}
+                {renderInlineMarkdown(item.text, `${keyBase}-liil-${idx}-${i}`, renderColors)}
               </Text>
             </View>
           ))}
@@ -342,6 +338,19 @@ function renderTextSegment(
 
           if (tableRows.length > 0) {
             const numCols = Math.max(...tableRows.map((row) => row.length));
+            const columnWidths = Array.from({ length: numCols }, (_, colIdx) => {
+              const longestCell = tableRows.reduce(
+                (longest, row) => Math.max(longest, (row[colIdx] ?? '').length),
+                0,
+              );
+              return Math.min(
+                MAX_TABLE_COLUMN_WIDTH,
+                Math.max(
+                  MIN_TABLE_COLUMN_WIDTH,
+                  longestCell * TABLE_COLUMN_CHARACTER_WIDTH + TABLE_COLUMN_PADDING,
+                ),
+              );
+            });
             nodes.push(
               <ScrollView
                 key={`${keyBase}-table-${idx}`}
@@ -370,8 +379,7 @@ function renderTextSegment(
                       <View
                         key={`${keyBase}-td-${idx}-${rowIdx}-${colIdx}`}
                         style={{
-                          minWidth: 120,
-                          maxWidth: 260,
+                          width: columnWidths[colIdx],
                           borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
                           borderRightColor: renderColors.border,
                           paddingHorizontal: 8,
@@ -389,7 +397,11 @@ function renderTextSegment(
                           }}
                           selectable
                         >
-                          {row[colIdx] || ''}
+                          {renderInlineMarkdown(
+                            row[colIdx] || '',
+                            `${keyBase}-tdil-${idx}-${rowIdx}-${colIdx}`,
+                            renderColors,
+                          )}
                         </Text>
                       </View>
                     ))}
@@ -443,16 +455,17 @@ export function renderMarkdownContent(
 ): React.ReactNode[] {
   if (!content) return [];
 
+  const source = normalizeMarkdownSource(content);
   const elements: React.ReactNode[] = [];
   let keyCounter = 0;
 
-  const blockRegex = /(\$\$([\s\S]*?)\$\$|```(\w+)?\n?([\s\S]*?)```)/g;
+  const blockRegex = /(\$\$([\s\S]*?)\$\$|```([^\n]*)\n?([\s\S]*?)```)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = blockRegex.exec(content)) !== null) {
+  while ((match = blockRegex.exec(source)) !== null) {
     if (match.index > lastIndex) {
-      const textBefore = content.slice(lastIndex, match.index);
+      const textBefore = source.slice(lastIndex, match.index);
       elements.push(...renderTextSegment(textBefore, `seg-${keyCounter++}`, renderColors));
     }
 
@@ -461,9 +474,9 @@ export function renderMarkdownContent(
       elements.push(<MathBlock key={`bmath-${keyCounter++}`} latex={mathContent} display={true} />);
     } else if (match[4] !== undefined) {
       const codeContent = match[4].trim();
-      const fenceLanguage = match[3];
+      const fenceLanguage = match[3]?.trim().split(/\s+/)[0];
       const languageLabel =
-        fenceLanguage && fenceLanguage.trim().length > 0 ? fenceLanguage : 'Plain text';
+        fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
       const codeTokens = tokenizeCode(codeContent, fenceLanguage);
       elements.push(
         <View
@@ -540,13 +553,13 @@ export function renderMarkdownContent(
     lastIndex = match.index + match[0].length;
   }
 
-  if (lastIndex < content.length) {
-    const remaining = content.slice(lastIndex);
+  if (lastIndex < source.length) {
+    const remaining = source.slice(lastIndex);
     elements.push(...renderTextSegment(remaining, `seg-tail-${keyCounter++}`, renderColors));
   }
 
-  if (elements.length === 0 && content.length > 0) {
-    elements.push(...renderTextSegment(content, 'seg-0', renderColors));
+  if (elements.length === 0 && source.length > 0) {
+    elements.push(...renderTextSegment(source, 'seg-0', renderColors));
   }
 
   return elements;

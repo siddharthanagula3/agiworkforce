@@ -145,7 +145,14 @@ export async function getPriceSelectionForCurrency(
 
   const localized = resolveLocalizedPlanPrice(plan, interval, normalizedCurrency, stripePrice);
   const configuredAmount = stripeAmountForCurrency(stripePrice, localized.currency);
-  if (configuredAmount === null || configuredAmount !== localized.amountMinor) return null;
+  if (configuredAmount === null || configuredAmount !== localized.amountMinor) {
+    console.warn(
+      `[localized-pricing] Stripe price ${priceId} charges ${configuredAmount ?? 'nothing'} ` +
+        `${localized.currency} for ${plan} ${interval} but the published price is ` +
+        `${localized.amountMinor}; checkout stays closed until the Stripe catalog matches.`,
+    );
+    return null;
+  }
 
   return { priceId, currency: localized.currency, amountMinor: localized.amountMinor };
 }

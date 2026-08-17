@@ -680,6 +680,40 @@ Capability parity, by evidence rather than by feature-folder name:
   authoritative completion signals. This is an engineering ownership boundary,
   not a founder credential blocker, and must land end to end rather than as a
   Mobile-only timeout veneer.
+- `TODO` **SEC-16 — establish the dispatch control-channel key out of band.**
+  The false threat-model claim was withdrawn on 2026-08-17 (both module
+  docstrings now state that the layer does not defend against the relay; guard:
+  `apps/mobile/__tests__/dispatch-hmac-threat-model.test.ts`). The key itself is
+  unchanged and still HKDF(IKM = relay-minted pairing code, salt = relayed
+  session salt), so a relay compromise still mints envelopes that verify.
+  Remaining work, all of which must land together: (1) desktop generates 32
+  random bytes per pairing, keeps them local, and appends them to the QR payload
+  the relay returned, so `agiw:<code>:<pairToken>:<secret>`; (2) that secret,
+  not the code, becomes the HKDF IKM on both peers — `deriveDispatchSecret` in
+  `apps/mobile/lib/dispatchHmac.ts` and `derive_session_key` in
+  `apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs`, plus the
+  `dispatch_hmac_init` Tauri command parameter; (3) each envelope gains a `from`
+  role inside `canonicalSigningInput` / `canonical_signing_input` so a frame
+  cannot be reflected back at its sender; (4) the manual-entry fallback in
+  `apps/mobile/src/features/companion/components/QRScanner.tsx` carries no
+  secret and needs the founder decision below before it can keep working; (5)
+  the wire change breaks every paired device, so `DISPATCH_HMAC_REQUIRED_AFTER`
+  and `DISPATCH_HMAC_MIN_MOBILE_VERSION` need a coordinated bump. Blocked on
+  `FoundersAssistance.md` §33.
+- `TODO` **AI-58 — one host-relay/remote-control contract, defined before any
+  dependent surface.** `docs/current/frontend-experience-contract.md` §13 has
+  Remote control as Absent on Web, unmounted on Desktop, static on Mobile, and
+  host-transport-missing on CLI and VS Code; the parity matrix carries the same
+  chain as MS-3, MS-18 and CAP-049. Nothing in the tree is a projection or
+  remote-control protocol — `apps/desktop/src/features/mobile-companion/` is
+  QR pairing plus an approval card, and `apps/mobile/app/(app)/companion/` is
+  the approval client for it. The contract has three parts and none exists: a
+  host transport (CLI and Desktop expose a session a remote client can attach
+  to), device grants with issue/list/expire/revoke replacing today's ephemeral
+  session key, and a projection client (Mobile and Web render and drive that
+  session). Effort XL across five surfaces plus the relay; it is founder-
+  approved scope on the 2026-08-01 Build list, not a defect to patch, and it
+  must not be started as a placeholder screen.
 
 ### Known blockers for this cycle
 
@@ -1643,30 +1677,29 @@ later`, exposed authenticated SKILL.md downloads for every Included bundle,
 
 ## Write collisions — these pairs must run serially
 
-| File                                                                   | Items              | Order                               |
-| ---------------------------------------------------------------------- | ------------------ | ----------------------------------- |
-| `.github/workflows/ci.yml`                                             | #3, #5             | #3 then #5                          |
-| `apps/web/next.config.ts`                                              | #1, #62            | #1 then #62                         |
-| `vercel.json`                                                          | #28, #62, #82      | #28 → #62 → #82                     |
-| `services/api-gateway/src/services/managedUsageBilling.ts`             | #20, #21, #33, #90 | #20 → #21 → #33 → #90               |
-| `apps/web/lib/cost-tracker.ts`                                         | #33 only (merged)  | —                                   |
-| `packages/contracts/types/src/billing-catalog.ts`                      | #28, #29           | #28 then #29                        |
-| `apps/web/.env.example`                                                | #23, #24           | #23 then #24                        |
-| `apps/web/app/api/stripe-webhook/lib/*`                                | #25, #26           | #25 then #26                        |
-| `apps/web/lib/server/account-erasure.ts`                               | #30, #87           | #30 then #87                        |
-| `apps/web/app/api/uploads/presign/route.ts`                            | #19, #89           | #19 then #89                        |
-| `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`    | #56, #67, #93      | #67 → #56 → #93                     |
-| `apps/extension/src/background.ts` + `background/policy.ts`            | #8, #9, #76        | #8 → #9 → #76                       |
-| `apps/extension/src/side_panel.ts`                                     | #49, #50, #76      | #50 → #49 → #76                     |
-| `apps/desktop/src-tauri/src/sys/security/tool_guard.rs`                | #14, #46           | #14 then #46                        |
-| `apps/desktop/src-tauri/.../image_gen.rs`, `perplexity.rs`, `voice.rs` | #54, #55, #61      | #54 → #55 → #61                     |
-| `apps/desktop/src/stores/settingsStore.ts`                             | #56, #59           | #59 then #56                        |
-| `apps/desktop/src/utils/ipc.ts`                                        | #45, #57           | #45 then #57                        |
-| `apps/desktop/src/api/embeddings.ts`                                   | #50, #57           | #50 then #57                        |
-| `apps/cli/src/voice.rs`                                                | #55, #61           | #55 then #61                        |
-| `apps/web/scripts/test-llm-keys.ts`                                    | #55, #61           | #55 then #61                        |
-| `packages/ui/**`                                                       | #72, #98, #99      | #72 first, then #98/#99 in parallel |
-| desktop feature dirs (`roi-dashboard`, `dynamic-canvas`, …)            | #41, #66           | decide #66 (route-or-delete) first  |
+| File                                                                   | Items             | Order                               |
+| ---------------------------------------------------------------------- | ----------------- | ----------------------------------- |
+| `.github/workflows/ci.yml`                                             | #3, #5            | #3 then #5                          |
+| `apps/web/next.config.ts`                                              | #1, #62           | #1 then #62                         |
+| `vercel.json`                                                          | #28, #62, #82     | #28 → #62 → #82                     |
+| `apps/web/lib/cost-tracker.ts`                                         | #33 only (merged) | —                                   |
+| `packages/contracts/types/src/billing-catalog.ts`                      | #28, #29          | #28 then #29                        |
+| `apps/web/.env.example`                                                | #23, #24          | #23 then #24                        |
+| `apps/web/app/api/stripe-webhook/lib/*`                                | #25, #26          | #25 then #26                        |
+| `apps/web/lib/server/account-erasure.ts`                               | #30, #87          | #30 then #87                        |
+| `apps/web/app/api/uploads/presign/route.ts`                            | #19, #89          | #19 then #89                        |
+| `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`    | #56, #67, #93     | #67 → #56 → #93                     |
+| `apps/extension/src/background.ts` + `background/policy.ts`            | #8, #9, #76       | #8 → #9 → #76                       |
+| `apps/extension/src/side_panel.ts`                                     | #49, #50, #76     | #50 → #49 → #76                     |
+| `apps/desktop/src-tauri/src/sys/security/tool_guard.rs`                | #14, #46          | #14 then #46                        |
+| `apps/desktop/src-tauri/.../image_gen.rs`, `perplexity.rs`, `voice.rs` | #54, #55, #61     | #54 → #55 → #61                     |
+| `apps/desktop/src/stores/settingsStore.ts`                             | #56, #59          | #59 then #56                        |
+| `apps/desktop/src/utils/ipc.ts`                                        | #45, #57          | #45 then #57                        |
+| `apps/desktop/src/api/embeddings.ts`                                   | #50, #57          | #50 then #57                        |
+| `apps/cli/src/voice.rs`                                                | #55, #61          | #55 then #61                        |
+| `apps/web/scripts/test-llm-keys.ts`                                    | #55, #61          | #55 then #61                        |
+| `packages/ui/**`                                                       | #72, #98, #99     | #72 first, then #98/#99 in parallel |
+| desktop feature dirs (`roi-dashboard`, `dynamic-canvas`, …)            | #41, #66          | decide #66 (route-or-delete) first  |
 
 Everything not listed here has a disjoint Writes set and may run in parallel within its wave.
 
@@ -1954,3 +1987,10 @@ intact, Settings account section (tier shows Max 15x).
   type across every fixed-provider/account/integration transport. These are
   explicit ownership/design gates, not UI controls that can be safely exposed
   as finished.
+- `TODO` Web `@` mentions now cover Skills and Projects through one shared
+  trigger rule (`matchMentionQuery` in `@agiworkforce/unified-chat`, used by the
+  web composer and the shared `ChatInput`). File mentions are still unbuilt on
+  web: `FileMentionPicker` needs an `onSearch` source, and no web send contract
+  carries a per-file reference — `POST /api/chat/conversations/[id]/messages`
+  never reads `project_knowledge_files`. Shipping an `@file` row before that
+  contract exists would render a picker whose selection the server ignores.

@@ -17,6 +17,7 @@ import {
 import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
 import { TwoFactorEnrollmentPanel } from '@features/settings/components/Settings/TwoFactorEnrollment';
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
+import { AdminConsoleEntry } from '@/features/admin/components/AdminConsoleEntry';
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
 
 export function SecuritySection() {
@@ -105,26 +106,6 @@ export function SecuritySection() {
         </p>
       </div>
 
-      <section
-        aria-label="Account security availability"
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          padding: '16px 20px',
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
-          Current account boundary
-        </div>
-        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
-          Passkeys, security keys, SMS MFA, and trusted-device lists are not available in the
-          current account contract. Authenticator app codes (TOTP) with recovery backup codes are
-          the supported second factor. To review active sessions or sign out other devices, use
-          Account settings.
-        </p>
-      </section>
-
       <TwoFactorEnrollmentPanel onStatusChange={handleTwoFactorStatus} />
 
       {isLoading ? (
@@ -146,6 +127,28 @@ export function SecuritySection() {
       )}
 
       <AuditLogPanel />
+
+      <AdminConsoleEntry />
+
+      <section
+        aria-label="Account security availability"
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          padding: '16px 20px',
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
+          Current account boundary
+        </div>
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
+          Passkeys, security keys, SMS MFA, and trusted-device lists are not available in the
+          current account contract. Authenticator app codes (TOTP) with recovery backup codes are
+          the supported second factor. To review active sessions or sign out other devices, use
+          Account settings.
+        </p>
+      </section>
 
       <section
         aria-label="Trusted contact availability"

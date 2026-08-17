@@ -1,4 +1,3 @@
-
 import type { RunPageAction, ScheduledTask, WebMCPToolInfo } from '../types';
 import { redactSecrets } from '@agiworkforce/utils/logger';
 
@@ -41,6 +40,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   DELETE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SAVE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  REPLAY_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RESUME_CHAT_RUN: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -91,7 +91,6 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   GET_RECORDED_ACTIONS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   LIST_SHORTCUTS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
-  REPLAY_SHORTCUT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   LIST_SCHEDULED_TASKS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   BRIDGE_URL_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
 };

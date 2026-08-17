@@ -27,7 +27,8 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { buildMemorySystemContent, withMemorySystemMessage } from './memory-context';
-import { isMemoryCapabilityEnabled } from './memory-capability';
+import { isMemoryCapabilityEnabled, isPastChatSearchEnabled } from './memory-capability';
+import { retrievePastChatContext } from './past-chat-context';
 
 const DEFAULT_WEB_CHAT_MODEL = 'auto';
 
@@ -207,8 +208,25 @@ export class WebChatRuntime implements ChatRuntime {
     // server-side Temporary Chat boundary (`enrichManagedMemoryContext`, which
     // only suppresses ITS OWN account memories) never sees them and cannot
     // strip them.
+    const persistentConversation = !isTemporaryConversation(conversationId);
+
+    // Excerpts from the user's OTHER conversations, retrieved from /api/search
+    // and fenced as untrusted data. Gated on its own Settings → Capabilities →
+    // "Search past chats" toggle, and on the same Temporary Chat boundary as
+    // saved facts: this rides in `messages[]`, so the server-side temporary
+    // boundary never sees it and cannot strip it.
+    const pastChatContent = persistentConversation
+      ? await retrievePastChatContext({
+          enabled: await isPastChatSearchEnabled(),
+          query: content,
+          currentConversationId: conversationId,
+          headers: await authHeaders(token),
+        })
+      : null;
+    history = withMemorySystemMessage(history, pastChatContent);
+
     const memoryContent =
-      !isTemporaryConversation(conversationId) && (await isMemoryCapabilityEnabled())
+      persistentConversation && (await isMemoryCapabilityEnabled())
         ? buildMemorySystemContent(useMemoryStore.getState().facts)
         : null;
     history = withMemorySystemMessage(history, memoryContent);

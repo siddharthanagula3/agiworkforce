@@ -5,6 +5,7 @@ import { Keyboard, TextInput } from 'react-native';
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { LARGE_PASTE_THRESHOLD, pastedTextFileName } from '@agiworkforce/utils/composer-paste';
 
 const mockCapabilityModelId = requireMobileCloudModel((model) => {
   const metadata = getModelMetadataById(model.id);
@@ -616,8 +617,23 @@ describe('ChatInput', () => {
       expect(getByLabelText('Message input').props.value).toBe('Review this:');
       const pasted = capturedAttachmentPreviewProps?.attachments.find((a) => a.pastedText);
       expect(pasted).toBeTruthy();
-      expect(pasted!.fileName).toBe('Pasted text');
+      expect(pasted!.fileName).toBe(pastedTextFileName(1));
       expect(pasted!.pastedText).toBe(bigBlock);
+    });
+
+    it('shares the composer paste policy with the other surfaces', () => {
+      const { getByLabelText } = renderInput();
+
+      const input = getByLabelText('Message input');
+      const first = 'a'.repeat(LARGE_PASTE_THRESHOLD);
+      fireEvent.changeText(input, first);
+      const second = 'b'.repeat(LARGE_PASTE_THRESHOLD);
+      fireEvent.changeText(getByLabelText('Message input'), second);
+
+      const pastedNames = (capturedAttachmentPreviewProps?.attachments ?? [])
+        .filter((a) => a.pastedText)
+        .map((a) => a.fileName);
+      expect(pastedNames).toEqual([pastedTextFileName(1), pastedTextFileName(2)]);
     });
 
     it('does not convert gradual typing under the paste threshold', () => {
@@ -678,7 +694,6 @@ describe('ChatInput', () => {
 
   describe('recording overlay send', () => {
     it('bumps voiceResetSignal even when the recording session already ended', async () => {
-
       const VoiceService = require('../src/features/voice/services/voice');
       VoiceService.isRecording.mockReturnValue(false);
 

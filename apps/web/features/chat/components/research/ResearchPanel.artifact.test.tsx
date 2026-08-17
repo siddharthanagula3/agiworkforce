@@ -60,3 +60,33 @@ describe('ResearchPanel · report to artifact', () => {
     expect(useResearchPanelStore.getState().panelOpen).toBe(false);
   });
 });
+
+describe('ResearchPanel · follow-up hand-off', () => {
+  it("sends a reopened Library report's follow-up to the host and closes the panel", async () => {
+    const user = userEvent.setup();
+    const onAskFollowUp = vi.fn();
+    render(<ResearchPanel onAskFollowUp={onAskFollowUp} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Library' }));
+    await user.click(await screen.findByText('Node.js release status'));
+    await user.type(
+      await screen.findByLabelText('Ask a follow-up about this report'),
+      'Which line should we pin?',
+    );
+    await user.click(screen.getByTestId('research-report-follow-up-send'));
+
+    expect(onAskFollowUp).toHaveBeenCalledTimes(1);
+    expect(onAskFollowUp.mock.calls[0]![0]).toContain('Which line should we pin?');
+    expect(onAskFollowUp.mock.calls[0]![0]).toContain('Node 24 is LTS');
+    expect(useResearchPanelStore.getState().panelOpen).toBe(false);
+  });
+
+  it('offers no composer when the host cannot send', async () => {
+    const user = userEvent.setup();
+    render(<ResearchPanel />);
+
+    await user.click(screen.getByRole('tab', { name: 'Report' }));
+    await screen.findByTestId('research-report-view');
+    expect(screen.queryByTestId('research-report-follow-up')).toBeNull();
+  });
+});

@@ -161,6 +161,11 @@ const VoiceInputOverlay = lazy(() =>
     default: m.VoiceInputOverlay,
   })),
 );
+const SpokenReplies = lazy(() =>
+  import('./features/voice/SpokenReplies').then((m) => ({
+    default: m.SpokenReplies,
+  })),
+);
 const OnboardingWelcome = lazy(() =>
   import('./features/onboarding').then((m) => ({
     default: m.OnboardingWelcome,
@@ -1675,6 +1680,11 @@ const DesktopShell = () => {
             <VoiceInputOverlay />
           </Suspense>
         )}
+        {isTauri && (
+          <Suspense fallback={null}>
+            <SpokenReplies />
+          </Suspense>
+        )}
         {isTauri && showOnboarding && !hasSelectedMode && (
           <Suspense fallback={null}>
             <OnboardingWelcome
@@ -1840,7 +1850,6 @@ const DesktopShell = () => {
                     setPlansModalOpen(true);
                   }
                 }}
-                onBuyTopUp={() => openSettingsDialog('billing')}
               />
             </ErrorBoundary>
           </div>

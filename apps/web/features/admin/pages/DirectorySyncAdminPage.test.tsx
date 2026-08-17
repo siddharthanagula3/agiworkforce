@@ -39,6 +39,28 @@ function connectionsPayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const GROUP_ID = '44444444-4444-4444-8444-444444444444';
+
+function groupsPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    groups: [
+      {
+        id: GROUP_ID,
+        connection_id: CONNECTION_ID,
+        external_id: 'okta-group-1',
+        display_name: 'Platform engineers',
+        mapped_role: null,
+        member_count: 3,
+        updated_at: '2026-08-01T10:00:00.000Z',
+      },
+    ],
+    organization_id: '11111111-1111-4111-8111-111111111111',
+    mappable_roles: ['admin', 'member', 'viewer'],
+    can_manage_roles: true,
+    ...overrides,
+  };
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -172,6 +194,133 @@ describe('DirectorySyncAdminPage', () => {
       );
       expect(revokeCall?.[1]?.headers).toMatchObject({ 'x-csrf-token': 'csrf-token' });
     });
+  });
+
+  it('lets an owner map a synced group to a role and sends the PATCH', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/groups') && init?.method === 'PATCH') {
+        return jsonResponse({
+          group: { ...groupsPayload().groups[0], mapped_role: 'admin' },
+          members_reconciled: 3,
+        });
+      }
+      if (String(url).includes('/groups')) return jsonResponse(groupsPayload());
+      if (String(url).includes('/tokens')) return jsonResponse({ tokens: [] });
+      return jsonResponse(connectionsPayload());
+    });
+
+    render(<DirectorySyncAdminPage />);
+
+    const select = (await screen.findByLabelText(
+      /Role for Platform engineers/i,
+    )) as HTMLSelectElement;
+    expect(select.value).toBe('');
+    expect(select.disabled).toBe(false);
+
+    fireEvent.change(select, { target: { value: 'admin' } });
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        ([callUrl, callInit]) =>
+          String(callUrl).includes('/api/admin/directory-sync/groups') &&
+          callInit?.method === 'PATCH',
+      );
+      expect(patchCall).toBeTruthy();
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+        groupId: GROUP_ID,
+        mappedRole: 'admin',
+      });
+      expect(patchCall?.[1]?.headers).toMatchObject({ 'x-csrf-token': 'csrf-token' });
+    });
+
+    await waitFor(() => {
+      expect(
+        (screen.getByLabelText(/Role for Platform engineers/i) as HTMLSelectElement).value,
+      ).toBe('admin');
+    });
+  });
+
+  it('clears a mapping by sending an explicit null rather than an empty string', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/groups') && init?.method === 'PATCH') {
+        return jsonResponse({
+          group: { ...groupsPayload().groups[0], mapped_role: null },
+          members_reconciled: 3,
+        });
+      }
+      if (String(url).includes('/groups')) {
+        return jsonResponse(
+          groupsPayload({
+            groups: [{ ...groupsPayload().groups[0], mapped_role: 'admin' }],
+          }),
+        );
+      }
+      if (String(url).includes('/tokens')) return jsonResponse({ tokens: [] });
+      return jsonResponse(connectionsPayload());
+    });
+
+    render(<DirectorySyncAdminPage />);
+
+    const select = await screen.findByLabelText(/Role for Platform engineers/i);
+    fireEvent.change(select, { target: { value: '' } });
+
+    await waitFor(() => {
+      const patchCall = fetchMock.mock.calls.find(
+        ([callUrl, callInit]) =>
+          String(callUrl).includes('/api/admin/directory-sync/groups') &&
+          callInit?.method === 'PATCH',
+      );
+      expect(JSON.parse(String(patchCall?.[1]?.body))).toEqual({
+        groupId: GROUP_ID,
+        mappedRole: null,
+      });
+    });
+  });
+
+  it('shows a non-owner the mapping read-only instead of a control that would 403', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/groups')) {
+        return jsonResponse(groupsPayload({ can_manage_roles: false }));
+      }
+      if (String(url).includes('/tokens')) return jsonResponse({ tokens: [] });
+      return jsonResponse(connectionsPayload());
+    });
+
+    render(<DirectorySyncAdminPage />);
+
+    const select = (await screen.findByLabelText(
+      /Role for Platform engineers/i,
+    )) as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+    expect(
+      screen.getByText(/Only an organization owner can change group role mapping/i),
+    ).toBeTruthy();
+  });
+
+  it('surfaces a refused mapping change instead of showing the new role', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/groups') && init?.method === 'PATCH') {
+        return jsonResponse(
+          { error: 'Only an organization owner can change group role mapping' },
+          403,
+        );
+      }
+      if (String(url).includes('/groups')) return jsonResponse(groupsPayload());
+      if (String(url).includes('/tokens')) return jsonResponse({ tokens: [] });
+      return jsonResponse(connectionsPayload());
+    });
+
+    render(<DirectorySyncAdminPage />);
+
+    fireEvent.change(await screen.findByLabelText(/Role for Platform engineers/i), {
+      target: { value: 'admin' },
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('organization owner');
+    expect((screen.getByLabelText(/Role for Platform engineers/i) as HTMLSelectElement).value).toBe(
+      '',
+    );
   });
 
   it('reports a failed connection create rather than pretending it worked', async () => {

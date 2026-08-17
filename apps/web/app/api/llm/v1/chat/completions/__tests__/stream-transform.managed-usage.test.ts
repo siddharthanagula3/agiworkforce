@@ -239,6 +239,61 @@ describe('buildStreamResponse CPST usage telemetry', () => {
     expect('fallbackReason' in usage).toBe(false);
   });
 
+  it('settles with the tokens context compaction removed before the request was sent', async () => {
+    lifecycle.finalize.mockResolvedValue({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 2,
+    });
+
+    const processed = managedProcessed();
+    processed.contextTrim = {
+      droppedMessages: 3,
+      truncatedMessages: 1,
+      estimatedTokensBefore: 12_000,
+      estimatedTokensAfter: 8_000,
+      budgetTokens: 8_192,
+    };
+
+    await drain(
+      await buildStreamResponse(
+        new Request('https://example.com/api/llm/v1/chat/completions', {
+          method: 'POST',
+        }) as never,
+        upstreamSse(),
+        processed,
+        'user-001',
+        'token-001',
+      ),
+    );
+
+    expect(finalizedUsage()['compactionSavedTokens']).toBe(4_000);
+  });
+
+  it('leaves the compaction counter absent when nothing was trimmed', async () => {
+    lifecycle.finalize.mockResolvedValue({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 2,
+    });
+
+    await drain(
+      await buildStreamResponse(
+        new Request('https://example.com/api/llm/v1/chat/completions', {
+          method: 'POST',
+        }) as never,
+        upstreamSse(),
+        managedProcessed(),
+        'user-001',
+        'token-001',
+      ),
+    );
+
+    expect('compactionSavedTokens' in finalizedUsage()).toBe(false);
+  });
+
   it('records a rotated attempt with its retry count and fallback reason', async () => {
     lifecycle.finalize.mockResolvedValue({
       requestStatus: 'completed',

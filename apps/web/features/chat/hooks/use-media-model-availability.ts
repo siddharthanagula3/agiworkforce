@@ -15,6 +15,10 @@ export interface MediaModelAvailabilityResult {
   retry: () => void;
 }
 
+const MEDIA_AVAILABILITY_UNAVAILABLE_COPY =
+  "We couldn't check which image and video models are available right now. Try again in a moment.";
+const MEDIA_AVAILABILITY_TIMEOUT_COPY =
+  'Checking image and video models took too long. Check your connection and try again.';
 const MEDIA_AVAILABILITY_TIMEOUT_MS = 10_000;
 const MEDIA_AVAILABILITY_RETRY_DELAY_MS = 500;
 const MEDIA_AVAILABILITY_MAX_RETRY_AFTER_MS = 5_000;
@@ -66,7 +70,7 @@ export function useMediaModelAvailability(): MediaModelAvailabilityResult {
       controller.abort();
       setAdmissions([]);
       setStatus('error');
-      setError('Media availability check timed out. Check your connection and retry.');
+      setError(MEDIA_AVAILABILITY_TIMEOUT_COPY);
     }, MEDIA_AVAILABILITY_TIMEOUT_MS);
 
     void (async () => {
@@ -98,9 +102,10 @@ export function useMediaModelAvailability(): MediaModelAvailabilityResult {
         setStatus('ready');
       } catch (cause) {
         if (controller.signal.aborted) return;
+        console.warn('media availability check failed', cause);
         setAdmissions([]);
         setStatus('error');
-        setError(cause instanceof Error ? cause.message : 'Could not check media availability.');
+        setError(MEDIA_AVAILABILITY_UNAVAILABLE_COPY);
       }
     })();
 

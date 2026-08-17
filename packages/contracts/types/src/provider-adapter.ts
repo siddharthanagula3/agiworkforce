@@ -289,8 +289,21 @@ export interface StreamChunkStop {
    * `finish_reason: 'content_filter'` — one honest concept, not two
    * vendor-specific ones, and distinct from `'error'` (transport/provider
    * failure) and from normal completion.
+   *
+   * `'pause_turn'` is NOT a completion: the provider suspended a still-running
+   * turn (Anthropic's `stop_reason: 'pause_turn'`, emitted for long-running
+   * server tools) and the turn is resumable by sending the response back.
+   * Callers must not report it as a finished answer.
    */
-  reason: 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'refusal' | 'error' | 'cancel';
+  reason:
+    | 'end_turn'
+    | 'max_tokens'
+    | 'tool_use'
+    | 'stop_sequence'
+    | 'refusal'
+    | 'pause_turn'
+    | 'error'
+    | 'cancel';
 }
 
 export type StreamChunk =

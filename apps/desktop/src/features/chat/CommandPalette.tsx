@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
   Search,
   Clock,
@@ -199,7 +200,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
       } finally {
         setFtsLoading(false);
       }
-    }, 300);
+    }, SEARCH_INPUT_DEBOUNCE_MS);
     return () => {
       if (ftsDebounceRef.current) clearTimeout(ftsDebounceRef.current);
     };

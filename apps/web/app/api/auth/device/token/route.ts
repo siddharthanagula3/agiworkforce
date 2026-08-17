@@ -17,6 +17,7 @@ import {
 } from '@/lib/server/device-refresh-token';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '@/lib/server/terms';
+import { devicePairingFlow } from '@/lib/validations/device';
 
 export const runtime = 'nodejs';
 
@@ -68,6 +69,14 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     return NextResponse.json({ error: 'invalid_grant' }, { status: 400, ...noStore });
   }
   const record = rows[0]!;
+
+  // device_authorization_codes is shared with the QR linking flow; only this flow's own
+  // XXXX-XXXX rows may be exchanged here, or a QR row's client-chosen device_id would mint
+  // a developer token without the fingerprint binding /api/device/poll enforces.
+  if (devicePairingFlow(record.user_code) !== 'cli') {
+    return NextResponse.json({ error: 'invalid_grant' }, { status: 400, ...noStore });
+  }
+
   const nowIso = new Date().toISOString();
 
   if (new Date(record.expires_at) < new Date()) {

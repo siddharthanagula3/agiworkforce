@@ -19,6 +19,7 @@ import {
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from '../cloud-bridge/managedCloudAuthority';
+import { cloudMirroringEnabledSnapshot } from '../privacy/cloudMirroring';
 
 export const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
 const LEGACY_BROWSER_STORE_KEY = 'agi_browser_conversations_v1';
@@ -1238,6 +1239,7 @@ export async function deleteConversation(
 }
 
 export function isCloudPersistenceEligible(entry: ConversationEntry): boolean {
+  if (!cloudMirroringEnabledSnapshot()) return false;
   if (entry.cloudSync?.blockedReason === 'non-cloud-runtime') return false;
   if (entry.messages.length === 0) return false;
   return entry.messages.every((message) => message.runtime === 'managed-cloud');

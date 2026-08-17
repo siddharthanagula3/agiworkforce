@@ -136,6 +136,34 @@ describe('useChatStream — tool approval → resume', () => {
     expect(assistantMessage()?.content).toContain('The PR renames a function.');
   });
 
+  it('sends typed guidance with the resume so the run can be redirected instead of stopped', async () => {
+    mockSseStream([approvalEvent]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('summarize PR 7', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+
+    const assistantId = assistantMessage()!.id;
+    mockSseStream([{ choices: [{ delta: { content: 'ok' } }] }]);
+
+    await act(async () => {
+      await result.current.resolveToolApproval(
+        assistantId,
+        'call_1',
+        'approved',
+        '  Only touch the docs directory.  ',
+      );
+    });
+
+    const approveCall = vi
+      .mocked(fetch)
+      .mock.calls.find((c) => String(c[0]).includes('/api/llm/v1/chat/completions/approve'));
+    const body = JSON.parse((approveCall![1] as RequestInit).body as string);
+    expect(body.guidance).toBe('Only touch the docs directory.');
+  });
+
   it('keeps the same server-owned run across consecutive approval boundaries', async () => {
     mockSseStream([approvalEvent]);
     const { result } = renderHook(() => useChatStream());

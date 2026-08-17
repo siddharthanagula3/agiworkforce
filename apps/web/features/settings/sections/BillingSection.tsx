@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { managedUsageComparisonLabel } from '@/lib/billing/managed-usage-caps';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { openBillingPortal, startTopUpCheckout } from '@/features/billing/services/stripe-payments';
 import {
@@ -508,10 +509,10 @@ export function BillingSection() {
     paymentMethods.items.find((pm) => pm.is_default)?.card ?? paymentMethods.items[0]?.card;
 
   function usageBadgeText(): string | null {
-    if (tier === 'pro') return '5x more usage than Basic';
-    if (tier === 'max') return '5x more usage than Pro';
-    if (tier === 'max_15x') return '15x more usage than Pro';
-    if (tier === 'team') return 'Same usage as Pro';
+    if (tier === 'pro') return managedUsageComparisonLabel('pro', 'basic', 'Basic');
+    if (tier === 'max') return managedUsageComparisonLabel('max', 'pro', 'Pro');
+    if (tier === 'max_15x') return managedUsageComparisonLabel('max_15x', 'pro', 'Pro');
+    if (tier === 'team') return managedUsageComparisonLabel('team', 'pro', 'Pro');
     return null;
   }
 

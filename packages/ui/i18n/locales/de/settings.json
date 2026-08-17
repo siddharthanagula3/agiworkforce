@@ -61,5 +61,6 @@
   "saved": "Gespeichert",
   "saving": "Speichern...",
   "resetToDefaults": "Auf Standardwerte zurücksetzen",
-  "confirmReset": "Möchten Sie wirklich alle Einstellungen auf die Standardwerte zurücksetzen?"
+  "confirmReset": "Möchten Sie wirklich alle Einstellungen auf die Standardwerte zurücksetzen?",
+  "translationScope": "Übersetzt die öffentliche Website, die Preise und einige Chat-Bezeichnungen. Einstellungen und die meisten anderen Bildschirme bleiben auf Englisch."
 }

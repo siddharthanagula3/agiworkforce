@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const defaultBaseUrl = 'http://127.0.0.1:5175';
-const baseURL = process.env['PLAYWRIGHT_BASE_URL'] || defaultBaseUrl;
+const devPort = Number(process.env['PLAYWRIGHT_DEV_PORT']) || 5175;
+const managedBaseUrl = `http://127.0.0.1:${devPort}`;
+const externalBaseUrl = process.env['PLAYWRIGHT_BASE_URL'];
+const baseURL = externalBaseUrl || managedBaseUrl;
 
 export default defineConfig({
   testDir: './e2e',
@@ -99,7 +101,23 @@ export default defineConfig({
     },
   ],
 
-  webServer: process.env['CI'] ? undefined : undefined,
+  webServer: externalBaseUrl
+    ? undefined
+    : {
+        command: 'pnpm run dev:vite',
+        url: managedBaseUrl,
+        env: {
+          VITE_DEV_PORT: String(devPort),
+          TAURI_DEV_HOST: '127.0.0.1',
+          VITE_DESKTOP_UI_DEV_LOCAL: '0',
+        },
+        // CI starts this same server itself before invoking Playwright, and the
+        // dev server is strictPort — a second one would abort the whole run.
+        reuseExistingServer: true,
+        timeout: 180000,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
 
   globalTimeout: process.env['CI'] ? 1800000 : 3600000,
 

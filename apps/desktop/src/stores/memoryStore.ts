@@ -2,11 +2,13 @@ import { toast } from 'sonner';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist } from 'zustand/middleware';
 
+import { MEMORY_CATEGORIES, isMemoryCategory, type MemoryCategory } from '@agiworkforce/types';
 import { fenceUntrustedMemoryContent } from '@agiworkforce/utils';
 
 import * as memoryApi from '../api/memory';
 
-export type MemoryCategory = 'preference' | 'fact' | 'decision' | 'context';
+export { MEMORY_CATEGORIES, isMemoryCategory };
+export type { MemoryCategory };
 
 export interface MemoryEntry {
   id: number;

@@ -15,6 +15,27 @@ const MIN_TERM_LENGTH = 3;
 
 interface MemoryPreferences {
   excludedTerms?: unknown;
+  suppressedSources?: unknown;
+}
+
+const MEMORY_SOURCES = [
+  { id: 'auto', label: 'Automatically captured from chats' },
+  { id: 'web', label: 'Saved on the web app' },
+  { id: 'desktop', label: 'Saved on Desktop' },
+  { id: 'mobile', label: 'Saved on mobile' },
+] as const;
+
+type MemorySourceId = (typeof MEMORY_SOURCES)[number]['id'];
+
+function normalizeSources(value: unknown): MemorySourceId[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<MemorySourceId>();
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    const known = MEMORY_SOURCES.find((source) => source.id === entry.trim().toLowerCase());
+    if (known) seen.add(known.id);
+  }
+  return [...seen];
 }
 
 function normalize(value: unknown): string[] {
@@ -32,6 +53,7 @@ function normalize(value: unknown): string[] {
 
 export function MemoryExclusions() {
   const [terms, setTerms] = useState<string[]>([]);
+  const [suppressedSources, setSuppressedSources] = useState<MemorySourceId[]>([]);
   const [draft, setDraft] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +65,7 @@ export function MemoryExclusions() {
       .then((stored) => {
         if (cancelled) return;
         setTerms(normalize(stored.excludedTerms));
+        setSuppressedSources(normalizeSources(stored.suppressedSources));
         setError(null);
       })
       .catch((cause) => {
@@ -58,18 +81,32 @@ export function MemoryExclusions() {
     };
   }, []);
 
-  const persist = useCallback(async (next: string[]) => {
-    setSaving(true);
-    try {
-      await savePreferenceNamespace(PREF_NAMESPACE, { excludedTerms: next });
-      setTerms(next);
-      setError(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save exclusions');
-    } finally {
-      setSaving(false);
-    }
-  }, []);
+  const persist = useCallback(
+    async (next: { excludedTerms: string[]; suppressedSources: MemorySourceId[] }) => {
+      setSaving(true);
+      try {
+        await savePreferenceNamespace(PREF_NAMESPACE, next);
+        setTerms(next.excludedTerms);
+        setSuppressedSources(next.suppressedSources);
+        setError(null);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Could not save exclusions');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [],
+  );
+
+  const toggleSource = useCallback(
+    (source: MemorySourceId) => {
+      const next = suppressedSources.includes(source)
+        ? suppressedSources.filter((existing) => existing !== source)
+        : [...suppressedSources, source];
+      void persist({ excludedTerms: terms, suppressedSources: next });
+    },
+    [persist, suppressedSources, terms],
+  );
 
   const addTerm = useCallback(() => {
     const term = draft.trim().toLowerCase();
@@ -88,8 +125,8 @@ export function MemoryExclusions() {
       return;
     }
     setDraft('');
-    void persist([...terms, term]);
-  }, [draft, terms, persist]);
+    void persist({ excludedTerms: [...terms, term], suppressedSources });
+  }, [draft, terms, suppressedSources, persist]);
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -193,7 +230,12 @@ export function MemoryExclusions() {
                 {term}
                 <button
                   type="button"
-                  onClick={() => void persist(terms.filter((existing) => existing !== term))}
+                  onClick={() =>
+                    void persist({
+                      excludedTerms: terms.filter((existing) => existing !== term),
+                      suppressedSources,
+                    })
+                  }
                   disabled={saving}
                   aria-label={`Stop excluding ${term}`}
                   style={{
@@ -212,6 +254,49 @@ export function MemoryExclusions() {
           ))}
         </ul>
       )}
+
+      <div>
+        <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: '12px 0 4px' }}>
+          Where memories come from
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+          Suppress a source to keep its memories out of every answer. They stay saved and stay
+          listed below, and suppressing automatic capture also stops new ones being written.
+        </p>
+      </div>
+
+      <ul
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          listStyle: 'none',
+          padding: 0,
+          margin: 0,
+        }}
+      >
+        {MEMORY_SOURCES.map((source) => (
+          <li key={source.id}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 13,
+                color: 'var(--text-1)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={suppressedSources.includes(source.id)}
+                disabled={!loaded || saving}
+                onChange={() => toggleSource(source.id)}
+              />
+              Suppress: {source.label}
+            </label>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

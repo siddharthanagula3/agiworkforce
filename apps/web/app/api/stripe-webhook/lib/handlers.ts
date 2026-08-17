@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
-import { recordAuditEvent } from '@/lib/security-audit';
+import { logSecurityEvent, recordAuditEvent } from '@/lib/security-audit';
 import {
   handleCreditTopUp,
   upsertSubscriptionFromSession,
@@ -85,7 +85,9 @@ export async function dispatchStripeEvent(
     case 'customer.subscription.pending_update_applied':
     case 'customer.subscription.updated': {
       const subscription = event.data.object as Stripe.Subscription;
-      await updateSubscriptionFromStripeSubscription(db, stripe, subscription);
+      await updateSubscriptionFromStripeSubscription(db, stripe, subscription, {
+        eventSequence: event.created,
+      });
       break;
     }
     case 'invoice.paid':
@@ -96,7 +98,9 @@ export async function dispatchStripeEvent(
       logger.info({ invoiceId: invoice.id }, 'Payment succeeded for invoice');
       if (stripeSubId) {
         const subscription = await stripe.subscriptions.retrieve(stripeSubId);
-        await updateSubscriptionFromStripeSubscription(db, stripe, subscription);
+        await updateSubscriptionFromStripeSubscription(db, stripe, subscription, {
+          eventSequence: event.created,
+        });
       }
       break;
     }
@@ -418,6 +422,47 @@ export async function dispatchStripeEvent(
           );
         }
       }
+      break;
+    }
+    // A warning is Stripe's issuer-sourced signal that a dispute is likely, not
+    // proof of fraud. What to DO about one — claw back, suspend, pre-refund — is
+    // a risk-appetite decision that has not been made, so this records the
+    // warning against the owning account with a stable reason code and leaves
+    // the account untouched. `charge.dispute.created` above is what acts.
+    case 'radar.early_fraud_warning.created': {
+      const warning = event.data.object as Stripe.Radar.EarlyFraudWarning;
+      const chargeId = typeof warning.charge === 'string' ? warning.charge : warning.charge.id;
+
+      const charge = await stripe.charges.retrieve(chargeId);
+      const stripeCustomerId = getCustomerId(charge.customer);
+
+      const profiles = stripeCustomerId
+        ? await db.query<{ id: string; email: string | null }>(
+            'select id, email from profiles where stripe_customer_id = $1 limit 1',
+            [stripeCustomerId],
+          )
+        : [];
+      const userId = profiles[0]?.id;
+
+      logger.warn(
+        { warningId: warning.id, chargeId, fraudType: warning.fraud_type, userId },
+        'Stripe early fraud warning received',
+      );
+
+      await logSecurityEvent({
+        ...(userId ? { userId } : {}),
+        eventType: 'suspicious_activity',
+        severity: 'high',
+        endpoint: '/api/stripe-webhook',
+        details: {
+          reason: 'stripe_early_fraud_warning',
+          warningId: warning.id,
+          chargeId,
+          fraudType: warning.fraud_type,
+          actionable: warning.actionable,
+          appealPath: '/support',
+        },
+      });
       break;
     }
     default:

@@ -89,8 +89,40 @@ export interface CapabilityDocumentRef {
   computedAt: string;
 }
 
+export const CAPABILITY_LIMIT_WINDOWS = [
+  'day',
+  'month',
+  'billing_period',
+  'rolling_five_hour',
+  'rolling_weekly',
+] as const;
+
+export type CapabilityLimitWindow = (typeof CAPABILITY_LIMIT_WINDOWS)[number];
+
+export const CAPABILITY_LIMIT_UNITS = [
+  'tokens',
+  'messages',
+  'images',
+  'video_seconds',
+  'voice_minutes',
+  'usage_cents',
+] as const;
+
+export type CapabilityLimitUnit = (typeof CAPABILITY_LIMIT_UNITS)[number];
+
+export interface CapabilityLimit {
+  id: string;
+  capabilityId: PlatformCapability | null;
+  limit: number | null;
+  unit: CapabilityLimitUnit;
+  window: CapabilityLimitWindow;
+  resetsAt: string | null;
+  policySource: string;
+}
+
 export interface EffectiveCapabilityDocument extends CapabilityDocumentRef {
   sources: Readonly<Record<CapabilityLayer, string>>;
   granted: readonly PlatformCapability[];
   deniedBy: Readonly<Partial<Record<PlatformCapability, readonly CapabilityLayer[]>>>;
+  limits: readonly CapabilityLimit[];
 }

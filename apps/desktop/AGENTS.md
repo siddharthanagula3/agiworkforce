@@ -33,6 +33,26 @@ Read root `AGENTS.md`, then this file.
   `pnpm --filter @agiworkforce/desktop build:electron`
 - Packaging/release: run the relevant build or document why it was not run.
 
+## Isolation pattern: release-only, brownfield in the dev loop
+
+`tauri.conf.json` keeps `app.security.pattern.use = "isolation"`, so every
+packaged build (`build:local`, `build:release`) and the WDIO e2e build ship the
+IPC isolation frame. The dev loop cannot: `build.devUrl` is
+`http://127.0.0.1:5173`, and WKWebView never delivers the isolation frame's
+`postMessage` (origin `null`) to an http parent, so with isolation on `pnpm dev`
+hangs on the first `invoke()` with no rejection. `pnpm dev` therefore merges
+`src-tauri/tauri.dev.conf.json`, which switches the pattern to `brownfield`.
+
+- The override must keep `"options": null`; JSON Merge Patch otherwise leaves
+  the isolation `options` map behind and the config fails to deserialize with
+  `invalid type: map, expected unit variant PatternKind::Brownfield`.
+- Dev does not exercise `src-tauri/isolation/isolation-hook.js`. Verify IPC
+  changes against the isolation pattern with `pnpm run test:e2e`, which builds
+  with `--features tauri/custom-protocol` and the product pattern.
+- Do not pass a pattern override to any `tauri build` invocation, and do not
+  flip the product config to `brownfield`.
+- `src/__tests__/tauriDevIsolation.test.ts` guards both halves.
+
 ## Locked: one surface, two shells, isolated execution planes
 
 **Decision (founder, 2026-08-03):** Desktop is one product surface with two

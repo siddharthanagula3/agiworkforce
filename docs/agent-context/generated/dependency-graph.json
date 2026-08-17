@@ -3,7 +3,6 @@
   "typescript": {
     "nodes": [
       "@agiworkforce/agent-core",
-      "@agiworkforce/api-gateway",
       "@agiworkforce/apply-patch",
       "@agiworkforce/artifacts",
       "@agiworkforce/browser-tool",
@@ -54,46 +53,6 @@
       "agi-workforce"
     ],
     "edges": [
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/apply-patch"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/data-layer"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/mcp"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/provider-protocol"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/provider-runtime"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/providers-factory"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/routing"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/skills"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/types"
-      },
-      {
-        "from": "@agiworkforce/api-gateway",
-        "to": "@agiworkforce/utils"
-      },
       {
         "from": "@agiworkforce/artifacts",
         "to": "@agiworkforce/cloud-contracts"

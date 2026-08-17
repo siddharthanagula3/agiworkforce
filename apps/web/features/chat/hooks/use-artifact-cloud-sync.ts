@@ -4,15 +4,21 @@ import { useEffect } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { logger } from '@shared/lib/logger';
 
-import { pullArtifactCloudChanges } from '../services/artifact-cloud-sync';
-import { useArtifactsStore } from '../stores/artifacts-store';
+import {
+  pullArtifactCloudChanges,
+  pushArtifactCloudChanges,
+} from '../services/artifact-cloud-sync';
+import { _sharedArtifactStore, useArtifactsStore } from '../stores/artifacts-store';
 
 const SYNC_INTERVAL_MS = 30_000;
+const LOCAL_EDIT_PUSH_DELAY_MS = 2_000;
 const MAX_RETRY_DELAY_MS = 5 * 60_000;
 
 export function useArtifactCloudSync(): void {
   const { getToken, isLoaded, userId } = useAuth();
   const applyCloudArtifactDeltas = useArtifactsStore((state) => state.applyCloudArtifactDeltas);
+  const collectArtifactPushBatch = useArtifactsStore((state) => state.collectArtifactPushBatch);
+  const applyArtifactPushResult = useArtifactsStore((state) => state.applyArtifactPushResult);
   const clearCloudArtifacts = useArtifactsStore((state) => state.clearCloudArtifacts);
   const setCloudSyncStatus = useArtifactsStore((state) => state.setCloudSyncStatus);
 
@@ -45,6 +51,16 @@ export function useArtifactCloudSync(): void {
           signal: abortController.signal,
         });
         if (stopped) return;
+
+        const pending = collectArtifactPushBatch();
+        const pushResult = await pushArtifactCloudChanges({
+          artifacts: pending,
+          getToken,
+          signal: abortController.signal,
+        });
+        if (stopped) return;
+        if (pushResult) applyArtifactPushResult(pushResult);
+
         failureCount = 0;
         setCloudSyncStatus('synced');
         schedule(SYNC_INTERVAL_MS);
@@ -52,7 +68,7 @@ export function useArtifactCloudSync(): void {
         if (stopped || abortController.signal.aborted) return;
         failureCount += 1;
         const message = error instanceof Error ? error.message : 'Artifact sync failed';
-        logger.warn('[artifact-cloud-sync] pull failed; retry scheduled', error);
+        logger.warn('[artifact-cloud-sync] sync failed; retry scheduled', error);
         setCloudSyncStatus('error', message);
         schedule(Math.min(SYNC_INTERVAL_MS * 2 ** (failureCount - 1), MAX_RETRY_DELAY_MS));
       } finally {
@@ -69,6 +85,12 @@ export function useArtifactCloudSync(): void {
       if (document.visibilityState === 'visible') requestImmediateSync();
     };
 
+    const unsubscribeFromLocalArtifacts = _sharedArtifactStore.subscribe(() => {
+      if (stopped || inFlight) return;
+      if (collectArtifactPushBatch().length === 0) return;
+      schedule(LOCAL_EDIT_PUSH_DELAY_MS);
+    });
+
     window.addEventListener('online', requestImmediateSync);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     void syncNow();
@@ -77,13 +99,16 @@ export function useArtifactCloudSync(): void {
       stopped = true;
       abortController.abort();
       if (timer) clearTimeout(timer);
+      unsubscribeFromLocalArtifacts();
       window.removeEventListener('online', requestImmediateSync);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearCloudArtifacts();
     };
   }, [
+    applyArtifactPushResult,
     applyCloudArtifactDeltas,
     clearCloudArtifacts,
+    collectArtifactPushBatch,
     getToken,
     isLoaded,
     setCloudSyncStatus,

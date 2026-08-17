@@ -12,6 +12,7 @@ import {
   SURFACE_STATUS,
 } from '../../lib/marketing-constants';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
+import { CliDownloadAvailability } from './CliDownloadAvailability';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
@@ -140,7 +141,7 @@ export default function DownloadPage() {
               index: '04',
               name: 'AGI CLI',
               tagline: 'An agent in your terminal.',
-              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution. Released as v1.0.0.',
+              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution.',
               capabilities: [
                 'Sessions, resume & fork',
                 'Sandboxed execution',
@@ -189,6 +190,8 @@ export default function DownloadPage() {
 
         <DesktopDownloadAvailability />
 
+        <CliDownloadAvailability />
+
         <section className="agi-fl-section" aria-labelledby="agi-download-notify-title">
           <p className="agi-fl-eyebrow">{COMING_SOON_LABEL}</p>
           <h2 id="agi-download-notify-title" className="agi-fl-h2">
@@ -211,7 +214,7 @@ export default function DownloadPage() {
         <DevBand
           eyebrow="For developers"
           title="Two developer surfaces."
-          body="The AGI CLI ships as the agi binary, released as v1.0.0. AGI in VS Code adds @agi chat, diff review, and slash commands to your editor, and has no published listing yet."
+          body="The AGI CLI ships as the agi binary. AGI in VS Code adds @agi chat, diff review, and slash commands to your editor, and has no published listing yet."
           ctas={[
             { href: '/cli', label: 'See the CLI' },
             { href: '/vscode-extension', label: 'See the VS Code Extension' },

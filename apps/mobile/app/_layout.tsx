@@ -72,6 +72,7 @@ import {
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
+import { CLOUD_SIGN_IN_RETURN_PATH } from './(public)/age-gate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
@@ -350,11 +351,7 @@ export default function RootLayout() {
     if (!authEnabled) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding && !inLegal) {
-        if (!isAgeGateConfirmed()) {
-          router.replace({ pathname: '/(public)/age-gate' as never });
-        } else {
-          router.replace({ pathname: '/(public)/onboarding' as never });
-        }
+        router.replace({ pathname: '/(public)/onboarding' as never });
         return;
       }
       if (onboardingDone && (inAuthGroup || inOnboarding)) {
@@ -365,12 +362,23 @@ export default function RootLayout() {
 
     if (!isClerkLoaded) return;
 
+    // The age gate guards CLOUD, not the app. Local Mode sends nothing off the
+    // device, so gating first launch on it was friction with no subject to
+    // protect — and a wall in front of a Local user, which the locked rule
+    // below forbids. It is raised here instead: the moment a user heads for
+    // Cloud sign-in, which is the first point personal data would leave.
+    if (!isClerkSignedIn && inAuthGroup && !isAgeGateConfirmed()) {
+      router.replace({
+        pathname: '/(public)/age-gate' as never,
+        params: { returnTo: CLOUD_SIGN_IN_RETURN_PATH },
+      } as never);
+      return;
+    }
+
     if (!isClerkSignedIn && !inAuthGroup) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding && !inLegal) {
-        router.replace({
-          pathname: (isAgeGateConfirmed() ? '/(public)/onboarding' : '/(public)/age-gate') as never,
-        });
+        router.replace({ pathname: '/(public)/onboarding' as never });
       } else if (onboardingDone && inOnboarding) {
         router.replace({ pathname: '/(app)' as const });
       }

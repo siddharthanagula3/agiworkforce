@@ -4,7 +4,6 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { api } from '@/services/api';
 import { useAuthStore } from '@/src/features/auth/store';
 import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { useProjectStore } from '@/src/features/projects/store';
@@ -22,20 +21,15 @@ import {
   providerForExecutionMode,
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
-import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
-  ManagedCloudConversationListResponseSchema,
-  ManagedCloudConversationResponseSchema,
-  ManagedCloudCreateConversationResponseSchema,
-  ManagedCloudUpdateConversationRequestSchema,
-  managedCloudConversationPath,
-  normalizeManagedCloudConversation,
-  normalizeManagedCloudMessage,
+  MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
+  ManagedCloudChatHttpError,
   type ManagedCloudConversation,
   type ManagedCloudConversationHistoryStats,
-  type ManagedCloudMessageWire,
 } from '@agiworkforce/cloud-contracts';
+import { managedCloudChat } from '@/services/managedCloudChat';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { setCloudMessageReactionRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { getDurableGeneratedImagePath } from '@/src/features/image/services/imagegen';
@@ -46,7 +40,12 @@ import {
 } from '@/src/features/artifacts/store';
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import { getConversationMessageStore } from './conversationRepository';
+import { cancelVideoGeneration } from '@/src/features/video/services/videogen';
 import { useCloudSyncStateStore } from './cloudSyncStateStore';
+
+const CLOUD_CONVERSATION_PAGE_SIZE = MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE;
+const CLOUD_MESSAGE_PAGE_SIZE = 500;
+
 function getCloudStore() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   const { useChatCloudMessageStore } =
@@ -101,6 +100,7 @@ interface MessageState {
     commandContent: string,
     prompt: string,
     model: string,
+    attachments?: MessageAttachment[],
   ) => string;
   completeImageGeneration: (
     conversationId: string,
@@ -144,6 +144,13 @@ interface MessageState {
     assistantMessageId: string,
     errorMessage: string,
   ) => void;
+  recordVideoGenerationTask: (
+    conversationId: string,
+    assistantMessageId: string,
+    taskId: string,
+  ) => void;
+  isVideoGenerationCancelRequested: (conversationId: string, assistantMessageId: string) => boolean;
+  stopVideoGeneration: (conversationId: string, assistantMessageId: string) => Promise<void>;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
 }
@@ -179,18 +186,19 @@ export const useChatMessageStore = create<MessageState>()(
             let hasMore = true;
             let historyStats: ManagedCloudConversationHistoryStats | undefined;
             while (hasMore) {
-              const data = ManagedCloudConversationListResponseSchema.parse(
-                await api.get<unknown>(
-                  `/api/chat/conversations?limit=100&offset=${offset}&includeHistoryStats=${offset === 0 ? '1' : '0'}&archived=exclude`,
-                ),
-              );
-              conversations.push(...data.conversations.map(normalizeManagedCloudConversation));
-              if (offset === 0) historyStats = data.historyStats;
-              hasMore = data.hasMore;
-              if (hasMore && data.nextOffset <= offset) {
+              const page = await managedCloudChat.listConversations({
+                limit: CLOUD_CONVERSATION_PAGE_SIZE,
+                offset,
+                includeHistoryStats: offset === 0,
+                archived: 'exclude',
+              });
+              conversations.push(...page.conversations);
+              if (offset === 0) historyStats = page.historyStats;
+              hasMore = page.hasMore;
+              if (hasMore && page.nextOffset <= offset) {
                 throw new Error('Cloud conversation pagination did not advance.');
               }
-              offset = data.nextOffset;
+              offset = page.nextOffset;
             }
             getCloudStore()
               .getState()
@@ -316,9 +324,7 @@ export const useChatMessageStore = create<MessageState>()(
           // three attempts, so waiting for it left the row on screen for the
           // best part of a second after the user tapped Delete, which reads as
           // the tap not registering.
-          const removedIndex = cloudStore
-            .getState()
-            .conversations.findIndex((c) => c.id === id);
+          const removedIndex = cloudStore.getState().conversations.findIndex((c) => c.id === id);
           const removedMessages = cloudStore.getState().messages[id];
           cloudStore.getState().removeCloudConversation(id);
           const previousConversationId = get().currentConversationId;
@@ -387,26 +393,22 @@ export const useChatMessageStore = create<MessageState>()(
         set({ isLoadingMessages: true });
         try {
           if (!shouldLoadRemoteMessages(conversation)) return;
-          const messageRows: ManagedCloudMessageWire[] = [];
+          const normalizedMessages: ChatMessage[] = [];
           let messageOffset = 0;
           let hasMoreMessages = true;
           while (hasMoreMessages) {
-            const data = ManagedCloudConversationResponseSchema.parse(
-              await api.get<unknown>(
-                `${managedCloudConversationPath(conversationId)}?limit=500&offset=${messageOffset}`,
-              ),
-            );
-            messageRows.push(...data.messages);
-            hasMoreMessages = data.hasMore;
-            const nextOffset = messageOffset + data.messages.length;
+            const page = await managedCloudChat.getConversation(conversationId, {
+              limit: CLOUD_MESSAGE_PAGE_SIZE,
+              offset: messageOffset,
+            });
+            normalizedMessages.push(...(page.messages as ChatMessage[]));
+            hasMoreMessages = page.hasMore;
+            const nextOffset = messageOffset + page.messages.length;
             if (hasMoreMessages && nextOffset <= messageOffset) {
               throw new Error('Cloud message pagination did not advance.');
             }
             messageOffset = nextOffset;
           }
-          const normalizedMessages = messageRows.map((message) =>
-            normalizeManagedCloudMessage(message, conversationId),
-          ) as ChatMessage[];
           if (cloudConversation) {
             const cloudState = cloudStore.getState();
             if (!cloudState.conversations.some((candidate) => candidate.id === conversationId)) {
@@ -466,10 +468,7 @@ export const useChatMessageStore = create<MessageState>()(
           ) {
             markConversationForSync(id);
             try {
-              await api.put(
-                managedCloudConversationPath(id),
-                ManagedCloudUpdateConversationRequestSchema.parse({ title }),
-              );
+              await managedCloudChat.updateConversation(id, { title });
             } catch {
               // Optimistic rename stands; the dirty-queue retry (push) persists it.
             }
@@ -506,10 +505,7 @@ export const useChatMessageStore = create<MessageState>()(
         if (shouldSyncConversationRemote(cloudConversation)) {
           markConversationForSync(id);
           try {
-            await api.put(
-              managedCloudConversationPath(id),
-              ManagedCloudUpdateConversationRequestSchema.parse({ model }),
-            );
+            await managedCloudChat.updateConversation(id, { model });
           } catch {
             // The optimistic row is durable in the Cloud cache and remains in
             // the sync sidecar until a later push confirms it server-side.
@@ -528,10 +524,7 @@ export const useChatMessageStore = create<MessageState>()(
           cloudStore.getState().patchCloudConversation(id, { pinned });
           if (shouldSyncConversationRemote(cloudConv)) {
             try {
-              await api.put(
-                managedCloudConversationPath(id),
-                ManagedCloudUpdateConversationRequestSchema.parse({ pinned }),
-              );
+              await managedCloudChat.updateConversation(id, { pinned });
             } catch {
               // The row visibly flips back; without a word for it the user is
               // left thinking they mis-tapped.
@@ -633,7 +626,7 @@ export const useChatMessageStore = create<MessageState>()(
         });
       },
 
-      beginImageGeneration: (conversationId, commandContent, prompt, model) => {
+      beginImageGeneration: (conversationId, commandContent, prompt, model, attachments) => {
         const ownerStore = getConversationMessageStore(conversationId);
         const isCloudConversation = ownerStore
           .getState()
@@ -654,6 +647,7 @@ export const useChatMessageStore = create<MessageState>()(
           content: commandContent,
           createdAt: now,
           model,
+          ...(attachments?.length ? { attachments } : {}),
         };
         const assistantMessage: ChatMessage = {
           id: assistantMessageId,
@@ -1022,6 +1016,42 @@ export const useChatMessageStore = create<MessageState>()(
         }
       },
 
+      recordVideoGenerationTask: (conversationId, assistantMessageId, taskId) => {
+        patchVideoGenerationMessage(conversationId, assistantMessageId, { videoTaskId: taskId });
+      },
+
+      isVideoGenerationCancelRequested: (conversationId, assistantMessageId) =>
+        videoGenerationMessage(conversationId, assistantMessageId)?.videoGenCancelRequested ===
+        true,
+
+      stopVideoGeneration: async (conversationId, assistantMessageId) => {
+        const target = videoGenerationMessage(conversationId, assistantMessageId);
+        if (!target?.videoTaskId || target.isGeneratingVideo !== true) return;
+        if (target.videoGenCancelRequested === true) return;
+
+        patchVideoGenerationMessage(conversationId, assistantMessageId, {
+          videoGenCancelRequested: true,
+          videoGenCancelError: undefined,
+        });
+
+        try {
+          const outcome = await cancelVideoGeneration(target.videoTaskId);
+          patchVideoGenerationMessage(conversationId, assistantMessageId, {
+            content: outcome.message ?? 'Video generation stopped.',
+            isGeneratingVideo: false,
+            videoGenStatus: 'cancelled',
+            videoGenProgress: 100,
+          });
+        } catch (error) {
+          patchVideoGenerationMessage(conversationId, assistantMessageId, {
+            videoGenCancelRequested: false,
+            videoGenCancelError: presentableMediaError(
+              error instanceof Error ? error.message : String(error),
+            ),
+          });
+        }
+      },
+
       resolveOfflineMessage: (conversationId, queueId) => {
         const ownerStore = getConversationMessageStore(conversationId);
         ownerStore.setState((state) => {
@@ -1084,6 +1114,34 @@ function generateMessageId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function videoGenerationMessage(
+  conversationId: string,
+  assistantMessageId: string,
+): ChatMessage | undefined {
+  return getConversationMessageStore(conversationId)
+    .getState()
+    .messages[conversationId]?.find((message) => message.id === assistantMessageId);
+}
+
+function patchVideoGenerationMessage(
+  conversationId: string,
+  assistantMessageId: string,
+  changes: Partial<ChatMessage>,
+): void {
+  getConversationMessageStore(conversationId).setState((state) => {
+    const messages = state.messages[conversationId];
+    if (!messages) return state;
+    return {
+      messages: {
+        ...state.messages,
+        [conversationId]: messages.map((message) =>
+          message.id === assistantMessageId ? { ...message, ...changes } : message,
+        ),
+      },
+    };
+  });
+}
+
 function presentableMediaError(errorMessage: string): string {
   if (/cancell?ed/i.test(errorMessage)) return 'the request was cancelled.';
   if (/timed?\s*out|timeout/i.test(errorMessage)) return 'the request timed out. Try again.';
@@ -1094,6 +1152,7 @@ function presentableMediaError(errorMessage: string): string {
 }
 
 function httpStatusFromError(error: unknown): number | null {
+  if (error instanceof ManagedCloudChatHttpError) return error.status;
   const match = error instanceof Error ? error.message.match(/HTTP (\d{3})/) : null;
   return match ? Number(match[1]) : null;
 }
@@ -1101,7 +1160,7 @@ function httpStatusFromError(error: unknown): number | null {
 async function deleteCloudConversationWithRetry(id: string, maxAttempts = 3): Promise<boolean> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await api.delete(managedCloudConversationPath(id));
+      await managedCloudChat.deleteConversation(id);
       return true;
     } catch (error) {
       const status = httpStatusFromError(error);
@@ -1248,15 +1307,12 @@ async function createConversationForMode(
   try {
     const id = uuidv7();
     const isTemporary = useSettingsStore.getState().isTemporaryChat;
-    const data = ManagedCloudCreateConversationResponseSchema.parse(
-      await api.post<unknown>('/api/chat/conversations', {
-        id,
-        title: title ?? 'New Chat',
-        projectId,
-        isTemporary,
-      }),
-    );
-    const normalizedCloudConversation = normalizeManagedCloudConversation(data.conversation);
+    const normalizedCloudConversation = await managedCloudChat.createConversation({
+      id,
+      title: title ?? 'New Chat',
+      projectId,
+      isTemporary,
+    });
     const conversation: ConversationSummary = {
       ...normalizeManagedCloudConversationForMobile(normalizedCloudConversation),
       projectId,

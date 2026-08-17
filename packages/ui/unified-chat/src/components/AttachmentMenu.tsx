@@ -20,10 +20,18 @@ import {
   ChevronDown,
   Check,
   CircleDot,
+  Image as ImageIcon,
+  Clapperboard,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCapability } from '../lib/capabilities';
 import type { WritingStyle } from '../lib/writingStyle';
+import type { MediaKind, MediaMode } from '../stores/mediaModeStore';
+
+const MEDIA_KIND_LABEL: Record<MediaKind, string> = {
+  image: 'Generate image',
+  video: 'Generate video',
+};
 
 export type StyleOption = WritingStyle;
 
@@ -48,6 +56,9 @@ export interface AttachmentMenuProps {
   codeExecutionEnabled?: boolean;
   onCodeExecutionToggle?: () => void;
   codeExecutionAvailable?: boolean;
+  mediaMode?: MediaMode;
+  mediaGenerationKinds?: MediaKind[];
+  onMediaModeToggle?: (kind: MediaKind) => void;
   activeStyle?: StyleOption | null;
   onStyleChange?: (style: StyleOption | null) => void;
   children: React.ReactNode;
@@ -288,6 +299,9 @@ export function AttachmentMenu({
   codeExecutionEnabled = false,
   onCodeExecutionToggle,
   codeExecutionAvailable = false,
+  mediaMode = 'text',
+  mediaGenerationKinds,
+  onMediaModeToggle,
   activeStyle = null,
   onStyleChange,
   children,
@@ -506,6 +520,19 @@ export function AttachmentMenu({
                 onClick={onResearchToggle}
               />
             )}
+            {/* Listed per kind the runtime actually generates, so a host with no
+              video transport never renders a video entry that the send would
+              silently downgrade to an ordinary chat turn. */}
+            {onMediaModeToggle &&
+              (mediaGenerationKinds ?? []).map((kind) => (
+                <MenuItem
+                  key={kind}
+                  icon={kind === 'image' ? <ImageIcon size={15} /> : <Clapperboard size={15} />}
+                  label={MEDIA_KIND_LABEL[kind]}
+                  checked={mediaMode === kind}
+                  onClick={() => onMediaModeToggle(kind)}
+                />
+              ))}
             {/* Omitted entirely when the host has no code-execution transport
               at all (e.g. a local/Tauri runtime) — disabled-but-visible when
               present but unavailable for the current model/provider/

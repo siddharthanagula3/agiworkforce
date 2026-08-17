@@ -33,6 +33,15 @@ export const CloudAgentPendingApprovalSchema = z.object({
     .max(32),
 });
 
+export const CloudAgentRunUsageSchema = z.object({
+  providerCalls: z.number().int().min(0),
+  inputTokens: z.number().int().min(0),
+  outputTokens: z.number().int().min(0),
+  reasoningTokens: z.number().int().min(0),
+  costCents: z.number().int().min(0).nullable(),
+  settledAt: z.string().datetime(),
+});
+
 export const CloudAgentRunSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().min(1),
@@ -49,6 +58,7 @@ export const CloudAgentRunSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   pendingApproval: CloudAgentPendingApprovalSchema.optional(),
+  usage: CloudAgentRunUsageSchema.optional(),
 });
 
 export const CloudAgentRunSnapshotPageSchema = z.object({
@@ -70,6 +80,7 @@ export type CloudAgentOriginSurface = z.infer<typeof CloudAgentOriginSurfaceSche
 export type CloudAgentWorkMode = z.infer<typeof CloudAgentWorkModeSchema>;
 export type CloudAgentRun = z.infer<typeof CloudAgentRunSchema>;
 export type CloudAgentPendingApproval = z.infer<typeof CloudAgentPendingApprovalSchema>;
+export type CloudAgentRunUsage = z.infer<typeof CloudAgentRunUsageSchema>;
 
 export interface CloudAgentRunSnapshotPage {
   run: CloudAgentRun;

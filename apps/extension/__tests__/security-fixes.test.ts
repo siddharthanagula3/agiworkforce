@@ -1,7 +1,7 @@
-
 import { describe, expect, it } from 'vitest';
 
 import { validateGatewayUrl } from '../src/background/policy';
+import { renderMarkdown, sanitizeHtml } from '../src/features/side-panel/markdown';
 
 describe('C-1 + M-02 validateGatewayUrl — exact-match allowlist', () => {
   it('accepts the canonical production gateway', () => {
@@ -186,107 +186,65 @@ describe('H-3 localStorage operations removed from ALLOWED_SCRIPT_OPERATIONS', (
   });
 });
 
-function encodeText(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function linkTextOf(html: string): string {
+  return html.match(/<a [^>]*>([\s\S]*?)<\/a>/)?.[1] ?? '';
 }
 
-function encodeHref(url: string): string {
-  return url.replace(/"/g, '%22').replace(/'/g, '%27').replace(/</g, '%3C').replace(/>/g, '%3E');
+function hrefOf(html: string): string {
+  return html.match(/href="([^"]*)"/)?.[1] ?? '';
 }
 
-function renderLinkMarkdown(text: string, url: string): string {
-  const safeUrl = /^https?:\/\//i.test(url.trim()) ? url : '#';
-  const encodedHref = encodeHref(safeUrl);
-  const encodedText = encodeText(text);
-  return `<a href="${encodedHref}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
-}
-
-describe('M-1 renderMarkdown link text entity-encoding', () => {
-  it('encodes < and > in link text', () => {
-    const result = renderLinkMarkdown('<img src=x>', 'https://safe.com');
-    expect(result).toContain('&lt;img src=x&gt;');
+describe('M-1 renderMarkdown link text entity-encoding (live module)', () => {
+  it('entity-encodes < and > in link text', () => {
+    const result = renderMarkdown('[<img src=x>](https://safe.com)');
+    expect(linkTextOf(result)).toBe('&lt;img src=x&gt;');
     expect(result).not.toContain('<img');
   });
 
-  it('encodes onerror= payload in link text — tag is entity-encoded, not injected raw', () => {
-    const result = renderLinkMarkdown('<img src=x onerror=alert(1)>', 'https://safe.com');
-    expect(result).toContain('&lt;img');
-    expect(result).toContain('&lt;img src=x onerror=alert(1)&gt;');
-    const innerText = result.replace(/<a [^>]+>/, '').replace('</a>', '');
-    expect(innerText).not.toContain('<img');
+  it('never emits a raw tag from an onerror payload in link text', () => {
+    const result = renderMarkdown('[<img src=x onerror=alert(1)>](https://safe.com)');
+    expect(linkTextOf(result)).toBe('&lt;img src=x onerror=alert(1)&gt;');
+    expect(result).not.toContain('<img');
   });
 
-  it('encodes double-quotes in link text', () => {
-    const result = renderLinkMarkdown('say "hello"', 'https://safe.com');
-    expect(result).toContain('&quot;hello&quot;');
+  it('entity-encodes double quotes in link text', () => {
+    expect(linkTextOf(renderMarkdown('[say "hello"](https://safe.com)'))).toBe(
+      'say &quot;hello&quot;',
+    );
   });
 
-  it('encodes single-quotes in link text', () => {
-    const result = renderLinkMarkdown("it's here", 'https://safe.com');
-    expect(result).toContain('&#39;s here');
+  it('entity-encodes single quotes in link text', () => {
+    expect(linkTextOf(renderMarkdown("[it's here](https://safe.com)"))).toBe('it&#39;s here');
   });
 
-  it('encodes ampersand in link text', () => {
-    const result = renderLinkMarkdown('A & B', 'https://safe.com');
-    expect(result).toContain('A &amp; B');
+  it('entity-encodes an ampersand in link text exactly once', () => {
+    expect(linkTextOf(renderMarkdown('[A & B](https://safe.com)'))).toBe('A &amp; B');
   });
 
-  it('preserves safe plain link text unchanged except for known entities', () => {
-    const result = renderLinkMarkdown('Click here', 'https://example.com');
-    expect(result).toContain('>Click here<');
+  it('leaves safe plain link text untouched', () => {
+    expect(linkTextOf(renderMarkdown('[Click here](https://example.com)'))).toBe('Click here');
   });
 
-  it('sets href to # when url is javascript: scheme', () => {
-    const result = renderLinkMarkdown('link', 'javascript:alert(1)');
-    expect(result).toContain('href="#"');
+  it('renders the entity-encoded link text as inert text, not as an element', () => {
+    const container = document.createElement('div');
+    container.innerHTML = sanitizeHtml(
+      renderMarkdown('[<img src=x onerror=alert(1)>](https://s.com)'),
+    );
+    const anchor = container.querySelector('a');
+    expect(container.querySelector('img')).toBeNull();
+    expect(anchor?.textContent).toBe('<img src=x onerror=alert(1)>');
+  });
+
+  it('sets href to # when the url is a javascript: scheme', () => {
+    const result = renderMarkdown('[link](javascript:alert(1))');
+    expect(hrefOf(result)).toBe('#');
     expect(result).not.toContain('javascript:');
   });
 
-  it('preserves https URL in href', () => {
-    const result = renderLinkMarkdown('link', 'https://api.agiworkforce.com');
-    expect(result).toContain('href="https://api.agiworkforce.com"');
-  });
-});
-
-describe('C-04 renderMarkdown href percent-encoding', () => {
-  it('percent-encodes a double quote in the URL', () => {
-    const result = renderLinkMarkdown('click', 'https://example.com/"');
-    expect(result).toContain('href="https://example.com/%22"');
-    expect(result).not.toContain('href="https://example.com/"" ');
-  });
-
-  it('percent-encodes a single quote in the URL', () => {
-    const result = renderLinkMarkdown('click', "https://example.com/'");
-    expect(result).toContain('href="https://example.com/%27"');
-  });
-
-  it('percent-encodes < and > in the URL', () => {
-    const result = renderLinkMarkdown('click', 'https://example.com/<script>');
-    expect(result).toContain('href="https://example.com/%3Cscript%3E"');
-  });
-
-  it('blocks attribute-injection attempt via crafted URL', () => {
-    const hostile = 'https://e.com" onerror="alert(1)';
-    const result = renderLinkMarkdown('click', hostile);
-    expect(result).toContain('href="https://e.com%22 onerror=%22alert(1)"');
-    const innerHref = result.match(/href="([^"]*)"/)?.[1] ?? '';
-    expect(innerHref).toBe('https://e.com%22 onerror=%22alert(1)');
-    expect(innerHref).not.toContain('"');
-  });
-
-  it('leaves a plain URL unchanged', () => {
-    const result = renderLinkMarkdown('click', 'https://example.com/path?q=1');
-    expect(result).toContain('href="https://example.com/path?q=1"');
-  });
-
-  it('still routes javascript: scheme to # via the existing http(s) gate', () => {
-    const result = renderLinkMarkdown('click', 'javascript:alert(1)');
-    expect(result).toContain('href="#"');
+  it('preserves an allowed https URL in href', () => {
+    expect(hrefOf(renderMarkdown('[link](https://api.agiworkforce.com)'))).toBe(
+      'https://api.agiworkforce.com',
+    );
   });
 });
 
@@ -426,9 +384,7 @@ describe('H-10 side panel does not send apiKey on CHAT_MESSAGE', () => {
     );
     expect(chatMessageBlocks?.length).toBeGreaterThan(0);
     for (const block of chatMessageBlocks ?? []) {
-      const codeOnly = block
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/\/\/.*$/gm, '');
+      const codeOnly = block.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
       expect(codeOnly).not.toMatch(/\bapiKey\s*:/);
     }
   });

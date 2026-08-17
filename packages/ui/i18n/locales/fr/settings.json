@@ -61,5 +61,6 @@
   "saved": "Enregistré",
   "saving": "Enregistrement...",
   "resetToDefaults": "Réinitialiser les paramètres par défaut",
-  "confirmReset": "Voulez-vous vraiment réinitialiser tous les paramètres par défaut ?"
+  "confirmReset": "Voulez-vous vraiment réinitialiser tous les paramètres par défaut ?",
+  "translationScope": "Traduit le site public, les tarifs et certains libellés du chat. Les paramètres et la plupart des autres écrans restent en anglais."
 }

@@ -1197,9 +1197,28 @@ pub fn run() {
             }
 
             // Event triggers (cron, webhook, file-watcher)
-            app.manage(crate::core::agent::triggers::TriggerRegistryState::new(
+            let trigger_state = crate::core::agent::triggers::TriggerRegistryState::new(
                 crate::core::agent::triggers::TriggerRegistry::new(),
+            );
+            let trigger_engine = trigger_state.0.clone();
+            let trigger_app_handle = app.handle().clone();
+            let trigger_store = Arc::new(Mutex::new(
+                main_database_access.open_connection().map_err(|e| {
+                    anyhow::anyhow!("Failed to open database for trigger registry: {}", e)
+                })?,
             ));
+            app.manage(trigger_state);
+            tauri::async_runtime::spawn(async move {
+                let mut registry = trigger_engine.write().await;
+                registry.set_app_handle(trigger_app_handle);
+                registry.set_store(trigger_store);
+                if let Err(e) = registry.load_persisted().await {
+                    tracing::error!("[triggers] failed to restore persisted triggers: {e}");
+                }
+                if let Err(e) = registry.start().await {
+                    tracing::error!("[triggers] trigger engine failed to start: {e}");
+                }
+            });
 
             if let Err(err) = build_system_tray(app) {
                 tracing::error!("[tray] initialization failed: {err:?}");

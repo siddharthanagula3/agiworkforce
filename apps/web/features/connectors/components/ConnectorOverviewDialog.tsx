@@ -66,7 +66,7 @@ export function ConnectorOverviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-white/[0.08] bg-[#0f0e0d] sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <OfficialConnectorLogo connector={connector} className="h-10 w-10 rounded-xl" />
@@ -98,7 +98,7 @@ export function ConnectorOverviewDialog({
           <ConnectorConsentSummary />
 
           {/* Tools list — only for connectors whose tools actually exist. */}
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3.5">
+          <div className="rounded-xl border border-border bg-muted/50 p-3.5">
             <div className="mb-2 flex items-center gap-2">
               <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="text-xs font-semibold text-foreground">
@@ -111,7 +111,7 @@ export function ConnectorOverviewDialog({
                   <Badge
                     key={tool}
                     variant="outline"
-                    className="border-white/[0.08] px-2 py-0.5 text-[11px] text-muted-foreground"
+                    className="border-border px-2 py-0.5 text-[11px] text-muted-foreground"
                   >
                     {tool}
                   </Badge>
@@ -126,7 +126,7 @@ export function ConnectorOverviewDialog({
           </div>
 
           {/* Actions */}
-          <div className="flex justify-end gap-2 border-t border-white/[0.06] pt-3">
+          <div className="flex justify-end gap-2 border-t border-border pt-3">
             <Button
               variant="ghost"
               size="sm"

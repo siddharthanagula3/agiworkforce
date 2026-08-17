@@ -56,6 +56,22 @@ agi auth-status  # confirm
 
 `agi` is the primary command. `agiworkforce` remains available as a backward-compatible alias.
 
+### Runtime requirement: sandbox backend
+
+Sandboxed command execution shells out to an OS sandbox binary, and there is no
+in-process fallback — the `linux-seccomp` Cargo feature is not compiled into
+release builds and installs no filter on any exec path.
+
+| Platform | Required binary           | Install                                                                                                            |
+| -------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Linux    | `bwrap` (bubblewrap)      | `sudo apt install bubblewrap` · `sudo dnf install bubblewrap` · `sudo pacman -S bubblewrap` · `apk add bubblewrap` |
+| macOS    | `sandbox-exec` (Seatbelt) | ships with macOS                                                                                                   |
+| Windows  | none                      | sandboxed exec unsupported                                                                                         |
+
+Without it, `run_command` refuses to execute and `agi doctor` reports
+`sandbox.os` as a warning with the install command. `--no-sandbox` runs
+unsandboxed and is the only supported way to proceed without the backend.
+
 ### Add a custom provider
 
 Drop a `[providers.<name>]` block into `~/.agiworkforce/config.toml` to wire up

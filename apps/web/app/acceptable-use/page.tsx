@@ -174,11 +174,12 @@ export default function AcceptableUsePage() {
           </h3>
           <p className="agi-page-lede" style={{ marginTop: 8 }}>
             The Chrome extension can drive a browser tab through the Chrome debugger on sites you
-            add to your allowlist. Do not use it to access accounts or systems you are not
-            authorized to access; to bypass authentication, access controls, paywalls, CAPTCHAs, or
-            bot detection; to scrape a site at a rate or in a manner the site prohibits; or to take
-            actions in another person&rsquo;s account. Adding a site to your own allowlist is a
-            statement about what you want the agent to reach. It is not permission from that site.
+            both add to your allowlist and separately grant browser control to. Do not use it to
+            access accounts or systems you are not authorized to access; to bypass authentication,
+            access controls, paywalls, CAPTCHAs, or bot detection; to scrape a site at a rate or in
+            a manner the site prohibits; or to take actions in another person&rsquo;s account.
+            Adding a site to your own allowlist is a statement about what you want the agent to
+            reach. It is not permission from that site.
           </p>
 
           <h3 className="agi-reason-h" style={{ marginTop: 28 }}>

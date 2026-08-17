@@ -57,8 +57,12 @@ interface Call {
 
 const calls: Call[] = [];
 const processedEventIds = new Set<string>();
+let existingSubscriptionRow: Record<string, unknown> | null = null;
 
 function rowsFor(sql: string): unknown[] {
+  if (sql.includes('from subscriptions') && sql.includes('apple_original_transaction_id')) {
+    return existingSubscriptionRow ? [existingSubscriptionRow] : [];
+  }
   if (sql.includes('process_stripe_event_idempotent')) {
     const eventId = String(calls.at(-1)?.params?.[0] ?? '');
     return [{ process_stripe_event_idempotent: !processedEventIds.has(eventId) }];
@@ -184,6 +188,7 @@ describe('a completed checkout provisions the entitlement it paid for', () => {
   beforeEach(() => {
     calls.length = 0;
     processedEventIds.clear();
+    existingSubscriptionRow = null;
     warnings.length = 0;
     observedTolerance = undefined;
     allocateCreditsForPeriod.mockReset();
@@ -212,6 +217,50 @@ describe('a completed checkout provisions the entitlement it paid for', () => {
     expect((end as Date).getTime()).toBe(PERIOD_END * 1000);
 
     expect(calls.some((call) => call.sql.includes('mark_stripe_event_succeeded'))).toBe(true);
+  });
+
+  it('releases an ended store subscription before the web checkout claims the row', async () => {
+    existingSubscriptionRow = {
+      plan_tier: 'pro',
+      status: 'expired',
+      stripe_subscription_id: null,
+      apple_original_transaction_id: 'apple-tx-legacy',
+      google_purchase_token: null,
+      current_period_end: null,
+    };
+
+    const response = await deliver(checkoutCompleted({}));
+    expect(response.status).toBe(200);
+
+    const release = calls.find(
+      (call) =>
+        call.sql.includes('update subscriptions') &&
+        call.sql.includes('apple_original_transaction_id'),
+    );
+    expect(release, 'the store identifier was left on a Stripe-owned row').toBeDefined();
+    expect(release!.params).toEqual(['user_new', false, true, false]);
+    expect(calls.indexOf(release!)).toBeLessThan(calls.indexOf(subscriptionUpsert()!));
+  });
+
+  it('keeps a still-entitled store subscription instead of silently taking it over', async () => {
+    existingSubscriptionRow = {
+      plan_tier: 'pro',
+      status: 'active',
+      stripe_subscription_id: null,
+      apple_original_transaction_id: 'apple-tx-live',
+      google_purchase_token: null,
+      current_period_end: new Date(PERIOD_END * 1000).toISOString(),
+    };
+
+    await deliver(checkoutCompleted({}));
+
+    expect(
+      calls.some(
+        (call) =>
+          call.sql.includes('update subscriptions') &&
+          call.sql.includes('apple_original_transaction_id'),
+      ),
+    ).toBe(false);
   });
 
   it('carries the resolved tier into both the row and the credits, never the session metadata', async () => {

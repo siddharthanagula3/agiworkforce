@@ -1,4 +1,3 @@
-
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 
 export const URL_FETCH_TOOL = 'url_fetch';
@@ -10,6 +9,7 @@ export function isUrlFetchTool(name: string): boolean {
 export const URL_FETCH_TIMEOUT_MS = 10_000;
 export const URL_FETCH_MAX_RESPONSE_BYTES = 1_572_864;
 export const URL_FETCH_MAX_CONTENT_CHARS = 20_000;
+export const URL_FETCH_MAX_EXTRACT_CHARS = 262_144;
 export const URL_FETCH_MAX_REDIRECTS = 5;
 const MAX_URL_LENGTH = 2_048;
 
@@ -26,6 +26,7 @@ export type UrlFetchErrorCode =
   | 'invalid_tool_input'
   | 'url_not_allowed'
   | 'url_not_accessible'
+  | 'cancelled'
   | 'timeout'
   | 'response_too_large'
   | 'unsupported_content_type'
@@ -105,50 +106,206 @@ export function decodeHtmlEntities(text: string): string {
     );
 }
 
+const DROP_ELEMENTS = ['script', 'style', 'noscript', 'template', 'svg', 'iframe', 'canvas'];
+const CHROME_ELEMENTS = ['nav', 'header', 'footer', 'aside', 'form'];
+const BLOCK_ELEMENTS = new Set([
+  'p',
+  'div',
+  'section',
+  'li',
+  'ul',
+  'ol',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'tr',
+  'table',
+  'blockquote',
+  'pre',
+  'figure',
+  'figcaption',
+  'dd',
+  'dt',
+]);
+const LINE_BREAK_ELEMENTS = new Set(['br', 'hr']);
+
+const NAME_CHAR = /[a-zA-Z0-9_]/;
+const WHITESPACE_CHAR = /\s/;
+
+// Every scanner below walks the document with indexOf instead of a lazy
+// quantifier: `<tag ...>[\s\S]*?</tag>` over attacker-controlled HTML rescans to
+// end-of-input from every unterminated opening delimiter (js/polynomial-redos).
+function bound(html: string): string {
+  return html.length > URL_FETCH_MAX_EXTRACT_CHARS
+    ? html.slice(0, URL_FETCH_MAX_EXTRACT_CHARS)
+    : html;
+}
+
+function findOpenTag(lower: string, tag: string, from: number): number {
+  const needle = `<${tag}`;
+  for (let at = lower.indexOf(needle, from); at !== -1; at = lower.indexOf(needle, at + 1)) {
+    const next = lower[at + needle.length];
+    if (next === undefined || !NAME_CHAR.test(next)) return at;
+  }
+  return -1;
+}
+
+function findCloseTag(
+  lower: string,
+  tag: string,
+  from: number,
+): { start: number; end: number } | null {
+  const needle = `</${tag}`;
+  for (let at = lower.indexOf(needle, from); at !== -1; at = lower.indexOf(needle, at + 1)) {
+    let cursor = at + needle.length;
+    while (cursor < lower.length && WHITESPACE_CHAR.test(lower[cursor]!)) cursor += 1;
+    if (lower[cursor] === '>') return { start: at, end: cursor + 1 };
+  }
+  return null;
+}
+
+function findRegion(
+  html: string,
+  lower: string,
+  tag: string,
+): { start: number; end: number } | null {
+  const open = findOpenTag(lower, tag, 0);
+  if (open === -1) return null;
+  const gt = html.indexOf('>', open);
+  if (gt === -1) return null;
+  const close = findCloseTag(lower, tag, gt + 1);
+  return close ? { start: gt + 1, end: close.start } : null;
+}
+
+function stripComments(html: string): string {
+  let out = '';
+  let cursor = 0;
+  for (let open = html.indexOf('<!--'); open !== -1; open = html.indexOf('<!--', cursor)) {
+    out += `${html.slice(cursor, open)} `;
+    const close = html.indexOf('-->', open + 4);
+    if (close === -1) return out;
+    cursor = close + 3;
+  }
+  return out + html.slice(cursor);
+}
+
+function stripDoctype(html: string, lower: string): string {
+  let out = '';
+  let cursor = 0;
+  for (
+    let open = lower.indexOf('<!doctype');
+    open !== -1;
+    open = lower.indexOf('<!doctype', cursor)
+  ) {
+    out += `${html.slice(cursor, open)} `;
+    const close = html.indexOf('>', open + 9);
+    if (close === -1) return out;
+    cursor = close + 1;
+  }
+  return out + html.slice(cursor);
+}
+
+function stripElement(html: string, tag: string): string {
+  const lower = html.toLowerCase();
+  let out = '';
+  let cursor = 0;
+  while (cursor < html.length) {
+    const open = findOpenTag(lower, tag, cursor);
+    if (open === -1) break;
+    const close = findCloseTag(lower, tag, open + tag.length + 1);
+    if (!close) break;
+    out += `${html.slice(cursor, open)} `;
+    cursor = close.end;
+  }
+  return out + html.slice(cursor);
+}
+
+function stripAllTags(html: string): string {
+  let out = '';
+  let cursor = 0;
+  while (cursor < html.length) {
+    const lt = html.indexOf('<', cursor);
+    if (lt === -1) return out + html.slice(cursor);
+    out += html.slice(cursor, lt);
+    const gt = html.indexOf('>', lt + 1);
+    if (gt === -1) return out;
+    if (gt === lt + 1) {
+      out += '<';
+      cursor = lt + 1;
+      continue;
+    }
+    cursor = gt + 1;
+  }
+  return out;
+}
+
+function tagNameAt(html: string, lt: number, gt: number): { name: string; closing: boolean } {
+  let start = lt + 1;
+  const closing = html[start] === '/';
+  if (closing) start += 1;
+  let end = start;
+  while (end < gt && NAME_CHAR.test(html[end]!)) end += 1;
+  return { name: html.slice(start, end).toLowerCase(), closing };
+}
+
+function toText(html: string): string {
+  let out = '';
+  let cursor = 0;
+  while (cursor < html.length) {
+    const lt = html.indexOf('<', cursor);
+    if (lt === -1) return out + html.slice(cursor);
+    out += html.slice(cursor, lt);
+    const gt = html.indexOf('>', lt + 1);
+    if (gt === -1) return out;
+    if (gt === lt + 1) {
+      out += '<';
+      cursor = lt + 1;
+      continue;
+    }
+    const { name, closing } = tagNameAt(html, lt, gt);
+    if (closing ? BLOCK_ELEMENTS.has(name) : LINE_BREAK_ELEMENTS.has(name)) out += '\n';
+    else out += ' ';
+    cursor = gt + 1;
+  }
+  return out;
+}
+
 export function extractHtmlTitle(html: string): string | undefined {
-  const m = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
-  if (!m?.[1]) return undefined;
-  const title = decodeHtmlEntities(m[1]).replace(/\s+/g, ' ').trim();
+  const doc = bound(html);
+  const region = findRegion(doc, doc.toLowerCase(), 'title');
+  if (!region) return undefined;
+  const title = decodeHtmlEntities(doc.slice(region.start, region.end)).replace(/\s+/g, ' ').trim();
   return title || undefined;
 }
 
-const DROP_ELEMENTS = ['script', 'style', 'noscript', 'template', 'svg', 'iframe', 'canvas'];
-const CHROME_ELEMENTS = ['nav', 'header', 'footer', 'aside', 'form'];
-
-function stripElement(html: string, tag: string): string {
-  const re = new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}\\s*>`, 'gi');
-  return html.replace(re, ' ');
-}
-
 export function extractHtmlText(html: string): string {
-  let doc = html
-    // Comments and doctype first so nothing inside them survives.
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<!DOCTYPE[^>]*>/gi, ' ');
+  const bounded = bound(html);
+  let doc = stripComments(bounded);
+  doc = stripDoctype(doc, doc.toLowerCase());
 
   for (const tag of DROP_ELEMENTS) doc = stripElement(doc, tag);
 
-  const region = /<(article|main)\b[^>]*>([\s\S]*?)<\/\1\s*>/i.exec(doc);
-  if (region?.[2] && region[2].replace(/<[^>]+>/g, '').trim().length >= 200) {
-    doc = region[2];
+  const lower = doc.toLowerCase();
+  const article = findRegion(doc, lower, 'article');
+  const main = findRegion(doc, lower, 'main');
+  const region =
+    article && main ? (article.start <= main.start ? article : main) : (article ?? main);
+  const regionText = region ? doc.slice(region.start, region.end) : '';
+
+  if (regionText && stripAllTags(regionText).trim().length >= 200) {
+    doc = regionText;
   } else {
-    const body = /<body\b[^>]*>([\s\S]*?)<\/body\s*>/i.exec(doc);
-    if (body?.[1]) doc = body[1];
+    const body = findRegion(doc, lower, 'body');
+    const bodyText = body ? doc.slice(body.start, body.end) : '';
+    if (bodyText) doc = bodyText;
   }
 
   for (const tag of CHROME_ELEMENTS) doc = stripElement(doc, tag);
 
-  const text = doc
-    // Block-level closers and <br>/<hr> become line breaks so structure survives.
-    .replace(
-      /<\/(p|div|section|li|ul|ol|h[1-6]|tr|table|blockquote|pre|figure|figcaption|dd|dt)\s*>/gi,
-      '\n',
-    )
-    .replace(/<(br|hr)\s*\/?>/gi, '\n')
-    // Everything else: strip the tag, keep the text.
-    .replace(/<[^>]+>/g, ' ');
-
-  return decodeHtmlEntities(text)
+  return decodeHtmlEntities(toText(doc))
     .replace(/[ \t\u00a0]+/g, ' ')
     .replace(/ ?\n ?/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -166,7 +323,10 @@ export interface UrlFetchOverrides {
   maxResponseBytes?: number;
   maxContentChars?: number;
   maxRedirects?: number;
+  signal?: AbortSignal;
 }
+
+const CANCELLED_MESSAGE = 'The request was cancelled.';
 
 function err(errorCode: UrlFetchErrorCode, error: string): UrlFetchOutcome {
   return { ok: false, errorCode, error };
@@ -213,6 +373,9 @@ export async function executeUrlFetch(
   const maxContentChars = overrides.maxContentChars ?? URL_FETCH_MAX_CONTENT_CHARS;
   const maxRedirects = overrides.maxRedirects ?? URL_FETCH_MAX_REDIRECTS;
 
+  const callerSignal = overrides.signal;
+  if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
+
   const rawUrl = args['url'];
   if (typeof rawUrl !== 'string' || rawUrl.trim().length === 0) {
     return err('invalid_tool_input', 'url_fetch requires a non-empty string "url" argument.');
@@ -233,6 +396,8 @@ export async function executeUrlFetch(
 
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), timeoutMs);
+  const cancel = () => controller.abort();
+  callerSignal?.addEventListener('abort', cancel, { once: true });
 
   try {
     let response: Response | null = null;
@@ -271,6 +436,7 @@ export async function executeUrlFetch(
           },
         });
       } catch (fetchErr) {
+        if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
         if (controller.signal.aborted) {
           return err('timeout', `Fetch timed out after ${timeoutMs}ms: ${current.href}`);
         }
@@ -337,6 +503,7 @@ export async function executeUrlFetch(
     try {
       bytes = await readBodyCapped(response, maxResponseBytes);
     } catch (readErr) {
+      if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
       if (controller.signal.aborted) {
         return err('timeout', `Fetch timed out after ${timeoutMs}ms: ${current.href}`);
       }
@@ -372,5 +539,6 @@ export async function executeUrlFetch(
     return { ok: true, url: current.href, title, content, truncated };
   } finally {
     clearTimeout(deadline);
+    callerSignal?.removeEventListener('abort', cancel);
   }
 }

@@ -36,6 +36,7 @@ import {
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
+import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 
 function isLikelyAudio(head: Uint8Array): boolean {
   if (head.length < 4) return false;
@@ -346,8 +347,16 @@ async function handleTranscriptions(request: NextRequest) {
         ? `agi.transcription.${randomUUID()}`
         : parseManagedUsageIdempotencyKey(idempotencyHeader);
     const subscription = await SubscriptionService.getSubscription(userId);
+    const billingDb = getNeonDb();
+    await assertTierUnitAllowance({
+      db: billingDb,
+      userId,
+      planTier: subscription?.plan_tier ?? 'free',
+      unit: 'voice_minutes',
+      requestedUnits: estimatedSeconds / 60,
+    });
     reservation = await reserveManagedUsageRequest({
-      db: getNeonDb(),
+      db: billingDb,
       userId,
       idempotencyKey,
       requestHash: fingerprintManagedUsageRequest({

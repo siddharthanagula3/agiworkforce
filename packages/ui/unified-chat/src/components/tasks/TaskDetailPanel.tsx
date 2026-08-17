@@ -37,6 +37,8 @@ import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import {
   type AgiWorkRerunGoal,
+  formatTaskCost,
+  formatTaskTokens,
   isLiveTaskState,
   taskStateLabel,
   taskStateTone,
@@ -174,6 +176,53 @@ function OutputRow({ output }: { output: AgentActivityArtifactEntry }) {
         </div>
       )}
     </li>
+  );
+}
+
+function TaskCostSection({ run }: { run: CloudAgentRun }) {
+  const usage = run.usage;
+  const live = isLiveTaskState(run.state);
+  return (
+    <section
+      data-testid="task-cost"
+      aria-label="Task cost and usage"
+      className="mx-4 mb-4 rounded-md border border-border/70 p-3"
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Cost and usage
+      </p>
+      {usage ? (
+        <>
+          {usage.costCents === null ? (
+            <p className="mt-1.5 text-sm text-foreground">
+              This run was metered against your free trial allowance rather than charged.
+            </p>
+          ) : (
+            <p className="mt-1.5 text-lg font-semibold text-foreground">
+              {formatTaskCost(usage.costCents)}
+            </p>
+          )}
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {formatTaskTokens(usage.inputTokens)} in · {formatTaskTokens(usage.outputTokens)} out
+            {usage.reasoningTokens > 0
+              ? ` · ${formatTaskTokens(usage.reasoningTokens)} reasoning`
+              : ''}{' '}
+            · {usage.providerCalls} model {usage.providerCalls === 1 ? 'call' : 'calls'}
+          </p>
+          {live ? (
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              This is what has settled so far. The total grows while the task keeps working.
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {live
+            ? 'Cost and token usage are recorded when this task settles.'
+            : 'No settled cost was recorded for this task.'}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -413,6 +462,8 @@ export function TaskDetailPanel({
           )}
         </section>
       ) : null}
+
+      <TaskCostSection run={run} />
 
       <div className="flex flex-col divide-y">
         <details open className="group p-4">

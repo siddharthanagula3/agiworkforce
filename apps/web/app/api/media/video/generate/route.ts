@@ -63,6 +63,7 @@ import {
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
+import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
   startVideoGenerationWorkflowExecution,
   startVideoGenerationWorkflowOwner,
@@ -910,6 +911,25 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     billableDurationSecs,
     generateAudio,
   );
+  try {
+    await assertTierUnitAllowance({
+      db: scopedDb,
+      userId,
+      planTier: subscription.plan_tier,
+      unit: 'video_seconds',
+      requestedUnits: billableDurationSecs,
+    });
+  } catch (error) {
+    const managedError =
+      error instanceof ManagedUsageRequestError
+        ? error
+        : new ManagedUsageRequestError(
+            'Managed usage billing is temporarily unavailable.',
+            503,
+            'billing_unavailable',
+          );
+    return managedUsageErrorResponse(request, managedError);
+  }
   if (!isVideoStorageConfigured()) {
     throw createError.serviceUnavailable(
       'Video storage is temporarily unavailable. Please try again later.',

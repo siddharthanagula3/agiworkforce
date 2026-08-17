@@ -309,6 +309,25 @@ describe('managed Cloud agent-run client', () => {
       expect(cancelled).toBe(true);
     });
 
+    it('carries steering guidance to the resume endpoint', async () => {
+      const { client, fetchImpl } = resumeClient(jsonResponse({}));
+
+      await client.resumeRun(RUN_ID, [{ toolCallId: 'call-1', decision: 'approved' }], {
+        guidance: '  Use the docs repo instead.  ',
+      });
+
+      expect(fetchImpl).toHaveBeenCalledWith(
+        '/api/llm/v1/chat/completions/approve',
+        expect.objectContaining({
+          body: JSON.stringify({
+            run_id: RUN_ID,
+            tool_approvals: [{ tool_call_id: 'call-1', decision: 'approved' }],
+            guidance: 'Use the docs repo instead.',
+          }),
+        }),
+      );
+    });
+
     it('names the two outcomes a person can act on instead of a generic HTTP failure', async () => {
       const conflict = resumeClient(
         jsonResponse(

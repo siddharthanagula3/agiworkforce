@@ -1,7 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { BILLING_PLAN_PRODUCT_LIMITS } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  BILLING_PLAN_PRODUCT_LIMITS,
+  normalizeUIPlanTier,
+} from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -57,6 +61,27 @@ describe('pricing locale bundles — plan feature claims', () => {
             `${locale}/pricing.json ${key} claims priority routing: ${value}`,
           ).toBe(false);
         }
+      }
+    }
+  });
+
+  it('names no plan tier the billing catalog stopped selling', () => {
+    const catalogKeys = new Set(
+      Object.keys(BILLING_PLAN_PRICING).flatMap((id) => [
+        id,
+        id.replace(/[-_](\w)/gu, (_match, char: string) => char.toUpperCase()),
+      ]),
+    );
+    const unrelated = 'byok';
+
+    for (const [locale, bundle] of pricingBundles()) {
+      for (const key of Object.keys(bundle)) {
+        if (catalogKeys.has(key)) continue;
+        const resolved = normalizeUIPlanTier(key, unrelated);
+        expect(
+          resolved === unrelated || resolved === key,
+          `${locale}/pricing.json ships retired tier key "${key}" (now sold as "${resolved}")`,
+        ).toBe(true);
       }
     }
   });

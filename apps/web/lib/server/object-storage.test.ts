@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { isPrivateObjectStorageConfigured, objectKeyFromPublicUrl } from './object-storage';
+import {
+  getPresignedPrivateUploadUrl,
+  isPrivateObjectStorageConfigured,
+  objectKeyFromPublicUrl,
+} from './object-storage';
 
 const ENV_KEYS = [
   'CLOUDFLARE_R2_ACCOUNT_ID',
@@ -34,6 +38,42 @@ describe('private object-storage configuration', () => {
 
     delete process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'];
     expect(isPrivateObjectStorageConfigured()).toBe(false);
+  });
+});
+
+describe('getPresignedPrivateUploadUrl', () => {
+  function configureR2(): void {
+    process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = 'account';
+    process.env['CLOUDFLARE_R2_ACCESS_KEY_ID'] = 'access';
+    process.env['CLOUDFLARE_R2_SECRET_ACCESS_KEY'] = 'secret';
+    process.env['CLOUDFLARE_R2_BUCKET_NAME'] = 'public-media';
+    process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'] = 'private-media';
+  }
+
+  it('signs the content length so an oversized body cannot be stored at the key', async () => {
+    configureR2();
+
+    const { uploadUrl } = await getPresignedPrivateUploadUrl({
+      key: 'chat-attachments/user-abc/object.png',
+      contentType: 'image/png',
+      contentLength: 1234,
+    });
+
+    const signedHeaders =
+      new URL(uploadUrl).searchParams.get('X-Amz-SignedHeaders')?.split(';') ?? [];
+    expect(signedHeaders).toContain('content-length');
+  });
+
+  it('refuses to presign an upload with no bound on its size', async () => {
+    configureR2();
+
+    await expect(
+      getPresignedPrivateUploadUrl({
+        key: 'chat-attachments/user-abc/object.png',
+        contentType: 'image/png',
+        contentLength: 0,
+      }),
+    ).rejects.toThrow('positive content length');
   });
 });
 

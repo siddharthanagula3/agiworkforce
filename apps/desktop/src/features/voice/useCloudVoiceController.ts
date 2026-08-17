@@ -33,7 +33,10 @@ export interface CloudVoiceControllerResult {
   isDesktopActionActive: boolean;
   isStopping: boolean;
   requiresComputerUseConsent: boolean;
+  consentPromptOpen: boolean;
   approveAction: () => Promise<void>;
+  acceptComputerUseConsent: () => Promise<void>;
+  dismissComputerUseConsent: () => void;
   useActionAsText: () => void;
   cancelAction: () => Promise<void>;
 }
@@ -41,6 +44,7 @@ export interface CloudVoiceControllerResult {
 export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerResult {
   const [workflowState, setWorkflowState] = useState<WorkflowState>('idle');
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [consentPromptOpen, setConsentPromptOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestContextRef = useRef<ManagedCloudRequestContext | null>(null);
   const unsubscribeBoundaryRef = useRef<(() => void) | null>(null);
@@ -114,6 +118,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     transcriptionFailureRef.current = null;
     cancelRecording();
     setPendingAction(null);
+    setConsentPromptOpen(false);
     setError(null);
     setWorkflowState('idle');
     clearTranscript();
@@ -264,7 +269,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     resetVoiceSession,
   ]);
 
-  const approveAction = useCallback(async () => {
+  const runApprovedAction = useCallback(async () => {
     const action = pendingAction;
     const request = requestContextRef.current;
     const generation = workflowGenerationRef.current;
@@ -281,10 +286,11 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
         setWorkflowState('error');
         return;
       }
+      if (!computerUse.consentAccepted || !computerUse.computerUseEnabled) {
+        throw new Error('Desktop control has not been turned on for this device.');
+      }
       setError(null);
       setWorkflowState('executing');
-      if (!computerUse.consentAccepted) computerUse.setConsentAccepted(true);
-      if (!computerUse.computerUseEnabled) computerUse.setComputerUseEnabled(true);
 
       const model = getRoutingSlotModel('computer_use');
       const provider = getModelMetadataById(model)?.provider;
@@ -324,6 +330,29 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     }
   }, [closeVoiceBoundary, isCurrentWorkflow, pendingAction]);
 
+  const approveAction = useCallback(async () => {
+    if (!pendingAction || !requestContextRef.current) return;
+    const computerUse = useComputerUseStore.getState();
+    if (!computerUse.consentAccepted || !computerUse.computerUseEnabled) {
+      setConsentPromptOpen(true);
+      return;
+    }
+    await runApprovedAction();
+  }, [pendingAction, runApprovedAction]);
+
+  const acceptComputerUseConsent = useCallback(async () => {
+    setConsentPromptOpen(false);
+    if (!pendingAction || !requestContextRef.current) return;
+    const computerUse = useComputerUseStore.getState();
+    computerUse.setConsentAccepted(true);
+    computerUse.setComputerUseEnabled(true);
+    await runApprovedAction();
+  }, [pendingAction, runApprovedAction]);
+
+  const dismissComputerUseConsent = useCallback(() => {
+    setConsentPromptOpen(false);
+  }, []);
+
   const useActionAsText = useCallback(() => {
     if (!pendingAction) return;
     const request = requestContextRef.current;
@@ -339,6 +368,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     }
     insertVoiceTextIntoDraft(pendingAction);
     setPendingAction(null);
+    setConsentPromptOpen(false);
     closeVoiceBoundary();
     setError(null);
     setWorkflowState('idle');
@@ -361,6 +391,7 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
       }
     }
     setPendingAction(null);
+    setConsentPromptOpen(false);
     closeVoiceBoundary();
     setError(null);
     setWorkflowState('idle');
@@ -387,7 +418,10 @@ export function useCloudVoiceController(enabled: boolean): CloudVoiceControllerR
     isDesktopActionActive: opaExecutionIdRef.current !== null || cancellingOpaExecutionId !== null,
     isStopping: workflowState === 'stopping',
     requiresComputerUseConsent: !computerUseEnabled || !consentAccepted,
+    consentPromptOpen,
     approveAction,
+    acceptComputerUseConsent,
+    dismissComputerUseConsent,
     useActionAsText,
     cancelAction,
   };

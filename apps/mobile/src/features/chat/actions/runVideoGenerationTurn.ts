@@ -25,6 +25,8 @@ export interface RunVideoGenerationTurnInput {
   resolution?: VideoGenRequest['resolution'];
   ownerId: string;
   begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
+  taskCreated?: (conversationId: string, assistantMessageId: string, taskId: string) => void;
+  isCancelRequested?: (conversationId: string, assistantMessageId: string) => boolean;
   progress?: (
     conversationId: string,
     assistantMessageId: string,
@@ -46,6 +48,7 @@ export interface VideoGenerationTurnDependencies {
   generate: (
     request: VideoGenRequest,
     options: {
+      onTaskCreated?: (taskId: string) => void;
       onProgress?: (progress: number | undefined, status: VideoGenStatusResponse['status']) => void;
       shouldCancel?: () => boolean;
     },
@@ -94,6 +97,9 @@ export async function runVideoGenerationTurn(
     input.model,
   );
 
+  const isStopRequested = () =>
+    input.isCancelRequested?.(input.conversationId, assistantMessageId) === true;
+
   try {
     const result = await dependencies.generate(
       {
@@ -103,14 +109,18 @@ export async function runVideoGenerationTurn(
         ...(input.resolution ? { resolution: input.resolution } : {}),
       },
       {
+        onTaskCreated: (taskId) => {
+          input.taskCreated?.(input.conversationId, assistantMessageId, taskId);
+        },
         onProgress: (progress, status) => {
           if (!isAccountCurrent()) return;
           input.progress?.(input.conversationId, assistantMessageId, progress, status);
         },
-        shouldCancel: () => !isAccountCurrent(),
+        shouldCancel: () => !isAccountCurrent() || isStopRequested(),
       },
     );
-    if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+    if (!isAccountCurrent() || isStopRequested())
+      return { status: 'cancelled', assistantMessageId };
 
     input.complete(input.conversationId, assistantMessageId, {
       videoUrl: result.videoUrl,
@@ -119,7 +129,8 @@ export async function runVideoGenerationTurn(
     });
     return { status: 'completed', assistantMessageId };
   } catch (error) {
-    if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+    if (!isAccountCurrent() || isStopRequested())
+      return { status: 'cancelled', assistantMessageId };
     if (error instanceof ApiPaywallError) {
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);

@@ -31,6 +31,7 @@ import {
   type CapabilityDocumentRef,
   type CapabilityLayer,
   type CapabilityLayerGrant,
+  type CapabilityLimit,
 } from './types';
 
 export const CAPABILITY_DOCUMENT_VERSION_UNRESOLVED = 'unresolved';
@@ -51,6 +52,7 @@ function contentHashHex(value: string): string {
 export interface ComputeCapabilityDocumentVersionInput {
   schemaVersion: string;
   layers: Readonly<Record<CapabilityLayer, CapabilityLayerGrant>>;
+  limits?: readonly CapabilityLimit[];
 }
 
 export function computeCapabilityDocumentVersion(
@@ -61,7 +63,16 @@ export function computeCapabilityDocumentVersion(
     const ids = [...grant.granted].sort().join(',');
     return `${layer}=${grant.sourceId}|${ids}`;
   }).join(';');
-  return `${input.schemaVersion}#${contentHashHex(canonical)}`;
+  // resetsAt is a per-account clock, not policy: hashing it would rewrite the
+  // version on every request and defeat staleness detection.
+  const canonicalLimits = [...(input.limits ?? [])]
+    .map(
+      (limit) =>
+        `${limit.id}=${limit.limit ?? 'null'}:${limit.unit}:${limit.window}@${limit.policySource}`,
+    )
+    .sort()
+    .join(';');
+  return `${input.schemaVersion}#${contentHashHex(`${canonical}||${canonicalLimits}`)}`;
 }
 
 export function isCapabilityDocumentStale(

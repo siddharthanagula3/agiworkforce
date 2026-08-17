@@ -312,27 +312,15 @@ mod tests {
         let mut total_candidates = 0usize;
         for preferences in preference_sets {
             let candidates = router.candidates(&request, &preferences);
-            // Guard against vacuous passes. Auto-strategy sets may correctly
-            // return zero candidates today: the canonical auto policy fails
-            // closed to Unavailable because `desktop/local-chat` has no
-            // allowed harnesses yet (registry status "partial"). Non-auto
-            // strategies must produce Local candidates from the fallback
-            // chain, so an empty result there would mean the test proves
-            // nothing.
-            let is_auto = matches!(
-                preferences.strategy,
-                RoutingStrategy::Auto
-                    | RoutingStrategy::AutoEconomy
-                    | RoutingStrategy::AutoBalanced
-                    | RoutingStrategy::AutoPremium
+            // Guard against vacuous passes: an empty result proves nothing
+            // about the boundary. Non-auto strategies reach Local providers
+            // through the fallback chain; auto strategies reach them through
+            // the `desktop/local-chat` harness fallback.
+            assert!(
+                !candidates.is_empty(),
+                "Expected Local candidates for preferences {:?}",
+                preferences
             );
-            if !is_auto {
-                assert!(
-                    !candidates.is_empty(),
-                    "Expected Local candidates for non-auto preferences {:?}",
-                    preferences
-                );
-            }
             total_candidates += candidates.len();
             for candidate in candidates {
                 assert!(
@@ -349,6 +337,65 @@ mod tests {
             total_candidates > 0,
             "Every preference set returned zero candidates — the boundary assertions never ran"
         );
+    }
+
+    #[test]
+    fn local_auto_falls_back_to_the_registry_declared_local_harnesses() {
+        let profile = agiworkforce_model_registry::runtime_profile("desktop/local-chat")
+            .expect("generated model registry must parse")
+            .expect("desktop/local-chat must exist");
+        assert_eq!(profile.trust_mode, TrustMode::Local);
+        assert!(
+            !profile.allowed_harness_ids.is_empty(),
+            "A Local Auto route has nothing to fall back to unless desktop/local-chat declares \
+             its executable harnesses"
+        );
+
+        let router = router_with_all_providers();
+        let request = LLMRequest::default();
+
+        for strategy in [
+            RoutingStrategy::Auto,
+            RoutingStrategy::AutoEconomy,
+            RoutingStrategy::AutoBalanced,
+            RoutingStrategy::AutoPremium,
+        ] {
+            let preferences = RouterPreferences {
+                strategy,
+                local_only: true,
+                trust_mode: Some(TrustMode::Local),
+                ..Default::default()
+            };
+            let candidates = router.candidates(&request, &preferences);
+            assert!(
+                !candidates.is_empty(),
+                "{strategy:?} under a Local boundary must not dead-end with zero candidates"
+            );
+            for candidate in &candidates {
+                assert!(
+                    matches!(
+                        candidate.provider,
+                        Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm
+                    ),
+                    "Local Auto must never cross into a cloud provider, got {:?}",
+                    candidate.provider
+                );
+            }
+            let expected_providers: Vec<Provider> = profile
+                .allowed_harness_ids
+                .iter()
+                .filter_map(|harness_id| harness_id.split_once('/'))
+                .filter_map(|(provider_key, _)| Provider::from_string(provider_key))
+                .collect();
+            for provider in expected_providers {
+                assert!(
+                    candidates
+                        .iter()
+                        .any(|candidate| candidate.provider == provider),
+                    "{strategy:?} dropped {provider:?}, which desktop/local-chat admits"
+                );
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -1419,5 +1466,35 @@ mod tests {
                 .contains_key(&suggestion.model),
             "fallback must remain catalog-addressable"
         );
+    }
+
+    #[test]
+    fn a_local_conversation_asked_for_byok_is_told_about_the_fork_not_about_ollama() {
+        let message = crate::core::llm::llm_router::local_only_no_candidate_message(Some(
+            Provider::Anthropic,
+        ));
+        assert!(
+            message.contains("Local"),
+            "the refusal must name the boundary it is protecting: {message}"
+        );
+        assert!(
+            message.to_lowercase().contains("fork"),
+            "the refusal must point at the BYOK fork ceremony: {message}"
+        );
+        assert!(
+            !message.contains("Ollama"),
+            "a BYOK selection is not a local-runtime outage: {message}"
+        );
+    }
+
+    #[test]
+    fn a_local_conversation_with_no_local_runtime_still_gets_the_runtime_message() {
+        for preferred in [None, Some(Provider::Ollama), Some(Provider::LmStudio)] {
+            let message = crate::core::llm::llm_router::local_only_no_candidate_message(preferred);
+            assert!(
+                message.contains("Ollama"),
+                "an unreachable local runtime must stay diagnosable: {message}"
+            );
+        }
     }
 }

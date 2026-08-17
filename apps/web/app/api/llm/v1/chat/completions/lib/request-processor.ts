@@ -37,6 +37,7 @@ import {
   getModelMetadataById,
   getMinimumRequiredTier,
   getModelReasoning,
+  clampEffortToEntitlement,
   isAutoModeModelId,
   type Effort,
   getSlotForModel,
@@ -60,7 +61,7 @@ import type {
   TaskFamily,
   TaskFamilySignals,
 } from '@agiworkforce/routing';
-import { trimMessagesToContextWindow } from './context-window';
+import { trimMessagesToContextWindow, type ContextTrimResult } from './context-window';
 import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
 import type { AuthGateSuccess } from './auth-gate';
 import { resolveAuthenticatedSurface } from './request-surface';
@@ -72,8 +73,11 @@ import {
   fingerprintManagedUsageRequest,
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
+  resolveManagedQuotaRecovery,
+  type ManagedQuotaRecovery,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
+import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import {
   applyProjectContext,
   formatProjectSystemPrompt,
@@ -86,16 +90,19 @@ import {
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
+  loadSuppressedMemorySources,
   type ManagedMemoryContextDb,
   type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
+  matchSkillsForPrompt,
   SKILL_TOOL_NAME,
   type Skill,
 } from '@agiworkforce/skills';
 import {
+  getManagedSkillCatalog,
   getManagedSkillCatalogForPlugins,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
@@ -112,7 +119,11 @@ import {
 } from '@/lib/services/map-search-tool-service';
 import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
-import { buildQuotaWarningHeader } from '@/lib/server/managed-usage-policy';
+import {
+  buildComputerUseSoftCapWarningHeader,
+  buildQuotaWarningHeader,
+} from '@/lib/server/managed-usage-policy';
+import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
   enforceManagedContentSafetyPreference,
   ManagedContentSafetyPolicyError,
@@ -218,6 +229,17 @@ export const ChatCompletionRequestSchema = z
           .max(100)
           .optional(),
         steps: z
+          .array(
+            z.object({
+              id: z.string().trim().min(1).max(100),
+              type: z.enum(['search', 'read', 'analyze', 'synthesize', 'verify']),
+              description: z.string().trim().min(1).max(500),
+              status: z.enum(['pending', 'running', 'completed', 'failed']),
+            }),
+          )
+          .max(50)
+          .optional(),
+        approved_steps: z
           .array(
             z.object({
               id: z.string().trim().min(1).max(100),
@@ -385,6 +407,45 @@ export function applyManagedSkillSelection(
   return { ok: true };
 }
 
+const SKILL_OFFER_EXCLUDED_SURFACES = new Set<CloudChatSurface>(['vscode', 'cli', 'api']);
+
+export type ImplicitManagedSkillOfferContext = {
+  prompt: string;
+  surface: CloudChatSurface;
+  toolsCapable: boolean;
+  loadCatalog: () => Promise<readonly Skill[]>;
+};
+
+export async function applyImplicitManagedSkillOffer(
+  request: ChatCompletionRequest,
+  context: ImplicitManagedSkillOfferContext,
+): Promise<string[]> {
+  if (request.skill_name) return [];
+  if (!context.toolsCapable) return [];
+  if (SKILL_OFFER_EXCLUDED_SURFACES.has(context.surface)) return [];
+  if (request.tool_choice !== undefined) return [];
+  if (!context.prompt.trim()) return [];
+
+  let catalog: readonly Skill[];
+  try {
+    catalog = await context.loadCatalog();
+  } catch (error) {
+    if (error instanceof SkillCatalogUnavailableError) return [];
+    throw error;
+  }
+
+  const matches = matchSkillsForPrompt(catalog, context.prompt);
+  if (matches.length === 0) return [];
+
+  const relevant = matches.map((match) => match.skill);
+  request.messages.unshift({ role: 'system', content: formatSkillsForToolPrompt(relevant) });
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => tool.function.name !== SKILL_TOOL_NAME),
+    createSkillToolDefinition(),
+  ];
+  return relevant.map((skill) => skill.name);
+}
+
 export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): void {
   if (!request.office_creation) return;
   request.tools = [
@@ -497,9 +558,12 @@ export type ProcessedRequest = {
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
     steps: ResearchStep[];
+    /** The plan the user pressed Start on after the approval pause. */
+    approvedSteps: ResearchStep[];
   };
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
+  contextTrim?: ContextTrimResult | null;
   llmRequest: {
     model: string;
     messages: Array<{
@@ -597,6 +661,7 @@ export function resolveRequestEffort(
   provider: string,
   model: string,
   effort: string | undefined,
+  planTier: string | null | undefined,
 ): Effort | undefined {
   const normalized = normalizeEffort(effort);
   if (!normalized || !modelSupportsEffort(provider, model)) return undefined;
@@ -606,7 +671,7 @@ export function resolveRequestEffort(
   ) {
     return undefined;
   }
-  return normalized;
+  return clampEffortToEntitlement(model, normalized, planTier);
 }
 
 export function anthropicUsesAdaptiveThinking(model: string): boolean {
@@ -718,7 +783,13 @@ export async function enrichManagedMemoryContext(params: {
 }): Promise<void> {
   if (params.isTemporary) return;
 
-  const memories = await loadManagedMemoryContext(params.db, { userId: params.userId });
+  const suppressedSources = await loadSuppressedMemorySources(params.db, {
+    userId: params.userId,
+  });
+  const memories = await loadManagedMemoryContext(params.db, {
+    userId: params.userId,
+    suppressedSources,
+  });
   const prompt = formatManagedMemorySystemPrompt(memories);
   if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
 }
@@ -1036,12 +1107,27 @@ function findCheaperFallbackModel(
   });
 }
 
-export function handleCreditError(_deductResult: {
-  code?: string;
-  daily_remaining?: number;
-  daily_limit?: number;
-  daily_used?: number;
-}): NextResponse {
+function quotaRecoveryFor(
+  code: string,
+  subscription: SubscriptionInfo | undefined,
+): ManagedQuotaRecovery | null {
+  return resolveManagedQuotaRecovery({
+    code,
+    planTier: subscription?.plan_tier,
+    billedByStripe: Boolean(subscription?.stripe_subscription_id),
+  });
+}
+
+export function handleCreditError(
+  _deductResult: {
+    code?: string;
+    daily_remaining?: number;
+    daily_limit?: number;
+    daily_used?: number;
+  },
+  subscription?: SubscriptionInfo,
+): NextResponse {
+  const recovery = quotaRecoveryFor('monthly_limit_exceeded', subscription);
   return NextResponse.json(
     {
       error: {
@@ -1049,20 +1135,32 @@ export function handleCreditError(_deductResult: {
           'Usage budget exhausted for this billing period. Upgrade your plan or add credits.',
         type: 'insufficient_quota',
         code: 'monthly_limit_exceeded',
+        ...(recovery ? { recovery } : {}),
       },
     },
     { status: 402 },
   );
 }
 
-function managedUsageErrorResponse(error: ManagedUsageRequestError): NextResponse {
-  return NextResponse.json(createManagedUsageErrorBody(error, 'invalid_request_error'), {
-    status: error.status,
-    headers: { 'X-AGI-Chat-Contract-Version': MANAGED_CHAT_CONTRACT_VERSION },
-  });
+function managedUsageErrorResponse(
+  error: ManagedUsageRequestError,
+  subscription?: SubscriptionInfo,
+): NextResponse {
+  return NextResponse.json(
+    createManagedUsageErrorBody(
+      error,
+      'invalid_request_error',
+      quotaRecoveryFor(error.code, subscription),
+    ),
+    {
+      status: error.status,
+      headers: { 'X-AGI-Chat-Contract-Version': MANAGED_CHAT_CONTRACT_VERSION },
+    },
+  );
 }
 
-function freeTrialBudgetReachedResponse(): ProcessFailure {
+function freeTrialBudgetReachedResponse(subscription?: SubscriptionInfo): ProcessFailure {
+  const recovery = quotaRecoveryFor('free_trial_token_budget_reached', subscription);
   return {
     ok: false,
     response: NextResponse.json(
@@ -1073,6 +1171,7 @@ function freeTrialBudgetReachedResponse(): ProcessFailure {
           type: 'insufficient_quota',
           code: 'free_trial_token_budget_reached',
           trial: { model: FREE_TRIAL_MODEL },
+          ...(recovery ? { recovery } : {}),
         },
       },
       { status: 429 },
@@ -1094,7 +1193,7 @@ export async function processRequest(
     requestId = parseManagedUsageIdempotencyKey(request.headers.get('idempotency-key'));
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
-      return { ok: false, response: managedUsageErrorResponse(error) };
+      return { ok: false, response: managedUsageErrorResponse(error, subscription) };
     }
     throw error;
   }
@@ -1500,6 +1599,7 @@ export async function processRequest(
   }
 
   if (isFreePlanTier(subscription.plan_tier) && !freeTrialEnabled) {
+    const recovery = quotaRecoveryFor('free_trial_model_only', subscription);
     return {
       ok: false,
       response: NextResponse.json(
@@ -1509,6 +1609,7 @@ export async function processRequest(
               'Free managed cloud access currently supports Auto Economy only. Select Auto Economy, upgrade your plan, or use local/BYOK.',
             type: 'invalid_request_error',
             code: 'free_trial_model_only',
+            ...(recovery ? { recovery } : {}),
           },
         },
         { status: 403 },
@@ -1907,6 +2008,19 @@ export async function processRequest(
         ),
       };
     }
+  } else {
+    const offeredSkills = await applyImplicitManagedSkillOffer(chatRequest, {
+      prompt: lastUserText,
+      surface: chatSurface,
+      toolsCapable: resolvedModelCaps?.tools !== false,
+      loadCatalog: getManagedSkillCatalog,
+    });
+    if (offeredSkills.length > 0) {
+      logger.info(
+        { requestId, userId, offeredSkills },
+        '[skills] offered relevance-matched skills without an explicit selection',
+      );
+    }
   }
 
   if (chatRequest.office_creation) {
@@ -1972,6 +2086,7 @@ export async function processRequest(
   }
 
   let quotaWarningHeader: string | null = null;
+  let computerUseSoftCapWarning: string | null = null;
 
   const providerBaseUrlEnvMap: Record<string, string> = {
     openai: 'OPENAI_BASE_URL',
@@ -2103,6 +2218,7 @@ export async function processRequest(
     providerLower,
     chatRequest.model,
     chatRequest.effort,
+    subscription.plan_tier,
   );
   let thinkingConfig: ReturnType<typeof buildThinkingConfig>;
   try {
@@ -2241,20 +2357,20 @@ export async function processRequest(
 
         if (hasFallbackCredits) {
           usedFallback = true;
-          fallbackReason = `Insufficient credits for ${originalModel}, switched to ${fallbackModel.model}`;
+          fallbackReason = 'insufficient_credits';
           chatRequest.model = fallbackModel.model;
           provider = fallbackProvider;
           estimatedCostCents = fallbackCostCents;
         } else {
           return {
             ok: false,
-            response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }),
+            response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }, subscription),
           };
         }
       } else {
         return {
           ok: false,
-          response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }),
+          response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }, subscription),
         };
       }
     }
@@ -2268,6 +2384,21 @@ export async function processRequest(
           'tenant_mismatch',
         );
       }
+      if (quotaFeature === 'computer_use') {
+        const decision = await assertTierUnitAllowance({
+          db: scoped.db,
+          userId,
+          planTier: subscription.plan_tier,
+          unit: 'computer_use_requests',
+          requestedUnits: 1,
+        });
+        if (decision.softLimitReached && decision.softLimit !== null) {
+          computerUseSoftCapWarning = buildComputerUseSoftCapWarningHeader({
+            usedUnits: decision.consumed + decision.requested,
+            softLimitUnits: decision.softLimit,
+          });
+        }
+      }
       managedUsage = await reserveManagedUsageRequest({
         db: scoped.db,
         userId,
@@ -2279,6 +2410,7 @@ export async function processRequest(
         leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
         planTier: subscription.plan_tier,
         isFlagship: isFlagshipRequest,
+        quotaFeature,
       });
       estimatedCostCents = managedUsage.estimatedCostCents;
     } catch (error) {
@@ -2290,15 +2422,16 @@ export async function processRequest(
               503,
               'billing_unavailable',
             );
-      return { ok: false, response: managedUsageErrorResponse(managedError) };
+      return { ok: false, response: managedUsageErrorResponse(managedError, subscription) };
     }
 
-    quotaWarningHeader = buildQuotaWarningHeader({
-      planTier: subscription.plan_tier,
-      creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
-      creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
-      estimatedCostCents,
-    });
+    quotaWarningHeader =
+      buildQuotaWarningHeader({
+        planTier: subscription.plan_tier,
+        creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
+        creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
+        estimatedCostCents,
+      }) ?? computerUseSoftCapWarning;
   }
 
   const internalMessages = chatRequest.messages.map((msg) => ({
@@ -2414,11 +2547,11 @@ export async function processRequest(
     usePromptCache: chatRequest.use_prompt_cache,
   };
 
-  trimMessagesToContextWindow(internalMessages, chatRequest.model, maxTokens);
+  const contextTrim = trimMessagesToContextWindow(internalMessages, chatRequest.model, maxTokens);
 
   if (freeTrialEnabled) {
     const trialReservationResult = await beginFreeTrialRequest({ userId, requestId });
-    if (!trialReservationResult.ok) return freeTrialBudgetReachedResponse();
+    if (!trialReservationResult.ok) return freeTrialBudgetReachedResponse(subscription);
 
     freeTrial = trialReservationResult.reservation;
     const fitted = applyFreeTrialProviderBudget({
@@ -2428,7 +2561,7 @@ export async function processRequest(
     });
     if (!fitted.ok) {
       await settleFreeTrialRequest({ reservation: freeTrial, outcome: 'failed' });
-      return freeTrialBudgetReachedResponse();
+      return freeTrialBudgetReachedResponse(subscription);
     }
     maxTokens = llmRequest.max_tokens;
   }
@@ -2471,11 +2604,13 @@ export async function processRequest(
           researchResume: {
             sources: chatRequest.research_resume.sources ?? [],
             steps: (chatRequest.research_resume.steps ?? []) as ResearchStep[],
+            approvedSteps: (chatRequest.research_resume.approved_steps ?? []) as ResearchStep[],
           },
         }
       : {}),
     indicResult,
     freeTrial,
+    contextTrim,
     llmRequest,
   };
 }

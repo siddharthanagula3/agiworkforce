@@ -23,6 +23,7 @@ import {
   FileCode,
   Globe,
   List,
+  SendHorizontal,
   Telescope,
   TriangleAlert,
 } from 'lucide-react';
@@ -63,6 +64,34 @@ export function researchReportToMarkdown(report: ResearchReport): string {
     );
   }
   return parts.join('\n\n');
+}
+
+// ============================================================================
+// Follow-up prompt
+// ============================================================================
+
+/** How much of the report rides along as grounding for a follow-up question. */
+const FOLLOW_UP_GROUNDING_CHARS = 8_000;
+
+/**
+ * The question the follow-up composer really sends: the user's words plus the
+ * report they are asking about, so the answer is grounded in the stored run
+ * rather than in a fresh guess at the same topic. A report too long to carry
+ * whole is cut with the cut declared, never silently.
+ */
+export function researchReportFollowUpPrompt(report: ResearchReport, question: string): string {
+  const markdown = researchReportToMarkdown(report);
+  const grounding =
+    markdown.length > FOLLOW_UP_GROUNDING_CHARS
+      ? `${markdown.slice(0, FOLLOW_UP_GROUNDING_CHARS)}\n\n[report truncated after ${FOLLOW_UP_GROUNDING_CHARS} characters]`
+      : markdown;
+  return [
+    'Follow-up on a saved research report. Answer from the report below, citing its sources where they apply, and say plainly when the report does not cover the question.',
+    '<research_report>',
+    grounding,
+    '</research_report>',
+    question.trim(),
+  ].join('\n\n');
 }
 
 // ============================================================================
@@ -237,6 +266,12 @@ interface ResearchReportViewProps {
    * that cannot work must not be offered.
    */
   onCreateArtifact?: (artifact: ReportArtifactInput) => void;
+  /**
+   * Host-injected send for a grounded follow-up question. Supplied by hosts
+   * that can start a chat turn; absent elsewhere, where a composer would
+   * collect a question nothing could answer.
+   */
+  onAskFollowUp?: (prompt: string) => void;
 }
 
 export function ResearchReportView({
@@ -244,9 +279,11 @@ export function ResearchReportView({
   onClose,
   exportService,
   onCreateArtifact,
+  onAskFollowUp,
 }: ResearchReportViewProps) {
   const [exportingFormat, setExportingFormat] = useState<DocumentFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [followUp, setFollowUp] = useState('');
   const service = exportService ?? documentExportService;
 
   const markdown = useMemo(() => researchReportToMarkdown(report), [report]);
@@ -292,6 +329,13 @@ export function ResearchReportView({
     },
     [markdown, report, service],
   );
+
+  const askFollowUp = useCallback(() => {
+    const question = followUp.trim();
+    if (!question || !onAskFollowUp) return;
+    onAskFollowUp(researchReportFollowUpPrompt(report, question));
+    setFollowUp('');
+  }, [followUp, onAskFollowUp, report]);
 
   const incomplete = report.status !== 'completed';
 
@@ -453,6 +497,46 @@ export function ResearchReportView({
           </section>
         )}
       </div>
+
+      {onAskFollowUp && (
+        <form
+          className="shrink-0 border-t border-border/30 p-3"
+          data-testid="research-report-follow-up"
+          onSubmit={(event) => {
+            event.preventDefault();
+            askFollowUp();
+          }}
+        >
+          <div className="flex items-end gap-2 rounded-lg border border-border/30 bg-muted/20 p-2">
+            <textarea
+              value={followUp}
+              onChange={(event) => setFollowUp(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault();
+                askFollowUp();
+              }}
+              rows={2}
+              placeholder="Ask a follow-up about this report"
+              aria-label="Ask a follow-up about this report"
+              className="min-w-0 flex-1 resize-none bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              disabled={followUp.trim().length === 0}
+              data-testid="research-report-follow-up-send"
+            >
+              <SendHorizontal className="h-3 w-3" aria-hidden="true" />
+              Ask
+            </Button>
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground/70">
+            The report travels with your question, so the answer stays grounded in it.
+          </p>
+        </form>
+      )}
     </div>
   );
 }

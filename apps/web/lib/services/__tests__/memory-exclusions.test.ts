@@ -7,7 +7,10 @@ import {
   MAX_MEMORY_EXCLUSIONS,
   isMemoryExcluded,
   loadMemoryExclusions,
+  loadManagedMemoryContext,
+  loadSuppressedMemorySources,
   normalizeMemoryExclusions,
+  normalizeSuppressedMemorySources,
   persistManagedAutoMemoryFacts,
 } from '../managed-memory-context-service';
 
@@ -146,5 +149,53 @@ describe('persistManagedAutoMemoryFacts — exclusions', () => {
     const insertIndex = db.calls.findIndex((c) => c.sql.includes('insert into user_memories'));
     expect(settingsIndex).toBeGreaterThanOrEqual(0);
     expect(insertIndex === -1 || settingsIndex < insertIndex).toBe(true);
+  });
+});
+
+describe('memory source suppression', () => {
+  it('normalizes only known sources', () => {
+    expect(normalizeSuppressedMemorySources(['auto', 'AUTO', 'web', 'nope', 7])).toEqual([
+      'auto',
+      'web',
+    ]);
+    expect(normalizeSuppressedMemorySources('auto')).toEqual([]);
+  });
+
+  it('reads the stored suppression list', async () => {
+    const db = fakeDb({ settings: { suppressedSources: ['auto'] } });
+
+    await expect(loadSuppressedMemorySources(db, { userId: 'u1' })).resolves.toEqual(['auto']);
+  });
+
+  it('keeps a suppressed source out of the recalled context', async () => {
+    const db = fakeDb();
+
+    await loadManagedMemoryContext(db, { userId: 'u1', suppressedSources: ['auto'] });
+
+    const call = db.calls.find((entry) => entry.sql.includes('from user_memories'));
+    expect(call?.sql).toContain('source');
+    expect(call?.params).toEqual(['u1', ['auto']]);
+  });
+
+  it('does not filter by source when nothing is suppressed', async () => {
+    const db = fakeDb();
+
+    await loadManagedMemoryContext(db, { userId: 'u1' });
+
+    const call = db.calls.find((entry) => entry.sql.includes('from user_memories'));
+    expect(call?.params).toEqual(['u1']);
+  });
+
+  it('refuses to write a new memory whose source the account suppressed', async () => {
+    const db = fakeDb({ settings: { suppressedSources: ['auto'] } });
+
+    const result = await persistManagedAutoMemoryFacts(db, {
+      userId: 'u1',
+      candidates: ['User prefers dark mode'],
+    });
+
+    expect(insertedBatch(db)).toBeNull();
+    expect(result.inserted).toBe(0);
+    expect(result.excluded).toBe(1);
   });
 });

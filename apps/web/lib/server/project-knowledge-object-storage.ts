@@ -1,15 +1,16 @@
 import 'server-only';
 
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   deleteObject,
   deletePrivateObject,
-  getObject,
-  getPrivateObject,
+  getBoundedObject,
+  getBoundedPrivateObject,
   isObjectStorageConfigured,
   isPrivateObjectStorageConfigured,
+  StoredObjectTooLargeError,
 } from './object-storage';
 
 const LOCAL_UPLOAD_TTL_MS = 5 * 60 * 1000;
@@ -198,26 +199,28 @@ export async function storeLocalProjectKnowledgeUpload(input: {
   const objectTemp = `${resolved.objectPath}.${tempId}.tmp`;
   const metadataTemp = `${resolved.metadataPath}.${tempId}.tmp`;
   await writeFile(/* turbopackIgnore: true */ objectTemp, input.data, { flag: 'wx' });
-  await writeFile(
-metadataTemp,
-    JSON.stringify({ contentType: claims.contentType }),
-    { flag: 'wx', mode: 0o600 },
-  );
+  await writeFile(metadataTemp, JSON.stringify({ contentType: claims.contentType }), {
+    flag: 'wx',
+    mode: 0o600,
+  });
   await rename(/* turbopackIgnore: true */ objectTemp, resolved.objectPath);
   await rename(/* turbopackIgnore: true */ metadataTemp, resolved.metadataPath);
 }
 
 export async function getProjectKnowledgeObject(
   key: string,
+  maxBytes: number,
 ): Promise<{ data: Buffer; contentType: string | undefined } | null> {
   if (isPrivateObjectStorageConfigured()) {
-    const privateObject = await getPrivateObject(key);
+    const privateObject = await getBoundedPrivateObject(key, maxBytes);
     if (privateObject) return privateObject;
-    return isObjectStorageConfigured() ? getObject(key) : null;
+    return isObjectStorageConfigured() ? getBoundedObject(key, maxBytes) : null;
   }
   const resolved = localPathForKey(key);
   if (!resolved) return null;
   try {
+    const stats = await stat(/* turbopackIgnore: true */ resolved.objectPath);
+    if (stats.size > maxBytes) throw new StoredObjectTooLargeError(key, maxBytes, stats.size);
     const [data, rawMetadata] = await Promise.all([
       readFile(/* turbopackIgnore: true */ resolved.objectPath),
       readFile(/* turbopackIgnore: true */ resolved.metadataPath, 'utf8'),

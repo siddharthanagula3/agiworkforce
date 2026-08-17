@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Readable } from 'node:stream';
@@ -215,6 +216,86 @@ async function getObjectStreamFromBucket(
   }
 }
 
+export class StoredObjectTooLargeError extends Error {
+  constructor(
+    readonly key: string,
+    readonly maxBytes: number,
+    readonly contentLength?: number,
+  ) {
+    super(`Stored object exceeds the permitted ${maxBytes} bytes`);
+    this.name = 'StoredObjectTooLargeError';
+  }
+}
+
+export interface StoredObjectHead {
+  contentLength: number | undefined;
+  contentType: string | undefined;
+}
+
+async function headObjectInBucket(bucket: string, key: string): Promise<StoredObjectHead | null> {
+  const client = getR2Client();
+  try {
+    const res = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return { contentLength: res.ContentLength, contentType: res.ContentType };
+  } catch (error) {
+    const name = (error as { name?: string } | null)?.name;
+    if (name === 'NoSuchKey' || name === 'NotFound') return null;
+    throw error;
+  }
+}
+
+export function headPrivateObject(key: string): Promise<StoredObjectHead | null> {
+  return headObjectInBucket(getPrivateBucketName(), key);
+}
+
+async function getBoundedObjectFromBucket(
+  bucket: string,
+  key: string,
+  maxBytes: number,
+): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+  const head = await headObjectInBucket(bucket, key);
+  if (!head) return null;
+  if (head.contentLength === undefined || head.contentLength > maxBytes) {
+    throw new StoredObjectTooLargeError(key, maxBytes, head.contentLength);
+  }
+
+  const stream = await getObjectStreamFromBucket(bucket, key);
+  if (!stream) return null;
+
+  const reader = stream.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      received += value.byteLength;
+      if (received > maxBytes) {
+        throw new StoredObjectTooLargeError(key, maxBytes, undefined);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return { data: Buffer.concat(chunks), contentType: stream.contentType };
+}
+
+export function getBoundedObject(
+  key: string,
+  maxBytes: number,
+): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+  return getBoundedObjectFromBucket(getPublicBucketName(), key, maxBytes);
+}
+
+export function getBoundedPrivateObject(
+  key: string,
+  maxBytes: number,
+): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+  return getBoundedObjectFromBucket(getPrivateBucketName(), key, maxBytes);
+}
+
 export function getObjectStream(key: string, range?: string): Promise<StoredObjectStream | null> {
   return getObjectStreamFromBucket(getPublicBucketName(), key, range);
 }
@@ -236,36 +317,42 @@ export async function deletePrivateObject(key: string): Promise<void> {
   await client.send(new DeleteObjectCommand({ Bucket: getPrivateBucketName(), Key: key }));
 }
 
-export async function getPresignedUploadUrl(params: {
+interface PresignUploadParams {
   key: string;
   contentType: string;
+  contentLength: number;
   expiresInSeconds?: number;
-}): Promise<{ uploadUrl: string; publicUrl: string }> {
+}
+
+async function presignUploadForBucket(
+  bucket: string,
+  params: PresignUploadParams,
+): Promise<string> {
+  if (!Number.isSafeInteger(params.contentLength) || params.contentLength <= 0) {
+    throw new Error('A presigned upload must bind a positive content length.');
+  }
   const client = getR2Client();
   const command = new PutObjectCommand({
-    Bucket: getPublicBucketName(),
+    Bucket: bucket,
     Key: params.key,
     ContentType: params.contentType,
+    ContentLength: params.contentLength,
   });
-  const uploadUrl = await getSignedUrl(client, command, {
+  return getSignedUrl(client, command, {
     expiresIn: params.expiresInSeconds ?? 300,
+    signableHeaders: new Set(['content-length']),
   });
+}
+
+export async function getPresignedUploadUrl(
+  params: PresignUploadParams,
+): Promise<{ uploadUrl: string; publicUrl: string }> {
+  const uploadUrl = await presignUploadForBucket(getPublicBucketName(), params);
   return { uploadUrl, publicUrl: publicUrlForKey(params.key) };
 }
 
-export async function getPresignedPrivateUploadUrl(params: {
-  key: string;
-  contentType: string;
-  expiresInSeconds?: number;
-}): Promise<{ uploadUrl: string }> {
-  const client = getR2Client();
-  const command = new PutObjectCommand({
-    Bucket: getPrivateBucketName(),
-    Key: params.key,
-    ContentType: params.contentType,
-  });
-  const uploadUrl = await getSignedUrl(client, command, {
-    expiresIn: params.expiresInSeconds ?? 300,
-  });
-  return { uploadUrl };
+export async function getPresignedPrivateUploadUrl(
+  params: PresignUploadParams,
+): Promise<{ uploadUrl: string }> {
+  return { uploadUrl: await presignUploadForBucket(getPrivateBucketName(), params) };
 }

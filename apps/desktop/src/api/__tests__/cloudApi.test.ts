@@ -9,6 +9,7 @@ import {
   createCloudConversation,
   createCloudChatPersistenceClient,
   generateCloudImage,
+  generateCloudVideo,
   getCloudConversation,
   listCloudConversations,
   sendCloudApprovalResume,
@@ -333,6 +334,91 @@ describe('cloudApi', () => {
       provider: 'google',
       model: GOOGLE_IMAGE_MODEL_ID,
     });
+  });
+
+  it('starts a durable video task and polls it to a durable file URL', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          task_id: 'task-1',
+          status: 'queued',
+          provider: 'google',
+          model: 'veo-fixture',
+          estimated_duration_secs: 120,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true, task_id: 'task-1', status: 'processing', progress: 0.4 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          task_id: 'task-1',
+          status: 'completed',
+          video_url: '/api/files/video-asset-1',
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateCloudVideo({
+      prompt: 'A lighthouse beam sweeping the fog',
+      idempotencyKey: 'agi.media.desktop.video.0190a000-0000-7000-8000-000000000003',
+      pollIntervalMs: 0,
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toEqual(
+      expect.stringContaining('/api/media/video/generate'),
+    );
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'agi.media.desktop.video.0190a000-0000-7000-8000-000000000003',
+        }),
+      }),
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toEqual(
+      expect.stringContaining('/api/media/video/status?task_id=task-1'),
+    );
+    expect(result).toEqual({
+      id: 'video-asset-1',
+      uri: expect.stringContaining('/api/files/video-asset-1'),
+      provider: 'google',
+      model: 'veo-fixture',
+    });
+  });
+
+  it('surfaces a failed video task instead of polling forever', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          task_id: 'task-2',
+          status: 'queued',
+          provider: 'google',
+          model: 'veo-fixture',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: false,
+          task_id: 'task-2',
+          status: 'failed',
+          error: 'The provider rejected the prompt',
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      generateCloudVideo({
+        prompt: 'A lighthouse beam sweeping the fog',
+        idempotencyKey: 'agi.media.desktop.video.0190a000-0000-7000-8000-000000000004',
+        pollIntervalMs: 0,
+      }),
+    ).rejects.toThrow('The provider rejected the prompt');
   });
 
   it('rejects an image result that cannot survive a reload', async () => {

@@ -84,6 +84,7 @@ vi.mock('../sessionLabeling', () => ({
 const sendCloudMessage = vi.fn();
 const sendCloudApprovalResume = vi.fn();
 const generateCloudImage = vi.fn();
+const generateCloudVideo = vi.fn();
 const followRun = vi.fn();
 const cancelRun = vi.fn();
 const getRun = vi.fn();
@@ -110,6 +111,7 @@ vi.mock('../../api/cloudApi', () => ({
     Authorization: 'Bearer desktop-cloud-token',
   })),
   generateCloudImage: (...args: unknown[]) => generateCloudImage(...args),
+  generateCloudVideo: (...args: unknown[]) => generateCloudVideo(...args),
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
   sendCloudApprovalResume: (...args: unknown[]) => sendCloudApprovalResume(...args),
   createDesktopCloudAgentRunClient: () => ({ followRun, cancelRun, getRun }),
@@ -166,7 +168,7 @@ describe('CloudRuntime', () => {
       expect(runtime.supportsCodeExecution).toBe(true);
       expect(runtime.supportsResearch).toBe(true);
       expect(runtime.supportsImageGeneration).toBe(true);
-      expect(runtime.supportsVideoGeneration).toBe(false);
+      expect(runtime.supportsVideoGeneration).toBe(true);
       expect(runtime.supportsComputerUse).toBe(false);
       expect(runtime.supportsConcurrentTurns).toBe(true);
       sendCloudMessage.mockResolvedValue(undefined);
@@ -303,6 +305,108 @@ describe('CloudRuntime', () => {
           }),
         }),
       );
+    });
+
+    it('honours an explicit image mode for a prompt the classifier would send to chat', async () => {
+      const runtime = new CloudRuntime();
+      generateCloudImage.mockResolvedValue({
+        id: 'image-asset-2',
+        uri: 'https://cloud.example/api/files/image-asset-2',
+        provider: 'google',
+        model: FIXTURE_IMAGE_MODEL_ID,
+      });
+
+      await runtime.sendMessage('conv_explicit_image', 'a quiet harbour at first light', {
+        model: 'auto',
+        mediaMode: 'image',
+      });
+
+      expect(sendCloudMessage).not.toHaveBeenCalled();
+      expect(generateCloudImage).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: 'a quiet harbour at first light' }),
+      );
+    });
+
+    it('dispatches an explicit video mode to durable managed media', async () => {
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+      generateCloudVideo.mockResolvedValue({
+        id: 'video-asset-1',
+        uri: 'https://cloud.example/api/files/video-asset-1',
+        provider: 'google',
+        model: 'fixture-video-model',
+      });
+
+      await runtime.sendMessage('conv_video', 'a lighthouse beam sweeping the fog', {
+        model: 'auto',
+        mediaMode: 'video',
+      });
+
+      expect(runtime.supportsVideoGeneration).toBe(true);
+      expect(sendCloudMessage).not.toHaveBeenCalled();
+      expect(generateCloudImage).not.toHaveBeenCalled();
+      expect(generateCloudVideo).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: 'a lighthouse beam sweeping the fog',
+          idempotencyKey: expect.stringMatching(/^agi\.media\.desktop\.video\./),
+        }),
+      );
+      expect(events.map((event) => event.type)).toEqual([
+        'tool_call',
+        'tool_result',
+        'generated_files',
+        'done',
+      ]);
+      expect(events.find((event) => event.type === 'generated_files')).toMatchObject({
+        files: [
+          {
+            id: 'video-asset-1',
+            uri: 'https://cloud.example/api/files/video-asset-1',
+            kind: 'video',
+            mimeType: 'video/mp4',
+          },
+        ],
+      });
+    });
+
+    it('settles a failed video request instead of leaving the assistant turn loading', async () => {
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+      generateCloudVideo.mockRejectedValue(new Error('Video provider unavailable'));
+
+      await runtime.sendMessage('conv_video_failure', 'a lighthouse beam sweeping the fog', {
+        mediaMode: 'video',
+      });
+
+      expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_result', 'error']);
+      expect(saveMessage).toHaveBeenNthCalledWith(
+        2,
+        'conv_video_failure',
+        expect.objectContaining({
+          role: 'assistant',
+          metadata: expect.objectContaining({
+            finishReason: 'error',
+            toolCalls: [
+              expect.objectContaining({
+                name: 'media_generate_video',
+                status: 'failed',
+                error: 'Video provider unavailable',
+              }),
+            ],
+          }),
+        }),
+      );
+    });
+
+    it('leaves the same prompt as an ordinary chat turn when no mode is set', async () => {
+      const runtime = new CloudRuntime();
+
+      await runtime.sendMessage('conv_no_mode', 'a quiet harbour at first light', {
+        model: 'auto',
+      });
+
+      expect(generateCloudImage).not.toHaveBeenCalled();
+      expect(sendCloudMessage).toHaveBeenCalled();
     });
 
     it('persists the user message before streaming, then the assistant message on done', async () => {

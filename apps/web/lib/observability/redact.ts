@@ -1,4 +1,3 @@
-
 export const REDACTED = '[redacted]';
 
 export const MAX_ATTRIBUTE_LENGTH = 256;
@@ -74,13 +73,48 @@ function isDeniedKey(key: string): boolean {
  * Mask secret-shaped substrings and clamp length. Exported for call sites that
  * build a free-text field (an error message) outside an attribute bag.
  */
-export function redactValue(value: string): string {
+export function maskSecretText(value: string): string {
   let out = value;
   for (const pattern of VALUE_PATTERNS) {
     pattern.lastIndex = 0;
     out = out.replace(pattern, REDACTED);
   }
+  return out;
+}
+
+export function redactValue(value: string): string {
+  const out = maskSecretText(value);
   return out.length > MAX_ATTRIBUTE_LENGTH ? `${out.slice(0, MAX_ATTRIBUTE_LENGTH)}…` : out;
+}
+
+const MAX_REDACTION_DEPTH = 8;
+
+function redactErrorLike(error: Error): Record<string, unknown> {
+  return {
+    type: error.constructor?.name ?? error.name,
+    message: maskSecretText(error.message),
+    ...(error.stack ? { stack: maskSecretText(error.stack) } : {}),
+  };
+}
+
+export function redactDeepValue(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') return maskSecretText(value);
+  if (value instanceof Error) return redactErrorLike(value);
+  if (value instanceof Date) return value;
+  if (depth >= MAX_REDACTION_DEPTH) return REDACTED;
+  if (Array.isArray(value)) return value.map((entry) => redactDeepValue(entry, depth + 1));
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = isDeniedKey(key) ? REDACTED : redactDeepValue(entry, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
+export function redactLogRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return redactDeepValue(record) as Record<string, unknown>;
 }
 
 export type SpanAttributeValue = string | number | boolean;

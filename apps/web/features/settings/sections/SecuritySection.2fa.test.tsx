@@ -11,6 +11,10 @@ const service = vi.hoisted(() => ({
   regenerateBackupCodes: vi.fn(),
 }));
 
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ isLoaded: true, user: { publicMetadata: { role: 'member' } } }),
+}));
+
 vi.mock('@features/settings/services/user-preferences', () => ({
   default: service,
   settingsService: service,

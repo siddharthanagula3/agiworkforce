@@ -3,6 +3,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  E2E_STUB_MODEL_ID,
+  E2E_STUB_MODEL_VENDOR,
   findInstalledExtensionRoot,
   verifyInstalledExtension,
   verifyInstalledExtensionRegistry,
@@ -10,6 +12,33 @@ import {
   writeExtensionHostTestRunner,
   type ExtensionIdentity,
 } from '../test/vsixInstallation';
+
+interface RunnerActivationContext {
+  subscriptions: unknown[];
+}
+
+function activateRunnerExtension(
+  source: string,
+  vscodeStub: unknown,
+  context: RunnerActivationContext,
+): void {
+  const moduleExports: Record<string, unknown> = {};
+  // `source` is the CommonJS module writeExtensionHostTestRunner just emitted, and
+  // asserting it actually activates is what this test exists for. Nothing here runs
+  // input from a request, a model, or a file the test did not itself write.
+  // llm-guardrail-allow: evaluates only the runner this test just generated.
+  const load = new Function('exports', 'require', `${source}\nreturn exports;`) as (
+    exports: Record<string, unknown>,
+    require: (id: string) => unknown,
+  ) => Record<string, unknown>;
+  const loaded = load(moduleExports, (id: string) => {
+    if (id !== 'vscode') throw new Error(`runner extension required unexpected module ${id}`);
+    return vscodeStub;
+  });
+  const activate = loaded.activate;
+  if (typeof activate !== 'function') throw new Error('runner extension exports no activate()');
+  (activate as (context: RunnerActivationContext) => void)(context);
+}
 
 const temporaryRoots: string[] = [];
 const identity: ExtensionIdentity = {
@@ -148,6 +177,51 @@ describe('installed VSIX verification', () => {
         'utf8',
       ),
     ).toBe('exports.fixture = true;\n');
+  });
+
+  it('gives the clean-profile host a stub language model so VS Code can reach the @agi participant', () => {
+    const root = temporaryRoot();
+    const compiledTests = path.join(root, 'compiled-tests');
+    fs.mkdirSync(path.join(compiledTests, 'suite'), { recursive: true });
+    fs.writeFileSync(path.join(compiledTests, 'localModelFixture.js'), 'exports.fixture = true;\n');
+    fs.writeFileSync(path.join(compiledTests, 'suite', 'extension.smoke.test.js'), 'test();\n');
+    fs.writeFileSync(path.join(compiledTests, 'suite', 'index.js'), 'exports.run = run;\n');
+
+    const runner = writeExtensionHostTestRunner(path.join(root, 'runner'), compiledTests);
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(runner.extensionDevelopmentPath, 'package.json'), 'utf8'),
+    ) as { contributes?: { languageModelChatProviders?: Array<{ vendor: string }> } };
+    expect(manifest.contributes?.languageModelChatProviders?.map((entry) => entry.vendor)).toEqual([
+      E2E_STUB_MODEL_VENDOR,
+    ]);
+
+    const registrations: Array<{ vendor: string; provider: Record<string, unknown> }> = [];
+    const context = { subscriptions: [] as unknown[] };
+    activateRunnerExtension(
+      fs.readFileSync(path.join(runner.extensionDevelopmentPath, 'extension.js'), 'utf8'),
+      {
+        lm: {
+          registerLanguageModelChatProvider(vendor: string, provider: Record<string, unknown>) {
+            registrations.push({ vendor, provider });
+            return { dispose: () => undefined };
+          },
+        },
+      },
+      context,
+    );
+
+    expect(registrations.map((entry) => entry.vendor)).toEqual([E2E_STUB_MODEL_VENDOR]);
+    expect(context.subscriptions).toHaveLength(1);
+    const provider = registrations[0]?.provider as {
+      provideLanguageModelChatInformation: () => Array<{ id: string; capabilities: unknown }>;
+      provideLanguageModelChatResponse: () => Promise<void>;
+    };
+    const models = provider.provideLanguageModelChatInformation();
+    expect(models.map((model) => model.id)).toEqual([E2E_STUB_MODEL_ID]);
+    expect(models[0]?.capabilities).toMatchObject({ toolCalling: true });
+    return expect(provider.provideLanguageModelChatResponse()).rejects.toThrow(
+      /must never generate/u,
+    );
   });
 
   it('requires one exact identity and version in the public VS Code extension listing', () => {

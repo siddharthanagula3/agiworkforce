@@ -59,6 +59,8 @@ export {
   showsThinkingSwitch,
 } from './lib/thinkingPolicy';
 export type { ThinkingSendPolicy } from './lib/thinkingPolicy';
+export { matchMentionQuery } from './lib/mentionQuery';
+export type { MentionMatch } from './lib/mentionQuery';
 export { classifyPrompt, TASK_LABEL } from './lib/promptClassifier';
 export type { ClassifiedTask, ClassificationResult, ClassifyOptions } from './lib/promptClassifier';
 export {
@@ -143,6 +145,7 @@ export type {
   ChatInputSlashCommandHost,
   ChatWorkMode,
   ChatWorkScope,
+  ComposerSkillSuggestion,
   ComposerVoiceController,
   ComposerVoiceState,
 } from './components/ChatInput';
@@ -161,11 +164,14 @@ export {
 } from './lib/writingStyle';
 export {
   LARGE_PASTE_THRESHOLD,
+  decideComposerPaste,
+  filesFromDataTransfer,
   isLargePaste,
   isPastedTextFileName,
   largePasteToFile,
   pastedTextFileName,
 } from './lib/largePaste';
+export type { ComposerPasteDecision } from './lib/largePaste';
 export { SendButton } from './components/SendButton';
 export type { SendButtonProps, SendButtonMode } from './components/SendButton';
 export { Disclaimer } from './components/Disclaimer';
@@ -513,6 +519,13 @@ export {
   selectPendingPlan,
   selectHasPendingApproval,
 } from './stores/planModeStore';
+export {
+  useMediaModeStore,
+  selectMediaMode,
+  supportedMediaKinds,
+  resolveSendMediaKind,
+} from './stores/mediaModeStore';
+export type { MediaKind, MediaMode, MediaGenerationSupport } from './stores/mediaModeStore';
 
 export { MaxUpgradePrompt } from './components/MaxUpgradePrompt';
 export type { MaxUpgradePromptProps } from './components/MaxUpgradePrompt';

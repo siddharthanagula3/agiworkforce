@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
+import { REGISTRY_DISCOVERY_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Badge } from '@/ui/Badge';
@@ -637,7 +638,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
       if (searchInput !== searchQuery) {
         searchBundles(searchInput);
       }
-    }, 300);
+    }, REGISTRY_DISCOVERY_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeout);
   }, [searchBundles, searchInput, searchQuery]);

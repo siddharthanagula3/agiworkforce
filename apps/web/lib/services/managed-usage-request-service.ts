@@ -3,13 +3,24 @@ import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  classifyManagedQuotaErrorCode,
+  getNextUpgradeTier,
+  isSelfServePaidPlanTier,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
+import {
   getPlanFlagshipWeeklyUsageCapCents,
   getPlanSessionUsageCapCents,
   getPlanWeeklyUsageCapCents,
 } from '@/lib/server/managed-usage-policy';
 import { logger } from '@/lib/logger';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
+
+const TOP_UP_HREF = '/settings/billing';
+const UPGRADE_HREF = '/pricing';
+const USAGE_HREF = '/settings/usage';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const PROVIDER_OPERATION_KEY_PATTERN = /^provider:[1-9]\d{0,8}$/;
@@ -26,9 +37,35 @@ export class ManagedUsageRequestError extends Error {
   }
 }
 
+export interface ManagedQuotaRecovery {
+  action: 'top_up' | 'upgrade' | 'view_usage';
+  href: string;
+}
+
+export function resolveManagedQuotaRecovery(input: {
+  code: string | null | undefined;
+  planTier: string | null | undefined;
+  billedByStripe: boolean;
+}): ManagedQuotaRecovery | null {
+  const block = classifyManagedQuotaErrorCode(input.code);
+  if (!block) return null;
+  if (
+    block.clearedByCredits &&
+    input.billedByStripe &&
+    isSelfServePaidPlanTier(normalizeBillingPlanTier(input.planTier))
+  ) {
+    return { action: 'top_up', href: TOP_UP_HREF };
+  }
+  if (block.showUpgradeCta && getNextUpgradeTier(input.planTier) !== null) {
+    return { action: 'upgrade', href: UPGRADE_HREF };
+  }
+  return { action: 'view_usage', href: USAGE_HREF };
+}
+
 export function createManagedUsageErrorBody(
   error: ManagedUsageRequestError,
   type: 'invalid_request_error' | 'insufficient_quota',
+  recovery?: ManagedQuotaRecovery | null,
 ) {
   return {
     error: {
@@ -36,6 +73,7 @@ export function createManagedUsageErrorBody(
       type,
       code: error.code,
       contract_version: error.contractVersion,
+      ...(recovery ? { recovery } : {}),
     },
   };
 }
@@ -47,6 +85,9 @@ export interface ManagedUsageRequestReservation {
   requestHash: string;
   leaseToken: string;
   estimatedCostCents: number;
+  quotaFeature?: string;
+  provider?: string;
+  model?: string;
 }
 
 export interface ManagedUsageFinalization {
@@ -210,6 +251,7 @@ export async function reserveManagedUsageRequest(input: {
   leaseSeconds?: number;
   planTier: string;
   isFlagship: boolean;
+  quotaFeature?: string;
 }): Promise<ManagedUsageRequestReservation> {
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
@@ -263,6 +305,9 @@ export async function reserveManagedUsageRequest(input: {
     requestHash: input.requestHash,
     leaseToken: row['lease_token'],
     estimatedCostCents: row['estimated_cost_cents'],
+    provider: input.provider,
+    model: input.model,
+    ...(input.quotaFeature ? { quotaFeature: input.quotaFeature } : {}),
   };
 }
 
@@ -374,6 +419,9 @@ export async function finalizeManagedUsageRequest(
   },
 ): Promise<ManagedUsageFinalization> {
   const actualCostCents = input.outcome === 'failed' ? 0 : Math.max(0, input.actualCostCents);
+  const usage = input.quotaFeature
+    ? { ...(input.usage ?? {}), quotaFeature: input.quotaFeature }
+    : (input.usage ?? {});
   const row = await queryOne(
     input.db,
     `select * from public.finalize_managed_usage_request(
@@ -386,7 +434,7 @@ export async function finalizeManagedUsageRequest(
       input.leaseToken,
       input.outcome,
       actualCostCents,
-      JSON.stringify(input.usage ?? {}),
+      JSON.stringify(usage),
     ],
   );
 
@@ -411,11 +459,36 @@ export async function finalizeManagedUsageRequest(
     );
   }
 
+  const settledCostCents =
+    typeof row['actual_cost_cents'] === 'number' ? row['actual_cost_cents'] : actualCostCents;
+
+  // The request fingerprint is the task identity: a regenerated turn sends the
+  // same payload and hashes the same, so the ledger can separate what the first
+  // attempt cost from what repeating it cost.
+  const settledTaskOutcome =
+    requestStatus === 'completed'
+      ? 'delivered'
+      : requestStatus === 'outcome_unknown'
+        ? 'undelivered'
+        : null;
+
+  if (settledTaskOutcome !== null && operationResult === 'finalized') {
+    await recordSettledProviderCost({
+      userId: input.userId,
+      provider: input.provider ?? 'unknown',
+      model: input.model ?? null,
+      actualCostCents: settledCostCents,
+      sourceRef: `managed_usage:${input.userId}:${input.idempotencyKey}:${input.requestHash}`,
+      taskOutcome: settledTaskOutcome,
+      taskRef: input.requestHash,
+      usage,
+    });
+  }
+
   return {
     requestStatus,
     operationResult,
     settlementStatus: settlementStatus ?? null,
-    actualCostCents:
-      typeof row['actual_cost_cents'] === 'number' ? row['actual_cost_cents'] : actualCostCents,
+    actualCostCents: settledCostCents,
   };
 }

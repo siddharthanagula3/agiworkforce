@@ -1004,6 +1004,83 @@ describe('retry with carried sources', () => {
   });
 });
 
+describe('plan approval gate', () => {
+  it('stops after planning and waits instead of searching', async () => {
+    streamRequestMock.mockResolvedValueOnce(planStream(['alpha query', 'beta query']));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { requirePlanApproval: true }),
+    );
+
+    expect(streamRequestMock).toHaveBeenCalledTimes(1);
+    const phases = researchStatuses(run).map((s) => s['phase']);
+    expect(phases).toEqual(['planning', 'awaiting_approval']);
+    expect(planSteps(researchPlans(run).at(-1)).map((s) => s['description'])).toEqual([
+      'alpha query',
+      'beta query',
+    ]);
+    expect(forwardedContent(run)).toBe('');
+    expect(run.doneCount).toBe(1);
+  });
+
+  it('never persists a report for a run nobody approved', async () => {
+    streamRequestMock.mockResolvedValueOnce(planStream(['alpha query']));
+    const persistReport = vi.fn(async () => undefined);
+
+    await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { requirePlanApproval: true, persistReport }),
+    );
+
+    expect(persistReport).not.toHaveBeenCalled();
+  });
+
+  it('searches the approved plan without re-planning when the user starts it', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(`notes\n${READY_MARKER}`),
+          finishEvent(),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStream([contentEvent('# Report\n\nBody [1]'), finishEvent()]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        requirePlanApproval: true,
+        approvedPlan: [
+          { id: 'plan-1', type: 'search', description: 'alpha query', status: 'pending' },
+          { id: 'plan-2', type: 'search', description: 'beta query', status: 'pending' },
+        ],
+      }),
+    );
+
+    expect(streamRequestMock).toHaveBeenCalledTimes(2);
+    const gathering = streamRequestMock.mock.calls[0]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const directive = gathering.messages[gathering.messages.length - 1]?.content ?? '';
+    expect(directive).toContain('- alpha query');
+    expect(directive).toContain('- beta query');
+    expect(researchStatuses(run).map((s) => s['phase'])).not.toContain('awaiting_approval');
+    expect(forwardedContent(run)).toContain('# Report');
+  });
+
+  it('runs rather than stranding the user when the plan could not be parsed', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(sseStream([contentEvent('I will look into it.'), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { requirePlanApproval: true }),
+    );
+
+    expect(researchStatuses(run).map((s) => s['phase'])).not.toContain('awaiting_approval');
+    expect(forwardedContent(run)).toBe('report');
+  });
+});
+
 describe('empty synthesis — attributing the cause honestly', () => {
   /**
    * Observed locally with an Anthropic key at $0: every upstream call was

@@ -125,6 +125,7 @@ interface VoiceModeState {
   globalPttActive: boolean;
   deepgramStreaming: boolean;
   bargeInEnabled: boolean;
+  speakRepliesEnabled: boolean;
   _mediaStream: MediaStream | null;
   _recorder: MediaRecorder | null;
   _audioChunks: Blob[];
@@ -165,6 +166,7 @@ interface VoiceModeState {
   sendDeepgramAudio: (audioData: number[]) => Promise<void>;
   getDeepgramStatus: () => Promise<DeepgramStreamStatus | null>;
   enableBargeIn: (enabled: boolean) => Promise<boolean>;
+  setSpeakRepliesEnabled: (enabled: boolean) => void;
   getBargeInStatus: () => Promise<BargeInStatus | null>;
   configureBargeIn: (
     sensitivity?: number,
@@ -207,6 +209,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         globalPttActive: false,
         deepgramStreaming: false,
         bargeInEnabled: false,
+        speakRepliesEnabled: false,
         _mediaStream: null,
         _recorder: null,
         _audioChunks: [],
@@ -828,6 +831,9 @@ export const useVoiceModeStore = create<VoiceModeState>()(
             return false;
           }
         },
+        setSpeakRepliesEnabled: (enabled: boolean) => {
+          set({ speakRepliesEnabled: enabled });
+        },
         getBargeInStatus: async () => {
           if (!voiceIsTauri) return null;
           try {
@@ -960,6 +966,7 @@ export const useVoiceModeStore = create<VoiceModeState>()(
         partialize: (state) => ({
           wakeWordActive: state.wakeWordActive,
           bargeInEnabled: state.bargeInEnabled,
+          speakRepliesEnabled: state.speakRepliesEnabled,
         }),
       },
     ),

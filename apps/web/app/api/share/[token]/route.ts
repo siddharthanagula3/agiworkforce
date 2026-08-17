@@ -7,6 +7,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 
+import { shareRef } from '@/lib/share-ref';
+
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
 
 type RouteContext = { params: Promise<{ token: string }> };
@@ -90,7 +92,7 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
       userId,
     ]);
   } catch (err) {
-    logger.error({ err, token, userId }, 'Failed to revoke shared session');
+    logger.error({ err, share: shareRef(token), userId }, 'Failed to revoke shared session');
     throw createError.internal('Failed to revoke share');
   }
 

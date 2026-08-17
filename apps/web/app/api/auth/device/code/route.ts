@@ -10,6 +10,8 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
+import { generateCliUserCode } from '@/lib/server/device-codes';
+import { CLI_USER_CODE_PATTERN } from '@/lib/validations/device';
 
 export const runtime = 'nodejs';
 
@@ -44,24 +46,6 @@ const DEVICE_AUTHORIZATION_SCOPES = [
   },
 ] as const;
 
-// XXXX-XXXX user code; excludes ambiguous 0/O/1/I/L for readability.
-const USER_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const USER_CODE_PATTERN = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/;
-
-function generateUserCode(): string {
-  const len = USER_CODE_ALPHABET.length;
-  const limit = 256 - (256 % len);
-  let code = '';
-  while (code.length < 8) {
-    const bytes = crypto.randomBytes(8 - code.length + 4);
-    for (let i = 0; i < bytes.length && code.length < 8; i++) {
-      const b = bytes[i]!;
-      if (b < limit) code += USER_CODE_ALPHABET[b % len];
-    }
-  }
-  return `${code.slice(0, 4)}-${code.slice(4, 8)}`;
-}
-
 async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) return rateLimitResponse;
@@ -81,7 +65,7 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
   const device = DEVICE_SURFACES[surface];
 
   const deviceCode = crypto.randomUUID();
-  const userCode = generateUserCode();
+  const userCode = generateCliUserCode();
   const expiresAt = new Date(Date.now() + DEVICE_CODE_EXPIRES_SECONDS * 1000).toISOString();
 
   const db = getNeonDb();
@@ -120,7 +104,7 @@ async function handleDeviceCodeLookup(request: NextRequest): Promise<NextRespons
   await getClerkAuthUser(request);
 
   const userCode = new URL(request.url).searchParams.get('user_code')?.trim().toUpperCase() ?? '';
-  if (!USER_CODE_PATTERN.test(userCode)) {
+  if (!CLI_USER_CODE_PATTERN.test(userCode)) {
     return NextResponse.json({ error: 'Invalid device code format' }, { status: 400 });
   }
 

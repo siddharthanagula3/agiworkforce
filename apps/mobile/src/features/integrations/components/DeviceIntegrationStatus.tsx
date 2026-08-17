@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Pressable, Platform, Linking, Alert } from 'react-native';
-import {
-  Calendar,
-  Users,
-  Bell,
-  CheckCircle,
-  XCircle,
-  HelpCircle,
-  RefreshCw,
-} from 'lucide-react-native';
+import { Calendar, Bell, CheckCircle, XCircle, HelpCircle, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +8,6 @@ import { Separator } from '@/components/ui/separator';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import {
   getCalendarPermissionStatus,
-  getContactsPermissionStatus,
   type PermissionStatus,
 } from '@/src/features/integrations/services/deviceIntegrations';
 import * as Notifications from 'expo-notifications';
@@ -137,7 +128,6 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
 function getIconMap(colors: ColorScheme): Record<string, React.ReactNode> {
   return {
     calendar: <Calendar size={18} color={colors.agentActive} />,
-    contacts: <Users size={18} color={colors.purple} />,
     notifications: <Bell size={18} color={colors.teal} />,
   };
 }
@@ -152,9 +142,8 @@ export function DeviceIntegrationStatus() {
   const checkAll = useCallback(async () => {
     setLoading(true);
 
-    const [calStat, contactsStat, notifResult] = await Promise.all([
+    const [calStat, notifResult] = await Promise.all([
       getCalendarPermissionStatus(),
-      getContactsPermissionStatus(),
       Notifications.getPermissionsAsync(),
     ]);
 
@@ -169,13 +158,6 @@ export function DeviceIntegrationStatus() {
         description: 'Schedule context for AI suggestions and reminders',
         status: permissionToStatus(calStat),
         lastSync: calStat === 'granted' ? now : undefined,
-      },
-      {
-        id: 'contacts',
-        name: 'Contacts',
-        description: 'People context for drafting messages and scheduling meetings',
-        status: permissionToStatus(contactsStat),
-        lastSync: contactsStat === 'granted' ? now : undefined,
       },
       {
         id: 'notifications',

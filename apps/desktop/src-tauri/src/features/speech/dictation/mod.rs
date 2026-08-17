@@ -17,8 +17,9 @@ pub use capture::{
     MAX_CAPTURE_SECONDS,
 };
 pub use coordinator::{
-    system_dictation_available, BeginError, DictationCoordinator, DictationOutcome, DictationPhase,
-    DictationSnapshot, DictationSource, SessionError, DICTATION_EVENT_VERSION,
+    ensure_text_injection_allowed, system_dictation_available, BeginError, DictationCoordinator,
+    DictationOutcome, DictationPhase, DictationSnapshot, DictationSource, SessionError,
+    DICTATION_EVENT_VERSION, TEXT_INJECTION_UNAVAILABLE,
 };
 pub use hotkey::{start_os_hook, GlobalHotkeyHook, HotkeyEdge};
 pub use transcription::{

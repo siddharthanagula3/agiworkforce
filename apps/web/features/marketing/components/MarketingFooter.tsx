@@ -136,7 +136,7 @@ export function MarketingFooter() {
       */}
       <div className="agi-footer-strip">
         <span>
-          Grievance officer ({GRIEVANCE_OFFICER_NAME}):{' '}
+          {GRIEVANCE_OFFICER_NAME}:{' '}
           <a href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)} className="agi-footer-link">
             {CONTACT_EMAIL}
           </a>{' '}

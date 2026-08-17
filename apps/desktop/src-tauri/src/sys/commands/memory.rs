@@ -387,13 +387,7 @@ pub async fn memory_get_session_context(state: State<'_, MemoryState>) -> Result
 /// List all memory categories
 #[tauri::command]
 pub async fn memory_list_categories() -> Result<Vec<String>> {
-    // Return the standard memory categories
-    Ok(vec![
-        "preference".to_string(),
-        "fact".to_string(),
-        "decision".to_string(),
-        "context".to_string(),
-    ])
+    Ok(memory_category_names())
 }
 
 /// Export all memories for backup
@@ -748,18 +742,40 @@ pub async fn memory_suggest_important(state: State<'_, MemoryState>) -> Result<V
     state.manager.get_important_memories(9)
 }
 
+const ALL_MEMORY_CATEGORIES: [MemoryCategory; 6] = [
+    MemoryCategory::Preference,
+    MemoryCategory::Fact,
+    MemoryCategory::Decision,
+    MemoryCategory::Context,
+    MemoryCategory::Summary,
+    MemoryCategory::Skill,
+];
+
+fn memory_category_names() -> Vec<String> {
+    ALL_MEMORY_CATEGORIES
+        .iter()
+        .map(|category| category.as_str().to_string())
+        .collect()
+}
+
 /// Parse a category string to MemoryCategory enum
 fn parse_category(category: &str) -> Result<MemoryCategory> {
-    match category.to_lowercase().as_str() {
-        "preference" | "preferences" => Ok(MemoryCategory::Preference),
-        "fact" | "facts" => Ok(MemoryCategory::Fact),
-        "decision" | "decisions" => Ok(MemoryCategory::Decision),
-        "context" => Ok(MemoryCategory::Context),
-        _ => Err(Error::Generic(format!(
-            "Invalid memory category: {}. Valid options: preference, fact, decision, context",
-            category
-        ))),
-    }
+    let normalized = category.trim().to_lowercase();
+    let singular = match normalized.as_str() {
+        "preferences" => "preference",
+        "facts" => "fact",
+        "decisions" => "decision",
+        "summaries" => "summary",
+        "skills" => "skill",
+        other => other,
+    };
+    MemoryCategory::parse(singular).ok_or_else(|| {
+        Error::Generic(format!(
+            "Invalid memory category: {}. Valid options: {}",
+            category,
+            memory_category_names().join(", ")
+        ))
+    })
 }
 
 #[cfg(test)]
@@ -777,6 +793,21 @@ mod tests {
             parse_category("Decision"),
             Ok(MemoryCategory::Decision)
         ));
+        assert!(matches!(
+            parse_category("summary"),
+            Ok(MemoryCategory::Summary)
+        ));
+        assert!(matches!(
+            parse_category("skills"),
+            Ok(MemoryCategory::Skill)
+        ));
         assert!(parse_category("invalid").is_err());
+    }
+
+    #[test]
+    fn every_category_round_trips_through_parse() {
+        for category in ALL_MEMORY_CATEGORIES {
+            assert_eq!(parse_category(category.as_str()).unwrap(), category);
+        }
     }
 }

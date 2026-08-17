@@ -1,5 +1,4 @@
-
-const CONTINUABLE_FINISH_REASONS = new Set(['length', 'max_tokens', 'stopped']);
+const CONTINUABLE_FINISH_REASONS = new Set(['length', 'max_tokens', 'stopped', 'pause_turn']);
 
 export function isContinuableFinishReason(reason: unknown): boolean {
   return typeof reason === 'string' && CONTINUABLE_FINISH_REASONS.has(reason);

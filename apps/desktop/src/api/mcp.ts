@@ -1,8 +1,11 @@
 import {
+  DEFAULT_MAX_RETRIES,
   MCP_INIT_TIMEOUT_MS,
   MCP_OAUTH_TIMEOUT_MS,
   MCP_TIMEOUT_MS,
   MCP_TOOL_CALL_TIMEOUT_MS,
+  RETRY_BACKOFF_MULTIPLIER,
+  RETRY_BASE_DELAY_MS,
 } from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 import type {
@@ -24,6 +27,8 @@ import type {
   McpExtensionInfo,
   McpExtensionPackageInfo,
 } from '../types/mcp';
+
+import { claimFromDeadline, startDeadline } from './deadlines';
 
 export type {
   McpServerConfig,
@@ -52,9 +57,9 @@ interface RetryConfig {
 }
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxRetries: 3,
-  delayMs: 1000,
-  backoffMultiplier: 2,
+  maxRetries: DEFAULT_MAX_RETRIES,
+  delayMs: RETRY_BASE_DELAY_MS,
+  backoffMultiplier: RETRY_BACKOFF_MULTIPLIER,
 };
 
 function sleep(ms: number): Promise<void> {
@@ -86,19 +91,32 @@ async function invokeWithTimeout<T>(
 async function invokeWithRetry<T>(
   command: string,
   args?: Record<string, unknown>,
-  timeoutMs: number = MCP_TIMEOUT_MS,
+  budgetMs: number = MCP_TIMEOUT_MS,
   retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG,
 ): Promise<T> {
+  const deadline = startDeadline(budgetMs);
+  const label = `MCP command '${command}'`;
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= retryConfig.maxRetries; attempt++) {
+    let attemptMs: number;
     try {
-      return await invokeWithTimeout<T>(command, args, timeoutMs);
+      attemptMs = claimFromDeadline(deadline, budgetMs, label);
+    } catch (error) {
+      throw lastError ?? (error instanceof Error ? error : new Error(String(error)));
+    }
+
+    try {
+      return await invokeWithTimeout<T>(command, args, attemptMs);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
       if (attempt < retryConfig.maxRetries) {
-        const delay = retryConfig.delayMs * Math.pow(retryConfig.backoffMultiplier, attempt);
+        const backoff = retryConfig.delayMs * Math.pow(retryConfig.backoffMultiplier, attempt);
+        const delay = Math.min(backoff, deadline.remainingMs());
+        if (delay <= 0) {
+          break;
+        }
         await sleep(delay);
       }
     }

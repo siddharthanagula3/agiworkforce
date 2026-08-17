@@ -154,9 +154,15 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
       ? await getPresignedPrivateUploadUrl({
           key,
           contentType: mimeType,
+          contentLength: byteCount,
           expiresInSeconds: 300,
         })
-      : await getPresignedUploadUrl({ key, contentType: mimeType, expiresInSeconds: 300 });
+      : await getPresignedUploadUrl({
+          key,
+          contentType: mimeType,
+          contentLength: byteCount,
+          expiresInSeconds: 300,
+        });
 
   return NextResponse.json({
     attachmentId: randomUUID(),

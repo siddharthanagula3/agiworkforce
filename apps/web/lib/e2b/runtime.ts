@@ -271,6 +271,23 @@ async function closeBillableInterval(
 
 export { closeBillableInterval };
 
+async function releaseUnreachableSandbox(
+  scope: E2BSessionScope,
+  session: E2BSession,
+): Promise<void> {
+  await closeBillableInterval(scope, session, 'kill');
+  try {
+    const Sandbox = await importSandbox();
+    if (Sandbox) await Sandbox.kill(session.sandboxId);
+  } catch (err) {
+    logger.warn(
+      { err, sandboxId: session.sandboxId, ...scopeLog(scope) },
+      '[e2b] unreachable sandbox could not be released; the reclaim sweeper is the backstop',
+    );
+  }
+  await deleteE2BSession(scope);
+}
+
 /**
  * Permanently release the conversation's sandbox (conversation deleted, or an idle
  * safety net). Best-effort; also clears the Redis mapping so nothing tries to resume a
@@ -404,7 +421,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   const contexts: Record<string, StoredContext> = { ...(existingSession?.contexts ?? {}) };
   let activeSinceMs: number | undefined;
 
-  if (existingSession) {
+  if (scope && existingSession) {
     try {
       sandbox = (await Sandbox.connect(existingSession.sandboxId, {
         timeoutMs: sandboxTimeoutMs,
@@ -412,9 +429,10 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
       sandboxId = existingSession.sandboxId;
     } catch (err) {
       logger.warn(
-        { err, ...scopeLog(scope) },
-        '[e2b] resume failed (sandbox likely expired); creating a fresh sandbox',
+        { err, sandboxId: existingSession.sandboxId, ...scopeLog(scope) },
+        '[e2b] resume failed; releasing the unreachable sandbox before creating a fresh one',
       );
+      await releaseUnreachableSandbox(scope, existingSession);
       for (const key of Object.keys(contexts)) delete contexts[key];
       const fresh = await createFresh();
       if (!fresh) return null;

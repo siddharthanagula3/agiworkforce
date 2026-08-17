@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 const dnsMocks = vi.hoisted(() => ({
@@ -18,6 +17,7 @@ import {
   urlFetchToolDef,
   isUrlFetchTool,
   URL_FETCH_TOOL,
+  URL_FETCH_MAX_EXTRACT_CHARS,
 } from './url-fetch-tool';
 
 function resolvePublic() {
@@ -342,6 +342,59 @@ describe('HTML extraction', () => {
     const outcome = await executeUrlFetch({ url: 'https://example.com/spa' }, { fetchImpl });
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.errorCode).toBe('url_not_accessible');
+  });
+});
+
+describe('extraction is linear in hostile HTML (no polynomial ReDoS)', () => {
+  const BUDGET_MS = 1_000;
+
+  function elapsed(run: () => void): number {
+    const started = Date.now();
+    run();
+    return Date.now() - started;
+  }
+
+  it.each([
+    ['unterminated comments', () => '<!--'.repeat(75_000)],
+    ['unterminated drop elements', () => '<script '.repeat(40_000)],
+    ['unterminated chrome elements', () => '<form '.repeat(50_000)],
+    ['unterminated region elements', () => '<article '.repeat(35_000)],
+    ['unterminated doctypes', () => '<!DOCTYPE '.repeat(30_000)],
+    ['unclosed angle brackets', () => '<'.repeat(300_000)],
+  ])(
+    'extractHtmlText survives %s within the time budget',
+    (_label, build) => {
+      const html = build();
+      expect(html.length).toBeGreaterThan(URL_FETCH_MAX_EXTRACT_CHARS);
+      const ms = elapsed(() => extractHtmlText(html));
+      expect(ms).toBeLessThan(BUDGET_MS);
+    },
+    120_000,
+  );
+
+  it('extractHtmlTitle survives unterminated title tags within the time budget', () => {
+    const html = '<title>'.repeat(50_000);
+    expect(html.length).toBeGreaterThan(URL_FETCH_MAX_EXTRACT_CHARS);
+    const ms = elapsed(() => extractHtmlTitle(html));
+    expect(ms).toBeLessThan(BUDGET_MS);
+  }, 120_000);
+
+  it('executeUrlFetch survives a hostile page inside the request deadline', async () => {
+    resolvePublic();
+    const hostile = `<html><body><p>${'<!--'.repeat(120_000)}</p></body></html>`;
+    const fetchImpl = fetchReturning(htmlResponse(hostile));
+    const started = Date.now();
+    const outcome = await executeUrlFetch({ url: 'https://example.com/hostile' }, { fetchImpl });
+    expect(Date.now() - started).toBeLessThan(BUDGET_MS);
+    expect(outcome.ok).toBe(false);
+  }, 120_000);
+
+  it('bounds extraction input so bytes past the cap cannot be scanned', () => {
+    const padding = '<p>filler</p>'.repeat(30_000);
+    expect(padding.length).toBeGreaterThan(URL_FETCH_MAX_EXTRACT_CHARS);
+    const text = extractHtmlText(`<html><body>${padding}<p>PAST_THE_CAP</p></body></html>`);
+    expect(text).toContain('filler');
+    expect(text).not.toContain('PAST_THE_CAP');
   });
 });
 

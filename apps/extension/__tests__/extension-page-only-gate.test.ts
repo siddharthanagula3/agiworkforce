@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import { EXTENSION_PAGE_ONLY_MESSAGE_TYPES } from '../src/background/policy';
 
@@ -98,6 +97,24 @@ describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — content-script senders reje
     expect(isRejectedByExtensionPageOnlyGate('CANCEL_CONTEXT_HANDOFF', sender)).toBe(true);
   });
 
+  it('rejects REPLAY_SHORTCUT from an allowlisted content script', () => {
+    const sender: SenderShape = {
+      id: EXTENSION_ID,
+      tab: { id: 1, url: 'https://allowlisted.com/' },
+    };
+    expect(isRejectedByExtensionPageOnlyGate('REPLAY_SHORTCUT', sender)).toBe(true);
+  });
+
+  it('rejects REPLAY_SHORTCUT alongside the CHAT_MESSAGE it can proxy', () => {
+    const sender: SenderShape = {
+      id: EXTENSION_ID,
+      tab: { id: 7, url: 'https://allowlisted.com/attacker' },
+    };
+    for (const type of ['REPLAY_SHORTCUT', 'CHAT_MESSAGE']) {
+      expect(isRejectedByExtensionPageOnlyGate(type, sender)).toBe(true);
+    }
+  });
+
   it('rejects when sender.id is from another extension', () => {
     const sender: SenderShape = {
       id: 'different-extension-id',
@@ -121,17 +138,18 @@ describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — extension pages allowed', (
       }),
     ).toBe(false);
   });
+
+  it('allows REPLAY_SHORTCUT from the side panel, its only real caller', () => {
+    expect(
+      isRejectedByExtensionPageOnlyGate('REPLAY_SHORTCUT', {
+        id: EXTENSION_ID,
+        tab: undefined,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — non-gated types pass through', () => {
-  it('does not gate REPLAY_SHORTCUT (allowed from content scripts)', () => {
-    const sender: SenderShape = {
-      id: EXTENSION_ID,
-      tab: { id: 1, url: 'https://allowlisted.com/' },
-    };
-    expect(isRejectedByExtensionPageOnlyGate('REPLAY_SHORTCUT', sender)).toBe(false);
-  });
-
   it('does not gate CLICK', () => {
     const sender: SenderShape = {
       id: EXTENSION_ID,

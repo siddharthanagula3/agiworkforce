@@ -1,5 +1,4 @@
-
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -7,7 +6,8 @@ import { API_KEY_SCOPE_VALUES } from '@/lib/api-key-scopes';
 import { rateLimitConfigs } from '@/lib/rate-limit';
 
 const v1Dir = path.resolve(import.meta.dirname, '..');
-const webRoot = path.resolve(v1Dir, '../../../..');
+const apiDir = path.resolve(v1Dir, '../..');
+const webRoot = path.resolve(apiDir, '../..');
 const repoRoot = path.resolve(webRoot, '../..');
 
 const spec = JSON.parse(readFileSync(path.join(webRoot, 'public/openapi.json'), 'utf8')) as {
@@ -26,46 +26,86 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-function subtreeFor(specPath: string): string {
-  return path.join(v1Dir, specPath.replace('/llm/v1/', ''));
+function routeDirOf(specPath: string): string {
+  return path.join(
+    apiDir,
+    ...specPath
+      .slice(1)
+      .split('/')
+      .map((segment) => segment.replace(/^\{(.+)\}$/, '[$1]')),
+  );
 }
 
-function subtreeSource(specPath: string): string {
-  return sourceFiles(subtreeFor(specPath))
+function specPathOf(routeDir: string): string {
+  return `/${path.relative(apiDir, routeDir).split(path.sep).join('/')}`;
+}
+
+function nearestRouteDir(file: string): string | null {
+  for (let dir = path.dirname(file); dir.startsWith(apiDir); dir = path.dirname(dir)) {
+    if (existsSync(path.join(dir, 'route.ts'))) return dir;
+  }
+  return null;
+}
+
+function routeSource(specPath: string): string {
+  const routeDir = routeDirOf(specPath);
+  return sourceFiles(routeDir)
+    .filter((file) => nearestRouteDir(file) === routeDir)
     .map((file) => readFileSync(file, 'utf8'))
     .join('\n');
 }
 
-const v1Operations = Object.entries(spec.paths)
-  .filter(([specPath]) => specPath.startsWith('/llm/v1/'))
-  .flatMap(([specPath, methods]) =>
-    Object.entries(methods).map(([method, operation]) => ({ specPath, method, operation })),
+const scopesByRoute = new Map<string, Set<string>>();
+for (const file of sourceFiles(apiDir)) {
+  const scopes = [...readFileSync(file, 'utf8').matchAll(/apiKeyScope:\s*'([^']+)'/g)].flatMap(
+    (match) => match[1] ?? [],
   );
+  if (scopes.length === 0) continue;
+  const routeDir = nearestRouteDir(file);
+  if (!routeDir) continue;
+  const specPath = specPathOf(routeDir);
+  const bucket = scopesByRoute.get(specPath) ?? new Set<string>();
+  for (const scope of scopes) bucket.add(scope);
+  scopesByRoute.set(specPath, bucket);
+}
+
+const operations = Object.entries(spec.paths).flatMap(([specPath, methods]) =>
+  Object.entries(methods).map(([method, operation]) => ({ specPath, method, operation })),
+);
 
 function acceptsApiKey(operation: { security?: Array<Record<string, unknown>> }): boolean {
   return (operation.security ?? []).some((requirement) => 'ApiKeyAuth' in requirement);
 }
 
 describe('published OpenAPI spec', () => {
-  it('documents every inference route an API key can authenticate to', () => {
-    const documented = new Set(v1Operations.map(({ specPath }) => specPath));
+  it('documents every route in the API tree an API key can authenticate to', () => {
+    for (const [specPath, scopes] of scopesByRoute) {
+      const methods = spec.paths[specPath];
+      expect(
+        methods,
+        `${specPath} passes apiKeyScope to the auth gate but openapi.json does not document it`,
+      ).toBeDefined();
+      const advertised = Object.values(methods ?? {}).filter(acceptsApiKey);
+      expect(
+        advertised.length,
+        `${specPath} accepts an API key scoped ${[...scopes].join(', ')} but no documented operation declares ApiKeyAuth`,
+      ).toBeGreaterThan(0);
+    }
+  });
 
-    for (const file of sourceFiles(v1Dir)) {
-      if (!file.endsWith(`${path.sep}route.ts`)) continue;
-      if (!/apiKeyScope:/.test(readFileSync(file, 'utf8'))) continue;
-      const specPath = `/llm/v1/${path
-        .relative(v1Dir, path.dirname(file))
-        .split(path.sep)
-        .join('/')}`;
-      expect(documented, `${specPath} takes an API key but is not in openapi.json`).toContain(
-        specPath,
-      );
+  it('advertises API-key auth only where the route asks the auth gate for a scope', () => {
+    for (const { specPath, operation } of operations) {
+      if (!acceptsApiKey(operation)) continue;
+      expect(
+        scopesByRoute.has(specPath),
+        `${specPath} is advertised to API keys but no source under it passes apiKeyScope, so the gate refuses every key`,
+      ).toBe(true);
     }
   });
 
   it('points each documented operation at a route that exports its method', () => {
-    for (const { specPath, method } of v1Operations) {
-      const source = readFileSync(path.join(subtreeFor(specPath), 'route.ts'), 'utf8');
+    for (const { specPath, method } of operations) {
+      const source = readFileSync(path.join(routeDirOf(specPath), 'route.ts'), 'utf8');
       expect(source, `${method.toUpperCase()} ${specPath}`).toMatch(
         new RegExp(`export (const|async function|function) ${method.toUpperCase()}\\b`),
       );
@@ -73,25 +113,27 @@ describe('published OpenAPI spec', () => {
   });
 
   it('names a real scope on every API-key operation and enforces it in the route', () => {
-    for (const { specPath, operation } of v1Operations) {
+    for (const { specPath, operation } of operations) {
       if (!acceptsApiKey(operation)) continue;
       const scope = operation['x-agi-api-key-scope'];
       expect(API_KEY_SCOPE_VALUES, `${specPath} declares an unknown scope`).toContain(scope);
-      expect(subtreeSource(specPath), `${specPath} does not require ${String(scope)}`).toContain(
+      expect(
+        [...(scopesByRoute.get(specPath) ?? [])],
+        `${specPath} advertises ${String(scope)} but the route requires a different scope`,
+      ).toContain(scope);
+      expect(routeSource(specPath), `${specPath} does not require ${String(scope)}`).toContain(
         `apiKeyScope: '${String(scope)}'`,
       );
     }
   });
 
-  it('offers API-key auth only where the route never binds an RLS subject', () => {
-    for (const { specPath, operation } of v1Operations) {
-      const bindsRlsSubject = subtreeSource(specPath).includes('getUserScopedDb');
+  it('keeps a bearer-only inference operation out of reach of an API key', () => {
+    for (const { specPath, operation } of operations) {
+      if (!specPath.startsWith('/llm/v1/') || acceptsApiKey(operation)) continue;
       expect(
-        bindsRlsSubject,
-        acceptsApiKey(operation)
-          ? `${specPath} is advertised to API keys but reaches getUserScopedDb, which rejects them`
-          : `${specPath} no longer reaches getUserScopedDb — an API key can reach it now, so document ApiKeyAuth`,
-      ).toBe(!acceptsApiKey(operation));
+        scopesByRoute.has(specPath),
+        `${specPath} is documented as bearer-only but its route passes apiKeyScope, so a key now works there`,
+      ).toBe(false);
     }
   });
 });

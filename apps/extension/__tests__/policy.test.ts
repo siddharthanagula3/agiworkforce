@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_BRIDGE_HOSTS,
@@ -107,8 +106,9 @@ describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
     }
   });
 
-  it('does NOT include REPLAY_SHORTCUT (web-allowlisted replay is allowed today)', () => {
-    expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has('REPLAY_SHORTCUT')).toBe(false);
+  it('includes REPLAY_SHORTCUT, whose prompt branch runs a CHAT_MESSAGE', () => {
+    expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has('REPLAY_SHORTCUT')).toBe(true);
+    expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has('CHAT_MESSAGE')).toBe(true);
   });
 
   it('gates privileged tab / cookie / chat operations (no legitimate web-page sender)', () => {

@@ -15,7 +15,7 @@ Read root `AGENTS.md`, then this file.
 - Primary lanes: `web-ui`, `web-api-billing`, and `enterprise-admin-surface`.
 - `web-ui` owns product UI under `apps/web/app/**`, `components/**`, `features/**`, `hooks/**`, and `lib/**` except API/admin paths.
 - `web-api-billing` owns Web API, auth, billing, and waitlist route mechanics.
-- Enterprise admin work that also touches `services/api-gateway/src/routes/enterprise.ts` must use the enterprise lane or an integrator.
+- Enterprise admin work that also touches SSO, SCIM, or the org audit tables must use the enterprise lane or an integrator.
 - Shared contracts, migrations, package manifests, and CI files are blocked from Web feature lanes.
 
 ## High-Risk Areas

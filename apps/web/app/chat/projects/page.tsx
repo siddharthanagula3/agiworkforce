@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ProjectGallery, ProjectCard } from '@agiworkforce/unified-chat';
 import type { Project, ProjectGalleryCreateInput } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
+import { CreateProjectDialog } from '@features/chat/components/dialogs/CreateProjectDialog';
 import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects, useProjectStore } from '@features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
@@ -48,6 +49,7 @@ export default function ProjectsPage() {
   const { projects, status: projectStatus, error: projectError, retry } = useManagedCloudProjects();
 
   const [editProject, setEditProject] = useState<Project | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('updated');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
@@ -185,6 +187,32 @@ export default function ProjectsPage() {
                 Mobile, and Desktop cloud sessions.
               </p>
             </div>
+
+            {/* Hidden on the gallery branch, which ships its own New button. */}
+            {!useGallery && projectStatus === 'ready' && (
+              <button
+                type="button"
+                data-testid="projects-new-btn"
+                onClick={() => setCreateOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 14px',
+                  border: '1px solid transparent',
+                  borderRadius: 9999,
+                  background: 'hsl(var(--primary))',
+                  color: 'hsl(var(--primary-foreground))',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                New project
+              </button>
+            )}
 
             {/* Show archived toggle */}
             {archivedProjects.length > 0 && (
@@ -338,7 +366,20 @@ export default function ProjectsPage() {
                 <p role="alert" style={{ color: 'var(--agi-ink-2)', margin: '0 0 12px' }}>
                   {projectError ?? 'Projects could not be loaded.'}
                 </p>
-                <button type="button" onClick={retry}>
+                <button
+                  type="button"
+                  onClick={retry}
+                  style={{
+                    padding: '7px 14px',
+                    border: '1px solid var(--agi-rule-strong)',
+                    borderRadius: 9999,
+                    background: 'transparent',
+                    color: 'var(--agi-ink-2)',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
+                >
                   Retry
                 </button>
               </div>
@@ -382,11 +423,36 @@ export default function ProjectsPage() {
                       {showArchived ? 'No archived projects.' : 'No projects yet.'}
                     </p>
                     {!showArchived && (
-                      <p
-                        style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 0, opacity: 0.7 }}
-                      >
-                        Switch to &ldquo;Updated (newest)&rdquo; sort to create one.
-                      </p>
+                      <>
+                        <p
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--agi-ink-2)',
+                            margin: 0,
+                            opacity: 0.7,
+                          }}
+                        >
+                          Group conversations, attach files, and share instructions.
+                        </p>
+                        <button
+                          type="button"
+                          data-testid="projects-empty-new-btn"
+                          onClick={() => setCreateOpen(true)}
+                          style={{
+                            marginTop: 8,
+                            padding: '8px 16px',
+                            border: '1px solid transparent',
+                            borderRadius: 9999,
+                            background: 'hsl(var(--primary))',
+                            color: 'hsl(var(--primary-foreground))',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          New project
+                        </button>
+                      </>
                     )}
                   </div>
                 ) : (
@@ -418,6 +484,8 @@ export default function ProjectsPage() {
             )}
           </section>
         </div>
+
+        <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
 
         {editProject && (
           <ProjectSettingsDialog

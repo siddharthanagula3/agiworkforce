@@ -35,6 +35,25 @@ const PROBES = [
   },
 ];
 
+const API_HOST_PROBES = [
+  {
+    path: '/health',
+    assertBody(body) {
+      if (!HEALTH_STATUSES.includes(body?.status) || !body?.checks?.environment) {
+        throw new Error('answered with something that is not this app’s health-check contract');
+      }
+    },
+  },
+  {
+    path: '/v1/models',
+    assertBody(body) {
+      if (body?.object !== 'list' || !Array.isArray(body?.data)) {
+        throw new Error('answered without the OpenAI-compatible model list envelope');
+      }
+    },
+  },
+];
+
 function assertUnauthorizedEnvelope(body) {
   if (body?.error?.code !== 'UNAUTHORIZED') {
     throw new Error('refused without the application UNAUTHORIZED envelope');
@@ -90,6 +109,77 @@ export async function verifyDeployment(rawBaseUrl, options = {}) {
       }
       return { baseUrl: baseUrl.href, probes: PROBES.map((probe) => probe.path) };
     } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        onRetry(attempt, error);
+        await delay(retryDelayMs);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+export function apiHostUrlFor(rawAppUrl) {
+  const appUrl = parseDeploymentUrl(rawAppUrl);
+  return new URL(`${appUrl.protocol}//api.${appUrl.host}`);
+}
+
+async function runApiHostProbe(apiHostUrl, probe) {
+  const target = new URL(probe.path, apiHostUrl);
+  const response = await fetch(target, {
+    headers: { accept: 'application/json', 'x-request-id': `api-host-${randomUUID()}` },
+    redirect: 'manual',
+    cache: 'no-store',
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+  if (response.status >= 300 && response.status < 400) {
+    throw settled(
+      `${target} was redirected to ${JSON.stringify(response.headers.get('location'))} ` +
+        'instead of being served: the host-scoped rewrite never ran',
+    );
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('json')) {
+    throw settled(
+      `${target} returned ${response.status} as ${JSON.stringify(contentType || 'no content-type')}; ` +
+        'the API host is serving the app shell, not the API',
+    );
+  }
+
+  if (response.status !== 200) {
+    throw new Error(`${target} returned ${response.status}, expected 200`);
+  }
+
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw settled(`${target} returned ${response.status} with a body that is not JSON`);
+  }
+
+  try {
+    probe.assertBody(body);
+  } catch (error) {
+    throw settled(`${target} ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export async function verifyApiHost(rawApiHostUrl, options = {}) {
+  const { attempts = ATTEMPTS, retryDelayMs = RETRY_DELAY_MS, onRetry = () => {} } = options;
+  const apiHostUrl = parseDeploymentUrl(rawApiHostUrl);
+  let lastError;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      for (const probe of API_HOST_PROBES) {
+        await runApiHostProbe(apiHostUrl, probe);
+      }
+      return { apiHostUrl: apiHostUrl.href, probes: API_HOST_PROBES.map((probe) => probe.path) };
+    } catch (error) {
+      if (error?.retryable === false) throw error;
       lastError = error;
       if (attempt < attempts) {
         onRetry(attempt, error);
@@ -191,16 +281,26 @@ export async function verifyDeployedCommit(rawBaseUrl, rawExpectedSha, options =
 }
 
 async function main() {
-  const [baseUrl, expectedSha] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const apiHostOnly = argv[0] === '--api-host';
+  const [baseUrl, expectedSha] = apiHostOnly ? argv.slice(1) : argv;
   if (!baseUrl) {
     throw new Error(
-      'Usage: node scripts/verify-deployment.mjs <deployment-url> [expected-commit-sha]',
+      'Usage: node scripts/verify-deployment.mjs [--api-host] <deployment-url> [expected-commit-sha]',
     );
   }
 
   const onRetry = (attempt, error) => {
     console.warn(`attempt ${attempt} failed: ${error instanceof Error ? error.message : error}`);
   };
+
+  if (apiHostOnly) {
+    const apiHost = await verifyApiHost(apiHostUrlFor(baseUrl), { onRetry });
+    console.log(
+      `API host serving path verified: ${apiHost.apiHostUrl} (${apiHost.probes.join(', ')})`,
+    );
+    return;
+  }
 
   const result = await verifyDeployment(baseUrl, { onRetry });
   console.log(`Deployment serving path verified: ${result.baseUrl} (${result.probes.join(', ')})`);

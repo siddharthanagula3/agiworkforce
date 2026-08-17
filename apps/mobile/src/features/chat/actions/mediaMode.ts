@@ -1,7 +1,8 @@
-
 import {
   getModelMetadataById,
   getRoutingSlotModel,
+  getVideoAspectOptionsForModel,
+  getVideoQualityOptionsForModel,
   isModelLive,
   modelsCatalog,
 } from '@agiworkforce/types';
@@ -73,6 +74,27 @@ export function clearInvalidMediaModelSelections(): boolean {
 function resolveSlotMediaModelId(kind: MediaKind): string | null {
   const modelId = getRoutingSlotModel(SLOT_FOR_MODE[kind]);
   return modelId && isExecutableMediaModel(kind, modelId) ? modelId : null;
+}
+
+export interface VideoOutputSelection {
+  aspectRatio: string;
+  resolution: string;
+}
+
+export function resolveVideoOutputSelection(
+  modelId: string | null | undefined,
+  aspectRatio: string,
+  resolution: string,
+): VideoOutputSelection {
+  const aspects = getVideoAspectOptionsForModel(modelId ?? undefined).map((option) => option.id);
+  const effectiveAspect = aspects.includes(aspectRatio) ? aspectRatio : (aspects[0] ?? aspectRatio);
+  const qualities = getVideoQualityOptionsForModel(modelId ?? undefined, effectiveAspect).map(
+    (option) => option.id,
+  );
+  return {
+    aspectRatio: effectiveAspect,
+    resolution: qualities.includes(resolution) ? resolution : (qualities[0] ?? resolution),
+  };
 }
 
 export function mediaModelIdForMode(mode: MediaMode): string | null {
