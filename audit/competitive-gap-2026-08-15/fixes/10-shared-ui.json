@@ -1,0 +1,15 @@
+[
+  {
+    "id": "CLR-04",
+    "title": "Shared code-block copy button is hover-gated despite sitting inside an always-visible header bar, contradicting the persistent-chrome pattern it otherwise implements",
+    "claimId": "composer-22",
+    "benchmark": "ChatGPT and Gemini show code-block header chrome (language label + copy icon) at all times, not hover-gated (01-chatgpt/chat-lifecycle.md, 03-gemini/composer-and-markdown-rendering.md)",
+    "ourState": "PRESENT_WORSE",
+    "ourEvidence": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:52 \u2014 the Copy Button's className includes 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100'. The surrounding .code-block-header-bar (apps/web/app/globals.css:1004-1007) IS unconditionally visible with the language label always shown, but the one interactive control inside it is invisible until hover/focus \u2014 same weakness as Claude's pattern despite having Claude-beating persistent chrome around it.",
+    "severity": "P2",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "Remove the opacity-0 default on the Copy button in CodeBlock (MarkdownContent.tsx:52) so it renders at full opacity by default, matching the always-visible language label beside it. One-line CSS-class fix, shared by web+desktop.",
+    "_domain": "Composer, chat lifecycle & message rendering"
+  }
+]

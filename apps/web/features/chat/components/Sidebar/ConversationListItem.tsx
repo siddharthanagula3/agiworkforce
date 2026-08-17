@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, memo } from 'react';
 import {
   DropdownMenu,
@@ -35,6 +34,7 @@ import {
 import { cn } from '@shared/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { useProjectStore } from '@features/projects/stores/project-store';
+import { conversationDeleteConfirm } from '@shared/components/layout/sidebar-session-actions';
 
 interface ConversationListItemProps {
   id: string;
@@ -306,9 +306,11 @@ export const ConversationListItem = memo(function ConversationListItem({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent onClick={stopPropagation}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
+            <AlertDialogTitle>{conversationDeleteConfirm(title).title}</AlertDialogTitle>
+            {/* One copy definition for every delete-conversation dialog — see
+                sidebar-session-actions.ts for what each claim is checked against. */}
             <AlertDialogDescription>
-              This will permanently delete &quot;{title}&quot; and all its messages.
+              {conversationDeleteConfirm(title).description}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

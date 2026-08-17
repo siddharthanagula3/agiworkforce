@@ -9,6 +9,7 @@
 
 // re-exported directly for ergonomic consumption (e.g. BridgeStatusCard
 export type { ExtensionStatusDiagnostics } from './browserExtension';
+export type { PairRequestPrompt } from './realtime';
 export type {
   AutomationPermissions,
   DiscardedRecording,

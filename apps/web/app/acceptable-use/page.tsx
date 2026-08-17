@@ -232,8 +232,12 @@ export default function AcceptableUsePage() {
             develop weapons, including chemical, biological, radiological, nuclear, or high-yield
             explosives; to build tooling for unlawful surveillance; or to generate fraud, phishing,
             or impersonation material. Do not use output to make automated decisions about a person
-            &mdash; employment, credit, housing, insurance, education, or legal status — without
-            meaningful human review.
+            &mdash; employment, credit, housing, insurance, medical, education, or legal status —
+            without meaningful human review. Do not use AGI for practices prohibited under Art. 5 of
+            the EU AI Act (Regulation (EU) 2024/1689): biometric categorisation to infer protected
+            or sensitive attributes, real-time remote biometric identification in public spaces,
+            social scoring, emotion inference in workplace or educational settings, or predictive
+            policing based solely on automated profiling.
           </p>
 
           <h3 className="agi-reason-h" style={{ marginTop: 28 }}>

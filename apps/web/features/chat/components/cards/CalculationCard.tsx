@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
@@ -8,6 +7,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkfor
 import { cn } from '@shared/lib/utils';
 import DOMPurify from 'dompurify';
 import { toast } from 'sonner';
+import {
+  CardExtraSections,
+  appendExtraLine,
+  openExtraSection,
+  stripListMarker,
+  type ExtraSection,
+} from './card-extras';
 
 interface ParsedCalculation {
   title: string;
@@ -17,11 +23,10 @@ interface ParsedCalculation {
   resultLabel: string;
   steps: Array<{ label: string; value: string }>;
   unit: string;
+  extraSections: ExtraSection[];
 }
 
 function parseCalculation(content: string): ParsedCalculation {
-  const lines = content.split('\n');
-
   let title = '';
   let description = '';
   let result = '';
@@ -30,6 +35,8 @@ function parseCalculation(content: string): ParsedCalculation {
   const formulas: ParsedCalculation['formulas'] = [];
   const steps: ParsedCalculation['steps'] = [];
   const descLines: string[] = [];
+  const extraSections: ExtraSection[] = [];
+  let extraHeading: string | null = null;
 
   const latexBlocks = content.match(/\$\$([\s\S]+?)\$\$/g) || [];
   for (const block of latexBlocks) {
@@ -43,7 +50,11 @@ function parseCalculation(content: string): ParsedCalculation {
     formulas.push({ label: '', expression: expr, isLatex: true });
   }
 
-  for (const line of lines) {
+  // Math blocks are already captured above; dropping them here keeps their
+  // inner lines from being re-read as prose.
+  const prose = content.replace(/\$\$[\s\S]+?\$\$/g, '\n').replace(/\\\[[\s\S]+?\\\]/g, '\n');
+
+  for (const line of prose.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
@@ -84,16 +95,27 @@ function parseCalculation(content: string): ParsedCalculation {
       continue;
     }
 
-    if (!result && formulas.length === 0 && steps.length === 0 && !trimmed.startsWith('#')) {
-      descLines.push(trimmed);
+    const heading = trimmed.match(/^#{1,6}\s+(.*)$/);
+    if (heading) {
+      extraHeading = (heading[1] ?? '').replace(/\*\*/g, '').trim();
+      openExtraSection(extraSections, extraHeading);
+      continue;
     }
+
+    if (extraHeading !== null) {
+      appendExtraLine(extraSections, extraHeading, stripListMarker(trimmed));
+      continue;
+    }
+
+    if (!result && formulas.length === 0 && steps.length === 0) {
+      descLines.push(trimmed);
+      continue;
+    }
+
+    appendExtraLine(extraSections, '', stripListMarker(trimmed));
   }
 
-  description = descLines
-    .filter((l) => !l.startsWith('#') && !l.startsWith('$'))
-    .join(' ')
-    .replace(/\*\*/g, '')
-    .trim();
+  description = descLines.join(' ').replace(/\*\*/g, '').trim();
 
   if (!result && formulas.length > 0) {
     const lastFormula = formulas[formulas.length - 1];
@@ -113,6 +135,7 @@ function parseCalculation(content: string): ParsedCalculation {
     resultLabel,
     steps,
     unit,
+    extraSections,
   };
 }
 
@@ -135,11 +158,11 @@ function FormulaDisplay({ expression, isLatex }: { expression: string; isLatex: 
     return (
       <div
         className="formula-katex overflow-x-auto py-2 text-center"
-        dangerouslySetInnerHTML={
-{
-            __html: DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } }),
-          }
-        }
+        // llm-guardrail-allow: KaTeX emits markup, so the string cannot be text-rendered; it is
+        // sanitized on the line below before it reaches the DOM.
+        dangerouslySetInnerHTML={{
+          __html: DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } }),
+        }}
         role="math"
         aria-label={expression}
       />
@@ -171,10 +194,10 @@ export function CalculationCard({ content }: CalculationCardProps) {
   }, [calc.result]);
 
   return (
-    <Card className="calculation-card overflow-hidden border-blue-200/50 dark:border-blue-800/30">
-      <CardHeader className="bg-gradient-to-r from-blue-50 to-sky-50 dark:from-blue-950/20 dark:to-sky-950/20 pb-4">
+    <Card className="calculation-card overflow-hidden border-[var(--chat-border)]">
+      <CardHeader className="border-b border-[var(--chat-border-subtle)] bg-[var(--chat-surface-hover)] pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/40">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--chat-surface-elevated)]">
             <Calculator className="h-5 w-5 text-blue-700 dark:text-blue-400" aria-hidden="true" />
           </div>
           <div>
@@ -239,7 +262,7 @@ export function CalculationCard({ content }: CalculationCardProps) {
 
         {/* Result */}
         {calc.result && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800/40 dark:bg-blue-950/20 p-4">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--chat-border-strong)] bg-[var(--chat-surface-hover)] p-4">
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {calc.resultLabel}
@@ -270,6 +293,8 @@ export function CalculationCard({ content }: CalculationCardProps) {
             </Button>
           </div>
         )}
+
+        <CardExtraSections sections={calc.extraSections} />
       </CardContent>
     </Card>
   );

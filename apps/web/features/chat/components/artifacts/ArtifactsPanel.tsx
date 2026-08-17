@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { Button } from '@agiworkforce/ui';
+import { Button, EmptyState } from '@agiworkforce/ui';
 import { useChatUIStore } from '@agiworkforce/unified-chat';
 import type { SharedArtifact } from '@agiworkforce/types';
 import {
@@ -11,6 +11,7 @@ import {
   type PublishResult,
 } from '@agiworkforce/artifacts';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
+import { useKeyboardShortcuts } from '../../hooks/use-keyboard-shortcuts';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArtifactPreview } from './ArtifactPreview';
@@ -45,19 +46,14 @@ function ArtifactTab({
   );
 }
 
-function EmptyState() {
+function ArtifactsEmptyState() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50">
-        <Code2 className="h-6 w-6 text-muted-foreground/60" />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-foreground">No artifacts yet</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Renderable code and generated files will appear here
-        </p>
-      </div>
-    </div>
+    <EmptyState
+      icon={Code2}
+      title="No artifacts yet"
+      description="Renderable code and generated files will appear here"
+      className="flex-1"
+    />
   );
 }
 
@@ -339,12 +335,16 @@ export function ArtifactsPanel() {
             panel-variant toolbar carries the Close button. This ensures the
             panel is always closeable on mobile even with zero or unresolved
             artifact selections. */}
-        <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <PanelRightOpen className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold text-foreground">Artifacts</h2>
+        {/* @container, same reason as the ArtifactPreview toolbar: this strip
+            lives INSIDE the split pane, which the user can drag down to
+            MIN_PANEL_WIDTH while the window stays wide. Viewport breakpoints
+            here reveal labels at a width this bar never has. */}
+        <div className="@container flex items-center justify-between border-b border-border/30 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+            <PanelRightOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <h2 className="shrink-0 text-sm font-semibold text-foreground">Artifacts</h2>
             {artifacts.length > 0 && (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                 {artifacts.length}
               </span>
             )}
@@ -352,7 +352,7 @@ export function ArtifactsPanel() {
                 hidden. Without this the artifacts simply vanish on reload. */}
             {persistenceDegraded && (
               <span
-                className="text-[10px] text-destructive"
+                className="shrink-0 whitespace-nowrap text-[10px] text-destructive"
                 title="Browser storage is full, so artifacts are not being saved. They will disappear when this tab is closed."
               >
                 Not saved
@@ -361,7 +361,7 @@ export function ArtifactsPanel() {
             {cloudSyncStatus !== 'idle' && (
               <span
                 className={cn(
-                  'text-[10px]',
+                  'shrink-0 whitespace-nowrap text-[10px]',
                   cloudSyncStatus === 'error' ? 'text-destructive' : 'text-muted-foreground',
                 )}
                 title={cloudSyncStatus === 'error' ? (cloudSyncError ?? undefined) : undefined}
@@ -374,7 +374,7 @@ export function ArtifactsPanel() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             {artifacts.length > 1 && (
               <Button
                 variant="ghost"
@@ -391,7 +391,7 @@ export function ArtifactsPanel() {
                 title="Download all artifacts as zip"
               >
                 <FolderDown className="h-3.5 w-3.5" />
-                <span className="ml-1 hidden sm:inline">Download all</span>
+                <span className="ml-1 hidden @[26rem]:inline">Download all</span>
               </Button>
             )}
             {/* Show Close here only when the viewer toolbar is not visible
@@ -411,7 +411,7 @@ export function ArtifactsPanel() {
         </div>
 
         {artifacts.length === 0 && !streamingArtifact ? (
-          <EmptyState />
+          <ArtifactsEmptyState />
         ) : (
           <>
             {/* Tabs · horizontal scrollable list */}
@@ -459,7 +459,7 @@ export function ArtifactsPanel() {
                   publishArtifact={makePublishHandler(selectedArtifact)}
                 />
               ) : (
-                <EmptyState />
+                <ArtifactsEmptyState />
               )}
             </div>
           </>
@@ -472,6 +472,8 @@ export function ArtifactsPanel() {
 export function ArtifactsToggleButton() {
   const { getConversationArtifacts, panelOpen, togglePanel } = useArtifactsStore();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+
+  useKeyboardShortcuts({ onToggleArtifacts: togglePanel });
 
   const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
 

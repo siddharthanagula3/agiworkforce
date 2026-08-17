@@ -1,0 +1,142 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
+vi.mock('server-only', () => ({}));
+
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+const rlsWithOrg = vi.fn(() => ({ tag: 'rls-adapter' }) as unknown as DatabaseAdapter);
+const rlsWithUser = vi.fn(() => ({ withOrg: rlsWithOrg }));
+vi.mock('@agiworkforce/data-layer', () => ({
+  createDatabaseClient: vi.fn(() => ({ withUser: rlsWithUser })),
+}));
+
+const mockAuth = vi.fn(async () => ({ userId: null, getToken: async () => null }));
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: (...args: unknown[]) => mockAuth(...(args as [])),
+}));
+
+vi.mock('@clerk/backend', () => ({ verifyToken: vi.fn() }));
+
+const mockVerifyKey = vi.fn();
+vi.mock('@/lib/services/api-key-service', () => ({
+  ApiKeyService: { verifyKey: (...args: unknown[]) => mockVerifyKey(...args) },
+}));
+
+vi.mock('@/lib/server/developer-token', () => ({
+  verifyDeveloperTokenSignature: vi.fn(() => null),
+  isDeveloperTokenRevoked: vi.fn(async () => false),
+}));
+
+const serviceQuery = vi.fn(async () => [] as Record<string, unknown>[]);
+const serviceExecute = vi.fn(async () => 0);
+const serviceTransaction = vi.fn(async (callback: (tx: DatabaseAdapter) => Promise<unknown>) =>
+  callback({ query: serviceQuery, execute: serviceExecute } as unknown as DatabaseAdapter),
+);
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(
+    () =>
+      ({
+        query: (...args: unknown[]) => serviceQuery(...(args as [])),
+        execute: (...args: unknown[]) => serviceExecute(...(args as [])),
+        transaction: (...args: unknown[]) => serviceTransaction(...(args as [never])),
+      }) as unknown as DatabaseAdapter,
+  ),
+}));
+
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+  resolveOrganizationMembershipId: vi.fn(async () => null),
+}));
+
+import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { isAppError } from '@/lib/errors';
+import { getUserScopedDb } from './rls-db';
+
+const API_KEY_TOKEN = 'sk_live_0000000000000000_rls_spec_fixture';
+const API_KEY_USER = 'user_api_key_principal';
+
+function apiKeyRequest(): NextRequest {
+  return new NextRequest('https://example.test/api/llm/v1/chat/completions', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${API_KEY_TOKEN}` },
+  });
+}
+
+async function capture(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(
+    () => null,
+    (error: unknown) => error,
+  );
+}
+
+describe('getUserScopedDb with an API-key principal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    serviceQuery.mockResolvedValue([]);
+    mockVerifyKey.mockResolvedValue({
+      id: 'key-1',
+      user_id: API_KEY_USER,
+      scopes: ['inference:write'],
+    });
+  });
+
+  it('binds the key owner as the RLS subject so inference endpoints are reachable', async () => {
+    const scoped = await getUserScopedDb(apiKeyRequest(), { apiKeyScope: 'inference:write' });
+
+    expect(scoped.userId).toBe(API_KEY_USER);
+    expect(rlsWithUser).not.toHaveBeenCalled();
+
+    serviceQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'owned-row' }]);
+    await expect(scoped.db.query('select id from web_conversations')).resolves.toEqual([
+      { id: 'owned-row' },
+    ]);
+
+    expect(serviceExecute).toHaveBeenCalledWith('set local role app_rls');
+    expect(serviceQuery).toHaveBeenCalledWith(
+      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
+      [API_KEY_USER, ''],
+    );
+  });
+
+  it('rejects a key missing the required scope as a scope-specific 403', async () => {
+    mockVerifyKey.mockResolvedValue({
+      id: 'key-1',
+      user_id: API_KEY_USER,
+      scopes: ['usage:read'],
+    });
+
+    const error = await capture(
+      getUserScopedDb(apiKeyRequest(), { apiKeyScope: 'inference:write' }),
+    );
+
+    expect(isApiKeyScopeError(error)).toBe(true);
+    expect(isAppError(error) && error.statusCode).toBe(403);
+  });
+
+  it('rejects a key on an endpoint that admits none with a scope reason, not a bare 401', async () => {
+    const error = await capture(getUserScopedDb(apiKeyRequest()));
+
+    expect(isApiKeyScopeError(error)).toBe(true);
+    expect(isAppError(error) && error.statusCode).toBe(403);
+  });
+
+  it('still binds a session JWT through the RLS-capable adapter', async () => {
+    const request = new NextRequest('https://example.test/api/chat/sync', {
+      method: 'POST',
+      headers: { authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.session.sig' },
+    });
+    const { verifyToken } = await import('@clerk/backend');
+    vi.mocked(verifyToken).mockResolvedValue({ sub: 'user_session' } as never);
+    vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk_secret');
+
+    const scoped = await getUserScopedDb(request);
+
+    expect(scoped.userId).toBe('user_session');
+    expect(rlsWithUser).toHaveBeenCalledWith('eyJhbGciOiJIUzI1NiJ9.session.sig');
+    vi.unstubAllEnvs();
+  });
+});

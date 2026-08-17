@@ -1,0 +1,130 @@
+{
+  "domain": "Shell, global nav, IA & design system",
+  "summary": "The shell is structurally solid \u2014 a real Projects section, dedicated search, persistent account chip, content-aware progress copy, and a genuine Claude-style artifact panel with a working Preview/Code toggle all hold up against the four-product benchmark. The most consequential findings are process gaps, not missing components: destructive-action confirmation is inconsistently wired (a proper red-accented AlertDialog exists and is used correctly for schedule/project-settings deletes, but the single most frequent destructive action \u2014 deleting a conversation from the sidebar \u2014 and several others fall back to native, unstyled window.confirm()); the composer-embedded Chat/AGI-Work mode toggle exists but its placeholder text never changes and it's invisible to free/basic-tier users; and suggested-prompt chips were deliberately removed from the empty state by an explicit 2026-08-06 founder decision, directly contradicting a 4/4-product convergence claim. Chat titling is single-stage (raw truncated prompt, permanently) rather than the two-stage LLM-cleanup pattern ChatGPT uses, and there's no shared 'task is running' status indicator between the Tasks list and the ordinary chat-history sidebar row for the same conversation.",
+  "strengths": [
+    "Real, content-aware agentic progress copy instead of a generic spinner \u2014 apps/web/features/chat/components/messages/ToolTimeline.tsx:774-845 builds phrases like 'Running: {tool}' with named tool labels, plus 'Thought for Xs' duration disclosure at ThinkingBlock.tsx:195.",
+    "A genuine persistent artifact side panel with a real Preview/Code toggle, matching Claude's signature feature and adding versioning/sharing/download \u2014 apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx and ArtifactPreview.tsx:202,1130-1152.",
+    "Composer-level model + reasoning-effort picker combined in one control, matching Gemini's shape \u2014 packages/ui/unified-chat/src/components/ModelSelector.tsx:271-297,448-450.",
+    "Persistent account chip (avatar, name, plan tier) visible with zero clicks from the primary chat shell \u2014 apps/web/features/chat/pages/WebChatPage.tsx:3841-3875.",
+    "Seven structurally distinct overlay primitives (Dialog/AlertDialog/ConfirmDialog/PromptDialog/Sheet/Drawer/AccessibleDialog) plus a real persistent side panel, not one generic modal reused everywhere \u2014 packages/ui/ui/src/primitives/*.",
+    "A real, pinnable Projects sidebar section with its own create action, dedicated search entry point, and 'New chat' as the most prominent sidebar control \u2014 packages/ui/ui/src/sidebar/Sidebar.tsx:539-548,629-633,807-808 \u2014 independently re-confirmed on top of the prior same-day audit's own verification.",
+    "Wide markdown tables are wrapped in overflow-x-auto, so the one real bug the benchmark warns about (no truncate control AND no scroll container) does not occur here \u2014 packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:197."
+  ],
+  "notWorthCopying": [
+    "ChatGPT's split marketing-nav interaction model (some items open in-place dropdowns, others hard-navigate) is flagged by the benchmark's own source material as ChatGPT's own undocumented inconsistency, not a pattern to aspire to \u2014 this repo currently replicates it (apps/web/shared/components/layout/Header.tsx) and should move toward Claude's all-consistent baseline instead, not stay as-is.",
+    "A bolted-on, ChatGPT-shaped global top-bar Chat/Work segmented control purely for parity \u2014 the prior same-day audit already documents ChatGPT's own rebuilt macOS app reportedly shipping a 'Chat mode went missing entirely on desktop' regression from this exact pattern; better to correctly wire the composer-embedded axis we already chose (Claude's shape) than add a second, differently-shaped axis on top.",
+    "Chasing every single-product code-block/table micro-affordance (ChatGPT's per-block Run button, Gemini's download icon + table truncate control) in isolation \u2014 each is real but single-product; the current hybrid (persistent language label + hover-reveal copy, boxed tables with safe overflow) is a reasonable middle ground already, not obviously worse than committing fully to any one competitor's choice."
+  ],
+  "gaps": [
+    {
+      "id": "shell-nav-ia-gap-01",
+      "title": "Destructive-action confirmation is inconsistently wired: styled red AlertDialog exists but the highest-frequency and highest-stakes deletes use native window.confirm()",
+      "claimId": "shell-07",
+      "benchmark": "ChatGPT, Claude, Gemini, Manus all require a two-step confirmation with a red-accented confirm control and specific consequence copy for every destructive action tested (delete chat/project/task, cancel subscription, remove plugin) \u2014 comparative-design-system.md.",
+      "ourState": "BUILT_NOT_WIRED",
+      "ourEvidence": "The destructive-variant primitive is proven correct in some flows: apps/web/features/schedules/components/SchedulesPage.tsx:535-568 (AlertDialog, bg-destructive AlertDialogAction, specific copy) and apps/web/features/projects/components/ProjectSettingsDialog.tsx:326-334 (same pattern, project delete). But the SAME action \u2014 delete project \u2014 falls back to native window.confirm() when triggered from the sidebar's own three-dot menu: apps/web/features/chat/pages/WebChatPage.tsx:3076-3081. Delete conversation (the single most frequent destructive action) uses window.confirm() in both shells: WebChatPage.tsx:2955-2960 and apps/web/shared/components/layout/WebAppShell.tsx:175-179. Delete message: apps/web/features/chat/components/messages/MessageBubble.tsx:2029. 'Permanently delete every chat, including archived chats' (the highest-stakes single action in the app) and 'Archive every chat': apps/web/features/settings/sections/PrivacySection.tsx:255-258 and :221.",
+      "severity": "P2",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Replace the window.confirm() call sites listed above with the existing AlertDialog/destructive-variant primitive already proven correct in SchedulesPage.tsx and ProjectSettingsDialog.tsx \u2014 no new component needed, just re-wiring ~7 call sites. Prioritize delete-conversation and delete-all-chats first (highest frequency and highest stakes)."
+    },
+    {
+      "id": "shell-nav-ia-gap-02",
+      "title": "Suggested-prompt chips were deliberately removed from the empty-state composer (2026-08-06 founder decision), contradicting a 4/4-product convergence",
+      "claimId": "shell-20",
+      "benchmark": "ChatGPT, Claude, Gemini, and Manus all show 3-5 clickable starter-prompt chips/cards below the empty-state composer \u2014 comparative-design-system.md; claude/gemini/manus frontend-overview.md.",
+      "ourState": "DIFFERENT_BY_DESIGN",
+      "ourEvidence": "apps/web/features/chat/components/GreetingBanner/GreetingBanner.tsx:11-13 \u2014 code comment states verbatim: 'The six quick-start suggestion chips were removed here and on mobile and desktop (founder 2026-08-06): the empty state is the mark and the greeting, nothing else.' Confirmed no chip/chip-list rendering remains in the component.",
+      "severity": "P2",
+      "effort": "M",
+      "priorAudit": "NEW",
+      "recommendation": "This is an explicit, dated, attributed product decision, not an oversight \u2014 flag to the founder for reconsideration given the benchmark shows unanimous 4/4-product convergence on this pattern, rather than silently re-adding chips. If reinstated, restore consistently across web/mobile/desktop per the original removal's own scope."
+    },
+    {
+      "id": "shell-nav-ia-gap-03",
+      "title": "Composer-embedded Chat/AGI-Work mode toggle exists but its placeholder text never changes and it's invisible to free/basic-tier users",
+      "claimId": "shell-01",
+      "benchmark": "Claude's composer-embedded Chat/Cowork axis shifts placeholder copy ('Write a message...' -> 'Describe a task or ask a question') on toggle and is visible regardless of plan tier \u2014 frontend-overview.md, comparative-design-system.md.",
+      "ourState": "PARTIAL",
+      "ourEvidence": "Toggle exists and is functionally real: apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2895-2921 (inline) and :2377-2409 (overflow-menu variant for narrow widths), explicitly commented 'claude.ai Chat/Cowork parity.' But the textarea placeholder at ChatComposerNew.tsx:2258-2266 branches only on isTurnActive/imageMode/videoMode, never workMode -- switching to AGI Work never changes the placeholder. Visibility is gated: canUseAgiWork requires billingPolicyReady && !isFreeTrial && canUseBillingPlanCapability(tier, 'agi_work') (ChatComposerNew.tsx:455-456), so free/basic-tier users never see this axis at all. Separately, there is no global-chrome-level axis (ChatGPT top-bar pill / Gemini sidebar-content-swap pattern) at all -- 'Code' in the sidebar (WebAppShell.tsx:251-256) is a plain route navigation to a different feature page, not a sidebar-content swap of the same shell.",
+      "severity": "P2",
+      "effort": "M",
+      "priorAudit": "CONFIRMS_PRIOR",
+      "priorAuditRef": "audit/parity-2026-08-15/gaps/domain-agentic-work.json AGENTIC-WORK-006 (re-confirms P2-001): 'AGI Work exists as a mode toggle on the ordinary chat composer... no independent, deep-linkable workspace object.' This finding adds the placeholder-non-reactivity and tier-gating angles that prior pass did not check.",
+      "recommendation": "Wire ChatComposerNew's placeholder prop to workMode (small, isolated change). Separately evaluate whether AGI Work's paid-tier gate should also gate its visibility, or whether it should render (disabled, with an upgrade nudge) for free/basic users the way the other benchmarked products keep their mode switch visible regardless of plan."
+    },
+    {
+      "id": "shell-nav-ia-gap-04",
+      "title": "No shared status indicator between the Tasks list and the ordinary chat-history sidebar row for the same running conversation",
+      "claimId": "shell-04",
+      "benchmark": "Claude and Gemini show an identical blue solid dot for an in-progress agentic task in BOTH a dedicated task list AND the general chat-history row for that same item -- comparative-design-system.md; frontend-overview.md.",
+      "ourState": "MISSING",
+      "ourEvidence": "packages/ui/ui/src/sidebar/types.ts:16-34 -- the SidebarSession interface every chat-history row is built from has no status/isStreaming/isRunning field. packages/ui/ui/src/sidebar/SessionItem.tsx (298 lines, the row renderer) has zero status/badge logic, confirmed by grep. The Tasks surface (packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:440-462) does show a real status pill (taskStateLabel(run.state)) but only within its own separate /tasks list -- no code path connects it back to the conversation's row in the ordinary sidebar.",
+      "severity": "P2",
+      "effort": "M",
+      "priorAudit": "NEW",
+      "recommendation": "Add an optional status field to SidebarSession, populate it from the same run-state source TasksPage already reads, and render a small dot in SessionItem when a conversation has an active/running AGI Work run -- mirroring the same data the Tasks list already has, just surfaced in a second place."
+    },
+    {
+      "id": "shell-nav-ia-gap-05",
+      "title": "Chat titling is single-stage (raw truncated prompt, permanent) rather than ChatGPT's two-stage placeholder-then-LLM-cleanup pattern",
+      "claimId": "shell-17",
+      "benchmark": "ChatGPT shows an instant placeholder title (truncated first prompt) that is silently replaced moments later by a shorter, LLM-generated title -- design-system.md.",
+      "ourState": "MISSING",
+      "ourEvidence": "apps/web/features/chat/pages/WebChatPage.tsx:3132-3145 -- the only auto-title logic fires once when the second message arrives and sets title = firstUser.content.trim().slice(0, 60), permanently. No title-generation API route exists: apps/web/app/api/chat/conversations/route.ts only persists whatever body.title a caller supplies, never derives one via LLM.",
+      "severity": "P3",
+      "effort": "M",
+      "priorAudit": "NEW",
+      "recommendation": "Add a background job/endpoint that generates a short title from the first exchange and PATCHes the conversation title after the fact, matching the existing pattern used for other async post-processing in the codebase."
+    },
+    {
+      "id": "shell-nav-ia-gap-06",
+      "title": "Scheduled-task creation uses a conventional multi-field form, not the shared chat composer, and offers no suggested/template starter schedules",
+      "claimId": "shell-05",
+      "benchmark": "All four products reuse the same visual composer across contexts including scheduled-task creation, just with different placeholder copy (design-system.md); separately, all three of ChatGPT/Claude/Gemini visually separate real schedules from suggested/template starters in the same list (design-system.md, frontend-overview.md) -- shell-18.",
+      "ourState": "MISSING",
+      "ourEvidence": "apps/web/features/schedules/components/ScheduleForm.tsx -- labeled text inputs, a model <select>, numeric interval fields, a raw cron-string field (placeholder=\"0 9 * * 1-5\u2026\"), not the rounded chat composer. apps/web/features/schedules/components/SchedulesPage.tsx:432-443 -- empty state offers only a 'Create Your First Schedule' CTA; grepped the file for 'Suggested'/'template', zero hits -- no template gallery exists to separate from real items at all.",
+      "severity": "P2",
+      "effort": "M",
+      "priorAudit": "CONFIRMS_PRIOR",
+      "priorAuditRef": "audit/parity-2026-08-15/gaps/domain-composer.json COMPOSER-001 (P1): four independent composer implementations repo-wide. This finding narrows to a within-web-surface instance (schedule creation doesn't even attempt the composer visual language) plus the separate, previously-unfiled observation that no suggested-template content exists on this surface at all (shell-18).",
+      "recommendation": "Lower priority than COMPOSER-001's cross-surface consolidation; if that migration happens, fold schedule creation into the shared composer with a 'Schedule' mode rather than a bespoke form. Independently, add 2-3 suggested schedule templates to the empty state, consistent with how the composer's own suggested-chips decision (shell-20) should be revisited together."
+    },
+    {
+      "id": "shell-nav-ia-gap-07",
+      "title": "Marketing-nav mobile breakpoint hides the primary sign-in/CTA behind the hamburger, unlike Claude's benchmark which keeps CTAs visible outside it",
+      "claimId": "shell-26",
+      "benchmark": "Claude's marketing nav collapses to a hamburger at ~1299px (above typical mobile width) while 'Contact sales' and 'Try Claude' CTAs remain visible outside the hamburger -- marketing-site-nav.md.",
+      "ourState": "PARTIAL",
+      "ourEvidence": "apps/web/app/globals.css:2246-2254 -- @media (max-width: 900px) hides BOTH .agi-top-nav-desktop AND .agi-top-actions-desktop (the Sign-in / 'Open AGI' CTA) together, replaced only by the hamburger toggle. The breakpoint itself (900px, above the typical 768px binary) matches the spirit of the claim; the CTA-visibility requirement does not.",
+      "severity": "P3",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Split the media query so .agi-top-actions-desktop (or a compact CTA-only variant) stays visible at the 900px breakpoint while only the nav links collapse into the hamburger, matching Claude's pattern."
+    },
+    {
+      "id": "shell-nav-ia-gap-08",
+      "title": "Per-response fork/branch action is gated behind the hover-only 'More actions' menu, not a persistent always-visible icon",
+      "claimId": "shell-27",
+      "benchmark": "Manus shows a persistent, always-visible fork/branch icon directly under every completed response ('Continue in new task'), not gated behind a menu -- overview-and-nav.md.",
+      "ourState": "PARTIAL",
+      "ourEvidence": "apps/web/features/chat/components/messages/MessageBubble.tsx:1977-1982 -- 'Branch conversation' (GitFork icon, wired to real onBranch/createBranch logic) exists only inside the 'More actions' DropdownMenu. The entire action row itself is opacity-0 group-hover:opacity-100 (MessageBubble.tsx:1742,1761) -- hover-only, not persistent.",
+      "severity": "P3",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Promote the branch action out of the overflow menu into the always-visible icon row alongside copy/regenerate, matching Manus's placement; the underlying branch functionality is already correct and just needs a different affordance location."
+    },
+    {
+      "id": "shell-nav-ia-gap-09",
+      "title": "No 'promote to recurring schedule' action in a conversation's options menu",
+      "claimId": "shell-28",
+      "benchmark": "Manus's per-task options menu includes a direct one-click 'Schedule a task' action that promotes an existing conversation into a recurring schedule -- overview-and-nav.md.",
+      "ourState": "MISSING",
+      "ourEvidence": "Grepped the repo for 'Schedule a task'/'Turn into schedule'/'promoteToSchedule' etc. -- zero hits. packages/ui/ui/src/sidebar/SessionItem.tsx's own header comment names its complete menu surface (pin/star/rename/share/archive/move-to-project/delete) with no scheduling entry.",
+      "severity": "P3",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Add a 'Schedule this' menu item to SessionItem's dropdown that pre-fills ScheduleForm with the conversation's context, reusing the existing rerunWork-style pattern already used to seed a new AGI Work chat from a task's goal (apps/web/features/tasks/components/TasksPage.tsx:34-42)."
+    }
+  ]
+}

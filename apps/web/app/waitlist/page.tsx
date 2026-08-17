@@ -60,8 +60,13 @@ export default function WaitlistPage() {
           <div style={{ maxWidth: 560, marginTop: 34, paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <PublicWaitlistForm source="website" ctaLabel="Request Org/SSO Early Access" />
             <p className="agi-fl-final-stamp" style={{ marginTop: 18, textTransform: 'none' }}>
-              One email when Enterprise org/SSO features land. No marketing drip, unsubscribe
-              anytime.
+              One email when Enterprise org/SSO features land, sent by a person &mdash; nothing here
+              mails this list automatically, so there is no unsubscribe link in a message to click.
+              No marketing drip. To come off the list, record a withdrawal at{' '}
+              <a href="/privacy/requests" className="agi-fl-surface-link">
+                /privacy/requests
+              </a>
+              . It needs no account, and a person removes your address.
             </p>
           </div>
         </section>

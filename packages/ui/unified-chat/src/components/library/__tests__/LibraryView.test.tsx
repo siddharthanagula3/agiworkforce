@@ -229,4 +229,99 @@ describe('shared LibraryView', () => {
     expect(screen.queryByRole('button', { name: 'Download generated file' })).toBeNull();
     expect(screen.getByText('Failed')).toBeTruthy();
   });
+
+  describe('artifact-class rows', () => {
+    const ARTIFACT_ITEM = {
+      ...ITEM,
+      id: 'asset-artifact',
+      file_name: 'dashboard.html',
+      mime_type: 'text/html',
+      surface: 'artifact',
+      previewable: true,
+      uri: '/api/files/asset-artifact',
+    };
+
+    function artifactTransport(overrides: Partial<LibraryTransport> = {}): LibraryTransport {
+      return makeTransport({
+        listPage: vi.fn(async () =>
+          jsonResponse({ items: [ARTIFACT_ITEM], has_more: false, next_offset: null }),
+        ),
+        fetchAsset: vi.fn(
+          async () =>
+            ({
+              ok: true,
+              status: 200,
+              text: async () => '<h1>Quarterly dashboard</h1>',
+            }) as unknown as Response,
+        ),
+        ...overrides,
+      });
+    }
+
+    it('renders a surface:artifact row through the sandboxed artifact renderer instead of the host raw-bytes tab', async () => {
+      const transport = artifactTransport();
+      render(<LibraryView transport={transport} />);
+
+      await screen.findByText('dashboard.html');
+      expect(screen.queryByTestId('artifact-renderer')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+      const renderer = await screen.findByTestId('artifact-renderer');
+      expect(renderer.getAttribute('data-artifact-id')).toBe('asset-artifact');
+      expect(transport.fetchAsset).toHaveBeenCalledWith('/api/files/asset-artifact');
+      expect(transport.openPreview).not.toHaveBeenCalled();
+    });
+
+    it('keeps a non-artifact row on the host preview gesture', async () => {
+      const fileItem = { ...ARTIFACT_ITEM, surface: 'file', file_name: 'sheet.csv' };
+      const transport = artifactTransport({
+        listPage: vi.fn(async () =>
+          jsonResponse({ items: [fileItem], has_more: false, next_offset: null }),
+        ),
+      });
+      render(<LibraryView transport={transport} />);
+
+      await screen.findByText('sheet.csv');
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+      await waitFor(() =>
+        expect(transport.openPreview).toHaveBeenCalledWith('/api/files/asset-artifact'),
+      );
+      expect(screen.queryByTestId('artifact-renderer')).toBeNull();
+    });
+
+    it('reports an artifact that cannot be read instead of showing an empty viewer', async () => {
+      const transport = artifactTransport({
+        fetchAsset: vi.fn(async () => ({ ok: false, status: 500 }) as Response),
+      });
+      render(<LibraryView transport={transport} />);
+
+      await screen.findByText('dashboard.html');
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+      expect(await screen.findByTestId('library-artifact-error-asset-artifact')).toBeTruthy();
+      expect(screen.queryByTestId('artifact-renderer')).toBeNull();
+    });
+
+    it('refuses to inline an artifact large enough to hang the tab', async () => {
+      const transport = artifactTransport({
+        fetchAsset: vi.fn(
+          async () =>
+            ({
+              ok: true,
+              status: 200,
+              text: async () => 'x'.repeat(512 * 1024 + 1),
+            }) as unknown as Response,
+        ),
+      });
+      render(<LibraryView transport={transport} />);
+
+      await screen.findByText('dashboard.html');
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+
+      expect(await screen.findByText(/too large to preview here/i)).toBeTruthy();
+      expect(screen.queryByTestId('artifact-renderer')).toBeNull();
+    });
+  });
 });

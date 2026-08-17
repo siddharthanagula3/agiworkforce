@@ -1,4 +1,3 @@
-
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -12,9 +11,11 @@ import {
   COOKIE_CONSENT_OPEN_EVENT,
   COOKIE_CONSENT_STORAGE_KEY,
   NECESSARY_ONLY_PREFERENCES,
+  buildCookieConsentRecord,
   isAnalyticsAllowed,
   parseCookiePreferences,
   readCookiePreferences,
+  type CookiePreferences,
 } from '@shared/lib/cookie-consent';
 
 vi.mock('next/script', () => ({
@@ -40,6 +41,13 @@ const TRACKING_ID = 'G-TESTID0000';
 
 function gaScripts(): HTMLScriptElement[] {
   return Array.from(document.querySelectorAll<HTMLScriptElement>('[data-testid="ga-script"]'));
+}
+
+function storeDecision(preferences: CookiePreferences): void {
+  window.localStorage.setItem(
+    COOKIE_CONSENT_STORAGE_KEY,
+    JSON.stringify(buildCookieConsentRecord(preferences)),
+  );
 }
 
 beforeEach(() => {
@@ -77,10 +85,7 @@ describe('AnalyticsConsentGate', () => {
   });
 
   it('inserts no gtag.js script when the user chose necessary-only', async () => {
-    window.localStorage.setItem(
-      COOKIE_CONSENT_STORAGE_KEY,
-      JSON.stringify(NECESSARY_ONLY_PREFERENCES),
-    );
+    storeDecision(NECESSARY_ONLY_PREFERENCES);
 
     render(<AnalyticsConsentGate trackingId={TRACKING_ID} />);
 
@@ -88,10 +93,7 @@ describe('AnalyticsConsentGate', () => {
   });
 
   it('loads gtag.js for the configured measurement id once analytics is allowed', async () => {
-    window.localStorage.setItem(
-      COOKIE_CONSENT_STORAGE_KEY,
-      JSON.stringify(ALL_ACCEPTED_PREFERENCES),
-    );
+    storeDecision(ALL_ACCEPTED_PREFERENCES);
 
     render(<AnalyticsConsentGate trackingId={TRACKING_ID} />);
 
@@ -202,10 +204,7 @@ describe('CookieConsent banner drives the gate', () => {
   });
 
   it('does not re-prompt a visitor who already decided', async () => {
-    window.localStorage.setItem(
-      COOKIE_CONSENT_STORAGE_KEY,
-      JSON.stringify(NECESSARY_ONLY_PREFERENCES),
-    );
+    storeDecision(NECESSARY_ONLY_PREFERENCES);
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       render(<CookieConsent />);
@@ -215,6 +214,34 @@ describe('CookieConsent banner drives the gate', () => {
       });
 
       expect(screen.queryByRole('button', { name: 'Allow analytics' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-prompts, and keeps analytics off, when the stored consent predates the notice', async () => {
+    window.localStorage.setItem(
+      COOKIE_CONSENT_STORAGE_KEY,
+      JSON.stringify({
+        ...buildCookieConsentRecord(ALL_ACCEPTED_PREFERENCES),
+        noticeVersion: 'cookies:1999-01-01+privacy:1999-01-01',
+      }),
+    );
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(
+        <>
+          <CookieConsent />
+          <AnalyticsConsentGate trackingId={TRACKING_ID} />
+        </>,
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(await screen.findByRole('button', { name: 'Allow analytics' })).toBeTruthy();
+      expect(gaScripts()).toHaveLength(0);
     } finally {
       vi.useRealTimers();
     }

@@ -415,6 +415,8 @@ export default function SettingsTabScreen() {
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/account-security'),
           },
+          // Sole entry point to cloud-billing. A duplicate Cloud > Billing row
+          // reached the same screen behind a generic tag instead of the plan.
           {
             key: 'account-subscription',
             label: 'Subscription',
@@ -520,6 +522,10 @@ export default function SettingsTabScreen() {
             icon: Zap,
             onPress: push('/(app)/settings/capabilities'),
           },
+          // The Data Controls screen takes no scope param: one screen already
+          // covers local data, chat history and Sync to AGI Cloud. A second
+          // "Cloud Data Controls" row would gate that same screen behind
+          // sign-in, so this row is its only entry point.
           {
             key: 'data-controls',
             label: 'Data Controls',
@@ -564,28 +570,12 @@ export default function SettingsTabScreen() {
             onPress: openCloudRoute('/(app)/settings/archived-chats'),
           },
           {
-            key: 'cloud-data-controls',
-            label: 'Cloud Data Controls',
-            icon: Database,
-            tag: cloudAccessTag,
-            tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/data-controls'),
-          },
-          {
             key: 'privacy',
             label: 'Privacy',
             icon: Shield,
             tag: cloudAccessTag,
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/cloud-privacy'),
-          },
-          {
-            key: 'billing',
-            label: 'Billing',
-            icon: CreditCard,
-            tag: cloudAccessTag,
-            tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/cloud-billing'),
           },
           {
             key: 'usage',

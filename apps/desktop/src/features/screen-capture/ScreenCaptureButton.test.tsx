@@ -23,6 +23,7 @@ vi.mock('../../lib/tauri-mock', () => ({
   isTauri: true,
 }));
 
+import { GLOBAL_SHORTCUTS, RENDERER_SHORTCUTS } from '../../constants/shortcuts';
 import { ScreenCaptureButton } from './ScreenCaptureButton';
 
 describe('ScreenCaptureButton', () => {
@@ -46,6 +47,26 @@ describe('ScreenCaptureButton', () => {
     captureFullScreenMock.mockResolvedValue(captureResult);
     captureWindowMock.mockResolvedValue(captureResult);
     getAvailableWindowsMock.mockResolvedValue([]);
+  });
+
+  it('advertises no capture accelerator the shortcut registry never binds', async () => {
+    const boundKeys = new Set(
+      [...RENDERER_SHORTCUTS, ...GLOBAL_SHORTCUTS].map((shortcut) => shortcut.key.toLowerCase()),
+    );
+    expect(boundKeys.has('r')).toBe(false);
+    expect(boundKeys.has('w')).toBe(false);
+
+    render(
+      <TooltipProvider>
+        <ScreenCaptureButton />
+      </TooltipProvider>,
+    );
+    fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' });
+
+    const menu = await screen.findByRole('menu');
+    expect(menu).toHaveTextContent('Capture Region');
+    expect(menu).toHaveTextContent('Capture Window');
+    expect(menu.textContent).not.toMatch(/(ctrl|cmd|command|control|alt|opt|meta)\s*\+/i);
   });
 
   it('uses native desktop region picker on macOS in Tauri mode', async () => {

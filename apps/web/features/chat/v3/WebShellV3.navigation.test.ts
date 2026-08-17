@@ -10,4 +10,16 @@ describe('WebShellV3 managed route navigation', () => {
     expect(resolveWebViewRoute('code-desktop')).toBe('/download');
     expect(resolveWebViewRoute('code-vscode')).toBe('/vscode-extension');
   });
+
+  it('routes artifacts to the in-shell gallery, not the public marketing gallery', () => {
+    // Regression: this used to point at /gallery, the public marketing-chrome
+    // route. Reachable via the collapsed sidebar rail on /chat/code, it took
+    // a signed-in user outside the app shell entirely.
+    expect(resolveWebViewRoute('artifacts')).toBe('/chat/artifacts');
+    expect(resolveWebViewRoute('work-artifacts')).toBe('/chat/artifacts');
+  });
+
+  it('routes the collapsed-rail Settings icon to general settings, not voice', () => {
+    expect(resolveWebViewRoute('general-settings')).toBe('/settings/general');
+  });
 });

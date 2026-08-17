@@ -22,6 +22,7 @@ vi.mock('@/lib/server/developer-token', () => ({
   issueDeveloperToken: (...args: unknown[]) => mocks.issueDeveloperToken(...args),
 }));
 vi.mock('@/lib/server/terms', () => ({
+  CURRENT_TERMS_VERSION: '2026-09-01',
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
 }));
 vi.mock('@/lib/logger', () => ({
@@ -115,10 +116,11 @@ describe('POST /api/auth/device/token', () => {
     await expect(response.json()).resolves.toEqual({ error: 'authorization_pending' });
   });
 
-  it('does not issue a token when assent became stale after approval', async () => {
+  it('points a stale-assent poll at re-acceptance instead of burning the code', async () => {
     mocks.query.mockResolvedValueOnce([
       {
         device_id: '0a9ae561-8447-4ce4-afca-1c205d69bbad',
+        user_code: 'ABCD-2345',
         expires_at: new Date(Date.now() + 60_000).toISOString(),
         status: 'approved',
         user_id: 'user-1',
@@ -135,8 +137,13 @@ describe('POST /api/auth/device/token', () => {
       }),
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: 'terms_acceptance_required' });
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: 'terms_acceptance_required',
+      terms_version: '2026-09-01',
+      acceptance_url:
+        'https://agiworkforce.com/login/complete?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD-2345',
+    });
     expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
   });

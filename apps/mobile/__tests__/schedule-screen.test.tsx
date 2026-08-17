@@ -30,9 +30,13 @@ jest.mock('lucide-react-native', () => {
   return {
     ArrowLeft: icon,
     Calendar: icon,
+    ChevronDown: icon,
     ChevronRight: icon,
+    ChevronUp: icon,
+    Clock: icon,
     Cloud: icon,
     Plus: icon,
+    Trash2: icon,
     X: icon,
     Zap: icon,
   };
@@ -162,6 +166,45 @@ describe('Schedules screen Cloud boundary', () => {
 
     expect(getByLabelText('Sign in to AGI Cloud')).toBeTruthy();
     expect(mockFetchSchedules).not.toHaveBeenCalled();
+  });
+
+  it('filters the list to active or paused schedules', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const base = {
+      prompt: 'Summarize inbox',
+      model: 'test-model-fixture',
+      recurrence: 'daily' as const,
+      cronExpression: undefined,
+      scheduledAt: null,
+      timeOfDay: '09:00',
+      timezone: 'UTC',
+      lastRunAt: null,
+      nextRunAt: null,
+      lastRunStatus: null,
+      createdAt: '2026-07-17T09:00:00.000Z',
+      updatedAt: '2026-07-17T09:00:00.000Z',
+    };
+    useScheduleStore.setState({
+      schedules: [
+        { ...base, id: 'schedule-active', name: 'Morning briefing', isActive: true },
+        { ...base, id: 'schedule-paused', name: 'Weekly rollup', isActive: false },
+      ],
+    });
+
+    const { getByLabelText, getByText, queryByText } = render(<SchedulesScreen />);
+
+    expect(getByText('Morning briefing')).toBeTruthy();
+    expect(getByText('Weekly rollup')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Filter schedules: Paused'));
+
+    expect(queryByText('Morning briefing')).toBeNull();
+    expect(getByText('Weekly rollup')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Filter schedules: Active'));
+
+    expect(getByText('Morning briefing')).toBeTruthy();
+    expect(queryByText('Weekly rollup')).toBeNull();
   });
 
   it('sends Free users to plan options instead of advertising an unavailable task', () => {

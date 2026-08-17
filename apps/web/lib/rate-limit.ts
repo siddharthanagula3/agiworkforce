@@ -27,6 +27,23 @@ if (isProductionRuntime && !hasRedisEnv) {
 
 const redis = hasRedisEnv ? new Redis({ url: redisRestUrl!, token: redisRestToken! }) : null;
 
+export const REDIS_OUTAGE_POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
+
+export type RedisOutagePolicy = 'fail-closed' | 'fail-open';
+
+export function resolveRedisOutagePolicy(): RedisOutagePolicy {
+  const configured = process.env[REDIS_OUTAGE_POLICY_ENV]?.trim().toLowerCase();
+  if (configured === 'fail-closed' || configured === 'fail-open') return configured;
+  if (configured) {
+    logger.error(
+      { [REDIS_OUTAGE_POLICY_ENV]: configured },
+      'Unrecognised Redis outage policy; enforcing fail-closed',
+    );
+    return 'fail-closed';
+  }
+  return hasRedisEnv || isProductionRuntime ? 'fail-closed' : 'fail-open';
+}
+
 export const rateLimitConfigs = {
   checkout: {
     limit: 15,
@@ -730,31 +747,31 @@ export async function checkRateLimit(
   const id = await resolveRateLimitIdentifier(request, identifier);
 
   if (!redis) {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const policy = resolveRedisOutagePolicy();
 
-    if (isProduction) {
+    if (process.env.NODE_ENV === 'production') {
       logger.error(
-        { key, failClosed: config.failClosed },
+        { key, failClosed: config.failClosed, policy },
         'SECURITY: Redis not configured in production - in-memory rate limiting is ineffective in distributed/serverless deployments',
       );
+    }
 
-      if (config.failClosed) {
-        logger.warn(
-          { key, identifier },
-          'AUDIT-008-016: Blocking request to security-sensitive endpoint - Redis not configured in production',
-        );
-        return {
-          success: false,
-          limit: effectiveLimit,
-          remaining: 0,
-          reset: Date.now() + 60000,
-          headers: {
-            'Retry-After': '60',
-            'X-RateLimit-Error': 'rate-limiter-unavailable',
-          },
-          identifier: id,
-        };
-      }
+    if (config.failClosed && policy === 'fail-closed') {
+      logger.warn(
+        { key, identifier, policy },
+        'Blocking request to a fail-closed endpoint - the shared rate limiter is unavailable',
+      );
+      return {
+        success: false,
+        limit: effectiveLimit,
+        remaining: 0,
+        reset: Date.now() + 60000,
+        headers: {
+          'Retry-After': '60',
+          'X-RateLimit-Error': 'rate-limiter-unavailable',
+        },
+        identifier: id,
+      };
     }
 
     const windowMs = parseWindow(config.window);
@@ -818,9 +835,11 @@ export async function checkRateLimit(
   } catch (error) {
     logger.error({ error, key, identifier }, 'Rate limiting check error');
 
-    if (config.failClosed) {
+    const policy = resolveRedisOutagePolicy();
+
+    if (config.failClosed && policy === 'fail-closed') {
       logger.warn(
-        { key, identifier },
+        { key, identifier, policy },
         'Rate limit check failed for security-sensitive endpoint, blocking request',
       );
       return {
@@ -835,7 +854,10 @@ export async function checkRateLimit(
       };
     }
 
-    logger.warn({ key, identifier }, 'Rate limit check failed, allowing request (fail-open)');
+    logger.warn(
+      { key, identifier, policy },
+      'Rate limit check failed, allowing request (fail-open)',
+    );
     return {
       success: true,
       limit: effectiveLimit,
@@ -907,17 +929,42 @@ export interface ManagedTurnSlot {
   release(): Promise<void>;
 }
 
+export type ManagedTurnDenial = 'plan-excluded' | 'ceiling-reached' | 'limiter-unavailable';
+
 export interface ManagedTurnSlotResult {
   admitted: boolean;
   limit: number | null;
   active: number;
   slot: ManagedTurnSlot | null;
+  denial?: ManagedTurnDenial;
 }
 
 const NOOP_SLOT: ManagedTurnSlot = { release: async () => {} };
 
 function managedTurnSlotKey(userId: string): string {
   return `agi-turns:${userId}`;
+}
+
+function unavailableTurnSlot(
+  userId: string,
+  limit: number,
+  reason: 'redis-not-configured' | 'redis-error',
+): ManagedTurnSlotResult {
+  const policy = resolveRedisOutagePolicy();
+
+  if (policy === 'fail-open') {
+    logger.warn(
+      { userId, limit, reason, policy },
+      'GOV-3: concurrent-turn ceiling unenforceable; admitting under the configured fail-open policy',
+    );
+    return { admitted: true, limit, active: 0, slot: NOOP_SLOT };
+  }
+
+  logger.error(
+    { userId, limit, reason, policy },
+    'GOV-3: concurrent-turn ceiling unenforceable; refusing the turn (fail-closed)',
+  );
+  return { admitted: false, limit, active: 0, slot: null, denial: 'limiter-unavailable' };
 }
 
 export async function acquireManagedTurnSlot(input: {
@@ -931,14 +978,10 @@ export async function acquireManagedTurnSlot(input: {
     return { admitted: true, limit: null, active: 0, slot: NOOP_SLOT };
   }
   if (limit <= 0) {
-    return { admitted: false, limit, active: 0, slot: null };
+    return { admitted: false, limit, active: 0, slot: null, denial: 'plan-excluded' };
   }
   if (!redis) {
-    logger.warn(
-      { userId: input.userId, limit },
-      'GOV-3: concurrent-turn slots unavailable without Redis; admitting (spend caps still apply)',
-    );
-    return { admitted: true, limit, active: 0, slot: NOOP_SLOT };
+    return unavailableTurnSlot(input.userId, limit, 'redis-not-configured');
   }
 
   const client = redis;
@@ -949,7 +992,7 @@ export async function acquireManagedTurnSlot(input: {
     await client.zremrangebyscore(key, 0, now - MANAGED_TURN_SLOT_TTL_SECONDS * 1000);
     const active = await client.zcard(key);
     if (active >= limit) {
-      return { admitted: false, limit, active, slot: null };
+      return { admitted: false, limit, active, slot: null, denial: 'ceiling-reached' };
     }
 
     await client.zadd(key, { score: now, member: input.turnId });
@@ -978,9 +1021,9 @@ export async function acquireManagedTurnSlot(input: {
   } catch (error) {
     logger.error(
       { error, userId: input.userId, limit },
-      'GOV-3: concurrent-turn slot check failed; admitting (spend caps still apply)',
+      'GOV-3: concurrent-turn slot check failed',
     );
-    return { admitted: true, limit, active: 0, slot: NOOP_SLOT };
+    return unavailableTurnSlot(input.userId, limit, 'redis-error');
   }
 }
 

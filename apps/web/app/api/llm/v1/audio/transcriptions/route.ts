@@ -2,6 +2,7 @@ import 'server-only';
 
 export const runtime = 'nodejs';
 
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -11,8 +12,30 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
-import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getRoutingSlotModel,
+  isModelLive,
+  resolveEffectiveModelPricingForInputTokens,
+  type PricedModel,
+} from '@agiworkforce/types';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
+// Developer API keys (inference:write) authenticate here, and the RLS-scoped db helper
+// rejects sk_live_/sk_test_ bearers outright. Tenancy comes from the authenticated userId
+// that every managed-usage query is parameterised by.
+import { getNeonDb } from '@/lib/server/neon-db';
+import { SubscriptionService } from '@/lib/services/subscription-service';
+import {
+  ManagedUsageRequestError,
+  createManagedUsageErrorBody,
+  finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest,
+  markManagedUsageClientDelivered,
+  markManagedUsageProviderStarted,
+  parseManagedUsageIdempotencyKey,
+  reserveManagedUsageRequest,
+  type ManagedUsageRequestReservation,
+} from '@/lib/services/managed-usage-request-service';
 
 function isLikelyAudio(head: Uint8Array): boolean {
   if (head.length < 4) return false;
@@ -44,6 +67,102 @@ function isLikelyAudio(head: Uint8Array): boolean {
   return false;
 }
 
+// OpenAI publishes ~$0.006 per audio minute for gpt-4o-transcribe against the catalog's
+// $2.50/1M input-token rate, i.e. ~2,400 audio tokens per minute. Spoken English near
+// 150 wpm lands around 4 transcript tokens per second. Used only to bound the pre-flight
+// reservation and to settle when the provider omits a usage block.
+const INPUT_TOKENS_PER_AUDIO_SECOND = 40;
+const OUTPUT_TOKENS_PER_AUDIO_SECOND = 4;
+
+// Lowest plausible byte rates, so bytes / rate is an upper bound on duration rather than a guess.
+const UNCOMPRESSED_AUDIO_BYTES_PER_SECOND = 8_000;
+const COMPRESSED_AUDIO_BYTES_PER_SECOND = 2_000;
+const UNCOMPRESSED_AUDIO_TYPES = new Set(['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/flac']);
+
+export function estimateAudioSeconds(byteSize: number, mimeType: string): number {
+  const bytesPerSecond = UNCOMPRESSED_AUDIO_TYPES.has(mimeType)
+    ? UNCOMPRESSED_AUDIO_BYTES_PER_SECOND
+    : COMPRESSED_AUDIO_BYTES_PER_SECOND;
+  return Math.max(1, Math.ceil(byteSize / bytesPerSecond));
+}
+
+export function estimateTranscriptionCostCents(
+  model: PricedModel,
+  inputTokens: number,
+  outputTokens: number,
+  pricedAt: Date = new Date(),
+): number {
+  const pricing = resolveEffectiveModelPricingForInputTokens(model, pricedAt, inputTokens);
+  const costDollars =
+    (pricing.inputCost * inputTokens + pricing.outputCost * outputTokens) / 1_000_000;
+  return costDollars > 0 ? Math.max(1, Math.ceil(costDollars * 100)) : 0;
+}
+
+interface SettledTokens {
+  inputTokens: number;
+  outputTokens: number;
+  source: 'provider_tokens' | 'provider_duration' | 'estimated_duration';
+}
+
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+export function settleTranscriptionTokens(
+  payload: unknown,
+  estimatedSeconds: number,
+): SettledTokens {
+  const usage =
+    payload && typeof payload === 'object'
+      ? ((payload as { usage?: unknown }).usage as Record<string, unknown> | undefined)
+      : undefined;
+
+  if (usage && isPositiveNumber(usage['input_tokens'])) {
+    return {
+      inputTokens: Math.ceil(usage['input_tokens']),
+      outputTokens: isNonNegativeNumber(usage['output_tokens'])
+        ? Math.ceil(usage['output_tokens'])
+        : 0,
+      source: 'provider_tokens',
+    };
+  }
+
+  if (usage && isPositiveNumber(usage['seconds'])) {
+    const seconds = Math.max(1, Math.ceil(usage['seconds']));
+    return {
+      inputTokens: seconds * INPUT_TOKENS_PER_AUDIO_SECOND,
+      outputTokens: seconds * OUTPUT_TOKENS_PER_AUDIO_SECOND,
+      source: 'provider_duration',
+    };
+  }
+
+  return {
+    inputTokens: estimatedSeconds * INPUT_TOKENS_PER_AUDIO_SECOND,
+    outputTokens: estimatedSeconds * OUTPUT_TOKENS_PER_AUDIO_SECOND,
+    source: 'estimated_duration',
+  };
+}
+
+function managedUsageErrorResponse(
+  request: NextRequest,
+  error: ManagedUsageRequestError,
+): NextResponse {
+  return NextResponse.json(
+    createManagedUsageErrorBody(
+      error,
+      error.status === 402 || error.status === 429 ? 'insufficient_quota' : 'invalid_request_error',
+    ),
+    {
+      status: error.status,
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    },
+  );
+}
+
 async function handleTranscriptions(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
@@ -56,7 +175,7 @@ async function handleTranscriptions(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'audio-transcription');
   if (rateLimitResponse) return rateLimitResponse;
 
-  await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
+  const { userId } = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
 
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
@@ -211,19 +330,97 @@ async function handleTranscriptions(request: NextRequest) {
     forwardForm.append('language', language);
   }
 
-  const response = await fetch(providerApiUrl('openai', 'audio/transcriptions'), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`,
-    },
-    body: forwardForm,
-    signal: AbortSignal.timeout(60_000),
-  });
+  const estimatedSeconds = estimateAudioSeconds(file.size, file.type);
+  const estimatedInputTokens = estimatedSeconds * INPUT_TOKENS_PER_AUDIO_SECOND;
+  const estimatedCostCents = estimateTranscriptionCostCents(
+    selectedModel,
+    estimatedInputTokens,
+    estimatedSeconds * OUTPUT_TOKENS_PER_AUDIO_SECOND,
+  );
 
-  const responseText = await response.text();
+  let reservation: ManagedUsageRequestReservation;
+  try {
+    const idempotencyHeader = request.headers.get('Idempotency-Key');
+    const idempotencyKey =
+      idempotencyHeader === null
+        ? `agi.transcription.${randomUUID()}`
+        : parseManagedUsageIdempotencyKey(idempotencyHeader);
+    const subscription = await SubscriptionService.getSubscription(userId);
+    reservation = await reserveManagedUsageRequest({
+      db: getNeonDb(),
+      userId,
+      idempotencyKey,
+      requestHash: fingerprintManagedUsageRequest({
+        model: selectedModel.id,
+        language: typeof language === 'string' ? language : null,
+        byteSize: file.size,
+        mimeType: file.type,
+      }),
+      provider: selectedModel.provider,
+      model: selectedModel.id,
+      estimatedCostCents,
+      planTier: subscription?.plan_tier ?? 'free',
+      isFlagship: false,
+    });
+  } catch (error) {
+    const managedError =
+      error instanceof ManagedUsageRequestError
+        ? error
+        : new ManagedUsageRequestError(
+            'Managed usage billing is temporarily unavailable.',
+            503,
+            'billing_unavailable',
+          );
+    return managedUsageErrorResponse(request, managedError);
+  }
+
+  async function releaseReservation(reason: string): Promise<void> {
+    try {
+      await finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'failed',
+        actualCostCents: 0,
+        usage: {
+          operation: 'transcription',
+          provider: selectedModel.provider,
+          model: selectedModel.id,
+          reason,
+        },
+      });
+    } catch (settlementError) {
+      logger.error(
+        {
+          event: 'transcription_refund_settlement_unrecorded',
+          error: settlementError,
+          userId,
+          idempotencyKey: reservation.idempotencyKey,
+        },
+        'Transcription failure settlement could not be persisted',
+      );
+    }
+  }
+
+  let response: Response;
+  let responseText: string;
+  try {
+    await markManagedUsageProviderStarted(reservation);
+    response = await fetch(providerApiUrl('openai', 'audio/transcriptions'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`,
+      },
+      body: forwardForm,
+      signal: AbortSignal.timeout(60_000),
+    });
+    responseText = await response.text();
+  } catch (error) {
+    await releaseReservation('provider_unreachable');
+    throw error;
+  }
 
   if (!response.ok) {
     logger.warn({ status: response.status, body: responseText }, 'Transcription proxy failed');
+    await releaseReservation('provider_failed');
     return NextResponse.json(
       {
         error: {
@@ -242,9 +439,56 @@ async function handleTranscriptions(request: NextRequest) {
   }
 
   let json: unknown;
+  let parsedJson = true;
   try {
     json = JSON.parse(responseText);
   } catch {
+    parsedJson = false;
+  }
+
+  const settled = settleTranscriptionTokens(parsedJson ? json : undefined, estimatedSeconds);
+  const actualCostCents = estimateTranscriptionCostCents(
+    selectedModel,
+    settled.inputTokens,
+    settled.outputTokens,
+  );
+  await finalizeManagedUsageRequest({
+    ...reservation,
+    outcome: 'completed',
+    actualCostCents,
+    usage: {
+      operation: 'transcription',
+      provider: selectedModel.provider,
+      model: selectedModel.id,
+      estimatedAudioSeconds: estimatedSeconds,
+      inputTokens: settled.inputTokens,
+      outputTokens: settled.outputTokens,
+      usageSource: settled.source,
+    },
+  });
+
+  logger.info(
+    {
+      userId,
+      provider: selectedModel.provider,
+      model: selectedModel.id,
+      estimatedCostCents,
+      actualCostCents,
+      usageSource: settled.source,
+    },
+    'Transcription credits deducted',
+  );
+
+  try {
+    await markManagedUsageClientDelivered(reservation);
+  } catch (error) {
+    logger.warn(
+      { error, userId, idempotencyKey: reservation.idempotencyKey },
+      'Transcription delivery marker could not be persisted',
+    );
+  }
+
+  if (!parsedJson) {
     return new NextResponse(responseText, {
       status: 200,
       headers: {

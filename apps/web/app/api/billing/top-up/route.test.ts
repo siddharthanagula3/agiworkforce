@@ -128,6 +128,28 @@ describe('POST /api/billing/top-up', () => {
     expect(mocks.createSession).not.toHaveBeenCalled();
   });
 
+  it('refuses a top-up when the subscription is billed in a currency other than USD', async () => {
+    mocks.retrieveSubscription.mockResolvedValueOnce({ currency: 'INR' });
+
+    const response = await POST(request(10));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining('INR') },
+    });
+    expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it('fails closed without charging when Stripe cannot confirm the billing currency', async () => {
+    mocks.retrieveSubscription.mockRejectedValueOnce(new Error('stripe unreachable'));
+
+    const response = await POST(request(10));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: 'SERVICE_UNAVAILABLE' } });
+    expect(mocks.createSession).not.toHaveBeenCalled();
+  });
+
   it('rejects accounts that are not actively billed by Stripe', async () => {
     mocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('to_regprocedure')) return [{ ready: true }];

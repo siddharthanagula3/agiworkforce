@@ -6,8 +6,8 @@ use crate::features::speech::{
     create_tts_provider, BargeInConfig, BargeInHandle, BargeInStats, DeepgramConfig, DeepgramState,
     DeepgramStreamingStats, PiperLocal, PiperVoiceDefinitions, PiperVoiceInfo, PttConfig,
     PushToTalk, SynthesisConfig, SystemTts, TranscriptionConfig, TtsConfig, TtsInterruptReason,
-    TtsPlayer, TtsProvider, Voice, VoiceWake, WakeWordConfig, WhisperLocal, WhisperModelInfo,
-    WhisperModelSize,
+    TtsPlayer, TtsProvider, Voice, VoiceWake, WakeWordConfig, WakeWordEvent, WhisperLocal,
+    WhisperModelInfo, WhisperModelSize,
 };
 #[cfg(feature = "vad")]
 use crate::features::speech::{BargeInDetector, SharedVad};
@@ -189,6 +189,9 @@ pub struct VoiceState {
     /// Active AGI Dictation recording session (if any).
     /// Uses `std::sync::Mutex` because cpal::Stream is not Send.
     pub recording: Arc<std::sync::Mutex<Option<CaptureHandle>>>,
+    /// Task draining [`VoiceWake::start`]'s receiver onto `wake:event`.
+    /// Held so a re-enable cannot leave two forwarders on the same detector.
+    pub wake_forwarder: Arc<std::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 impl VoiceState {
@@ -211,6 +214,7 @@ impl VoiceState {
             local_whisper: Arc::new(RwLock::new(LocalWhisperState::default())),
             local_piper: Arc::new(RwLock::new(LocalPiperState::default())),
             recording: Arc::new(std::sync::Mutex::new(None)),
+            wake_forwarder: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 }
@@ -880,12 +884,70 @@ pub async fn voice_tts_configure(
 // Wake Word Commands
 // =============================================================================
 
-/// Enable wake word detection
+/// Wire version for `wake:event` payloads.
+pub const WAKE_EVENT_VERSION: u32 = 1;
+
+/// Whether saying a configured wake phrase can actually trigger anything in
+/// this build. Single source of truth for the refusal below.
+///
+/// Stays `false` while `features/speech/wake.rs`'s detection loop only reports
+/// voice activity: it buffers speech and emits a fixed `speech_detected`
+/// marker instead of transcribing the utterance, so no configured phrase can
+/// ever match. Flip it in the same change that makes that loop transcribe —
+/// never from UI or settings code.
+pub const fn wake_phrase_detection_available() -> bool {
+    false
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WakeEventPayload {
+    version: u32,
+    kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    phrase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+    confidence: f32,
+    timestamp: i64,
+}
+
+fn emit_wake_event(app: &AppHandle, payload: &WakeEventPayload) {
+    if let Err(error) = app.emit("wake:event", payload) {
+        tracing::warn!("[wake] failed to emit {}: {}", payload.kind, error);
+    }
+}
+
+/// A detector report becomes a frontend event only when it names a configured
+/// wake phrase. Voice activity that matches nothing must not reach the webview
+/// as a trigger, or any noise would open dictation.
+fn wake_detection_payload(wake: &VoiceWake, event: &WakeWordEvent) -> Option<WakeEventPayload> {
+    let (phrase, confidence) = wake.matches_wake_phrase(&event.phrase_detected)?;
+    Some(WakeEventPayload {
+        version: WAKE_EVENT_VERSION,
+        kind: "detected",
+        phrase: Some(phrase.to_string()),
+        detail: None,
+        confidence,
+        timestamp: event.timestamp,
+    })
+}
+
+/// Enable wake word detection.
+///
+/// Fails closed while [`wake_phrase_detection_available`] is false: refusing
+/// keeps the microphone shut and emits a `refused` event the webview can show,
+/// rather than opening a permanent capture stream behind a "Listening" badge
+/// for a phrase that cannot fire.
 #[tauri::command]
 pub async fn voice_wake_enable(
     state: State<'_, Arc<Mutex<VoiceState>>>,
     config: Option<WakeWordConfig>,
+    app: AppHandle,
 ) -> Result<(), String> {
+    const UNAVAILABLE: &str =
+        "Wake-phrase detection is not available in this build — the detector reports voice activity but does not yet transcribe it, so no wake phrase can match.";
+
     let voice_state = state.lock().await;
     let mut wake = voice_state.wake.write().await;
 
@@ -893,15 +955,85 @@ pub async fn voice_wake_enable(
         wake.update_config(cfg);
     }
 
-    wake.start().await.map(|_| ()).map_err(|e| e.to_string())
+    if !wake_phrase_detection_available() {
+        emit_wake_event(
+            &app,
+            &WakeEventPayload {
+                version: WAKE_EVENT_VERSION,
+                kind: "refused",
+                phrase: None,
+                detail: Some(UNAVAILABLE.to_string()),
+                confidence: 0.0,
+                timestamp: chrono::Utc::now().timestamp_millis(),
+            },
+        );
+        return Err(UNAVAILABLE.to_string());
+    }
+
+    let mut enabled = wake.get_config().clone();
+    enabled.enabled = true;
+    wake.update_config(enabled);
+
+    let mut events = wake.start().await.map_err(|e| e.to_string())?;
+    drop(wake);
+
+    let detector = voice_state.wake.clone();
+    let forwarder = tokio::spawn(async move {
+        while let Some(event) = events.recv().await {
+            let payload = {
+                let wake = detector.read().await;
+                wake_detection_payload(&wake, &event)
+            };
+            match payload {
+                Some(payload) => emit_wake_event(&app, &payload),
+                None => tracing::debug!(
+                    "[wake] voice activity ({}) matched no configured phrase",
+                    event.phrase_detected
+                ),
+            }
+        }
+
+        emit_wake_event(
+            &app,
+            &WakeEventPayload {
+                version: WAKE_EVENT_VERSION,
+                kind: "stopped",
+                phrase: None,
+                detail: None,
+                confidence: 0.0,
+                timestamp: chrono::Utc::now().timestamp_millis(),
+            },
+        );
+    });
+
+    if let Some(previous) = lock_wake_forwarder(&voice_state).replace(forwarder) {
+        previous.abort();
+    }
+    Ok(())
 }
 
-/// Disable wake word detection
+fn lock_wake_forwarder(
+    state: &VoiceState,
+) -> std::sync::MutexGuard<'_, Option<tokio::task::JoinHandle<()>>> {
+    state
+        .wake_forwarder
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Disable wake word detection. The detector thread exits and drops its
+/// sender, which ends the forwarder after it emits `stopped`.
 #[tauri::command]
 pub async fn voice_wake_disable(state: State<'_, Arc<Mutex<VoiceState>>>) -> Result<(), String> {
     let voice_state = state.lock().await;
-    let wake = voice_state.wake.read().await;
+    let mut wake = voice_state.wake.write().await;
     wake.stop();
+
+    // `voice_get_capabilities` reports `wake_word_enabled` from this flag, so
+    // leaving it set would keep advertising a detector that has stopped.
+    let mut disabled = wake.get_config().clone();
+    disabled.enabled = false;
+    wake.update_config(disabled);
     Ok(())
 }
 
@@ -2379,5 +2511,60 @@ mod tts_availability_tests {
             tts_provider_available(&TtsConfig::default(), SystemTts::platform_supported()),
             SystemTts::platform_supported()
         );
+    }
+}
+
+#[cfg(test)]
+mod wake_event_tests {
+    use super::*;
+
+    fn detector(phrases: &[&str]) -> VoiceWake {
+        VoiceWake::new(WakeWordConfig {
+            enabled: true,
+            wake_phrases: phrases.iter().map(|p| p.to_string()).collect(),
+            ..WakeWordConfig::default()
+        })
+    }
+
+    fn report(phrase: &str) -> WakeWordEvent {
+        WakeWordEvent {
+            phrase_detected: phrase.to_string(),
+            confidence: 0.0,
+            timestamp: 1,
+        }
+    }
+
+    /// The receiver returned by `VoiceWake::start` used to be dropped on the
+    /// spot (`wake.start().await.map(|_| ())`), so a detected phrase reached
+    /// nothing. A match must now produce a `wake:event` payload naming the
+    /// configured phrase, which is what the webview listens for.
+    #[test]
+    fn a_matched_phrase_becomes_a_detected_event() {
+        let payload = wake_detection_payload(&detector(&["Hey AGI"]), &report("hey agi open chat"))
+            .expect("a spoken wake phrase must produce an event");
+
+        assert_eq!(payload.kind, "detected");
+        assert_eq!(payload.phrase.as_deref(), Some("Hey AGI"));
+        assert_eq!(payload.version, WAKE_EVENT_VERSION);
+    }
+
+    /// The VAD loop reports plain voice activity as the literal marker
+    /// `speech_detected`. Forwarding that as a trigger would open dictation on
+    /// any noise, so it must classify as no match.
+    #[test]
+    fn bare_voice_activity_is_not_a_wake_phrase() {
+        assert!(wake_detection_payload(
+            &detector(&["Hey AGI", "OK AGI", "AGI"]),
+            &report("speech_detected")
+        )
+        .is_none());
+    }
+
+    /// The capability probe is the reason `voice_wake_enable` refuses instead
+    /// of opening the microphone. It may only be flipped by the change that
+    /// teaches the detection loop to transcribe.
+    #[test]
+    fn wake_phrase_detection_is_gated_until_the_detector_transcribes() {
+        assert!(!wake_phrase_detection_available());
     }
 }

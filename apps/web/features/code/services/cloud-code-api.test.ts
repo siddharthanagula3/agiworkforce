@@ -84,6 +84,98 @@ describe('cloudCodeApi', () => {
     }
   });
 
+  it('reaches the agent-turn endpoint with CSRF and an idempotency key', async () => {
+    const fetchImpl = vi.fn(async () =>
+      json({
+        turnId: '22222222-2222-4222-8222-222222222222',
+        stopReason: 'awaiting_approval',
+        stepsUsed: 1,
+        finalMessage: '',
+        pendingApproval: {
+          stepIndex: 0,
+          toolUseId: 'tool-1',
+          command: 'pnpm install',
+          reason: 'Writes to the workspace.',
+        },
+      }),
+    );
+    const api = createCloudCodeApi({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      getCsrfToken: vi.fn(async () => 'csrf-code'),
+    });
+
+    await expect(
+      api.startAgentTurn(session.id, {
+        goal: 'install deps',
+        model: 'test-fixture-model',
+        idempotencyKey: 'idem-12345678',
+      }),
+    ).resolves.toMatchObject({ stopReason: 'awaiting_approval' });
+
+    const [path, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe(`/api/code/sessions/${session.id}/agent`);
+    expect(init.headers).toMatchObject({
+      'x-csrf-token': 'csrf-code',
+      'idempotency-key': 'idem-12345678',
+    });
+    expect(JSON.parse(String(init.body))).toEqual({
+      goal: 'install deps',
+      model: 'test-fixture-model',
+    });
+  });
+
+  it('lists and decides agent approvals on the approvals endpoint', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({
+          approvals: [
+            {
+              turnId: '22222222-2222-4222-8222-222222222222',
+              stepIndex: 0,
+              command: 'pnpm install',
+              reason: 'Writes to the workspace.',
+              goal: 'install deps',
+              expiresAt: '2026-07-30T12:30:00.000Z',
+              createdAt: '2026-07-30T12:00:00.000Z',
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        json({
+          turnId: '22222222-2222-4222-8222-222222222222',
+          stopReason: 'done',
+          stepsUsed: 2,
+          finalMessage: 'Done.',
+        }),
+      );
+    const api = createCloudCodeApi({
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      getCsrfToken: vi.fn(async () => 'csrf-code'),
+    });
+
+    await expect(api.listApprovals(session.id)).resolves.toMatchObject([{ stepIndex: 0 }]);
+    await expect(
+      api.decideApproval(session.id, {
+        turnId: '22222222-2222-4222-8222-222222222222',
+        stepIndex: 0,
+        decision: 'approve',
+      }),
+    ).resolves.toMatchObject({ stopReason: 'done' });
+
+    const [listPath] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const [decidePath, decideInit] = fetchImpl.mock.calls[1] as [string, RequestInit];
+    expect(listPath).toBe(`/api/code/sessions/${session.id}/agent/approvals`);
+    expect(decidePath).toBe(`/api/code/sessions/${session.id}/agent/approvals`);
+    expect(decideInit.method).toBe('POST');
+    expect(JSON.parse(String(decideInit.body))).toEqual({
+      turnId: '22222222-2222-4222-8222-222222222222',
+      stepIndex: 0,
+      decision: 'approve',
+    });
+  });
+
   it('surfaces the standardized server error message', async () => {
     const api = createCloudCodeApi({
       fetchImpl: vi.fn(async () =>

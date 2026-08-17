@@ -1,5 +1,4 @@
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
-import { MAX_CHAT_ATTACHMENT_BYTES } from '@agiworkforce/cloud-contracts';
 
 export interface SanitizeOptions {
   allowedTags?: string[];
@@ -322,56 +321,6 @@ export class SecurityManager {
     }
 
     return null;
-  }
-
-  static validateFileUpload(file: File): {
-    isValid: boolean;
-    errors: string[];
-  } {
-    const errors: string[] = [];
-    const maxSize = MAX_CHAT_ATTACHMENT_BYTES;
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'text/plain',
-      'text/csv',
-      'application/json',
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ];
-
-    if (file.size > maxSize) {
-      errors.push('File size exceeds 10MB limit');
-    }
-
-    if (!allowedTypes.includes(file.type)) {
-      errors.push(`File type ${file.type} is not allowed`);
-    }
-
-    const suspiciousPatterns = [
-      /\.exe$/i,
-      /\.bat$/i,
-      /\.cmd$/i,
-      /\.scr$/i,
-      /\.vbs$/i,
-      /\.js$/i,
-      /\.jar$/i,
-      /\.php$/i,
-      /\.asp$/i,
-      /\.jsp$/i,
-    ];
-
-    if (suspiciousPatterns.some((pattern) => pattern.test(file.name))) {
-      errors.push('File type not allowed based on extension');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    };
   }
 
   static generateSecureId(length: number = 32): string {

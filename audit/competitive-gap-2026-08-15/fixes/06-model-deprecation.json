@@ -1,0 +1,28 @@
+[
+  {
+    "id": "G2",
+    "title": "deprecation_date is wired to silently filter models, never rendered as a visible countdown",
+    "claimId": "mqp-08",
+    "benchmark": "ChatGPT's model picker shows 'o3 \u2014 Leaving on August 26' inline inside the dropdown.",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "packages/contracts/types/src/model-catalog.ts:553-554 defines deprecation_date, populated on real records (e.g. models.json:1640). The only consumer is apps/web/shared/stores/model-store.ts:94-109 (isCurrentModel), which uses it purely as an on/off gate ('if (retiresAt <= Date.now()) return false') \u2014 the model just vanishes at the deadline. Grepped deprecation_date/deprecationDate across apps/web: no rendering consumer found; ComposerFooter.tsx has no 'deprecation' string anywhere in the file.",
+    "severity": "P2",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "In ComposerFooter.tsx's row renderer, when a model has a future deprecation_date, render an inline 'Leaving on <date>' label the same way the coming_soon/env-lock reasons already render via modelLock()'s reason field. Adjacent to prior-audit MODELS-006 (retired-model conversation migration notice), which covers a different consumer of the same lifecycle field.",
+    "_domain": "Models, reasoning controls, quotas, pricing &amp; entitlements"
+  },
+  {
+    "id": "CLR-01",
+    "title": "Model picker never surfaces an inline retirement/deprecation warning for a model with a future deprecation_date",
+    "claimId": "composer-03",
+    "benchmark": "ChatGPT annotates a retiring model directly in the picker itself ('o3 \u2014 Leaving on August 26'), not only in release notes (01-chatgpt/composer.md)",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "apps/web/shared/stores/model-store.ts:88-105 (isCurrentModel()) reads the catalog's deprecation_date and filters the model OUT of the picker once the date has passed, but a model with a future deprecation_date renders with zero warning \u2014 grepped ComposerFooter.tsx (ModelRow, lines 362-450) and the whole file for deprecat/retir/Leaving/sunset: only the filter's own comment matches, no UI badge exists. packages/contracts/types/src/models.json currently has zero non-null future deprecation_date entries, so this is latent, not actively visible.",
+    "severity": "P2",
+    "effort": "M",
+    "priorAudit": "NEW",
+    "recommendation": "Add an advance-warning state to ModelRow: when 0 < days-until(deprecation_date) <= N, render a 'Leaving on <date>' badge instead of silently removing the model at the deadline. Reuses the existing catalog field; no new data source needed.",
+    "_domain": "Composer, chat lifecycle & message rendering"
+  }
+]

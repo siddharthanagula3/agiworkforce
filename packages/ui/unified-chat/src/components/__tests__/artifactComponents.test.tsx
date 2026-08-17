@@ -1,13 +1,10 @@
-
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ArtifactRenderer } from '../ArtifactRenderer';
-import { ArtifactsSidebar } from '../ArtifactsSidebar';
 import { ReactPreview, buildReactPreviewDocument } from '../artifact-components/ReactPreview';
 import { PresentationArtifact } from '../artifact-components/PresentationArtifact';
 import { SpreadsheetArtifact } from '../artifact-components/SpreadsheetArtifact';
 import { SidecarPanel } from '../sidecar/SidecarPanel';
-import { useArtifactStore } from '../../stores/artifactStore';
 import type { Artifact } from '../../lib/types';
 
 function makeArtifact(overrides: {
@@ -169,56 +166,6 @@ describe('ArtifactRenderer', () => {
       fireEvent.click(copyBtn);
     });
     expect(writeText).toHaveBeenCalledWith('const x = 1;');
-  });
-});
-
-describe('ArtifactsSidebar', () => {
-  beforeEach(() => {
-    useArtifactStore.getState().reset();
-  });
-
-  it('renders nothing when isOpen is false', () => {
-    const { container } = render(<ArtifactsSidebar isOpen={false} />);
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('renders when isOpen is true', () => {
-    render(<ArtifactsSidebar isOpen={true} />);
-    expect(screen.getByTestId('artifacts-sidebar')).toBeDefined();
-  });
-
-  it('shows empty state when no active artifact', () => {
-    render(<ArtifactsSidebar isOpen={true} />);
-    expect(screen.getByText(/No artifact selected/)).toBeDefined();
-  });
-
-  it('renders the active artifact when set in store', () => {
-    const artifact = makeArtifact({
-      id: 'sidebar-a1',
-      type: 'code',
-      content: 'const test = 1;',
-      language: 'ts',
-      title: 'Sidebar Code',
-    });
-    act(() => {
-      useArtifactStore.getState().openArtifact(artifact);
-    });
-    render(<ArtifactsSidebar isOpen={true} />);
-    const matches = screen.getAllByText('Sidebar Code');
-    expect(matches.length).toBeGreaterThan(0);
-  });
-
-  it('calls onClose when X button is clicked', () => {
-    const onClose = vi.fn();
-    render(<ArtifactsSidebar isOpen={true} onClose={onClose} />);
-    fireEvent.click(screen.getByLabelText('Close artifact panel'));
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('has correct width style', () => {
-    render(<ArtifactsSidebar isOpen={true} />);
-    const sidebar = screen.getByTestId('artifacts-sidebar');
-    expect(sidebar.style.width).toBe('420px');
   });
 });
 

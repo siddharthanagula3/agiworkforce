@@ -17,16 +17,23 @@ import type {
 import { useMemoryStore } from '@agiworkforce/unified-chat';
 import {
   MANAGED_CLOUD_CHAT_BASE_PATH,
+  ManagedCloudUpdateConversationRequestSchema,
+  ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationMessagesPath,
   managedCloudConversationPath,
 } from '@agiworkforce/cloud-contracts';
 import { getAuthToken as getClerkToken } from '@shared/lib/get-auth-token';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { buildMemorySystemContent, withMemorySystemMessage } from './memory-context';
 import { isMemoryCapabilityEnabled } from './memory-capability';
 
 const DEFAULT_WEB_CHAT_MODEL = 'auto';
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * GOV-27: a conversation request that did not succeed.
@@ -75,6 +82,12 @@ function conversationErrorFor(status: number, action: string): ChatConversationE
     );
   }
   return new ChatConversationError(`Could not ${action}. Please try again.`, status, 'server');
+}
+
+function isTemporaryConversation(conversationId: string): boolean {
+  return Boolean(
+    useChatStore.getState().conversations.find((c) => c.id === conversationId)?.isTemporary,
+  );
 }
 
 async function getAuthToken(): Promise<string> {
@@ -175,6 +188,11 @@ export class WebChatRuntime implements ChatRuntime {
         // Non-fatal: proceed without history
       }
     }
+    // Empty prior history means `content` below is the conversation's first
+    // message -- the server generates a real title from it in the background
+    // (see the messages route). Captured before the push below, which is what
+    // would make this always false.
+    const isFirstMessageInConversation = history.length === 0;
     // Append the new user message
     history.push({ role: 'user', content });
 
@@ -183,9 +201,16 @@ export class WebChatRuntime implements ChatRuntime {
     // Settings → Capabilities → Memory toggle is on. Facts live client-side in
     // the unified-chat memory store; gating here is what makes both the Memory
     // editor and its capability toggle actually affect answers.
-    const memoryContent = (await isMemoryCapabilityEnabled())
-      ? buildMemorySystemContent(useMemoryStore.getState().facts)
-      : null;
+    //
+    // Temporary chats are the second gate, and it has to live here: these facts
+    // are injected as an ordinary system message in `messages[]`, so the
+    // server-side Temporary Chat boundary (`enrichManagedMemoryContext`, which
+    // only suppresses ITS OWN account memories) never sees them and cannot
+    // strip them.
+    const memoryContent =
+      !isTemporaryConversation(conversationId) && (await isMemoryCapabilityEnabled())
+        ? buildMemorySystemContent(useMemoryStore.getState().facts)
+        : null;
     history = withMemorySystemMessage(history, memoryContent);
 
     // Fail-closed: the client never requests auto-approval (that would let a
@@ -194,148 +219,206 @@ export class WebChatRuntime implements ChatRuntime {
     // tool_call StreamEvents below surface as an Approve/Reject prompt.
     const completionsUrl = '/api/llm/v1/chat/completions';
 
-    const response = await fetch(completionsUrl, {
-      method: 'POST',
-      headers: await authHeaders(token),
-      body: JSON.stringify({
-        model: options?.model ?? DEFAULT_WEB_CHAT_MODEL,
-        messages: history,
-        stream: true,
-        thinking_mode: options?.thinkingEnabled ?? undefined,
-        web_search: options?.webSearch ?? undefined,
-        research: options?.research ?? undefined,
-        code_execution: options?.codeExecution ?? undefined,
-        work_mode: options?.workMode ?? undefined,
-        client_timezone: getBrowserTimeZone(),
-        use_prompt_cache: true,
-      }),
-      signal: controller.signal,
-    });
+    // Everything from here down is wrapped so cleanup and the title-sync
+    // below run on EVERY exit path (success, a non-2xx completions response,
+    // a missing body, or the reader throwing on abort) -- not just the happy
+    // "streamed to [DONE]" path. The user's first message is already saved
+    // and its title generation already scheduled server-side by the time this
+    // request is even sent (see the messages route), so a failed assistant
+    // turn -- exactly what happens when the completions call 400s -- must not
+    // also skip syncing the title. This used to leak `_abortControllers`
+    // entries on the two early-return branches below, too: they returned
+    // before ever reaching the delete that follows the streaming loop.
+    try {
+      const response = await fetch(completionsUrl, {
+        method: 'POST',
+        headers: await authHeaders(token),
+        body: JSON.stringify({
+          model: options?.model ?? DEFAULT_WEB_CHAT_MODEL,
+          messages: history,
+          stream: true,
+          thinking_mode: options?.thinkingEnabled ?? undefined,
+          web_search: options?.webSearch ?? undefined,
+          research: options?.research ?? undefined,
+          code_execution: options?.codeExecution ?? undefined,
+          work_mode: options?.workMode ?? undefined,
+          client_timezone: getBrowserTimeZone(),
+          use_prompt_cache: true,
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const err = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-      this.emit({ type: 'error', error: err.error?.message ?? `HTTP ${response.status}` });
-      return;
-    }
-    if (!response.body) {
-      this.emit({ type: 'error', error: 'No response body' });
-      return;
-    }
+      if (!response.ok) {
+        const err = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
+        this.emit({ type: 'error', error: err.error?.message ?? `HTTP ${response.status}` });
+        return;
+      }
+      if (!response.body) {
+        this.emit({ type: 'error', error: 'No response body' });
+        return;
+      }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    let inThinking = false;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let inThinking = false;
 
-    outer: while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() ?? '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data: ')) continue;
-        const data = trimmed.slice(6);
-        if (data === '[DONE]') {
-          if (inThinking) {
-            inThinking = false;
-          }
-          this.emit({ type: 'done' });
-          break outer;
-        }
-        try {
-          const parsed = JSON.parse(data) as Record<string, unknown>;
-          let chunk: string | null = null;
-          const choices = parsed['choices'];
-          if (Array.isArray(choices) && choices.length > 0) {
-            const delta = (choices[0] as Record<string, unknown>)['delta'] as
-              | Record<string, unknown>
-              | undefined;
-
-            if (delta && typeof delta['content'] === 'string') {
-              chunk = delta['content'] as string;
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data: ')) continue;
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') {
+            if (inThinking) {
+              inThinking = false;
             }
+            this.emit({ type: 'done' });
+            break outer;
+          }
+          try {
+            const parsed = JSON.parse(data) as Record<string, unknown>;
+            let chunk: string | null = null;
+            const choices = parsed['choices'];
+            if (Array.isArray(choices) && choices.length > 0) {
+              const delta = (choices[0] as Record<string, unknown>)['delta'] as
+                | Record<string, unknown>
+                | undefined;
 
-            // ── MCP tool events emitted by tool-loop.ts ────────────────────
-            // x_tool_status: a tool started or finished (status = running | completed | failed)
-            if (delta && delta['x_tool_status']) {
-              const ts = delta['x_tool_status'] as Record<string, unknown>;
-              const toolName = String(ts['name'] ?? 'tool');
-              const status = String(ts['status'] ?? 'running') as
-                | 'running'
-                | 'completed'
-                | 'failed';
-              // Emit a tool_call event so useChat's onStream handler updates
-              // the ToolTimeline via the chat store.
-              this.emit({
-                type: 'tool_call',
-                toolCall: {
-                  id: toolName,
-                  name: toolName,
-                  args: {},
-                },
-              });
-              if (status === 'completed' || status === 'failed') {
+              if (delta && typeof delta['content'] === 'string') {
+                chunk = delta['content'] as string;
+              }
+
+              // ── MCP tool events emitted by tool-loop.ts ────────────────────
+              // x_tool_status: a tool started or finished (status = running | completed | failed)
+              if (delta && delta['x_tool_status']) {
+                const ts = delta['x_tool_status'] as Record<string, unknown>;
+                const toolName = String(ts['name'] ?? 'tool');
+                const status = String(ts['status'] ?? 'running') as
+                  | 'running'
+                  | 'completed'
+                  | 'failed';
+                // Emit a tool_call event so useChat's onStream handler updates
+                // the ToolTimeline via the chat store.
+                this.emit({
+                  type: 'tool_call',
+                  toolCall: {
+                    id: toolName,
+                    name: toolName,
+                    args: {},
+                  },
+                });
+                if (status === 'completed' || status === 'failed') {
+                  this.emit({
+                    type: 'tool_result',
+                    toolCallId: toolName,
+                    ...(status === 'failed' ? { error: 'Tool execution failed' } : {}),
+                  });
+                }
+              }
+
+              // x_tool_result: final output from a tool execution
+              if (delta && delta['x_tool_result']) {
+                const tr = delta['x_tool_result'] as Record<string, unknown>;
+                const toolCallId = String(tr['tool_call_id'] ?? '');
+                const isError = tr['is_error'] === true;
+                const content = String(tr['content'] ?? '');
                 this.emit({
                   type: 'tool_result',
-                  toolCallId: toolName,
-                  ...(status === 'failed' ? { error: 'Tool execution failed' } : {}),
+                  toolCallId,
+                  ...(isError ? { error: content } : { result: content }),
                 });
               }
-            }
 
-            // x_tool_result: final output from a tool execution
-            if (delta && delta['x_tool_result']) {
-              const tr = delta['x_tool_result'] as Record<string, unknown>;
-              const toolCallId = String(tr['tool_call_id'] ?? '');
-              const isError = tr['is_error'] === true;
-              const content = String(tr['content'] ?? '');
-              this.emit({
-                type: 'tool_result',
-                toolCallId,
-                ...(isError ? { error: content } : { result: content }),
-              });
+              // x_tool_approval_request: tool is gated on user consent (manual mode).
+              // In auto mode this event is never sent. Emit a tool_call with the
+              // args so the ToolCallCard renders the approval prompt.
+              if (delta && delta['x_tool_approval_request']) {
+                const req = delta['x_tool_approval_request'] as Record<string, unknown>;
+                this.emit({
+                  type: 'tool_call',
+                  toolCall: {
+                    id: String(req['tool_call_id'] ?? crypto.randomUUID()),
+                    name: String(req['name'] ?? 'tool'),
+                    args: (req['args'] as Record<string, unknown>) ?? {},
+                  },
+                });
+              }
+            } else if (parsed['type'] === 'content_block_delta') {
+              const delta = parsed['delta'] as Record<string, unknown> | undefined;
+              if (delta && typeof delta['text'] === 'string') {
+                chunk = delta['text'] as string;
+              }
             }
-
-            // x_tool_approval_request: tool is gated on user consent (manual mode).
-            // In auto mode this event is never sent. Emit a tool_call with the
-            // args so the ToolCallCard renders the approval prompt.
-            if (delta && delta['x_tool_approval_request']) {
-              const req = delta['x_tool_approval_request'] as Record<string, unknown>;
-              this.emit({
-                type: 'tool_call',
-                toolCall: {
-                  id: String(req['tool_call_id'] ?? crypto.randomUUID()),
-                  name: String(req['name'] ?? 'tool'),
-                  args: (req['args'] as Record<string, unknown>) ?? {},
-                },
-              });
+            if (chunk !== null) {
+              if (chunk === '<thinking>') {
+                inThinking = true;
+              } else if (chunk === '</thinking>') {
+                inThinking = false;
+              } else if (inThinking) {
+                this.emit({ type: 'thinking', content: chunk });
+              } else {
+                this.emit({ type: 'content', content: chunk });
+              }
             }
-          } else if (parsed['type'] === 'content_block_delta') {
-            const delta = parsed['delta'] as Record<string, unknown> | undefined;
-            if (delta && typeof delta['text'] === 'string') {
-              chunk = delta['text'] as string;
-            }
+          } catch {
+            // Non-JSON lines are expected; skip silently
           }
-          if (chunk !== null) {
-            if (chunk === '<thinking>') {
-              inThinking = true;
-            } else if (chunk === '</thinking>') {
-              inThinking = false;
-            } else if (inThinking) {
-              this.emit({ type: 'thinking', content: chunk });
-            } else {
-              this.emit({ type: 'content', content: chunk });
-            }
-          }
-        } catch {
-          // Non-JSON lines are expected; skip silently
         }
       }
-    }
+    } finally {
+      this._abortControllers.delete(conversationId);
 
-    this._abortControllers.delete(conversationId);
+      // First real caller of renameConversation: the messages route generates
+      // a short title from this turn's first user message asynchronously, off
+      // the request path, so it is not necessarily ready yet even though the
+      // turn above is done (or failed). Never awaited -- a UI title refresh
+      // must not hold up the Promise callers await for the turn itself.
+      if (isFirstMessageInConversation) {
+        void this.syncGeneratedTitle(conversationId);
+      }
+    }
+  }
+
+  /**
+   * Poll the server for the background-generated title (see
+   * apps/web/app/api/chat/conversations/[id]/messages/route.ts) and, once it
+   * has changed from whatever this method first observed, commit it through
+   * `renameConversation` so the sidebar picks it up without a reload. Bounded
+   * and best-effort: a title that never arrives (provider failure, disabled
+   * route) just leaves the immediate truncated title in place, and any
+   * failure here is swallowed -- this must never surface as a chat error.
+   */
+  private async syncGeneratedTitle(conversationId: string): Promise<void> {
+    try {
+      const baseline = await this.fetchConversationTitle(conversationId);
+      for (const delayMs of [1200, 3000]) {
+        await sleep(delayMs);
+        const title = await this.fetchConversationTitle(conversationId);
+        if (title && title !== baseline) {
+          await this.renameConversation(conversationId, title);
+          return;
+        }
+      }
+    } catch {
+      // Best-effort UI refresh only; never surfaces as a chat error.
+    }
+  }
+
+  private async fetchConversationTitle(conversationId: string): Promise<string | null> {
+    const token = await getAuthToken();
+    // limit=1: this call only wants the conversation's current title, not its
+    // transcript.
+    const res = await fetch(`${managedCloudConversationPath(conversationId)}?limit=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { conversation?: { title?: string | null } };
+    return data.conversation?.title?.trim() || null;
   }
 
   stopGeneration(conversationId: string): void {
@@ -382,13 +465,27 @@ export class WebChatRuntime implements ChatRuntime {
 
   async renameConversation(conversationId: string, title: string): Promise<void> {
     const token = await getAuthToken();
+    // The route only exports GET/PUT/DELETE (apps/web/app/api/chat/conversations/[id]/route.ts)
+    // -- this used to send PATCH, a method that route never registered, so
+    // every call 405'd before this method ever had a caller to expose the bug.
+    // PUT + the shared wire schema is the same contract useConversations'
+    // updateConversation already uses successfully for renames.
     const res = await fetch(managedCloudConversationPath(conversationId), {
-      method: 'PATCH',
+      method: 'PUT',
       headers: await authHeaders(token),
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(ManagedCloudUpdateConversationRequestSchema.parse({ title })),
     });
     // GOV-27: same unchecked-mutation bug as delete above.
     if (!res.ok) throw conversationErrorFor(res.status, 'rename this conversation');
+    // A rename that persists server-side but never updates the local store is
+    // only half done: the sidebar (which reads useChatStore, not the network)
+    // would keep showing the old title until an unrelated reload happened to
+    // refetch it. Mirrors useConversations' updateConversation, which is the
+    // proven read-model-sync half of the same PUT contract.
+    const data = ManagedCloudUpdateConversationResponseSchema.parse(await res.json());
+    useChatStore.getState().updateConversation(conversationId, {
+      title: data.conversation.title ?? title,
+    });
   }
 
   async loadConversations(): Promise<Conversation[]> {

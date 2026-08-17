@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -54,6 +53,13 @@ async function purgeRejectedKnowledgeUpload(
       '[knowledge-files] CRITICAL: could not delete a rejected upload from storage',
     );
   }
+}
+
+function unreadableUploadSummary(mimeType: string, extractedText: string | null): string | null {
+  if (extractedText !== null) return null;
+  return mimeType.trim().toLowerCase().startsWith('image/')
+    ? 'Not readable: text is not extracted from images, so only this file name reaches the model.'
+    : 'Not readable: no text could be extracted from this file, so only its name reaches the model.';
 }
 
 function isSchemaNotReady(error: unknown): boolean {
@@ -315,7 +321,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
         body.mimeType.trim(),
         body.byteCount,
         body.checksumSha256.trim(),
-        null,
+        unreadableUploadSummary(body.mimeType, extractedText),
         body.sourceSurface,
         userId,
         body.storageUri.trim(),

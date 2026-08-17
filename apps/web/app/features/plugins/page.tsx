@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -7,16 +8,23 @@ import {
   DevBand,
   FinalCta,
 } from '@/features/marketing/components/FlagshipSections';
+import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
+import { pluginAvailabilityClaim } from '@/features/plugins/availability';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Plugins | Bundle Commands, Skills, Hooks & MCP Servers',
   description:
-    'AGI plugins bundle slash commands, skills, agents, hooks, and MCP server wiring into one install. Previewed on the agi CLI today, ahead of a marketplace.',
+    'AGI plugins bundle slash commands, skills, agents, hooks, and MCP server wiring into one install. Browse the hosted catalogue to see which packs are installable today.',
   path: '/features/plugins',
 });
 
-export default function FeaturesPluginsPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function FeaturesPluginsPage() {
+  const catalog = await loadPluginCatalog();
+  const availability = pluginAvailabilityClaim(catalog);
+
   return (
     <div data-design="agi">
       <main className="agi-shell">
@@ -27,8 +35,11 @@ export default function FeaturesPluginsPage() {
           <h1 className="agi-page-h1">One install, a whole workflow.</h1>
           <p className="agi-page-lede">
             A plugin bundles slash commands, skills, agents, hooks, and MCP server wiring into one
-            folder you can install from a local path or a Git repository. Previewed on the agi CLI
-            today, before the marketplace opens.
+            folder you can install from a local path or a Git repository on the agi CLI.{' '}
+            <strong>{availability}</strong>
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 12 }}>
+            <Link href="/plugins">Browse the hosted plugin catalogue</Link>
           </p>
         </section>
 
@@ -99,12 +110,12 @@ export default function FeaturesPluginsPage() {
         />
 
         <DevBand
-          eyebrow="Preview"
-          title="Live on the CLI first."
-          body="Plugins are previewed on the agi CLI today: agi plugin manages installs, /skills lists what was discovered, and bundled MCP servers run as stdio processes behind the same explicit approvals as every other tool."
+          eyebrow="Availability"
+          title="Where a plugin comes from."
+          body={`On the agi CLI, agi plugin installs from a local path or a Git repository, /skills lists what was discovered, and bundled MCP servers run as stdio processes behind the same explicit approvals as every other tool. The hosted catalogue is the other route: ${availability}`}
           ctas={[
+            { href: '/plugins', label: 'Browse the catalogue' },
             { href: '/cli', label: 'See the CLI' },
-            { href: '/skills', label: 'Browse Skills' },
           ]}
         />
 

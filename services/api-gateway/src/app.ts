@@ -27,6 +27,7 @@ import {
   validateSecurityHeaders,
 } from './middleware/requestValidation';
 import { getSystemClient } from './lib/neonClients';
+import { dependencyHealthReport } from './lib/dependencies';
 import { logger } from './lib/logger';
 import { providerHealthRouter } from './services/providerHealth';
 
@@ -101,6 +102,13 @@ export function createApp(options: GatewayAppOptions = {}): Express {
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // Deliberately dependency-free: it reports circuit state from in-process
+  // counters and must stay answerable while every upstream is down.
+  app.get('/health/dependencies', (_req: Request, res: Response) => {
+    const report = dependencyHealthReport();
+    res.json({ ...report, service: SERVICE_NAME, requestId: getRequestId(res) });
   });
 
   app.get('/ready', async (_req: Request, res: Response) => {

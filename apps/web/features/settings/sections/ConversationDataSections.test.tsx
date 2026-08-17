@@ -17,6 +17,18 @@ const mocks = vi.hoisted(() => ({
   routerReplace: vi.fn(),
 }));
 
+/**
+ * Stable stub for the shared `useConfirm` destructive-confirm hook
+ * (shell-nav-ia-gap-01 remainder). PrivacySection and ArchivedChatsSection now
+ * route their bulk-delete/bulk-archive confirmations through the same
+ * AlertDialog wrapper as WebAppShell/WebChatPage instead of `window.confirm` —
+ * same stub shape as apps/web/shared/components/layout/WebAppShell.test.tsx.
+ */
+const confirmStub = vi.hoisted(() => ({
+  confirm: vi.fn(async () => true),
+  dialog: null as React.ReactNode,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.routerReplace }),
 }));
@@ -50,6 +62,7 @@ vi.mock('@/lib/sentry-shared', () => ({
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   Switch: ({ checked }: { checked: boolean }) => <span role="switch" aria-checked={checked} />,
+  useConfirm: () => confirmStub,
 }));
 
 const archivedConversation = {
@@ -74,7 +87,6 @@ const storeConversation = {
 describe('Web conversation data settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mocks.listArchived.mockResolvedValue({
       conversations: [archivedConversation],
       hasMore: false,
@@ -113,8 +125,11 @@ describe('Web conversation data settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete all archived' }));
 
     await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_archived'));
-    expect(window.confirm).toHaveBeenCalledWith(
-      'Permanently delete every archived chat? This cannot be undone.',
+    expect(confirmStub.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Delete all archived chats?',
+        variant: 'destructive',
+      }),
     );
     expect(screen.getByText('No archived chats')).toBeInTheDocument();
   });
@@ -144,7 +159,6 @@ describe('Web conversation data settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
 
     expect(mocks.revokeShare).not.toHaveBeenCalled();
-    expect(window.confirm).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
 
     await waitFor(() => expect(mocks.revokeShare).toHaveBeenCalledWith('share-token'));

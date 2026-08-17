@@ -2,10 +2,8 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import {
-  loadPluginCatalog,
-  type PluginCatalogResult,
-} from '@/features/plugins/server/registry-source';
+import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
+import { pluginAvailabilityClaim } from '@/features/plugins/availability';
 import {
   isPluginEntryInstallable,
   isPluginEntryWebInstallable,
@@ -35,25 +33,9 @@ function statusLabel(entry: PluginRegistryEntry): string {
   return 'Declared — not installable yet';
 }
 
-function availabilityClaim(catalog: PluginCatalogResult, installableCount: number): string {
-  if (catalog.status !== 'ok') {
-    return 'The registry is unreachable right now, so this page cannot say which packs are installable.';
-  }
-  if (catalog.entries.length === 0) {
-    return 'The registry holds no packs yet.';
-  }
-  if (installableCount === 0) {
-    return 'No pack is installable in this environment yet.';
-  }
-  return `${installableCount} of ${catalog.entries.length} packs are installable today; the rest are declared and not yet published.`;
-}
-
 export default async function PluginsPage() {
   const catalog = await loadPluginCatalog();
   const entries = catalog.status === 'ok' ? catalog.entries : [];
-  const installableCount = entries.filter(
-    (entry) => isPluginEntryWebInstallable(entry) || isPluginEntryInstallable(entry),
-  ).length;
 
   return (
     <div data-design="agi">
@@ -66,7 +48,10 @@ export default async function PluginsPage() {
           </h1>
           <p className="agi-page-lede">
             Plugins bundle skills and connectors into a single install. The catalogue below is the
-            live hosted registry. <strong>{availabilityClaim(catalog, installableCount)}</strong>
+            live hosted registry. <strong>{pluginAvailabilityClaim(catalog)}</strong>
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 12 }}>
+            <Link href="/features/plugins">What a plugin bundles, and how installs work</Link>
           </p>
         </section>
 
@@ -107,7 +92,8 @@ export default async function PluginsPage() {
             The first packs.
           </h2>
 
-          {/* Same discriminator as `availabilityClaim` — see the note there. */}
+          {/* Same discriminator as `pluginAvailabilityClaim` — an unreachable registry must not
+              render as an empty catalogue. */}
           {catalog.status !== 'ok' ? (
             <p className="agi-reason-p" style={{ margin: 0 }} role="status">
               The plugin registry is temporarily unreachable, so the catalogue cannot be shown right

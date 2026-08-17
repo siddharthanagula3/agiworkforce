@@ -338,6 +338,11 @@ describe('Connectors pane (table)', () => {
     expect(screen.getByText('Authentication')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Disconnect GitHub?' })).getByRole('button', {
+        name: 'Disconnect',
+      }),
+    );
     await waitFor(() => expect(disconnectConnector).toHaveBeenCalledWith('github'));
 
     // Back returns to the table.
@@ -511,6 +516,79 @@ describe('Connectors pane (table)', () => {
     // Honest failure — the form shows the error and does NOT fake a success.
     expect(await screen.findByText('Custom connectors are not yet supported on web.')).toBeTruthy();
     expect(screen.getByText('Add custom connector')).toBeTruthy();
+  });
+
+  // Moved here from the web-only ConnectorsPage directory, which signed-in
+  // users never reach (apps/web/app/connectors/page.tsx redirects them to
+  // this modal) — the JSON importer was previously invisible to every user
+  // who could actually persist a connector.
+  it('prefills name/url/token from a pasted JSON config, then submits through the normal Add flow', async () => {
+    const addCustomConnector = vi.fn().mockResolvedValue(undefined);
+    renderModal(
+      {},
+      {
+        addCustomConnector,
+        customConnectorAuthTokenSupported: true,
+      },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+
+    // Add is disabled before any JSON is parsed — parsing only prefills state,
+    // it is never a second submit path.
+    const addBtn = screen.getByRole('button', { name: 'Add' });
+    expect(addBtn).toHaveProperty('disabled', true);
+
+    fireEvent.change(screen.getByLabelText('MCP server JSON config'), {
+      target: {
+        value: JSON.stringify({
+          mcpServers: {
+            linear: {
+              url: 'https://mcp.linear.app/mcp',
+              headers: { Authorization: 'Bearer secret-token', 'X-Custom': 'dropped' },
+            },
+          },
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /parse & fill in fields below/i }));
+
+    expect(screen.getByPlaceholderText('My connector')).toHaveProperty('value', 'linear');
+    expect(screen.getByPlaceholderText('https://example.com/mcp')).toHaveProperty(
+      'value',
+      'https://mcp.linear.app/mcp',
+    );
+    expect(screen.getByPlaceholderText('Token is encrypted before storage')).toHaveProperty(
+      'value',
+      'secret-token',
+    );
+    // A header this product cannot store is surfaced, not silently dropped.
+    expect(screen.getByText(/X-Custom.*will not be saved/i)).toBeTruthy();
+    expect(addBtn).toHaveProperty('disabled', false);
+
+    fireEvent.click(addBtn);
+    await waitFor(() =>
+      expect(addCustomConnector).toHaveBeenCalledWith({
+        name: 'linear',
+        url: 'https://mcp.linear.app/mcp',
+        authToken: 'secret-token',
+      }),
+    );
+  });
+
+  it('shows the parser-specific error for malformed JSON instead of a generic message', async () => {
+    renderModal({}, { addCustomConnector: vi.fn(), customConnectorAuthTokenSupported: true });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
+
+    fireEvent.change(screen.getByLabelText('MCP server JSON config'), {
+      target: { value: '{not json' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /parse & fill in fields below/i }));
+
+    expect(screen.getByText('That is not valid JSON.')).toBeTruthy();
   });
 });
 

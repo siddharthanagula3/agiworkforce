@@ -1,4 +1,4 @@
-import { CalendarClock, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
@@ -58,6 +58,7 @@ export function AgiWorkScheduled() {
   const { t } = useTranslation('v3');
   const tasks = useSchedulerStore((s) => s.tasks);
   const isLoading = useSchedulerStore((s) => s.isLoading);
+  const error = useSchedulerStore((s) => s.error);
   const fetchTasks = useSchedulerStore((s) => s.fetchTasks);
   const toggleTask = useSchedulerStore((s) => s.toggleTask);
   const deleteTask = useSchedulerStore((s) => s.deleteTask);
@@ -88,6 +89,29 @@ export function AgiWorkScheduled() {
             {t('agiWork.scheduled.scheduleNew')}
           </button>
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            data-testid="scheduled-load-error"
+            className="flex items-center gap-3 rounded-xl border border-[var(--chat-destructive)] bg-[var(--chat-surface-elevated)] px-4 py-3"
+          >
+            <AlertTriangle
+              size={16}
+              aria-hidden="true"
+              className="flex-shrink-0 text-[var(--chat-destructive)]"
+            />
+            <p className="min-w-0 flex-1 text-sm text-[var(--chat-text-primary)]">{error}</p>
+            <button
+              type="button"
+              onClick={() => void fetchTasks()}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-[var(--chat-border)] px-2.5 py-1.5 text-sm font-medium text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              {t('common.refresh')}
+            </button>
+          </div>
+        )}
 
         {/* Task list */}
         {isLoading && tasks.length === 0 ? (
@@ -148,7 +172,7 @@ export function AgiWorkScheduled() {
               </div>
             ))}
 
-            {tasks.length === 0 && !isLoading && (
+            {tasks.length === 0 && !isLoading && !error && (
               <EmptyState
                 icon={CalendarClock}
                 title={t('agiWork.scheduled.emptyTitle')}

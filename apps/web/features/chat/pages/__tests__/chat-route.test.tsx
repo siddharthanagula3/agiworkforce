@@ -33,10 +33,6 @@ vi.mock('@/lib/server/require-current-terms', () => ({
     routeMocks.requireCurrentTermsAcceptance(...args),
 }));
 
-vi.mock('@features/chat/pages/UnifiedChatPage', () => ({
-  default: () => <div data-testid="unified-chat-page">UnifiedChatPage</div>,
-}));
-
 vi.mock('@features/chat/pages/WebChatPage', () => ({
   default: () => <div data-testid="web-chat-page">WebChatPage</div>,
 }));

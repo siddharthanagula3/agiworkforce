@@ -102,7 +102,16 @@ export default function CopyrightPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">How to send a notice</p>
           <p className="agi-page-lede">
-            Email{' '}
+            Use the{' '}
+            <Link href="/copyright/report" style={{ color: 'var(--agi-ink)' }}>
+              notice form
+            </Link>
+            . It checks that the URL you report still resolves to something published here, gives
+            you a reference, and puts the notice in front of the person who can disable the link.
+            Every public share and published artifact page links straight to it.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            If you would rather email, write to{' '}
             <a
               href={contactMailto(CONTACT_SUBJECTS.ipComplaint)}
               style={{ color: 'var(--agi-ink)' }}

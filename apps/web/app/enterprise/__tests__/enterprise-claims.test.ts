@@ -51,20 +51,70 @@ describe('/enterprise — dated posture', () => {
   });
 });
 
-describe('/enterprise — control claims stay scoped, not shipped', () => {
-  it('scopes SSO, SCIM, audit and retention as contract commitments', () => {
+describe('/enterprise — control claims stay accurate: shipped controls say so, unbuilt ones do not', () => {
+  // AUDIT-FIX (competitive-gap-2026-08-15, G12): this test originally required
+  // SSO/SCIM/Audit to read as contract-scoped, not-yet-shipped commitments.
+  // That was accurate when written, but apps/web/features/admin/pages/
+  // AdminConsolePage.tsx's Identity readiness row has since flipped to
+  // "Implemented — entitlement-gated": first-party SSO sign-in and SCIM
+  // provisioning are live code paths gated on the `enterprise_controls`
+  // billing capability. Calling a shipped, gated control "roadmap" is the
+  // same honesty bug this suite exists to catch — it just runs in the other
+  // direction — so the assertion below now requires the opposite: these rows
+  // must say "implemented" and must NOT regress to roadmap/ask-us framing.
+  // Audit is checked separately (below) because
+  // services/api-gateway/src/routes/enterprise.ts gates its audit-events
+  // routes on organization-admin membership, NOT `enterprise_controls` — a
+  // test that demanded the same entitlement wording there would itself be
+  // asserting something the code does not do. Retention is unchanged: there
+  // is still no per-organization retention control, so that row keeps the
+  // original contract-scoped assertion.
+  it('states SSO and directory provisioning as implemented and entitlement-gated', () => {
     const source = rendered();
-    // Each control row must sit next to language that says it is scoped on a
-    // contract or not shipped, rather than offered as an available toggle.
-    for (const control of ['SSO', 'SCIM', 'Audit', 'Retention']) {
+    for (const control of ["k: 'SSO'", "k: 'Directory provisioning'"]) {
       const index = source.indexOf(control);
       expect(index, `${control} row missing`).toBeGreaterThan(-1);
       const context = source.slice(index, index + 420).toLowerCase();
+      expect(/implemented/u.test(context), `${control} does not say it is implemented`).toBe(true);
       expect(
-        /scoped|no per-organization|not a shipped control|commitment/u.test(context),
-        `${control} is stated without contract scoping`,
+        /entitlement|enterprise_controls/u.test(context),
+        `${control} does not name its entitlement gate`,
       ).toBe(true);
+      expect(
+        /roadmap|ask us for current implementation status|scoped and dated in your contract/u.test(
+          context,
+        ),
+        `${control} regressed to roadmap/not-yet-built framing`,
+      ).toBe(false);
     }
+  });
+
+  it('states audit logging as implemented and gated on org-admin membership, not the SSO entitlement', () => {
+    const source = rendered();
+    const index = source.indexOf("k: 'Audit'");
+    expect(index, "'Audit' row missing").toBeGreaterThan(-1);
+    const context = source.slice(index, index + 420).toLowerCase();
+    expect(/implemented/u.test(context), 'Audit does not say it is implemented').toBe(true);
+    expect(/admin/u.test(context), 'Audit does not name its real (admin-membership) gate').toBe(
+      true,
+    );
+    expect(
+      /roadmap|ask us for current implementation status|scoped and dated in your contract/u.test(
+        context,
+      ),
+      'Audit regressed to roadmap/not-yet-built framing',
+    ).toBe(false);
+  });
+
+  it('keeps retention scoped as a contract commitment, since it is not shipped', () => {
+    const source = rendered();
+    const index = source.indexOf("k: 'Retention'");
+    expect(index, 'Retention row missing').toBeGreaterThan(-1);
+    const context = source.slice(index, index + 420).toLowerCase();
+    expect(
+      /scoped|no per-organization|not a shipped control|commitment/u.test(context),
+      'Retention is stated without contract scoping',
+    ).toBe(true);
   });
 
   it('claims no certification it does not hold', () => {

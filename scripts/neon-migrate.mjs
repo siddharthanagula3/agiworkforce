@@ -5,16 +5,28 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Client } from 'pg';
 import {
+  DEPLOYMENT_SURFACES,
+  MIGRATION_TARGETS,
   MigrationContractError,
   applyMigrations,
   baselineMigrations,
   inspectMigrationState,
   loadMigrationInventory,
+  readDeploymentRecords,
+  recordDeployment,
   verifyMigrations,
 } from './lib/neon-migrations.mjs';
 
-const COMMANDS = new Set(['inventory', 'status', 'apply', 'verify', 'baseline']);
-const TARGETS = new Set(['local', 'ci', 'branch', 'production']);
+const COMMANDS = new Set([
+  'inventory',
+  'status',
+  'apply',
+  'verify',
+  'baseline',
+  'record',
+  'deployments',
+]);
+const TARGETS = new Set(MIGRATION_TARGETS);
 
 export function parseCliArgs(argv) {
   const options = {
@@ -23,6 +35,10 @@ export function parseCliArgs(argv) {
     through: undefined,
     reason: undefined,
     evidence: undefined,
+    surface: undefined,
+    commit: undefined,
+    deploymentRef: undefined,
+    limit: undefined,
     confirmBaseline: false,
     confirmProduction: false,
     json: false,
@@ -41,6 +57,14 @@ export function parseCliArgs(argv) {
       options.reason = argv[++index];
     } else if (argument === '--evidence') {
       options.evidence = argv[++index];
+    } else if (argument === '--surface') {
+      options.surface = argv[++index];
+    } else if (argument === '--commit') {
+      options.commit = argv[++index];
+    } else if (argument === '--deployment-ref') {
+      options.deploymentRef = argv[++index];
+    } else if (argument === '--limit') {
+      options.limit = Number(argv[++index]);
     } else if (argument === '--confirm-baseline') {
       options.confirmBaseline = true;
     } else if (argument === '--confirm-production') {
@@ -87,6 +111,9 @@ function printHelp() {
   pnpm db:migrate -- status
   pnpm db:migrate -- apply --target local|ci|branch|production
   pnpm db:migrate -- verify
+  pnpm db:migrate -- record --surface web|gateway --commit SHA \\
+    --target local|ci|branch|production [--confirm-production] [--deployment-ref URL]
+  pnpm db:migrate -- deployments [--surface web|gateway] [--limit N]
   pnpm db:migrate -- baseline --through N --reason TEXT --evidence TEXT \\
     --target branch|production --confirm-baseline [--confirm-production]
 
@@ -108,6 +135,34 @@ function reportState(state, options) {
     );
     for (const filename of payload.pendingFiles) console.log(`- pending ${filename}`);
     for (const detail of payload.drift) console.log(`- drift ${detail}`);
+  }
+}
+
+function reportDeploymentRecord(record, options) {
+  if (options.json) {
+    console.log(JSON.stringify(record, null, 2));
+    return;
+  }
+  console.log(
+    `recorded ${record.surface} ${record.target} deployment ${record.commit_sha} at migration ` +
+      `${record.head_filename} (${record.applied_count} applied, ledger ${record.ledger_digest.slice(0, 12)})`,
+  );
+}
+
+function reportDeploymentHistory(records, options) {
+  if (options.json) {
+    console.log(JSON.stringify(records, null, 2));
+    return;
+  }
+  if (records.length === 0) {
+    console.log('no migration deployment records');
+    return;
+  }
+  for (const record of records) {
+    console.log(
+      `${new Date(record.verified_at).toISOString()} ${record.surface} ${record.target} ` +
+        `${record.commit_sha} ${record.head_filename} (${record.applied_count} applied)`,
+    );
   }
 }
 
@@ -142,7 +197,11 @@ async function execute(argv = process.argv.slice(2), env = process.env) {
       'AGI_DATABASE_URL, DATABASE_URL, or NEON_DATABASE_URL must be exported',
     );
   }
-  if (options.command === 'apply' || options.command === 'baseline') {
+  if (
+    options.command === 'apply' ||
+    options.command === 'baseline' ||
+    options.command === 'record'
+  ) {
     assertMutationTarget(options, connectionString);
   }
   if (options.command === 'baseline') {
@@ -170,6 +229,29 @@ async function execute(argv = process.argv.slice(2), env = process.env) {
     if (options.command === 'verify') {
       const state = await verifyMigrations(client, migrations);
       reportState(state, options);
+      return;
+    }
+    if (options.command === 'record') {
+      const result = await recordDeployment(client, migrations, {
+        surface: options.surface,
+        target: options.target,
+        commitSha: options.commit ?? env.GITHUB_SHA,
+        deploymentRef: options.deploymentRef,
+      });
+      reportDeploymentRecord(result.record, options);
+      return;
+    }
+    if (options.command === 'deployments') {
+      if (options.surface !== undefined && !DEPLOYMENT_SURFACES.includes(options.surface)) {
+        throw new MigrationContractError(
+          `Unknown surface: ${options.surface} (expected ${DEPLOYMENT_SURFACES.join('|')})`,
+        );
+      }
+      const records = await readDeploymentRecords(client, {
+        surface: options.surface,
+        limit: options.limit,
+      });
+      reportDeploymentHistory(records, options);
       return;
     }
     if (options.command === 'apply') {

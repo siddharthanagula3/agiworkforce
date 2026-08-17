@@ -90,7 +90,7 @@ export default function ArtifactsFeaturePage() {
             },
             {
               k: 'Publish',
-              v: 'Managed publishing is rolling out as sharing controls are proven.',
+              v: 'Publish an artifact to a public page with its own link. Published pages are listed in Settings and revoked from there whenever you want the link dead.',
             },
           ]}
         />

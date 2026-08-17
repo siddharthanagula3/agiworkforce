@@ -22,6 +22,7 @@ const mockCopyToClipboard = jest.fn().mockResolvedValue(false);
 const mockShareFile = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@agiworkforce/types', () => ({
+  ...jest.requireActual('@agiworkforce/types'),
   summarizeGeneratedFileBundle: (input: Record<string, unknown>) =>
     mockSummarizeGeneratedFileBundle(input),
 }));
@@ -64,6 +65,7 @@ jest.mock('lucide-react-native', () => {
     FileText: iconFactory('file-text'),
     BarChart3: iconFactory('bar-chart'),
     ExternalLink: iconFactory('external-link'),
+    Globe: iconFactory('globe'),
     Shield: iconFactory('shield'),
     X: iconFactory('x'),
     Copy: iconFactory('copy'),

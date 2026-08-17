@@ -1,0 +1,1715 @@
+{
+  "_description": "Grandfathered hardcoded color literals in apps/web (AP-02). New violations fail CI via the check:no-hex-web step. Shrink this list; do not add to it. Replace each entry with a Tailwind class or a var(--color-*) custom property.",
+  "violations": [
+    {
+      "file": "app/api/og/route.tsx",
+      "line": 3,
+      "rule": "hex",
+      "literal": "#C8892A"
+    },
+    {
+      "file": "app/api/og/route.tsx",
+      "line": 29,
+      "rule": "hex",
+      "literal": "#0A0A0F"
+    },
+    {
+      "file": "app/api/og/route.tsx",
+      "line": 31,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/api/og/route.tsx",
+      "line": 44,
+      "rule": "hex",
+      "literal": "#FFFFFF"
+    },
+    {
+      "file": "app/api/og/route.tsx",
+      "line": 54,
+      "rule": "hex",
+      "literal": "#F4F4F5"
+    },
+    {
+      "file": "app/api/og/route.tsx",
+      "line": 62,
+      "rule": "hex",
+      "literal": "#9BA1A6"
+    },
+    {
+      "file": "app/api/projects/[id]/duplicate/route.ts",
+      "line": 88,
+      "rule": "hex",
+      "literal": "#3b82f6"
+    },
+    {
+      "file": "app/api/projects/route.ts",
+      "line": 117,
+      "rule": "hex",
+      "literal": "#3b82f6"
+    },
+    {
+      "file": "app/auth/clerkAppearance.ts",
+      "line": 3,
+      "rule": "hex",
+      "literal": "#f0a84a"
+    },
+    {
+      "file": "app/auth/clerkAppearance.ts",
+      "line": 4,
+      "rule": "hex",
+      "literal": "#0e0f10"
+    },
+    {
+      "file": "app/auth/clerkAppearance.ts",
+      "line": 5,
+      "rule": "hex",
+      "literal": "#f7f8f8"
+    },
+    {
+      "file": "app/auth/clerkAppearance.ts",
+      "line": 6,
+      "rule": "hex",
+      "literal": "#b6b9c2"
+    },
+    {
+      "file": "app/auth/clerkAppearance.ts",
+      "line": 7,
+      "rule": "hex",
+      "literal": "#151618"
+    },
+    {
+      "file": "app/auth/clerkAppearance.ts",
+      "line": 8,
+      "rule": "hex",
+      "literal": "#f7f8f8"
+    },
+    {
+      "file": "app/auth/clerkAppearance.ts",
+      "line": 9,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/auth/clerkAppearance.ts",
+      "line": 10,
+      "rule": "hex",
+      "literal": "#eb5e55"
+    },
+    {
+      "file": "app/billing/UpgradeWelcome.tsx",
+      "line": 91,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "app/billing/UpgradeWelcome.tsx",
+      "line": 166,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "app/billing/UpgradeWelcome.tsx",
+      "line": 189,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "app/billing/UpgradeWelcome.tsx",
+      "line": 189,
+      "rule": "hex",
+      "literal": "#21808d"
+    },
+    {
+      "file": "app/byok/WaitlistForm.tsx",
+      "line": 134,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/error.tsx",
+      "line": 42,
+      "rule": "hex",
+      "literal": "#1a1a1a"
+    },
+    {
+      "file": "app/chat/error.tsx",
+      "line": 43,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "app/chat/library/page.tsx",
+      "line": 13,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/library/page.tsx",
+      "line": 15,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/loading.tsx",
+      "line": 19,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/chat/loading.tsx",
+      "line": 20,
+      "rule": "hex",
+      "literal": "#888"
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 184,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 205,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 231,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 233,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 257,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 280,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 281,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 379,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 402,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 437,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 499,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 534,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 535,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 672,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/[id]/page.tsx",
+      "line": 746,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/page.tsx",
+      "line": 139,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/page.tsx",
+      "line": 141,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/page.tsx",
+      "line": 256,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/chat/projects/page.tsx",
+      "line": 286,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/chat/projects/page.tsx",
+      "line": 316,
+      "rule": "hex",
+      "literal": "#ebe2d1"
+    },
+    {
+      "file": "app/chat/projects/page.tsx",
+      "line": 316,
+      "rule": "hex",
+      "literal": "#1b1810"
+    },
+    {
+      "file": "app/docs/byok-env/page.tsx",
+      "line": 89,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 33,
+      "rule": "hex",
+      "literal": "#171813"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 40,
+      "rule": "hex",
+      "literal": "#a98248"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 40,
+      "rule": "hex",
+      "literal": "#d1b27a"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 40,
+      "rule": "hex",
+      "literal": "#a98248"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 42,
+      "rule": "hex",
+      "literal": "#24231e"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 74,
+      "rule": "hex",
+      "literal": "#1a1b17"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 75,
+      "rule": "hex",
+      "literal": "#b9985c"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 76,
+      "rule": "hex",
+      "literal": "#e7e0d2"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 122,
+      "rule": "hex",
+      "literal": "#171813"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 125,
+      "rule": "hex",
+      "literal": "#1a1b17"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 126,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 129,
+      "rule": "hex",
+      "literal": "#e7e0d2"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 132,
+      "rule": "hex",
+      "literal": "#b9985c"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 133,
+      "rule": "hex",
+      "literal": "#c8c0b2"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 407,
+      "rule": "hex",
+      "literal": "#f8f5ee"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 407,
+      "rule": "hex",
+      "literal": "#39362e"
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 503,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 659,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/gallery/GalleryClient.tsx",
+      "line": 845,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "app/qa-artifacts/page.tsx",
+      "line": 31,
+      "rule": "hex",
+      "literal": "#fafafa"
+    },
+    {
+      "file": "app/qa-artifacts/page.tsx",
+      "line": 31,
+      "rule": "hex",
+      "literal": "#111"
+    },
+    {
+      "file": "app/qa-artifacts/page.tsx",
+      "line": 32,
+      "rule": "hex",
+      "literal": "#e5e5e5"
+    },
+    {
+      "file": "app/qa-artifacts/page.tsx",
+      "line": 32,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "app/settings/byok/EnvKeyStatusList.tsx",
+      "line": 52,
+      "rule": "hex",
+      "literal": "#2eb88a"
+    },
+    {
+      "file": "app/settings/byok/EnvKeyStatusList.tsx",
+      "line": 54,
+      "rule": "hex",
+      "literal": "#2eb88a"
+    },
+    {
+      "file": "app/settings/byok/EnvKeyStatusList.tsx",
+      "line": 56,
+      "rule": "hex",
+      "literal": "#2eb88a"
+    },
+    {
+      "file": "app/settings/byok/EnvKeyStatusList.tsx",
+      "line": 66,
+      "rule": "hex",
+      "literal": "#2eb88a"
+    },
+    {
+      "file": "app/settings/byok/page.tsx",
+      "line": 25,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "lib/services/notification-email-service.ts",
+      "line": 62,
+      "rule": "hex",
+      "literal": "#666"
+    },
+    {
+      "file": "features/admin/pages/AdminConsolePage.tsx",
+      "line": 162,
+      "rule": "hex",
+      "literal": "#0b0d0f"
+    },
+    {
+      "file": "features/billing/components/UpgradeConfirmDialog.tsx",
+      "line": 167,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 13,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 18,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 23,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 27,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 77,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 92,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 92,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 116,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 116,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 117,
+      "rule": "rgb",
+      "literal": "rgb("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 121,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 121,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 122,
+      "rule": "rgb",
+      "literal": "rgb("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 126,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 126,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 127,
+      "rule": "rgb",
+      "literal": "rgb("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 165,
+      "rule": "hex",
+      "literal": "#667eea"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 165,
+      "rule": "hex",
+      "literal": "#764ba2"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 169,
+      "rule": "hex",
+      "literal": "#667eea"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 169,
+      "rule": "hex",
+      "literal": "#764ba2"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 173,
+      "rule": "hex",
+      "literal": "#11998e"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 173,
+      "rule": "hex",
+      "literal": "#38ef7d"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 177,
+      "rule": "hex",
+      "literal": "#f093fb"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 177,
+      "rule": "hex",
+      "literal": "#f5576c"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 240,
+      "rule": "hex",
+      "literal": "#f0f0f0"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 240,
+      "rule": "hex",
+      "literal": "#e0e0e0"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 240,
+      "rule": "hex",
+      "literal": "#f0f0f0"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 256,
+      "rule": "hex",
+      "literal": "#374151"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 256,
+      "rule": "hex",
+      "literal": "#4b5563"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 256,
+      "rule": "hex",
+      "literal": "#374151"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 263,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 274,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 283,
+      "rule": "hex",
+      "literal": "#6b7280"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 284,
+      "rule": "hex",
+      "literal": "#f3f4f6"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 288,
+      "rule": "hex",
+      "literal": "#059669"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 289,
+      "rule": "hex",
+      "literal": "#d1fae5"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 293,
+      "rule": "hex",
+      "literal": "#d97706"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 294,
+      "rule": "hex",
+      "literal": "#fef3c7"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 298,
+      "rule": "hex",
+      "literal": "#dc2626"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 299,
+      "rule": "hex",
+      "literal": "#fee2e2"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 304,
+      "rule": "hex",
+      "literal": "#9ca3af"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 305,
+      "rule": "hex",
+      "literal": "#374151"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 309,
+      "rule": "hex",
+      "literal": "#10b981"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 310,
+      "rule": "hex",
+      "literal": "#064e3b"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 314,
+      "rule": "hex",
+      "literal": "#f59e0b"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 315,
+      "rule": "hex",
+      "literal": "#451a03"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 319,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/chat/chat-interface.css",
+      "line": 320,
+      "rule": "hex",
+      "literal": "#7f1d1d"
+    },
+    {
+      "file": "features/chat/components/ChatLoadingSkeleton.tsx",
+      "line": 28,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/components/ChatLoadingSkeleton.tsx",
+      "line": 29,
+      "rule": "hex",
+      "literal": "#888"
+    },
+    {
+      "file": "features/chat/components/Composer/ComposerFooter.tsx",
+      "line": 70,
+      "rule": "hex",
+      "literal": "#71717A"
+    },
+    {
+      "file": "features/chat/components/Composer/ComposerFooter.tsx",
+      "line": 70,
+      "rule": "hex",
+      "literal": "#71717A"
+    },
+    {
+      "file": "features/chat/components/ImageGenerationCard.tsx",
+      "line": 198,
+      "rule": "hex",
+      "literal": "#1a1a1f"
+    },
+    {
+      "file": "features/chat/components/ImageGenerationCard.tsx",
+      "line": 201,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/components/ImageGenerationCard.tsx",
+      "line": 584,
+      "rule": "hex",
+      "literal": "#0f0f12"
+    },
+    {
+      "file": "features/chat/components/WebChatRoot.tsx",
+      "line": 28,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/components/WebChatRoot.tsx",
+      "line": 29,
+      "rule": "hex",
+      "literal": "#888"
+    },
+    {
+      "file": "features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 408,
+      "rule": "rgb",
+      "literal": "rgb("
+    },
+    {
+      "file": "features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 415,
+      "rule": "rgb",
+      "literal": "rgb("
+    },
+    {
+      "file": "features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1051,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/chat/components/artifacts/ArtifactsPanel.tsx",
+      "line": 456,
+      "rule": "hex",
+      "literal": "#1e1e1e"
+    },
+    {
+      "file": "features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 190,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "features/chat/components/messages/MessageBubble.tsx",
+      "line": 1846,
+      "rule": "hex",
+      "literal": "#6366f1"
+    },
+    {
+      "file": "features/chat/components/messages/cards/MapSearchCard.tsx",
+      "line": 322,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/chat/components/messages/cards/MapSearchCard.tsx",
+      "line": 322,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/chat/components/messages/cards/MapSearchCard.tsx",
+      "line": 322,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/chat/components/share/ShareConversationDialog.tsx",
+      "line": 137,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/chat/components/workflows/WorkingProcess.tsx",
+      "line": 104,
+      "rule": "hex",
+      "literal": "#6366f1"
+    },
+    {
+      "file": "features/chat/services/conversation-export.ts",
+      "line": 71,
+      "rule": "hex",
+      "literal": "#f5f5f5"
+    },
+    {
+      "file": "features/chat/services/conversation-export.ts",
+      "line": 78,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/services/conversation-export.ts",
+      "line": 85,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/chat/services/conversation-export.ts",
+      "line": 88,
+      "rule": "hex",
+      "literal": "#e3f2fd"
+    },
+    {
+      "file": "features/chat/services/conversation-export.ts",
+      "line": 96,
+      "rule": "hex",
+      "literal": "#666"
+    },
+    {
+      "file": "features/chat/services/conversation-export.ts",
+      "line": 106,
+      "rule": "hex",
+      "literal": "#ddd"
+    },
+    {
+      "file": "features/chat/v3/WebSidebar.tsx",
+      "line": 609,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 105,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 106,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 107,
+      "rule": "hex",
+      "literal": "#ef7777"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 141,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 142,
+      "rule": "hex",
+      "literal": "#ef8a8a"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 344,
+      "rule": "hex",
+      "literal": "#f59e0b"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 398,
+      "rule": "hex",
+      "literal": "#22c55e"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 406,
+      "rule": "hex",
+      "literal": "#090c10"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 407,
+      "rule": "hex",
+      "literal": "#d7e0ea"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 414,
+      "rule": "hex",
+      "literal": "#8796a8"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 419,
+      "rule": "hex",
+      "literal": "#e7edf5"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 425,
+      "rule": "hex",
+      "literal": "#64d98b"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 438,
+      "rule": "hex",
+      "literal": "#ff8e8e"
+    },
+    {
+      "file": "features/code/CloudCodePage.module.css",
+      "line": 443,
+      "rule": "hex",
+      "literal": "#8796a8"
+    },
+    {
+      "file": "features/connectors/components/ConnectorOverviewDialog.tsx",
+      "line": 69,
+      "rule": "hex",
+      "literal": "#0f0e0d"
+    },
+    {
+      "file": "features/connectors/components/ToolPermissionsPanel.tsx",
+      "line": 140,
+      "rule": "hex",
+      "literal": "#0f0e0d"
+    },
+    {
+      "file": "features/connectors/config/connector-logos.ts",
+      "line": 13,
+      "rule": "hex",
+      "literal": "#EA4335"
+    },
+    {
+      "file": "features/connectors/config/connector-logos.ts",
+      "line": 37,
+      "rule": "hex",
+      "literal": "#0F9D58"
+    },
+    {
+      "file": "features/projects/components/AddSourcesModal.tsx",
+      "line": 143,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/AddSourcesModal.tsx",
+      "line": 160,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/AddSourcesModal.tsx",
+      "line": 228,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/AddSourcesModal.tsx",
+      "line": 340,
+      "rule": "hex",
+      "literal": "#f87171"
+    },
+    {
+      "file": "features/projects/components/AddSourcesModal.tsx",
+      "line": 464,
+      "rule": "hex",
+      "literal": "#f87171"
+    },
+    {
+      "file": "features/projects/components/AddSourcesModal.tsx",
+      "line": 503,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/AddSourcesModal.tsx",
+      "line": 529,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/FilePreviewModal.tsx",
+      "line": 243,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/KnowledgeFilesPanel.tsx",
+      "line": 183,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/KnowledgeFilesPanel.tsx",
+      "line": 184,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/KnowledgeFilesPanel.tsx",
+      "line": 186,
+      "rule": "hex",
+      "literal": "#f87171"
+    },
+    {
+      "file": "features/projects/components/KnowledgeFilesPanel.tsx",
+      "line": 202,
+      "rule": "hex",
+      "literal": "#f87171"
+    },
+    {
+      "file": "features/projects/components/KnowledgeFilesPanel.tsx",
+      "line": 236,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/SourcesPanel.tsx",
+      "line": 154,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/SourcesPanel.tsx",
+      "line": 155,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/projects/components/SourcesPanel.tsx",
+      "line": 157,
+      "rule": "hex",
+      "literal": "#f87171"
+    },
+    {
+      "file": "features/projects/components/SourcesPanel.tsx",
+      "line": 173,
+      "rule": "hex",
+      "literal": "#f87171"
+    },
+    {
+      "file": "features/settings/components/MemoryExclusions.tsx",
+      "line": 156,
+      "rule": "hex",
+      "literal": "#dc2626"
+    },
+    {
+      "file": "features/settings/components/WebSettingsModal.tsx",
+      "line": 83,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/components/WebSettingsModal.tsx",
+      "line": 84,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/components/WebSettingsModal.tsx",
+      "line": 85,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/AccountSection.tsx",
+      "line": 417,
+      "rule": "hex",
+      "literal": "#09090b"
+    },
+    {
+      "file": "features/settings/sections/AccountSection.tsx",
+      "line": 444,
+      "rule": "hex",
+      "literal": "#21808d"
+    },
+    {
+      "file": "features/settings/sections/AccountSection.tsx",
+      "line": 523,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/AccountSection.tsx",
+      "line": 577,
+      "rule": "hex",
+      "literal": "#21808d"
+    },
+    {
+      "file": "features/settings/sections/AccountSection.tsx",
+      "line": 578,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/ArchivedChatsSection.tsx",
+      "line": 205,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/ArchivedChatsSection.tsx",
+      "line": 289,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/ArchivedChatsSection.tsx",
+      "line": 321,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 175,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 185,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 217,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 537,
+      "rule": "hex",
+      "literal": "#b3261e"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 556,
+      "rule": "hex",
+      "literal": "#b3261e"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 621,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 622,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 624,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 713,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 716,
+      "rule": "hex",
+      "literal": "#09090b"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 716,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 783,
+      "rule": "hex",
+      "literal": "#b3261e"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 871,
+      "rule": "hex",
+      "literal": "#b3261e"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 917,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 920,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 968,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 969,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 984,
+      "rule": "hex",
+      "literal": "#b3261e"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 1023,
+      "rule": "hex",
+      "literal": "#b3261e"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 1040,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 1069,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 1138,
+      "rule": "hex",
+      "literal": "#b3261e"
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 1173,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/BillingSection.tsx",
+      "line": 1256,
+      "rule": "hex",
+      "literal": "#b3261e"
+    },
+    {
+      "file": "features/settings/sections/DeletedChatsSection.tsx",
+      "line": 133,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/GeneralSection.tsx",
+      "line": 209,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/GeneralSection.tsx",
+      "line": 209,
+      "rule": "hex",
+      "literal": "#21808d"
+    },
+    {
+      "file": "features/settings/sections/OrganizationSharingSection.tsx",
+      "line": 391,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/settings/sections/PrivacySection.tsx",
+      "line": 641,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/PrivacySection.tsx",
+      "line": 643,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/PrivacySection.tsx",
+      "line": 662,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/PrivacySection.tsx",
+      "line": 710,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/PrivacySection.tsx",
+      "line": 756,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/PrivacySection.tsx",
+      "line": 765,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/PrivacySection.tsx",
+      "line": 768,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/PublishedArtifactsSection.tsx",
+      "line": 230,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/SafetySection.tsx",
+      "line": 85,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/SharedLinksSection.tsx",
+      "line": 123,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/SharedLinksSection.tsx",
+      "line": 214,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/TeamSection.tsx",
+      "line": 59,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/TeamSection.tsx",
+      "line": 60,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "features/settings/sections/TeamSection.tsx",
+      "line": 143,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/settings/sections/TeamSection.tsx",
+      "line": 808,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/settings/sections/TeamSection.tsx",
+      "line": 936,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/settings/sections/TeamSection.tsx",
+      "line": 1003,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/settings/sections/TeamSection.tsx",
+      "line": 1023,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/settings/sections/TimeFocusSection.tsx",
+      "line": 269,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/settings/sections/UsageSection.tsx",
+      "line": 72,
+      "rule": "hex",
+      "literal": "#dc2626"
+    },
+    {
+      "file": "features/settings/sections/UsageSection.tsx",
+      "line": 74,
+      "rule": "hex",
+      "literal": "#d97706"
+    },
+    {
+      "file": "features/settings/sections/UsageSection.tsx",
+      "line": 77,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/UsageSection.tsx",
+      "line": 180,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/settings/sections/team/SSOPanel.tsx",
+      "line": 73,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/settings/sections/team/SSOPanel.tsx",
+      "line": 74,
+      "rule": "hex",
+      "literal": "#fff"
+    },
+    {
+      "file": "features/settings/sections/team/SSOPanel.tsx",
+      "line": 266,
+      "rule": "hex",
+      "literal": "#ef4444"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 26,
+      "rule": "hex",
+      "literal": "#131109"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 27,
+      "rule": "hex",
+      "literal": "#131109"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 28,
+      "rule": "hex",
+      "literal": "#f5f0e6"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 29,
+      "rule": "hex",
+      "literal": "#c4bcac"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 30,
+      "rule": "hex",
+      "literal": "#948b79"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 31,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 32,
+      "rule": "hex",
+      "literal": "#f0a84a"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 33,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 34,
+      "rule": "hex",
+      "literal": "#f5f0e6"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 35,
+      "rule": "hex",
+      "literal": "#0b0a08"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 36,
+      "rule": "hex",
+      "literal": "#eb6a55"
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 37,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 56,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 57,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 58,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 59,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 60,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 61,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 62,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 63,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 64,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 65,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 66,
+      "rule": "hsl",
+      "literal": "hsl("
+    },
+    {
+      "file": "features/support/components/SupportWidget.module.css",
+      "line": 67,
+      "rule": "rgb",
+      "literal": "rgba("
+    },
+    {
+      "file": "features/teams/components/TeamInvitationAcceptance.tsx",
+      "line": 94,
+      "rule": "hex",
+      "literal": "#000"
+    },
+    {
+      "file": "features/teams/components/TeamInvitationAcceptance.tsx",
+      "line": 110,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/teams/components/TeamInvitationAcceptance.tsx",
+      "line": 112,
+      "rule": "hex",
+      "literal": "#c8892a"
+    },
+    {
+      "file": "features/teams/components/TeamInvitationAcceptance.tsx",
+      "line": 148,
+      "rule": "hex",
+      "literal": "#22c55e"
+    },
+    {
+      "file": "features/teams/components/TeamInvitationAcceptance.tsx",
+      "line": 233,
+      "rule": "hex",
+      "literal": "#ef4444"
+    }
+  ]
+}

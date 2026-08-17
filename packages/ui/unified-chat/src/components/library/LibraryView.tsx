@@ -29,11 +29,13 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   summarizeGeneratedFileBundle,
+  type ArtifactType,
   type GeneratedFile,
   type GeneratedFileKind,
   type SourceSurface,
 } from '@agiworkforce/types';
 import { GeneratedFileCard } from '../GeneratedFileCard';
+import { ArtifactRenderer } from '../ArtifactRenderer';
 import { Button } from '@agiworkforce/ui';
 
 type OriginFilter = 'all' | 'generated' | 'uploaded';
@@ -69,6 +71,46 @@ export function iconKindFor(fileName: string, mimeType: string): GeneratedFileKi
   if (['zip', 'tar', 'gz', 'tgz', '7z', 'rar'].includes(ext)) return 'archive';
   return 'other';
 }
+
+const ARTIFACT_TYPE_BY_EXTENSION: Readonly<Record<string, ArtifactType>> = {
+  html: 'html',
+  htm: 'html',
+  svg: 'svg',
+  md: 'markdown',
+  markdown: 'markdown',
+  mmd: 'mermaid',
+  mermaid: 'mermaid',
+  json: 'json',
+};
+
+/**
+ * The artifact class a Library row renders as. `media_assets.metadata.surface`
+ * (written by the server's `classifyGeneratedFile`) already decided that this
+ * row IS an artifact; this only picks which renderer inside that family.
+ */
+export function artifactTypeForLibraryItem(item: LibraryItem): ArtifactType {
+  const mime = item.mime_type.toLowerCase();
+  if (mime.startsWith('image/svg')) return 'svg';
+  if (mime === 'text/html') return 'html';
+  if (mime === 'text/markdown') return 'markdown';
+  if (mime === 'application/json') return 'json';
+  const ext = item.file_name.includes('.')
+    ? item.file_name.slice(item.file_name.lastIndexOf('.') + 1).toLowerCase()
+    : '';
+  return ARTIFACT_TYPE_BY_EXTENSION[ext] ?? 'code';
+}
+
+/**
+ * An artifact is rendered inline, so its bytes cross into the DOM rather than
+ * going straight to disk. Refuse anything that would make the tab unresponsive
+ * and keep the download path, which streams, as the honest way out.
+ */
+const MAX_INLINE_ARTIFACT_BYTES = 512 * 1024;
+
+type ArtifactSource =
+  | { status: 'loading' }
+  | { status: 'ready'; content: string }
+  | { status: 'error'; message: string };
 
 const KNOWN_SURFACES: ReadonlySet<string> = new Set([
   'web',
@@ -155,6 +197,8 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [permanentlyDeletingId, setPermanentlyDeletingId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [openArtifactIds, setOpenArtifactIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [artifactSources, setArtifactSources] = useState<Record<string, ArtifactSource>>({});
   const requestSeq = useRef(0);
 
   useEffect(() => {
@@ -358,6 +402,55 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
     [transport],
   );
 
+  const loadArtifactSource = useCallback(
+    async (item: LibraryItem) => {
+      setArtifactSources((prev) => ({ ...prev, [item.id]: { status: 'loading' } }));
+      try {
+        const res = await transport.fetchAsset(item.uri);
+        if (!res.ok) {
+          if (res.status === 404 || res.status === 410) {
+            setUnavailableIds((current) => new Set(current).add(item.id));
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const content = await res.text();
+        if (content.length > MAX_INLINE_ARTIFACT_BYTES) {
+          setArtifactSources((prev) => ({
+            ...prev,
+            [item.id]: {
+              status: 'error',
+              message: 'This file is too large to preview here — download it instead.',
+            },
+          }));
+          return;
+        }
+        setArtifactSources((prev) => ({ ...prev, [item.id]: { status: 'ready', content } }));
+      } catch (err) {
+        setArtifactSources((prev) => ({
+          ...prev,
+          [item.id]: { status: 'error', message: err instanceof Error ? err.message : String(err) },
+        }));
+      }
+    },
+    [transport],
+  );
+
+  const toggleArtifact = useCallback(
+    (item: LibraryItem) => {
+      const wasOpen = openArtifactIds.has(item.id);
+      setOpenArtifactIds((current) => {
+        const next = new Set(current);
+        if (wasOpen) next.delete(item.id);
+        else next.add(item.id);
+        return next;
+      });
+      if (!wasOpen && artifactSources[item.id]?.status !== 'ready') {
+        void loadArtifactSource(item);
+      }
+    },
+    [openArtifactIds, artifactSources, loadArtifactSource],
+  );
+
   const cards = useMemo(
     () =>
       page.items.map((item) => {
@@ -365,6 +458,7 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
         return {
           item,
           isUnavailable,
+          isArtifact: item.surface === 'artifact',
           presentation: summarizeGeneratedFileBundle({
             generatedFile: generatedFileFromLibraryItem(item),
             fallbackStatus: isUnavailable ? 'failed' : 'completed',
@@ -475,7 +569,7 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
           data-testid="library-grid"
           className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {cards.map(({ item, isUnavailable, presentation }) => (
+          {cards.map(({ item, isUnavailable, isArtifact, presentation }) => (
             <div
               key={item.id}
               className="flex h-full flex-col overflow-hidden rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]"
@@ -494,10 +588,25 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
                 }}
                 onDownload={isUnavailable ? undefined : () => void handleDownload(item)}
                 onPreview={
-                  !isUnavailable && item.previewable ? () => handlePreview(item) : undefined
+                  isUnavailable || !item.previewable
+                    ? undefined
+                    : isArtifact
+                      ? // An artifact-class row's bytes are markup or source, so
+                        // handing them to the host's raw-bytes tab is both a worse
+                        // reading experience and an unsandboxed one. Render it
+                        // through the same sandboxed renderer the chat panel uses.
+                        () => toggleArtifact(item)
+                      : () => handlePreview(item)
                 }
                 onPreviewError={() => void handleThumbnailError(item)}
               />
+              {isArtifact && openArtifactIds.has(item.id) ? (
+                <ArtifactSection
+                  item={item}
+                  source={artifactSources[item.id]}
+                  onRetry={() => void loadArtifactSource(item)}
+                />
+              ) : null}
               <div className="flex flex-col gap-2 border-t border-[var(--chat-border)] px-3 py-2">
                 {isUnavailable ? (
                   <p className="text-xs text-[var(--chat-destructive)]" role="status">
@@ -651,6 +760,60 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
           </Button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ArtifactSection({
+  item,
+  source,
+  onRetry,
+}: {
+  item: LibraryItem;
+  source: ArtifactSource | undefined;
+  onRetry: () => void;
+}) {
+  if (!source || source.status === 'loading') {
+    return (
+      <div
+        data-testid={`library-artifact-loading-${item.id}`}
+        className="flex items-center gap-2 border-t border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-text-muted)]"
+      >
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+        Loading preview…
+      </div>
+    );
+  }
+
+  if (source.status === 'error') {
+    return (
+      <div
+        data-testid={`library-artifact-error-${item.id}`}
+        className="flex items-center gap-2 border-t border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-destructive)]"
+      >
+        <span>Couldn&apos;t open this artifact ({source.message}).</span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="font-medium underline underline-offset-2"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-[var(--chat-border)] p-3">
+      <ArtifactRenderer
+        artifact={{
+          id: item.id,
+          type: artifactTypeForLibraryItem(item),
+          title: item.file_name,
+          content: source.content,
+          createdAt: item.created_at,
+        }}
+      />
     </div>
   );
 }

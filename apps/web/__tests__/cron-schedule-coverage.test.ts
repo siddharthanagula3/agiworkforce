@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 
 /**
  * A cron route that nothing schedules never runs, and nothing says so —
@@ -46,15 +47,38 @@ describe('cron routes and vercel.json schedules agree', () => {
     expect(dangling, `these schedules point at no route: ${dangling.join(', ')}`).toEqual([]);
   });
 
-  it('keeps every schedule daily or less frequent', () => {
-    // A sub-daily cron is rejected on the Hobby plan, and the rejection kills
-    // the whole deployment rather than just the cron: pushes succeed and no
-    // build ever queues.
-    const subDaily = scheduledCrons().filter((cron) => {
-      const [minute, hour] = cron.schedule.split(/\s+/);
-      return minute === '*' || hour === '*' || hour?.includes('/') || hour?.includes(',');
-    });
+  // A sub-daily cron is rejected on the Hobby plan, and the rejection kills the
+  // whole deployment rather than just the cron: pushes succeed and no build ever
+  // queues. The account moved to Pro on 2026-08-16, so sub-daily is permitted —
+  // but only for the schedule sweep, which is the one cron whose cadence is a
+  // product promise rather than a housekeeping choice. Every other job stays
+  // daily, so a future downgrade breaks one line here instead of the deploy.
+  const SUB_DAILY_ALLOWED = new Set(['/api/cron/run-schedules']);
 
-    expect(subDaily.map((cron) => `${cron.path} @ ${cron.schedule}`)).toEqual([]);
+  function isSubDaily(schedule: string): boolean {
+    const [minute, hour] = schedule.split(/\s+/);
+    return (
+      minute === '*' || hour === '*' || Boolean(hour?.includes('/')) || Boolean(hour?.includes(','))
+    );
+  }
+
+  it('keeps every housekeeping schedule daily or less frequent', () => {
+    const unexpected = scheduledCrons().filter(
+      (cron) => isSubDaily(cron.schedule) && !SUB_DAILY_ALLOWED.has(cron.path),
+    );
+
+    expect(unexpected.map((cron) => `${cron.path} @ ${cron.schedule}`)).toEqual([]);
+  });
+
+  it('runs the schedule sweep at the cadence the product offers users', () => {
+    const sweep = scheduledCrons().find((cron) => cron.path === '/api/cron/run-schedules');
+    expect(sweep, 'the user-schedule sweep must be scheduled').toBeDefined();
+
+    const sweepMinutes = SWEEP_INTERVAL_MS / 60_000;
+    expect(
+      sweep?.schedule,
+      `vercel.json must fire the sweep every ${sweepMinutes} minutes to match SWEEP_INTERVAL_MS, ` +
+        'or users are offered schedules the platform never runs',
+    ).toBe(`*/${sweepMinutes} * * * *`);
   });
 });

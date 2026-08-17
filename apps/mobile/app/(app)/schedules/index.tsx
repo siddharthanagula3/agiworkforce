@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Pressable, FlatList, RefreshControl, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -25,6 +25,14 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 
+const SCHEDULE_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'paused', label: 'Paused' },
+] as const;
+
+type ScheduleFilter = (typeof SCHEDULE_FILTERS)[number]['key'];
+
 export default function SchedulesScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -41,6 +49,15 @@ export default function SchedulesScreen() {
     useScheduleStore();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<ScheduleFilter>('all');
+
+  const visibleSchedules = useMemo(
+    () =>
+      filter === 'all'
+        ? schedules
+        : schedules.filter((schedule) => schedule.isActive === (filter === 'active')),
+    [filter, schedules],
+  );
 
   useEffect(() => {
     if (FEATURES.schedules && isCloudMode && cloudUnlocked) void fetchSchedules();
@@ -216,6 +233,52 @@ export default function SchedulesScreen() {
         </View>
       )}
 
+      {schedules.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}
+        >
+          {SCHEDULE_FILTERS.map((item) => {
+            const selected = item.key === filter;
+            const count =
+              item.key === 'all'
+                ? schedules.length
+                : schedules.filter((schedule) => schedule.isActive === (item.key === 'active'))
+                    .length;
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => setFilter(item.key)}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter schedules: ${item.label}`}
+                accessibilityState={{ selected }}
+                style={{
+                  height: 34,
+                  borderRadius: 17,
+                  paddingHorizontal: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  backgroundColor: selected ? colors.teal : colors.surfaceOverlay,
+                  borderColor: selected ? colors.teal : colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    color: selected ? colors.white : colors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: '600',
+                  }}
+                >
+                  {`${item.label} (${count})`}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+
       {/* Schedule list or empty state */}
       {schedules.length === 0 ? (
         <EmptyState
@@ -223,9 +286,17 @@ export default function SchedulesScreen() {
           onUseTemplate={handleUseTemplate}
           canCreateSchedule={canCreateSchedule}
         />
+      ) : visibleSchedules.length === 0 ? (
+        <View className="flex-1 items-center px-8 pt-10">
+          <Text className="text-center text-sm text-white/50">
+            {filter === 'active'
+              ? 'No active schedules. Resume one to run it again.'
+              : 'No paused schedules.'}
+          </Text>
+        </View>
       ) : (
         <FlatList
-          data={schedules}
+          data={visibleSchedules}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
           refreshControl={

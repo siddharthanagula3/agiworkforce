@@ -209,19 +209,21 @@ describe('Settings page', () => {
     const { getByText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
-    expect(getByText('Billing')).toBeTruthy();
+    expect(getByText('Subscription')).toBeTruthy();
     expect(getByText('Connectors')).toBeTruthy();
     expect(getAllByText('Sign in').length).toBeGreaterThan(0);
     expect(queryByText('Log Out')).toBeNull();
+    expect(queryByText('Billing')).toBeNull();
   });
 
   it('shows cloud rows as cloud-gated after invite redemption', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
     useWaitlistStore.setState({ cloudUnlocked: true });
-    const { getByLabelText, getAllByText } = render(<SettingsTabScreen />);
+    const { getByLabelText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
-    expect(getByLabelText('Cloud Data Controls. Cloud')).toBeTruthy();
+    expect(getByLabelText('Cloud Personalization. Cloud')).toBeTruthy();
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
+    expect(queryByText('Sign in')).toBeNull();
   });
 
   it('does not route to sign-in again after cloud access is unlocked', () => {
@@ -230,7 +232,7 @@ describe('Settings page', () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Cloud Data Controls. Cloud'));
+    fireEvent.press(getByLabelText('Cloud Personalization. Cloud'));
 
     expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
     expect(alertSpy).not.toHaveBeenCalled();
@@ -244,19 +246,28 @@ describe('Settings page', () => {
 
     fireEvent.press(getByLabelText('Cloud Personalization. Cloud'));
     fireEvent.press(getByLabelText('Cloud Memory. Cloud'));
-    fireEvent.press(getByLabelText('Cloud Data Controls. Cloud'));
     fireEvent.press(getByLabelText('Account Security. Cloud'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization?scope=cloud');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory?scope=cloud');
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
+  });
+
+  it('reaches the scope-agnostic Data Controls screen from a single unduplicated row', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const { getAllByLabelText, getByLabelText } = render(<SettingsTabScreen />);
+
+    expect(getAllByLabelText(/^Data Controls/)).toHaveLength(1);
+    fireEvent.press(getByLabelText('Data Controls'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');
   });
 
   it('routes a signed-out cloud row tap to sign-in (public alpha, no invite/waitlist gate)', () => {
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Cloud Data Controls. Sign in'));
+    fireEvent.press(getByLabelText('Cloud Personalization. Sign in'));
     fireEvent.press(getByLabelText('Shared Links. Sign in'));
 
     expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
@@ -274,14 +285,15 @@ describe('Settings page', () => {
   });
 
   it('routes every signed-out subscription surface to sign-in instead of account data', () => {
-    const { getByLabelText } = render(<SettingsTabScreen />);
+    const { getByLabelText, queryAllByLabelText } = render(<SettingsTabScreen />);
+
+    expect(queryAllByLabelText(/^Billing/)).toHaveLength(0);
 
     fireEvent.press(getByLabelText('Subscription. Sign in'));
-    fireEvent.press(getByLabelText('Billing. Sign in'));
     fireEvent.press(getByLabelText('Usage. Sign in'));
     fireEvent.press(getByLabelText('Connectors. Sign in'));
 
-    expect(mockPush).toHaveBeenCalledTimes(4);
+    expect(mockPush).toHaveBeenCalledTimes(3);
     expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
   });
 

@@ -123,6 +123,16 @@ function SessionItemBase({
         >
           <div className="flex items-center gap-1.5">
             {session.starred && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
+            {session.runState === 'running' && (
+              <span
+                data-testid={`session-running-${session.id}`}
+                className="relative flex h-2 w-2 shrink-0"
+              >
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75 motion-reduce:animate-none" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                <span className="sr-only">{t('sidebar.running', 'Running')}</span>
+              </span>
+            )}
             <span className="truncate text-sm font-medium text-[hsl(var(--foreground))]">
               {session.title || t('sidebar.untitled', 'Untitled')}
             </span>

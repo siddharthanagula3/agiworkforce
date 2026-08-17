@@ -448,12 +448,13 @@ pub fn synthesize_findings(
     .with_citations(citation_ids)
 }
 
-/// Truncates a title to a maximum length, adding ellipsis if needed.
+/// Truncates a title to a maximum length in bytes, never splitting a codepoint.
 fn truncate_title(title: &str, max_len: usize) -> String {
     if title.len() <= max_len {
         title.to_string()
     } else {
-        format!("{}...", &title[..max_len.saturating_sub(3)])
+        let end = crate::core::agi::floor_char_boundary(title, max_len.saturating_sub(3));
+        format!("{}...", &title[..end])
     }
 }
 
@@ -510,5 +511,37 @@ mod tests {
             truncate_title("This is a very long title", 10),
             "This is..."
         );
+    }
+
+    #[test]
+    fn test_truncate_title_multibyte_does_not_panic() {
+        let title = format!("{}{}", "a".repeat(55), "日本語のタイトル".repeat(5));
+        assert!(!title.is_char_boundary(57));
+
+        let truncated = truncate_title(&title, 60);
+
+        assert_eq!(truncated, format!("{}...", "a".repeat(55)));
+    }
+
+    #[test]
+    fn test_truncate_title_cyrillic_and_emoji_at_every_cap() {
+        let title = "Привет🌍мир".repeat(8);
+        for cap in 4..title.len() {
+            let truncated = truncate_title(&title, cap);
+            assert!(truncated.is_char_boundary(truncated.len()));
+        }
+    }
+
+    #[test]
+    fn test_report_title_from_multibyte_query() {
+        let query = "как работает 🚀 ракетный двигатель в условиях невесомости и вакуума";
+        assert!(query.len() > 60);
+
+        let report = ResearchReportGenerator::new(query, ResearchMode::Quick)
+            .with_summary("s")
+            .build()
+            .unwrap();
+
+        assert!(report.title.ends_with("..."));
     }
 }

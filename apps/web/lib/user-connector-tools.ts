@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { z } from 'zod';
@@ -16,6 +15,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { logger } from '@/lib/logger';
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
+import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import {
   getInstallationAccessToken,
   getPrDiff,
@@ -456,6 +456,7 @@ async function executeRemoteConnectorTool(
     if (!handle) {
       await assertResolvedPublicHostname(entry.url);
       handle = await connectMcpServer({
+        egressPolicy: MCP_EGRESS_POLICY,
         serverName: entry.connectorId,
         config: entryToMcpConfig(entry),
       });
@@ -725,6 +726,7 @@ async function executeCustomConnectorTool(
     if (!handle) {
       await assertResolvedPublicHostname(row.url);
       handle = await connectMcpServer({
+        egressPolicy: MCP_EGRESS_POLICY,
         serverName: customServerId(row.short_id),
         config: customRowToMcpConfig(row),
       });
@@ -935,6 +937,7 @@ async function callOAuthConnectorTool(
   if (!handle) {
     await assertResolvedPublicHostname(target.mcpUrl);
     handle = await connectMcpServer({
+      egressPolicy: MCP_EGRESS_POLICY,
       serverName: target.connectorId,
       config: oauthConnectorMcpConfig(target, accessToken, tokenType),
     });
@@ -1226,6 +1229,7 @@ async function executeOrgSharedConnectorTool(
     if (!handle) {
       await assertResolvedPublicHostname(row.url);
       handle = await connectMcpServer({
+        egressPolicy: MCP_EGRESS_POLICY,
         serverName: orgSharedServerId(row.org_short_id),
         config: customRowToMcpConfig(row),
       });

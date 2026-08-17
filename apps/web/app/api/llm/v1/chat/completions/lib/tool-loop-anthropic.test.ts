@@ -63,6 +63,7 @@ function fakeAdapterStream(chunks: unknown[]) {
 
 function makeProcessed(): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'req-anthropic-1',
     chatRequest: { model: ANTHROPIC_MODEL, messages: [], stream: true } as never,
     conversationId: undefined,

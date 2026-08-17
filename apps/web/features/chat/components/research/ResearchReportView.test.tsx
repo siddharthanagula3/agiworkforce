@@ -84,6 +84,36 @@ describe('ResearchReportView', () => {
     expect(screen.getByText('2 sources · 45s')).toBeInTheDocument();
   });
 
+  it('renders a favicon per citation, matching the Sources tab', () => {
+    const { container } = render(<ResearchReportView report={makeReport()} />);
+
+    const favicons = [...container.querySelectorAll('img')].map((img) => img.getAttribute('src'));
+    expect(favicons).toEqual([
+      'https://www.google.com/s2/favicons?domain=nodejs.org&sz=32',
+      'https://www.google.com/s2/favicons?domain=nodejs.org&sz=32',
+    ]);
+  });
+
+  it('falls back to the globe placeholder when a citation url is not a url', () => {
+    const { container } = render(
+      <ResearchReportView
+        report={makeReport({
+          citations: [
+            {
+              id: '1',
+              title: 'A source with no parseable url',
+              url: 'not-a-url',
+              accessedAt: '2026-08-05T10:00:00.000Z',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(container.querySelectorAll('img')).toHaveLength(0);
+    expect(screen.getByText('A source with no parseable url')).toBeInTheDocument();
+  });
+
   it('invokes the existing export service with the assembled markdown', async () => {
     const exportDocument = vi.fn().mockResolvedValue(undefined);
     const report = makeReport();

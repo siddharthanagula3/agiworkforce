@@ -136,8 +136,14 @@ Source: `src/features/settings/cloud-account/index.tsx`.
 
 Model output is labelled as AI-generated in the UI, and first run shows a
 disclosure screen naming the on-device model and any third-party cloud
-providers, in line with EU AI Act Article 50. India's DPDP Act 2023 obligations
-are handled by the export/delete controls described above.
+providers, addressing the EU AI Act Article 50 transparency duty.
+
+We do not claim full compliance with India's DPDP Act 2023. The itemised notice
+is published at https://agiworkforce.com/privacy/india, consent withdrawal and
+the export/delete controls described above are implemented, and the obligations
+we have not met — verifiable parental consent under s.9, notice in Eighth
+Schedule languages under s.6(4), and India data residency — are listed at
+https://agiworkforce.com/trust.
 
 ## Export compliance
 

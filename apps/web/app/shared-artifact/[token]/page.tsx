@@ -6,6 +6,7 @@ import {
   getPublishedArtifactByToken,
 } from '@/lib/services/published-artifact-service';
 import { PublishedArtifactView } from './PublishedArtifactView';
+import { ReportContentLink } from '@/app/copyright/report/ReportContentLink';
 import type { PublishedArtifactKind } from '@/features/chat/components/artifacts/publishedArtifactRender';
 
 interface Props {
@@ -40,12 +41,15 @@ export default async function PublishedArtifactPage({ params }: Props) {
   }
 
   return (
-    <PublishedArtifactView
-      title={artifact.title}
-      kind={artifact.kind as PublishedArtifactKind}
-      language={artifact.language}
-      content={artifact.content}
-      publishedAt={artifact.updatedAt}
-    />
+    <>
+      <PublishedArtifactView
+        title={artifact.title}
+        kind={artifact.kind as PublishedArtifactKind}
+        language={artifact.language}
+        content={artifact.content}
+        publishedAt={artifact.updatedAt}
+      />
+      <ReportContentLink publicPath={`/shared-artifact/${token}`} />
+    </>
   );
 }

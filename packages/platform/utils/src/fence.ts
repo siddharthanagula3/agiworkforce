@@ -6,8 +6,7 @@
  * Unicode normalization and strips invisible/bidi control characters that
  * could be used for prompt injection via homograph or tokenization attacks.
  *
- * Mirrors the pattern established in apps/web/app/api/agents/execute/route.ts
- * and apps/web/app/api/completion/route.ts.
+ * Mirrors the pattern established in apps/web/app/api/completion/route.ts.
  *
  * @module fence
  */

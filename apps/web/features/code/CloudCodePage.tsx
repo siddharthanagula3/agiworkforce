@@ -1,10 +1,10 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   Blocks,
+  Bot,
   ChevronRight,
   Download,
   ExternalLink,
@@ -25,11 +25,25 @@ import type {
   CloudCodeSession,
   CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
-import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
-import { WebSidebar } from '@/features/chat/v3/WebSidebar';
-import { resolveWebViewRoute } from '@/features/chat/v3/WebShellV3';
-import { cloudCodeApi, type CloudCodeApi, CloudCodeApiError } from './services/cloud-code-api';
+import { getRoutingSlotModel } from '@agiworkforce/types';
+import { WebAppShell } from '@shared/components/layout/WebAppShell';
+import {
+  cloudCodeApi,
+  type CloudCodeAgentTurn,
+  type CloudCodeApi,
+  CloudCodeApiError,
+} from './services/cloud-code-api';
 import styles from './CloudCodePage.module.css';
+
+const AGENT_MODEL_ID = getRoutingSlotModel('coding_balanced');
+
+type ApprovalPrompt = {
+  turnId: string;
+  stepIndex: number;
+  command: string;
+  reason: string;
+  goal: string;
+};
 
 const NETWORK_OPTIONS: Array<{
   id: CloudCodeNetworkAccess;
@@ -70,6 +84,25 @@ function friendlyError(error: unknown): string {
   return 'Something went wrong. Please retry.';
 }
 
+function agentOutcomeLabel(turn: CloudCodeAgentTurn): string {
+  switch (turn.stopReason) {
+    case 'done':
+      return 'Finished';
+    case 'awaiting_approval':
+      return 'Waiting for your approval';
+    case 'max_steps':
+      return 'Stopped at the step limit';
+    case 'timeout':
+      return 'Timed out';
+    case 'cancelled':
+      return 'Cancelled';
+    case 'denied':
+      return 'Stopped — command denied';
+    default:
+      return 'Failed';
+  }
+}
+
 function sessionStateLabel(session: CloudCodeSession): string {
   if (session.state === 'ready') return 'Ready';
   if (session.state === 'running') return 'Command running';
@@ -83,8 +116,6 @@ export interface CloudCodePageProps {
 }
 
 export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
-  const router = useRouter();
-  const { openSettings } = useSettingsModal();
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const [availability, setAvailability] = useState<CloudCodeAvailability | null>(null);
   const [sessions, setSessions] = useState<CloudCodeSession[]>([]);
@@ -103,6 +134,11 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const [closing, setClosing] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [goal, setGoal] = useState('');
+  const [agentTurn, setAgentTurn] = useState<CloudCodeAgentTurn | null>(null);
+  const [agentGoal, setAgentGoal] = useState('');
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalPrompt[]>([]);
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedId) ?? null,
@@ -187,26 +223,30 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     setConfirmClose(false);
   }, []);
 
-  const handleSidebarMode = useCallback(
-    (mode: 'chat' | 'work' | 'code') => {
-      if (mode === 'chat') router.push('/chat');
-    },
-    [router],
-  );
-
-  const handleSidebarView = useCallback(
-    (view: string) => {
-      const route = resolveWebViewRoute(view);
-      if (route) router.push(route);
-    },
-    [router],
-  );
-
   const canCreate =
     availability?.deploymentEnabled === true &&
     availability.storageReady === true &&
     availability.planEntitled === true;
   const canRun = canCreate;
+
+  // Approvals outlive the tab that created them (the backend persists them with a
+  // 30-minute expiry), so a reload or a session switch has to re-read them or a
+  // half-finished agent turn becomes unresumable from the UI.
+  useEffect(() => {
+    setAgentTurn(null);
+    setAgentGoal('');
+    setPendingApprovals([]);
+    if (!selectedId || showCreate || !canRun) return;
+    const controller = new AbortController();
+    void api
+      .listApprovals(selectedId, controller.signal)
+      .then(setPendingApprovals)
+      .catch((approvalsError) => {
+        if (approvalsError instanceof DOMException && approvalsError.name === 'AbortError') return;
+        setError(friendlyError(approvalsError));
+      });
+    return () => controller.abort();
+  }, [api, canRun, selectedId, showCreate]);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -256,6 +296,77 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     }
   }
 
+  function applyAgentTurn(turn: CloudCodeAgentTurn, turnGoal: string) {
+    setAgentTurn(turn);
+    setAgentGoal(turnGoal);
+    setPendingApprovals(
+      turn.pendingApproval
+        ? [
+            {
+              turnId: turn.turnId,
+              stepIndex: turn.pendingApproval.stepIndex,
+              command: turn.pendingApproval.command,
+              reason: turn.pendingApproval.reason,
+              goal: turnGoal,
+            },
+          ]
+        : [],
+    );
+  }
+
+  async function handleAgentTurn(event: FormEvent) {
+    event.preventDefault();
+    if (!canRun || !selectedSession || !goal.trim() || agentBusy) return;
+    if (selectedSession.state !== 'ready') return;
+    const submitted = goal.trim();
+    setGoal('');
+    setAgentBusy(true);
+    setAgentTurn(null);
+    setPendingApprovals([]);
+    setError(null);
+    try {
+      const turn = await api.startAgentTurn(selectedSession.id, {
+        goal: submitted,
+        model: AGENT_MODEL_ID,
+        idempotencyKey: makeRequestId(),
+      });
+      applyAgentTurn(turn, submitted);
+      void loadSessions();
+    } catch (turnError) {
+      setGoal(submitted);
+      setAgentGoal('');
+      setError(friendlyError(turnError));
+      void loadSessions();
+    } finally {
+      setAgentBusy(false);
+    }
+  }
+
+  async function handleApproval(approval: ApprovalPrompt, decision: 'approve' | 'reject') {
+    if (!selectedSession || agentBusy) return;
+    setAgentBusy(true);
+    setError(null);
+    try {
+      const turn = await api.decideApproval(selectedSession.id, {
+        turnId: approval.turnId,
+        stepIndex: approval.stepIndex,
+        decision,
+      });
+      applyAgentTurn(turn, agentGoal || approval.goal);
+      void loadSessions();
+    } catch (decisionError) {
+      setError(friendlyError(decisionError));
+      // The approval may have expired or been decided elsewhere; re-read rather
+      // than leaving a card that can no longer be acted on.
+      void api
+        .listApprovals(selectedSession.id)
+        .then(setPendingApprovals)
+        .catch(() => setPendingApprovals([]));
+    } finally {
+      setAgentBusy(false);
+    }
+  }
+
   async function handleClose() {
     if (!selectedSession || closing) return;
     setClosing(true);
@@ -272,27 +383,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   }
 
   return (
-    <div className={styles['shell']}>
-      <div className={styles['sidebar']}>
-        <WebSidebar
-          mode="code"
-          onModeChange={handleSidebarMode}
-          onNewChat={openCreate}
-          onNavigateView={handleSidebarView}
-          onOpenAccountMenu={() => openSettings('account')}
-        />
-      </div>
-
-      <div className={styles['mobileHeader']}>
-        <button className={styles['ghostButton']} onClick={() => router.push('/chat')}>
-          Chat
-        </button>
-        <strong>Code</strong>
-        <button className={styles['ghostButton']} onClick={openCreate}>
-          <Plus size={15} /> New
-        </button>
-      </div>
-
+    <WebAppShell>
       <main className={styles['main']}>
         <div className={styles['page']}>
           <div className={styles['eyebrow']}>
@@ -634,6 +725,123 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                           {running ? <Loader2 className={styles['spin']} size={14} /> : 'Run'}
                         </button>
                       </form>
+
+                      <section
+                        aria-label="Agent turn"
+                        style={{
+                          borderTop: '1px solid var(--chat-border)',
+                          padding: 14,
+                          display: 'grid',
+                          gap: 12,
+                        }}
+                      >
+                        <div
+                          className={styles['eyebrow']}
+                          style={{ fontSize: 11, letterSpacing: '0.07em' }}
+                        >
+                          <Bot size={13} /> Agent
+                        </div>
+                        <form onSubmit={handleAgentTurn} style={{ display: 'grid', gap: 9 }}>
+                          <label className={styles['label']} htmlFor="cloud-code-agent-goal">
+                            Describe a task. The agent works in this workspace and asks before it
+                            runs a command that needs your approval.
+                          </label>
+                          <textarea
+                            id="cloud-code-agent-goal"
+                            className={styles['input']}
+                            style={{ minHeight: 74, padding: '10px 11px', resize: 'vertical' }}
+                            value={goal}
+                            onChange={(event) => setGoal(event.target.value)}
+                            placeholder="Install dependencies and run the test suite"
+                            maxLength={8000}
+                            disabled={
+                              !canRun || agentBusy || running || selectedSession.state !== 'ready'
+                            }
+                          />
+                          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                              className={styles['primaryButton']}
+                              type="submit"
+                              disabled={
+                                !canRun ||
+                                agentBusy ||
+                                running ||
+                                !goal.trim() ||
+                                selectedSession.state !== 'ready'
+                              }
+                            >
+                              {agentBusy ? (
+                                <Loader2 className={styles['spin']} size={14} />
+                              ) : (
+                                <Bot size={14} />
+                              )}
+                              {agentBusy ? 'Agent working…' : 'Start agent turn'}
+                            </button>
+                          </div>
+                        </form>
+
+                        {agentTurn && (
+                          <div className={styles['banner']} style={{ marginTop: 0 }} role="status">
+                            <Bot size={17} />
+                            <div style={{ minWidth: 0 }}>
+                              <strong>{agentOutcomeLabel(agentTurn)}</strong>
+                              {' · '}
+                              {agentTurn.stepsUsed} step{agentTurn.stepsUsed === 1 ? '' : 's'}
+                              {agentGoal && (
+                                <>
+                                  <br />
+                                  <span>{agentGoal}</span>
+                                </>
+                              )}
+                              {agentTurn.finalMessage && (
+                                <pre className={styles['stdout']} style={{ marginTop: 8 }}>
+                                  {agentTurn.finalMessage}
+                                </pre>
+                              )}
+                              {agentTurn.errorMessage && (
+                                <pre className={styles['stderr']} style={{ marginTop: 8 }}>
+                                  {agentTurn.errorMessage}
+                                </pre>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {pendingApprovals.map((approval) => (
+                          <div
+                            key={`${approval.turnId}:${approval.stepIndex}`}
+                            className={styles['acknowledgement']}
+                            style={{ marginTop: 0, display: 'grid', gap: 9 }}
+                          >
+                            <div>
+                              <strong>Approval required</strong>
+                              <br />
+                              {approval.reason}
+                            </div>
+                            <pre className={styles['stdout']} style={{ margin: 0 }}>
+                              $ {approval.command}
+                            </pre>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                              <button
+                                className={styles['ghostButton']}
+                                type="button"
+                                disabled={agentBusy}
+                                onClick={() => void handleApproval(approval, 'reject')}
+                              >
+                                Reject
+                              </button>
+                              <button
+                                className={styles['primaryButton']}
+                                type="button"
+                                disabled={agentBusy}
+                                onClick={() => void handleApproval(approval, 'approve')}
+                              >
+                                Approve and continue
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </section>
                     </>
                   )}
                 </section>
@@ -661,6 +869,6 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
           </div>
         </div>
       </main>
-    </div>
+    </WebAppShell>
   );
 }

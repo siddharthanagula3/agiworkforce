@@ -10,18 +10,78 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import {
+  DATA_RIGHTS_REQUEST_LABELS,
   DATA_RIGHTS_REQUEST_TYPES,
   MAX_REQUEST_DETAILS_LENGTH,
   createDataRightsRequest,
   isDataRightsRequestType,
   readUserDataRightsRequests,
+  type DataRightsRequest,
 } from '@/lib/server/data-rights-requests';
+import { getHandoffConfig } from '@/lib/support/handoff/config';
+import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
 const CreateRequestSchema = z.object({
   requestType: z.string().refine(isDataRightsRequestType, 'Unknown request type'),
   contactEmail: z.string().email().max(254),
   details: z.string().max(MAX_REQUEST_DETAILS_LENGTH).optional(),
 });
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/"/gu, '&quot;')
+    .replace(/'/gu, '&#39;');
+}
+
+async function alertOperators(input: {
+  created: DataRightsRequest;
+  contactEmail: string;
+  details: string | null;
+  userId: string | null;
+}): Promise<boolean> {
+  const environment = process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
+  const { created } = input;
+  const text = [
+    `Environment: ${environment}`,
+    `Reference: ${created.reference}`,
+    `Received at: ${created.createdAt}`,
+    `Request type: ${DATA_RIGHTS_REQUEST_LABELS[created.requestType]}`,
+    `Contact email: ${input.contactEmail}`,
+    `Account: ${input.userId ?? '(not signed in)'}`,
+    '',
+    'WHAT THE REQUESTER WROTE',
+    input.details || '(nothing supplied)',
+    '',
+    'NEXT STEP',
+    'The request is queued in public.data_rights_requests and listed by GET /api/admin/privacy/requests.',
+  ].join('\n');
+
+  const sent = await sendSupportEmail({
+    to: getHandoffConfig().fallbackEmail,
+    subject: `[AGI DPDP] ${environment} data-rights request ${created.reference} (${created.requestType})`,
+    text,
+    html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(text)}</pre>`,
+    replyTo: input.contactEmail,
+    idempotencyKey: `data-rights-request:${created.reference}`,
+  });
+
+  if (!sent.delivered) {
+    logger.error(
+      {
+        event: 'data_rights_request_alert_undeliverable',
+        reference: created.reference,
+        requestType: created.requestType,
+        reason: sent.reason,
+        detail: sent.detail,
+      },
+      'Data-rights request was recorded but no operator was notified',
+    );
+  }
+  return sent.delivered;
+}
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfResponse = await requireCsrfToken(request);
@@ -42,18 +102,16 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     userId = null;
   }
 
+  const contactEmail = parsed.data.contactEmail.trim().toLowerCase();
+  const details = parsed.data.details?.trim() || null;
+
+  let created: DataRightsRequest;
   try {
-    const created = await createDataRightsRequest({
+    created = await createDataRightsRequest({
       userId,
-      contactEmail: parsed.data.contactEmail.trim().toLowerCase(),
+      contactEmail,
       requestType: parsed.data.requestType,
-      details: parsed.data.details?.trim() || null,
-    });
-    return NextResponse.json({
-      reference: created.reference,
-      requestType: created.requestType,
-      status: created.status,
-      createdAt: created.createdAt,
+      details,
     });
   } catch (error) {
     logger.error(
@@ -62,6 +120,27 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     );
     throw createError.internal('Your request could not be recorded, so nothing was stored');
   }
+
+  const operatorNotified = await alertOperators({
+    created,
+    contactEmail,
+    details,
+    userId,
+  }).catch((error) => {
+    logger.error(
+      { error, event: 'data_rights_request_alert_failed', reference: created.reference },
+      'Data-rights request was recorded but the operator alert threw',
+    );
+    return false;
+  });
+
+  return NextResponse.json({
+    reference: created.reference,
+    requestType: created.requestType,
+    status: created.status,
+    createdAt: created.createdAt,
+    operatorNotified,
+  });
 }
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {

@@ -21,263 +21,263 @@
   "registeredWithoutReachableCaller": [
     {
       "command": "api_delete",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: DELETE shorthand over api_request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_extract_json_path",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: JSONPath extractor over a parsed response. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_extract_template_variables",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Template-variable lister for the same client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_get",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: GET shorthand over api_request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_oauth_client_credentials",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Runs the OAuth 2.0 client-credentials grant. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_oauth_create_client",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Stores a renderer-supplied OAuth 2.0 client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_oauth_exchange_code",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Exchanges an OAuth 2.0 code for tokens. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_oauth_get_auth_url",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Builds the OAuth 2.0 authorize URL. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_oauth_refresh_token",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Refreshes an OAuth 2.0 token. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_parse_response",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Response-body parser for the same client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_post_json",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: JSON POST shorthand over api_request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_put_json",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: JSON PUT shorthand over api_request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_render_template",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Request-template renderer for the same client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_request",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: The generic renderer-driven HTTP request. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "api_validate_template",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Template validator for the same client. sys/commands/api.rs is a renderer-facing HTTP/OAuth client whose only client is the unreachable apps/desktop/src/api/apiManagement.ts. The agent already reaches HTTP through core/agi/executors/api_executor.rs and the shipped OAuth flow is mcp_oauth_* (apps/desktop/src/api/mcp.ts), so this is a second door on the same capability. Delete the wrapper and its lib.rs registration; the judge_destination egress policy stays with whatever still sends requests."
     },
     {
       "command": "auto_save_decision",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Records a decision into project memory. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "automation_generate_code",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Turns a recording into source code. The mounted apps/desktop/src/features/automation/ActionRecorder.tsx records through packages/client/desktop-command-client/src/automation.ts and saves a recording with skills.skillCreateFromRecording; the script/codegen export was never ported to that client and survives only in the unreachable apps/desktop/src/api/automationEnhanced.ts. Superseded by the skill flow. Delete the wrapper, its lib.rs registration, and the client."
     },
     {
       "command": "automation_save_recording_as_script",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Saves a recording as a script file. The mounted apps/desktop/src/features/automation/ActionRecorder.tsx records through packages/client/desktop-command-client/src/automation.ts and saves a recording with skills.skillCreateFromRecording; the script/codegen export was never ported to that client and survives only in the unreachable apps/desktop/src/api/automationEnhanced.ts. Superseded by the skill flow. Delete the wrapper, its lib.rs registration, and the client."
     },
     {
       "command": "budget_get_status",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: The only window into the DailyBudgetGuard that lib.rs:492-499 initialises at a $25/day cap. Its one caller, apps/desktop/src/features/layout/BudgetStatusWidget.tsx, is exported from features/layout/index.ts but never mounted, so the cap is enforced invisibly and a user hitting it gets no explanation. Mount the widget from a reachable shell such as apps/desktop/src/features/v3/DesktopShellV3.tsx."
     },
     {
       "command": "chat_detect_intent",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Regex intent classifier over the user’s message. sys/commands/chat/intent.rs is self-contained - detect_user_intent and matches_stop_intent have no Rust caller - and the only client is the unreachable apps/desktop/src/api/chat.ts. The mounted composer stops generation with chat_stop_generation (apps/desktop/src/runtime/TauriRuntime.ts) rather than pre-classifying the text. Delete the wrapper and its lib.rs registration."
     },
     {
       "command": "chat_is_stop_command",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Regex \"did the user say stop\" predicate. sys/commands/chat/intent.rs is self-contained - detect_user_intent and matches_stop_intent have no Rust caller - and the only client is the unreachable apps/desktop/src/api/chat.ts. The mounted composer stops generation with chat_stop_generation (apps/desktop/src/runtime/TauriRuntime.ts) rather than pre-classifying the text. Delete the wrapper and its lib.rs registration."
     },
     {
       "command": "clear_project_memories",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Clears a project folder’s memories - the user-facing half of a memory store that can currently only be written to. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "coord_get_pending_approvals",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Lists pending approvals. Same dead module as task_*: sys/commands/task_persistence.rs keeps app_states and approvals in an in-memory HashMap with no producer, while the shipped approval boundary is core/agent/approval.rs behind request_tool_confirmation. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "coord_request_approval",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Opens an approval request. Same dead module as task_*: sys/commands/task_persistence.rs keeps app_states and approvals in an in-memory HashMap with no producer, while the shipped approval boundary is core/agent/approval.rs behind request_tool_confirmation. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "coord_update_app_state",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Writes an app-state entry. Same dead module as task_*: sys/commands/task_persistence.rs keeps app_states and approvals in an in-memory HashMap with no producer, while the shipped approval boundary is core/agent/approval.rs behind request_tool_confirmation. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "delete_project_memory",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Deletes one stored memory - the user-facing half of a memory store that can currently only be written to. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "execute_code",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Sandboxed multi-language runner, already gated - sys/commands/code_execution.rs:59-75 calls request_confirmation_simple before running anything. Its only client is canvasRunCodeViaTauri in apps/desktop/src/stores/editingStore.ts, and the whole canvas tree (features/canvas, features/dynamic-canvas) is unmounted, so this decision rides on the canvas wire-or-cut call in docs/adr/wire-or-cut.md. Separately: it is absent from apps/desktop/.hitl-required-tools.yaml, so nothing in CI guards that confirmation gate."
     },
     {
       "command": "form_undo_attempt",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Attempts to reverse a recorded submission. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "form_undo_can_undo",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Predicate over the empty store. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "form_undo_clear",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Empties the store. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "form_undo_clear_old",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Evicts aged entries from the store. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "form_undo_get",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Reads one recorded submission. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "form_undo_list",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Lists recorded submissions. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "form_undo_list_undoable",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Lists reversible submissions. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "form_undo_record",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: The only writer into FormUndoManager. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "form_undo_stats",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Reports counts over the store. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "get_architectural_decisions",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Reads back architectural decisions. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "get_coding_styles",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Reads back per-project coding styles. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "get_project_context",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Reads the stored project context. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "get_project_memory_stats",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Reports project-memory counts. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "migration_launch_lovable",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Would queue a Lovable workflow import. sys/commands/migration.rs returns a fixed \"planned but not yet available\" error for every Lovable command (migration.rs:3-9) and its own tests assert that refusal; the only client is the unreachable apps/desktop/src/api/migration.ts. Nothing is lost by removing it and nothing ships by keeping it. Delete the wrapper, its lib.rs registration, and the client."
     },
     {
       "command": "migration_list_lovable_workflows",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Would list Lovable workflows. sys/commands/migration.rs returns a fixed \"planned but not yet available\" error for every Lovable command (migration.rs:3-9) and its own tests assert that refusal; the only client is the unreachable apps/desktop/src/api/migration.ts. Nothing is lost by removing it and nothing ships by keeping it. Delete the wrapper, its lib.rs registration, and the client."
     },
     {
       "command": "migration_test_lovable_connection",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Would validate Lovable credentials. sys/commands/migration.rs returns a fixed \"planned but not yet available\" error for every Lovable command (migration.rs:3-9) and its own tests assert that refusal; the only client is the unreachable apps/desktop/src/api/migration.ts. Nothing is lost by removing it and nothing ships by keeping it. Delete the wrapper, its lib.rs registration, and the client."
     },
     {
       "command": "save_architectural_decision",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Writes an architectural decision. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "save_coding_style",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Writes a per-project coding style. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "scheduler_get_history",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Returns a job’s past runs. The mounted apps/desktop/src/stores/schedulerStore.ts already invokes nine scheduler_* commands; job history and job detail are the missing pair, so wire them there. Note: the file that used to invoke them, apps/desktop/src/hooks/useScheduler.ts, has been removed, which leaves the command with no frontend caller at all - check-wiring.sh reports it as ORPHAN, not UNREACHABLE, until it is wired or deleted."
     },
     {
       "command": "scheduler_get_job",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Returns one scheduled job. The mounted apps/desktop/src/stores/schedulerStore.ts already invokes nine scheduler_* commands; job history and job detail are the missing pair, so wire them there. Note: the file that used to invoke them, apps/desktop/src/hooks/useScheduler.ts, has been removed, which leaves the command with no frontend caller at all - check-wiring.sh reports it as ORPHAN, not UNREACHABLE, until it is wired or deleted."
     },
     {
       "command": "task_cancel",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Cancels a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_complete",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Completes a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_create",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Creates a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_get_resumable",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Lists resumable tasks from the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_get_status",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Reads a task from the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_list",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Lists the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_list_by_status",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Filters the duplicate store by status. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_pause",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Pauses a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_resume",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Resumes a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_save_context",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Saves resume context into the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "task_update_progress",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Updates progress in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
     {
       "command": "undo_can_undo",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "DELETE: Returns get_undo_summary(...).revertible_changes > 0 (sys/commands/undo.rs:119-127). It is a pure derivation of undo_get_summary, which core/llm/tool_executor/mod.rs already exposes as an agent tool, and it has no client of its own. Delete the wrapper and its lib.rs registration."
     },
     {
       "command": "undo_change",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "KEEP: Reverts one identified agent change. Users reach this through the LLM tool executor, not the renderer: core/llm/tool_executor/mod.rs dispatches it to core/llm/tool_executor/undo_tools.rs behind sys/security/tool_guard.rs, which is exactly what sys/commands/undo.rs documents (\"reverse AGI actions through natural language\"). The renderer door is deliberately absent, same class as document_edit_excel. The SIX-32 claim that no user path can trigger it was wrong. apps/desktop/src/api/undo.ts is a dead duplicate client and goes with the rest of that file."
     },
     {
       "command": "undo_get_changes",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "KEEP: Lists revertible agent changes. Users reach this through the LLM tool executor, not the renderer: core/llm/tool_executor/mod.rs dispatches it to core/llm/tool_executor/undo_tools.rs behind sys/security/tool_guard.rs, which is exactly what sys/commands/undo.rs documents (\"reverse AGI actions through natural language\"). The renderer door is deliberately absent, same class as document_edit_excel. The SIX-32 claim that no user path can trigger it was wrong. apps/desktop/src/api/undo.ts is a dead duplicate client and goes with the rest of that file."
     },
     {
       "command": "undo_get_summary",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "KEEP: Summarises revertible agent changes. Users reach this through the LLM tool executor, not the renderer: core/llm/tool_executor/mod.rs dispatches it to core/llm/tool_executor/undo_tools.rs behind sys/security/tool_guard.rs, which is exactly what sys/commands/undo.rs documents (\"reverse AGI actions through natural language\"). The renderer door is deliberately absent, same class as document_edit_excel. The SIX-32 claim that no user path can trigger it was wrong. apps/desktop/src/api/undo.ts is a dead duplicate client and goes with the rest of that file."
     },
     {
       "command": "undo_last",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "KEEP: Reverts the most recent agent change. Users reach this through the LLM tool executor, not the renderer: core/llm/tool_executor/mod.rs dispatches it to core/llm/tool_executor/undo_tools.rs behind sys/security/tool_guard.rs, which is exactly what sys/commands/undo.rs documents (\"reverse AGI actions through natural language\"). The renderer door is deliberately absent, same class as document_edit_excel. The SIX-32 claim that no user path can trigger it was wrong. apps/desktop/src/api/undo.ts is a dead duplicate client and goes with the rest of that file."
     },
     {
       "command": "undo_task",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Reverts every change belonging to one task, which undo_last(task_id) only partly covers. Its siblings reach users as agent tools rather than through the renderer, so wire it the same way: dispatch in core/llm/tool_executor/mod.rs, handler beside the others in core/llm/tool_executor/undo_tools.rs, risk entry in sys/security/tool_guard.rs. Do not revive apps/desktop/src/api/undo.ts for it."
     },
     {
       "command": "update_memory_importance",
-      "reason": "SIX-32 baseline: the only invoke() call sites for this command live in desktop modules that are unreachable from apps/desktop/src/main.tsx, so no user path can trigger it. Delete the command or route its feature tree from a mounted surface; this list may only shrink."
+      "reason": "WIRE: Re-ranks one stored memory. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     }
   ]
 }

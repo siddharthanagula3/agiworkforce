@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Modal, View, Animated, AccessibilityInfo } from 'react-native';
+import { Modal, View, Animated } from 'react-native';
 import { Cpu } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 import { EDGE_COPY } from './copy';
 import { spacing, radii } from '@/src/ui/theme';
 
@@ -28,19 +29,11 @@ export function ModelLoadingFirstRunModal({
 }: ModelLoadingFirstRunModalProps) {
   const colors = useThemeColors();
   const barWidth = useRef(new Animated.Value(0)).current;
-  const reduceMotionRef = useRef(false);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((val) => {
-        reduceMotionRef.current = val;
-      })
-      .catch(() => {});
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     const clampedProgress = Math.min(1, Math.max(0, progress));
-    if (reduceMotionRef.current) {
+    if (reduceMotion) {
       barWidth.setValue(clampedProgress);
     } else {
       Animated.timing(barWidth, {
@@ -49,7 +42,7 @@ export function ModelLoadingFirstRunModal({
         useNativeDriver: false, // width animation cannot use native driver
       }).start();
     }
-  }, [progress, barWidth]);
+  }, [progress, reduceMotion, barWidth]);
 
   const etaText =
     etaSeconds !== undefined && etaSeconds > 0

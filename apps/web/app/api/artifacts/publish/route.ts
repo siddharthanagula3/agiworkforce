@@ -11,6 +11,8 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   MAX_CONTENT_CHARS,
   PUBLISHABLE_KINDS,
+  PublishedArtifactOwnershipError,
+  PublishedArtifactQuotaError,
   PublishedArtifactValidationError,
   buildPublishedArtifactUrl,
   listPublishedArtifacts,
@@ -84,6 +86,12 @@ async function handlePublish(request: NextRequest): Promise<Response> {
   } catch (error) {
     if (error instanceof PublishedArtifactValidationError) {
       throw createError.validation(error.message);
+    }
+    if (error instanceof PublishedArtifactOwnershipError) {
+      throw createError.forbidden(error.message);
+    }
+    if (error instanceof PublishedArtifactQuotaError) {
+      throw createError.conflict(error.message);
     }
     if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
     throw error;

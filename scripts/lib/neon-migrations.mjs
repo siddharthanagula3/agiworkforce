@@ -10,6 +10,11 @@ export const MIGRATION_RUNNER_VERSION = 1;
 const ADVISORY_LOCK_NAMESPACE = 924_818;
 const ADVISORY_LOCK_ID = 20_260_730;
 const MIGRATION_NAME = /^(\d{4})_([a-z0-9][a-z0-9_]*)\.sql$/;
+const COMMIT_SHA = /^[0-9a-f]{7,40}$/;
+
+export const MIGRATION_TARGETS = ['local', 'ci', 'branch', 'production'];
+export const DEPLOYMENT_SURFACES = ['web', 'gateway'];
+export const DEPLOYMENT_HISTORY_LIMIT = 20;
 
 export class MigrationContractError extends Error {
   constructor(message, details = []) {
@@ -310,4 +315,117 @@ export async function verifyMigrations(client, migrations) {
     );
   }
   return state;
+}
+
+export function ledgerDigest(ledgerRows) {
+  const canonical = [...ledgerRows]
+    .map((row) => ({ ...row, sequence: Number(row.sequence) }))
+    .sort((first, second) => first.sequence - second.sequence)
+    .map((row) => `${row.sequence}:${row.filename}:${row.checksum}`)
+    .join('\n');
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
+export async function ensureDeploymentLedger(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS public.schema_migration_deployments (
+      id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      surface text NOT NULL CHECK (surface IN ('web', 'gateway')),
+      target text NOT NULL CHECK (target IN ('local', 'ci', 'branch', 'production')),
+      commit_sha text NOT NULL CHECK (commit_sha ~ '^[0-9a-f]{7,40}$'),
+      deployment_ref text,
+      head_sequence integer NOT NULL CHECK (head_sequence > 0),
+      head_filename text NOT NULL,
+      head_checksum text NOT NULL CHECK (head_checksum ~ '^[0-9a-f]{64}$'),
+      applied_count integer NOT NULL CHECK (applied_count > 0),
+      ledger_digest text NOT NULL CHECK (ledger_digest ~ '^[0-9a-f]{64}$'),
+      runner_version integer NOT NULL CHECK (runner_version > 0),
+      verified_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+      metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+      UNIQUE (surface, target, commit_sha)
+    )
+  `);
+}
+
+function assertDeploymentIdentity({ surface, target, commitSha }) {
+  const details = [];
+  if (!DEPLOYMENT_SURFACES.includes(surface)) {
+    details.push(`surface must be one of ${DEPLOYMENT_SURFACES.join('|')}`);
+  }
+  if (!MIGRATION_TARGETS.includes(target)) {
+    details.push(`target must be one of ${MIGRATION_TARGETS.join('|')}`);
+  }
+  if (typeof commitSha !== 'string' || !COMMIT_SHA.test(commitSha)) {
+    details.push('commit must be a 7-40 character lowercase git sha');
+  }
+  if (details.length > 0) {
+    throw new MigrationContractError('Deployment record identity is incomplete', details);
+  }
+}
+
+export async function recordDeployment(client, migrations, options) {
+  const identity = {
+    surface: options.surface,
+    target: options.target,
+    commitSha: options.commitSha,
+  };
+  assertDeploymentIdentity(identity);
+
+  const state = await verifyMigrations(client, migrations);
+  const head = migrations.at(-1);
+  await ensureDeploymentLedger(client);
+
+  const inserted = await client.query(
+    `INSERT INTO public.schema_migration_deployments
+       (surface, target, commit_sha, deployment_ref, head_sequence, head_filename,
+        head_checksum, applied_count, ledger_digest, runner_version, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+     ON CONFLICT (surface, target, commit_sha) DO UPDATE SET
+       deployment_ref = EXCLUDED.deployment_ref,
+       head_sequence = EXCLUDED.head_sequence,
+       head_filename = EXCLUDED.head_filename,
+       head_checksum = EXCLUDED.head_checksum,
+       applied_count = EXCLUDED.applied_count,
+       ledger_digest = EXCLUDED.ledger_digest,
+       runner_version = EXCLUDED.runner_version,
+       verified_at = clock_timestamp(),
+       metadata = EXCLUDED.metadata
+     RETURNING surface, target, commit_sha, deployment_ref, head_sequence, head_filename,
+               head_checksum, applied_count, ledger_digest, runner_version, verified_at, metadata`,
+    [
+      identity.surface,
+      identity.target,
+      identity.commitSha,
+      options.deploymentRef?.trim() || null,
+      head.sequence,
+      head.filename,
+      head.checksum,
+      state.plan.applied.length,
+      ledgerDigest(state.ledgerRows),
+      MIGRATION_RUNNER_VERSION,
+      JSON.stringify(options.metadata ?? {}),
+    ],
+  );
+
+  return { record: inserted.rows[0], ...state };
+}
+
+export async function readDeploymentRecords(client, options = {}) {
+  const relation = await client.query(
+    "SELECT to_regclass('public.schema_migration_deployments') AS relation",
+  );
+  if (!relation.rows[0]?.relation) return [];
+
+  const limit =
+    Number.isInteger(options.limit) && options.limit > 0 ? options.limit : DEPLOYMENT_HISTORY_LIMIT;
+  const result = await client.query(
+    `SELECT surface, target, commit_sha, deployment_ref, head_sequence, head_filename,
+            head_checksum, applied_count, ledger_digest, runner_version, verified_at, metadata
+       FROM public.schema_migration_deployments
+      WHERE ($1::text IS NULL OR surface = $1)
+      ORDER BY verified_at DESC, id DESC
+      LIMIT $2`,
+    [options.surface ?? null, limit],
+  );
+  return result.rows;
 }

@@ -1,9 +1,9 @@
-
 import { randomBytes } from 'crypto';
 
 import { NextRequest, NextResponse } from 'next/server';
 
 import { connectMcpServer } from '@agiworkforce/mcp';
+import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -169,6 +169,7 @@ async function handlePost(request: NextRequest) {
   let toolCount = 0;
   try {
     const handle = await connectMcpServer({
+      egressPolicy: MCP_EGRESS_POLICY,
       serverName: name,
       config: {
         url: parsedUrl.toString(),

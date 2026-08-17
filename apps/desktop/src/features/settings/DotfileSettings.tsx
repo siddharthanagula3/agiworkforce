@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import {
   ChevronDown,
   ChevronUp,
+  FolderOpen,
   Loader2,
   Plus,
   Puzzle,
@@ -14,8 +15,62 @@ import {
   Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { homeDir } from '@tauri-apps/api/path';
 import { Button } from '@/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
+import { fileOpenWithDefaultApp } from '../../api/fileOps';
+
+function enclosingFolder(filePath: string): string {
+  const trimmed = filePath.replace(/[/\\]+$/, '');
+  const separator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return separator > 0 ? trimmed.slice(0, separator) : trimmed;
+}
+
+async function expandHome(path: string): Promise<string> {
+  if (!path.startsWith('~')) return path;
+  const home = (await homeDir()).replace(/[/\\]+$/, '');
+  return `${home}${path.slice(1)}`;
+}
+
+interface OpenFolderButtonProps {
+  path: string;
+  name: string;
+  kind?: 'file' | 'directory';
+}
+
+function OpenFolderButton({ path, name, kind = 'file' }: OpenFolderButtonProps) {
+  const [opening, setOpening] = useState(false);
+  const isMounted = useIsMounted();
+
+  const handleOpen = useCallback(async () => {
+    setOpening(true);
+    try {
+      const folder = kind === 'directory' ? path.replace(/[/\\]+$/, '') : enclosingFolder(path);
+      await fileOpenWithDefaultApp(await expandHome(folder));
+    } catch (err) {
+      toast.error(`Failed to open the folder for ${name}: ${String(err)}`);
+    } finally {
+      if (isMounted.current) setOpening(false);
+    }
+  }, [path, name, kind, isMounted]);
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleOpen()}
+      disabled={opening}
+      aria-label={`Open containing folder for ${name}`}
+      title="Open containing folder"
+      className="shrink-0 p-1 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+    >
+      {opening ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+      ) : (
+        <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
 
 interface McpServerEntry {
   command?: string;
@@ -105,9 +160,10 @@ function ConfigEditorSection() {
   return (
     <div>
       <h3 className="text-lg font-semibold mb-1">Configuration</h3>
-      <p className="text-sm text-muted-foreground mb-4">
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         Shared settings from{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.agiworkforce/config.toml</code>
+        <OpenFolderButton path="~/.agiworkforce/config.toml" name="config.toml" />
       </p>
       <div className="space-y-3">
         {[
@@ -217,9 +273,10 @@ function McpServersSection() {
           Add
         </Button>
       </div>
-      <p className="text-sm text-muted-foreground mb-4">
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         Servers configured in{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.agiworkforce/mcp.json</code>
+        <OpenFolderButton path="~/.agiworkforce/mcp.json" name="mcp.json" />
       </p>
 
       {showAdd && (
@@ -369,6 +426,7 @@ function EcosystemSection() {
                 <span className="text-sm font-medium">{tool.name}</span>
                 <p className="text-xs text-muted-foreground truncate">{tool.path}</p>
               </div>
+              <OpenFolderButton path={tool.path} name={tool.name} kind="directory" />
               <div className="flex gap-1.5 shrink-0">
                 {tool.has_mcp && (
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">
@@ -419,9 +477,10 @@ function SkillsBrowserSection() {
   return (
     <div>
       <h3 className="text-lg font-semibold mb-1">Skills</h3>
-      <p className="text-sm text-muted-foreground mb-4">
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         Discovered in{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.agiworkforce/skills/</code>
+        <OpenFolderButton path="~/.agiworkforce/skills/" name="skills" kind="directory" />
       </p>
 
       {loading ? (
@@ -443,6 +502,7 @@ function SkillsBrowserSection() {
               <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                 {skill.source}
               </span>
+              <OpenFolderButton path={skill.path} name={skill.name} />
             </div>
           ))}
         </div>
@@ -504,11 +564,12 @@ function InstructionsEditorSection() {
   return (
     <div>
       <h3 className="text-lg font-semibold mb-1">Instructions</h3>
-      <p className="text-sm text-muted-foreground mb-4">
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         Global instructions from{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">
           ~/.agiworkforce/INSTRUCTIONS.md
         </code>
+        <OpenFolderButton path="~/.agiworkforce/INSTRUCTIONS.md" name="INSTRUCTIONS.md" />
       </p>
       <textarea
         value={content}
@@ -582,11 +643,12 @@ function MemoryViewerSection() {
           </button>
         )}
       </div>
-      <p className="text-sm text-muted-foreground mb-4">
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         Read-only view of{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">
           ~/.agiworkforce/memories/raw_memories.md
         </code>
+        <OpenFolderButton path="~/.agiworkforce/memories/raw_memories.md" name="raw_memories.md" />
       </p>
       {!content ? (
         <p className="text-sm text-muted-foreground py-2">No memories stored yet.</p>
@@ -619,6 +681,13 @@ export function DotfileSettings() {
               <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.agiworkforce/</code> dotfile
               directory used by both the desktop app and CLI.
             </p>
+          </div>
+          <div className="ml-auto">
+            <OpenFolderButton
+              path="~/.agiworkforce/"
+              name="the dotfile directory"
+              kind="directory"
+            />
           </div>
         </div>
       </div>

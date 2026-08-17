@@ -1,6 +1,16 @@
 import 'server-only';
 
+import { createHash, timingSafeEqual } from 'node:crypto';
+
 import { logger } from '@/lib/logger';
+
+function digest(value: string): Buffer {
+  return createHash('sha256').update(value, 'utf8').digest();
+}
+
+function constantTimeEquals(provided: string, expected: string): boolean {
+  return timingSafeEqual(digest(provided), digest(expected));
+}
 
 export function verifyCronRequest(request: Pick<Request, 'headers'>): boolean {
   const authHeader = request.headers.get('authorization');
@@ -9,7 +19,7 @@ export function verifyCronRequest(request: Pick<Request, 'headers'>): boolean {
   const devBypass = process.env['CRON_DEV_BYPASS'] === '1';
 
   if (cronSecret) {
-    return authHeader === `Bearer ${cronSecret}`;
+    return constantTimeEquals(authHeader ?? '', `Bearer ${cronSecret}`);
   }
 
   if (nodeEnv === 'development' && devBypass) {

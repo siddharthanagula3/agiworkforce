@@ -241,7 +241,22 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'server_overload',
   'capacity_off_switch',
   'api_timeout',
+  'dependency_unavailable',
 ]);
+
+export function providerUnavailableFailure(retryAfterSeconds?: number): SafeProviderFailure {
+  return {
+    statusCode: 503,
+    category: 'dependency_unavailable',
+    chunk: {
+      type: 'error',
+      message: 'The upstream provider is temporarily unavailable. Please retry.',
+      code: 'dependency_unavailable',
+      retryable: true,
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+    },
+  };
+}
 
 export function isFailoverEligibleFailure(failure: SafeProviderFailure): boolean {
   if (failure.chunk.code === 'gateway_deadline_exceeded') return false;

@@ -1,0 +1,116 @@
+{
+  "domain": "Artifacts, canvas & generative UI objects",
+  "summary": "The web artifact system (ArtifactsPanel.tsx + ArtifactPreview.tsx) is a genuinely strong, well-engineered analogue of Claude's Artifacts: a persistent resizable side panel, in-place Preview/Code toggle, auto title + type label, version history with Restore, one unified component covering 12 content types, a cross-origin/null-origin sandboxed iframe, and a publish flow that is verifiably end-to-end (CSRF, rate-limited, RLS-scoped, DB-CHECK-enforced render policy) \u2014 stronger evidence than the benchmark itself could get for Claude's own publish action. The remaining gaps are almost entirely single-product, non-table-stakes differentiators (Gemini's Canvas composer entry, Deep-Research-to-5-formats, a first-class Videos surface; ChatGPT's full-page pinned-annotation image editor), correctly capped at P3. The one real, actionable gap is the artifact gallery (/gallery) missing search, filter, and a Shared-with-you tab that Claude's dedicated gallery has, plus a nuance that our transcript's tool-name display mechanism is generic infrastructure with no product-level \"frontend design\" skill wired into it, so it can't currently reproduce Claude's named-skill narration even though the display plumbing already exists.",
+  "strengths": [
+    "Publish is genuinely shipped end-to-end (not just UI-present): apps/web/app/api/artifacts/publish/route.ts (CSRF + rate limit + Zod + RLS) plus published_artifacts migration 0095 (forced RLS, owner-only) and a public render policy enforced in both app code and a DB CHECK constraint \u2014 confirmed shipped in docs/agent-context/known-flaws.md:396-411. The benchmark itself notes Claude's publish action was 'not exercised' in their research; ours is verified working.",
+    "Cross-origin/null-origin sandboxed iframe rendering read directly from source: apps/web/features/chat/components/SandboxedIframe.tsx:16-24 (allow-scripts without allow-same-origin, window-identity auth) plus connect-src 'none' on published pages \u2014 more rigorously confirmed than the benchmark could get for any competitor.",
+    "One unified artifact object model across 12 content types (html/react/svg/mermaid/code/document/spreadsheet/table/csv/presentation/email/image) through a single ArtifactPreview.tsx component (lines 96-119), avoiding ChatGPT's documented Run-panel/inline-app fragmentation (artifacts-15).",
+    "Dedicated artifact-typed gallery with its own left-nav entry (WebSidebar.tsx:112, WebShellV3.tsx:33 -> /gallery), ahead of ChatGPT/Gemini's generic multi-type Library pattern described in artifacts-10.",
+    "Version history with prev/next navigation and Restore directly in the panel header, ArtifactPreview.tsx:1177-1237 \u2014 not documented for ChatGPT at all in this benchmark pass.",
+    "Accessible mobile artifact overlay: real role=dialog/aria-modal/focus-trap/Escape handling, ArtifactsPanel.tsx:308-362."
+  ],
+  "notWorthCopying": [
+    "Claude's naive 'AI-powered artifacts' (artifact calls the model directly on the viewer's own quota) \u2014 the prior audit's GAP-P0-009 red-team already found an anonymous-wallet DoS, an opaque-origin auth contradiction, and a fail-open concurrency limiter in this design; correctly un-shipped, do not clone as-is.",
+    "ChatGPT's silent, undiscoverable export-to-Library with no on-object publish control (artifacts-06/07) \u2014 we already do better with a visible, working Publish button; don't regress toward this pattern.",
+    "ChatGPT's two-surface fragmentation (a separate Run panel vs. an inline-app-generation surface with no unified object model, artifacts-15) \u2014 keep our single ArtifactPreview component as the pattern for new artifact types rather than spinning up type-specific chrome."
+  ],
+  "gaps": [
+    {
+      "id": "ART-CANVAS-01",
+      "title": "Artifact gallery has no search, no filter-by, and no Shared-with-you tab",
+      "claimId": "artifacts-09",
+      "benchmark": "Claude's /artifacts gallery has All/Yours/Shared-with-you tabs, a Filter-by dropdown, and a search icon (research files 11-artifacts-and-files/claude-artifacts-findings.md, 04-cross-product-comparison/09-generative-artifacts-canvas-and-media.md).",
+      "ourState": "PARTIAL",
+      "ourEvidence": "apps/web/app/gallery/GalleryClient.tsx: only two tabs exist, type TabId = 'yours' | 'inspiration' (line 970); grepped whole file for search/Search (0 hits) and filter/Filter (only an unrelated .filter(Boolean) call at line 630). Nav entry confirmed reachable: apps/web/features/chat/v3/WebSidebar.tsx:112 'Artifacts' -> WebShellV3.tsx:33 VIEW_ROUTES['artifacts']='/gallery'.",
+      "severity": "P3",
+      "effort": "M",
+      "priorAudit": "NEW",
+      "recommendation": "Add a search input and a type/date filter dropdown to GalleryClient's header row, scoped to sortedArtifacts; a 'Shared with you' tab requires the cross-account artifact-sharing model to exist first (see ARTIFACTS-001 in the prior audit, which found even single-user cross-device sync is push-missing), so sequence search/filter first as the cheap win."
+    },
+    {
+      "id": "ART-CANVAS-02",
+      "title": "Gallery's 'New Artifact' never opens a blank, directly-editable artifact \u2014 always routes through a chat prompt",
+      "claimId": "artifacts-09",
+      "benchmark": "Claude's gallery has a 'New artifact' button implied to open a real artifact creation surface, not just a chat redirect (claude-artifacts-findings.md).",
+      "ourState": "PARTIAL",
+      "ourEvidence": "apps/web/app/gallery/GalleryClient.tsx:994-1005 handleCategorySelect either router.push('/chat') for the 'scratch' category or opens a wizard whose handleLaunch does router.push(`/chat?prompt=${encoded}`) \u2014 every path is a chat-prompt redirect, never a direct editable canvas.",
+      "severity": "P2",
+      "effort": "M",
+      "priorAudit": "CONFIRMS_PRIOR",
+      "priorAuditRef": "audit/parity-2026-08-15/gaps/domain-artifacts.json ARTIFACTS-003 (same conclusion reached independently from the gallery entry point rather than the Code-tab side; corroborating, not new)",
+      "recommendation": "See ARTIFACTS-003's own recommendation: make the Code tab's <pre> a real editable surface behind an Edit toggle, writing back through the existing content-keyed versioning path, and let the Gallery's blank-artifact path open that editor directly instead of always redirecting to /chat."
+    },
+    {
+      "id": "ART-CANVAS-03",
+      "title": "No product-level 'frontend design' skill is wired into artifact generation, so named-skill narration cannot occur even though the display mechanism exists",
+      "claimId": "artifacts-13",
+      "benchmark": "Claude's transcript names the specific internal skill auto-invoked before building UI (e.g. '\ud83d\udccb Loaded frontend-design skill') (claude-artifacts-findings.md).",
+      "ourState": "BUILT_NOT_WIRED",
+      "ourEvidence": "Display link exists and is generic: apps/web/features/chat/components/messages/ToolTimeline.tsx humanizeToolName (lines 145-196) falls through to a tool's real name for anything unmapped, and getToolIcon (lines 61-104) has a dedicated BookOpen glyph for any tool name containing 'skill'/'learn' explicitly citing the Claude reference. Missing link: no product-shipped SKILL.md for design/UI work was found anywhere under the repo outside dev-tooling (.agents/skills/*, which are Claude Code environment skills, not product skills) or IDE-extension test fixtures (apps/extension-vscode/.vscode-test/**) \u2014 grep for SKILL.md excluding those turned up none for a design/frontend skill. The real product skill runtime exists (packages/tools/skills, apps/web/lib/services/skill-catalog-service.ts) but nothing evidences the artifact-generation code path auto-selecting a named UI-design skill to feed that display.",
+      "severity": "P3",
+      "effort": "L",
+      "priorAudit": "NEW",
+      "recommendation": "If a bundled 'frontend design' (or similar) skill is wanted to match this Claude behavior, author it under the product skill catalog (not .agents/skills, which is Claude Code tooling) and have the system prompt/tool-selection logic for HTML/React artifact generation prefer it when available; the transcript display path already renders whatever name comes through, so this is purely a generation-flow + skill-catalog wiring task, not a UI task."
+    },
+    {
+      "id": "ART-CANVAS-04",
+      "title": "Composer has no discrete, named Canvas/artifact-creation tool entry",
+      "claimId": "artifacts-17",
+      "benchmark": "Gemini's composer 'More tools' menu has a distinct 'Canvas' entry alongside Deep Research (evidence label UNVERIFIED even for Gemini itself \u2014 the benchmark never exercised it).",
+      "ourState": "MISSING",
+      "ourEvidence": "grep for canvas/Canvas in apps/web/features/chat/components/Composer/ChatComposerNew.tsx returns only an HTML <canvas> element used for camera-capture image processing (lines 1063-1075), unrelated to artifact creation. Artifact creation is implicit-by-prompt-content or via the Gallery's New Artifact button (see ART-CANVAS-02).",
+      "severity": "P3",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Low priority given SINGLE_PRODUCT/UNVERIFIED convergence. If pursued, add a 'New artifact' entry to the composer's tools/attachments menu that opens the same category picker the Gallery already has (apps/web/app/gallery/GalleryClient.tsx CategoryPicker), rather than building a second implementation."
+    },
+    {
+      "id": "ART-CANVAS-05",
+      "title": "No one-click transform of a completed research report into derivative formats (web page/infographic/quiz/flashcards/audio)",
+      "claimId": "artifacts-18",
+      "benchmark": "Gemini's Deep Research completed-report panel offers a 'Create' menu producing Web page/Infographic/Quiz/Flashcards/Audio Overview or a custom app.",
+      "ourState": "MISSING",
+      "ourEvidence": "Grepped apps/web/features/chat/components/research/ResearchReportView.tsx, ResearchPanel.tsx, ResearchActivity.tsx for infographic/flashcard/quiz/'audio overview'/a Create-transform menu: zero hits in any file.",
+      "severity": "P3",
+      "effort": "L",
+      "priorAudit": "NEW",
+      "recommendation": "Single-product Gemini differentiator; not worth building ahead of table-stakes gaps elsewhere. If prioritized later, the cheapest slice is a 'Turn into artifact' action on ResearchReportView that re-prompts the model to restructure the existing report content as an HTML artifact (reusing the existing artifact-generation path), before investing in audio/quiz-specific pipelines."
+    },
+    {
+      "id": "ART-CANVAS-06",
+      "title": "Image editing is inline-in-chat only; no full-page editor and no pinned-annotation edit targeting",
+      "claimId": "artifacts-19",
+      "benchmark": "ChatGPT's image editor is a full-page dedicated surface with a pin-an-annotation-on-the-image edit-location feature, 5 aspect-ratio presets, and a natural-language 'Describe edits' composer.",
+      "ourState": "PARTIAL",
+      "ourEvidence": "apps/web/features/chat/components/ImageGenerationCard.tsx already has a real natural-language edit composer (editText state, lines 367-424, wired to onRegenerate) and a per-model aspect-ratio dropdown (getImageAspectOptionsForModel/normalizeImageAspectRatioForModel, lines 478-488) \u2014 but it renders inline in the chat message, not as a full-page surface, and grepping the file for pin/annotation/comment (image-location-targeting) returns no hits.",
+      "severity": "P3",
+      "effort": "L",
+      "priorAudit": "NEW",
+      "recommendation": "The natural-language edit loop already exists and is the harder half of this; a full-page surface is a layout change reusing the same editText/regenerate logic. Pinned-annotation targeting (click a point on the image to scope an edit) is the genuinely new work and should be scoped separately, lower priority given SINGLE_PRODUCT convergence."
+    },
+    {
+      "id": "ART-CANVAS-07",
+      "title": "No dedicated top-level video-generation surface (nav item, specialized composer, template gallery); video generation is chat-prompt-triggered only",
+      "claimId": "artifacts-20",
+      "benchmark": "Gemini has a dedicated top-level 'Videos' nav item with its own composer (aspect ratio, image-attach, model picker) and a template gallery of 9+ example videos.",
+      "ourState": "PARTIAL",
+      "ourEvidence": "Video generation is real and functionally complete end-to-end: apps/web/app/api/media/video/{generate,status,cancel,openrouter-webhook}/route.ts, apps/web/lib/workflows/video-generation-workflow.ts, in-chat lifecycle UI (apps/web/features/chat/components/messages/VideoGenerationPlaceholder.tsx elapsed-time counter; completion state 'Your video is ready!' with Download control at apps/web/features/chat/components/messages/MessageBubble.tsx:1586,1604). Missing: grepped apps/web/features/chat/v3/WebSidebar.tsx for 'Videos' \u2014 no nav entry; there is no dedicated composer or template gallery outside the main chat composer.",
+      "severity": "P3",
+      "effort": "XL",
+      "priorAudit": "NEW",
+      "recommendation": "The underlying generation capability, job lifecycle, and completion UI already exist and work \u2014 this is a chrome/surface gap, not a capability gap. If prioritized, add a /videos route reusing the existing generation API and completion-state components rather than rebuilding the pipeline; treat as lower priority than table-stakes gaps given SINGLE_PRODUCT convergence and XL effort to build a full template gallery."
+    },
+    {
+      "id": "ART-CANVAS-08",
+      "title": "Image-generation entry points do not disclose the underlying model name in first-party UI copy",
+      "claimId": "artifacts-22",
+      "benchmark": "Gemini's Images entry point shows 'Create images with Nano Banana 2' directly in UI text.",
+      "ourState": "MISSING",
+      "ourEvidence": "Grepped apps/web/features/chat/components/ImageGenerationCard.tsx for a rendered {modelId}-derived label near the generation entry point: modelId is threaded through function calls (normalizeImageAspectRatioForModel(modelId, ...) etc.) but no user-visible model-name string was found. This is a shallow single-file grep, not a full sweep of every image-generation entry point in the app, so confidence is lower than other findings in this file.",
+      "severity": "P3",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Low priority, single-product Gemini differentiator with only shallow verification here. If pursued: surface the resolved model's display name (sourced from packages/contracts/types/src/models.json per this repo's own model-ID rule, never hardcoded) near the image-generation entry point."
+    }
+  ]
+}

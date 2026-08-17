@@ -1,12 +1,15 @@
-
-import { useCallback, useMemo } from 'react';
-import { View, ScrollView, Pressable, Alert } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { FileText, Plus, Trash2 } from 'lucide-react-native';
+import { ALLOWED_ATTACHMENT_MIME_PREFIXES, IMAGE_ATTACHMENT_MIME_TYPES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { useProjectStore } from '@/src/features/projects/store';
-import type { ProjectSource } from '@/src/features/projects/store';
+import {
+  cloudProjectSources,
+  useProjectSourceTarget,
+  useProjectStore,
+} from '@/src/features/projects/store';
 import { formatBytes } from '@agiworkforce/utils/format';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 
@@ -14,13 +17,32 @@ interface ProjectSourcesTabProps {
   projectId: string;
 }
 
-const EMPTY_PROJECT_SOURCES: ProjectSource[] = [];
+interface DisplaySource {
+  id: string;
+  name: string;
+  size: number;
+  addedAt: string;
+}
+
+/** Derived from the shared attachment allowlist the upload path and the server both enforce. */
+export const PROJECT_SOURCE_MIME_TYPES: readonly string[] = [
+  ...IMAGE_ATTACHMENT_MIME_TYPES,
+  ...ALLOWED_ATTACHMENT_MIME_PREFIXES.map((prefix) =>
+    prefix.endsWith('/') ? `${prefix}*` : prefix,
+  ),
+];
+
+const EMPTY_SOURCES: DisplaySource[] = [];
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
 
 function SourceRow({
   source,
   onRemove,
 }: {
-  source: ProjectSource;
+  source: DisplaySource;
   onRemove: (id: string) => void;
 }) {
   const colors = useThemeColors();
@@ -77,7 +99,7 @@ function SourceRow({
   );
 }
 
-function EmptyState() {
+function Notice({ title, body }: { title: string; body: string }) {
   const colors = useThemeColors();
   return (
     <View className="items-center justify-center py-16 px-6">
@@ -91,13 +113,13 @@ function EmptyState() {
         className="text-[15px] font-semibold text-center mb-2"
         style={{ color: colors.textPrimary }}
       >
-        No sources added yet
+        {title}
       </Text>
       <Text
         className="text-[13px] text-center leading-[19px]"
         style={{ color: colors.textSecondary }}
       >
-        Add files to give the project more context.
+        {body}
       </Text>
     </View>
   );
@@ -105,41 +127,125 @@ function EmptyState() {
 
 export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   const colors = useThemeColors();
+  const target = useProjectSourceTarget(projectId);
   const projects = useProjectStore((s) => s.projects);
-  const sources = useMemo(
-    () => projects.find((project) => project.id === projectId)?.sources ?? EMPTY_PROJECT_SOURCES,
-    [projectId, projects],
-  );
   const addSource = useProjectStore((s) => s.addSource);
   const removeSource = useProjectStore((s) => s.removeSource);
 
-  const handleAddSources = useCallback(async () => {
+  const [cloudSources, setCloudSources] = useState<DisplaySource[]>(EMPTY_SOURCES);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const localSources = useMemo<DisplaySource[]>(
+    () =>
+      (projects.find((project) => project.id === projectId)?.sources ?? []).map((source) => ({
+        id: source.id,
+        name: source.name,
+        size: source.size,
+        addedAt: source.addedAt,
+      })),
+    [projectId, projects],
+  );
+
+  const refreshCloudSources = useCallback(async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
+      const files = await cloudProjectSources.list(projectId);
+      if (!mounted.current) return;
+      setCloudSources(
+        files.map((file) => ({
+          id: file.id,
+          name: file.fileName,
+          size: file.byteCount,
+          addedAt: file.addedAt,
+        })),
+      );
+      setLoadError(null);
+    } catch (error) {
+      if (!mounted.current) return;
+      setLoadError(errorMessage(error, 'Could not load this project’s sources.'));
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (target !== 'cloud') {
+      setCloudSources(EMPTY_SOURCES);
+      setLoadError(null);
+      return;
+    }
+    setBusy(true);
+    void refreshCloudSources().finally(() => {
+      if (mounted.current) setBusy(false);
+    });
+  }, [target, refreshCloudSources]);
+
+  const sources = target === 'cloud' ? cloudSources : localSources;
+
+  const handleAddSources = useCallback(async () => {
+    if (target === 'unknown') {
+      Alert.alert('Project unavailable', 'This project is no longer available on this device.');
+      return;
+    }
+
+    let result: DocumentPicker.DocumentPickerResult;
+    try {
+      result = await DocumentPicker.getDocumentAsync({
         multiple: true,
         copyToCacheDirectory: true,
+        type: [...PROJECT_SOURCE_MIME_TYPES],
       });
+    } catch {
+      Alert.alert('Error', 'Could not pick files. Please try again.');
+      return;
+    }
+    if (result.canceled) return;
 
-      if (result.canceled) return;
-
-      for (const asset of result.assets) {
-        addSource(projectId, {
+    setBusy(true);
+    const failures: string[] = [];
+    for (const asset of result.assets) {
+      try {
+        await addSource(projectId, {
           name: asset.name,
           mimeType: asset.mimeType ?? 'application/octet-stream',
           size: asset.size ?? 0,
           uri: asset.uri,
         });
+      } catch (error) {
+        failures.push(errorMessage(error, `"${asset.name}" could not be added.`));
       }
-    } catch {
-      Alert.alert('Error', 'Could not pick files. Please try again.');
     }
-  }, [projectId, addSource]);
+    if (target === 'cloud') await refreshCloudSources();
+    if (!mounted.current) return;
+    setBusy(false);
+    if (failures.length > 0) {
+      Alert.alert('Some sources were not added', failures.join('\n\n'));
+    }
+  }, [projectId, target, addSource, refreshCloudSources]);
 
   const handleRemove = useCallback(
-    (sourceId: string) => {
-      removeSource(projectId, sourceId);
+    async (sourceId: string) => {
+      try {
+        await removeSource(projectId, sourceId);
+        if (target === 'cloud') await refreshCloudSources();
+      } catch (error) {
+        Alert.alert('Could not remove source', errorMessage(error, 'Please try again.'));
+      }
     },
-    [projectId, removeSource],
+    [projectId, target, removeSource, refreshCloudSources],
+  );
+
+  const handleRemovePress = useCallback(
+    (sourceId: string) => {
+      void handleRemove(sourceId);
+    },
+    [handleRemove],
   );
 
   return (
@@ -147,16 +253,20 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       {/* Add sources button */}
       <View className="px-4 pt-4 pb-2">
         <Pressable
-          onPress={handleAddSources}
+          onPress={() => void handleAddSources()}
+          disabled={busy || target === 'unknown'}
           className="flex-row items-center justify-center gap-2 py-3 rounded-xl"
           style={{
             backgroundColor: `${colors.teal}18`,
             borderWidth: 1,
             borderColor: `${colors.teal}35`,
+            opacity: busy || target === 'unknown' ? 0.5 : 1,
           }}
           accessibilityRole="button"
           accessibilityLabel="Add sources"
+          accessibilityState={{ disabled: busy || target === 'unknown' }}
         >
+          {busy ? <ActivityIndicator size="small" color={colors.teal} /> : null}
           <Plus size={16} color={colors.teal} />
           <Text className="text-[14px] font-semibold" style={{ color: colors.teal }}>
             Add sources
@@ -164,9 +274,15 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
         </Pressable>
       </View>
 
-      {/* List or empty state */}
-      {sources.length === 0 ? (
-        <EmptyState />
+      {target === 'unknown' ? (
+        <Notice
+          title="Project unavailable"
+          body="This project is no longer available on this device, so sources cannot be added."
+        />
+      ) : loadError ? (
+        <Notice title="Could not load sources" body={loadError} />
+      ) : sources.length === 0 ? (
+        <Notice title="No sources added yet" body="Add files to give the project more context." />
       ) : (
         <ScrollView
           className="flex-1"
@@ -174,7 +290,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           showsVerticalScrollIndicator={false}
         >
           {sources.map((source) => (
-            <SourceRow key={source.id} source={source} onRemove={handleRemove} />
+            <SourceRow key={source.id} source={source} onRemove={handleRemovePress} />
           ))}
         </ScrollView>
       )}

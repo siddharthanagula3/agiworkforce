@@ -1,10 +1,10 @@
-
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { createRateLimiter } from '../middleware/rateLimit';
+import { isDependencyUnavailableError, providerBreaker } from '../lib/dependencies';
 import { logger } from '../lib/logger';
 import {
   buildProviderAdapter,
@@ -196,6 +196,21 @@ router.post(
       if (!res.writableEnded) ctrl.abort();
     });
 
+    let lease;
+    try {
+      lease = await providerBreaker(providerId).begin({ signal: ctrl.signal });
+    } catch (err) {
+      if (!isDependencyUnavailableError(err)) throw err;
+      logger.warn(
+        { providerId, userId: user.userId, err: (err as Error).message },
+        'Provider stream refused before dialling upstream',
+      );
+      throw new AppError(
+        `Provider "${providerId}" is temporarily unavailable. Try another provider.`,
+        503,
+      );
+    }
+
     res.status(200);
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -211,11 +226,14 @@ router.post(
     let chunkCount = 0;
 
     try {
-      for await (const chunk of adapter.stream(chatRequest, ctrl.signal)) {
+      for await (const chunk of adapter.stream(chatRequest, lease.signal)) {
         chunkCount += 1;
+        if (chunkCount === 1) lease.succeeded();
         writeEvent(chunk);
       }
+      lease.succeeded();
     } catch (err) {
+      lease.failed(err);
       const classified = classifyError(err);
       logger.warn(
         {
@@ -239,6 +257,7 @@ router.post(
       writeEvent(errorChunk);
       writeEvent({ type: 'stop', reason: 'error' });
     } finally {
+      lease.release();
       logger.info(
         {
           providerId,

@@ -1,4 +1,3 @@
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -850,6 +849,7 @@ describe('settings mapping — leak guard (toCloudSettings)', () => {
     const allowedNamespaces = new Set([
       'appearance',
       'personalization',
+      'general',
       'profile',
       'notifications',
       'language',

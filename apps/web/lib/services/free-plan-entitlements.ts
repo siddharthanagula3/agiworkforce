@@ -20,6 +20,13 @@ export function getKnowledgeStorageLimitBytes(planTier: string | null | undefine
   );
 }
 
+export function isContractNegotiatedLimit(
+  planTier: string | null | undefined,
+  key: 'projects' | 'customMcpServers' | 'knowledgeStorageBytes',
+): boolean {
+  return getBillingPlanProductLimits(planTier)?.[key] === 'custom';
+}
+
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${Math.round(bytes / 1024 ** 3)} GB`;
   if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
@@ -54,6 +61,9 @@ export function getProjectLimitErrorMessage(planTier: string | null | undefined)
     return 'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.';
   }
   if (limit === null) {
+    if (isContractNegotiatedLimit(planTier, 'projects')) {
+      return `${label} Project allowances are set by your contract, not by a plan default. This request hit that negotiated limit; contact your account team to raise it.`;
+    }
     return `${label} accounts have no Project limit from your plan. This request hit an account-level limit; contact support if it persists.`;
   }
   return `${label} accounts can have up to ${limit} ${limit === 1 ? 'Project' : 'Projects'}. Delete a Project or upgrade to add another.`;
@@ -66,6 +76,9 @@ export function getCustomRemoteMcpLimitErrorMessage(planTier: string | null | un
     return 'Your current subscription does not allow custom connectors. Choose an eligible plan and try again.';
   }
   if (limit === null) {
+    if (isContractNegotiatedLimit(planTier, 'customMcpServers')) {
+      return `${label} custom connector allowances are set by your contract, not by a plan default. This request hit that negotiated limit; contact your account team to raise it.`;
+    }
     return `${label} accounts have no custom connector limit from your plan. This request hit an account-level limit; contact support if it persists.`;
   }
   return `${label} accounts can add up to ${limit} custom connector${limit === 1 ? '' : 's'}. Remove one or upgrade to add another.`;

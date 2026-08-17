@@ -46,10 +46,22 @@ P1_PATTERNS = [
     (r"do\s+not\s+follow\s+(?:any|your|the)\s+(?:rules?|guidelines?)", 0.9),
     (r"you\s+must\s+(?:always\s+)?ignore", 0.7),
 ]
+_HIDDEN_INSTRUCTION_KEYWORDS = r"(?:system|instructions?|ignore|POST|GET|send|transmit)"
+
 # P2: Hidden Instructions
+# The comment/anchor patterns run under re.DOTALL, so an unbounded `.*?` gap can
+# rescan the whole file once per keyword hit. The leading lookahead proves a
+# closing delimiter is near before any gap is walked, and each gap is bounded;
+# together they cap the work per start position. Do not restore bare `.*?`.
 P2_PATTERNS = [
-    (r"<!--.*?(?:system|instructions?|ignore|POST|GET|send|transmit).*?-->", 0.7),
-    (r"\[//\]:\s*#\s*\(.*?(?:system|instructions?|ignore|POST|GET|send|transmit).*?\)", 0.8),
+    (
+        r"<!--(?=.{0,500}-->).{0,200}?" + _HIDDEN_INSTRUCTION_KEYWORDS + r".{0,200}?-->",
+        0.7,
+    ),
+    (
+        r"\[//\]:\s*#\s*\((?=.{0,500}\)).{0,200}?" + _HIDDEN_INSTRUCTION_KEYWORDS + r".{0,200}?\)",
+        0.8,
+    ),
     (r"[\u200b\u200c\u200d\u2060\ufeff]", 0.6),
     (r"[\u202a-\u202e\u2066-\u2069]", 0.85),
     (r"data:text/plain;base64,[A-Za-z0-9+/=]{50,}", 0.7),

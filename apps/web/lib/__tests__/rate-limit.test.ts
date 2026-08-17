@@ -1,6 +1,22 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
+
+const upstash = vi.hoisted(() => ({
+  client: {
+    zremrangebyscore: vi.fn(async () => 0),
+    zcard: vi.fn(async () => 0),
+    zadd: vi.fn(async () => 1),
+    zrem: vi.fn(async () => 1),
+    expire: vi.fn(async () => 1),
+  },
+}));
+
+vi.mock('@upstash/redis', () => ({
+  Redis: function RedisMock() {
+    return upstash.client;
+  },
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('../logger', () => ({
@@ -129,5 +145,173 @@ describe('tier-aware ceilings', () => {
 
     const blocked = await checkRateLimit(req, 'chat-message', id, 'max_15x');
     expect(blocked.success).toBe(false);
+  });
+});
+
+describe('managed concurrent-turn ceiling', () => {
+  const POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
+  const PAID_TIER = 'pro';
+  const paidCeiling = getPlanMaxConcurrentTurns(PAID_TIER)!;
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    upstash.client.zremrangebyscore.mockResolvedValue(0);
+    upstash.client.zcard.mockResolvedValue(0);
+    upstash.client.zadd.mockResolvedValue(1);
+    upstash.client.expire.mockResolvedValue(1);
+    process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.invalid';
+    process.env['UPSTASH_REDIS_REST_TOKEN'] = 'token';
+    delete process.env[POLICY_ENV];
+    delete process.env['VERCEL_ENV'];
+  });
+
+  afterEach(() => {
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env[POLICY_ENV];
+  });
+
+  it('admits and records a turn while Redis answers', async () => {
+    const { acquireManagedTurnSlot } = await import('../rate-limit');
+
+    const result = await acquireManagedTurnSlot({
+      userId: 'user-redis-up',
+      planTier: PAID_TIER,
+      turnId: 'turn-1',
+    });
+
+    expect(result.admitted).toBe(true);
+    expect(result.limit).toBe(paidCeiling);
+    expect(upstash.client.zadd).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a turn once the plan ceiling is full', async () => {
+    upstash.client.zcard.mockResolvedValue(paidCeiling);
+    const { acquireManagedTurnSlot } = await import('../rate-limit');
+
+    const result = await acquireManagedTurnSlot({
+      userId: 'user-at-ceiling',
+      planTier: PAID_TIER,
+      turnId: 'turn-2',
+    });
+
+    expect(result.admitted).toBe(false);
+    expect(result.denial).toBe('ceiling-reached');
+    expect(upstash.client.zadd).not.toHaveBeenCalled();
+  });
+
+  it('refuses the turn when Redis fails, instead of removing the ceiling', async () => {
+    upstash.client.zcard.mockRejectedValue(new Error('redis unavailable'));
+    const { acquireManagedTurnSlot } = await import('../rate-limit');
+
+    const result = await acquireManagedTurnSlot({
+      userId: 'user-redis-down',
+      planTier: PAID_TIER,
+      turnId: 'turn-3',
+    });
+
+    expect(result.admitted).toBe(false);
+    expect(result.denial).toBe('limiter-unavailable');
+    expect(result.slot).toBeNull();
+  });
+
+  it('refuses the turn when Redis is configured away entirely under a fail-closed policy', async () => {
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    process.env[POLICY_ENV] = 'fail-closed';
+    const { acquireManagedTurnSlot } = await import('../rate-limit');
+
+    const result = await acquireManagedTurnSlot({
+      userId: 'user-no-redis',
+      planTier: PAID_TIER,
+      turnId: 'turn-4',
+    });
+
+    expect(result.admitted).toBe(false);
+    expect(result.denial).toBe('limiter-unavailable');
+  });
+
+  it('admits on a Redis failure only when an operator configured fail-open', async () => {
+    process.env[POLICY_ENV] = 'fail-open';
+    upstash.client.zcard.mockRejectedValue(new Error('redis unavailable'));
+    const { acquireManagedTurnSlot } = await import('../rate-limit');
+
+    const result = await acquireManagedTurnSlot({
+      userId: 'user-fail-open',
+      planTier: PAID_TIER,
+      turnId: 'turn-5',
+    });
+
+    expect(result.admitted).toBe(true);
+    expect(result.slot).not.toBeNull();
+  });
+
+  it('keeps a Redis-less dev box working without an explicit policy', async () => {
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    const { acquireManagedTurnSlot } = await import('../rate-limit');
+
+    const result = await acquireManagedTurnSlot({
+      userId: 'user-dev',
+      planTier: PAID_TIER,
+      turnId: 'turn-6',
+    });
+
+    expect(result.admitted).toBe(true);
+  });
+});
+
+describe('rate-limit failure policy', () => {
+  const POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
+
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['VERCEL_ENV'];
+    delete process.env[POLICY_ENV];
+  });
+
+  afterEach(() => {
+    delete process.env[POLICY_ENV];
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+  });
+
+  it('defaults to fail-closed wherever Redis is configured', async () => {
+    process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.invalid';
+    process.env['UPSTASH_REDIS_REST_TOKEN'] = 'token';
+    const { resolveRedisOutagePolicy } = await import('../rate-limit');
+    expect(resolveRedisOutagePolicy()).toBe('fail-closed');
+  });
+
+  it('leaves a Redis-less dev box fail-open', async () => {
+    const { resolveRedisOutagePolicy } = await import('../rate-limit');
+    expect(resolveRedisOutagePolicy()).toBe('fail-open');
+  });
+
+  it('honours an explicit choice and refuses to guess from a typo', async () => {
+    process.env[POLICY_ENV] = 'fail-closed';
+    const { resolveRedisOutagePolicy } = await import('../rate-limit');
+    expect(resolveRedisOutagePolicy()).toBe('fail-closed');
+
+    process.env[POLICY_ENV] = 'whatever';
+    expect(resolveRedisOutagePolicy()).toBe('fail-closed');
+
+    process.env[POLICY_ENV] = 'FAIL-OPEN';
+    expect(resolveRedisOutagePolicy()).toBe('fail-open');
+  });
+
+  it('blocks a fail-closed endpoint when the shared limiter is gone', async () => {
+    process.env[POLICY_ENV] = 'fail-closed';
+    const { checkRateLimit } = await import('../rate-limit');
+
+    const blocked = await checkRateLimit(req, 'llm-completion', 'user:no-limiter');
+    expect(blocked.success).toBe(false);
+    expect(blocked.headers['X-RateLimit-Error']).toBe('rate-limiter-unavailable');
+
+    const allowed = await checkRateLimit(req, 'me', 'user:no-limiter');
+    expect(allowed.success).toBe(true);
   });
 });

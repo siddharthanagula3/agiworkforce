@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -6,6 +5,7 @@ import { Clock, Users, ChefHat, Printer, Timer, UtensilsCrossed } from 'lucide-r
 import { Badge, Card, CardContent, CardHeader, Button } from '@agiworkforce/ui';
 import { Checkbox } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import { CardExtraSections, type ExtraSection } from './card-extras';
 
 interface ParsedRecipe {
   title: string;
@@ -16,7 +16,7 @@ interface ParsedRecipe {
   description: string;
   ingredients: string[];
   instructions: string[];
-  extraSections: Array<{ heading: string; lines: string[] }>;
+  extraSections: ExtraSection[];
 }
 
 function parseRecipe(content: string): ParsedRecipe {
@@ -34,7 +34,7 @@ function parseRecipe(content: string): ParsedRecipe {
   type Section = 'preamble' | 'ingredients' | 'instructions' | 'other';
   let currentSection: Section = 'preamble';
   const descLines: string[] = [];
-  const extraSections: Array<{ heading: string; lines: string[] }> = [];
+  const extraSections: ExtraSection[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -85,7 +85,7 @@ function parseRecipe(content: string): ParsedRecipe {
       currentSection = 'instructions';
       continue;
     }
-    if (/^#{1,4}\s/.test(trimmed) && currentSection !== 'preamble') {
+    if (/^#{1,4}\s/.test(trimmed)) {
       currentSection = 'other';
       extraSections.push({
         heading: trimmed.replace(/^#{1,4}\s*/, '').replace(/\*\*/g, ''),
@@ -162,11 +162,11 @@ export function RecipeCard({ content }: RecipeCardProps) {
   ].filter((b) => b.value);
 
   return (
-    <Card className="recipe-card overflow-hidden border-amber-200/50 dark:border-amber-800/30 print:border print:shadow-none">
-      <CardHeader className="space-y-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 pb-4">
+    <Card className="recipe-card overflow-hidden border-[var(--chat-border)] print:border print:shadow-none">
+      <CardHeader className="space-y-3 border-b border-[var(--chat-border-subtle)] bg-[var(--chat-surface-hover)] pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/40">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--chat-surface-elevated)]">
               <ChefHat className="h-5 w-5 text-amber-700 dark:text-amber-400" aria-hidden="true" />
             </div>
             <div>
@@ -196,7 +196,7 @@ export function RecipeCard({ content }: RecipeCardProps) {
               <Badge
                 key={badge.label}
                 variant="secondary"
-                className="gap-1.5 bg-white/70 dark:bg-white/10 text-xs font-normal"
+                className="gap-1.5 bg-[var(--chat-surface-elevated)] text-xs font-normal"
               >
                 <badge.icon className="h-3 w-3" aria-hidden="true" />
                 <span className="font-medium">{badge.label}:</span> {badge.value}
@@ -258,7 +258,7 @@ export function RecipeCard({ content }: RecipeCardProps) {
             <ol className="space-y-3" role="list">
               {recipe.instructions.map((step, i) => (
                 <li key={`step-${i}`} className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--chat-surface-hover)] text-xs font-semibold text-[var(--chat-text-primary)]">
                     {i + 1}
                   </span>
                   <p className="text-sm leading-relaxed pt-0.5">{step}</p>
@@ -268,23 +268,7 @@ export function RecipeCard({ content }: RecipeCardProps) {
           </section>
         )}
 
-        {/* Anything the recipe layout has no dedicated slot for — Notes, Tips,
-            Variations, Storage. Rendered rather than dropped so the card is
-            never a lossy view of the answer. */}
-        {recipe.extraSections.map((section) => (
-          <section key={section.heading} className="mt-6" data-testid="recipe-extra-section">
-            <h4 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              {section.heading}
-            </h4>
-            <ul className="space-y-1.5">
-              {section.lines.map((line, i) => (
-                <li key={`${section.heading}-${i}`} className="text-sm leading-relaxed">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+        <CardExtraSections sections={recipe.extraSections} />
       </CardContent>
     </Card>
   );

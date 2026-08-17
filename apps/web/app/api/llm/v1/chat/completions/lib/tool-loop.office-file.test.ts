@@ -76,6 +76,7 @@ function finalStream(): ReadableStream<Uint8Array> {
 
 function makeProcessed(): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'req-office',
     chatRequest: {
       model: 'test-model',

@@ -29,9 +29,11 @@ import {
   Layers,
   Loader2,
   Lock,
+  Play,
   Presentation,
   Share2,
   ShieldCheck,
+  Video,
 } from 'lucide-react';
 import type { GeneratedFileKind, GeneratedFilePresentation } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
@@ -78,6 +80,35 @@ function getKindIcon(kindLabel: string): ReactElement {
   return <Layers size={16} className="text-zinc-400" aria-hidden />;
 }
 
+// `GeneratedFileKind` has no video member, so a video asset arrives with the
+// generic "File" kind label; its mime type is the only reliable signal.
+function isVideoPresentation(presentation: GeneratedFilePresentation): boolean {
+  return (
+    (presentation.mimeType ?? '').toLowerCase().startsWith('video/') ||
+    presentation.kindLabel.toLowerCase().includes('video')
+  );
+}
+
+function VideoMarker({ overlay }: { overlay: boolean }) {
+  return (
+    <span
+      data-testid="generated-file-video-marker"
+      role="img"
+      aria-label="Video"
+      className={cn(
+        'flex items-center justify-center',
+        overlay ? 'pointer-events-none absolute inset-0 rounded-md bg-black/40' : 'h-full w-full',
+      )}
+    >
+      {overlay ? (
+        <Play className="h-4 w-4 fill-white text-white" aria-hidden />
+      ) : (
+        <Video size={16} className="text-indigo-300" aria-hidden />
+      )}
+    </span>
+  );
+}
+
 function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation }) {
   if (presentation.isRunning) {
     return (
@@ -121,6 +152,7 @@ export function GeneratedFileCard({
   className,
 }: GeneratedFileCardProps) {
   const [previewFailed, setPreviewFailed] = useState(false);
+  const isVideo = isVideoPresentation(presentation);
 
   useEffect(() => {
     setPreviewFailed(false);
@@ -147,18 +179,21 @@ export function GeneratedFileCard({
       <div className="flex items-start gap-3">
         {/* Preview thumbnail when available; falls back to a kind icon. */}
         {presentation.previewUri && !previewFailed ? (
-          <img
-            src={presentation.previewUri}
-            alt={`${presentation.title} preview`}
-            className="h-12 w-12 shrink-0 rounded-md object-cover"
-            onError={() => {
-              setPreviewFailed(true);
-              onPreviewError?.();
-            }}
-          />
+          <div className="relative h-12 w-12 shrink-0">
+            <img
+              src={presentation.previewUri}
+              alt={`${presentation.title} preview`}
+              className="h-12 w-12 rounded-md object-cover"
+              onError={() => {
+                setPreviewFailed(true);
+                onPreviewError?.();
+              }}
+            />
+            {isVideo ? <VideoMarker overlay /> : null}
+          </div>
         ) : (
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-[var(--chat-surface-overlay)]">
-            {getKindIcon(presentation.kindLabel)}
+            {isVideo ? <VideoMarker overlay={false} /> : getKindIcon(presentation.kindLabel)}
           </div>
         )}
 

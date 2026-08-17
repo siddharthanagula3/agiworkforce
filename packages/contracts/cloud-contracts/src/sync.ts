@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 export const ServerVersionSchema = z
@@ -305,6 +304,7 @@ const CloudSafeSettingsNamespaceSchema = z.record(z.string(), z.unknown());
 export const CloudSafeSettingsSchema = z.object({
   appearance: CloudSafeSettingsNamespaceSchema.optional(),
   personalization: CloudSafeSettingsNamespaceSchema.optional(),
+  general: CloudSafeSettingsNamespaceSchema.optional(),
   profile: CloudSafeSettingsNamespaceSchema.optional(),
   notifications: CloudSafeSettingsNamespaceSchema.optional(),
   language: CloudSafeSettingsNamespaceSchema.optional(),

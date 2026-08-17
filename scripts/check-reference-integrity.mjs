@@ -314,6 +314,20 @@ export function isIntentional(finding, intentional) {
   });
 }
 
+export function ratchetBaseline(existing, reproducingKeys, { hasBaseline }) {
+  const reproducing = new Set(reproducingKeys);
+  if (!hasBaseline) return { debt: [...reproducing].sort(), added: [] };
+
+  const declared = new Set([
+    ...(existing.debt ?? []),
+    ...(existing.knownContradictions ?? []).map((entry) => entry.key),
+  ]);
+  return {
+    debt: [...new Set(existing.debt ?? [])].filter((key) => reproducing.has(key)).sort(),
+    added: [...reproducing].filter((key) => !declared.has(key)).sort(),
+  };
+}
+
 export function validateAllowlist(allowlist, errors) {
   for (const entry of allowlist.intentional ?? []) {
     if (!entry.reason || entry.reason.length < 20) {
@@ -388,9 +402,22 @@ export function main() {
   const real = findings.filter((f) => !ignored.has(f.reference));
 
   if (WRITE_BASELINE) {
+    const hasBaseline = fs.existsSync(path.join(REPO_ROOT, ALLOWLIST_PATH));
     const existing = loadAllowlist();
     const intentional = existing.intentional ?? [];
     const seedable = real.filter((finding) => !isIntentional(finding, intentional));
+    const { debt, added } = ratchetBaseline(existing, seedable.map(findingKey), { hasBaseline });
+
+    if (added.length > 0) {
+      console.error(
+        `Refusing to widen ${ALLOWLIST_PATH}: ${added.length} reference(s) are not on the baseline, ` +
+          'which only ratchets down. Fix each reference, or declare it under intentional or ' +
+          `knownContradictions:\n  ${added.slice(0, 20).join('\n  ')}`,
+      );
+      return 1;
+    }
+
+    const dropped = new Set(existing.debt ?? []).size - debt.length;
     const baseline = {
       schemaVersion: 1,
       reason:
@@ -398,7 +425,7 @@ export function main() {
         'Entries that stop reproducing fail as stale, so this list only ratchets down.',
       intentional,
       knownContradictions: existing.knownContradictions ?? [],
-      debt: [...new Set(seedable.map(findingKey))].sort(),
+      debt,
     };
     fs.writeFileSync(
       path.join(REPO_ROOT, ALLOWLIST_PATH),
@@ -412,7 +439,9 @@ export function main() {
     } catch {
       console.warn(`Could not run Prettier on ${ALLOWLIST_PATH}; run it manually.`);
     }
-    console.log(`Seeded ${baseline.debt.length} entries into ${ALLOWLIST_PATH}.`);
+    console.log(
+      `${ALLOWLIST_PATH} now carries ${baseline.debt.length} debt entr(ies); dropped ${dropped}.`,
+    );
     return 0;
   }
 

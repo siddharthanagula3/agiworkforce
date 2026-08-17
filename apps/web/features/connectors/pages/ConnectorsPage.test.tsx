@@ -333,14 +333,18 @@ describe('ConnectorsPage', () => {
     expect(screen.queryByText('Terminal / Shell')).toBeNull();
   });
 
-  it('labels the custom MCP flow as inspection only', async () => {
+  // This page is the public directory (unauthenticated visitors only — see
+  // app/connectors/page.tsx). It no longer has an "Inspect MCP server" /
+  // custom-connector-add flow: that persisted state and its auth-token field,
+  // gated on isSignedIn, was unreachable dead UI here (signed-in users never
+  // mount this component) and is now the settings modal's
+  // AddCustomConnectorForm (SettingsModal.test.tsx) instead.
+  it('does not offer the signed-in-only custom connector flow', async () => {
     await renderConnectorsPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /inspect mcp server/i }));
-
-    expect(screen.getAllByText('Inspect MCP server').length).toBeGreaterThan(0);
-    expect(screen.getByText(/review its advertised tools/i)).toBeDefined();
+    expect(screen.queryByRole('button', { name: /inspect mcp server/i })).toBeNull();
     expect(screen.queryByText('Add custom connector')).toBeNull();
+    expect(screen.queryByLabelText(/mcp auth token/i)).toBeNull();
   });
 
   // Regression guard: a failed GET /api/connectors previously rendered

@@ -22,6 +22,7 @@
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/types": "workspace:*",
+    "@agiworkforce/utils": "workspace:*",
     "@clerk/backend": "^3.4.0",
     "@neondatabase/serverless": "^1.1.0",
     "bcryptjs": "^3.0.3",

@@ -38,6 +38,8 @@ logger = get_logger(__name__)
 
 ANALYZER_ID = "static_patterns_tool_misuse"
 
+_SQL_WRITE_VERBS = r"(?:DROP|DELETE|UPDATE|INSERT|ALTER|TRUNCATE)"
+
 # TM1: Tool Parameter Abuse — dangerous parameter values
 TM1_PATTERNS = [
     # shell=True is a classic command injection vector
@@ -67,8 +69,12 @@ TM1_PATTERNS = [
     # matching HTTP verb DELETE in REST docs or "remove" in prose
     (r"\b(?:delete|remove)\s+['\"]?/[^\s'\"]{1,100}", 0.80),
     # SQL injection via parameter construction
+    # Three chained `.*?` gaps backtrack cubically on a long line (a file with no
+    # newline is one line). The lookahead proves a SQL verb is within reach before
+    # any gap is walked, and each gap is bounded. Do not restore bare `.*?`.
     (
-        r"(?:execute|query)\s*\(\s*f?['\"].*?\{.*?\}.*?\b(?:DROP|DELETE|UPDATE|INSERT|ALTER|TRUNCATE)\b",
+        r"(?:execute|query)\s*\(\s*f?['\"](?=[^\n]{0,600}\b" + _SQL_WRITE_VERBS + r"\b)"
+        r"[^\n]{0,200}?\{[^\n]{0,100}?\}[^\n]{0,200}?\b" + _SQL_WRITE_VERBS + r"\b",
         0.85,
     ),
     # Dangerous tool parameter patterns in instructions

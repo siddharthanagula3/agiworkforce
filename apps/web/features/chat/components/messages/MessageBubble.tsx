@@ -1386,7 +1386,11 @@ const MessageBubbleComponent = function MessageBubble({
                   <MarkdownContent content={cleanedContent} isStreaming={message.isStreaming} />
                 );
                 return formatCardType ? (
-                  <MessageFormatCard content={cleanedContent} cardType={formatCardType}>
+                  <MessageFormatCard
+                    content={cleanedContent}
+                    cardType={formatCardType}
+                    messageId={message.id}
+                  >
                     {markdown}
                   </MessageFormatCard>
                 ) : (
@@ -1893,6 +1897,18 @@ const MessageBubbleComponent = function MessageBubble({
                   : 'opacity-100',
               )}
             >
+              {/* CLR-03: `message.timestamp` was carried as data and used only
+                  for memo comparisons, so nothing on this surface ever said when
+                  a message was sent. `title` carries the full date because the
+                  visible label is clock-time only. */}
+              <time
+                data-testid="message-timestamp"
+                dateTime={message.timestamp.toISOString()}
+                title={message.timestamp.toLocaleString()}
+                className="px-1 text-[11px] tabular-nums text-[var(--chat-text-muted)]"
+              >
+                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </time>
               <TooltipProvider delayDuration={300}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2092,7 +2108,9 @@ const MessageBubbleComponent = function MessageBubble({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      {isBranching ? 'Creating branch…' : 'Branch conversation'}
+                      {isBranching
+                        ? 'Creating branch…'
+                        : 'Branch conversation — this chat stays unchanged'}
                     </TooltipContent>
                   </Tooltip>
                 )}

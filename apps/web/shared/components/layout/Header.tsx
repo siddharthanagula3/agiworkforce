@@ -244,6 +244,20 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
             )}
           </span>
 
+          {/* Visible only below the 900px breakpoint, where the desktop action
+              row collapses; the full action set stays inside the drawer. */}
+          <span className="agi-top-cta-compact">
+            {userEmail ? (
+              <Link href="/chat" className="agi-top-cta">
+                {t('navChat')}
+              </Link>
+            ) : (
+              <Link href="/login?redirectTo=%2F" className="agi-top-cta">
+                {t('navChat', 'Open AGI')}
+              </Link>
+            )}
+          </span>
+
           {/* Mobile menu toggle */}
           <span className="agi-top-mobile-controls">
             <ThemeToggle className="agi-top-theme-toggle--mobile" />

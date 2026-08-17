@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./async": "./src/async.ts",
+    "./circuit-breaker": "./src/circuitBreaker.ts",
     "./crypto": "./src/crypto.ts",
     "./display-name": "./src/displayName.ts",
     "./fence": "./src/fence.ts",

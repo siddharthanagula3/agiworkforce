@@ -3,8 +3,8 @@
 /**
  * Canonical web chat store for the main chat page flow.
  *
- * Used by: WebChatPage, useChatStream, useConversations, UnifiedChatPage,
- * ChatSettings, CommandPalette, and localByokHandoff.
+ * Used by: WebChatPage, useChatStream, useConversations, ChatSettings,
+ * CommandPalette, and localByokHandoff.
  *
  * Persist key: 'agiworkforce-web-chat' (persists model selection + sidebar state only).
  *
@@ -354,6 +354,8 @@ export interface MessageMetadata {
   videoProvider?: 'google' | 'runway' | 'openrouter';
   /** Canonical catalog model identity selected by the server. */
   videoModel?: string;
+  /** Aspect ratio requested when the video was generated; sizes the shimmer placeholder. */
+  videoAspect?: string;
   /** Latest provider progress reported by the durable reconciler. */
   videoProgress?: number;
   /** Durable terminal error projected by the server. */

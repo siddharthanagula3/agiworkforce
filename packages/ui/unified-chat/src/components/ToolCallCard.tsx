@@ -1,4 +1,3 @@
-
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { AlertCircle, Check, Copy, Play, X as XIcon } from 'lucide-react';
 import { InlineToolCall, type InlineToolCallStatus, type InlineToolKind } from './InlineToolCall';
@@ -67,6 +66,145 @@ export function detectCodeBlock(
         : null;
   if (!code) return null;
   return { language, code };
+}
+
+export type DiffLineType = 'add' | 'remove' | 'context' | 'meta';
+
+export interface DiffLine {
+  type: DiffLineType;
+  content: string;
+}
+
+export interface FileDiff {
+  filePath?: string;
+  lines: DiffLine[];
+  additions: number;
+  deletions: number;
+}
+
+const UNIFIED_HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/m;
+const PATCH_ENVELOPE_HEADER = /^\*\*\* (?:Begin Patch|Add File|Update File|Delete File)\b/m;
+const DIFF_META_PREFIXES = ['@@', '--- ', '+++ ', 'diff ', 'index ', '*** ', '\\ No newline'];
+const FILE_PATH_KEYS = ['path', 'file_path', 'filePath', 'file', 'target_file'];
+const OLD_TEXT_KEYS = ['old_text', 'oldText', 'old_string', 'oldString', 'before'];
+const NEW_TEXT_KEYS = ['new_text', 'newText', 'new_string', 'newString', 'after'];
+const MAX_RENDERED_DIFF_LINES = 400;
+
+export function looksLikeUnifiedDiff(text: string): boolean {
+  return UNIFIED_HUNK_HEADER.test(text) || PATCH_ENVELOPE_HEADER.test(text);
+}
+
+export function parseUnifiedDiff(text: string): DiffLine[] {
+  return text.split('\n').map((line) => {
+    if (DIFF_META_PREFIXES.some((prefix) => line.startsWith(prefix))) {
+      return { type: 'meta' as const, content: line };
+    }
+    if (line.startsWith('+')) return { type: 'add' as const, content: line.slice(1) };
+    if (line.startsWith('-')) return { type: 'remove' as const, content: line.slice(1) };
+    if (line.startsWith(' ')) return { type: 'context' as const, content: line.slice(1) };
+    return { type: 'context' as const, content: line };
+  });
+}
+
+function readString(
+  source: Record<string, unknown> | undefined,
+  keys: string[],
+): string | undefined {
+  if (!source) return undefined;
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === 'string') return value;
+  }
+  return undefined;
+}
+
+function filePathFromDiffHeader(text: string): string | undefined {
+  const unified = text.match(/^\+\+\+ (?:b\/)?(.+)$/m)?.[1]?.trim();
+  if (unified && unified !== '/dev/null') return unified;
+  return text.match(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/m)?.[1]?.trim();
+}
+
+function buildDiff(lines: DiffLine[], filePath?: string): FileDiff | null {
+  const additions = lines.filter((line) => line.type === 'add').length;
+  const deletions = lines.filter((line) => line.type === 'remove').length;
+  if (additions === 0 && deletions === 0) return null;
+  return { filePath, lines, additions, deletions };
+}
+
+export function detectFileDiff(parameters?: Record<string, unknown>): FileDiff | null {
+  if (!parameters) return null;
+  const argPath = readString(parameters, FILE_PATH_KEYS);
+
+  const patch = readString(parameters, ['patch', 'diff', 'unified_diff', 'patchText']);
+  if (patch && looksLikeUnifiedDiff(patch)) {
+    return buildDiff(parseUnifiedDiff(patch), argPath ?? filePathFromDiffHeader(patch));
+  }
+
+  const oldText = readString(parameters, OLD_TEXT_KEYS);
+  const newText = readString(parameters, NEW_TEXT_KEYS);
+  if (oldText == null && newText == null) return null;
+
+  const lines: DiffLine[] = [
+    ...(oldText
+      ? oldText.split('\n').map((content) => ({ type: 'remove' as const, content }))
+      : []),
+    ...(newText ? newText.split('\n').map((content) => ({ type: 'add' as const, content })) : []),
+  ];
+  return buildDiff(lines, argPath);
+}
+
+export function detectResultDiff(
+  result?: string,
+  parameters?: Record<string, unknown>,
+): FileDiff | null {
+  if (!result || !looksLikeUnifiedDiff(result)) return null;
+  return buildDiff(
+    parseUnifiedDiff(result),
+    filePathFromDiffHeader(result) ?? readString(parameters, FILE_PATH_KEYS),
+  );
+}
+
+function FileDiffBlock({ filePath, lines, additions, deletions }: FileDiff) {
+  const visible = lines.slice(0, MAX_RENDERED_DIFF_LINES);
+  const truncated = lines.length - visible.length;
+
+  return (
+    <div
+      data-testid="tool-file-diff"
+      className="rounded border border-white/8 bg-black/20 overflow-hidden"
+    >
+      <div className="flex items-center gap-2 px-2 py-1 border-b border-white/8">
+        <span className="flex-1 truncate font-mono text-[10px] text-muted-foreground">
+          {filePath ?? 'diff'}
+        </span>
+        <span className="font-mono text-[10px] text-green-500">+{additions}</span>
+        <span className="font-mono text-[10px] text-red-500">-{deletions}</span>
+      </div>
+      <div className="max-h-48 overflow-auto font-mono text-[10px] leading-snug">
+        {visible.map((line, index) => (
+          <div
+            key={index}
+            data-diff-line={line.type}
+            className={cn(
+              'flex',
+              line.type === 'add' && 'bg-green-500/10 text-green-700 dark:text-green-400',
+              line.type === 'remove' && 'bg-red-500/10 text-red-700 dark:text-red-400',
+              line.type === 'meta' && 'text-blue-600 dark:text-blue-400',
+              line.type === 'context' && 'text-muted-foreground',
+            )}
+          >
+            <span aria-hidden="true" className="w-4 shrink-0 select-none text-center">
+              {line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '}
+            </span>
+            <span className="flex-1 whitespace-pre pr-2">{line.content || ' '}</span>
+          </div>
+        ))}
+        {truncated > 0 && (
+          <div className="px-2 py-1 text-muted-foreground">… {truncated} more lines</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function HighlightedCodeBlock({ language, code }: { language: string; code: string }) {
@@ -183,6 +321,8 @@ const ToolCallCardComponent = ({
     [status, requiresApproval, expired],
   );
   const codeBlock = useMemo(() => detectCodeBlock(name, args), [name, args]);
+  const requestDiff = useMemo(() => (codeBlock ? null : detectFileDiff(args)), [codeBlock, args]);
+  const resultDiff = useMemo(() => detectResultDiff(result, args), [result, args]);
 
   const durationLabel =
     status === 'running' && startedAt != null
@@ -264,6 +404,8 @@ const ToolCallCardComponent = ({
             </p>
             {codeBlock ? (
               <HighlightedCodeBlock language={codeBlock.language} code={codeBlock.code} />
+            ) : requestDiff ? (
+              <FileDiffBlock {...requestDiff} />
             ) : commandText ? (
               <pre className="font-mono text-[10px] leading-snug p-2 rounded bg-black/20 border border-white/8 overflow-x-auto max-h-48 overflow-y-auto select-text">
                 {commandText}
@@ -281,9 +423,13 @@ const ToolCallCardComponent = ({
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1 ml-0.5">
               Response
             </p>
-            <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
-              {result}
-            </pre>
+            {resultDiff ? (
+              <FileDiffBlock {...resultDiff} />
+            ) : (
+              <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
+                {result}
+              </pre>
+            )}
           </div>
         )}
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useConfirm } from '@agiworkforce/ui';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   applyBulkConversationAction,
@@ -35,6 +36,11 @@ const actionButtonStyle = {
 
 export function ArchivedChatsSection() {
   const router = useRouter();
+  // Destructive-action confirmation (shell-nav-ia-gap-01 remainder) — same
+  // shared AlertDialog wrapper as PrivacySection and WebChatPage, replacing
+  // native `window.confirm()` for both the single-chat and delete-all-archived
+  // actions below.
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const [conversations, setConversations] = useState<ArchivedConversationSummary[]>([]);
   const [nextOffset, setNextOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -109,12 +115,14 @@ export function ArchivedChatsSection() {
   };
 
   const handleDelete = async (conversation: ArchivedConversationSummary) => {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(`Permanently delete “${conversation.title}”? This cannot be undone.`)
-    ) {
-      return;
-    }
+    const label = conversation.title ? `“${conversation.title}”` : 'this archived chat';
+    const confirmed = await confirmDestructive({
+      title: 'Delete archived chat?',
+      description: `Permanently delete ${label} and every message in it. This cannot be undone.`,
+      confirmText: 'Delete chat',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
     setActionId(conversation.id);
     setError(null);
     setNotice(null);
@@ -132,12 +140,14 @@ export function ArchivedChatsSection() {
   };
 
   const handleDeleteAll = async () => {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm('Permanently delete every archived chat? This cannot be undone.')
-    ) {
-      return;
-    }
+    const chatCount = conversations.length;
+    const confirmed = await confirmDestructive({
+      title: 'Delete all archived chats?',
+      description: `Permanently delete all ${chatCount} archived chat${chatCount === 1 ? '' : 's'} and their messages. Chats that are not archived are not affected. This cannot be undone.`,
+      confirmText: 'Delete all archived',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
     setActionId('all');
     setError(null);
     setNotice(null);
@@ -167,6 +177,7 @@ export function ArchivedChatsSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {destructiveConfirmDialog}
       <div>
         <SettingsSectionLink
           section="privacy"

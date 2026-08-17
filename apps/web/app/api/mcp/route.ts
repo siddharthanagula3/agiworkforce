@@ -1,7 +1,7 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { connectMcpServer, type McpServerConfig } from '@agiworkforce/mcp';
+import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -68,6 +68,7 @@ async function handleConnect(request: NextRequest) {
   let handle;
   try {
     handle = await connectMcpServer({
+      egressPolicy: MCP_EGRESS_POLICY,
       serverName,
       config: { ...body.config, connectionTimeoutMs: 30_000 },
     });

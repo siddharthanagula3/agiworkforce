@@ -6,7 +6,9 @@ import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-l
 import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
 import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
+import type { ApiKeyScope } from '@/lib/api-key-scopes';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import {
   resolveActiveOrganizationId,
   resolveOrganizationMembershipId,
@@ -31,6 +33,10 @@ export interface UserScopedDb {
   organizationId: string | null;
 }
 
+export interface UserScopedDbOptions {
+  apiKeyScope?: ApiKeyScope;
+}
+
 export const ACTIVE_ORG_HEADER = MANAGED_CLOUD_ORGANIZATION_HEADER;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -52,17 +58,23 @@ async function resolveRequestOrganizationId(
   return resolveActiveOrganizationId(getNeonDb(), userId);
 }
 
-export async function getUserScopedDb(request: NextRequest): Promise<UserScopedDb> {
+function isApiKeyToken(token: string): boolean {
+  return token.startsWith('sk_live_') || token.startsWith('sk_test_');
+}
+
+export async function getUserScopedDb(
+  request: NextRequest,
+  options: UserScopedDbOptions = {},
+): Promise<UserScopedDb> {
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
-    if (token.startsWith('sk_live_') || token.startsWith('sk_test_')) {
-      throw createError.unauthorized();
-    }
-    const { userId } = await getClerkAuthUser(request);
+    const { userId } = await getClerkAuthUser(request, options);
     const organizationId = await resolveRequestOrganizationId(request, userId);
     return {
-      db: getRlsCapableDb().withUser(token).withOrg(organizationId),
+      db: isApiKeyToken(token)
+        ? createClaimedUserScopedDb(getNeonDb(), { userId, organizationId })
+        : getRlsCapableDb().withUser(token).withOrg(organizationId),
       userId,
       organizationId,
     };

@@ -35,7 +35,6 @@ export interface CommandOption {
   title: string;
   subtitle?: string;
   group: string;
-  shortcut?: string;
   icon: React.ElementType;
   hasSubMenu?: boolean;
   subCommands?: CommandOption[];
@@ -54,9 +53,6 @@ function useCommands(
   const router = useRouter();
   const { theme, setTheme } = useTheme();
 
-  const mod =
-    typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+';
-
   const themeLabel = theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System';
   const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
@@ -72,6 +68,9 @@ function useCommands(
     },
   ];
 
+  // No command carries a keybinding hint: KEYBOARD_SHORTCUT_DOCS is the only
+  // registry, and every binding in it is registered by the chat page, which is
+  // the one route where CommandPaletteProvider refuses to open this palette.
   const top: CommandOption[] = [
     {
       id: 'new-chat',
@@ -79,7 +78,6 @@ function useCommands(
       subtitle: 'Start a fresh conversation',
       group: 'Actions',
       icon: PlusCircle,
-      shortcut: `${mod}⇧O`,
       action: () => router.push('/chat'),
     },
     {
@@ -88,7 +86,6 @@ function useCommands(
       subtitle: 'Find past chats',
       group: 'Actions',
       icon: Search,
-      shortcut: `${mod}F`,
       action: () => router.push('/chat?search=true'),
     },
     {
@@ -106,7 +103,6 @@ function useCommands(
       title: 'Go to Chat',
       group: 'Navigate',
       icon: MessageSquare,
-      shortcut: `${mod}⇧C`,
       action: () => router.push('/chat'),
     },
     {
@@ -347,11 +343,6 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                           className="w-3.5 h-3.5 text-zinc-600 shrink-0"
                           aria-hidden="true"
                         />
-                      )}
-                      {cmd.shortcut && !cmd.hasSubMenu && (
-                        <kbd className="text-[10px] text-zinc-600 bg-zinc-800 rounded px-1.5 py-0.5 shrink-0">
-                          {cmd.shortcut}
-                        </kbd>
                       )}
                     </button>
                   );

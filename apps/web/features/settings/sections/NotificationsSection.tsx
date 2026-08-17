@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
@@ -12,57 +11,49 @@ const NAMESPACE = 'notifications';
 
 export type NotifKey = 'browserReplyReady' | 'mobilePushScheduleDone' | 'emailScheduleDone';
 
-interface NotifSpec {
+interface ChannelSpec {
   id: NotifKey;
-  label: string;
+  channel: string;
   description: string;
   defaultValue: boolean;
-  managedOnly?: boolean;
 }
 
-interface ChannelGroup {
+interface EventSpec {
   heading: string;
   subheading: string;
-  managedOnly?: boolean;
-  items: NotifSpec[];
+  channels: ChannelSpec[];
 }
 
-const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
+const EVENTS: ReadonlyArray<EventSpec> = [
   {
-    heading: 'Browser notifications',
-    subheading: 'Shown as desktop popups when the AGI tab is in the background.',
-    items: [
+    heading: 'Reply ready',
+    subheading: 'A long-running response finishes while the AGI tab is in the background.',
+    channels: [
       {
         id: 'browserReplyReady',
-        label: 'Reply ready',
+        channel: 'Browser',
         description:
-          'Browser notification when a long-running response finishes while the tab is in the background.',
+          'Shown as a desktop popup by your browser. Your browser asks for notification permission the first time.',
         defaultValue: true,
       },
     ],
   },
   {
-    heading: 'Email',
-    subheading: 'Sent to the address on your account.',
-    items: [
+    heading: 'Scheduled task finished',
+    subheading:
+      'A scheduled task completes or fails. Scheduled runs happen on the server while you are away, so this is the one result you cannot see in the app.',
+    channels: [
       {
         id: 'emailScheduleDone',
-        label: 'Scheduled task finished',
+        channel: 'Email',
         description:
-          'Email when one of your scheduled tasks completes or fails. The email says what finished and links to the run — it never contains the task output.',
+          'Sent to the address on your account. It says what finished and links to the run — it never contains the task output.',
         defaultValue: false,
       },
-    ],
-  },
-  {
-    heading: 'Mobile push',
-    subheading: 'Sent to the AGI app on devices you have signed in on.',
-    items: [
       {
         id: 'mobilePushScheduleDone',
-        label: 'Scheduled task finished',
-        description:
-          'Push notification when one of your scheduled tasks completes or fails. Scheduled runs happen on the server while you are away, so this is the one result you cannot see in the app.',
+        channel: 'Mobile push',
+        description: 'Sent to the AGI app on devices you have signed in on.',
         defaultValue: false,
       },
     ],
@@ -70,15 +61,13 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
 ];
 
 function defaultNotificationState(): Record<NotifKey, boolean> {
-  return CHANNEL_GROUPS.flatMap((g) => g.items).reduce(
-    (acc, t) => ({ ...acc, [t.id]: t.defaultValue }),
+  return EVENTS.flatMap((event) => event.channels).reduce(
+    (acc, channel) => ({ ...acc, [channel.id]: channel.defaultValue }),
     {} as Record<NotifKey, boolean>,
   );
 }
 
 export function NotificationsSection() {
-  const subscription = useBillingStore((s) => s.subscription);
-  const hasHostedCloud = subscription?.status === 'active' && subscription.tier !== 'free';
   const [state, setState] = useState<Record<NotifKey, boolean>>(() => defaultNotificationState());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -106,8 +95,7 @@ export function NotificationsSection() {
     };
   }, []);
 
-  function toggle(key: NotifKey, disabled?: boolean) {
-    if (disabled) return;
+  function toggle(key: NotifKey) {
     setState((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       setSaving(true);
@@ -136,8 +124,8 @@ export function NotificationsSection() {
           Notifications
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          When and how AGI reaches out. These preferences are loaded from and saved to your account
-          settings.
+          When and how AGI reaches out. Each event below lists the channels that can deliver it.
+          These preferences are loaded from and saved to your account settings.
         </p>
         <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
           {loading
@@ -170,9 +158,10 @@ export function NotificationsSection() {
         </p>
       </section>
 
-      {CHANNEL_GROUPS.map((group) => (
+      {EVENTS.map((event) => (
         <section
-          key={group.heading}
+          key={event.heading}
+          aria-label={event.heading}
           style={{
             border: '1px solid var(--settings-border)',
             borderRadius: 'var(--radius-lg)',
@@ -180,7 +169,6 @@ export function NotificationsSection() {
             overflow: 'hidden',
           }}
         >
-          {/* Group header */}
           <div
             style={{
               padding: '14px 20px',
@@ -190,39 +178,17 @@ export function NotificationsSection() {
               gap: 2,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
-                {group.heading}
-              </span>
-              {group.managedOnly && (
-                <span
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                    color: 'var(--text-3)',
-                    padding: '2px 6px',
-                    border: '1px solid var(--settings-border)',
-                    borderRadius: 4,
-                  }}
-                >
-                  {hasHostedCloud ? 'Hosted cloud' : 'Upgrade'}
-                </span>
-              )}
-            </div>
-            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{group.subheading}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
+              {event.heading}
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+              {event.subheading}
+            </span>
           </div>
 
-          {/* Items */}
-          {group.items.map((spec, idx) => (
+          {event.channels.map((spec, idx) => (
             <label
               key={spec.id}
-              title={
-                spec.managedOnly && !hasHostedCloud
-                  ? 'Available with hosted cloud upgrades'
-                  : undefined
-              }
               style={{
                 padding: '14px 20px',
                 borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
@@ -230,22 +196,21 @@ export function NotificationsSection() {
                 alignItems: 'flex-start',
                 justifyContent: 'space-between',
                 gap: 14,
-                cursor: spec.managedOnly && !hasHostedCloud ? 'not-allowed' : 'pointer',
-                opacity: spec.managedOnly && !hasHostedCloud ? 0.55 : 1,
+                cursor: 'pointer',
               }}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
-                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
-                  {spec.label}
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
+                  {spec.channel}
                 </span>
                 <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
                   {spec.description}
                 </span>
               </div>
               <Switch
+                aria-label={`${event.heading} — ${spec.channel}`}
                 checked={state[spec.id]}
-                disabled={spec.managedOnly && !hasHostedCloud}
-                onCheckedChange={() => toggle(spec.id, spec.managedOnly && !hasHostedCloud)}
+                onCheckedChange={() => toggle(spec.id)}
                 style={{ marginTop: 2, flexShrink: 0 }}
               />
             </label>

@@ -46,6 +46,41 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
+const mockGetUserScopedDb = vi.fn();
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
+}));
+
+// The route meters usage over the pooled connection, not a request-scoped one:
+// rls-db refuses sk_live_/sk_test_ tokens outright, and this route accepts
+// developer API keys.
+const mockGetNeonDb = vi.fn();
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: (...args: unknown[]) => mockGetNeonDb(...args),
+}));
+
+const mockGetSubscription = vi.fn();
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: {
+    getSubscription: (...args: unknown[]) => mockGetSubscription(...args),
+  },
+}));
+
+const mockReserveManagedUsage = vi.fn();
+const mockFinalizeManagedUsage = vi.fn();
+const mockMarkProviderStarted = vi.fn();
+const mockMarkClientDelivered = vi.fn();
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    reserveManagedUsageRequest: (...args: unknown[]) => mockReserveManagedUsage(...args),
+    finalizeManagedUsageRequest: (...args: unknown[]) => mockFinalizeManagedUsage(...args),
+    markManagedUsageProviderStarted: (...args: unknown[]) => mockMarkProviderStarted(...args),
+    markManagedUsageClientDelivered: (...args: unknown[]) => mockMarkClientDelivered(...args),
+  };
+});
+
 vi.mock('@/lib/errors', () => {
   class AppError extends Error {
     code: string;
@@ -138,6 +173,30 @@ describe('POST /api/voice/transcribe', () => {
 
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: 'test@example.com' });
 
+    mockGetUserScopedDb.mockResolvedValue({
+      userId: 'user-123',
+      organizationId: null,
+      db: { query: vi.fn() },
+    });
+    mockGetNeonDb.mockReturnValue({ query: vi.fn() });
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    mockReserveManagedUsage.mockImplementation(
+      async (input: { estimatedCostCents: number; idempotencyKey: string }) => ({
+        db: { query: vi.fn() },
+        userId: 'user-123',
+        idempotencyKey: input.idempotencyKey,
+        requestHash: 'hash-1',
+        leaseToken: 'lease-1',
+        estimatedCostCents: input.estimatedCostCents,
+      }),
+    );
+    mockFinalizeManagedUsage.mockResolvedValue({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+    });
+    mockMarkProviderStarted.mockResolvedValue(undefined);
+    mockMarkClientDelivered.mockResolvedValue(undefined);
+
     mockFetch.mockResolvedValue(makeOpenAISuccessResponse('Hello world'));
   });
 
@@ -197,6 +256,9 @@ describe('POST /api/voice/transcribe', () => {
     await POST(request);
 
     expect(mockFetch).toHaveBeenCalledOnce();
+    expect(mockReserveManagedUsage.mock.invocationCallOrder[0]!).toBeLessThan(
+      mockFetch.mock.invocationCallOrder[0]!,
+    );
     const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://api.openai.com/v1/audio/transcriptions');
     expect((options.headers as Record<string, string>)['Authorization']).toContain(

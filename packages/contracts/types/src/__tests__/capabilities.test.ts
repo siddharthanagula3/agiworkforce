@@ -85,8 +85,8 @@ describe('platform capability matrix', () => {
     expect(isCapabilityEnabled('mobile', 'canUseNotifications')).toBe(true);
   });
 
-  it('WEB does NOT expose mobile device capabilities (camera/photos)', () => {
-    expect(isCapabilityEnabled('web', 'canUseCamera')).toBe(false);
+  it('WEB exposes camera (getUserMedia is wired in the composer) but not the photo library', () => {
+    expect(isCapabilityEnabled('web', 'canUseCamera')).toBe(true);
     expect(isCapabilityEnabled('web', 'canUsePhotos')).toBe(false);
   });
 

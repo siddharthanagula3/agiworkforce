@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -11,12 +10,8 @@ import {
   Zap,
   ExternalLink,
   Loader2,
-  Link2,
-  BookOpen,
   AlertTriangle,
-  Plug,
   RefreshCw,
-  X,
 } from 'lucide-react';
 import {
   Badge,
@@ -31,7 +26,6 @@ import {
 import { cn } from '@shared/lib/utils';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { getConnectorCapability } from '@/lib/connectors/catalog';
-import { legacyTransportNotice, resolveMcpTransportChoice } from '../lib/mcp-transport-choice';
 import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
 import { OfficialConnectorLogo } from '../components/OfficialConnectorLogo';
 import {
@@ -41,16 +35,6 @@ import {
 } from '../hooks/use-connectors';
 import { getGitHubCallbackNotice } from '../lib/github-callback-notice';
 import { getConnectorOAuthNotice } from '../lib/connector-oauth-notice';
-import { getCsrfToken } from '@/lib/client/csrf';
-
-interface CustomConnectorSummary {
-  id: string;
-  name: string;
-  url: string;
-  transport: string;
-  createdAt: string;
-  updatedAt: string;
-}
 
 import { ToolPermissionsPanel } from '../components/ToolPermissionsPanel';
 import {
@@ -78,325 +62,6 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   // has no way to connect them (audit CRIT-001).
   { label: 'Not available here', value: 'request_access' },
 ];
-
-// ─── InspectMcpServerDialog ───────────────────────────────────────────────────
-
-interface InspectMcpServerDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Only signed-in users can persist a connector (POST /api/connectors/custom requires auth). */
-  isSignedIn: boolean | undefined;
-  /** Called after a connector is successfully saved, so the page can refresh its lists. */
-  onAdded: () => void;
-}
-
-type McpInspectResult = {
-  serverName: string;
-  tools: Array<{
-    name: string;
-    description: string;
-  }>;
-};
-
-function InspectMcpServerDialog({
-  open,
-  onOpenChange,
-  isSignedIn,
-  onAdded,
-}: InspectMcpServerDialogProps) {
-  const [mcpUrl, setMcpUrl] = useState('');
-  const [authToken, setAuthToken] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  /** Set when the pasted URL selects the deprecated HTTP+SSE transport. */
-  const [legacyTransportWarning, setLegacyTransportWarning] = useState<string | null>(null);
-  const [isInspecting, setIsInspecting] = useState(false);
-  const [inspectResult, setInspectResult] = useState<McpInspectResult | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
-
-  const handleInspect = useCallback(async () => {
-    const trimmedUrl = mcpUrl.trim();
-    if (!trimmedUrl) {
-      setError('MCP server URL is required.');
-      return;
-    }
-
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(trimmedUrl);
-    } catch {
-      setError('Enter a valid HTTP or HTTPS URL.');
-      return;
-    }
-    if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
-      setError('MCP server URL must use HTTP or HTTPS.');
-      return;
-    }
-
-    // Say it out loud when the pasted URL selects the deprecated transport,
-    // instead of silently downgrading. See features/connectors/lib/
-    // mcp-transport-choice.ts for why we do not rewrite the URL for them.
-    const transportChoice = resolveMcpTransportChoice(parsedUrl);
-    setLegacyTransportWarning(
-      transportChoice.deprecated ? legacyTransportNotice(transportChoice.suggestedUrl) : null,
-    );
-
-    setError(null);
-    setInspectResult(null);
-    setIsInspecting(true);
-    try {
-      const csrfToken = await getCsrfToken();
-      const response = await fetch('/api/mcp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({
-          serverName: parsedUrl.hostname.replace(/^www\./, '').slice(0, 100),
-          config: {
-            url: trimmedUrl,
-            transport: resolveMcpTransportChoice(parsedUrl).transport,
-            ...(authToken.trim()
-              ? {
-                  headers: {
-                    Authorization: `Bearer ${authToken.trim()}`,
-                  },
-                }
-              : {}),
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as {
-          error?: string;
-          message?: string;
-        };
-        throw new Error(body.message ?? body.error ?? `HTTP ${response.status}`);
-      }
-
-      const body = (await response.json()) as {
-        server?: {
-          serverName?: string;
-          tools?: Array<{
-            toolName?: string;
-            title?: string;
-            description?: string;
-            fallbackDescription?: string;
-          }>;
-        };
-      };
-      const tools = body.server?.tools ?? [];
-      setInspectResult({
-        serverName: body.server?.serverName ?? parsedUrl.hostname,
-        tools: tools.map((tool) => ({
-          name: tool.title ?? tool.toolName ?? 'Unnamed tool',
-          description: tool.description ?? tool.fallbackDescription ?? 'No description.',
-        })),
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to inspect MCP server.');
-    } finally {
-      setIsInspecting(false);
-    }
-  }, [authToken, mcpUrl]);
-
-  // Persist the just-inspected server as a custom connector — reuses the same
-  // URL + auth token already entered above, so there's nothing new to fill in.
-  const handleAddConnector = useCallback(async () => {
-    const trimmedUrl = mcpUrl.trim();
-    if (!inspectResult || !trimmedUrl) return;
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(trimmedUrl);
-    } catch {
-      setError('Enter a valid HTTP or HTTPS URL.');
-      return;
-    }
-
-    setIsAdding(true);
-    try {
-      const csrfToken = await getCsrfToken();
-      const response = await fetch('/api/connectors/custom', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: inspectResult.serverName,
-          url: trimmedUrl,
-          transport: resolveMcpTransportChoice(parsedUrl).transport,
-          ...(authToken.trim() ? { authToken: authToken.trim() } : {}),
-        }),
-      });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as {
-          error?: string;
-          message?: string;
-        };
-        throw new Error(body.message ?? body.error ?? `HTTP ${response.status}`);
-      }
-      toast.success(`Added ${inspectResult.serverName}.`);
-      setMcpUrl('');
-      setAuthToken('');
-      setInspectResult(null);
-      onOpenChange(false);
-      onAdded();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not add connector. Try again.');
-    } finally {
-      setIsAdding(false);
-    }
-  }, [authToken, inspectResult, mcpUrl, onAdded, onOpenChange]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-border bg-card sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-base font-semibold text-foreground">
-            Inspect MCP server
-          </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
-            Inspect an HTTP MCP-compatible server and review its advertised tools. A remote MCP
-            server is a third party you are choosing to trust — AGI does not vet it, it sees the
-            conversation context sent to its tools, and any auth token you enter is transmitted to
-            it.{' '}
-            <a href="/agent-permissions" className="underline hover:text-foreground">
-              How connector permissions work
-            </a>
-            .
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 pt-1">
-          {/* Option 1: MCP URL */}
-          <div className="rounded-xl border border-border bg-white/[0.02] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Link2 className="h-4 w-4 text-primary" aria-hidden="true" />
-              <span className="text-sm font-medium text-foreground">MCP server URL</span>
-            </div>
-            <div className="space-y-2">
-              <Input
-                placeholder="https://mcp.example.com/sse"
-                type="url"
-                value={mcpUrl}
-                onChange={(e) => {
-                  setMcpUrl(e.target.value);
-                  setError(null);
-                  setInspectResult(null);
-                }}
-                className="h-9 border-border bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
-                aria-label="MCP server URL"
-              />
-              <Input
-                placeholder="Auth token (optional)"
-                type="password"
-                value={authToken}
-                onChange={(e) => setAuthToken(e.target.value)}
-                className="h-9 border-border bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
-                aria-label="MCP auth token"
-              />
-              {error && <p className="text-xs text-destructive">{error}</p>}
-              {/* A deprecated transport is not an error — the connection works.
-                  It is a heads-up with the modern URL, so the user is not
-                  quietly parked on a protocol that is eligible for removal. */}
-              {legacyTransportWarning && (
-                <p className="text-xs text-amber-600 dark:text-amber-500" role="status">
-                  {legacyTransportWarning}
-                </p>
-              )}
-              <Button
-                size="sm"
-                className="h-8 w-full text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => void handleInspect()}
-                disabled={isInspecting}
-              >
-                {isInspecting ? (
-                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                ) : (
-                  <Plus className="mr-1.5 h-3 w-3" />
-                )}
-                Inspect tools
-              </Button>
-              {inspectResult && (
-                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-300">
-                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    Found {inspectResult.tools.length} tools on {inspectResult.serverName}
-                  </div>
-                  {inspectResult.tools.length > 0 && (
-                    <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                      {inspectResult.tools.slice(0, 5).map((tool) => (
-                        <li key={tool.name}>
-                          <span className="text-foreground">{tool.name}</span>
-                          <span className="ml-1">{tool.description}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {isSignedIn && (
-                    <>
-                      <p className="mt-3 flex items-start gap-1.5 text-[11px] text-amber-500">
-                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-                        Only add connectors from developers you trust — they can read the
-                        conversation context you share with their tools.
-                      </p>
-                      <Button
-                        size="sm"
-                        className="mt-2 h-8 w-full text-xs bg-emerald-600 text-foreground hover:bg-emerald-600/90"
-                        onClick={() => void handleAddConnector()}
-                        disabled={isAdding}
-                      >
-                        {isAdding ? (
-                          <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                        ) : (
-                          <Plug className="mr-1.5 h-3 w-3" />
-                        )}
-                        Add connector
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Option 2: MCP Directory */}
-          <div className="rounded-xl border border-border bg-white/[0.02] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-primary" aria-hidden="true" />
-              <span className="text-sm font-medium text-foreground">MCP reference servers</span>
-            </div>
-            <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-              A short hand-picked list of stdio servers you install from Desktop or the CLI. Not a
-              browsable registry — use the official MCP registry to search community servers.
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 flex-1 text-xs border-border hover:border-border"
-                asChild
-              >
-                <a href="/connectors/mcp-directory">View reference list</a>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-3 text-xs text-muted-foreground"
-                onClick={() =>
-                  window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer')
-                }
-              >
-                MCP docs
-                <ExternalLink className="ml-1.5 h-3 w-3" aria-hidden="true" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function formatRelativeTime(isoString: string | null | undefined): string {
   if (!isoString) return 'Never';
@@ -807,7 +472,6 @@ export function ConnectorsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { isSignedIn } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ConnectorCategory | 'All'>('All');
@@ -826,60 +490,11 @@ export function ConnectorsPage() {
     disconnect,
     retry: retryConnectors,
   } = useConnectors();
-  const [showInspectDialog, setShowInspectDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   // Master-detail: which connector row is selected in the left list
   const [selectedConnector, setSelectedConnector] = useState<Connector | null>(null);
   // Overview dialog: shown before connecting
   const [overviewConnector, setOverviewConnector] = useState<Connector | null>(null);
-
-  // User-added custom remote MCP connectors (/api/connectors/custom). These
-  // have no entry in the static CONNECTORS catalog, so they render as a
-  // separate minimal row set inside the "Connected" group instead of going
-  // through the Connector/ConnectorDetailPanel master-detail flow.
-  const [customConnectors, setCustomConnectors] = useState<CustomConnectorSummary[]>([]);
-  const [removingCustomId, setRemovingCustomId] = useState<string | null>(null);
-
-  const refreshCustomConnectors = useCallback(async () => {
-    if (!isSignedIn) {
-      setCustomConnectors([]);
-      return;
-    }
-    try {
-      const res = await fetch('/api/connectors/custom', { credentials: 'include' });
-      if (!res.ok) return;
-      const json = (await res.json()) as { connectors: CustomConnectorSummary[] };
-      setCustomConnectors(json.connectors ?? []);
-    } catch {
-      // degrade gracefully
-    }
-  }, [isSignedIn]);
-
-  useEffect(() => {
-    void refreshCustomConnectors();
-  }, [refreshCustomConnectors]);
-
-  const handleRemoveCustomConnector = useCallback(async (id: string) => {
-    setRemovingCustomId(id);
-    try {
-      const csrfToken = await getCsrfToken();
-      const res = await fetch(`/api/connectors/custom?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: { 'x-csrf-token': csrfToken },
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        throw new Error('Could not remove this connector. Try again.');
-      }
-      setCustomConnectors((prev) => prev.filter((c) => c.id !== id));
-      invalidateConnectorsCache();
-      toast.success('Connector removed.');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not remove this connector.');
-    } finally {
-      setRemovingCustomId(null);
-    }
-  }, []);
 
   const ITEMS_PER_PAGE = 20;
 
@@ -1056,18 +671,6 @@ export function ConnectorsPage() {
                 <Badge variant="outline" className="border-border text-xs text-muted-foreground">
                   {VISIBLE_CONNECTORS.length} total
                 </Badge>
-                {/* /api/mcp requires an authenticated user — showing this to
-                    signed-out visitors made the primary CTA a guaranteed 401. */}
-                {isSignedIn && (
-                  <Button
-                    size="sm"
-                    className="h-8 gap-1.5 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
-                    onClick={() => setShowInspectDialog(true)}
-                  >
-                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                    Inspect MCP server
-                  </Button>
-                )}
               </div>
             </div>
 
@@ -1156,13 +759,17 @@ export function ConnectorsPage() {
                   selectedConnector ? 'hidden lg:block' : 'block',
                 )}
               >
-                {/* Connected group — catalog connectors + user-added custom MCP connectors */}
-                {(connectedConnectors.length > 0 || customConnectors.length > 0) && (
+                {/* Connected group — catalog connectors only. This page is the
+                    public directory (unauthenticated visitors only; see
+                    app/connectors/page.tsx), so it has no user-added custom
+                    MCP connectors to show — that list lives in the settings
+                    modal's Connectors section (signed-in only). */}
+                {connectedConnectors.length > 0 && (
                   <div className="mb-4">
                     <div className="mb-1.5 flex items-center gap-1.5 px-1">
                       <Check className="h-3 w-3 text-emerald-400" />
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Connected ({connectedConnectors.length + customConnectors.length})
+                        Connected ({connectedConnectors.length})
                       </span>
                     </div>
                     <div className="space-y-0.5">
@@ -1174,33 +781,6 @@ export function ConnectorsPage() {
                           connected
                           onClick={() => setSelectedConnector(connector)}
                         />
-                      ))}
-                      {customConnectors.map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-muted-foreground"
-                        >
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.06]">
-                            <Plug className="h-3.5 w-3.5" aria-hidden="true" />
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
-                            {c.name}
-                          </span>
-                          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-                          <button
-                            type="button"
-                            aria-label={`Remove ${c.name}`}
-                            onClick={() => void handleRemoveCustomConnector(c.id)}
-                            disabled={removingCustomId === c.id}
-                            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive disabled:opacity-50"
-                          >
-                            {removingCustomId === c.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <X className="h-3 w-3" aria-hidden="true" />
-                            )}
-                          </button>
-                        </div>
                       ))}
                     </div>
                   </div>
@@ -1357,13 +937,6 @@ export function ConnectorsPage() {
           )}
         </div>
       </div>
-
-      <InspectMcpServerDialog
-        open={showInspectDialog}
-        onOpenChange={setShowInspectDialog}
-        isSignedIn={isSignedIn}
-        onAdded={() => void refreshCustomConnectors()}
-      />
 
       <ConnectorOverviewDialog
         connector={overviewConnector}

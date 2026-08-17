@@ -16,6 +16,27 @@ into any `ProviderAdapter` at the request-build boundary. Renamed from
 `llm-normalize` to `provider-protocol` in the W4 T-wave (DM #10 rename
 confirmed by the founder, executed 2026-07-16).
 
+## Surface Topology
+
+Request-shaping is centralized, not duplicated. Three cases, verified
+2026-08-16 by `src/__tests__/surface-shaping-parity.test.ts`:
+
+- **TS provider adapters** — `packages/ai/providers/*` (anthropic, openai,
+  google, deepseek, lmstudio, minimax, moonshot, ollama, openrouter,
+  perplexity, qwen, xai, zhipu), `apps/web/app/api/llm/**`, and
+  `services/api-gateway` import this package directly. It is not web-only.
+- **Rust surfaces** — `apps/desktop` and `apps/cli` shape through
+  `crates/agiworkforce-llm`, held to byte-parity with the desktop adapters by
+  `apps/desktop/src-tauri/src/core/llm/tests/c2c_request_oracle.rs`.
+- **Thin clients** — `apps/mobile`, `apps/extension`, `apps/extension-vscode`
+  build **no** provider wire payloads. They POST a canonical body (`model`,
+  `messages`, `effort`, `thinking_mode`) to the managed gateway at
+  `/api/llm/v1/chat/completions`; shaping happens server-side. The parity test
+  fails if any of them starts emitting `reasoning_effort`, `cache_control`,
+  `max_completion_tokens`, `anthropic-version`, `thinkingConfig`,
+  `generationConfig`, or `input_schema`, and fails if the canonical `Effort`
+  vocabulary drifts from `OpenAIReasoningEffort`.
+
 ## Lane Contract
 
 - Primary lane: `provider-routing`.

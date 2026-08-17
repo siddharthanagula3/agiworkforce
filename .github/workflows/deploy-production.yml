@@ -4,6 +4,13 @@ on:
   workflow_run:
     workflows: ['CI']
     types: [completed]
+  # A promotion that never runs is silent: when CI is not green on a main push
+  # the jobs below evaluate their `if` to false and the whole run reports
+  # `skipped`, which GitHub does not alert on. This schedule is the alarm — it
+  # asks production which commit it is serving and fails when that is not main.
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
 
 concurrency:
   group: production-surfaces
@@ -20,6 +27,62 @@ permissions:
   actions: read
 
 jobs:
+  # Deliberately probes the public apex, not a `*.vercel.app` alias: the aliases
+  # sit behind Deployment Protection, and the apex is what real users get. It
+  # needs no Vercel credential for the same reason.
+  production-drift:
+    name: Alarm when production is not serving main
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL || 'https://agiworkforce.com' }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Self-test the production serving-path verifier
+        run: node --test scripts/verify-deployment.test.mjs
+
+      - name: Compare the commit production serves against main
+        id: drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_sha="$(git rev-parse HEAD)"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          node scripts/verify-deployment.mjs "$PRODUCTION_WEB_URL" "$head_sha"
+
+      - name: Record the production drift check
+        if: ${{ !cancelled() }}
+        env:
+          HEAD_SHA: ${{ steps.drift.outputs.head_sha }}
+          DRIFT_OUTCOME: ${{ steps.drift.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$DRIFT_OUTCOME" = "success" ]; then
+            verdict="production serves main HEAD"
+          else
+            verdict="production is NOT serving main HEAD; the promotion has not happened"
+            echo "::error::$verdict (main is ${HEAD_SHA:-unknown}; see the step log for the commit production reports)"
+          fi
+          {
+            echo "## Production drift check"
+            echo
+            echo "- Origin: $PRODUCTION_WEB_URL"
+            echo "- main HEAD: \`${HEAD_SHA:-unknown}\`"
+            echo "- Serving path: probed via /api/health plus authenticated routes"
+            echo "- Verdict: $verdict"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   scope:
     name: Select production surfaces
     if: >-
@@ -72,6 +135,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      AGI_DATABASE_URL: ${{ secrets.AGI_DATABASE_URL }}
     steps:
       - name: Checkout the CI-verified commit
         uses: actions/checkout@v6
@@ -93,7 +157,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID AGI_DATABASE_URL; do
             if [ -z "${!name:-}" ]; then
               echo "::error::$name is required in the production-web environment"
               exit 1
@@ -102,6 +166,12 @@ jobs:
 
       - name: Self-test the production serving-path verifier
         run: node --test scripts/verify-deployment.test.mjs
+
+      - name: Install migration-ledger dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify the production schema ledger without mutation
+        run: pnpm db:migrate -- verify
 
       - name: Install pinned Vercel CLI
         run: npm install --global vercel@58.4.0
@@ -188,6 +258,14 @@ jobs:
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
         run: node scripts/verify-deployment.mjs "$DEPLOYMENT_URL"
+
+      - name: Record the migration state this deployment serves
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: >-
+          pnpm db:migrate -- record --surface web --commit "$HEAD_SHA"
+          --target production --confirm-production --deployment-ref "$DEPLOYMENT_URL"
 
       - name: Roll back to the last verified production deployment
         id: rollback

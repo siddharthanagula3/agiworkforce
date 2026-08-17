@@ -115,4 +115,48 @@ describe('capability preamble', () => {
       expect(officeLine).not.toContain(`.${format}`);
     }
   });
+
+  it('discloses a "Run code" turn whose execution tool was dropped, even when other tools ran', () => {
+    const preamble = buildCapabilityPreamble({
+      tools: [{ type: 'function', function: { name: 'web_search' } }],
+      codeExecutionUnavailable: true,
+    });
+
+    expect(preamble).toContain('"Run code"');
+    expect(preamble).toContain('code execution is not available');
+    expect(preamble).toContain('never report output');
+  });
+
+  it.each([
+    ['Anthropic', { type: 'code_execution_20260120', name: 'code_execution' }, 'code_execution'],
+    ['Google', { code_execution: {} }, 'code_execution'],
+    ['OpenAI', { type: 'code_interpreter', container: { type: 'auto' } }, 'code_interpreter'],
+  ])(
+    'never tells the model it cannot run code when %s attached a hosted execution tool',
+    (_provider, tool, expectedName) => {
+      const preamble = buildCapabilityPreamble({ tools: [tool] });
+
+      expect(extractToolNames([tool])).toEqual([expectedName]);
+      expect(preamble).not.toContain('No tools are available on this turn');
+      expect(preamble).toContain(`- ${expectedName} — run code in a hosted sandbox`);
+      expect(preamble).toContain('Code execution is already enabled.');
+    },
+  );
+
+  it('does not claim code execution on a turn that only got search', () => {
+    const preamble = buildCapabilityPreamble({
+      tools: [{ type: 'function', function: { name: 'web_search' } }],
+    });
+
+    expect(preamble).not.toContain('Code execution is already enabled.');
+  });
+
+  it('stays silent about code execution when the turn actually got the tool', () => {
+    const preamble = buildCapabilityPreamble({
+      tools: [{ type: 'function', function: { name: 'execute_code' } }],
+      codeExecutionUnavailable: false,
+    });
+
+    expect(preamble).not.toContain('"Run code"');
+  });
 });

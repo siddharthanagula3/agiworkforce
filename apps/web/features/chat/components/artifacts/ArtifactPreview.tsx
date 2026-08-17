@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   FileText,
   Globe,
+  Pencil,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import {
@@ -214,7 +215,11 @@ export function ArtifactPreview({
   // Version navigation (panel-only, view-only). null = show latest.
   const versionCount = versionHistory?.length ?? 0;
   const restoreArtifactVersion = useArtifactsStore((s) => s.restoreArtifactVersion);
+  const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
+  const isStoredArtifact = useArtifactsStore((s) => s.artifacts.some((a) => a.id === artifact.id));
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
+  // Manual source edit. null = not editing; a string = the unsaved draft.
+  const [sourceDraft, setSourceDraft] = useState<string | null>(null);
 
   // PDF / DOCX viewer state (Fix 39 / Fix 40)
   const isPdf = artifact.type === 'document' && artifact.language?.toLowerCase() === 'pdf';
@@ -449,10 +454,37 @@ export function ArtifactPreview({
     setPdfError(false);
     setImageError(false);
     setCopied(false);
+    // An unsaved draft belongs to the revision it was opened from. Carrying it
+    // across an artifact swap or a new version would overwrite other content.
+    setSourceDraft(null);
     // CAP-015: a published URL belongs to one artifact id. Leaving it up after
     // a swap would offer the previous artifact's public link under this title.
     setPublishedUrl(null);
   }, [artifact.id, versionCount]);
+
+  /**
+   * Manual source editing (panel variant). Web artifacts could only ever be
+   * revised by another model turn, while two marketing surfaces call them
+   * editable. A save goes through the SAME content-keyed store path Restore
+   * uses, so the edit becomes a real new version rather than a silent overwrite.
+   *
+   * Offered only for artifacts whose source IS text and only on the latest
+   * version: PDF/DOCX/image content is an opaque data URI, and an older
+   * revision has to be restored before it can be edited.
+   */
+  const isLatestVersion = versionCount === 0 || shownVersionIndex === versionCount - 1;
+  const canEditSource =
+    variant === 'panel' && isStoredArtifact && isLatestVersion && !isPdf && !isDocx && !isImage;
+
+  const saveSourceEdit = useCallback(() => {
+    if (sourceDraft === null) return;
+    const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
+    if (!stored) return;
+    if (sourceDraft !== stored.content) {
+      upsertArtifact({ ...stored, content: sourceDraft, createdAt: new Date() });
+    }
+    setSourceDraft(null);
+  }, [artifact.id, sourceDraft, upsertArtifact]);
 
   // AUDIT-FIX ART-6 / ART-14: the security banner is DERIVED, never latched,
   // and it now states what actually happened per renderer:
@@ -1110,9 +1142,19 @@ if (__AgiApp) {
         )}
       >
         {/* Single reference toolbar */}
-        <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-card/80 px-3 py-1.5">
-          {/* LEFT: toggle + type icon + title + type + version chip */}
-          <div className="flex min-w-0 items-center gap-2">
+        {/* @container: this header sizes to the ARTIFACT PANEL, not the viewport.
+            The panel is a fixed-width split pane, so viewport breakpoints (sm:)
+            told the labels below to render at a width the panel never has —
+            a 1600px window still leaves this bar ~400px wide. The result was
+            the left group overflowing its 47px box by ~198px and painting on
+            top of the button row. Sizing decisions here must be container-
+            relative; see the @[...] variants below. */}
+        <div className="@container flex shrink-0 items-center justify-between border-b border-border/30 bg-card/80 px-3 py-1.5">
+          {/* LEFT: toggle + type icon + title + type + version chip.
+              overflow-hidden is load-bearing, not cosmetic: it is what
+              guarantees this group can never paint over the controls on the
+              right, whatever the panel width or title length. */}
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
             {/* Eye/Code segmented toggle — for renderable artifacts (sandbox)
                 and shared-renderer types (spreadsheet/presentation/email).
                 PDF/DOCX are single-view (their "source" is an opaque data URI),
@@ -1152,10 +1194,18 @@ if (__AgiApp) {
             {/* Type icon */}
             <TypeIcon type={artifact.type} className="h-4 w-4 text-muted-foreground" />
             {/* Title + muted TYPE label */}
-            <span className="truncate text-sm font-semibold text-foreground">
+            {/* min-w-0 is what makes `truncate` actually engage on a flex child:
+                without it the span's min-content width wins and the text pushes
+                past the container instead of ellipsising. This is the element
+                that absorbs the shrink — everything else here is shrink-0. */}
+            <span className="min-w-0 truncate text-sm font-semibold text-foreground">
               {artifact.title || 'Artifact'}
             </span>
-            <span className="shrink-0 text-sm text-muted-foreground">· {typeLabel}</span>
+            {/* Redundant with TypeIcon and with the artifact tab above, so it is
+                the first thing to go when the panel is narrow. */}
+            <span className="hidden shrink-0 text-sm text-muted-foreground @[26rem]:inline">
+              · {typeLabel}
+            </span>
             {/* Version chip — visible from the first generated version so the
                 artifact panel always answers which revision is being shown.
                 Navigation remains disabled until real edit history exists. */}
@@ -1225,6 +1275,52 @@ if (__AgiApp) {
               - code / markdown doc: Copy · Download · Close
               External + Fullscreen collapse on narrow (375px) widths. */}
           <div className="flex shrink-0 items-center gap-1">
+            {/* Edit / Save · Cancel — only over the source view, and only for a
+                text artifact on its latest version (see canEditSource). */}
+            {canEditSource &&
+              !showPreview &&
+              (sourceDraft === null ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSourceDraft(activeContent)}
+                  className="h-7 px-2"
+                  aria-label="Edit artifact source"
+                  title="Edit"
+                  data-testid="artifact-edit-source"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span className="ml-1 hidden text-xs @[30rem]:inline">Edit</span>
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={saveSourceEdit}
+                    className="h-7 px-2"
+                    aria-label="Save artifact source"
+                    title="Save as a new version"
+                    data-testid="artifact-save-source"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    <span className="ml-1 hidden text-xs @[30rem]:inline">Save</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSourceDraft(null)}
+                    className="h-7 px-2"
+                    aria-label="Discard artifact source edit"
+                    title="Discard changes"
+                    data-testid="artifact-cancel-source-edit"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span className="ml-1 hidden text-xs @[30rem]:inline">Cancel</span>
+                  </Button>
+                </>
+              ))}
+
             {/* Copy — not for binary docs (copying a data URI is useless). */}
             {!isPdf && !isDocx && !isImage && (
               <Button
@@ -1238,12 +1334,12 @@ if (__AgiApp) {
                 {copied ? (
                   <>
                     <Check className="h-3.5 w-3.5 text-green-500" />
-                    <span className="ml-1 hidden text-xs sm:inline">Copied</span>
+                    <span className="ml-1 hidden text-xs @[30rem]:inline">Copied</span>
                   </>
                 ) : (
                   <>
                     <Copy className="h-3.5 w-3.5" />
-                    <span className="ml-1 hidden text-xs sm:inline">Copy</span>
+                    <span className="ml-1 hidden text-xs @[30rem]:inline">Copy</span>
                   </>
                 )}
               </Button>
@@ -1319,7 +1415,7 @@ if (__AgiApp) {
                 title="Publish"
               >
                 <Globe className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="ml-1 hidden text-xs sm:inline">
+                <span className="ml-1 hidden text-xs @[30rem]:inline">
                   {isPublishing ? 'Publishing…' : 'Publish'}
                 </span>
               </Button>
@@ -1345,7 +1441,7 @@ if (__AgiApp) {
                 variant="ghost"
                 size="sm"
                 onClick={handleOpenInNewTab}
-                className="hidden h-7 px-2 sm:flex"
+                className="hidden h-7 px-2 @[22rem]:flex"
                 aria-label="Open source in new tab"
                 title="Open source in new tab"
               >
@@ -1359,7 +1455,7 @@ if (__AgiApp) {
                 variant="ghost"
                 size="sm"
                 onClick={handleFullscreen}
-                className="hidden h-7 px-2 sm:flex"
+                className="hidden h-7 px-2 @[22rem]:flex"
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                 title="Fullscreen"
               >
@@ -1534,13 +1630,24 @@ if (__AgiApp) {
           )}
 
           {/* Source / Code — shown whenever not previewing (or for pure-code artifacts) */}
-          {!showPreview && (
-            <ScrollArea className="h-full w-full bg-gray-900">
-              <pre className="p-4">
-                <code className="text-sm text-gray-100">{activeContent}</code>
-              </pre>
-            </ScrollArea>
-          )}
+          {!showPreview &&
+            (sourceDraft !== null ? (
+              <textarea
+                value={sourceDraft}
+                onChange={(event) => setSourceDraft(event.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+                className="h-full w-full resize-none border-0 bg-gray-900 p-4 font-mono text-sm text-gray-100 outline-none focus:ring-0"
+                aria-label="Artifact source"
+                data-testid="artifact-source-editor"
+              />
+            ) : (
+              <ScrollArea className="h-full w-full bg-gray-900">
+                <pre className="p-4">
+                  <code className="text-sm text-gray-100">{activeContent}</code>
+                </pre>
+              </ScrollArea>
+            ))}
         </div>
       </div>
     );

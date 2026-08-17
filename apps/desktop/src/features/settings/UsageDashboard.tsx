@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
-import { BarChart3, RefreshCw, SlidersHorizontal, TrendingUp } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  BarChart3,
+  CalendarClock,
+  Flame,
+  RefreshCw,
+  SlidersHorizontal,
+  TrendingUp,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
@@ -9,7 +16,14 @@ import {
   useBillingUsageStore,
   selectBudget,
   selectBudgetPercentage,
+  selectCostAnalytics,
 } from '../../stores/billingUsage';
+import type { ModelUsageStats } from '../../types/billing';
+import type { CostTimeseriesPoint } from '../../types/chat';
+import type { BudgetPeriod } from '../../stores/billing/budgetSlice';
+
+const DAY_MS = 86_400_000;
+const ACTIVITY_SPAN_DAYS = 30;
 
 function barColorClass(pct: number): string {
   if (pct > 95) return 'bg-red-500';
@@ -37,6 +51,117 @@ function formatTimeRemaining(futureMs: number): string {
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }
+
+function formatIsoDay(iso: string): string {
+  const parsed = Date.parse(`${iso}T00:00:00Z`);
+  if (Number.isNaN(parsed)) return iso;
+  return new Date(parsed).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function toIsoDay(dayNumber: number): string {
+  return new Date(dayNumber * DAY_MS).toISOString().slice(0, 10);
+}
+
+function costByUtcDay(points: readonly CostTimeseriesPoint[]): Map<number, number> {
+  const costByDay = new Map<number, number>();
+  for (const point of points) {
+    const parsed = Date.parse(`${point.date}T00:00:00Z`);
+    if (Number.isNaN(parsed)) continue;
+    const day = Math.floor(parsed / DAY_MS);
+    costByDay.set(day, (costByDay.get(day) ?? 0) + point.total_cost);
+  }
+  return costByDay;
+}
+
+export interface ActivitySummary {
+  activeDays: number;
+  currentStreak: number;
+  longestStreak: number;
+  busiestDay: { date: string; cost: number } | null;
+}
+
+export function summarizeActivity(
+  points: readonly CostTimeseriesPoint[],
+  nowMs: number,
+): ActivitySummary {
+  const costByDay = costByUtcDay(points);
+  const days = [...costByDay.keys()].sort((a, b) => b - a);
+  const newest = days[0];
+  if (newest === undefined) {
+    return { activeDays: 0, currentStreak: 0, longestStreak: 0, busiestDay: null };
+  }
+
+  const today = Math.floor(nowMs / DAY_MS);
+  let currentStreak = 0;
+  if (newest === today || newest === today - 1) {
+    let expected = newest;
+    for (const day of days) {
+      if (day !== expected) break;
+      currentStreak += 1;
+      expected -= 1;
+    }
+  }
+
+  let longestStreak = 1;
+  let run = 1;
+  for (let i = 1; i < days.length; i += 1) {
+    const day = days[i];
+    const previous = days[i - 1];
+    if (day === undefined || previous === undefined) continue;
+    run = day === previous - 1 ? run + 1 : 1;
+    if (run > longestStreak) longestStreak = run;
+  }
+
+  let busiestDayNumber = newest;
+  let busiestCost = costByDay.get(newest) ?? 0;
+  for (const [day, cost] of costByDay) {
+    if (cost > busiestCost) {
+      busiestDayNumber = day;
+      busiestCost = cost;
+    }
+  }
+
+  return {
+    activeDays: days.length,
+    currentStreak,
+    longestStreak,
+    busiestDay: { date: toIsoDay(busiestDayNumber), cost: busiestCost },
+  };
+}
+
+export function activityCells(
+  points: readonly CostTimeseriesPoint[],
+  nowMs: number,
+  span = ACTIVITY_SPAN_DAYS,
+): { date: string; cost: number }[] {
+  const costByDay = costByUtcDay(points);
+  const today = Math.floor(nowMs / DAY_MS);
+  const cells: { date: string; cost: number }[] = [];
+  for (let offset = span - 1; offset >= 0; offset -= 1) {
+    const day = today - offset;
+    cells.push({ date: toIsoDay(day), cost: costByDay.get(day) ?? 0 });
+  }
+  return cells;
+}
+
+export function favouriteModel(models: readonly ModelUsageStats[]): ModelUsageStats | null {
+  let best: ModelUsageStats | null = null;
+  for (const model of models) {
+    if (best === null || model.total_tokens > best.total_tokens) best = model;
+  }
+  return best;
+}
+
+const PERIOD_LABELS: Record<BudgetPeriod, string> = {
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+  'per-conversation': 'per-conversation',
+};
 
 interface UsageRowProps {
   label: string;
@@ -114,17 +239,152 @@ function EmptyUsageState() {
   );
 }
 
+function heatClass(cost: number, max: number): string {
+  if (cost <= 0) return 'bg-muted';
+  const ratio = max > 0 ? cost / max : 0;
+  if (ratio > 0.66) return 'bg-green-500';
+  if (ratio > 0.33) return 'bg-green-500/70';
+  return 'bg-green-500/40';
+}
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-md bg-muted/50 p-2.5">
+      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">
+        {label}
+      </p>
+      <p className="text-sm font-semibold tabular-nums truncate">{value}</p>
+      {hint && <p className="text-[10px] text-muted-foreground truncate">{hint}</p>}
+    </div>
+  );
+}
+
+interface ResetSectionProps {
+  period: BudgetPeriod;
+  periodEnd: number;
+}
+
+function UsageResetSection({ period, periodEnd }: ResetSectionProps) {
+  const upcoming = periodEnd > Date.now();
+  return (
+    <section
+      aria-labelledby="usage-resets-heading"
+      className="rounded-lg border border-border bg-card p-4 space-y-3"
+    >
+      <div className="flex items-center gap-2">
+        <CalendarClock className="h-4 w-4 text-muted-foreground" />
+        <h4 id="usage-resets-heading" className="text-sm font-semibold">
+          Usage limit resets
+        </h4>
+      </div>
+
+      {upcoming ? (
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{PERIOD_LABELS[period]} token budget</p>
+            <p className="text-xs text-muted-foreground">Resets {formatDate(periodEnd)}</p>
+          </div>
+          <span className="text-xs font-semibold tabular-nums shrink-0">
+            in {formatTimeRemaining(periodEnd)}
+          </span>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          No reset window is running. A new {PERIOD_LABELS[period]} window opens with your next
+          message, and its reset time will show here.
+        </p>
+      )}
+    </section>
+  );
+}
+
+interface ActivitySectionProps {
+  timeseries: readonly CostTimeseriesPoint[];
+  models: readonly ModelUsageStats[];
+  nowMs: number;
+}
+
+function ActivitySection({ timeseries, models, nowMs }: ActivitySectionProps) {
+  const summary = useMemo(() => summarizeActivity(timeseries, nowMs), [timeseries, nowMs]);
+  const cells = useMemo(() => activityCells(timeseries, nowMs), [timeseries, nowMs]);
+  const favourite = useMemo(() => favouriteModel(models), [models]);
+  const maxCost = cells.reduce((max, cell) => (cell.cost > max ? cell.cost : max), 0);
+
+  return (
+    <section
+      aria-labelledby="usage-activity-heading"
+      className="rounded-lg border border-border bg-card p-4 space-y-4"
+    >
+      <div className="flex items-center gap-2">
+        <Flame className="h-4 w-4 text-muted-foreground" />
+        <h4 id="usage-activity-heading" className="text-sm font-semibold">
+          Activity
+        </h4>
+      </div>
+
+      {summary.activeDays === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No activity recorded in the last {ACTIVITY_SPAN_DAYS} days.
+        </p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Stat
+              label="Current streak"
+              value={`${summary.currentStreak} day${summary.currentStreak === 1 ? '' : 's'}`}
+              hint={`Longest ${summary.longestStreak}`}
+            />
+            <Stat label="Active days" value={`${summary.activeDays} / ${ACTIVITY_SPAN_DAYS}`} />
+            <Stat
+              label="Busiest day"
+              value={summary.busiestDay ? formatIsoDay(summary.busiestDay.date) : '—'}
+              hint={summary.busiestDay ? `$${summary.busiestDay.cost.toFixed(4)}` : undefined}
+            />
+            <Stat
+              label="Favourite model"
+              value={favourite ? favourite.model_name || favourite.model_id : '—'}
+              hint={favourite ? `${favourite.total_tokens.toLocaleString()} tok` : undefined}
+            />
+          </div>
+
+          <div>
+            <div
+              className="flex flex-wrap gap-1"
+              role="img"
+              aria-label="Activity over the last 30 days"
+            >
+              {cells.map((cell) => (
+                <span
+                  key={cell.date}
+                  title={`${formatIsoDay(cell.date)} · $${cell.cost.toFixed(4)}`}
+                  className={cn('h-3.5 w-3.5 rounded-sm', heatClass(cell.cost, maxCost))}
+                />
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5">
+              Daily spend across the last {ACTIVITY_SPAN_DAYS} days (UTC).
+            </p>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function UsageDashboard() {
   const budget = useBillingUsageStore(selectBudget);
   const budgetPct = useBillingUsageStore(selectBudgetPercentage);
-  const { usageStats, costOverview, loadCostOverview, setMonthlyBudget } = useBillingUsageStore(
-    useShallow((s) => ({
-      usageStats: s.usageStats,
-      costOverview: s.costOverview,
-      loadCostOverview: s.loadCostOverview,
-      setMonthlyBudget: s.setMonthlyBudget,
-    })),
-  );
+  const costAnalytics = useBillingUsageStore(selectCostAnalytics);
+  const { usageStats, costOverview, loadCostOverview, loadCostAnalytics, setMonthlyBudget } =
+    useBillingUsageStore(
+      useShallow((s) => ({
+        usageStats: s.usageStats,
+        costOverview: s.costOverview,
+        loadCostOverview: s.loadCostOverview,
+        loadCostAnalytics: s.loadCostAnalytics,
+        setMonthlyBudget: s.setMonthlyBudget,
+      })),
+    );
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAdjustingBudget, setIsAdjustingBudget] = useState(false);
@@ -133,19 +393,20 @@ export function UsageDashboard() {
 
   useEffect(() => {
     void loadCostOverview();
-  }, [loadCostOverview]);
+    void loadCostAnalytics({ days: ACTIVITY_SPAN_DAYS });
+  }, [loadCostOverview, loadCostAnalytics]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await loadCostOverview();
+      await Promise.all([loadCostOverview(), loadCostAnalytics({ days: ACTIVITY_SPAN_DAYS })]);
       toast.success('Usage data refreshed');
     } catch {
       toast.error('Failed to refresh usage data');
     } finally {
       setIsRefreshing(false);
     }
-  }, [loadCostOverview]);
+  }, [loadCostOverview, loadCostAnalytics]);
 
   const handleAdjustLimit = useCallback(async () => {
     const parsed = parseFloat(budgetInputValue);
@@ -169,7 +430,9 @@ export function UsageDashboard() {
   const hasTokenData = budget.currentUsage > 0 || budget.enabled;
   const hasModelData = (usageStats?.model_usage?.length ?? 0) > 0;
   const hasCostData = costOverview !== null;
-  const hasAnyData = hasTokenData || hasModelData || hasCostData;
+  const timeseries = costAnalytics?.timeseries ?? [];
+  const hasActivityData = timeseries.length > 0;
+  const hasAnyData = hasTokenData || hasModelData || hasCostData || hasActivityData;
 
   const sessionResetLabel =
     budget.periodEnd > Date.now()
@@ -208,10 +471,14 @@ export function UsageDashboard() {
         </Button>
       </div>
 
+      <UsageResetSection period={budget.period} periodEnd={budget.periodEnd} />
+
       {!hasAnyData ? (
         <EmptyUsageState />
       ) : (
         <>
+          <ActivitySection timeseries={timeseries} models={modelUsage} nowMs={Date.now()} />
+
           {/* ── Section 1: Session / period usage ── */}
           {hasTokenData && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-4">

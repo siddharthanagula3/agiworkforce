@@ -1,4 +1,3 @@
-
 export const GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
   'patternProperties',
   'additionalProperties',
@@ -107,6 +106,47 @@ function stripNullVariants(variants: unknown[]): { variants: unknown[]; stripped
 }
 
 type SchemaDefs = Map<string, unknown>;
+
+const MAX_SCHEMA_DEPTH = 64;
+const MAX_EXPANDED_NODES = 5000;
+
+type ResolvedRef = { value: unknown; cost: number };
+
+type CleanBudget = {
+  nodes: number;
+  truncations: number;
+  resolvedRefs: Map<SchemaDefs | undefined, Map<string, ResolvedRef>>;
+};
+
+function createCleanBudget(): CleanBudget {
+  return { nodes: 0, truncations: 0, resolvedRefs: new Map() };
+}
+
+function readResolvedRef(
+  budget: CleanBudget,
+  defs: SchemaDefs | undefined,
+  ref: string,
+): ResolvedRef | undefined {
+  return budget.resolvedRefs.get(defs)?.get(ref);
+}
+
+function writeResolvedRef(
+  budget: CleanBudget,
+  defs: SchemaDefs | undefined,
+  ref: string,
+  entry: ResolvedRef,
+): void {
+  let byRef = budget.resolvedRefs.get(defs);
+  if (!byRef) {
+    byRef = new Map();
+    budget.resolvedRefs.set(defs, byRef);
+  }
+  byRef.set(ref, entry);
+}
+
+function exhausted(budget: CleanBudget, depth: number): boolean {
+  return depth > MAX_SCHEMA_DEPTH || budget.nodes >= MAX_EXPANDED_NODES;
+}
 
 function extendSchemaDefs(
   defs: SchemaDefs | undefined,
@@ -218,17 +258,41 @@ function sanitizeRequiredFields(schema: Record<string, unknown>): Record<string,
   return schema;
 }
 
+function withRefMeta(obj: Record<string, unknown>, cleaned: unknown): unknown {
+  if (!cleaned || typeof cleaned !== 'object' || Array.isArray(cleaned)) {
+    return cleaned;
+  }
+  const result: Record<string, unknown> = { ...(cleaned as Record<string, unknown>) };
+  copySchemaMeta(obj, result);
+  return result;
+}
+
 function cleanSchemaForGeminiWithDefs(
   schema: unknown,
   defs: SchemaDefs | undefined,
   refStack: Set<string> | undefined,
+  depth: number,
+  budget: CleanBudget,
 ): unknown {
   if (!schema || typeof schema !== 'object') {
     return schema;
   }
   if (Array.isArray(schema)) {
-    return schema.map((item) => cleanSchemaForGeminiWithDefs(item, defs, refStack));
+    if (exhausted(budget, depth)) {
+      budget.truncations += 1;
+      return [];
+    }
+    budget.nodes += 1;
+    return schema.map((item) =>
+      cleanSchemaForGeminiWithDefs(item, defs, refStack, depth + 1, budget),
+    );
   }
+
+  if (exhausted(budget, depth)) {
+    budget.truncations += 1;
+    return {};
+  }
+  budget.nodes += 1;
 
   const obj = schema as Record<string, unknown>;
   const nextDefs = extendSchemaDefs(defs, obj);
@@ -236,7 +300,14 @@ function cleanSchemaForGeminiWithDefs(
   const refValue = typeof obj['$ref'] === 'string' ? obj['$ref'] : undefined;
   if (refValue) {
     if (refStack?.has(refValue)) {
+      budget.truncations += 1;
       return {};
+    }
+
+    const memoized = readResolvedRef(budget, nextDefs, refValue);
+    if (memoized) {
+      budget.nodes += memoized.cost;
+      return withRefMeta(obj, memoized.value);
     }
 
     const resolved = tryResolveLocalRef(refValue, nextDefs);
@@ -244,14 +315,23 @@ function cleanSchemaForGeminiWithDefs(
       const nextRefStack = refStack ? new Set(refStack) : new Set<string>();
       nextRefStack.add(refValue);
 
-      const cleaned = cleanSchemaForGeminiWithDefs(resolved, nextDefs, nextRefStack);
-      if (!cleaned || typeof cleaned !== 'object' || Array.isArray(cleaned)) {
-        return cleaned;
+      const nodesBefore = budget.nodes;
+      const truncationsBefore = budget.truncations;
+      const cleaned = cleanSchemaForGeminiWithDefs(
+        resolved,
+        nextDefs,
+        nextRefStack,
+        depth + 1,
+        budget,
+      );
+      if (budget.truncations === truncationsBefore && budget.nodes <= MAX_EXPANDED_NODES) {
+        writeResolvedRef(budget, nextDefs, refValue, {
+          value: cleaned,
+          cost: Math.max(1, budget.nodes - nodesBefore),
+        });
       }
 
-      const result: Record<string, unknown> = { ...(cleaned as Record<string, unknown>) };
-      copySchemaMeta(obj, result);
-      return result;
+      return withRefMeta(obj, cleaned);
     }
 
     const result: Record<string, unknown> = {};
@@ -263,12 +343,12 @@ function cleanSchemaForGeminiWithDefs(
   const hasOneOf = 'oneOf' in obj && Array.isArray(obj['oneOf']);
   let cleanedAnyOf = hasAnyOf
     ? (obj['anyOf'] as unknown[]).map((variant) =>
-        cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack),
+        cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack, depth + 1, budget),
       )
     : undefined;
   let cleanedOneOf = hasOneOf
     ? (obj['oneOf'] as unknown[]).map((variant) =>
-        cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack),
+        cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack, depth + 1, budget),
       )
     : undefined;
 
@@ -323,7 +403,7 @@ function cleanSchemaForGeminiWithDefs(
         cleaned[key] = Object.fromEntries(
           Object.entries(props).map(([k, v]) => [
             k,
-            cleanSchemaForGeminiWithDefs(v, nextDefs, refStack),
+            cleanSchemaForGeminiWithDefs(v, nextDefs, refStack, depth + 1, budget),
           ]),
         );
       } else {
@@ -332,24 +412,28 @@ function cleanSchemaForGeminiWithDefs(
     } else if (key === 'items' && value) {
       if (Array.isArray(value)) {
         cleaned[key] = value.map((entry) =>
-          cleanSchemaForGeminiWithDefs(entry, nextDefs, refStack),
+          cleanSchemaForGeminiWithDefs(entry, nextDefs, refStack, depth + 1, budget),
         );
       } else if (typeof value === 'object') {
-        cleaned[key] = cleanSchemaForGeminiWithDefs(value, nextDefs, refStack);
+        cleaned[key] = cleanSchemaForGeminiWithDefs(value, nextDefs, refStack, depth + 1, budget);
       } else {
         cleaned[key] = value;
       }
     } else if (key === 'anyOf' && Array.isArray(value)) {
       cleaned[key] =
         cleanedAnyOf ??
-        value.map((variant) => cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack));
+        value.map((variant) =>
+          cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack, depth + 1, budget),
+        );
     } else if (key === 'oneOf' && Array.isArray(value)) {
       cleaned[key] =
         cleanedOneOf ??
-        value.map((variant) => cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack));
+        value.map((variant) =>
+          cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack, depth + 1, budget),
+        );
     } else if (key === 'allOf' && Array.isArray(value)) {
       cleaned[key] = value.map((variant) =>
-        cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack),
+        cleanSchemaForGeminiWithDefs(variant, nextDefs, refStack, depth + 1, budget),
       );
     } else {
       cleaned[key] = value;
@@ -408,10 +492,14 @@ export function cleanSchemaForGemini(schema: unknown): unknown {
   if (!schema || typeof schema !== 'object') {
     return schema;
   }
+
+  const budget = createCleanBudget();
   if (Array.isArray(schema)) {
-    return schema.map(cleanSchemaForGemini);
+    return schema.map((item) =>
+      cleanSchemaForGeminiWithDefs(item, undefined, undefined, 0, budget),
+    );
   }
 
   const defs = extendSchemaDefs(undefined, schema as Record<string, unknown>);
-  return cleanSchemaForGeminiWithDefs(schema, defs, undefined);
+  return cleanSchemaForGeminiWithDefs(schema, defs, undefined, 0, budget);
 }

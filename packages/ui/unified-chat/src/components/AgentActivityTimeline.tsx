@@ -111,9 +111,24 @@ function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
   }
 }
 
-function connectorInitial(name: string): string | undefined {
-  if (!/^mcp__/i.test(name)) return undefined;
-  const serverId = name.slice('mcp__'.length).split('__')[0];
+const GENERIC_CONNECTOR_LABELS = new Set(['connector', 'mcp', 'tool', 'action']);
+
+// A custom connector's qualified name is an opaque `mcp__custom-<id>__<tool>`, so the
+// user's chosen display name only reaches this component inside the server-built summary
+// ("Using <Name> connector" / "Review <Name> action" from canonicalToolSummary).
+function summaryConnectorInitial(summary: string): string | undefined {
+  const label = /^(?:using|review)\s+(.+?)\s+(?:connector|tool|action)$/i
+    .exec(summary.trim())?.[1]
+    ?.trim();
+  if (!label || GENERIC_CONNECTOR_LABELS.has(label.toLowerCase())) return undefined;
+  return label.match(/[\p{L}\p{N}]/u)?.[0]?.toUpperCase();
+}
+
+function connectorInitial(entry: AgentActivityToolEntry): string | undefined {
+  const fromSummary = summaryConnectorInitial(entry.summary);
+  if (fromSummary) return fromSummary;
+  if (!/^mcp__/i.test(entry.name)) return undefined;
+  const serverId = entry.name.slice('mcp__'.length).split('__')[0];
   if (!serverId || /^custom-/i.test(serverId)) return undefined;
   return serverId[0]?.toUpperCase();
 }
@@ -527,7 +542,7 @@ export function AgentActivityTimeline({
                     kind={categoryToKind(entry.category)}
                     iconLetter={
                       entry.category === 'connector' || entry.category === 'mcp'
-                        ? connectorInitial(entry.name)
+                        ? connectorInitial(entry)
                         : undefined
                     }
                     expired={isApprovalExpired?.(entry.toolCallId) ?? false}

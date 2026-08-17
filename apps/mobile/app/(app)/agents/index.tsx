@@ -3,10 +3,10 @@ import {
   ActivityIndicator,
   AppState,
   type AppStateStatus,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
+  SectionList,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,9 +21,12 @@ import {
   Clock3,
   Cloud,
   PauseCircle,
+  Plus,
   RefreshCw,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
+import { TIME_GROUPS } from '@/lib/constants';
+import { formatAgeLabel } from '@/src/features/artifacts/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -87,6 +90,51 @@ function mergeRuns(current: CloudAgentRun[], incoming: CloudAgentRun[]): CloudAg
   return [...merged.values()];
 }
 
+const TASK_GROUP_ORDER = ['Today', 'Yesterday', 'This Week', 'Older'] as const;
+
+type TaskGroupTitle = (typeof TASK_GROUP_ORDER)[number];
+
+interface TaskSection {
+  title: TaskGroupTitle;
+  data: CloudAgentRun[];
+}
+
+function runActivityMs(run: CloudAgentRun): number {
+  const parsed = Date.parse(run.completedAt ?? run.updatedAt);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function taskTimeLabel(run: CloudAgentRun): string {
+  const age = formatAgeLabel(run.completedAt ?? run.updatedAt);
+  if (!age) return '';
+  return `${run.completedAt ? 'Finished' : 'Updated'} ${age}`;
+}
+
+function groupRunsByDay(runs: CloudAgentRun[]): TaskSection[] {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayMs = startOfToday.getTime();
+  const groups: Record<TaskGroupTitle, CloudAgentRun[]> = {
+    Today: [],
+    Yesterday: [],
+    'This Week': [],
+    Older: [],
+  };
+
+  for (const run of [...runs].sort((a, b) => runActivityMs(b) - runActivityMs(a))) {
+    const age = todayMs - runActivityMs(run);
+    if (age < 0) groups.Today.push(run);
+    else if (age < TIME_GROUPS.YESTERDAY) groups.Yesterday.push(run);
+    else if (age < TIME_GROUPS.THIS_WEEK) groups['This Week'].push(run);
+    else groups.Older.push(run);
+  }
+
+  return TASK_GROUP_ORDER.filter((title) => groups[title].length > 0).map((title) => ({
+    title,
+    data: groups[title],
+  }));
+}
+
 export default function TasksScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -95,6 +143,7 @@ export default function TasksScreen() {
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const conversations = useChatStore((state) => state.conversations);
+  const setWorkMode = useChatStore((state) => state.setWorkMode);
   const [filter, setFilter] = useState<TaskFilter>('active');
   const [runs, setRuns] = useState<CloudAgentRun[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -115,6 +164,7 @@ export default function TasksScreen() {
     () => new Map(conversations.map((conversation) => [conversation.id, conversation.title])),
     [conversations],
   );
+  const sections = useMemo(() => groupRunsByDay(runs), [runs]);
 
   const fetchRuns = useCallback(
     async (
@@ -262,6 +312,11 @@ export default function TasksScreen() {
       .finally(() => setLoading(false));
   }, [fetchRuns]);
 
+  const handleNewTask = useCallback(() => {
+    setWorkMode('agiwork');
+    router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+  }, [router, setWorkMode]);
+
   const handleLoadMore = useCallback(() => {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
@@ -383,10 +438,25 @@ export default function TasksScreen() {
       ) : runs.length === 0 ? (
         <EmptyState filter={filter} colors={colors} />
       ) : (
-        <FlatList
-          data={runs}
+        <SectionList
+          sections={sections}
           keyExtractor={(run) => run.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48, gap: 10 }}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 96, gap: 10 }}
+          renderSectionHeader={({ section }) => (
+            <Text
+              style={{
+                color: colors.textMuted,
+                fontSize: 12,
+                fontWeight: '700',
+                textTransform: 'uppercase',
+                letterSpacing: 0.6,
+                marginTop: 6,
+              }}
+            >
+              {section.title}
+            </Text>
+          )}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -445,6 +515,25 @@ export default function TasksScreen() {
           }
         />
       )}
+
+      <Pressable
+        onPress={handleNewTask}
+        accessibilityRole="button"
+        accessibilityLabel="Start a new task"
+        style={{
+          position: 'absolute',
+          right: 20,
+          bottom: 28,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.textPrimary,
+        }}
+      >
+        <Plus size={24} color={colors.accentText} />
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -489,6 +578,7 @@ function TaskCard({
   const presentation = statePresentation(run.state, colors);
   const Icon = presentation.Icon;
   const pendingApproval = run.state === 'awaiting_input' ? run.pendingApproval : undefined;
+  const timeLabel = taskTimeLabel(run);
   return (
     <Pressable
       onPress={onPress}
@@ -532,6 +622,9 @@ function TaskCard({
               · {getManagedDisplayName(run.model)}
             </Text>
           </View>
+          {timeLabel ? (
+            <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 4 }}>{timeLabel}</Text>
+          ) : null}
         </View>
         {onPress ? <ChevronRight size={18} color={colors.textMuted} /> : null}
       </View>

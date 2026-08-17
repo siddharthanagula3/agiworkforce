@@ -361,22 +361,22 @@ describe('PricingPage', () => {
     const comparison = screen.getByRole('table', { name: 'Plan capabilities' });
     const rows = within(comparison);
     expect(rows.getByRole('row', { name: /^Free / })).toHaveAccessibleName(
-      'Free free foreverLabel compareFreeUsage 1 project 1 custom MCP Yes No No No No No managed access No compareFreeBestFor',
+      'Free free foreverLabel compareFreeUsage 1 project 1 custom MCP Yes No No No No No managed access No No compareFreeBestFor',
     );
     expect(rows.getByRole('row', { name: /^Basic / })).toHaveAccessibleName(
-      'Basic $7/mo monthly compareBasicUsage 5 projects 5 custom MCP Yes No No No No No managed access No compareBasicBestFor',
+      'Basic $7/mo monthly compareBasicUsage 5 projects 5 custom MCP Yes No No No No No managed access No No compareBasicBestFor',
     );
     expect(rows.getByRole('row', { name: /^Pro / })).toHaveAccessibleName(
-      'Pro $20/mo compareProInterval $16.67 compareProUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code No compareProBestFor',
+      'Pro $20/mo compareProInterval $16.67 compareProUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code No No compareProBestFor',
     );
     expect(rows.getByRole('row', { name: /^Max 5x / })).toHaveAccessibleName(
-      'Max 5x $100/mo monthlyOnly compareMaxUsage Unlimited Unlimited Yes Yes Yes No Yes CLI, Chrome & VS Code No compareMaxBestFor',
+      'Max 5x $100/mo monthlyOnly compareMaxUsage Unlimited Unlimited Yes Yes Yes No Yes CLI, Chrome & VS Code No No compareMaxBestFor',
     );
     expect(rows.getByRole('row', { name: /^Max 15x / })).toHaveAccessibleName(
-      'Max 15x $200/mo monthlyOnly 15x Pro usage Unlimited Unlimited Yes Yes Yes Yes Yes CLI, Chrome & VS Code No Highest-capacity work and video generation',
+      'Max 15x $200/mo monthlyOnly 15x Pro usage Unlimited Unlimited Yes Yes Yes Yes Yes CLI, Chrome & VS Code No No Highest-capacity work and video generation',
     );
     expect(rows.getByRole('row', { name: /^Team / })).toHaveAccessibleName(
-      'Team $25/seat/mo compareTeamBilling compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Yes compareTeamBestFor',
+      'Team $25/seat/mo compareTeamBilling compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Yes No compareTeamBestFor',
     );
     // Explicit timeout: this assertion computes the accessible name of every row
     // in the full comparison table, which is genuinely slow in jsdom and sits

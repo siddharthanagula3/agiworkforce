@@ -28,6 +28,7 @@ export type {
   McpCallToolResult,
 } from './types';
 
-export { resolveMcpTransport } from './transport';
+export { resolveMcpTransport, createEgressGuardedFetch } from './transport';
+export type { McpEgressPolicy, McpFetch } from './transport';
 export { connectMcpServer, buildMcpToolCatalog } from './connect';
 export type { McpServerHandle, ConnectMcpServerParams } from './connect';

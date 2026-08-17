@@ -2323,6 +2323,9 @@ importers:
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../packages/contracts/types
+      '@agiworkforce/utils':
+        specifier: workspace:*
+        version: link:../../packages/platform/utils
       '@clerk/backend':
         specifier: ^3.4.0
         version: 3.4.13(react-dom@19.2.6(react@19.2.6))(react@19.2.6)

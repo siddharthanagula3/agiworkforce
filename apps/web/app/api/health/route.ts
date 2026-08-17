@@ -17,7 +17,14 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(healthCheck, {
     status: statusCode,
-    headers: getCorsHeaders(request),
+    headers: {
+      ...getCorsHeaders(request),
+      // An external uptime monitor is the only detector that survives this
+      // deployment being down; a 200 with no freshness directive is
+      // heuristically cacheable, so a proxy could answer "healthy" for it
+      // while the platform is unreachable.
+      'Cache-Control': 'no-store',
+    },
   });
 }
 

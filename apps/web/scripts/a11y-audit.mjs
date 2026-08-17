@@ -4,20 +4,30 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const reportsDirectory = path.join(scriptDirectory, '../reports');
 const baseUrl = (process.env['A11Y_BASE_URL'] || 'http://127.0.0.1:3000').replace(/\/$/, '');
 const wcagTags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 const colorSchemes = ['light', 'dark'];
-const auditedPages = [
+
+// This runner has no session, so every entry must be reachable signed out: proxy.ts sends
+// /chat, /library, /schedules, /settings, /billing and /admin to /login, and a redirected
+// audit silently reports the login wall under the requested route's name.
+export const auditedPages = [
   { path: '/', name: 'Home' },
-  { path: '/chat', name: 'Chat' },
+  { path: '/login', name: 'Sign in' },
   { path: '/pricing', name: 'Pricing' },
   { path: '/features/agents', name: 'Features - Agents' },
   { path: '/download', name: 'Download' },
 ];
+
+export function findUnexpectedRedirect(requestedUrl, landedUrl) {
+  const requestedPath = new URL(requestedUrl).pathname.replace(/\/+$/, '') || '/';
+  const landedPath = new URL(landedUrl).pathname.replace(/\/+$/, '') || '/';
+  return requestedPath === landedPath ? null : landedPath;
+}
 
 function summarize(violations, passes) {
   return {
@@ -30,7 +40,7 @@ function summarize(violations, passes) {
   };
 }
 
-async function auditPage(browser, pageDefinition, colorScheme) {
+export async function auditPage(browser, pageDefinition, colorScheme) {
   const context = await browser.newContext({ colorScheme, reducedMotion: 'reduce' });
   const page = await context.newPage();
   const url = new URL(pageDefinition.path, `${baseUrl}/`).toString();
@@ -40,6 +50,12 @@ async function auditPage(browser, pageDefinition, colorScheme) {
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     if (!response || !response.ok()) {
       throw new Error(`Navigation returned ${response?.status() ?? 'no response'}`);
+    }
+    const redirectedTo = findUnexpectedRedirect(url, page.url());
+    if (redirectedTo) {
+      throw new Error(
+        `Navigation redirected to ${redirectedTo}; ${pageDefinition.path} was never audited`,
+      );
     }
     await page.locator('body').waitFor({ state: 'visible' });
     await page.evaluate(async () => {
@@ -120,7 +136,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack : String(error));
-  process.exitCode = 1;
-});
+const invokedDirectly =
+  process.argv[1] !== undefined && pathToFileURL(process.argv[1]).href === import.meta.url;
+
+if (invokedDirectly) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack : String(error));
+    process.exitCode = 1;
+  });
+}

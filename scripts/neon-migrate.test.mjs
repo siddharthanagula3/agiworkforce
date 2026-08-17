@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  MIGRATION_RUNNER_VERSION,
   expectedTablesAfter,
   inspectMigrationState,
+  ledgerDigest,
   loadMigrationInventory,
   planMigrations,
+  readDeploymentRecords,
+  recordDeployment,
 } from './lib/neon-migrations.mjs';
 import {
   extractRouteReferencesFromSource,
@@ -86,10 +90,180 @@ test('CLI accepts the pnpm separator and explicit safety confirmations', () => {
     through: undefined,
     reason: undefined,
     evidence: undefined,
+    surface: undefined,
+    commit: undefined,
+    deploymentRef: undefined,
+    limit: undefined,
     confirmBaseline: false,
     confirmProduction: false,
     json: false,
   });
+});
+
+test('CLI parses the deployment record identity', () => {
+  const options = parseCliArgs([
+    '--',
+    'record',
+    '--surface',
+    'web',
+    '--commit',
+    'a'.repeat(40),
+    '--target',
+    'production',
+    '--confirm-production',
+    '--deployment-ref',
+    'https://example.invalid/deployment',
+  ]);
+  assert.equal(options.command, 'record');
+  assert.equal(options.surface, 'web');
+  assert.equal(options.commit, 'a'.repeat(40));
+  assert.equal(options.target, 'production');
+  assert.equal(options.confirmProduction, true);
+  assert.equal(options.deploymentRef, 'https://example.invalid/deployment');
+});
+
+function deploymentDatabase(migrations, appliedCount) {
+  const ledger = migrations.slice(0, appliedCount).map((migration) => ledgerRow(migration));
+  const deployments = [];
+  const statements = [];
+  let deploymentLedgerExists = false;
+
+  const client = {
+    async query(statement, params = []) {
+      statements.push(statement);
+      if (/to_regclass\('public\.schema_migrations'\)/.test(statement)) {
+        return { rows: [{ relation: 'schema_migrations' }] };
+      }
+      if (/FROM public\.schema_migrations\b/.test(statement)) {
+        return { rows: ledger };
+      }
+      if (/CREATE TABLE IF NOT EXISTS public\.schema_migration_deployments/.test(statement)) {
+        deploymentLedgerExists = true;
+        return { rows: [] };
+      }
+      if (/to_regclass\('public\.schema_migration_deployments'\)/.test(statement)) {
+        return {
+          rows: [{ relation: deploymentLedgerExists ? 'schema_migration_deployments' : null }],
+        };
+      }
+      if (/INSERT INTO public\.schema_migration_deployments/.test(statement)) {
+        if (!deploymentLedgerExists) throw new Error('deployment ledger does not exist');
+        const row = {
+          surface: params[0],
+          target: params[1],
+          commit_sha: params[2],
+          deployment_ref: params[3],
+          head_sequence: params[4],
+          head_filename: params[5],
+          head_checksum: params[6],
+          applied_count: params[7],
+          ledger_digest: params[8],
+          runner_version: params[9],
+          metadata: JSON.parse(params[10]),
+          verified_at: new Date(),
+        };
+        const existing = deployments.findIndex(
+          (record) =>
+            record.surface === row.surface &&
+            record.target === row.target &&
+            record.commit_sha === row.commit_sha,
+        );
+        if (existing >= 0) deployments[existing] = row;
+        else deployments.push(row);
+        return { rows: [row] };
+      }
+      if (/FROM public\.schema_migration_deployments/.test(statement)) {
+        const [surface, limit] = params;
+        return {
+          rows: deployments
+            .filter((record) => surface === null || record.surface === surface)
+            .slice(0, limit),
+        };
+      }
+      throw new Error(`unexpected statement: ${statement}`);
+    },
+  };
+
+  return { client, ledger, statements, deployments };
+}
+
+test('a deployment refuses to record itself while the database is behind the head', async () => {
+  const migrations = loadMigrationInventory().slice(0, 3);
+  const database = deploymentDatabase(migrations, 2);
+
+  await assert.rejects(
+    recordDeployment(database.client, migrations, {
+      surface: 'web',
+      target: 'production',
+      commitSha: 'b'.repeat(40),
+    }),
+    (error) => {
+      assert.equal(error.name, 'MigrationContractError');
+      assert.match(error.message, /unapplied migrations/);
+      assert.deepEqual(error.details, [migrations[2].filename]);
+      return true;
+    },
+  );
+  assert.equal(
+    database.statements.some((statement) => /schema_migration_deployments/.test(statement)),
+    false,
+  );
+  assert.equal(database.deployments.length, 0);
+});
+
+test('a verified deployment records its migration head and stays queryable', async () => {
+  const migrations = loadMigrationInventory().slice(0, 3);
+  const database = deploymentDatabase(migrations, migrations.length);
+  const commitSha = 'c'.repeat(40);
+
+  const result = await recordDeployment(database.client, migrations, {
+    surface: 'web',
+    target: 'production',
+    commitSha,
+    deploymentRef: 'https://example.invalid/deployment',
+  });
+
+  assert.equal(result.record.head_filename, migrations.at(-1).filename);
+  assert.equal(result.record.head_checksum, migrations.at(-1).checksum);
+  assert.equal(result.record.applied_count, migrations.length);
+  assert.equal(result.record.ledger_digest, ledgerDigest(database.ledger));
+  assert.equal(result.record.runner_version, MIGRATION_RUNNER_VERSION);
+
+  await recordDeployment(database.client, migrations, {
+    surface: 'web',
+    target: 'production',
+    commitSha,
+  });
+
+  const history = await readDeploymentRecords(database.client, { surface: 'web' });
+  assert.equal(history.length, 1);
+  assert.equal(history[0].commit_sha, commitSha);
+  assert.equal(history[0].head_sequence, migrations.at(-1).sequence);
+  assert.deepEqual(await readDeploymentRecords(database.client, { surface: 'gateway' }), []);
+});
+
+test('a deployment record demands a known surface and a real commit sha', async () => {
+  const migrations = loadMigrationInventory().slice(0, 3);
+  const database = deploymentDatabase(migrations, migrations.length);
+
+  await assert.rejects(
+    recordDeployment(database.client, migrations, {
+      surface: 'marketing',
+      target: 'production',
+      commitSha: 'not-a-sha',
+    }),
+    (error) => {
+      assert.equal(error.name, 'MigrationContractError');
+      assert.equal(error.details.length, 2);
+      return true;
+    },
+  );
+});
+
+test('deployment history is empty until a deployment records one', async () => {
+  const migrations = loadMigrationInventory().slice(0, 3);
+  const database = deploymentDatabase(migrations, migrations.length);
+  assert.deepEqual(await readDeploymentRecords(database.client), []);
 });
 
 test('route-table extraction reads query builders and SQL while excluding CTE aliases', () => {

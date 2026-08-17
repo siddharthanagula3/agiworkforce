@@ -5,6 +5,7 @@ import {
   blockContext,
   ignoreQueryMap,
   isIntentional,
+  ratchetBaseline,
   validateAllowlist,
 } from './check-reference-integrity.mjs';
 import {
@@ -136,6 +137,40 @@ test('knownContradictions require an owner', () => {
   validateAllowlist({ knownContradictions: [{ key: 'path::a::b' }] }, errors);
   assert.equal(errors.length, 1);
   assert.match(errors[0], /needs an owner/);
+});
+
+test('rewriting the baseline reports new references instead of absorbing them', () => {
+  const { debt, added } = ratchetBaseline(
+    { debt: ['md-path::a.md::x'] },
+    ['md-path::a.md::x', 'md-path::b.md::y'],
+    { hasBaseline: true },
+  );
+  assert.deepEqual(added, ['md-path::b.md::y']);
+  assert.deepEqual(debt, ['md-path::a.md::x']);
+});
+
+test('rewriting the baseline drops entries that no longer reproduce', () => {
+  const { debt, added } = ratchetBaseline({ debt: ['keep', 'gone'] }, ['keep'], {
+    hasBaseline: true,
+  });
+  assert.deepEqual(debt, ['keep']);
+  assert.deepEqual(added, []);
+});
+
+test('a knownContradictions key counts as declared and never lands in debt', () => {
+  const { debt, added } = ratchetBaseline(
+    { debt: [], knownContradictions: [{ key: 'md-path::a.md::x', owner: 'platform' }] },
+    ['md-path::a.md::x'],
+    { hasBaseline: true },
+  );
+  assert.deepEqual(added, []);
+  assert.deepEqual(debt, []);
+});
+
+test('the first seed with no baseline on disk captures every reproducing finding', () => {
+  const { debt, added } = ratchetBaseline({}, ['b', 'a'], { hasBaseline: false });
+  assert.deepEqual(debt, ['a', 'b']);
+  assert.deepEqual(added, []);
 });
 
 test('a bare candidate is also asked as a directory', () => {

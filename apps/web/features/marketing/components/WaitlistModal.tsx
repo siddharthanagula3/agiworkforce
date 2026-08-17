@@ -116,7 +116,11 @@ function WaitlistDialog({
             <DialogDescription className="agi-waitlist-lede">
               We&rsquo;ll email you when the Enterprise program opens for your requirements. Managed
               Cloud is already open in public alpha, and current availability for Local and BYOK is
-              listed on each surface page.
+              listed on each surface page. Changed your mind? Record a withdrawal at{' '}
+              <a href="/privacy/requests" className="agi-consent-notice-link">
+                /privacy/requests
+              </a>{' '}
+              &mdash; no account needed.
             </DialogDescription>
           </div>
         ) : (
@@ -183,7 +187,13 @@ function WaitlistDialog({
             ) : null}
 
             <p className="agi-waitlist-finePrint">
-              One email when access opens. No marketing drip, unsubscribe anytime.
+              One email when access opens, sent by a person &mdash; nothing here mails this list
+              automatically, so there is no unsubscribe link in a message to click. No marketing
+              drip. To come off the list, record a withdrawal at{' '}
+              <a href="/privacy/requests" className="agi-consent-notice-link">
+                /privacy/requests
+              </a>
+              . It needs no account, and a person removes your address.
             </p>
           </>
         )}

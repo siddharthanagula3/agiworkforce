@@ -1,4 +1,3 @@
-
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import {
   SSEClientTransport,
@@ -96,17 +95,82 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
   return true;
 }
 
-export function resolveMcpTransport(config: McpServerConfig): Transport {
+export type McpFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
+
+export interface McpEgressPolicy {
+  assertAllowedUrl?: (url: string) => void | Promise<void>;
+  fetch?: McpFetch;
+  maxRedirects?: number;
+}
+
+const DEFAULT_MAX_REDIRECTS = 3;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+function assertFollowableUrl(url: URL): void {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new MCPTransportError(
+      `MCP HTTP transport refused scheme "${url.protocol}" — only http/https are allowed.`,
+    );
+  }
+  if (url.username !== '' || url.password !== '') {
+    throw new MCPTransportError('MCP HTTP transport refused a URL with embedded credentials.');
+  }
+}
+
+export function createEgressGuardedFetch(policy: McpEgressPolicy = {}): McpFetch {
+  const baseFetch: McpFetch = policy.fetch ?? ((input, init) => fetch(input, init));
+  const maxRedirects = policy.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
+  const assertAllowedUrl = policy.assertAllowedUrl;
+
+  return async (input, init) => {
+    let current = new URL(typeof input === 'string' ? input : input.toString());
+    const pinnedOrigin = current.origin;
+
+    for (let hop = 0; ; hop++) {
+      assertFollowableUrl(current);
+      if (assertAllowedUrl) await assertAllowedUrl(current.href);
+
+      const response = await baseFetch(current.href, { ...init, redirect: 'manual' });
+      if (!REDIRECT_STATUSES.has(response.status)) return response;
+
+      const location = response.headers.get('location');
+      await response.body?.cancel().catch(() => undefined);
+      if (!location) {
+        throw new MCPTransportError(
+          `MCP server answered HTTP ${response.status} without a Location header.`,
+        );
+      }
+      if (hop >= maxRedirects) {
+        throw new MCPTransportError(`MCP request exceeded ${maxRedirects} redirects.`);
+      }
+
+      let next: URL;
+      try {
+        next = new URL(location, current);
+      } catch {
+        throw new MCPTransportError(`MCP server redirected to a malformed URL: ${location}`);
+      }
+      if (!assertAllowedUrl && next.origin !== pinnedOrigin) {
+        throw new MCPTransportError(
+          `MCP server redirected to ${next.origin}, which no egress policy was supplied to re-validate.`,
+        );
+      }
+      current = next;
+    }
+  };
+}
+
+export function resolveMcpTransport(
+  config: McpServerConfig,
+  egressPolicy: McpEgressPolicy = {},
+): Transport {
   if (config.command) {
     const consent = config.userConsent;
     const expectedArgs = config.args ?? [];
     const consentMatchesCommand = !!consent && consent.for_command === config.command;
     const consentMatchesArgs =
       !!consent &&
-      (consent.for_args !== undefined
-        ? arraysEqual(consent.for_args, expectedArgs)
-        :
-          false);
+      (consent.for_args !== undefined ? arraysEqual(consent.for_args, expectedArgs) : false);
     const consentValid = !!config.developerMode && consentMatchesCommand && consentMatchesArgs;
     if (!config.signedManifest && !consentValid) {
       throw new MCPTransportError(
@@ -131,13 +195,17 @@ export function resolveMcpTransport(config: McpServerConfig): Transport {
   const requestInit: RequestInit | undefined = headers ? { headers } : undefined;
   const authProvider = config.authProvider;
 
+  const guardedFetch = createEgressGuardedFetch(egressPolicy);
+
   if (config.transport === 'sse') {
     return new SSEClientTransport(url, {
+      fetch: guardedFetch,
       ...(requestInit ? { requestInit } : {}),
       ...(authProvider ? { authProvider } : {}),
     });
   }
   return new StreamableHTTPClientTransport(url, {
+    fetch: guardedFetch,
     ...(requestInit ? { requestInit } : {}),
     ...(authProvider ? { authProvider } : {}),
     ...(authProvider ? { onInsufficientScope: 'reauthorize' as const } : {}),

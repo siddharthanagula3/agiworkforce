@@ -1,0 +1,56 @@
+[
+  {
+    "id": "settings-27-gap",
+    "title": "Voice settings page is real and honest but has no nav entry - still unreachable",
+    "claimId": "settings-27",
+    "benchmark": "ChatGPT and Claude both give voice mode its own settings section, reachable from the main nav; majority convergence.",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "apps/web/app/settings/voice/page.tsx:55-60 is real, honest content ('Managed voice is not available... This page does not show disabled settings that the runtime cannot consume'). SETTINGS_NAV_GROUPS_WEB (packages/ui/ui/src/settings-nav.ts:279-306) lists 16 keys; 'voice' is not among them. A route mapping exists (WebShellV3.tsx:38, 'voice-settings': '/settings/voice') but nothing in the settings modal's own nav links to it.",
+    "severity": "P1",
+    "effort": "S",
+    "priorAudit": "CONFIRMS_PRIOR",
+    "priorAuditRef": "SETTINGS-001 (domain-settings.md, filed P1 as a broken-workflow nav bug) - independently re-verified fresh this pass, still unfixed.",
+    "recommendation": "Add 'voice' back into SETTINGS_NAV_GROUPS_WEB - a one-line nav-registration fix for an already-built, already-honest page.",
+    "_domain": "Settings taxonomy & permission/approval architecture"
+  },
+  {
+    "id": "settings-21-gap",
+    "title": "Tool-access-mode setting is fully dead - defined, never read or set",
+    "claimId": "settings-21",
+    "benchmark": "Claude's 'Tool access mode' dropdown (Load tools when needed / eager) governs when connected tools enter the model's active context; single-product.",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "packages/ui/unified-chat/src/stores/settingsStore.ts:41,55,88,106 defines toolAccessMode:'lazy'|'eager' and setToolAccessMode. Grepping the whole repo (excluding the defining file) for either identifier returns zero hits - no UI control renders it, nothing reads it to gate behavior.",
+    "severity": "P2",
+    "effort": "M",
+    "priorAudit": "CONFIRMS_PRIOR",
+    "priorAuditRef": "SETTINGS-005 (domain-settings.md) - one of 7 dead field/setter pairs already catalogued in this exact file; still dead.",
+    "recommendation": "Either wire a real dropdown to this setter and make tool-loading actually branch on it, or delete the dead state per this repo's own demonstrated pattern of removing toggles that persist but change nothing.",
+    "_domain": "Settings taxonomy & permission/approval architecture"
+  },
+  {
+    "id": "settings-12-gap",
+    "title": "Per-task credit-debit ledger exists in Postgres, never reaches a settings screen",
+    "claimId": "settings-12",
+    "benchmark": "Manus shows a visible 'Credits history' ledger, debited per task, distinct from a message-count plan; single-product.",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "credit_transactions table (apps/web/db/neon/0004_token_credits.sql:24-25) supports transaction_type in {purchase,adjustment,refund,bonus,deduction} with a metadata column (0020_functions.sql:650). rolling-usage.ts:19,55 already derives rolling-cap math 'entirely from credit_transactions (transaction_type = deduction)'. Grepping every apps/web/app/api route for credit_transactions returns only stripe-webhook write paths, billing/top-up/route.ts (writes), and user/export/route.ts (GDPR bulk-export read only) - no GET route returns it for display, and BillingSection.tsx only renders a lump overageAvailableCents balance plus a purchase-level Stripe Invoices table.",
+    "severity": "P2",
+    "effort": "M",
+    "priorAudit": "NEW",
+    "recommendation": "Add a GET /api/billing/credit-history route reading the already-populated credit_transactions table and render it as a 'Credits history' list in BillingSection - materially cheaper than the Manus feature it targets because the ledger already exists.",
+    "_domain": "Settings taxonomy & permission/approval architecture"
+  },
+  {
+    "id": "G11",
+    "title": "In-app paywall shows the upgrade tier's name but never its price",
+    "claimId": "mqp-26",
+    "benchmark": "Gemini's in-app upsell banner discloses the exact price: 'Get 5x more usage with AI Ultra \u2014 $99.99/month.'",
+    "ourState": "BUILT_NOT_WIRED",
+    "ourEvidence": "apps/web/features/chat/components/InlinePaywallCard.tsx:201-202,234-239 builds every CTA string from getBillingPlanPricing(requiredTier).label only ('Upgrade to Pro'). The same getBillingPlanPricing() call already returns monthlyPriceUsd (packages/contracts/types/src/billing-catalog.ts:95,122-123) \u2014 the component is already calling the function that has the price, it just doesn't read that field into the string.",
+    "severity": "P3",
+    "effort": "S",
+    "priorAudit": "NEW",
+    "recommendation": "Interpolate monthlyPriceUsd (or the already-localized price where available) into the existing CTA strings at InlinePaywallCard.tsx:201-202,234-239 \u2014 no new data plumbing required.",
+    "_domain": "Models, reasoning controls, quotas, pricing &amp; entitlements"
+  }
+]

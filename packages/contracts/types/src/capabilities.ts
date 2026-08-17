@@ -61,7 +61,7 @@ const WEB: CapabilityRow = {
   canUseLocalMcp: false,
   canUseLocalModels: false,
   canUseNativeIntegrations: false,
-  canUseCamera: false,
+  canUseCamera: true,
   canUsePhotos: false,
   canUseNotifications: false, // SPEC-SILENT for web; web push not shipped — false matches current
 };
@@ -92,7 +92,7 @@ const DESKTOP: CapabilityRow = {
   canUseLocalMcp: true,
   canUseLocalModels: true,
   canUseNativeIntegrations: true,
-  canUseCamera: false,
+  canUseCamera: true,
   canUsePhotos: false,
   canUseNotifications: true, // desktop has native notifications
 };

@@ -1,5 +1,20 @@
+import { isResearchStep, type ResearchStep } from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
 import type { StreamDelta } from '@/services/streaming';
+
+export type ResearchPhase = 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error';
+
+export interface ResearchProgress {
+  phase: ResearchPhase;
+  label?: string;
+  iteration?: number;
+  maxIterations?: number;
+  searches?: number;
+  maxSearches?: number;
+  sources?: number;
+  elapsedMs?: number;
+  steps?: ResearchStep[];
+}
 
 export interface ToolCallAccumulator {
   byKey: Map<string, ToolCall>;
@@ -8,7 +23,14 @@ export interface ToolCallAccumulator {
   nameToKey: Map<string, string>;
   idToKey: Map<string, string>;
   lastKey: string | null;
+  research: ResearchProgress | null;
 }
+
+// The server never sends a `deep_research` tool call; the research row is
+// synthesized from x_research_status/x_research_plan so the run shows up in the
+// same timeline the rest of the activity renders in.
+export const RESEARCH_TOOL_KEY = 'research:deep_research';
+export const RESEARCH_TOOL_NAME = 'deep_research';
 
 export function createToolCallAccumulator(): ToolCallAccumulator {
   return {
@@ -18,6 +40,7 @@ export function createToolCallAccumulator(): ToolCallAccumulator {
     nameToKey: new Map(),
     idToKey: new Map(),
     lastKey: null,
+    research: null,
   };
 }
 
@@ -58,8 +81,140 @@ function safeStringify(value: unknown): string {
   }
 }
 
+const RESEARCH_PHASES: readonly ResearchPhase[] = [
+  'planning',
+  'searching',
+  'synthesizing',
+  'complete',
+  'error',
+];
+
+const RESEARCH_PHASE_LABELS: Record<ResearchPhase, string> = {
+  planning: 'Planning research',
+  searching: 'Searching the web',
+  synthesizing: 'Writing report',
+  complete: 'Research complete',
+  error: 'Research failed',
+};
+
+const STEP_MARKERS: Record<ResearchStep['status'], string> = {
+  pending: '·',
+  running: '▸',
+  completed: '✓',
+  failed: '✕',
+};
+
+function readCount(source: Record<string, unknown>, key: string): number | undefined {
+  const value = source[key];
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : undefined;
+}
+
+function readResearchStatus(
+  payload: unknown,
+  prev: ResearchProgress | null,
+): ResearchProgress | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const raw = payload as Record<string, unknown>;
+  const phase = raw['phase'];
+  if (!RESEARCH_PHASES.includes(phase as ResearchPhase)) return null;
+  return {
+    ...(prev ?? {}),
+    phase: phase as ResearchPhase,
+    ...(typeof raw['label'] === 'string' && raw['label'] ? { label: raw['label'] } : {}),
+    iteration: readCount(raw, 'iteration') ?? prev?.iteration,
+    maxIterations: readCount(raw, 'max_iterations') ?? prev?.maxIterations,
+    searches: readCount(raw, 'searches') ?? prev?.searches,
+    maxSearches: readCount(raw, 'max_searches') ?? prev?.maxSearches,
+    sources: readCount(raw, 'sources') ?? prev?.sources,
+    elapsedMs: readCount(raw, 'elapsed_ms') ?? prev?.elapsedMs,
+  };
+}
+
+function readResearchPlan(payload: unknown): ResearchStep[] | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const rawSteps = (payload as { steps?: unknown }).steps;
+  if (!Array.isArray(rawSteps)) return null;
+
+  const steps: ResearchStep[] = [];
+  const seen = new Set<string>();
+  for (const raw of rawSteps) {
+    if (!raw || typeof raw !== 'object') continue;
+    const wire = raw as Record<string, unknown>;
+    const candidate = {
+      id: wire['id'],
+      type: wire['type'],
+      description: wire['description'],
+      status: wire['status'],
+    };
+    if (!isResearchStep(candidate)) continue;
+    if (seen.has(candidate.id)) continue;
+    seen.add(candidate.id);
+    const step: ResearchStep = { ...candidate };
+    const duration = readCount(wire, 'duration_ms');
+    if (duration !== undefined) step.durationMs = duration;
+    const sources = readCount(wire, 'sources_consulted');
+    if (sources !== undefined) step.sourcesConsulted = sources;
+    steps.push(step);
+    if (steps.length >= 50) break;
+  }
+  return steps.length > 0 ? steps : null;
+}
+
+export function formatResearchProgress(research: ResearchProgress): string {
+  const lines = [research.label || RESEARCH_PHASE_LABELS[research.phase]];
+
+  const counts: string[] = [];
+  if ((research.iteration ?? 0) > 0 && (research.maxIterations ?? 0) > 0) {
+    counts.push(`round ${research.iteration} of ${research.maxIterations}`);
+  }
+  const searches = research.searches ?? 0;
+  if (searches > 0) {
+    counts.push(
+      (research.maxSearches ?? 0) > 0
+        ? `${searches} of ${research.maxSearches} searches`
+        : `${searches} search${searches === 1 ? '' : 'es'}`,
+    );
+  }
+  const sources = research.sources ?? 0;
+  if (sources > 0) counts.push(`${sources} source${sources === 1 ? '' : 's'}`);
+  if (counts.length > 0) lines.push(counts.join(' · '));
+
+  for (const step of research.steps ?? []) {
+    lines.push(`${STEP_MARKERS[step.status]} ${step.description}`);
+  }
+
+  return lines.join('\n');
+}
+
+function researchToolStatus(phase: ResearchPhase): ToolCall['status'] {
+  if (phase === 'complete') return 'completed';
+  if (phase === 'error') return 'failed';
+  return 'running';
+}
+
 export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamDelta): boolean {
   let changed = false;
+
+  const researchDelta = delta as {
+    x_research_status?: unknown;
+    x_research_plan?: unknown;
+  };
+  const nextStatus = readResearchStatus(researchDelta.x_research_status, acc.research);
+  if (nextStatus) acc.research = nextStatus;
+  const nextSteps = readResearchPlan(researchDelta.x_research_plan);
+  if (nextSteps) {
+    acc.research = { ...(acc.research ?? { phase: 'planning' }), steps: nextSteps };
+  }
+  if (nextStatus || nextSteps) {
+    const research = acc.research as ResearchProgress;
+    const t = ensure(acc, RESEARCH_TOOL_KEY, { name: RESEARCH_TOOL_NAME });
+    t.name = RESEARCH_TOOL_NAME;
+    t.status = researchToolStatus(research.phase);
+    t.output = formatResearchProgress(research);
+    if ((research.elapsedMs ?? 0) > 0) t.duration = research.elapsedMs;
+    t.requiresApproval = false;
+    changed = true;
+  }
 
   const st = delta.x_tool_status;
   if (st?.name) {

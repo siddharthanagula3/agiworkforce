@@ -11,7 +11,7 @@
  */
 import * as SentrySDK from '@sentry/nextjs';
 
-import { isSentryConfigured } from '../../lib/sentry-shared';
+import { hasTelemetryConsent, isSentryConfigured } from '../../lib/sentry-shared';
 
 export type SeverityLevel = 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
 
@@ -19,26 +19,36 @@ export interface Span {
   end(): void;
 }
 
+const USER_ID_STORAGE_KEY = 'user_id';
+
 export function setUser(user: {
   id: string;
   email?: string;
   username?: string;
   [key: string]: unknown;
 }): void {
-  if (user.id) {
-    SentrySDK.setUser({ id: user.id });
-    try {
-      localStorage.setItem('user_id', user.id);
-    } catch {
-      // localStorage may not be available in SSR
-    }
+  if (!user.id) return;
+  // Consent is re-read on every call, not just at init: a user who revokes
+  // telemetry mid-session leaves an already-initialised SDK running, and the
+  // next profile load would otherwise re-attach a stable id they opted out of.
+  // hasTelemetryConsent is false on the server, where no per-user consent
+  // signal exists, so server callers never attach one either.
+  if (!hasTelemetryConsent()) {
+    clearUser();
+    return;
+  }
+  SentrySDK.setUser({ id: user.id });
+  try {
+    localStorage.setItem(USER_ID_STORAGE_KEY, user.id);
+  } catch {
+    // localStorage may not be available in SSR
   }
 }
 
 export function clearUser(): void {
   SentrySDK.setUser(null);
   try {
-    localStorage.removeItem('user_id');
+    localStorage.removeItem(USER_ID_STORAGE_KEY);
   } catch {
     // localStorage may not be available in SSR
   }

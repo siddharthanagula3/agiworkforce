@@ -1,4 +1,5 @@
-import { vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
+import { resetCircuitBreakers } from '@agiworkforce/utils';
 
 process.env['JWT_SECRET'] = 'test-jwt-secret-key-for-testing-only';
 process.env['NEON_DATABASE_URL'] = 'postgresql://test:test@localhost:5432/test';
@@ -44,6 +45,12 @@ beforeAll(() => {
       });
     }) as typeof fetch;
   }
+});
+
+// Circuit state is process-wide by design, so one test's induced outage would
+// otherwise leave the next test's dependency short-circuited.
+beforeEach(() => {
+  resetCircuitBreakers();
 });
 
 afterEach(() => {

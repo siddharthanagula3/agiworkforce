@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
@@ -178,12 +178,16 @@ describe('SchedulesPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
     const dialog = screen.getByRole('dialog', { name: 'Create Schedule' });
+    // On-demand, not a standing recurring automation, is the safer default
+    // for a fresh dialog (sched-gap-17).
+    expect(within(dialog).getByLabelText<HTMLSelectElement>('Frequency')).toHaveValue('once');
     await user.click(within(dialog).getByRole('button', { name: 'Create Schedule' }));
 
     expect(within(dialog).getByText('Enter a schedule name.')).toBeInTheDocument();
     expect(
       within(dialog).getByText('Enter instructions for the scheduled task.'),
     ).toBeInTheDocument();
+    expect(within(dialog).getByText('Choose when this task should run.')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Schedule Name')).toHaveFocus();
     expect(api.createSchedule).not.toHaveBeenCalled();
   });
@@ -280,6 +284,11 @@ describe('SchedulesPage', () => {
       within(dialog).getByLabelText('Task Instructions'),
       'Prepare a concise plan for the day.',
     );
+    // The dialog now defaults to on-demand ("One Time"; sched-gap-17), so a
+    // fresh create requires an explicit Run At value.
+    fireEvent.change(within(dialog).getByLabelText('Run At'), {
+      target: { value: '2026-07-16T09:00' },
+    });
     await user.click(within(dialog).getByRole('button', { name: 'Create Schedule' }));
 
     await waitFor(() => expect(api.createSchedule).toHaveBeenCalledTimes(1));
@@ -398,6 +407,57 @@ describe('SchedulesPage', () => {
     expect(listRuns).toHaveBeenNthCalledWith(3, schedule.id, { limit: 20, offset: 20 });
   });
 
+  it('closes the run history panel non-destructively, leaving the schedule untouched', async () => {
+    const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
+    const user = userEvent.setup();
+
+    render(<SchedulesPage api={api} />);
+    await screen.findByRole('heading', { name: 'Morning brief' });
+
+    await user.click(screen.getByRole('button', { name: 'View History for Morning brief' }));
+    expect(await screen.findByRole('heading', { name: 'Run History' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Close Run History for Morning brief' }));
+    expect(screen.queryByRole('heading', { name: 'Run History' })).not.toBeInTheDocument();
+    // Closing is a view-only dismiss: the schedule itself, and any destructive
+    // confirmation, are untouched (sched-gap-11).
+    expect(screen.getByRole('heading', { name: 'Morning brief' })).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(api.deleteSchedule).not.toHaveBeenCalled();
+  });
+
+  it('flags a due schedule as running now the instant its live run is detected', async () => {
+    const dueSchedule: ScheduleTask = {
+      ...schedule,
+      nextExecutionAt: new Date(Date.now() - 5_000).toISOString(),
+    };
+    const inFlightRun: ScheduleRun = {
+      ...successfulRun,
+      id: 'run-in-flight',
+      status: 'running',
+      completedAt: null,
+      durationMs: null,
+    };
+    const listRuns = vi.fn<ScheduleApi['listRuns']>().mockResolvedValue(runsPage([inFlightRun]));
+    const api = createApi({
+      listSchedules: vi.fn(async () => page([dueSchedule])),
+      listRuns,
+    });
+
+    render(<SchedulesPage api={api} />);
+    await screen.findByRole('heading', { name: 'Morning brief' });
+
+    // No schedule-level 'running' status exists (sched-gap-07) — the row
+    // learns this only by polling that schedule's own run history.
+    await waitFor(() =>
+      expect(listRuns).toHaveBeenCalledWith(
+        dueSchedule.id,
+        expect.objectContaining({ limit: 1, offset: 0 }),
+      ),
+    );
+    expect(await screen.findByText('Running now')).toBeInTheDocument();
+  });
+
   it('requires destructive confirmation and removes a deleted schedule only after success', async () => {
     const request = deferred<void>();
     const deleteSchedule = vi.fn(() => request.promise);
@@ -423,6 +483,37 @@ describe('SchedulesPage', () => {
     expect(screen.getByRole('status', { name: 'Schedule action result' })).toHaveTextContent(
       'Schedule deleted.',
     );
+  });
+
+  it('filters the schedule list by status without dropping the other rows from state', async () => {
+    const active = { ...schedule, id: 'schedule-active', name: 'Active brief' };
+    const completed = {
+      ...schedule,
+      id: 'schedule-completed',
+      name: 'Finished brief',
+      status: 'completed' as const,
+      isEnabled: false,
+      nextExecutionAt: null,
+    };
+    const api = createApi({ listSchedules: vi.fn(async () => page([active, completed])) });
+    const user = userEvent.setup();
+
+    render(<SchedulesPage api={api} />);
+    await screen.findByRole('heading', { name: 'Active brief' });
+    expect(screen.getByRole('heading', { name: 'Finished brief' })).toBeInTheDocument();
+
+    const filters = screen.getByRole('group', { name: 'Filter schedules by status' });
+    expect(within(filters).getByRole('button', { name: 'All 2' })).toBeInTheDocument();
+    // Zero-count statuses (paused, failed, expired) stay hidden from the tab row.
+    expect(within(filters).queryByRole('button', { name: /Paused/ })).not.toBeInTheDocument();
+
+    await user.click(within(filters).getByRole('button', { name: 'Completed 1' }));
+    expect(screen.getByRole('heading', { name: 'Finished brief' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Active brief' })).not.toBeInTheDocument();
+
+    await user.click(within(filters).getByRole('button', { name: 'All 2' }));
+    expect(screen.getByRole('heading', { name: 'Active brief' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Finished brief' })).toBeInTheDocument();
   });
 
   it('disables unsupported and terminal actions while preserving history and deletion', async () => {

@@ -1,0 +1,147 @@
+[
+  {
+    "id": "SHELL-NAV-IA-001",
+    "domain": "shell-nav-ia",
+    "surface": "web",
+    "feature": "Route-level auth gating for /tasks",
+    "screen": "/tasks (Cloud work runs)",
+    "files": [
+      "apps/web/proxy.ts:145-152",
+      "apps/web/proxy.ts:232-234",
+      "apps/web/app/tasks/page.tsx:1-18",
+      "apps/web/shared/components/layout/WebAppShell.tsx:1-120"
+    ],
+    "currentState": "The Next.js proxy's isProtectedAppRoute matcher (apps/web/proxy.ts:145-152) lists exactly ['/chat(.*)', '/library(.*)', '/schedules(.*)', '/settings(.*)', '/billing(.*)', '/admin(.*)'] — '/tasks' is absent. The gate at proxy.ts:232-234 (`if (isProtectedAppRoute(request) && !hasBrowserSessionCookie(request)) return buildSignedOutRedirect(request)`) therefore never fires for /tasks. app/tasks/page.tsx wraps <TasksPage/> in <WebAppShell> with no metadata robots block beyond noindex and no auth check of its own, and WebAppShell.tsx has zero client-side auth-redirect logic (confirmed: no `!user`, `isAuthInitialized`, `SignedOut`, or `redirect(` calls anywhere in the file) — it relies entirely on the proxy for gating. The live route sweep (web-route-sweep-findings.md Finding 2) independently observed the resulting behavior: an unauthenticated visit to /tasks renders the complete signed-in chrome (New Chat / Search / Chat / Code / Projects / Library / Tasks / Schedules / Customize), a perpetual 'Loading account…' placeholder, and the 'Tasks — your Cloud work runs' heading with Active/All filters — i.e. a broken, stuck loading state rather than a sign-in prompt.",
+    "expectedState": "Every authenticated product surface redirects a signed-out visitor to /login?redirectTo=<route> before any authenticated chrome renders, exactly as /chat, /chat/schedules, /settings, and /billing already do. /tasks should be added to isProtectedAppRoute (or covered by a broader pattern) so its behavior matches every sibling item in the same sidebar nav list it renders.",
+    "benchmarkRef": "ChatGPT and Claude web both redirect signed-out visitors to a sign-in screen for any authenticated destination (Tasks/Scheduled equivalents included) rather than rendering the authenticated shell — per chatgpt-web-desktop.md and claude-web-desktop.md general auth-gating behavior; no competitor surface was observed rendering full authenticated chrome to a signed-out session.",
+    "gapType": "broken-workflow",
+    "severity": "P1",
+    "evidence": "Read apps/web/proxy.ts in full (isProtectedAppRoute definition at :145-152, its only call site at :232-234, and the matcher config at :260-263 which does not further restrict scope). Read apps/web/app/tasks/page.tsx and apps/web/app/chat/schedules/page.tsx side by side — structurally identical (WebAppShell + feature page component), yet only /chat/schedules is covered because it also matches '/chat(.*)'. Grepped WebAppShell.tsx and features/tasks/components/TasksPage.tsx for auth-redirect logic — zero hits in either. Cross-checked against the independent live-HTTP behavior already recorded in web-route-sweep-findings.md Finding 2, which observed the exact unauthenticated-full-chrome render this source-level read predicts. Confirmed the claim is source-verified, not just a route-sweep artifact, by tracing the proxy matcher directly rather than trusting either document alone.",
+    "priorArtId": null,
+    "recommendation": "Add '/tasks(.*)' to isProtectedAppRoute in apps/web/proxy.ts (one line). Add a regression test asserting every route rendered inside WebAppShell/WebChatPage's sidebar nav item list is present in isProtectedAppRoute, so a future new nav item can't silently ship ungated the same way."
+  },
+  {
+    "id": "SHELL-NAV-IA-002",
+    "domain": "shell-nav-ia",
+    "surface": "desktop-tauri",
+    "feature": "Desktop Settings navigation naming",
+    "screen": "Settings sidebar — 'Connections' and 'Connectors' tabs",
+    "files": [
+      "packages/ui/ui/src/settings-nav.ts:149-161",
+      "apps/desktop/src/features/settings/tabs/Connections/index.tsx:1-38",
+      "apps/desktop/src/features/settings/tabs/Connectors/index.tsx:1-64"
+    ],
+    "currentState": "Desktop Settings registers two separately-labeled nav entries, 'Connections' (key 'connections', icon MonitorSmartphone, keywords mobile/phone/device/pairing/remote control/screen sharing) and 'Connectors' (key 'connectors', icon Plug, keywords mcp/integration), three items apart in the same flat list (Agents, Connections, Cowork, Connectors, AGI Code...). 'Connections' mounts MobileCompanionPanel — QR pairing so a phone can control this Mac. 'Connectors' mounts ConnectorGallery + ConnectorHealthDashboard — the MCP/OAuth integration catalog. Both tabs are real, correctly wired, and distinct in content; the defect is purely the near-homograph naming, which the audit's own done-claim-verification.md (GAP-083) independently discovered while investigating a different row: a claim that 'Connections' hosted MCP content turned out to describe 'Connectors' instead, showing the names are confusable even to someone reading the source.",
+    "expectedState": "Two settings destinations serving unrelated purposes (device pairing vs. third-party integrations) should not share a name differing only in suffix. Rename one — e.g. 'Connections' → 'Device pairing' or 'Remote control', matching the mobile app's own 'Remote'/'Desktop control' vocabulary for the same feature (see SHELL-NAV-IA-004) — so 'Connectors' unambiguously means the MCP/integration catalog, matching how ChatGPT and Claude each use a single unambiguous term ('Plugins' / 'Connectors' respectively) for the integration catalog and a differently-named page ('Codex → Connections' in Codex macOS settings, per shots-codex-macos-settings.md) for device/session pairing.",
+    "benchmarkRef": "Codex macOS Settings uses 'Connections' exclusively for 'Control this Mac' device pairing (shots-codex-macos-settings.md), with no adjacent, similarly-named integration-catalog tab; Claude Desktop separates the same two concepts into 'Cowork → Dispatch' (device pairing) and 'Customize → Connectors' (MCP catalog) — non-confusable names in both references.",
+    "gapType": "ux-gap",
+    "severity": "P2",
+    "evidence": "Read packages/ui/ui/src/settings-nav.ts:120-175 directly to confirm both entries' exact labels, icons, and list position. Read both tabs' index.tsx files in full to confirm each mounts genuinely different, real content (MobileCompanionPanel vs. ConnectorGallery/ConnectorHealthDashboard) rather than being a literal duplicate. Cross-referenced audit/parity-2026-08-15/gaps/done-claim-verification.md and .json (id GAP-083), which reached the identical conclusion independently while verifying an unrelated ui-gaps.csv claim, corroborating the finding from a second angle.",
+    "priorArtId": "GAP-083",
+    "recommendation": "Rename the 'connections' settings-nav entry's label (single string change in settings-nav.ts) to a term that does not share a stem with 'Connectors' — e.g. 'Remote control' — and update apps/desktop/src/features/mobile-companion/QRPairingCard.tsx's own on-screen copy to match (see SHELL-NAV-IA-004, which found that copy also names the wrong destination on the Mobile side)."
+  },
+  {
+    "id": "SHELL-NAV-IA-003",
+    "domain": "shell-nav-ia",
+    "surface": "mobile",
+    "feature": "Skills navigation entry point",
+    "screen": "Nav drawer — primary items",
+    "files": [
+      "apps/mobile/src/features/drawer/components/DrawerContent.tsx:37-100",
+      "apps/mobile/src/features/skills/SkillsScreen.tsx:1-655",
+      "apps/mobile/app/(app)/skills/index.tsx:1-11",
+      "apps/mobile/__tests__/drawer-content.test.tsx:208-235"
+    ],
+    "currentState": "SkillsScreen.tsx is a complete, 655-line implementation (search, source badges, Cloud-mode gate, loading/error/empty states) and its route wrapper is registered at app/(app)/skills/index.tsx. The drawer's PRIMARY_ITEMS array (DrawerContent.tsx:62-100) — the only place a user navigates from — has no Skills row; '/(app)/skills' appears only as an unused member of the RoutePath type union (line 43). A later commit (1e858a7f1, an ancestor of the current HEAD) removed the row, and drawer-content.test.tsx:208-235 now explicitly asserts the Skills label is absent in Cloud mode. No other screen (Settings, Capabilities, Connectors) links to it either.",
+    "expectedState": "A fully-built, cloud-gated Skills catalog screen should have at least one reachable entry point, matching ChatGPT iOS (Skills reachable from the sidebar drawer per shots-chatgpt-ios-shell-settings.md) and matching this repo's own web/desktop surfaces, which do expose Skills from Settings → Customize.",
+    "benchmarkRef": "ChatGPT iOS sidebar drawer includes Skills as a direct destination (shots-chatgpt-ios-shell-settings.md, screen 072); Claude iOS reaches Skills indirectly via Capabilities/Directory but that destination is at least reachable, unlike this repo's mobile Skills screen which is orphaned.",
+    "gapType": "dead-code",
+    "severity": "P1",
+    "evidence": "Read DrawerContent.tsx PRIMARY_ITEMS array in full — five entries (chats, projects, library, schedules, remote), no skills. Read SkillsScreen.tsx to confirm it is not a stub (real query/search/empty-state logic). Grepped the whole apps/mobile tree for '/(app)/skills' — two hits total, both non-navigational (the type union member and the route file's own registration). Cross-referenced audit/parity-2026-08-15/gaps/done-claim-verification.md (id GAP-001), which independently reached REGRESSED with the same file:line evidence, confirming the removal is real and post-dates the row's original 'Done' status.",
+    "priorArtId": "GAP-001",
+    "recommendation": "Restore a Skills row in DrawerContent.tsx's PRIMARY_ITEMS (mirroring how Settings → Capabilities already surfaces other Cloud-gated features), or if the founder decision that removed it was deliberate product scoping rather than an oversight, delete SkillsScreen.tsx and its route rather than leaving 655 lines of unreachable, tested code — per CLAUDE.md's 'finish what you start' rule, half-wired is worse than neither state."
+  },
+  {
+    "id": "SHELL-NAV-IA-004",
+    "domain": "shell-nav-ia",
+    "surface": "cross-surface",
+    "feature": "Desktop-to-Mobile pairing instructions naming",
+    "screen": "Desktop Settings → Connections (QR pairing card) instructing the user where to go on Mobile",
+    "files": [
+      "apps/desktop/src/features/mobile-companion/QRPairingCard.tsx:113-117",
+      "apps/mobile/src/features/drawer/components/DrawerContent.tsx:94-99",
+      "apps/mobile/app/(app)/companion/index.tsx:210-212",
+      "apps/mobile/src/features/settings/capabilities/index.tsx:234-236"
+    ],
+    "currentState": "Desktop's QRPairingCard.tsx tells the user to open 'AGI Workforce → Desktop Companion' on their phone to complete pairing. No screen, drawer row, or settings row anywhere in apps/mobile is labeled 'Desktop Companion' — the literal string does not appear in any user-facing Mobile text (only in a code comment in services/companion.ts). The actual Mobile entry points for this exact feature are labeled 'Remote' (drawer row and screen header, DrawerContent.tsx:94-99 and companion/index.tsx:210-212) or 'Desktop control' (a second, separate entry point inside Settings → Capabilities, capabilities/index.tsx:234-236).",
+    "expectedState": "Cross-surface pairing instructions must name the destination using the exact label the other surface actually shows, the way Codex macOS's pairing card correctly names 'Control this Mac' matching its own settings label (per shots-codex-macos-settings.md). A user following AGI Workforce's printed instructions today cannot find a menu item called 'Desktop Companion' anywhere on their phone.",
+    "benchmarkRef": "Codex/ChatGPT macOS's device-pairing settings card names the exact destination the paired surface uses, per shots-codex-macos-settings.md; no naming drift was observed between the pairing instructions and the actual destination in any competitor capture reviewed.",
+    "gapType": "broken-workflow",
+    "severity": "P1",
+    "evidence": "Read QRPairingCard.tsx:113-117 for the exact instruction copy. Grepped 'Desktop Companion' across the entire apps/mobile tree — zero user-facing matches. Read DrawerContent.tsx:94-99 and companion/index.tsx:210-212 to confirm the drawer/header label is 'Remote', and settings/capabilities/index.tsx:234-236 to confirm the separate Settings entry point is labeled 'Desktop control'. Cross-referenced done-claim-verification.md/.json (id GAP-210), which independently verified the identical mismatch while checking an unrelated claim, confirming two of the row's three copy assertions check out (Scan QR Code / Enter code manually) but the destination name does not.",
+    "priorArtId": "GAP-210",
+    "recommendation": "Change QRPairingCard.tsx's instruction text to name 'Remote' (the drawer/header label a user actually sees), and add a co-located test that fails if the two surfaces' strings diverge again — the class of bug a per-surface audit cannot catch on its own, since each surface's own tests only assert its own copy."
+  },
+  {
+    "id": "SHELL-NAV-IA-005",
+    "domain": "shell-nav-ia",
+    "surface": "cross-surface",
+    "feature": "Personal/Team workspace switcher",
+    "screen": "Account/profile menu — Desktop AccountMenu, Mobile Settings",
+    "files": [
+      "apps/web/features/workspaces/components/WorkspaceMenuItems.tsx:1-77",
+      "apps/web/shared/components/layout/WebAppShell.tsx:379",
+      "apps/desktop/src/features/v3/AccountMenu.tsx",
+      "apps/desktop/src/features/settings/cloud/CloudTeamSection.tsx:1-40"
+    ],
+    "currentState": "Web's account-menu dropdown mounts <WorkspaceMenuItems>, which lists 'Personal' plus every team the account belongs to (each with a checkmark for the active one) and calls a real switchWorkspace mutation on click (WorkspaceMenuItems.tsx:41-67) — a genuine multi-workspace switcher shared by the chat page and every secondary shell. Desktop's AccountMenu.tsx has no equivalent: its item list is Settings, Language, Privacy & Security, 'View all plans', 'BYOK & Local', 'Apps & Extensions', Help & Support, Log Out — no Workspace section, no organization list, no switch action. Desktop does have team-membership management (CloudTeamSection.tsx, 'Team and workspace membership, rendered inline' — add/remove members, change roles), but it operates on whichever single org context the account already resolves to; there is no picker to move between Personal and a Team the account belongs to. Grepping apps/mobile for the equivalent Clerk organization hooks found zero matches — Mobile has no workspace switcher either.",
+    "expectedState": "A user who belongs to both a Personal account and one or more Team workspaces should be able to switch active workspace context from Desktop and Mobile the same way they can from Web, since Team membership itself is a real, shared product feature (billing, member management, and shared conversations all exist per web/desktop inventories) — not a Web-only concept.",
+    "benchmarkRef": "Claude and ChatGPT both let a user switch between personal and organization/team context from every first-party surface (web, desktop, mobile) via their account-row dropdown — no research doc or screenshot teardown in this audit found a competitor surface with team support but no in-place switcher for it.",
+    "gapType": "parity-gap",
+    "severity": "P2",
+    "evidence": "Read WorkspaceMenuItems.tsx in full — confirmed a real Personal + per-workspace list, active-selection checkmark, and a switchWorkspace.mutate() call site, mounted into WebAppShell.tsx:379. Read AccountMenu.tsx's full menu-item array — no workspace/team entry present. Read CloudTeamSection.tsx's header comment and members-list/role logic — confirmed it manages membership within one implicit org context, not a picker across multiple. Grepped apps/desktop and apps/mobile for useOrganization/useOrganizationList/OrganizationSwitcher/switchWorkspace — present only in apps/web.",
+    "priorArtId": null,
+    "recommendation": "Port a thin equivalent of WorkspaceMenuItems into Desktop's AccountMenu (the Clerk organization-overview data and switch mutation are already real API surfaces on the web backend that Desktop's cloud API client can call) and add the same Personal/Team picker to Mobile's Settings → Billing area, where plan context already lives."
+  },
+  {
+    "id": "SHELL-NAV-IA-006",
+    "domain": "shell-nav-ia",
+    "surface": "web",
+    "feature": "Account-footer consistency across the two parallel web shells",
+    "screen": "Sidebar account footer — /tasks, /chat/library, /chat/projects, /chat/schedules vs. /chat",
+    "files": [
+      "apps/web/shared/components/layout/WebAppShell.tsx:242-368",
+      "apps/web/features/chat/pages/WebChatPage.tsx:3820-3875"
+    ],
+    "currentState": "WebChatPage.tsx's account footer (the one rendered on the main /chat route) shows a dismissible 'Free plan — Upgrade' pill above the account row and an inline orange 'Upgrade' badge next to the account name for free-tier users (WebChatPage.tsx:3833-3866). WebAppShell.tsx — the second, lighter shell that renders /tasks, /chat/library, /chat/projects, and /chat/schedules — renders only the plain tier label with no upgrade nudge anywhere in its account footer (WebAppShell.tsx:311-368). A free-tier user who spends their session on Tasks or Library never sees the upgrade prompt their Chat session shows them.",
+    "expectedState": "The upgrade nudge is a monetization-relevant, deliberately-designed piece of UI (per BillingSection.tsx's recent overage/paywall work referenced in git history) and should render consistently everywhere the account footer appears, not only on the page most likely already visited.",
+    "benchmarkRef": "n/a — an internal cross-shell consistency defect, not a benchmark comparison; flagged because CLAUDE.md's shell/nav consistency bar applies within the product's own surfaces, not only against competitors.",
+    "gapType": "ux-gap",
+    "severity": "P3",
+    "evidence": "Read WebAppShell.tsx's sidebarFooterSlot-equivalent account section in full (lines 242-368) — no showFreeUpgrade equivalent, no Upgrade badge. Read WebChatPage.tsx:3820-3875 — confirmed the resolveChatAccountDisplay() call produces showFreeUpgrade and the JSX conditionally renders both the banner and the badge. This is the same two-shells duplication web-frontend.md §2.1 already documents as an intentional architectural split; this finding is the one behavioral inconsistency that split has produced.",
+    "priorArtId": null,
+    "recommendation": "Extract the free-plan nudge (banner + badge) into a small shared component both shells' footerSlot can render, keyed off the same resolveChatAccountDisplay()/showFreeUpgrade logic already used by WebChatPage."
+  },
+  {
+    "id": "SHELL-NAV-IA-007",
+    "domain": "shell-nav-ia",
+    "surface": "web",
+    "feature": "Page metadata / browser-tab identity for directory-style product surfaces",
+    "screen": "/skills, /connectors, /apps, /device-auth, /user",
+    "files": [
+      "apps/web/app/skills/page.tsx",
+      "apps/web/app/connectors/page.tsx",
+      "apps/web/app/apps/page.tsx",
+      "apps/web/app/device-auth/page.tsx",
+      "apps/web/app/user/page.tsx"
+    ],
+    "currentState": "None of these five route files export a `metadata` object, so each renders the app-wide default `<title>AGI | One AI workspace across models and tools.</title>` instead of a page-specific title. /skills, /connectors, and /apps are exactly the kind of directory/catalog surface a competitor makes distinctly identifiable (Claude's Skill/Connector/Plugin directory modal and ChatGPT's Plugins marketplace both carry their own page identity) — a user with several of these open in browser tabs cannot tell them apart, and the pages are non-indexable-looking to search engines despite being public-reachable when signed out (per web-route-sweep-findings.md Finding 4, which first surfaced this at the HTTP layer).",
+    "expectedState": "Every top-level product route should export a distinct `metadata.title`, matching the pattern already used correctly by /tasks, /chat/schedules, and dozens of other routes in the same app (e.g. app/tasks/page.tsx:6-10).",
+    "benchmarkRef": "n/a — basic web-platform hygiene rather than a specific competitor feature; included because it directly affects the 'browser-tab identity' aspect of shell/navigation this domain covers, and because /skills, /connectors, and /apps are public-facing directory surfaces of exactly the kind competitors make indexable and identifiable.",
+    "gapType": "frontend-gap",
+    "severity": "P3",
+    "evidence": "Grepped each of the five page.tsx files for `export const metadata` — zero matches in all five, confirming the route-sweep's HTTP-layer observation at the source level rather than trusting the sweep alone. Cross-checked /local/page.tsx, which the route sweep also flagged for an empty title — that one already has metadata.title set in current code, so it was correctly excluded from this finding as stale/already-fixed evidence rather than re-filed.",
+    "priorArtId": null,
+    "recommendation": "Add a `metadata` export with a short, specific title to each of the five files (e.g. 'Skills', 'Connectors', 'Apps', 'Sign in with a code', 'Account') — a one-line change per file with no behavioral risk."
+  }
+]

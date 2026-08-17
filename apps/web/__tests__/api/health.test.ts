@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -156,6 +155,17 @@ describe('Health Check API', () => {
 
       const data = await response.json();
       expect(data.checks.database.status).toBe('healthy');
+    });
+
+    it('forbids caching so an external monitor cannot be answered from a stale copy', async () => {
+      const healthy = await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
+      expect(healthy.status).toBe(200);
+      expect(healthy.headers.get('cache-control')).toBe('no-store');
+
+      mockNeonQuery.mockRejectedValueOnce(new Error('Connection failed'));
+      const down = await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
+      expect(down.status).toBe(503);
+      expect(down.headers.get('cache-control')).toBe('no-store');
     });
 
     it('should include timestamp in response', async () => {

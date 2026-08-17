@@ -764,3 +764,65 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
     });
   });
 });
+
+describe('resolveAutoRoute tier slot admission', () => {
+  it('refuses an explicit flagship selection on tiers whose allowed slots exclude it', () => {
+    for (const subscriptionTier of ['free', 'basic', 'pro'] as const) {
+      const result = resolveAutoRoute({
+        selection: CODING_PREMIUM_MODEL_ID,
+        taskType: 'coding',
+        subscriptionTier,
+        trustMode: 'managed_cloud',
+      });
+
+      expect(result).toMatchObject({
+        status: 'unavailable',
+        code: 'explicit_model_ineligible',
+      });
+    }
+  });
+
+  it('still admits the same explicit flagship selection on a tier that allows its slot', () => {
+    const result = resolveAutoRoute({
+      selection: CODING_PREMIUM_MODEL_ID,
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      modelKey: CODING_PREMIUM_MODEL_ID,
+      reason: 'explicit',
+    });
+  });
+
+  it('refuses an explicit paid-slot selection for a free tier', () => {
+    const result = resolveAutoRoute({
+      selection: CODING_BALANCED_MODEL_ID,
+      taskType: 'coding',
+      subscriptionTier: 'free',
+      trustMode: 'managed_cloud',
+    });
+
+    expect(result).toMatchObject({
+      status: 'unavailable',
+      code: 'explicit_model_ineligible',
+    });
+  });
+
+  it('does not carry a tier-ineligible current model through continuity', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'coding',
+      subscriptionTier: 'free',
+      trustMode: 'managed_cloud',
+      currentModelKey: CODING_PREMIUM_MODEL_ID,
+      previousTaskType: 'coding',
+    });
+
+    expect(result).toMatchObject({ status: 'selected' });
+    expect(result).not.toMatchObject({ modelKey: CODING_PREMIUM_MODEL_ID });
+    expect(result).not.toMatchObject({ reason: 'continuity' });
+  });
+});

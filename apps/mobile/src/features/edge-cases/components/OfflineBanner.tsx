@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { View, Animated, AccessibilityInfo } from 'react-native';
+import { View, Animated } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { EDGE_COPY } from './copy';
 import { spacing } from '@/src/ui/theme';
@@ -12,21 +13,10 @@ export function OfflineBanner() {
   const { isOnline } = useNetworkStatus();
   const translateY = useRef(new Animated.Value(-60)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const reduceMotionRef = useRef(false);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((val) => {
-        reduceMotionRef.current = val;
-      })
-      .catch(() => {
-        // Non-fatal — default to no reduce-motion
-      });
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     const show = !isOnline;
-    const reduceMotion = reduceMotionRef.current;
 
     if (show) {
       if (reduceMotion) {
@@ -65,7 +55,7 @@ export function OfflineBanner() {
         ]).start();
       }
     }
-  }, [isOnline, translateY, opacity]);
+  }, [isOnline, reduceMotion, translateY, opacity]);
 
   return (
     <Animated.View

@@ -39,7 +39,8 @@ import { SkillMentionPicker, type MentionSkill } from './SkillMentionPicker';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
-import type { WritingStyle } from '../lib/writingStyle';
+import { largePasteToFile } from '../lib/largePaste';
+import { loadWritingStyle, saveWritingStyle, type WritingStyle } from '../lib/writingStyle';
 import type { ChatAttachmentPolicy, LocalToolScope } from '../lib/runtime';
 import {
   getSlashCommand,
@@ -193,7 +194,11 @@ export function ChatInput({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [explicitWebSearchEnabled, setExplicitWebSearchEnabled] = useState(false);
-  const [activeStyle, setActiveStyle] = useState<WritingStyle | null>(null);
+  const [activeStyle, setActiveStyleState] = useState<WritingStyle | null>(loadWritingStyle);
+  const setActiveStyle = useCallback((style: WritingStyle | null) => {
+    setActiveStyleState(style);
+    saveWritingStyle(style);
+  }, []);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [selectedSkill, setSelectedSkill] = useState<MentionSkill | null>(null);
 
@@ -575,6 +580,15 @@ export function ChatInput({
       if (pasted.length > 0) {
         e.preventDefault();
         appendFiles(pasted);
+        return;
+      }
+      const pastedText = e.clipboardData?.getData('text/plain') ?? '';
+      const asFile = largePasteToFile(pastedText, {
+        existingFileNames: attachedFilesRef.current.map((file) => file.name),
+      });
+      if (asFile) {
+        e.preventDefault();
+        appendFiles([asFile]);
       }
     },
     [disabled, isStreaming, appendFiles],

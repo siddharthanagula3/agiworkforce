@@ -107,8 +107,10 @@ import {
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
 import {
+  beginPairing,
   loadPairingState,
-  requestPairing,
+  storeBridgeSecret,
+  submitPairingCode,
   unpair,
   type PairingState,
 } from './features/native-bridge/pairing';
@@ -3033,6 +3035,25 @@ function injectStyles(): void {
       color: var(--agi-ext-danger);
       min-height: 16px;
       margin-bottom: 6px;
+    }
+    .sp-drawer-pairing-code-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .sp-drawer-pairing-code-row[hidden] { display: none; }
+    .sp-drawer-pairing-hint { font-size: 11px; color: var(--agi-ext-text-muted); }
+    .sp-drawer-pairing-code-input {
+      font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+      font-size: 15px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--agi-ext-border);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
     }
     .sp-drawer-btn-row { display: flex; gap: 6px; }
     .sp-drawer-btn {
@@ -6577,6 +6598,54 @@ function buildUI(): void {
   });
   pairingSection.appendChild(pairingError);
 
+  const pairingCodeRow = el('div', { class: 'sp-drawer-pairing-code-row', hidden: '' });
+  const pairingCodeHint = el(
+    'div',
+    { class: 'sp-drawer-pairing-hint', id: 'sp-drawer-pairing-hint' },
+    t('spPairingCodeHint'),
+  );
+  const pairingCodeInput = el('input', {
+    type: 'text',
+    class: 'sp-drawer-pairing-code-input',
+    id: 'sp-drawer-pairing-code-input',
+    placeholder: t('spPairingCodePlaceholder'),
+    autocomplete: 'off',
+    spellcheck: 'false',
+    maxlength: '12',
+    'aria-label': t('spPairingCodeHint'),
+  }) as HTMLInputElement;
+  const pairingCodeSubmitBtn = el(
+    'button',
+    { class: 'sp-drawer-btn sp-drawer-btn-primary', id: 'sp-drawer-pairing-code-submit' },
+    t('spPairingCodeSubmit'),
+  );
+  pairingCodeRow.appendChild(pairingCodeHint);
+  pairingCodeRow.appendChild(pairingCodeInput);
+  pairingCodeRow.appendChild(pairingCodeSubmitBtn);
+  pairingSection.appendChild(pairingCodeRow);
+
+  const pairingSecretRow = el('div', { class: 'sp-drawer-pairing-code-row' });
+  pairingSecretRow.appendChild(
+    el('div', { class: 'sp-drawer-pairing-hint' }, t('spPairingSecretHint')),
+  );
+  const pairingSecretInput = el('input', {
+    type: 'password',
+    class: 'sp-drawer-pairing-code-input',
+    id: 'sp-drawer-bridge-secret-input',
+    placeholder: t('spPairingSecretPlaceholder'),
+    autocomplete: 'off',
+    spellcheck: 'false',
+    'aria-label': t('spPairingSecretHint'),
+  }) as HTMLInputElement;
+  const pairingSecretSaveBtn = el(
+    'button',
+    { class: 'sp-drawer-btn', id: 'sp-drawer-bridge-secret-save' },
+    t('spPairingSecretSave'),
+  );
+  pairingSecretRow.appendChild(pairingSecretInput);
+  pairingSecretRow.appendChild(pairingSecretSaveBtn);
+  pairingSection.appendChild(pairingSecretRow);
+
   const pairingBtnRow = el('div', { class: 'sp-drawer-btn-row' });
   const drawerPairBtn = el(
     'button',
@@ -6598,6 +6667,22 @@ function buildUI(): void {
 
   function applyDrawerPairingState(state: PairingState): void {
     pairingError.textContent = '';
+    const awaitingCode = state.phase === 'awaiting-code' || state.phase === 'confirming';
+    if (awaitingCode) {
+      pairingCodeRow.removeAttribute('hidden');
+    } else {
+      pairingCodeRow.setAttribute('hidden', '');
+      pairingCodeInput.value = '';
+    }
+    (pairingCodeInput as HTMLInputElement).disabled = state.phase === 'confirming';
+    (pairingCodeSubmitBtn as HTMLButtonElement).disabled = state.phase === 'confirming';
+
+    if (state.phase === 'idle' || state.phase === 'error') {
+      pairingSecretRow.removeAttribute('hidden');
+    } else {
+      pairingSecretRow.setAttribute('hidden', '');
+    }
+
     switch (state.phase) {
       case 'idle':
         pairingLabel.textContent = t('spPairingIdle');
@@ -6612,6 +6697,21 @@ function buildUI(): void {
         pairingFingerprint.setAttribute('hidden', '');
         drawerPairBtn.textContent = t('spPairingInProgress');
         (drawerPairBtn as HTMLButtonElement).disabled = true;
+        drawerUnpairBtn.setAttribute('hidden', '');
+        break;
+      case 'awaiting-code':
+        pairingLabel.textContent = t('spPairingAwaitingCode');
+        pairingFingerprint.setAttribute('hidden', '');
+        pairingCodeSubmitBtn.textContent = t('spPairingCodeSubmit');
+        drawerPairBtn.setAttribute('hidden', '');
+        drawerUnpairBtn.setAttribute('hidden', '');
+        if (state.error) pairingError.textContent = state.error;
+        break;
+      case 'confirming':
+        pairingLabel.textContent = t('spPairingInProgress');
+        pairingFingerprint.setAttribute('hidden', '');
+        pairingCodeSubmitBtn.textContent = t('spPairingInProgress');
+        drawerPairBtn.setAttribute('hidden', '');
         drawerUnpairBtn.setAttribute('hidden', '');
         break;
       case 'paired':
@@ -6638,9 +6738,34 @@ function buildUI(): void {
   }
 
   drawerPairBtn.addEventListener('click', async () => {
-    applyDrawerPairingState({ phase: 'requesting', fingerprint: null, error: null });
-    const next = await requestPairing();
+    applyDrawerPairingState({
+      phase: 'requesting',
+      fingerprint: null,
+      error: null,
+      requestId: null,
+      codeLength: null,
+      expiresAt: null,
+    });
+    const next = await beginPairing();
     applyDrawerPairingState(next);
+  });
+  pairingCodeSubmitBtn.addEventListener('click', async () => {
+    const next = await submitPairingCode(pairingCodeInput.value);
+    applyDrawerPairingState(next);
+  });
+  pairingSecretSaveBtn.addEventListener('click', async () => {
+    const stored = await storeBridgeSecret(pairingSecretInput.value);
+    pairingSecretInput.value = '';
+    if (stored.phase === 'error') {
+      applyDrawerPairingState(stored);
+      return;
+    }
+    applyDrawerPairingState(await beginPairing());
+  });
+  pairingCodeInput.addEventListener('keydown', (event) => {
+    if ((event as KeyboardEvent).key !== 'Enter') return;
+    event.preventDefault();
+    void submitPairingCode(pairingCodeInput.value).then(applyDrawerPairingState);
   });
   drawerUnpairBtn.addEventListener('click', async () => {
     const next = await unpair();

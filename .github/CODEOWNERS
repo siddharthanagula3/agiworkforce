@@ -9,9 +9,7 @@
 /AGENTS.md @siddhartha
 /CLAUDE.md @siddhartha
 /PLAN.md @siddhartha
-/TODO.md @siddhartha
 /CHANGELOG.md @siddhartha
-/CONTRIBUTING.md @siddhartha
 /docs/agent-context/ @siddhartha
 /docs/engineering/ @siddhartha
 /audit/ @siddhartha
@@ -22,7 +20,6 @@
 /apps/desktop/ @siddhartha
 /apps/web/ @siddhartha
 /apps/mobile/ @siddhartha
-/ios/ @siddhartha
 /apps/extension/ @siddhartha
 /apps/extension-vscode/ @siddhartha
 

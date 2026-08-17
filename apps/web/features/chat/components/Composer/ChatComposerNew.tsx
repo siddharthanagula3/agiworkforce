@@ -36,6 +36,7 @@ import { AttachmentPreview } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
+import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import {
@@ -66,7 +67,12 @@ import {
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
-import { BUILT_IN_SLASH_COMMANDS, SendPreview, useCapability } from '@agiworkforce/unified-chat';
+import {
+  BUILT_IN_SLASH_COMMANDS,
+  largePasteToFile,
+  SendPreview,
+  useCapability,
+} from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -110,9 +116,71 @@ const COMPOSER_COUNTER_THRESHOLD = Math.floor(COMPOSER_MAX_CHARS * 0.75);
 /** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
 export type ComposerWorkMode = CloudWorkMode;
 
+type ComposerSendArgs = [
+  content: string,
+  attachments?: File[],
+  skillId?: string,
+  meta?: ComposerSendMeta,
+];
+
+interface QueuedFollowUp {
+  id: string;
+  conversationId: string | null;
+  args: ComposerSendArgs;
+  preview: string;
+  toolsLabel: string | null;
+}
+
+export const AGI_WORK_MATURITY_LABEL = 'Alpha';
+export const AGI_WORK_MATURITY_TITLE = `AGI Work runs on Managed Cloud, which is in ${MANAGED_CLOUD_STATUS}. Runs can fail or stall, and behaviour may change.`;
+const AGI_WORK_MATURITY_INLINE_ID = 'agi-work-maturity-inline';
+const AGI_WORK_MATURITY_MENU_ID = 'agi-work-maturity-menu';
+
+/**
+ * `aria-hidden` because the badge sits inside the AGI Work button: leaving it
+ * in the accessibility tree would rename the control from "AGI Work" to
+ * "AGI Work Alpha". Assistive tech gets the disclosure from the sibling
+ * `AgiWorkMaturityDescription` via `aria-describedby` instead.
+ */
+function AgiWorkMaturityBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="agi-work-maturity-badge"
+      title={AGI_WORK_MATURITY_TITLE}
+      className="ml-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1 text-[9px] font-medium uppercase leading-4 tracking-wide text-amber-700 dark:text-amber-300"
+    >
+      {AGI_WORK_MATURITY_LABEL}
+    </span>
+  );
+}
+
+function AgiWorkMaturityDescription({ id }: { id: string }) {
+  return (
+    <span id={id} className="sr-only">
+      {AGI_WORK_MATURITY_TITLE}
+    </span>
+  );
+}
+
 const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
   chat: 'Chat — quick questions and conversation',
   agiwork: 'AGI Work — multi-step tasks with tools, files, and reviewable deliverables',
+};
+
+/**
+ * Placeholder copy per work mode.
+ *
+ * AUDIT-FIX shell-nav-ia-gap-03: the Chat | AGI Work toggle was fully wired
+ * (mode → send meta → conversation creation) but the textarea placeholder
+ * branched only on isTurnActive/imageMode/videoMode, so flipping to AGI Work
+ * changed nothing the user could read inside the input. claude.ai's equivalent
+ * Chat/Cowork axis re-writes its prompt on toggle; this is that missing signal.
+ * `chat` is null so the caller-supplied `placeholder` prop still wins there.
+ */
+const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
+  chat: null,
+  agiwork: 'Describe a multi-step task and what it should deliver',
 };
 
 export interface ComposerSendMeta {
@@ -397,14 +465,18 @@ const ChatComposerNewComponent = ({
   // edge -- including the one caused by navigating to another chat -- and used
   // to call `onSend` with no conversation id, so the host resolved it to
   // whatever chat had become active and a message written for A was sent into B.
-  const pendingQueueRef = useRef<{
-    conversationId: string | null;
-    args: Parameters<typeof onSend>;
-  } | null>(null);
+  //
+  // COMPOSER-005: the queue used to be a single slot, so a second send while a
+  // follow-up was already waiting silently destroyed the first — a typed message
+  // vanished with nothing on screen saying so. It is a list now; the flush still
+  // releases exactly one message per finished turn, because the server's
+  // per-conversation concurrency guard has not changed.
+  const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
+  const queuedFollowUpsRef = useRef<QueuedFollowUp[]>(queuedFollowUps);
+  queuedFollowUpsRef.current = queuedFollowUps;
+  /** Set while a queued message is being edited, so re-sending replaces its slot. */
+  const editingQueuedIdRef = useRef<string | null>(null);
   const wasLoadingRef = useRef(false);
-  const [queuedPreview, setQueuedPreview] = useState<string | null>(null);
-  /** Human-readable list of tools the queued follow-up will carry (CMP-16). */
-  const [queuedToolsLabel, setQueuedToolsLabel] = useState<string | null>(null);
   const {
     attachments,
     previews,
@@ -565,6 +637,7 @@ const ChatComposerNewComponent = ({
   // RENDERING (absent on web), composing with the model/tier gates below.
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
   const canTakeScreenshotCap = useCapability('canTakeScreenshot');
+  const canUseCameraCap = useCapability('canUseCamera');
 
   // Image generation mode state (imageMode itself is per-conversation, above)
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
@@ -695,6 +768,26 @@ const ChatComposerNewComponent = ({
       : hasDocumentAttachments
         ? 'document'
         : 'image';
+  /**
+   * AUDIT-FIX MEDIA-VIDEO-01 (confirms VOICE-MEDIA-010): staged attachments
+   * were silently destroyed by an image/video send.
+   *
+   * `hasAttachmentConflict` above only asks whether the selected TEXT model can
+   * read the file, so it never fired in a media mode. Meanwhile the media send
+   * paths build their request from prompt + generation options only —
+   * `onGenerateImage`/`onGenerateVideo` carry no attachment field, and
+   * `ManagedMediaVideoGenerationRequestSchema` has no `source_image` — and then
+   * `clearComposerState()` wiped the file with nothing on screen saying so.
+   *
+   * Until a real reference-image contract exists end to end, the honest
+   * behaviour is to refuse the staging rather than accept and discard it:
+   * `addChatAttachments` below rejects new files while a media mode is active,
+   * and anything already staged when the mode is entered blocks the send behind
+   * the explicit banner instead of disappearing.
+   */
+  const mediaModeActive = imageMode || videoMode;
+  const mediaModeNoun = imageMode ? 'Image' : 'Video';
+  const mediaAttachmentConflict = mediaModeActive && attachments.length > 0;
   const compatibleModels = getSelectableModels().filter(
     (model) =>
       model.capabilities.vision &&
@@ -902,6 +995,20 @@ const ChatComposerNewComponent = ({
   const overflowMenuRef = useRef<HTMLDivElement>(null);
   const projectPickerRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
+  // UI-16: every remaining composer popover is portaled through
+  // AnchoredComposerMenu for the reason documented in that file — the composer
+  // sits inside overflow-hidden shell columns, so an `absolute` popover taller
+  // than the space above it is silently cut off and its rows stop taking
+  // pointer events. Each needs its own trigger to anchor from, and the project
+  // picker needs a content ref too because its outside-click test can no longer
+  // rely on DOM containment.
+  const projectPickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const projectPickerMenuRef = useRef<HTMLDivElement>(null);
+  const imageAspectTriggerRef = useRef<HTMLButtonElement>(null);
+  const imageModelTriggerRef = useRef<HTMLButtonElement>(null);
+  const videoAspectTriggerRef = useRef<HTMLButtonElement>(null);
+  const videoQualityTriggerRef = useRef<HTMLButtonElement>(null);
+  const videoModelTriggerRef = useRef<HTMLButtonElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasTypingRef = useRef(false);
@@ -1009,12 +1116,28 @@ const ChatComposerNewComponent = ({
     }
   }, [prefillText, prevPrefill, onPrefillConsumed]);
 
+  /**
+   * AUDIT-FIX MEDIA-VIDEO-01: every attachment entry point on this surface
+   * funnels through here (the + menu's file input, drag-and-drop, paste,
+   * screenshot capture and the camera dialog), so this is the one place that
+   * can refuse a file the media send paths would only throw away. Refusing out
+   * loud is the point — the previous behaviour accepted the file, showed it in
+   * the preview strip, and then destroyed it on send.
+   */
   const addChatAttachments = useCallback(
     (files: File[]) => {
+      if (files.length === 0) return;
+      if (imageMode || videoMode) {
+        const noun = imageMode ? 'Image' : 'Video';
+        setLocalNotice(
+          `${noun} generation works from your prompt only — attached files are not sent to the ${noun.toLowerCase()} model. Leave ${noun.toLowerCase()} mode first if you want to send ${files.length === 1 ? 'this file' : 'these files'} to the chat model.`,
+        );
+        return;
+      }
       setLocalNotice(null);
       addFiles(files);
     },
-    [addFiles],
+    [addFiles, imageMode, videoMode],
   );
 
   const handleFileDrop = useCallback(
@@ -1099,13 +1222,24 @@ const ChatComposerNewComponent = ({
         const file = item.getAsFile();
         if (file) pasted.push(file);
       }
-      if (pasted.length === 0) return;
-      // Only swallow the event once a real file paste was captured, so pasting
-      // text still inserts text.
+      if (pasted.length > 0) {
+        // Only swallow the event once a real file paste was captured, so pasting
+        // ordinary text still inserts text.
+        e.preventDefault();
+        addChatAttachments(pasted);
+        return;
+      }
+      // COMPOSER-002: a book-sized paste is a document, not a message. Shared
+      // threshold and naming with the desktop composer and mobile so the same
+      // clipboard produces the same attachment on every surface.
+      const asFile = largePasteToFile(e.clipboardData?.getData('text/plain') ?? '', {
+        existingFileNames: attachments.map((file) => file.name),
+      });
+      if (!asFile) return;
       e.preventDefault();
-      addChatAttachments(pasted);
+      addChatAttachments([asFile]);
     },
-    [addChatAttachments, disabled, trialExhausted],
+    [addChatAttachments, attachments, disabled, trialExhausted],
   );
 
   // Handle droppedFiles prop · same derived-state-from-props pattern as prefillText.
@@ -1160,7 +1294,10 @@ const ChatComposerNewComponent = ({
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
         setShowMentions(false);
       }
-      if (projectPickerRef.current && !projectPickerRef.current.contains(e.target as Node)) {
+      const insideProjectPicker =
+        projectPickerRef.current?.contains(target) ||
+        projectPickerMenuRef.current?.contains(target);
+      if (projectPickerRef.current && !insideProjectPicker) {
         setShowProjectPicker(false);
       }
     }
@@ -1600,6 +1737,17 @@ const ChatComposerNewComponent = ({
     // queued — it simply waits until the current turn is idle.
     if (sendImageMode) {
       if (isTurnActive) return;
+      // AUDIT-FIX MEDIA-VIDEO-01: never let this branch run with files staged —
+      // it builds its request from prompt + generation options only, so
+      // `clearComposerState()` below would destroy them. `sendImageMode` can
+      // also be turned on by a typed `/image` command at this exact point,
+      // which is why the guard lives here and not only on the render banner.
+      if (attachments.length > 0) {
+        setLocalNotice(
+          'Image generation works from your prompt only. Remove the attached files, or leave image mode to send them to the chat model.',
+        );
+        return;
+      }
       const prompt = outgoingContent.trim();
       if (!prompt) return;
       if (!onGenerateImage) {
@@ -1631,6 +1779,15 @@ const ChatComposerNewComponent = ({
     // of the streaming turn and is not queued.
     if (videoMode) {
       if (isTurnActive) return;
+      // AUDIT-FIX MEDIA-VIDEO-01: same contract as image above. The video
+      // request schema has no reference-image field at all, so an attachment
+      // here has nowhere to go and must not be swallowed by the send.
+      if (attachments.length > 0) {
+        setLocalNotice(
+          'Video generation works from your prompt only. Remove the attached files, or leave video mode to send them to the chat model.',
+        );
+        return;
+      }
       const prompt = outgoingContent.trim();
       if (!prompt) return;
       if (!onGenerateVideo) {
@@ -1710,11 +1867,24 @@ const ChatComposerNewComponent = ({
       // AUDIT-FIX STR-8/BUG-15: capture the TARGET conversation alongside the
       // arguments so the flush can prove it is still delivering to the chat the
       // message was written for.
-      pendingQueueRef.current = { conversationId, args: sendArgs };
-      setQueuedPreview(outgoingContent.trim() || 'Attachment');
-      // AUDIT-FIX CMP-16: publish the queued turn's tools immediately; the sync
-      // effect above only fires on a subsequent toggle change.
-      setQueuedToolsLabel(activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null);
+      const editingId = editingQueuedIdRef.current;
+      editingQueuedIdRef.current = null;
+      const queued: QueuedFollowUp = {
+        id: editingId ?? globalThis.crypto.randomUUID(),
+        conversationId: conversationId ?? null,
+        args: sendArgs,
+        preview: outgoingContent.trim() || 'Attachment',
+        // AUDIT-FIX CMP-16: publish the queued turn's tools immediately; the sync
+        // effect above only fires on a subsequent toggle change.
+        toolsLabel: activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null,
+      };
+      setQueuedFollowUps((current) => {
+        const index = editingId ? current.findIndex((item) => item.id === editingId) : -1;
+        if (index === -1) return [...current, queued];
+        const next = [...current];
+        next[index] = queued;
+        return next;
+      });
       clearComposerState();
       return;
     }
@@ -1800,14 +1970,19 @@ const ChatComposerNewComponent = ({
   // run against the draft the parking effect has already written, not before it.
   useEffect(() => {
     if (wasLoadingRef.current && !isTurnActive) {
-      const pending = pendingQueueRef.current;
-      if (pending) {
-        pendingQueueRef.current = null;
-        setQueuedPreview(null);
-        setQueuedToolsLabel(null);
-        if (pending.conversationId === conversationId) {
-          onSend(...pending.args);
-        } else {
+      const queue = queuedFollowUpsRef.current;
+      // Exactly one message is released per finished turn — the rest stay
+      // queued for the next edge — so the client still never fires two
+      // concurrent turns at one conversation.
+      const deliverable = queue.filter((item) => item.conversationId === (conversationId ?? null));
+      const stranded = queue.filter((item) => item.conversationId !== (conversationId ?? null));
+      const next = deliverable[0];
+      const remaining = deliverable.slice(1);
+      setQueuedFollowUps(remaining);
+      queuedFollowUpsRef.current = remaining;
+      if (next) onSend(...next.args);
+      for (const pending of stranded) {
+        {
           // AUDIT-FIX STR-8/BUG-15: this edge was produced by navigating away,
           // not by the queued turn finishing. Sending now would deliver a
           // message composed for another chat into the one on screen. Park the
@@ -1845,11 +2020,31 @@ const ChatComposerNewComponent = ({
     wasLoadingRef.current = isTurnActive;
   }, [isTurnActive, onSend, conversationId, setDraftContent]);
 
-  const cancelQueuedMessage = useCallback(() => {
-    pendingQueueRef.current = null;
-    setQueuedPreview(null);
-    setQueuedToolsLabel(null);
+  const cancelQueuedMessage = useCallback((id: string) => {
+    if (editingQueuedIdRef.current === id) editingQueuedIdRef.current = null;
+    setQueuedFollowUps((current) => current.filter((item) => item.id !== id));
   }, []);
+
+  /**
+   * Pull a queued message back into the composer to change it. The slot is kept
+   * (`editingQueuedIdRef`) so re-sending replaces it in place rather than
+   * shuffling it to the back of the queue, and the attachments come back with
+   * the text — dropping them would be the same silent data loss this row fixes.
+   */
+  const editQueuedMessage = useCallback(
+    (id: string) => {
+      const target = queuedFollowUpsRef.current.find((item) => item.id === id);
+      if (!target) return;
+      editingQueuedIdRef.current = id;
+      setMessage(target.args[0]);
+      const attachmentsToRestore = target.args[1];
+      if (attachmentsToRestore && attachmentsToRestore.length > 0) {
+        addChatAttachments([...attachmentsToRestore]);
+      }
+      textareaRef.current?.focus();
+    },
+    [addChatAttachments],
+  );
 
   /**
    * AUDIT-FIX CMP-16: a queued follow-up is now a first-class message.
@@ -1863,7 +2058,11 @@ const ChatComposerNewComponent = ({
    * different conversation) and publishes the resulting tool list.
    */
   useEffect(() => {
-    const pending = pendingQueueRef.current;
+    // Only the most recently queued message follows the visible toggles: those
+    // controls describe what the composer would send NOW, and rewriting an
+    // older queued message's options from them would silently change a choice
+    // the user already made for it.
+    const pending = queuedFollowUpsRef.current.at(-1);
     if (!pending) return;
     const meta = pending.args[3];
     if (!meta) return;
@@ -1878,7 +2077,10 @@ const ChatComposerNewComponent = ({
         thinkingEnabled && (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
       styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
     };
-    setQueuedToolsLabel(activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null);
+    const toolsLabel = activeToolLabels.length > 0 ? activeToolLabels.join(' · ') : null;
+    setQueuedFollowUps((current) =>
+      current.map((item, index) => (index === current.length - 1 ? { ...item, toolsLabel } : item)),
+    );
   }, [
     activeToolLabels,
     canUseAgiWork,
@@ -1994,30 +2196,46 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {queuedPreview && (
-        <div
-          className="mb-2 flex items-center gap-2 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
-          data-testid="queued-followup"
-        >
-          <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate">
-            Queued · sends when the current response finishes: {queuedPreview}
-            {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry —
-                they are editable while it waits (the "+" menu stays open during
-                streaming), so the user can see and change them. */}
-            {queuedToolsLabel && (
-              <span className="ml-1 text-[var(--chat-text-muted)]">· {queuedToolsLabel}</span>
-            )}
-          </span>
-          <button
-            type="button"
-            onClick={cancelQueuedMessage}
-            className="shrink-0 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Cancel queued message"
-          >
-            Cancel
-          </button>
-        </div>
+      {queuedFollowUps.length > 0 && (
+        <ul aria-label="Queued messages" className="mb-2 flex flex-col gap-1.5">
+          {queuedFollowUps.map((queued, index) => (
+            <li
+              key={queued.id}
+              className="flex items-center gap-2 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
+              data-testid="queued-followup"
+            >
+              <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1 truncate">
+                {index === 0
+                  ? 'Queued · sends when the current response finishes: '
+                  : `Queued ${index + 1} of ${queuedFollowUps.length}: `}
+                {queued.preview}
+                {/* AUDIT-FIX CMP-16: say which toggles the queued turn will carry —
+                    they are editable while it waits (the "+" menu stays open during
+                    streaming), so the user can see and change them. */}
+                {queued.toolsLabel && (
+                  <span className="ml-1 text-[var(--chat-text-muted)]">· {queued.toolsLabel}</span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => editQueuedMessage(queued.id)}
+                className="shrink-0 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={`Edit queued message: ${queued.preview}`}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => cancelQueuedMessage(queued.id)}
+                className="shrink-0 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={`Cancel queued message: ${queued.preview}`}
+              >
+                Cancel
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
 
       {trialExhausted && (
@@ -2080,6 +2298,42 @@ const ChatComposerNewComponent = ({
         className="mb-2"
         privacyShortLabel={attachmentPrivacyShortLabel}
       />
+
+      {/* AUDIT-FIX MEDIA-VIDEO-01: files that were staged BEFORE the user
+          entered image/video mode (the + menu switches mode without touching
+          the attachment list). The send is blocked rather than silently
+          dropping them; both ways out are one click. */}
+      {mediaAttachmentConflict && (
+        <div
+          role="alert"
+          className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+          data-testid="media-attachment-conflict"
+        >
+          <p className="text-foreground">
+            {attachments.length === 1 ? 'The attached file is' : 'The attached files are'} not used
+            here: {mediaModeNoun.toLowerCase()} generation works from your prompt only.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={clearAttachments}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+            >
+              {attachments.length === 1 ? 'Remove attachment' : 'Remove attachments'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (imageMode) setImageMode(false);
+                else setVideoMode(false);
+              }}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
+            >
+              Leave {mediaModeNoun.toLowerCase()} mode
+            </button>
+          </div>
+        </div>
+      )}
 
       {hasAttachmentConflict && (
         <div
@@ -2189,47 +2443,47 @@ const ChatComposerNewComponent = ({
         )}
 
         {/* @Mention Dropdown */}
-        {showMentions && (
-          <div
-            ref={mentionsRef}
-            className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl"
-          >
-            <div className="p-1.5">
-              <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Skills
-              </div>
-              {skillsLoading ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground">Loading skills…</p>
-              ) : skillsError ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground">
-                  Skills are temporarily unavailable.
-                </p>
-              ) : filteredSkills.length === 0 ? (
-                <p className="px-3 py-2 text-xs text-muted-foreground">No matching skills.</p>
-              ) : (
-                filteredSkills.map((skill) => (
-                  <button
-                    key={skill.name}
-                    onClick={() => handleMentionSelect(skill)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60"
-                  >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <span className="text-[10px] font-bold">
-                        {skill.name.substring(0, 2).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{skill.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {skill.description}
-                      </div>
-                    </div>
-                  </button>
-                ))
-              )}
+        <AnchoredComposerMenu
+          anchorRef={textareaRef}
+          open={showMentions}
+          contentRef={mentionsRef}
+          className="w-72"
+        >
+          <div className="p-1.5">
+            <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Skills
             </div>
+            {skillsLoading ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">Loading skills…</p>
+            ) : skillsError ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                Skills are temporarily unavailable.
+              </p>
+            ) : filteredSkills.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-muted-foreground">No matching skills.</p>
+            ) : (
+              filteredSkills.map((skill) => (
+                <button
+                  key={skill.name}
+                  onClick={() => handleMentionSelect(skill)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                >
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <span className="text-[10px] font-bold">
+                      {skill.name.substring(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{skill.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {skill.description}
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
-        )}
+        </AnchoredComposerMenu>
 
         <div
           className={cn(
@@ -2262,7 +2516,12 @@ const ChatComposerNewComponent = ({
                     ? 'Describe or edit an image'
                     : videoMode
                       ? 'Describe the video you want'
-                      : placeholder
+                      : // AUDIT-FIX shell-nav-ia-gap-03: the work-mode axis now
+                        // reaches the input itself. Gated on `canUseAgiWork` for
+                        // the same reason the send does (`workMode: canUseAgiWork
+                        // ? workMode : 'chat'`) — a stale toggle on a downgraded
+                        // plan must not promise a mode the send will not use.
+                        ((canUseAgiWork ? WORK_MODE_PLACEHOLDERS[workMode] : null) ?? placeholder)
               }
               // Type-ahead: the textarea stays enabled while a turn streams so the
               // user can compose a follow-up (queued + auto-sent on completion).
@@ -2391,6 +2650,9 @@ const ChatComposerNewComponent = ({
                                 onClick={() => handleWorkModeChange(mode)}
                                 disabled={isTurnActive || composerDisabled}
                                 aria-pressed={workMode === mode}
+                                aria-describedby={
+                                  mode === 'agiwork' ? AGI_WORK_MATURITY_MENU_ID : undefined
+                                }
                                 title={WORK_MODE_TITLES[mode]}
                                 className={cn(
                                   'flex h-7 items-center rounded-full px-3 transition-colors',
@@ -2401,26 +2663,55 @@ const ChatComposerNewComponent = ({
                                     'cursor-not-allowed opacity-50',
                                 )}
                               >
-                                {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                                {mode === 'chat' ? (
+                                  'Chat'
+                                ) : (
+                                  <>
+                                    AGI Work
+                                    <AgiWorkMaturityBadge />
+                                  </>
+                                )}
                               </button>
                             ))}
+                            <AgiWorkMaturityDescription id={AGI_WORK_MATURITY_MENU_ID} />
                           </div>
                         </div>
                         <div className="my-1 border-t border-border/40" />
                       </div>
                     )}
 
-                    {/* 1. Add photos and files */}
+                    {/* 1. Add photos and files.
+
+                        AUDIT-FIX MEDIA-VIDEO-01: this row was available
+                        unconditionally in image/video mode, where the send path
+                        cannot carry an attachment and `clearComposerState()`
+                        destroyed it. Disabled with the reason on the row rather
+                        than hidden, so the affordance does not vanish without
+                        explanation the moment a media mode is entered. */}
                     <button
                       type="button"
                       onClick={() => {
                         fileInputRef.current?.click();
                         closeMenu();
                       }}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                      disabled={mediaModeActive}
+                      title={
+                        mediaModeActive
+                          ? `${mediaModeNoun} generation works from your prompt only. Leave ${mediaModeNoun.toLowerCase()} mode to attach files.`
+                          : undefined
+                      }
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                        mediaModeActive ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/60',
+                      )}
                     >
                       <Paperclip className="h-4 w-4 text-muted-foreground" />
                       <span className="flex-1 text-left">Add photos &amp; files</span>
+                      {mediaModeActive && (
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Not used here
+                        </span>
+                      )}
                     </button>
 
                     {hostCanGenerateImage && (
@@ -2630,24 +2921,24 @@ const ChatComposerNewComponent = ({
                       </button>
                     )}
 
-                    {/* Take a photo — webcam capture. Unlike the screenshot
-                        item above this is NOT desktop-gated: `getUserMedia` is
-                        available in every browser this app supports, and the
-                        camera is the one attachment source a laptop and a phone
-                        both have. The dialog owns the permission prompt and the
-                        preview; nothing is captured until the shutter is
-                        pressed. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowOverflowMenu(false);
-                        setCameraOpen(true);
-                      }}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                    >
-                      <Camera className="h-4 w-4" />
-                      <span className="flex-1 text-left">Take a photo</span>
-                    </button>
+                    {/* Take a photo — webcam capture, gated on the shared
+                        `canUseCamera` flag so the matrix stays load-bearing
+                        rather than decorative. The dialog owns the permission
+                        prompt and the preview; nothing is captured until the
+                        shutter is pressed. */}
+                    {canUseCameraCap && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowOverflowMenu(false);
+                          setCameraOpen(true);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                      >
+                        <Camera className="h-4 w-4" />
+                        <span className="flex-1 text-left">Take a photo</span>
+                      </button>
+                    )}
 
                     {/* 4. Select working folder — desktop-only capability (local
                         File System Access). Render-gated: ABSENT on web/mobile.
@@ -2908,6 +3199,7 @@ const ChatComposerNewComponent = ({
                     onClick={() => handleWorkModeChange(mode)}
                     disabled={isTurnActive || composerDisabled}
                     aria-pressed={workMode === mode}
+                    aria-describedby={mode === 'agiwork' ? AGI_WORK_MATURITY_INLINE_ID : undefined}
                     title={WORK_MODE_TITLES[mode]}
                     className={cn(
                       'flex h-7 items-center rounded-full px-3 transition-colors',
@@ -2917,9 +3209,17 @@ const ChatComposerNewComponent = ({
                       (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                     )}
                   >
-                    {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                    {mode === 'chat' ? (
+                      'Chat'
+                    ) : (
+                      <>
+                        AGI Work
+                        <AgiWorkMaturityBadge />
+                      </>
+                    )}
                   </button>
                 ))}
+                <AgiWorkMaturityDescription id={AGI_WORK_MATURITY_INLINE_ID} />
               </div>
             )}
 
@@ -2946,6 +3246,7 @@ const ChatComposerNewComponent = ({
                 {/* Aspect ratio selector */}
                 <div className="relative">
                   <button
+                    ref={imageAspectTriggerRef}
                     type="button"
                     onClick={() => {
                       setShowImageAspectMenu((p) => !p);
@@ -2958,31 +3259,33 @@ const ChatComposerNewComponent = ({
                       ?.label ?? 'Auto'}
                     <ChevronDown className="h-3 w-3" />
                   </button>
-                  {showImageAspectMenu && (
-                    <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                      {imageAspectOptions.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => {
-                            setImageAspectRatio(opt.id);
-                            setShowImageAspectMenu(false);
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                            effectiveImageAspectRatio === opt.id
-                              ? 'bg-primary/10 text-primary'
-                              : 'hover:bg-muted/60',
-                          )}
-                        >
-                          <span className="flex-1 text-left">{opt.label}</span>
-                          {effectiveImageAspectRatio === opt.id && (
-                            <Check className="h-3 w-3 shrink-0 text-primary" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <AnchoredComposerMenu
+                    anchorRef={imageAspectTriggerRef}
+                    open={showImageAspectMenu}
+                    className="w-44 p-1"
+                  >
+                    {imageAspectOptions.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setImageAspectRatio(opt.id);
+                          setShowImageAspectMenu(false);
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                          effectiveImageAspectRatio === opt.id
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted/60',
+                        )}
+                      >
+                        <span className="flex-1 text-left">{opt.label}</span>
+                        {effectiveImageAspectRatio === opt.id && (
+                          <Check className="h-3 w-3 shrink-0 text-primary" />
+                        )}
+                      </button>
+                    ))}
+                  </AnchoredComposerMenu>
                 </div>
               </div>
             )}
@@ -3017,6 +3320,7 @@ const ChatComposerNewComponent = ({
                 {videoAspectOptions.length > 1 && (
                   <div className="relative">
                     <button
+                      ref={videoAspectTriggerRef}
                       type="button"
                       onClick={() => {
                         setShowVideoAspectMenu((p) => !p);
@@ -3029,31 +3333,33 @@ const ChatComposerNewComponent = ({
                       {effectiveVideoAspectRatio}
                       <ChevronDown className="h-3 w-3" />
                     </button>
-                    {showVideoAspectMenu && (
-                      <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                        {videoAspectOptions.map((opt) => (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => {
-                              setVideoAspectRatio(opt.id);
-                              setShowVideoAspectMenu(false);
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                              effectiveVideoAspectRatio === opt.id
-                                ? 'bg-primary/10 text-primary'
-                                : 'hover:bg-muted/60',
-                            )}
-                          >
-                            <span className="flex-1 text-left">{opt.label}</span>
-                            {effectiveVideoAspectRatio === opt.id && (
-                              <Check className="h-3 w-3 shrink-0 text-primary" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <AnchoredComposerMenu
+                      anchorRef={videoAspectTriggerRef}
+                      open={showVideoAspectMenu}
+                      className="w-44 p-1"
+                    >
+                      {videoAspectOptions.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setVideoAspectRatio(opt.id);
+                            setShowVideoAspectMenu(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                            effectiveVideoAspectRatio === opt.id
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-muted/60',
+                          )}
+                        >
+                          <span className="flex-1 text-left">{opt.label}</span>
+                          {effectiveVideoAspectRatio === opt.id && (
+                            <Check className="h-3 w-3 shrink-0 text-primary" />
+                          )}
+                        </button>
+                      ))}
+                    </AnchoredComposerMenu>
                   </div>
                 )}
 
@@ -3064,6 +3370,7 @@ const ChatComposerNewComponent = ({
                 {videoQualityOptions.length > 1 && (
                   <div className="relative">
                     <button
+                      ref={videoQualityTriggerRef}
                       type="button"
                       onClick={() => {
                         setShowVideoQualityMenu((p) => !p);
@@ -3077,36 +3384,38 @@ const ChatComposerNewComponent = ({
                         effectiveVideoResolution}
                       <ChevronDown className="h-3 w-3" />
                     </button>
-                    {showVideoQualityMenu && (
-                      <div className="absolute bottom-full left-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                        {videoQualityOptions.map((opt) => (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => {
-                              setVideoResolution(opt.id);
-                              setShowVideoQualityMenu(false);
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                              effectiveVideoResolution === opt.id
-                                ? 'bg-primary/10 text-primary'
-                                : 'hover:bg-muted/60',
-                            )}
-                          >
-                            <span className="flex-1 text-left">{opt.label}</span>
-                            {opt.durationSecs && (
-                              <span className="shrink-0 text-[10px] text-muted-foreground">
-                                {opt.durationSecs.join('/')}s only
-                              </span>
-                            )}
-                            {effectiveVideoResolution === opt.id && (
-                              <Check className="h-3 w-3 shrink-0 text-primary" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <AnchoredComposerMenu
+                      anchorRef={videoQualityTriggerRef}
+                      open={showVideoQualityMenu}
+                      className="w-52 p-1"
+                    >
+                      {videoQualityOptions.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setVideoResolution(opt.id);
+                            setShowVideoQualityMenu(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                            effectiveVideoResolution === opt.id
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-muted/60',
+                          )}
+                        >
+                          <span className="flex-1 text-left">{opt.label}</span>
+                          {opt.durationSecs && (
+                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                              {opt.durationSecs.join('/')}s only
+                            </span>
+                          )}
+                          {effectiveVideoResolution === opt.id && (
+                            <Check className="h-3 w-3 shrink-0 text-primary" />
+                          )}
+                        </button>
+                      ))}
+                    </AnchoredComposerMenu>
                   </div>
                 )}
               </div>
@@ -3143,6 +3452,7 @@ const ChatComposerNewComponent = ({
             {imageMode && (
               <div className="relative ml-auto shrink-0">
                 <button
+                  ref={imageModelTriggerRef}
                   type="button"
                   onClick={() => {
                     setShowImageModelMenu((p) => !p);
@@ -3163,48 +3473,47 @@ const ChatComposerNewComponent = ({
                   </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
-                {showImageModelMenu && (
-                  <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                    {availableImageModels.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          setImageModelId(m.id);
-                          if (!isImageAspectRatioSupported(m.id, imageAspectRatio)) {
-                            setImageAspectRatio('auto');
-                          }
-                          setShowImageModelMenu(false);
-                        }}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                          imageModelId === m.id
-                            ? 'bg-primary/10 text-primary'
-                            : 'hover:bg-muted/60',
-                        )}
-                      >
-                        <span className="flex-1 text-left">{m.label}</span>
-                        {imageModelId === m.id && (
-                          <Check className="h-3 w-3 shrink-0 text-primary" />
-                        )}
-                      </button>
-                    ))}
-                    {mediaAvailabilityStatus === 'error' && (
-                      <button
-                        type="button"
-                        onClick={retryMediaAvailability}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                      >
-                        Retry model availability
-                      </button>
-                    )}
-                    {mediaAvailabilityStatus === 'ready' && availableImageModels.length === 0 && (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">
-                        This deployment is not ready for image generation.
-                      </p>
-                    )}
-                  </div>
-                )}
+                <AnchoredComposerMenu
+                  anchorRef={imageModelTriggerRef}
+                  open={showImageModelMenu}
+                  align="end"
+                  className="w-52 p-1"
+                >
+                  {availableImageModels.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setImageModelId(m.id);
+                        if (!isImageAspectRatioSupported(m.id, imageAspectRatio)) {
+                          setImageAspectRatio('auto');
+                        }
+                        setShowImageModelMenu(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                        imageModelId === m.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <span className="flex-1 text-left">{m.label}</span>
+                      {imageModelId === m.id && <Check className="h-3 w-3 shrink-0 text-primary" />}
+                    </button>
+                  ))}
+                  {mediaAvailabilityStatus === 'error' && (
+                    <button
+                      type="button"
+                      onClick={retryMediaAvailability}
+                      className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    >
+                      Retry model availability
+                    </button>
+                  )}
+                  {mediaAvailabilityStatus === 'ready' && availableImageModels.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      This deployment is not ready for image generation.
+                    </p>
+                  )}
+                </AnchoredComposerMenu>
               </div>
             )}
 
@@ -3217,6 +3526,7 @@ const ChatComposerNewComponent = ({
             {videoMode && (
               <div className="relative ml-auto shrink-0">
                 <button
+                  ref={videoModelTriggerRef}
                   type="button"
                   onClick={() => setShowVideoModelMenu((p) => !p)}
                   className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
@@ -3233,45 +3543,44 @@ const ChatComposerNewComponent = ({
                   </span>
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
-                {showVideoModelMenu && (
-                  <div className="absolute bottom-full right-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
-                    {availableVideoModels.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          setVideoModelId(m.id);
-                          setShowVideoModelMenu(false);
-                        }}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                          videoModelId === m.id
-                            ? 'bg-primary/10 text-primary'
-                            : 'hover:bg-muted/60',
-                        )}
-                      >
-                        <span className="flex-1 text-left">{m.label}</span>
-                        {videoModelId === m.id && (
-                          <Check className="h-3 w-3 shrink-0 text-primary" />
-                        )}
-                      </button>
-                    ))}
-                    {mediaAvailabilityStatus === 'error' && (
-                      <button
-                        type="button"
-                        onClick={retryMediaAvailability}
-                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                      >
-                        Retry model availability
-                      </button>
-                    )}
-                    {mediaAvailabilityStatus === 'ready' && availableVideoModels.length === 0 && (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">
-                        This deployment is not ready for video generation.
-                      </p>
-                    )}
-                  </div>
-                )}
+                <AnchoredComposerMenu
+                  anchorRef={videoModelTriggerRef}
+                  open={showVideoModelMenu}
+                  align="end"
+                  className="w-52 p-1"
+                >
+                  {availableVideoModels.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setVideoModelId(m.id);
+                        setShowVideoModelMenu(false);
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                        videoModelId === m.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
+                      )}
+                    >
+                      <span className="flex-1 text-left">{m.label}</span>
+                      {videoModelId === m.id && <Check className="h-3 w-3 shrink-0 text-primary" />}
+                    </button>
+                  ))}
+                  {mediaAvailabilityStatus === 'error' && (
+                    <button
+                      type="button"
+                      onClick={retryMediaAvailability}
+                      className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    >
+                      Retry model availability
+                    </button>
+                  )}
+                  {mediaAvailabilityStatus === 'ready' && availableVideoModels.length === 0 && (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      This deployment is not ready for video generation.
+                    </p>
+                  )}
+                </AnchoredComposerMenu>
               </div>
             )}
 
@@ -3299,7 +3608,9 @@ const ChatComposerNewComponent = ({
               disabled={
                 composerDisabled ||
                 (sendButtonMode !== 'stop' &&
-                  (hasAttachmentConflict || selectedMediaModelUnavailable))
+                  (hasAttachmentConflict ||
+                    mediaAttachmentConflict ||
+                    selectedMediaModelUnavailable))
               }
               onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
               className="shrink-0"
@@ -3338,6 +3649,7 @@ const ChatComposerNewComponent = ({
             )}
           >
             <button
+              ref={projectPickerTriggerRef}
               type="button"
               onClick={() => {
                 setShowProjectPicker((prev) => !prev);
@@ -3373,88 +3685,89 @@ const ChatComposerNewComponent = ({
             )}
           </div>
 
-          {showProjectPicker && (
-            <div className="absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-              <input
-                type="text"
-                value={projectQuery}
-                onChange={(e) => setProjectQuery(e.target.value)}
-                placeholder="Search projects..."
-                aria-label="Search projects"
-                autoFocus
-                className="mb-1.5 w-full rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
-              />
-              <div className="max-h-56 overflow-y-auto">
-                {filteredPickerProjects.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    {projectPicker.projects.length === 0 ? 'No projects yet' : 'No projects found'}
-                  </div>
-                )}
-                {filteredPickerProjects.map((project) => (
-                  <button
-                    key={project.id}
-                    type="button"
-                    onClick={() => handlePickProject(project.id)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-left">{project.name}</span>
-                    {projectPicker.activeProjectId === project.id && (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-foreground" />
-                    )}
-                  </button>
-                ))}
-              </div>
+          <AnchoredComposerMenu
+            anchorRef={projectPickerTriggerRef}
+            open={showProjectPicker}
+            contentRef={projectPickerMenuRef}
+            className="w-72 p-1.5"
+          >
+            <input
+              type="text"
+              value={projectQuery}
+              onChange={(e) => setProjectQuery(e.target.value)}
+              placeholder="Search projects..."
+              aria-label="Search projects"
+              autoFocus
+              className="mb-1.5 w-full rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
+            />
+            <div className="max-h-56 overflow-y-auto">
+              {filteredPickerProjects.length === 0 && (
+                <div className="px-3 py-2 text-sm text-muted-foreground">
+                  {projectPicker.projects.length === 0 ? 'No projects yet' : 'No projects found'}
+                </div>
+              )}
+              {filteredPickerProjects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => handlePickProject(project.id)}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                >
+                  <span className="min-w-0 flex-1 truncate text-left">{project.name}</span>
+                  {projectPicker.activeProjectId === project.id && (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-foreground" />
+                  )}
+                </button>
+              ))}
+            </div>
 
-              <div className="my-1 border-t border-border/30" />
+            <div className="my-1 border-t border-border/30" />
 
-              {/* Local folder — working-directory surfaces (desktop) only.
+            {/* Local folder — working-directory surfaces (desktop) only.
                 Render-gated by the capability matrix so web never shows a
                 folder option; canPickFolder only disables when the desktop
                 browser shell lacks the File System Access API. */}
-              {canUseAgiWork && canUseWorkingDirectory && (
-                <button
-                  type="button"
-                  disabled={!canPickFolder}
-                  onClick={handlePickFolderFromPicker}
-                  title={
-                    canPickFolder ? undefined : 'Folder access is not supported in this browser'
-                  }
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                    !canPickFolder && 'cursor-not-allowed opacity-50',
-                  )}
-                >
-                  <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 text-left">Choose a different folder</span>
-                </button>
-              )}
-
+            {canUseAgiWork && canUseWorkingDirectory && (
               <button
                 type="button"
-                onClick={() => {
-                  closeProjectPicker();
-                  projectPicker.onCreateProject();
-                }}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                disabled={!canPickFolder}
+                onClick={handlePickFolderFromPicker}
+                title={canPickFolder ? undefined : 'Folder access is not supported in this browser'}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                  !canPickFolder && 'cursor-not-allowed opacity-50',
+                )}
               >
-                <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="flex-1 text-left">Create new project</span>
+                <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="flex-1 text-left">Choose a different folder</span>
               </button>
+            )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  closeProjectPicker();
-                  router.push('/chat/projects');
-                }}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-              >
-                <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="flex-1 text-left">View all projects</span>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={() => {
+                closeProjectPicker();
+                projectPicker.onCreateProject();
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+            >
+              <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1 text-left">Create new project</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                closeProjectPicker();
+                router.push('/chat/projects');
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+            >
+              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1 text-left">View all projects</span>
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          </AnchoredComposerMenu>
         </div>
       )}
 
@@ -3530,6 +3843,28 @@ const ChatComposerNewComponent = ({
           remains visible before send and expands to the complete payload/tool
           explanation only when requested. */}
       <div className="mt-2 flex min-h-5 flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-[11px] text-muted-foreground">
+        {/* Standing web-search indicator. Search is ambient by design (the manual
+            toggle was removed), which left nothing on screen saying whether the
+            current turn can search — `webSearchEnabled` reached the user only
+            through the transient queued-follow-up chip and the collapsed send
+            preview. It is derived, not a control, so it is text and not a
+            button. */}
+        {billingPolicyReady ? (
+          <>
+            <span
+              data-testid="web-search-indicator"
+              data-active={webSearchEnabled ? 'true' : 'false'}
+              title={
+                webSearchEnabled
+                  ? 'This model can search the web when the question needs current information.'
+                  : 'This model has no web-search path, so this turn answers from its training data.'
+              }
+            >
+              {webSearchEnabled ? 'Web search on' : 'Web search off'}
+            </span>
+            <span aria-hidden="true">·</span>
+          </>
+        ) : null}
         {sendPreviewPresentation ? (
           <>
             <SendPreview presentation={sendPreviewPresentation} variant="compact" />

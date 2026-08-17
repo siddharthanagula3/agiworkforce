@@ -4,6 +4,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
 import { MessageBubble, StreamingThinkingStatus } from './MessageBubble';
 import { ProvenanceFooter } from './ProvenanceFooter';
+import { ResearchStatusChip, readMessageResearchStatus } from './ResearchStatusChip';
 import {
   isMessageContinuable,
   hasStreamError,
@@ -134,30 +135,37 @@ export function MessageList({
           vertical rhythm via per-row py-3, and every row's content centred in a
           readable max-w-3xl column that lines up with the composer. */}
       <div ref={scrollerRef} className="h-full overflow-y-auto py-2">
-        {messages.map((msg) => (
-          <div key={msg.id} data-message-row={msg.role} className="px-4 py-3">
-            <div className="mx-auto w-full max-w-3xl">
-              <div
-                className={msg.role === 'user' ? 'flex justify-end' : 'flex flex-col items-stretch'}
-              >
-                <MessageBubble
-                  message={msg}
-                  artifactProjection={artifactProjections?.get(msg.id) ?? null}
-                  onArtifactClick={onArtifactClick}
-                  onRetry={onRegenerateMessage}
-                  onToolApprove={onToolApprove}
-                  onToolReject={onToolReject}
-                  approvalTurnExpired={approvalTurnExpired}
-                  onResendApproval={onRegenerateMessage}
-                  onEdit={onEditMessage}
-                />
-                {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (
-                  <ProvenanceFooter message={msg} onPinModel={handlePinModel} />
-                )}
+        {messages.map((msg) => {
+          const research =
+            msg.role === 'assistant' ? readMessageResearchStatus(msg.metadata) : null;
+          return (
+            <div key={msg.id} data-message-row={msg.role} className="px-4 py-3">
+              <div className="mx-auto w-full max-w-3xl">
+                <div
+                  className={
+                    msg.role === 'user' ? 'flex justify-end' : 'flex flex-col items-stretch'
+                  }
+                >
+                  {research && <ResearchStatusChip status={research} />}
+                  <MessageBubble
+                    message={msg}
+                    artifactProjection={artifactProjections?.get(msg.id) ?? null}
+                    onArtifactClick={onArtifactClick}
+                    onRetry={onRegenerateMessage}
+                    onToolApprove={onToolApprove}
+                    onToolReject={onToolReject}
+                    approvalTurnExpired={approvalTurnExpired}
+                    onResendApproval={onRegenerateMessage}
+                    onEdit={onEditMessage}
+                  />
+                  {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (
+                    <ProvenanceFooter message={msg} onPinModel={handlePinModel} />
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {showDetachedThinkingStatus ? (
           <div className="px-4 py-3" data-message-row="assistant-status">
             <div className="mx-auto w-full max-w-3xl">
