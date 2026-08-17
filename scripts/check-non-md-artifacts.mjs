@@ -107,6 +107,8 @@ const allowedLiveNonMarkdownPrefixes = [
   'docs/spec/artifacts/',
   'audit/desktop-ui-computer-use/screenshots/',
   'audit/demo-readiness/screenshots/',
+  'audit/parity-2026-08-15/',
+  'audit/competitive-gap-2026-08-15/',
   'reports/generated/',
 ];
 const allowedLiveNonMarkdownFiles = new Set([
