@@ -200,14 +200,6 @@
       "reason": "WIRE: Writes a per-project coding style. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
-      "command": "scheduler_get_history",
-      "reason": "WIRE: Returns a job’s past runs. The mounted apps/desktop/src/stores/schedulerStore.ts already invokes nine scheduler_* commands; job history and job detail are the missing pair, so wire them there. Note: the file that used to invoke them, apps/desktop/src/hooks/useScheduler.ts, has been removed, which leaves the command with no frontend caller at all - check-wiring.sh reports it as ORPHAN, not UNREACHABLE, until it is wired or deleted."
-    },
-    {
-      "command": "scheduler_get_job",
-      "reason": "WIRE: Returns one scheduled job. The mounted apps/desktop/src/stores/schedulerStore.ts already invokes nine scheduler_* commands; job history and job detail are the missing pair, so wire them there. Note: the file that used to invoke them, apps/desktop/src/hooks/useScheduler.ts, has been removed, which leaves the command with no frontend caller at all - check-wiring.sh reports it as ORPHAN, not UNREACHABLE, until it is wired or deleted."
-    },
-    {
       "command": "task_cancel",
       "reason": "DELETE: Cancels a task in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
     },
