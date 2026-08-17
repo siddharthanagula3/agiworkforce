@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyRound, ShieldAlert } from 'lucide-react';
 import { realtime, type PairRequestPrompt } from '@agiworkforce/desktop-command-client';
 import { listen, type UnlistenFn } from '@agiworkforce/client-runtime';
@@ -40,14 +40,24 @@ export function BridgePairRequests({
 
   const effectiveFetcher = fetcher ?? realtime.bridgePendingPairRequests;
   const effectiveDeny = deny ?? realtime.bridgeDenyPairRequest;
-  const effectiveSubscribe =
-    subscribe ??
-    ((handler: (prompt: PairRequestPrompt) => void) =>
-      listen<PairRequestPrompt>(realtime.BRIDGE_PAIR_REQUEST_EVENT, handler));
-  const effectiveSubscribeConfirmed =
-    subscribeConfirmed ??
-    ((handler: (requestId: string) => void) =>
-      listen<string>(realtime.BRIDGE_PAIR_REQUEST_CONFIRMED_EVENT, handler));
+  // Memoized because the subscribe effect below depends on both. A fresh
+  // arrow every render tore down and re-established the pairing listeners on
+  // every render, so a prompt arriving mid-render could land on a listener
+  // that was already gone.
+  const effectiveSubscribe = useMemo(
+    () =>
+      subscribe ??
+      ((handler: (prompt: PairRequestPrompt) => void) =>
+        listen<PairRequestPrompt>(realtime.BRIDGE_PAIR_REQUEST_EVENT, handler)),
+    [subscribe],
+  );
+  const effectiveSubscribeConfirmed = useMemo(
+    () =>
+      subscribeConfirmed ??
+      ((handler: (requestId: string) => void) =>
+        listen<string>(realtime.BRIDGE_PAIR_REQUEST_CONFIRMED_EVENT, handler)),
+    [subscribeConfirmed],
+  );
 
   const track = useCallback((prompt: PairRequestPrompt) => {
     if (!mountedRef.current) return;
