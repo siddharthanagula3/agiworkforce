@@ -289,7 +289,7 @@ export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Dat
   return nextCronOccurrence(expression, timing.timezone, searchAfter);
 }
 
-export const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 
 const CADENCE_SAMPLE_OCCURRENCES = 8;
 
@@ -328,6 +328,12 @@ function tightestCronGapMs(expression: string, timezone: string, from: Date): nu
 
 export function describeSweepCadence(): { cadence: string; minimum: string } {
   const hours = SWEEP_INTERVAL_MS / (60 * 60 * 1000);
+  if (hours < 1) {
+    const minutes = SWEEP_INTERVAL_MS / (60 * 1000);
+    return minutes === 1
+      ? { cadence: 'once a minute', minimum: '1 minute' }
+      : { cadence: `every ${minutes} minutes`, minimum: `${minutes} minutes` };
+  }
   if (hours >= 24) {
     const days = hours / 24;
     return days === 1

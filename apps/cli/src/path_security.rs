@@ -39,12 +39,16 @@ pub fn register_additional_workspace_root_path(
     let canonical = path
         .canonicalize()
         .map_err(|e| format!("Cannot resolve additional directory: {e}"))?;
-    let mut roots = additional_roots()
-        .write()
-        .map_err(|_| "Additional workspace root registry is poisoned".to_string())?;
-    if !roots.iter().any(|root| root == &canonical) {
-        roots.push(canonical.clone());
+    {
+        let mut roots = additional_roots()
+            .write()
+            .map_err(|_| "Additional workspace root registry is poisoned".to_string())?;
+        if !roots.iter().any(|root| root == &canonical) {
+            roots.push(canonical.clone());
+        }
     }
+    #[cfg(test)]
+    record_test_root_owner(&canonical);
     Ok(canonical)
 }
 
@@ -65,10 +69,45 @@ pub fn unregister_additional_workspace_roots(paths: &[PathBuf]) {
 }
 
 #[cfg(test)]
-pub fn clear_additional_workspace_roots_for_tests() {
-    if let Ok(mut roots) = additional_roots().write() {
-        roots.clear();
+static TEST_ROOT_OWNERS: OnceLock<RwLock<Vec<(std::thread::ThreadId, PathBuf)>>> = OnceLock::new();
+
+#[cfg(test)]
+fn test_root_owners() -> &'static RwLock<Vec<(std::thread::ThreadId, PathBuf)>> {
+    TEST_ROOT_OWNERS.get_or_init(|| RwLock::new(Vec::new()))
+}
+
+#[cfg(test)]
+fn record_test_root_owner(canonical: &Path) {
+    let owner = std::thread::current().id();
+    if let Ok(mut owners) = test_root_owners().write() {
+        if !owners
+            .iter()
+            .any(|(id, path)| *id == owner && path == canonical)
+        {
+            owners.push((owner, canonical.to_path_buf()));
+        }
     }
+}
+
+/// Test-only reset. Cargo runs unit tests as parallel threads sharing this one
+/// process-global registry, so clearing it wholesale deletes roots a sibling
+/// test registered a moment earlier. Only the calling thread's roots are
+/// dropped, which is what each caller actually means by "reset".
+#[cfg(test)]
+pub fn clear_additional_workspace_roots_for_tests() {
+    let owner = std::thread::current().id();
+    let mut owned = Vec::new();
+    if let Ok(mut owners) = test_root_owners().write() {
+        owners.retain(|(id, path)| {
+            if *id == owner {
+                owned.push(path.clone());
+                false
+            } else {
+                true
+            }
+        });
+    }
+    unregister_additional_workspace_roots(&owned);
 }
 
 /// Directories whose contents the CLI loads as TRUSTED, always-on instructions
@@ -300,17 +339,18 @@ fn expand_home(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Mutex, MutexGuard};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex, MutexGuard};
 
-    /// `ADDITIONAL_WORKSPACE_ROOTS` is process-global, and cargo runs tests in
-    /// parallel threads. Without this, one test's
-    /// `clear_additional_workspace_roots_for_tests()` races another's
-    /// `register_additional_workspace_root_path`, and the registered-root test
-    /// fails intermittently — roughly one run in three.
+    /// `ADDITIONAL_WORKSPACE_ROOTS` is process-global and cargo runs tests in
+    /// parallel threads, so these tests take one order within this module.
+    /// Cross-module interference is handled by
+    /// `clear_additional_workspace_roots_for_tests` dropping only the calling
+    /// thread's roots; this mutex cannot reach `claude_parity` or `agent`.
     static ROOTS_GUARD: Mutex<()> = Mutex::new(());
 
-    /// Serialize access to the global. Recovers from a poisoned lock so one
-    /// failing test does not cascade into every sibling.
+    /// Recovers from a poisoned lock so one failing test does not cascade into
+    /// every sibling.
     fn lock_roots() -> MutexGuard<'static, ()> {
         ROOTS_GUARD.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -404,6 +444,41 @@ mod tests {
 
         assert_eq!(result, file.canonicalize().expect("canonical extra file"));
         clear_additional_workspace_roots_for_tests();
+    }
+
+    /// `ROOTS_GUARD` only serializes this module. `claude_parity` and `agent`
+    /// tests also reset the registry, on their own threads, so the reset must
+    /// not reach a root another running test registered.
+    #[test]
+    fn registered_root_survives_another_test_thread_resetting_the_registry() {
+        let _guard = lock_roots();
+        clear_additional_workspace_roots_for_tests();
+        let workspace = tempfile::tempdir().expect("workspace tempdir");
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        let file = outside.path().join("shared.txt");
+        std::fs::write(&file, "shared").expect("write outside file");
+
+        register_additional_workspace_root_path(outside.path()).expect("register extra root");
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let sibling = {
+            let stop = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    clear_additional_workspace_roots_for_tests();
+                }
+            })
+        };
+
+        let outcome = (0..500).try_for_each(|_| {
+            validate_workspace_path_with_cwd(&file.to_string_lossy(), workspace.path()).map(|_| ())
+        });
+
+        stop.store(true, Ordering::Relaxed);
+        sibling.join().expect("sibling test thread");
+        clear_additional_workspace_roots_for_tests();
+
+        outcome.expect("registered root must survive another test thread's registry reset");
     }
 }
 

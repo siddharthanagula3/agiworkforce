@@ -1,10 +1,16 @@
-
 'use client';
 
 import { useMemo } from 'react';
 import { Trophy, ThumbsUp, ThumbsDown, Scale } from 'lucide-react';
 import { Badge, Card, CardContent, CardHeader } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import {
+  CardExtraSections,
+  appendExtraLine,
+  openExtraSection,
+  stripListMarker,
+  type ExtraSection,
+} from './card-extras';
 
 interface ComparisonItem {
   name: string;
@@ -19,6 +25,7 @@ interface ParsedComparison {
   winner: string;
   winnerReason: string;
   featureKeys: string[];
+  extraSections: ExtraSection[];
 }
 
 function parseComparison(content: string): ParsedComparison {
@@ -57,6 +64,14 @@ function parseComparison(content: string): ParsedComparison {
     | 'winner'
     | 'table';
   let currentSection: Section = 'none';
+  const extraSections: ExtraSection[] = [];
+  let currentHeading = '';
+
+  const headingText = (line: string): string =>
+    line
+      .replace(/^#+\s*/, '')
+      .replace(/\*\*/g, '')
+      .trim();
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -67,12 +82,24 @@ function parseComparison(content: string): ParsedComparison {
       .replace(/\*\*/g, '')
       .replace(/^#+\s*/, '');
 
-    if (items[0].name && lower.startsWith(items[0].name.toLowerCase())) {
+    const isHeadingLine = /^#{1,6}\s+/.test(trimmed);
+    // Only a heading or a bare label opens an item's section. Prose that merely
+    // starts with the item's name ("Postgres is the older engine…") is content,
+    // and matching it here used to swallow the sentence whole.
+    const opensItemSection = (name: string): boolean =>
+      Boolean(name) &&
+      (isHeadingLine
+        ? lower.startsWith(name.toLowerCase())
+        : lower.replace(/[:.]$/, '') === name.toLowerCase());
+
+    if (opensItemSection(items[0].name)) {
       currentSection = 'item0';
+      currentHeading = headingText(trimmed);
       continue;
     }
-    if (items[1].name && lower.startsWith(items[1].name.toLowerCase())) {
+    if (opensItemSection(items[1].name)) {
       currentSection = 'item1';
+      currentHeading = headingText(trimmed);
       continue;
     }
 
@@ -95,20 +122,28 @@ function parseComparison(content: string): ParsedComparison {
 
     if (/^#{2,4}\s*\*?\*?(winner|verdict|recommendation|conclusion)\*?\*?/i.test(trimmed)) {
       currentSection = 'winner';
+      currentHeading = headingText(trimmed);
       continue;
     }
     if (currentSection === 'winner') {
+      const text = trimmed.replace(/\*\*/g, '').replace(/^[-*]\s+/, '');
       if (!winner) {
-        if (items[0].name && lower.includes(items[0].name.toLowerCase())) {
-          winner = items[0].name;
-          winnerReason = trimmed.replace(/\*\*/g, '').replace(/^[-*]\s+/, '');
-        } else if (items[1].name && lower.includes(items[1].name.toLowerCase())) {
+        if (items[0].name && lower.includes(items[0].name.toLowerCase())) winner = items[0].name;
+        else if (items[1].name && lower.includes(items[1].name.toLowerCase()))
           winner = items[1].name;
-          winnerReason = trimmed.replace(/\*\*/g, '').replace(/^[-*]\s+/, '');
-        } else {
-          winnerReason = trimmed.replace(/\*\*/g, '').replace(/^[-*]\s+/, '');
-        }
       }
+      if (!winnerReason) winnerReason = text;
+      else appendExtraLine(extraSections, currentHeading, text);
+      continue;
+    }
+
+    const unmatchedHeading = trimmed.match(/^(#{1,6})\s+/);
+    if (unmatchedHeading) {
+      currentHeading = headingText(trimmed);
+      // A top-level heading ends the item it followed; a deeper one is a
+      // sub-section of that item, so pros/cons after it still land on it.
+      if ((unmatchedHeading[1] ?? '').length <= 2) currentSection = 'none';
+      openExtraSection(extraSections, currentHeading);
       continue;
     }
 
@@ -119,9 +154,12 @@ function parseComparison(content: string): ParsedComparison {
       else if (currentSection === 'cons0') items[0].cons.push(text);
       else if (currentSection === 'pros1') items[1].pros.push(text);
       else if (currentSection === 'cons1') items[1].cons.push(text);
+      else appendExtraLine(extraSections, currentHeading, text);
+      continue;
     }
 
-    if (trimmed.startsWith('|') && !trimmed.match(/^\|[-\s|]+\|$/)) {
+    if (trimmed.startsWith('|')) {
+      if (/^\|[-\s|]+\|$/.test(trimmed)) continue;
       const cells = trimmed
         .split('|')
         .map((c) => c.trim())
@@ -135,27 +173,23 @@ function parseComparison(content: string): ParsedComparison {
           items[0].features[featureKey] = cells[1]?.replace(/\*\*/g, '') || '';
           items[1].features[featureKey] = cells[2]?.replace(/\*\*/g, '') || '';
         }
+        continue;
       }
+      appendExtraLine(extraSections, currentHeading, stripListMarker(trimmed.replace(/\|/g, ' ')));
+      continue;
     }
+
+    appendExtraLine(extraSections, currentHeading, stripListMarker(trimmed));
   }
 
   if (!items[0].name) items[0].name = 'Option A';
   if (!items[1].name) items[1].name = 'Option B';
 
-  if (
-    items[0].pros.length > 0 &&
-    items[1].pros.length === 0 &&
-    items[0].cons.length === 0 &&
-    items[1].cons.length > 0
-  ) {
-    // Looks correct as-is
-  }
-
   const featureKeys = [
     ...new Set([...Object.keys(items[0].features), ...Object.keys(items[1].features)]),
   ];
 
-  return { title, items, winner, winnerReason, featureKeys };
+  return { title, items, winner, winnerReason, featureKeys, extraSections };
 }
 
 interface ComparisonCardProps {
@@ -170,10 +204,10 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
   const hasFeatures = featureKeys.length > 0;
 
   return (
-    <Card className="comparison-card overflow-hidden border-indigo-200/50 dark:border-indigo-800/30">
-      <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 pb-4">
+    <Card className="comparison-card overflow-hidden border-[var(--chat-border)]">
+      <CardHeader className="border-b border-[var(--chat-border-subtle)] bg-[var(--chat-surface-hover)] pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/40">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--chat-surface-elevated)]">
             <Scale className="h-5 w-5 text-indigo-700 dark:text-indigo-400" aria-hidden="true" />
           </div>
           <div>
@@ -197,14 +231,14 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
                 className={cn(
                   'rounded-lg border p-4',
                   winner === item.name
-                    ? 'border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20'
+                    ? 'border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)]'
                     : 'border-border',
                 )}
               >
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="font-semibold text-sm">{item.name}</h4>
                   {winner === item.name && (
-                    <Badge className="gap-1 bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300 border-0 text-[10px]">
+                    <Badge className="gap-1 border-0 bg-[var(--chat-warning-bg)] text-[10px] text-[var(--chat-warning-fg)]">
                       <Trophy className="h-3 w-3" aria-hidden="true" />
                       Winner
                     </Badge>
@@ -305,7 +339,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
 
         {/* Winner callout */}
         {winner && winnerReason && (
-          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-950/20 p-3">
+          <div className="flex items-start gap-3 rounded-lg border border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] p-3">
             <Trophy
               className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
               aria-hidden="true"
@@ -316,6 +350,8 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
             </div>
           </div>
         )}
+
+        <CardExtraSections sections={comparison.extraSections} />
       </CardContent>
     </Card>
   );

@@ -58,6 +58,57 @@ function walkRustFiles(relativeDirectory) {
   return files;
 }
 
+const skippedDirectories = new Set(['node_modules', 'target', 'dist', 'build', 'out', 'coverage']);
+
+function findManifests(relativeDirectory, manifestName) {
+  const absoluteDirectory = path.join(root, relativeDirectory);
+  if (!fs.existsSync(absoluteDirectory)) return [];
+
+  const manifests = [];
+  for (const entry of fs.readdirSync(absoluteDirectory, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') || skippedDirectories.has(entry.name)) continue;
+    const relativePath =
+      relativeDirectory === '.' ? entry.name : path.posix.join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) {
+      manifests.push(...findManifests(relativePath, manifestName));
+    } else if (entry.isFile() && entry.name === manifestName) {
+      manifests.push(relativePath);
+    }
+  }
+  return manifests;
+}
+
+function projectReadmePointer(source) {
+  let table = '';
+  for (const rawLine of source.split('\n')) {
+    const line = rawLine.trim();
+    if (line.startsWith('#')) continue;
+    const header = line.match(/^\[([^\]]+)\]\s*$/);
+    if (header) {
+      table = header[1];
+      continue;
+    }
+    if (table !== 'project') continue;
+    const inlineTable = line.match(/^readme\s*=\s*\{[^}]*\bfile\s*=\s*["']([^"']+)["']/);
+    if (inlineTable) return inlineTable[1];
+    const literal = line.match(/^readme\s*=\s*["']([^"']+)["']/);
+    if (literal) return literal[1];
+  }
+  return null;
+}
+
+for (const manifestPath of findManifests('.', 'pyproject.toml')) {
+  const pointer = projectReadmePointer(fs.readFileSync(path.join(root, manifestPath), 'utf8'));
+  if (!pointer) continue;
+  const inputPath = path.posix.normalize(
+    path.posix.join(path.posix.dirname(manifestPath), pointer),
+  );
+  requireNonemptyFile(
+    inputPath,
+    `readme = "${pointer}" in ${manifestPath}; the build fails without it`,
+  );
+}
+
 const literalIncludePattern = /include_str!\(\s*"([^"]+\.(?:md|txt))"\s*\)/g;
 for (const sourcePath of [...walkRustFiles('apps'), ...walkRustFiles('crates')]) {
   const source = fs.readFileSync(path.join(root, sourcePath), 'utf8');

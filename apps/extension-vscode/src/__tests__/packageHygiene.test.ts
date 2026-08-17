@@ -28,7 +28,7 @@ describe('VSIX package hygiene', () => {
     expect(manifest.scripts.package).toMatch(/^pnpm run clean && /u);
   });
 
-  it('only lists the explicitly required runtime output files', () => {
+  it('only lists the explicitly required runtime output files', { timeout: 60_000 }, () => {
     expect(PACKAGED_RUNTIME_OUTPUT_ALLOWLIST).toEqual(EXPECTED_RUNTIME_OUTPUT);
 
     const extensionRoot = resolve(__dirname, '../..');

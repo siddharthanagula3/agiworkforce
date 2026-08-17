@@ -22,9 +22,10 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
  * `shared_sessions`: knowledge of the 144-bit token is the read grant.
  *
  * Known gaps (founder-pending, deliberately NOT invented here):
- *   - No TTL. Published pages live until the publisher revokes them.
- *   - No per-user quota. `MAX_CONTENT_CHARS` bounds a single row, not a user.
- *   - View auth is public-by-token, matching the conversation-share precedent.
+ *   - No TTL. Published pages live until the publisher revokes them; no expiry
+ *     window has been approved and a guessed one would silently delete pages.
+ *   - View auth is public-by-token, matching the conversation-share precedent,
+ *     and views are not counted or audited.
  */
 
 export const MAX_CONTENT_CHARS = 1_000_000;
@@ -32,6 +33,13 @@ const MAX_TITLE_CHARS = 300;
 const MAX_ARTIFACT_ID_CHARS = 200;
 const MAX_LANGUAGE_CHARS = 50;
 const MAX_LIST_LIMIT = 200;
+
+/**
+ * Per-user cap on live published pages. Deliberately equal to the management
+ * list cap: a page past that limit could never appear in its own publisher's
+ * "Published artifacts" list, so it could never be found and revoked there.
+ */
+export const MAX_PUBLISHED_PER_USER = MAX_LIST_LIMIT;
 
 export const PUBLISHABLE_KINDS = [
   'html',
@@ -67,6 +75,34 @@ export class PublishedArtifactValidationError extends Error {
     super(message);
     this.name = 'PublishedArtifactValidationError';
   }
+}
+
+/** The caller does not own the conversation the artifact came from: a 403, never a 500. */
+export class PublishedArtifactOwnershipError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PublishedArtifactOwnershipError';
+  }
+}
+
+export class PublishedArtifactQuotaError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PublishedArtifactQuotaError';
+  }
+}
+
+const PG_RLS_VIOLATION = '42501';
+
+function isRowLevelSecurityDenial(error: unknown): boolean {
+  let candidate: unknown = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!candidate || typeof candidate !== 'object') return false;
+    const row = candidate as Record<string, unknown>;
+    if (row['code'] === PG_RLS_VIOLATION) return true;
+    candidate = row['cause'];
+  }
+  return false;
 }
 
 interface PublishedArtifactRow {
@@ -143,6 +179,16 @@ function rowToPublishedArtifact(row: PublishedArtifactRow): PublishedArtifact {
   };
 }
 
+interface PublishPreflightRow {
+  other_published: number | string | null;
+  owned_conversations: number | string | null;
+}
+
+function countOf(value: number | string | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
 interface PublishedArtifactSummaryRow {
   token: string;
   artifact_id: string;
@@ -212,9 +258,36 @@ export async function publishArtifactRecord(
 
   const title = (input.title ?? '').slice(0, MAX_TITLE_CHARS);
   const language = input.language ? input.language.slice(0, MAX_LANGUAGE_CHARS) : null;
+  const conversationId = input.conversationId ?? null;
 
-  const rows = await db.query<PublishedArtifactRow>(
-    `insert into public.published_artifacts (
+  const [preflight] = await db.query<PublishPreflightRow>(
+    `select
+       (select count(*) from public.published_artifacts
+         where user_id = $1 and artifact_id <> $2) as other_published,
+       (select count(*) from public.web_conversations
+         where id = $3::uuid and user_id = $1) as owned_conversations`,
+    [userId, artifactId, conversationId],
+  );
+
+  // The RLS WITH CHECK in 0095 already refuses a foreign conversation, but it
+  // refuses it by raising 42501 — a 500 to the caller. Decide it here so the
+  // answer is a 403 the client can act on.
+  if (conversationId && countOf(preflight?.owned_conversations) === 0) {
+    throw new PublishedArtifactOwnershipError(
+      'That artifact belongs to a conversation you do not own, so it cannot be published.',
+    );
+  }
+
+  if (countOf(preflight?.other_published) >= MAX_PUBLISHED_PER_USER) {
+    throw new PublishedArtifactQuotaError(
+      `You already have ${MAX_PUBLISHED_PER_USER} published artifacts. Unpublish one before publishing another.`,
+    );
+  }
+
+  let rows: PublishedArtifactRow[];
+  try {
+    rows = await db.query<PublishedArtifactRow>(
+      `insert into public.published_artifacts (
        token, user_id, artifact_id, conversation_id, title, kind, language, content
      ) values ($1, $2, $3, $4, $5, $6, $7, $8)
      on conflict (user_id, artifact_id) do update set
@@ -226,21 +299,31 @@ export async function publishArtifactRecord(
        updated_at = now()
      returning id, token, user_id, artifact_id, conversation_id, title, kind,
                language, content, created_at, updated_at`,
-    [
-      mintPublishToken(),
-      userId,
-      artifactId,
-      input.conversationId ?? null,
-      title,
-      input.kind,
-      language,
-      content,
-    ],
-  );
+      [
+        mintPublishToken(),
+        userId,
+        artifactId,
+        conversationId,
+        title,
+        input.kind,
+        language,
+        content,
+      ],
+    );
+  } catch (error) {
+    // The preflight and the write are not one transaction: the conversation can
+    // change hands or be deleted in between, and RLS is the one that finally says no.
+    if (isRowLevelSecurityDenial(error)) {
+      throw new PublishedArtifactOwnershipError(
+        'Row-level security refused the publish: the artifact is not yours to publish.',
+      );
+    }
+    throw error;
+  }
 
   const row = rows[0];
   if (!row) {
-    throw new PublishedArtifactValidationError(
+    throw new PublishedArtifactOwnershipError(
       'Artifact was not published (row-level security denied the write)',
     );
   }

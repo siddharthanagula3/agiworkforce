@@ -1,4 +1,3 @@
-
 import type {
   ChatRequest,
   ContentBlock,
@@ -155,11 +154,17 @@ function translateNativeTool(tool: unknown): ResponsesNativeTool {
   if (!tool || typeof tool !== 'object' || Array.isArray(tool)) {
     throw new TypeError('OpenAI Responses native tools must be objects');
   }
-  const type = (tool as Record<string, unknown>)['type'];
+  const raw = tool as Record<string, unknown>;
+  const type = raw['type'];
   if (typeof type !== 'string' || type.trim().length === 0) {
     throw new TypeError('OpenAI Responses native tools require a non-empty type');
   }
-  return { ...(tool as Record<string, unknown>), type };
+  // Responses rejects code_interpreter without a container ("Missing required
+  // parameter: 'tools[].container'"); auto reuses the response's live container.
+  if (type === 'code_interpreter' && raw['container'] == null) {
+    return { ...raw, type, container: { type: 'auto' } };
+  }
+  return { ...raw, type };
 }
 
 function translateToolChoice(choice: ToolChoice | undefined): ResponsesToolChoice | undefined {

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   Badge,
@@ -110,6 +109,7 @@ export function EnhancedExportDialog({
       const selectedFormatData = EXPORT_FORMATS.find((f) => f.id === selectedFormat);
       const filename = `${baseFilename}${selectedFormatData?.extension || '.txt'}`;
 
+      const contentOptions = { includeTimestamps };
       const options = {
         title: session.title,
         author: 'Chat Session Export',
@@ -124,25 +124,25 @@ export function EnhancedExportDialog({
 
       switch (selectedFormat) {
         case 'markdown': {
-          const content = exportService.exportAsMarkdown(session, messages);
+          const content = exportService.exportAsMarkdown(session, messages, contentOptions);
           await downloadAsMarkdown(content, filename, options);
           break;
         }
 
         case 'pdf': {
-          const content = exportService.exportAsMarkdown(session, messages);
+          const content = exportService.exportAsMarkdown(session, messages, contentOptions);
           await downloadAsPDF(content, filename, options);
           break;
         }
 
         case 'docx': {
-          const content = exportService.exportAsMarkdown(session, messages);
+          const content = exportService.exportAsMarkdown(session, messages, contentOptions);
           await downloadAsDOCX(content, filename, options);
           break;
         }
 
         case 'html': {
-          const content = exportService.exportAsHTML(session, messages);
+          const content = exportService.exportAsHTML(session, messages, contentOptions);
           const blob = new Blob([content], { type: 'text/plain' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -177,6 +177,8 @@ export function EnhancedExportDialog({
   };
 
   const selectedFormatData = EXPORT_FORMATS.find((f) => f.id === selectedFormat);
+  const supportsMetadataOption =
+    selectedFormat === 'markdown' || selectedFormat === 'pdf' || selectedFormat === 'docx';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -238,19 +240,19 @@ export function EnhancedExportDialog({
           </div>
 
           {/* Export Options */}
-          {(selectedFormat === 'markdown' ||
-            selectedFormat === 'pdf' ||
-            selectedFormat === 'docx') && (
+          {selectedFormat !== 'json' && (
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Options</Label>
               <div className="space-y-2">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <Checkbox
-                    checked={includeMetadata}
-                    onCheckedChange={(checked) => setIncludeMetadata(checked === true)}
-                  />
-                  <span className="text-sm">Include metadata (title, date, message count)</span>
-                </label>
+                {supportsMetadataOption && (
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <Checkbox
+                      checked={includeMetadata}
+                      onCheckedChange={(checked) => setIncludeMetadata(checked === true)}
+                    />
+                    <span className="text-sm">Include metadata (title, date, message count)</span>
+                  </label>
+                )}
                 <label className="flex cursor-pointer items-center gap-2">
                   <Checkbox
                     checked={includeTimestamps}

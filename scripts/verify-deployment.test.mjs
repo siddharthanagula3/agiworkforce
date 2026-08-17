@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import test from 'node:test';
-import { verifyDeployment } from './verify-deployment.mjs';
+import { verifyDeployedCommit, verifyDeployment } from './verify-deployment.mjs';
+
+const HEAD_SHA = 'e15df56e3a1b4c5d6e7f8091a2b3c4d5e6f70819';
+const OLDER_SHA = '4bfc99dc1f0e9d8c7b6a5948372615043f2e1d0c';
 
 const HEALTHY_BODY = {
   status: 'healthy',
@@ -123,4 +126,87 @@ test('a transient failure is retried before the gate gives up', async (t) => {
 
   assert.equal(healthHits, 2);
   assert.equal(result.probes.length, 3);
+});
+
+test('a production origin serving main HEAD passes the drift check', async (t) => {
+  const baseUrl = await startDeployment(t, {
+    '/api/version': [200, { commit: HEAD_SHA, environment: 'production', deploymentId: 'dpl_1' }],
+  });
+
+  const result = await verifyDeployedCommit(baseUrl, HEAD_SHA, { attempts: 1 });
+
+  assert.equal(result.deployedCommit, HEAD_SHA);
+});
+
+test('an abbreviated deployed SHA still matches the full expected SHA', async (t) => {
+  const baseUrl = await startDeployment(t, {
+    '/api/version': [200, { commit: HEAD_SHA.slice(0, 9), environment: 'production' }],
+  });
+
+  const result = await verifyDeployedCommit(baseUrl, HEAD_SHA, { attempts: 1 });
+
+  assert.equal(result.deployedCommit, HEAD_SHA.slice(0, 9));
+});
+
+test('a production origin left on an older build fails and names both commits', async (t) => {
+  const baseUrl = await startDeployment(t, {
+    '/api/version': [200, { commit: OLDER_SHA, environment: 'production' }],
+  });
+
+  await assert.rejects(
+    verifyDeployedCommit(baseUrl, HEAD_SHA, { attempts: 1 }),
+    new RegExp(`serving commit ${OLDER_SHA}, but main is at ${HEAD_SHA}`),
+  );
+});
+
+test('a build predating /api/version reads as drift, not as a passing check', async (t) => {
+  const baseUrl = await startDeployment(t, {
+    '/api/version': [404, { error: { code: 'NOT_FOUND', message: 'Not found' } }],
+  });
+
+  await assert.rejects(
+    verifyDeployedCommit(baseUrl, HEAD_SHA, { attempts: 1 }),
+    /does not serve \/api\/version/,
+  );
+});
+
+test('a deployed build that reports no commit does not pass as a match', async (t) => {
+  const baseUrl = await startDeployment(t, {
+    '/api/version': [200, { commit: 'unknown', environment: 'production' }],
+  });
+
+  await assert.rejects(
+    verifyDeployedCommit(baseUrl, HEAD_SHA, { attempts: 1 }),
+    /reported no deployed commit/,
+  );
+});
+
+test('drift is reported on the first attempt instead of being retried away', async (t) => {
+  let versionHits = 0;
+  const server = createServer((request, response) => {
+    versionHits += 1;
+    response.statusCode = 200;
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify({ commit: OLDER_SHA }));
+  });
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected TCP address');
+
+  await assert.rejects(
+    verifyDeployedCommit(`http://127.0.0.1:${address.port}`, HEAD_SHA, {
+      attempts: 5,
+      retryDelayMs: 1,
+    }),
+    /the promotion did not happen/,
+  );
+  assert.equal(versionHits, 1);
+});
+
+test('an expected commit that is not a git SHA is rejected before any request', async () => {
+  await assert.rejects(
+    verifyDeployedCommit('https://example.com', 'main', { attempts: 1 }),
+    /is not a git SHA/,
+  );
 });

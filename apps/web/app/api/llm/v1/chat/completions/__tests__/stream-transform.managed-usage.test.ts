@@ -37,6 +37,7 @@ import type { ProcessedRequest } from '../lib/request-processor';
 
 function managedProcessed(): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'agi.chat.web.send.assistant-001',
     chatRequest: { model: 'fixture-model', messages: [], stream: true } as never,
     conversationId: undefined,

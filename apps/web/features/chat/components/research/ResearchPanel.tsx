@@ -15,10 +15,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Globe, X, ExternalLink, Search, PanelRight, Telescope } from 'lucide-react';
 import type { ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
-import { Button } from '@agiworkforce/ui';
+import { Button, EmptyState } from '@agiworkforce/ui';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import { ResearchReportView } from './ResearchReportView';
+import { useArtifactsStore } from '../../stores/artifacts-store';
+import { ResearchReportView, type ReportArtifactInput } from './ResearchReportView';
+import { ResearchReportsGallery } from './ResearchReportsGallery';
 
 // ============================================================================
 // Source row
@@ -101,17 +103,14 @@ function SourceRow({ source, index }: { source: ResearchSource; index: number })
 // Empty state
 // ============================================================================
 
-function EmptyState() {
+function SourcesEmptyState() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50">
-        <Search className="h-6 w-6 text-muted-foreground/60" />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-foreground">No sources yet</p>
-        <p className="mt-1 text-xs text-muted-foreground">Web search sources will appear here</p>
-      </div>
-    </div>
+    <EmptyState
+      icon={Search}
+      title="No sources yet"
+      description="Web search sources will appear here"
+      className="flex-1"
+    />
   );
 }
 
@@ -128,6 +127,29 @@ function ReportTab({ conversationId }: { conversationId: string | null }) {
   const [report, setReport] = useState<ResearchReport | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const addArtifact = useArtifactsStore((s) => s.addArtifact);
+  const setArtifactsPanelOpen = useArtifactsStore((s) => s.setPanelOpen);
+  const closePanel = useResearchPanelStore((s) => s.closePanel);
+
+  // Both panels occupy the same right-hand slot, so the hand-off swaps them
+  // rather than stacking two sidebars.
+  const createArtifact = useCallback(
+    (artifact: ReportArtifactInput) => {
+      const id = addArtifact({
+        id: `research-report-${report?.id ?? crypto.randomUUID()}`,
+        type: 'document',
+        title: artifact.title,
+        language: artifact.language,
+        content: artifact.content,
+        messageId: '',
+        ...(conversationId ? { conversationId } : {}),
+      });
+      useArtifactsStore.getState().selectArtifact(id);
+      setArtifactsPanelOpen(true);
+      closePanel();
+    },
+    [addArtifact, closePanel, conversationId, report?.id, setArtifactsPanelOpen],
+  );
 
   const load = useCallback(
     async (signal: AbortSignal) => {
@@ -176,20 +198,15 @@ function ReportTab({ conversationId }: { conversationId: string | null }) {
   }
   if (!report) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50">
-          <Telescope className="h-6 w-6 text-muted-foreground/60" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-foreground">No saved report yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Deep Research runs save their report here when they finish
-          </p>
-        </div>
-      </div>
+      <EmptyState
+        icon={Telescope}
+        title="No saved report yet"
+        description="Deep Research runs save their report here when they finish"
+        className="flex-1"
+      />
     );
   }
-  return <ResearchReportView report={report} />;
+  return <ResearchReportView report={report} onCreateArtifact={createArtifact} />;
 }
 
 // ============================================================================
@@ -204,9 +221,10 @@ export function ResearchPanel() {
   // Scope to the active conversation: a chat that didn't run a web search shows
   // no sources, never a previous chat's leftover sources.
   const { sources, query } = sourcesFor(activeConversationId);
-  // Two views over the same research run: the live source list, and the durable
-  // report the run persisted (CAP-045 slice 3).
-  const [tab, setTab] = useState<'sources' | 'report'>('sources');
+  // Three views: the live source list, the durable report THIS run persisted
+  // (CAP-045 slice 3), and every report the user owns across all conversations
+  // (the gallery — `GET /api/research/reports` with no conversationId).
+  const [tab, setTab] = useState<'sources' | 'report' | 'library'>('sources');
 
   if (!panelOpen) return null;
 
@@ -266,6 +284,20 @@ export function ResearchPanel() {
               >
                 Report
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'library'}
+                onClick={() => setTab('library')}
+                className={cn(
+                  'rounded-md px-2 py-0.5 text-sm font-semibold transition-colors',
+                  tab === 'library'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                Library
+              </button>
             </div>
             {tab === 'sources' && sources.length > 0 && (
               <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
@@ -284,7 +316,11 @@ export function ResearchPanel() {
           </Button>
         </div>
 
-        {tab === 'report' ? (
+        {tab === 'library' ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ResearchReportsGallery />
+          </div>
+        ) : tab === 'report' ? (
           <div className="min-h-0 flex-1">
             <ReportTab conversationId={activeConversationId} />
           </div>
@@ -302,7 +338,7 @@ export function ResearchPanel() {
 
             {/* Source list */}
             {sources.length === 0 ? (
-              <EmptyState />
+              <SourcesEmptyState />
             ) : (
               <div className="flex-1 space-y-2 overflow-y-auto p-3 [scrollbar-width:thin]">
                 {sources.map((source, index) => (

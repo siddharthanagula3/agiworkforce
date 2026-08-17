@@ -7,6 +7,7 @@ import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigat
 import { ToolApprovalProvider } from '@/lib/hooks/useChatStream';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
+import { managedCloudConversationPath } from '@agiworkforce/cloud-contracts';
 // GOV-19: remaining managed quota, shared with Settings > Usage.
 import {
   getWorstUsagePercent,
@@ -117,6 +118,11 @@ import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import {
+  conversationDeleteConfirm,
+  projectDeleteConfirm,
+} from '@shared/components/layout/sidebar-session-actions';
+import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
@@ -256,6 +262,34 @@ const AUTO_TITLE_PLACEHOLDERS: ReadonlySet<string> = new Set([
   IMAGE_GENERATION_TITLE,
   VIDEO_GENERATION_TITLE,
 ]);
+
+/**
+ * Read schedule for the server's two-stage title (see
+ * app/api/chat/conversations/[id]/messages/route.ts): the stage-1 truncation is
+ * already committed by the time a turn's second message renders, and the
+ * LLM-written title replaces it in the background a beat later. Read once
+ * immediately, then twice more across the window that second write lands in.
+ */
+const SERVER_TITLE_READ_DELAYS_MS = [0, 1200, 3000] as const;
+
+const CLIENT_FALLBACK_TITLE_LENGTH = 60;
+
+function clientFallbackTitle(firstUserContent: string): string {
+  return firstUserContent.trim().slice(0, CLIENT_FALLBACK_TITLE_LENGTH).replace(/\n/g, ' ');
+}
+
+async function fetchServerConversationTitle(
+  conversationId: string,
+  authToken: string,
+): Promise<string | null> {
+  // limit=1: this read only wants the conversation's title, not its transcript.
+  const response = await fetch(`${managedCloudConversationPath(conversationId)}?limit=1`, {
+    headers: { Authorization: `Bearer ${authToken}` },
+  });
+  if (!response.ok) return null;
+  const data = (await response.json()) as { conversation?: { title?: string | null } };
+  return data.conversation?.title?.trim() || null;
+}
 
 type PendingByokHandoff = {
   sourceConversationId: string;
@@ -799,6 +833,10 @@ export default function WebChatPage() {
   // nothing. Scoped, it does what its comment claims (close the reentrancy
   // window for one conversation) instead of serialising the whole app.
   const sendingConversationsRef = useRef<Set<string>>(new Set());
+  // Conversations whose auto-title read has already been started. The effect below
+  // re-runs on every `conversations` change, including the one its own adoption
+  // causes, so without this it would start a second read pass mid-flight.
+  const autoTitledConversationsRef = useRef<Set<string>>(new Set());
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [isUserTyping, setIsUserTyping] = useState(false);
@@ -2999,13 +3037,7 @@ export default function WebChatPage() {
       // migration dropped this confirmation that the prior ConversationListItem
       // had; restore it for parity.
       const conversation = conversations.find((c) => c.id === id);
-      const label = conversation?.title ? `“${conversation.title}”` : 'this conversation';
-      const confirmed = await confirmDestructive({
-        title: 'Delete conversation?',
-        description: `Delete ${label} and every message in it. This cannot be undone.`,
-        confirmText: 'Delete conversation',
-        variant: 'destructive',
-      });
+      const confirmed = await confirmDestructive(conversationDeleteConfirm(conversation?.title));
       if (!confirmed) return;
       const deleted = await deleteConversation(id);
       if (!deleted) return;
@@ -3128,18 +3160,10 @@ export default function WebChatPage() {
   const handleProjectDelete = useCallback(
     async (projectId: string) => {
       const project = storeProjects.find((p) => p.id === projectId);
-      const label = project?.name ? `“${project.name}”` : 'this project';
       // Same dialog the project-detail Settings pane already used for this exact
       // action — the sidebar three-dot menu was the one route that still fell
       // back to a native browser confirm.
-      // Copy matches ProjectSettingsDialog's dialog verbatim — same action, so
-      // the consequence a user reads must not depend on which menu they used.
-      const confirmed = await confirmDestructive({
-        title: 'Delete project?',
-        description: `${label} will be permanently deleted. Conversations in this project will be moved to “All Chats”. This action cannot be undone.`,
-        confirmText: 'Delete project',
-        variant: 'destructive',
-      });
+      const confirmed = await confirmDestructive(projectDeleteConfirm(project?.name));
       if (!confirmed) return;
       // Optimistic remove, with rollback on server failure so the sidebar
       // never lies about what actually got deleted.
@@ -3191,30 +3215,70 @@ export default function WebChatPage() {
     [storeProjects, activeProjectId, setActiveProject, handleComposerCreateProject],
   );
 
-  // Auto-title: when the second message arrives (first assistant reply), derive title
-  // from the first user message content if the conversation still carries one of the
-  // app's own placeholder titles.
+  // Auto-title: when the second message arrives (first assistant reply), replace one
+  // of the app's own placeholder titles ('New Chat' / 'Image generation' / 'Video
+  // generation' — never a title a human typed) with a real one.
+  //
+  // WEB-85: this used to compute its own 60-char truncation of the first user message
+  // and PUT it. That write raced the server's two-stage titler (the messages route
+  // commits a truncation synchronously and an LLM-written title in the background) and
+  // re-truncated the generated title, which forced the server to whitelist this
+  // effect's exact output as safe-to-replace just to win its own race. The server is
+  // the only titler now: this effect READS the authoritative title and adopts it into
+  // the local store, so nothing here can clobber the generated one.
+  //
+  // The local truncation survives only as the fallback for conversations the server
+  // never titles — a temporary chat, whose messages are deliberately never persisted.
+  //
   // Intentionally only re-runs on messages.length, not the full messages array, to
   // avoid re-running on every streaming chunk.
-  //
-  // MEDIA-TITLE-03: the guard used to test `title === 'New Chat'` only, while the
-  // image and video paths lazily create their conversation as 'Image generation' /
-  // 'Video generation'. Those two literals permanently bypassed the auto-titler, so
-  // every media chat in the sidebar read "Image generation" forever while a text chat
-  // beside it read its own prompt. Matching all three placeholders retitles new media
-  // chats AND repairs already-stuck ones the next time they are opened; a title the
-  // user (or this effect) has already set is never overwritten.
   useEffect(() => {
     if (!displayedConversationId || displayedMessages.length !== 2) return;
-    const convo = conversations.find((c) => c.id === displayedConversationId);
+    const conversationId = displayedConversationId;
+    if (autoTitledConversationsRef.current.has(conversationId)) return;
+    const convo = conversations.find((c) => c.id === conversationId);
     if (!convo || !AUTO_TITLE_PLACEHOLDERS.has(convo.title)) return;
     const firstUser = displayedMessages[0];
     if (!firstUser || firstUser.role !== 'user') return;
-    const title = firstUser.content.trim().slice(0, 60).replace(/\n/g, ' ');
-    if (!title || title === convo.title) return;
-    updateConversation(displayedConversationId, { title });
+    const placeholderTitle = convo.title;
+    const isTemporary = Boolean(convo.isTemporary);
+    autoTitledConversationsRef.current.add(conversationId);
+
+    void (async () => {
+      let adopted: string | null = null;
+      if (!isTemporary) {
+        for (const delayMs of SERVER_TITLE_READ_DELAYS_MS) {
+          if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+          let serverTitle: string | null = null;
+          try {
+            const token = await getToken();
+            if (!token) break;
+            serverTitle = await fetchServerConversationTitle(conversationId, token);
+          } catch {
+            serverTitle = null;
+          }
+          if (!serverTitle || AUTO_TITLE_PLACEHOLDERS.has(serverTitle)) continue;
+          if (serverTitle === adopted) continue;
+          useChatStore.getState().updateConversation(conversationId, { title: serverTitle });
+          // The first non-placeholder read is the stage-1 truncation; the next distinct
+          // one is the generated title, and nothing follows it.
+          if (adopted) return;
+          adopted = serverTitle;
+        }
+        if (adopted) return;
+      }
+      const fallback = clientFallbackTitle(firstUser.content);
+      if (!fallback || fallback === placeholderTitle) return;
+      void updateConversation(conversationId, { title: fallback });
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayedMessages.length, displayedConversationId, conversations, updateConversation]);
+  }, [
+    displayedMessages.length,
+    displayedConversationId,
+    conversations,
+    updateConversation,
+    getToken,
+  ]);
 
   // Scroll to and flash-highlight a message when navigated from global search results.
   // GlobalSearchDialog navigates to /chat/[sessionId]?highlightMessage=<msgId>.
@@ -3914,6 +3978,19 @@ export default function WebChatPage() {
 
   // Map web Conversation[] → SidebarSession[] for @agiworkforce/ui <Sidebar>.
   // Web uses isPinned/isStarred/isArchived; shared sidebar uses pinned/starred/archived.
+  // shell-04 / agentic-modes-gap-03: the recents list said nothing about a
+  // conversation with a turn in flight, so a user who navigated away from a
+  // running chat had no way back to it except by remembering which one it was.
+  // The two id sets the store already maintains per conversation are the
+  // source — a background stream keeps its own row lit while another chat is on
+  // screen. Managed runs a DIFFERENT device started are not observable here and
+  // are deliberately not claimed as idle: `runState` is simply omitted.
+  const loadingConversationIds = useChatStore((s) => s.loadingConversationIds);
+  const streamingConversationIds = useChatStore((s) => s.streamingConversationIds);
+  const runningConversationIds = useMemo(
+    () => new Set([...loadingConversationIds, ...streamingConversationIds]),
+    [loadingConversationIds, streamingConversationIds],
+  );
   const sidebarSessions = useMemo<SidebarSession[]>(
     () =>
       conversations.map((c) => ({
@@ -3925,8 +4002,9 @@ export default function WebChatPage() {
         archived: c.isArchived ?? false,
         projectId: c.projectId ?? undefined,
         messageCount: c.messageCount,
+        ...(runningConversationIds.has(c.id) ? { runState: 'running' as const } : {}),
       })),
-    [conversations],
+    [conversations, runningConversationIds],
   );
 
   // Keyboard shortcuts definitions forwarded to the shortcuts dialog.
@@ -3985,21 +4063,7 @@ export default function WebChatPage() {
   // footerSlot: web-specific account menu + free-plan nudge.
   const sidebarFooterSlot = (
     <div className="w-full">
-      {/* Free plan nudge */}
-      {showFreeUpgrade && (
-        <div className="px-3 pb-2">
-          <div className="flex items-center justify-between rounded-full bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground">
-            <span>Free plan</span>
-            <button
-              type="button"
-              onClick={() => handleOpenUpgradeDialog()}
-              className="font-medium text-primary hover:underline"
-            >
-              Upgrade
-            </button>
-          </div>
-        </div>
-      )}
+      {showFreeUpgrade && <SidebarFreePlanNudge onUpgrade={() => handleOpenUpgradeDialog()} />}
       {/* Account dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -4016,15 +4080,7 @@ export default function WebChatPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
-                {tierLabel && currentTier === 'free' ? (
-                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/20">
-                    Upgrade
-                  </span>
-                ) : tierLabel ? (
-                  <span className="shrink-0 rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {tierLabel}
-                  </span>
-                ) : null}
+                <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={currentTier === 'free'} />
               </div>
               {!isAccountLoading && user?.email && (
                 <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>

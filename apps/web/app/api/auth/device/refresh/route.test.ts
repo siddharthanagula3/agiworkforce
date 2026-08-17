@@ -119,7 +119,7 @@ describe('POST /api/auth/device/refresh', () => {
     expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
   });
 
-  it('revokes a refresh family whose account has not accepted the live revision', async () => {
+  it('withholds a token from an account that has not accepted the live revision', async () => {
     mocks.query.mockResolvedValueOnce([
       {
         id: '11111111-1111-4111-8111-111111111111',
@@ -139,8 +139,11 @@ describe('POST /api/auth/device/refresh', () => {
     const response = await POST(request());
 
     expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ error: 'terms_acceptance_required' });
-    expect(mocks.execute.mock.calls[0]?.[0]).toContain('WHERE family_id = $1');
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'terms_acceptance_required',
+      terms_version: CURRENT_TERMS_VERSION,
+    });
+    expect(mocks.execute).not.toHaveBeenCalled();
     expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
   });
 

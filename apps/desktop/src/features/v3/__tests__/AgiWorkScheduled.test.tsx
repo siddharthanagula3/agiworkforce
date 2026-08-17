@@ -24,6 +24,8 @@ vi.mock('react-i18next', () => ({
         'agiWork.scheduled.deleteTitle': 'Delete scheduled task?',
         'agiWork.scheduled.deleteDescription': `Delete ${params?.['name'] ?? ''}. This cannot be undone.`,
         'common.delete': 'Delete',
+        'common.refresh': 'Refresh',
+        'agiWork.scheduled.emptyTitle': 'No scheduled tasks',
       };
       return labels[key] ?? key;
     },
@@ -52,6 +54,7 @@ describe('AgiWorkScheduled capability honesty', () => {
         },
       ],
       isLoading: false,
+      error: null,
       fetchTasks,
       toggleTask,
       deleteTask,
@@ -96,6 +99,29 @@ describe('AgiWorkScheduled capability honesty', () => {
     expect(
       screen.getByRole('switch', { name: 'Pause scheduled task Weekly memory cleanup' }),
     ).toBeInTheDocument();
+  });
+
+  it('reports a failed load instead of claiming there is nothing scheduled', () => {
+    useSchedulerStore.setState({ tasks: [], isLoading: false, error: 'Scheduler is unavailable' });
+
+    render(<AgiWorkScheduled />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Scheduler is unavailable');
+    expect(screen.queryByText('No scheduled tasks')).not.toBeInTheDocument();
+
+    fetchTasks.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(fetchTasks).toHaveBeenCalled();
+  });
+
+  it('keeps loaded tasks visible when a later action fails', () => {
+    useSchedulerStore.setState({ error: 'Failed to toggle task' });
+
+    render(<AgiWorkScheduled />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to toggle task');
+    expect(screen.getByText('Daily brief')).toBeInTheDocument();
   });
 
   it('requires confirmation before deleting a scheduled task', () => {

@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DIR = resolve(__dirname, '..', 'docs', 'spec', 'artifacts');
 
-const COMMON_KEYS = ['schema_version', 'generated_at'];
-const SPEC = {
+export const COMMON_KEYS = ['schema_version', 'generated_at'];
+export const SPEC = {
   'engineering_rules.json': ['invariants', 'rules'],
   'feature_matrix.json': ['surfaces', 'features'],
   'competitor_matrix.json': ['capabilities'],
@@ -154,6 +154,20 @@ function main() {
         '  --dir <dir>    artifacts directory (default: docs/spec/artifacts)',
         '  --diff <old>   print added/removed/changed top-level entries vs <old>',
         '  --help         show this help',
+        '',
+        'A directory that does not exist is treated as "no spec set kept here" and passes.',
+        'A directory that exists must carry all eight artifacts, valid and fully keyed.',
+      ].join('\n'),
+    );
+    process.exit(0);
+  }
+
+  if (!existsSync(args.dir)) {
+    console.log(
+      [
+        `SKIP: no spec artifact set at ${args.dir}.`,
+        'The eight-artifact spec set was retired with docs/spec/ on 2026-07-26; this check',
+        'validates the set only where a repo keeps one. Create the directory to opt back in.',
       ].join('\n'),
     );
     process.exit(0);
@@ -178,4 +192,7 @@ function main() {
   process.exit(0);
 }
 
-main();
+const isMain =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+if (isMain) main();

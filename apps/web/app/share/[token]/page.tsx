@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { SharedSessionViewer } from '@/features/chat/components/share/SharedSessionViewer';
 import type { SharedSession } from '@/features/chat/components/share/SharedSessionViewer';
 import { ExpiredShareBanner } from '@/features/chat/components/share/ExpiredShareBanner';
+import { ReportContentLink } from '@/app/copyright/report/ReportContentLink';
 
 interface Props {
   params: Promise<{ token: string }>;
@@ -65,5 +66,10 @@ export default async function SharedSessionPage({ params }: Props) {
     return <ExpiredShareBanner />;
   }
 
-  return <SharedSessionViewer session={data as SharedSession} />;
+  return (
+    <>
+      <SharedSessionViewer session={data as SharedSession} />
+      <ReportContentLink publicPath={`/share/${token}`} />
+    </>
+  );
 }

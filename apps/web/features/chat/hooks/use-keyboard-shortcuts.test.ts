@@ -9,7 +9,8 @@ afterEach(() => {
 
 function press(key: string, modifiers: { meta?: boolean; shift?: boolean } = {}) {
   const event = new KeyboardEvent('keydown', {
-    key,
+    // A real browser reports the shifted character, so Shift+a arrives as 'A'.
+    key: modifiers.shift && key.length === 1 ? key.toUpperCase() : key,
     metaKey: modifiers.meta ?? false,
     ctrlKey: modifiers.meta ?? false,
     shiftKey: modifiers.shift ?? false,
@@ -28,6 +29,7 @@ const HANDLER_KEYS = [
   'onFocusComposer',
   'onCopyLastMessage',
   'onRegenerateLastMessage',
+  'onToggleArtifacts',
 ] as const;
 
 type HandlerKey = (typeof HANDLER_KEYS)[number];
@@ -49,6 +51,7 @@ describe('KEYBOARD_SHORTCUT_DOCS', () => {
       'Focus message composer',
       'Copy last message',
       'Regenerate last message',
+      'Toggle artifacts panel',
     ]);
   });
 
@@ -75,6 +78,7 @@ describe('useKeyboardShortcuts bindings', () => {
     ['Escape', {}, 'onFocusComposer'],
     ['c', { meta: true, shift: true }, 'onCopyLastMessage'],
     ['r', { meta: true, shift: true }, 'onRegenerateLastMessage'],
+    ['a', { meta: true, shift: true }, 'onToggleArtifacts'],
   ] as const)('fires %s for %s', (key, modifiers, handlerKey) => {
     const { handlers } = renderWithSpies();
 
@@ -107,6 +111,13 @@ describe('useKeyboardShortcuts bindings', () => {
 
     expect(handlers.onFocusComposer).not.toHaveBeenCalled();
     document.body.removeChild(input);
+  });
+
+  it('leaves the browser default alone for a shortcut this mount does not handle', () => {
+    renderHook(() => useKeyboardShortcuts({ onToggleArtifacts: vi.fn() }));
+
+    expect(press('k', { meta: true }).defaultPrevented).toBe(false);
+    expect(press('a', { meta: true, shift: true }).defaultPrevented).toBe(true);
   });
 
   it('binds nothing when disabled', () => {

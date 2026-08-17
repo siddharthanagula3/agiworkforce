@@ -39,6 +39,7 @@ import {
   Plus,
   Loader2,
   Settings as SettingsIcon,
+  FileJson,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../cn';
@@ -48,12 +49,23 @@ import type {
   SettingsDataAdapter,
   SettingsConnector,
   SettingsSkill,
+  SettingsPlugin,
   ConnectedConnector,
 } from './types';
 import { SETTINGS_NAV_KEYWORDS } from '../settings-nav';
 import type { SettingsNavGroupResolved, SettingsNavKey } from '../settings-nav';
 import { ConnectorLogo } from './ConnectorLogo';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../primitives/Dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../primitives/Dialog';
+import {
+  parseCustomMcpJsonConfig,
+  describeCustomMcpJsonImportError,
+} from './custom-mcp-json-import';
 
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
@@ -72,6 +84,81 @@ function isValidHttpsUrl(value: string): boolean {
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// useConfirm — the single confirm-before-destructive-action primitive for this
+// modal (CPS-03). Every destructive action here routes through it so a new one
+// cannot ship without a confirm step, as connector Disconnect once did.
+// ---------------------------------------------------------------------------
+
+interface ConfirmRequest {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+}
+
+function useConfirm(): {
+  confirm: (request: ConfirmRequest) => void;
+  confirmDialog: React.ReactNode;
+} {
+  const [request, setRequest] = useState<ConfirmRequest | null>(null);
+  const confirm = useCallback((next: ConfirmRequest) => setRequest(next), []);
+
+  const confirmDialog = (
+    <Dialog
+      open={request !== null}
+      onOpenChange={(open) => {
+        if (!open) setRequest(null);
+      }}
+    >
+      <DialogContent className="border-border bg-card sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base font-semibold text-foreground">
+            {request?.title}
+          </DialogTitle>
+          <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
+            {request?.description}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setRequest(null)}
+            className={cn(
+              'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
+              FOCUS_RING,
+            )}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const pending = request;
+              setRequest(null);
+              pending?.onConfirm();
+            }}
+            className={cn(
+              'rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground transition-colors hover:bg-destructive/90',
+              FOCUS_RING,
+            )}
+          >
+            {request?.confirmLabel}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  return { confirm, confirmDialog };
+}
+
+const REMOVE_PLUGIN_CONFIRM = {
+  title: 'Remove plugin?',
+  description: "This plugin's commands and skills will no longer be available.",
+  confirmLabel: 'Remove',
+} as const;
 
 // ---------------------------------------------------------------------------
 // Nav config — flat list, no group headers (matches Claude reference)
@@ -468,6 +555,13 @@ function DirectoryBrowse({
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'az' | 'za'>('az');
   const [category, setCategory] = useState('All');
+  const { confirm, confirmDialog } = useConfirm();
+  // WEB-31: installing a pack grants its skills and reuses the connectors it
+  // declares, so the grant has to be shown and accepted before the install call
+  // is made — never on the way back from it.
+  const [confirmingInstallPlugin, setConfirmingInstallPlugin] = useState<SettingsPlugin | null>(
+    null,
+  );
   const { mutatingIds, errors, connect } = useConnectorMutations(adapter);
 
   const connectors = useMemo(
@@ -887,7 +981,7 @@ function DirectoryBrowse({
                   ) : plugin.installable && adapter?.installPlugin ? (
                     <button
                       type="button"
-                      onClick={() => void adapter.installPlugin?.(plugin.id)}
+                      onClick={() => setConfirmingInstallPlugin(plugin)}
                       className={cn(
                         'shrink-0 rounded-lg bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:bg-foreground/90',
                         FOCUS_RING,
@@ -935,7 +1029,12 @@ function DirectoryBrowse({
                       <button
                         type="button"
                         disabled={plugin.mutating}
-                        onClick={() => void adapter.removePlugin?.(plugin.id)}
+                        onClick={() =>
+                          confirm({
+                            ...REMOVE_PLUGIN_CONFIRM,
+                            onConfirm: () => void adapter.removePlugin?.(plugin.id),
+                          })
+                        }
                         className={cn(
                           'font-medium text-destructive underline-offset-4 hover:underline disabled:opacity-50',
                           FOCUS_RING,
@@ -955,6 +1054,85 @@ function DirectoryBrowse({
             ))}
           </div>
         ))}
+
+      <Dialog
+        open={confirmingInstallPlugin !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmingInstallPlugin(null);
+        }}
+      >
+        <DialogContent className="border-border bg-card sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-foreground">
+              Install {confirmingInstallPlugin?.name}?
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
+              {confirmingInstallPlugin?.author
+                ? `Published by ${confirmingInstallPlugin.author}. `
+                : ''}
+              Installing adds this pack&apos;s skills to your account. You can disable or remove it
+              at any time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 text-xs">
+            <div>
+              <p className="font-semibold text-foreground">Skills it adds</p>
+              {confirmingInstallPlugin?.declaredSkills?.length ? (
+                <ul className="mt-1 list-disc pl-4 text-muted-foreground">
+                  {confirmingInstallPlugin.declaredSkills.map((skill) => (
+                    <li key={skill}>{skill}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-muted-foreground">This pack declares no skills.</p>
+              )}
+            </div>
+            <div>
+              <p className="font-semibold text-foreground">Connectors it uses</p>
+              {confirmingInstallPlugin?.requiredConnectors?.length ? (
+                <ul className="mt-1 list-disc pl-4 text-muted-foreground">
+                  {confirmingInstallPlugin.requiredConnectors.map((connector) => (
+                    <li key={connector}>{connector}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-muted-foreground">
+                  This pack needs no connectors. Installing it grants no new data access.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setConfirmingInstallPlugin(null)}
+              className={cn(
+                'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
+                FOCUS_RING,
+              )}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={confirmingInstallPlugin?.mutating}
+              onClick={() => {
+                const target = confirmingInstallPlugin;
+                setConfirmingInstallPlugin(null);
+                if (target) void adapter?.installPlugin?.(target.id);
+              }}
+              className={cn(
+                'rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 disabled:opacity-50',
+                FOCUS_RING,
+              )}
+            >
+              Install
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {confirmDialog}
     </div>
   );
 }
@@ -979,9 +1157,37 @@ function AddCustomConnectorForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Paste a raw MCP server config (Claude Desktop / Cursor / VS Code style,
+  // or a bare {"url": "..."} object) instead of typing the fields by hand.
+  // This is validation, not a second submit path: parsing only prefills
+  // name/url/authToken above — the user still reviews them and submits
+  // through the SAME handleSubmit -> adapter.addCustomConnector flow.
+  const [jsonConfigText, setJsonConfigText] = useState('');
+  const [jsonImportError, setJsonImportError] = useState<string | null>(null);
+  const [jsonImportNote, setJsonImportNote] = useState<string | null>(null);
+
   const trimmedUrl = url.trim();
   const urlValid = isValidHttpsUrl(trimmedUrl);
   const canSubmit = name.trim().length > 0 && urlValid && !submitting;
+
+  const handleImportJsonConfig = useCallback(() => {
+    const result = parseCustomMcpJsonConfig(jsonConfigText);
+    if (!result.ok) {
+      setJsonImportError(describeCustomMcpJsonImportError(result.error));
+      setJsonImportNote(null);
+      return;
+    }
+    setJsonImportError(null);
+    setJsonImportNote(
+      result.value.droppedHeaderNames.length > 0
+        ? `Only a single bearer token is stored for custom connectors — ${result.value.droppedHeaderNames.join(', ')} from this config will not be saved.`
+        : null,
+    );
+    setName(result.value.name ?? '');
+    setUrl(result.value.url);
+    setAuthToken(result.value.authToken ?? '');
+    setError(null);
+  }, [jsonConfigText]);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -1057,6 +1263,55 @@ function AddCustomConnectorForm({
             </a>
           )}
         </p>
+      </div>
+
+      {/*
+        Paste a Claude Desktop / Cursor / VS Code style MCP config (or a bare
+        {"url": "..."} object) to fill in the fields below instead of typing
+        them by hand. Parsing only prefills state — the Add button below is
+        still the only way this ever reaches adapter.addCustomConnector.
+      */}
+      <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/20 p-3">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+          <FileJson className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          Paste a JSON config
+        </div>
+        <textarea
+          value={jsonConfigText}
+          onChange={(e) => {
+            setJsonConfigText(e.target.value);
+            setJsonImportError(null);
+            setJsonImportNote(null);
+          }}
+          placeholder={'{\n  "url": "https://example.com/mcp"\n}'}
+          rows={3}
+          aria-label="MCP server JSON config"
+          className={cn(
+            'w-full resize-y rounded-lg border border-border bg-muted/30 px-3 py-2 font-mono text-xs text-foreground placeholder:text-muted-foreground',
+            FOCUS_RING,
+          )}
+        />
+        {jsonImportError && (
+          <p role="alert" className="text-[11px] text-destructive">
+            {jsonImportError}
+          </p>
+        )}
+        {jsonImportNote && (
+          <p role="status" className="text-[11px] text-amber-600 dark:text-amber-500">
+            {jsonImportNote}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={handleImportJsonConfig}
+          disabled={jsonConfigText.trim().length === 0}
+          className={cn(
+            'w-fit rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+            FOCUS_RING,
+          )}
+        >
+          Parse &amp; fill in fields below
+        </button>
       </div>
 
       {/*
@@ -1195,6 +1450,7 @@ function ConnectorsPanel({
     connect: handleConnect,
     disconnect: handleDisconnect,
   } = useConnectorMutations(adapter);
+  const { confirm, confirmDialog } = useConfirm();
 
   const catalogConnectors = useMemo(
     () => (adapter?.connectors ?? []).filter((c) => !c.exclusive),
@@ -1271,17 +1527,27 @@ function ConnectorsPanel({
   if (detailConnector) {
     const canConnect = Boolean(detailConnector.canConnect && adapter?.connectConnector);
     return (
-      <ConnectorDetail
-        connector={detailConnector}
-        connection={connectionById.get(detailConnector.id)}
-        canConnect={canConnect}
-        mutating={mutatingIds.has(detailConnector.id)}
-        onConnect={() => handleConnect(detailConnector.id)}
-        onDisconnect={() => handleDisconnect(detailConnector.id)}
-        onBack={() => setDetailId(null)}
-        error={rowErrors[detailConnector.id]}
-        disclosure={connectorDisclosure}
-      />
+      <>
+        <ConnectorDetail
+          connector={detailConnector}
+          connection={connectionById.get(detailConnector.id)}
+          canConnect={canConnect}
+          mutating={mutatingIds.has(detailConnector.id)}
+          onConnect={() => handleConnect(detailConnector.id)}
+          onDisconnect={() =>
+            confirm({
+              title: `Disconnect ${detailConnector.name}?`,
+              description: `The assistant will no longer be able to use ${detailConnector.name}. You can connect it again later.`,
+              confirmLabel: 'Disconnect',
+              onConfirm: () => handleDisconnect(detailConnector.id),
+            })
+          }
+          onBack={() => setDetailId(null)}
+          error={rowErrors[detailConnector.id]}
+          disclosure={connectorDisclosure}
+        />
+        {confirmDialog}
+      </>
     );
   }
 
@@ -1685,6 +1951,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
 function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'table' | 'browse'>('table');
+  const { confirm, confirmDialog } = useConfirm();
   const plugins = useMemo(() => adapter?.plugins ?? [], [adapter?.plugins]);
   const loading = adapter?.pluginsLoading ?? false;
   const loadError = adapter?.pluginsError;
@@ -1922,7 +2189,12 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                           <button
                             type="button"
                             disabled={plugin.mutating}
-                            onClick={() => void adapter.removePlugin?.(plugin.id)}
+                            onClick={() =>
+                              confirm({
+                                ...REMOVE_PLUGIN_CONFIRM,
+                                onConfirm: () => void adapter.removePlugin?.(plugin.id),
+                              })
+                            }
                             className={cn(
                               'font-medium text-destructive underline-offset-4 hover:underline disabled:opacity-50',
                               FOCUS_RING,
@@ -1945,6 +2217,8 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
           </table>
         </div>
       )}
+
+      {confirmDialog}
     </div>
   );
 }

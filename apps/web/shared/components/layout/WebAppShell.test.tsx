@@ -28,9 +28,13 @@ const shellState = vi.hoisted(() => ({
     subscription: { tier: 'free' } as { tier: string } | null,
     isLoading: false,
     initialized: true,
+    error: null as string | null,
+    unauthenticated: false,
   },
   conversationsLoading: false,
 }));
+
+const settingsModalState = vi.hoisted(() => ({ openSettings: vi.fn() }));
 
 /** Stable stub for the shared `useConfirm` destructive-confirm hook. */
 const confirmStub = vi.hoisted(() => ({
@@ -108,13 +112,16 @@ vi.mock('@shared/stores/authentication-store', () => ({
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
-  useBillingStore: (
-    selector: (state: {
-      subscription: { tier: string } | null;
-      isLoading: boolean;
-      initialized: boolean;
-    }) => unknown,
-  ) => selector(shellState.billing),
+  useBillingStore: (selector: (state: typeof shellState.billing) => unknown) =>
+    selector(shellState.billing),
+}));
+
+vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
+  useSettingsModal: () => ({
+    isOpen: false,
+    openSettings: settingsModalState.openSettings,
+    closeSettings: vi.fn(),
+  }),
 }));
 
 vi.mock('@/features/projects', () => ({
@@ -154,7 +161,10 @@ beforeEach(() => {
   shellState.billing.subscription = { tier: 'free' };
   shellState.billing.isLoading = false;
   shellState.billing.initialized = true;
+  shellState.billing.error = null;
+  shellState.billing.unauthenticated = false;
   shellState.conversationsLoading = false;
+  settingsModalState.openSettings = vi.fn();
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     get matches() {
       return mediaState.matches;
@@ -300,6 +310,58 @@ describe('WebAppShell responsive navigation', () => {
         `the signed-in account menu must link ${route}`,
       ).not.toBeNull();
     }
+  });
+
+  /**
+   * SHELL-NAV-IA-006 — the chat shell offered free-tier users a "Free plan /
+   * Upgrade" pill and an Upgrade badge in the account footer; this lighter
+   * shell (/tasks, /chat/library, /chat/projects, /chat/schedules) rendered
+   * neither, so leaving /chat removed the only in-product upgrade route.
+   */
+  it('free tier: offers the upgrade nudge and routes it to billing', () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByText('Free plan')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+    expect(settingsModalState.openSettings).toHaveBeenCalledWith('billing');
+  });
+
+  it('paid tier: shows the catalog plan label and no upgrade nudge', async () => {
+    shellState.billing.subscription = { tier: 'pro' };
+    const { getBillingPlanPricing } = await import('@agiworkforce/types');
+
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.queryByText('Free plan')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upgrade' })).toBeNull();
+    expect(screen.getByText(getBillingPlanPricing('pro').label)).toBeInTheDocument();
+  });
+
+  it('unknown plan (401 from /api/me): claims no tier and sells no upgrade', async () => {
+    // The 401 path clears `subscription`, sets `initialized` and records no
+    // error — the exact state a `?? 'free'` fallback turns into an upgrade
+    // pitch aimed at a paying subscriber.
+    shellState.billing.subscription = null;
+    shellState.billing.unauthenticated = true;
+    const { getBillingPlanPricing } = await import('@agiworkforce/types');
+
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.queryByText('Free plan')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upgrade' })).toBeNull();
+    expect(screen.queryByText(getBillingPlanPricing('free').label)).toBeNull();
   });
 
   it('resize from desktop to narrow swaps the persistent sidebar for the trigger', () => {

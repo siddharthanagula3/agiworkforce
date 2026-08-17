@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
@@ -50,6 +50,7 @@ export function MemoryEditor({
   const isAccountScoped = adapter?.scope === 'cloud';
 
   const [draft, setDraft] = useState('');
+  const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [mutationError, setMutationError] = useState<string | null>(null);
@@ -58,6 +59,12 @@ export function MemoryEditor({
   useEffect(() => {
     void hydrateFromServer().catch(() => undefined);
   }, [hydrateFromServer]);
+
+  const query = search.trim().toLowerCase();
+  const visibleFacts = useMemo(
+    () => (query ? facts.filter((fact) => fact.text.toLowerCase().includes(query)) : facts),
+    [facts, query],
+  );
 
   // An optimistic adapter has already applied the change by the time this
   // awaits, so `mutating` gates only the control that started the request. It
@@ -193,6 +200,18 @@ export function MemoryEditor({
         </p>
       ) : null}
 
+      {facts.length > 0 ? (
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Search memory"
+          placeholder="Search memory"
+          className="rounded-md border bg-[var(--chat-surface-base)] px-3 py-2 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
+          style={{ borderColor: 'var(--chat-border)' }}
+        />
+      ) : null}
+
       {/* Existing facts */}
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
         {facts.length === 0 ? (
@@ -204,9 +223,16 @@ export function MemoryEditor({
               ? 'No cloud memory facts yet. Add one above and it will be available to your Managed Cloud conversations.'
               : 'No local memory facts yet. Add one above and it will be available to conversations on this device.'}
           </p>
+        ) : visibleFacts.length === 0 ? (
+          <p
+            className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-[var(--chat-text-muted)]"
+            style={{ borderColor: 'var(--chat-border)' }}
+          >
+            {`No memory matches “${search.trim()}”.`}
+          </p>
         ) : (
           <ul aria-label="Memory facts" className="flex flex-col gap-2">
-            {facts.map((fact) => {
+            {visibleFacts.map((fact) => {
               const isEditing = editingId === fact.id;
               return (
                 <li

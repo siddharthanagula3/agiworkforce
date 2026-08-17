@@ -22,6 +22,7 @@
  *   capabilities -> CapabilitiesSection (memory, tools, artifacts)
  *   memory       -> MemorySection   (MemoryEditor)
  *   notifications -> NotificationsSection (browser/email/mobile-push toggles)
+ *   voice        -> VoiceSection    (dictation + managed-voice availability, mirrors /settings/voice)
  *   reflect      -> ReflectSection (on-demand account activity recap)
  *   time-focus   -> TimeFocusSection (account-wide quiet hours + break reminders)
  *   help         -> HelpSection (docs, support, status, release notes, legal)
@@ -33,8 +34,14 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { z } from 'zod';
+import { Mic } from 'lucide-react';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
-import type { SettingsDataAdapter, SettingsPlugin, SettingsSkill } from '@agiworkforce/ui';
+import type {
+  SettingsDataAdapter,
+  SettingsNavGroupResolved,
+  SettingsPlugin,
+  SettingsSkill,
+} from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { ConnectorConsentSummary } from '@/features/connectors/components/ConnectorConsentSummary';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -56,6 +63,7 @@ import { UsageSection } from '../sections/UsageSection';
 import { CapabilitiesSection } from '../sections/CapabilitiesSection';
 import { MemorySection } from '../sections/MemorySection';
 import { NotificationsSection } from '../sections/NotificationsSection';
+import { VoiceSection } from '../sections/VoiceSection';
 import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
 import { HelpSection } from '../sections/HelpSection';
@@ -89,6 +97,7 @@ const ApiPluginsResponseSchema = z.object({
       webInstallable: z.boolean(),
       publisher: z.object({ name: z.string().min(1) }),
       declaredSkills: z.array(z.string()),
+      requiredConnectors: z.array(z.string()).default([]),
       distribution: z.object({ manifestUrl: z.string().url() }).passthrough().nullable(),
       updatedAt: z.string(),
     }),
@@ -165,6 +174,7 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
   plugins: 'plugins',
   memory: 'memory',
   notifications: 'notifications',
+  voice: 'voice',
   reflect: 'reflect',
   'time-focus': 'time-focus',
   help: 'help',
@@ -172,6 +182,38 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
 
 const SEGMENT_TO_SECTION: Record<string, string> = Object.fromEntries(
   Object.entries(SECTION_TO_SEGMENT).map(([k, v]) => [v, k]),
+);
+
+// ---------------------------------------------------------------------------
+// AUDIT-FIX settings-27: `voice` is deliberately NOT added to the shared
+// `SETTINGS_NAV_GROUPS_WEB` in @agiworkforce/ui — that constant also drives
+// apps/desktop's Cloud settings nav (DESKTOP_CLOUD_SETTINGS_NAV maps over it
+// directly with no section content for a Cloud-side Voice tab; Desktop's own
+// voice settings are Local-only, a different surface). Adding the key there
+// would silently regress Desktop Cloud settings to the exact "nav item with
+// no content behind it" bug its own test suite guards against. Web-only
+// insertion here, mirroring how DesktopCloudSettingsModal already injects its
+// own extra items (`cowork`, `archived`, `shared-links`) on top of the same
+// shared array instead of editing it.
+// ---------------------------------------------------------------------------
+
+const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
+  (group) => ({
+    ...group,
+    items: group.items.flatMap((item) =>
+      item.key === 'notifications'
+        ? [
+            item,
+            {
+              key: 'voice' as const,
+              label: 'Voice',
+              icon: Mic,
+              keywords: ['speech', 'tts', 'microphone', 'audio', 'dictation'],
+            },
+          ]
+        : [item],
+    ),
+  }),
 );
 
 // ---------------------------------------------------------------------------
@@ -586,6 +628,8 @@ export function WebSettingsModal({
             installable: plugin.webInstallable,
             author: plugin.publisher.name,
             skillCount: plugin.declaredSkills.length,
+            declaredSkills: plugin.declaredSkills,
+            requiredConnectors: plugin.requiredConnectors,
             updatedAt: plugin.updatedAt,
             statusLabel: plugin.webInstallable
               ? 'Available on Web'
@@ -808,6 +852,7 @@ export function WebSettingsModal({
     capabilities: <CapabilitiesSection />,
     memory: <MemorySection />,
     notifications: <NotificationsSection />,
+    voice: <VoiceSection />,
     reflect: <ReflectSection />,
     'time-focus': <TimeFocusSection />,
     help: <HelpSection />,
@@ -823,7 +868,7 @@ export function WebSettingsModal({
           activeSection={activeSection}
           onSectionChange={handleSectionChange}
           sectionContent={sectionContent}
-          navGroups={SETTINGS_NAV_GROUPS_WEB}
+          navGroups={WEB_SETTINGS_NAV_GROUPS}
           adapter={adapter}
           connectorDisclosure={<ConnectorConsentSummary />}
           navBadges={navBadges}

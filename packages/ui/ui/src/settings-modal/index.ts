@@ -1,5 +1,12 @@
 export { SettingsModal, type SettingsModalProps, type SettingsNavBadge } from './SettingsModal';
 export { ConnectorLogo, type ConnectorLogoProps } from './ConnectorLogo';
+export {
+  parseCustomMcpJsonConfig,
+  describeCustomMcpJsonImportError,
+  type ParsedCustomMcpConfig,
+  type CustomMcpJsonImportError,
+  type CustomMcpJsonImportResult,
+} from './custom-mcp-json-import';
 export type {
   SettingsDataAdapter,
   SettingsConnector,

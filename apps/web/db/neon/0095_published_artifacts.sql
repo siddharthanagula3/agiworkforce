@@ -20,11 +20,16 @@
 -- DELIBERATE DIFFERENCES FROM shared_sessions
 --
 -- 1. No expiry column at all. Conversation shares expire after 7 days; published
---    artifacts do not. TTL and per-user quota are FOUNDER-PENDING for CAP-015
---    and no value has been chosen, so this migration does not invent one — a
---    column defaulted to some arbitrary window would silently start deleting
---    user-visible pages on a policy nobody approved. Revocation is explicit
+--    artifacts do not. TTL is FOUNDER-PENDING for CAP-015 and no window has been
+--    chosen, so this migration does not invent one — a column defaulted to some
+--    arbitrary window would silently start removing user-visible pages on a
+--    policy nobody approved. Revocation is explicit
 --    (DELETE /api/artifacts/publish/[token]) and is the only removal path.
+--    The per-user cap is NOT a column either: it is enforced by
+--    MAX_PUBLISHED_PER_USER in lib/services/published-artifact-service.ts, which
+--    counts live rows before the insert and refuses with a 409 the publisher can
+--    act on. A CHECK constraint cannot count sibling rows, and a trigger would
+--    surface the refusal as an opaque database error.
 --
 -- 2. `kind` is CHECK-constrained to the artifact kinds the public renderer can
 --    actually serve (apps/web/lib/artifact-sandbox.ts `ArtifactKind`). html,
@@ -127,7 +132,7 @@ create policy published_artifacts_owner_delete
   using (user_id = public.current_app_user_id());
 
 comment on table public.published_artifacts is
-  'Publicly served artifact pages (CAP-015). Knowledge of the token is the read grant; there is no TTL and no per-user quota yet (founder-pending) — revocation is explicit.';
+  'Publicly served artifact pages (CAP-015). Knowledge of the token is the read grant; there is no TTL yet (founder-pending) and revocation is explicit. The per-user cap is enforced in the app layer (MAX_PUBLISHED_PER_USER), not by a constraint here.';
 
 comment on column public.published_artifacts.kind is
   'Renderer the public page must use. html/react/mermaid execute script and are served only through the cross-origin sandbox frame; svg renders as an inert img and markdown/text/code render inline under a strict CSP.';

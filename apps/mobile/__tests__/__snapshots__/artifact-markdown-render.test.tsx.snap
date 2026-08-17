@@ -60,6 +60,47 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           plan.md · DOCUMENT
         </Text>
         <View
+          accessibilityLabel="Publish artifact to a public link"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": false,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "backgroundColor": "rgba(17, 17, 17, 0.08)",
+              "borderRadius": 8,
+              "opacity": 1,
+              "padding": 8,
+            }
+          }
+        />
+        <View
           accessibilityLabel="Download artifact"
           accessibilityRole="button"
           accessibilityState={

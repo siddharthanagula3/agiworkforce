@@ -16,8 +16,16 @@
  * DOCX are whatever that service already produces.
  */
 
-import { useCallback, useMemo, useState } from 'react';
-import { Download, ExternalLink, Telescope, TriangleAlert } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Download,
+  ExternalLink,
+  FileCode,
+  Globe,
+  List,
+  Telescope,
+  TriangleAlert,
+} from 'lucide-react';
 import type { Citation, ResearchReport } from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
@@ -57,6 +65,81 @@ export function researchReportToMarkdown(report: ResearchReport): string {
   return parts.join('\n\n');
 }
 
+// ============================================================================
+// Table of contents
+// ============================================================================
+
+export interface ReportHeading {
+  id: string;
+  text: string;
+  level: number;
+}
+
+function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Headings of the stored report body, in document order.
+ *
+ * Fenced code blocks are skipped: a `# comment` inside a fence is not a
+ * heading, and counting it would shift every entry's index off the heading
+ * elements the markdown renderer actually produces (the TOC scrolls by that
+ * index, so a drift sends the reader to the wrong section).
+ */
+export function extractMarkdownHeadings(markdown: string): ReportHeading[] {
+  const headings: ReportHeading[] = [];
+  const seen = new Map<string, number>();
+  let insideFence = false;
+
+  for (const line of markdown.split('\n')) {
+    if (/^\s{0,3}(?:```|~~~)/.test(line)) {
+      insideFence = !insideFence;
+      continue;
+    }
+    if (insideFence) continue;
+
+    const match = /^\s{0,3}(#{1,4})\s+(.+?)\s*#*\s*$/.exec(line);
+    if (!match) continue;
+
+    const text = match[2]!.replace(/[*_`]/g, '').trim();
+    if (!text) continue;
+
+    const base = slugifyHeading(text) || `section-${headings.length + 1}`;
+    const used = seen.get(base) ?? 0;
+    seen.set(base, used + 1);
+    headings.push({
+      id: used === 0 ? base : `${base}-${used}`,
+      text,
+      level: match[1]!.length,
+    });
+  }
+
+  return headings;
+}
+
+// ============================================================================
+// Artifact hand-off
+// ============================================================================
+
+export interface ReportArtifactInput {
+  title: string;
+  language: string;
+  content: string;
+}
+
+/** The report as a markdown artifact the artifacts surface can own and edit. */
+export function researchReportToArtifact(report: ResearchReport): ReportArtifactInput {
+  return {
+    title: report.title || 'Research report',
+    language: 'md',
+    content: researchReportToMarkdown(report),
+  };
+}
+
 /** A filesystem-safe base name derived from the report's own title. */
 export function researchReportFilename(report: ResearchReport): string {
   const base = (report.title || 'research-report')
@@ -72,11 +155,19 @@ export function researchReportFilename(report: ResearchReport): string {
 // ============================================================================
 
 function CitationRow({ citation, index }: { citation: Citation; index: number }) {
+  const [faviconError, setFaviconError] = useState(false);
+
   let host = citation.url;
+  let faviconSrc: string | undefined;
   try {
-    host = new URL(citation.url).hostname.replace(/^www\./, '');
+    const parsed = new URL(citation.url);
+    host = parsed.hostname.replace(/^www\./, '');
+    // Same provider-agnostic favicon source ResearchPanel's SourceRow and
+    // SourcePill already use; `Citation` carries no favicon field of its own.
+    faviconSrc = `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`;
   } catch {
-    // Non-URL string: show it raw rather than hiding the source.
+    // Non-URL string: show it raw rather than hiding the source, and show the
+    // globe placeholder instead of guessing a favicon domain.
   }
 
   return (
@@ -92,6 +183,21 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
       >
         <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded bg-primary/10 px-1 text-[11px] font-semibold text-primary">
           {citation.id || index + 1}
+        </span>
+        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+          {faviconSrc && !faviconError ? (
+            <img
+              src={faviconSrc}
+              alt=""
+              aria-hidden="true"
+              width={16}
+              height={16}
+              className="h-4 w-4 rounded-sm object-contain"
+              onError={() => setFaviconError(true)}
+            />
+          ) : (
+            <Globe className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+          )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-foreground group-hover:text-primary">
@@ -124,14 +230,45 @@ interface ResearchReportViewProps {
   onClose?: () => void;
   /** Injected in tests; defaults to the shared document-export-service. */
   exportService?: Pick<typeof documentExportService, 'exportDocument'>;
+  /**
+   * Host-injected hand-off to the artifacts surface. Supplied by hosts that
+   * HAVE one (the chat panel); left undefined elsewhere (the standalone report
+   * gallery), where no artifacts panel exists to receive the result — an action
+   * that cannot work must not be offered.
+   */
+  onCreateArtifact?: (artifact: ReportArtifactInput) => void;
 }
 
-export function ResearchReportView({ report, onClose, exportService }: ResearchReportViewProps) {
+export function ResearchReportView({
+  report,
+  onClose,
+  exportService,
+  onCreateArtifact,
+}: ResearchReportViewProps) {
   const [exportingFormat, setExportingFormat] = useState<DocumentFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const service = exportService ?? documentExportService;
 
   const markdown = useMemo(() => researchReportToMarkdown(report), [report]);
+  const headings = useMemo(() => extractMarkdownHeadings(report.content), [report.content]);
+  const bodyRef = useRef<HTMLElement | null>(null);
+
+  // The markdown renderer emits plain headings with no ids, so the anchors the
+  // contents list needs are stamped onto the rendered nodes here, in document
+  // order, against the same heading list the list itself is built from.
+  useEffect(() => {
+    const rendered = bodyRef.current?.querySelectorAll<HTMLElement>('h1, h2, h3, h4');
+    if (!rendered) return;
+    headings.forEach((heading, index) => {
+      const element = rendered[index];
+      if (element) element.id = heading.id;
+    });
+  }, [headings]);
+
+  const scrollToHeading = useCallback((headingId: string) => {
+    const target = bodyRef.current?.ownerDocument.getElementById(headingId);
+    target?.scrollIntoView?.({ block: 'start' });
+  }, []);
 
   const handleExport = useCallback(
     async (format: DocumentFormat) => {
@@ -176,6 +313,19 @@ export function ResearchReportView({ report, onClose, exportService }: ResearchR
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {onCreateArtifact && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => onCreateArtifact(researchReportToArtifact(report))}
+              data-testid="research-report-create-artifact"
+              aria-label="Turn this report into an artifact"
+            >
+              <FileCode className="h-3 w-3" aria-hidden="true" />
+              Artifact
+            </Button>
+          )}
           {EXPORT_FORMATS.map((format) => (
             <Button
               key={format.id}
@@ -244,12 +394,43 @@ export function ResearchReportView({ report, onClose, exportService }: ResearchR
           </section>
         )}
 
+        {headings.length >= 3 && (
+          <nav
+            className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
+            aria-label="Report contents"
+          >
+            <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <List className="h-3.5 w-3.5" aria-hidden="true" />
+              Contents
+            </p>
+            <ol className="space-y-0.5" data-testid="research-report-toc">
+              {headings.map((heading) => (
+                <li
+                  key={heading.id}
+                  style={{
+                    paddingLeft: `${(heading.level - (headings[0]?.level ?? 1)) * 12}px`,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => scrollToHeading(heading.id)}
+                    className="block w-full truncate text-left text-xs text-muted-foreground transition-colors hover:text-primary"
+                  >
+                    {heading.text}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
+
         {/*
           The stored body is markdown, so it goes through the same renderer the
           chat transcript uses. Rendering it as preformatted text showed saved
           reports as literal `##`, `**`, and `[text](url)` syntax.
         */}
         <article
+          ref={bodyRef}
           className="text-sm leading-relaxed text-foreground"
           data-testid="research-report-content"
         >

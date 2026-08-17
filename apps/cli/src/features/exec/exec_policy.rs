@@ -13,9 +13,7 @@
 //!
 //! The bash tool calls [`evaluate`] and hard-blocks any `Forbidden` command.
 
-use agiworkforce_execpolicy::{
-    blocking_append_allow_prefix_rule, Decision, Evaluation, Policy, PolicyParser,
-};
+use agiworkforce_execpolicy::{blocking_append_allow_prefix_rule, Decision, Policy, PolicyParser};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -236,8 +234,14 @@ pub async fn persist_allow_command(command: &str) -> Result<()> {
 }
 
 async fn persist_allow_command_to(path: PathBuf, command: &str) -> Result<()> {
-    let prefix = shlex::split(command)
-        .filter(|tokens| !tokens.is_empty())
+    let segments = shell_segments(command)
+        .ok_or_else(|| anyhow::anyhow!("cannot persist an unparseable shell command"))?;
+    let [segment] = segments.as_slice() else {
+        anyhow::bail!(
+            "cannot persist an Always Allow rule for a command with shell operators; approve each command separately"
+        );
+    };
+    let prefix = segment_argv(segment)
         .ok_or_else(|| anyhow::anyhow!("cannot persist an empty or invalid shell command"))?;
     let display_path = path.display().to_string();
     tokio::task::spawn_blocking(move || blocking_append_allow_prefix_rule(&path, &prefix))
@@ -259,23 +263,205 @@ fn heuristic_decision(command: &str) -> Decision {
     }
 }
 
-/// Evaluate a shell command string against the policy. Tokenizes the command
-/// into argv (falling back to a single-token argv if it is not valid shell
-/// syntax) and returns the resulting [`Decision`].
-pub fn evaluate(policy: &Policy, command: &str) -> Decision {
-    evaluate_policy(policy, command).decision
+/// A shell command string is never a single argv: `git status && rm -rf /` is
+/// two commands, and a prefix rule matching only the first must not authorize
+/// the rest. Every segment is evaluated independently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandEvaluation {
+    pub decision: Decision,
+    pub matched_rule: bool,
+    pub every_segment_matched_rule: bool,
 }
 
-pub fn evaluate_policy(policy: &Policy, command: &str) -> Evaluation {
-    let argv = shlex::split(command).unwrap_or_else(|| vec![command.to_string()]);
-    if argv.is_empty() {
-        return Evaluation {
+const SEGMENT_BREAKS: &[char] = &[';', '&', '|', '\n', '\r'];
+
+fn is_redirection_ampersand(current: &str, next: Option<char>) -> bool {
+    matches!(current.chars().last(), Some('>') | Some('<')) || matches!(next, Some('>'))
+}
+
+fn push_segment(segments: &mut Vec<String>, current: &mut String) {
+    let segment = current.trim().to_string();
+    current.clear();
+    if !segment.is_empty() {
+        segments.push(segment);
+    }
+}
+
+fn read_until(chars: &[char], start: usize, terminator: char) -> Option<(String, usize)> {
+    let mut index = start;
+    let mut inner = String::new();
+    while index < chars.len() {
+        let character = chars[index];
+        if character == '\\' && index + 1 < chars.len() {
+            inner.push(character);
+            inner.push(chars[index + 1]);
+            index += 2;
+            continue;
+        }
+        if character == terminator {
+            return Some((inner, index + 1));
+        }
+        inner.push(character);
+        index += 1;
+    }
+    None
+}
+
+fn read_balanced_parens(chars: &[char], start: usize) -> Option<(String, usize)> {
+    let mut index = start;
+    let mut depth = 1usize;
+    let mut inner = String::new();
+    let mut quote: Option<char> = None;
+    while index < chars.len() {
+        let character = chars[index];
+        if character == '\\' && quote != Some('\'') && index + 1 < chars.len() {
+            inner.push(character);
+            inner.push(chars[index + 1]);
+            index += 2;
+            continue;
+        }
+        match character {
+            '\'' | '"' => match quote {
+                Some(open) if open == character => quote = None,
+                Some(_) => {}
+                None => quote = Some(character),
+            },
+            '(' if quote.is_none() => depth += 1,
+            ')' if quote.is_none() => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((inner, index + 1));
+                }
+            }
+            _ => {}
+        }
+        inner.push(character);
+        index += 1;
+    }
+    None
+}
+
+/// Split a shell command string into the individual commands it runs, including
+/// the ones hidden inside `$(...)` and backtick substitutions. Returns `None`
+/// when the string cannot be understood, so callers can fail closed.
+fn shell_segments(command: &str) -> Option<Vec<String>> {
+    let chars: Vec<char> = command.chars().collect();
+    let mut segments = Vec::new();
+    let mut current = String::new();
+    let mut quote: Option<char> = None;
+    let mut index = 0;
+
+    while index < chars.len() {
+        let character = chars[index];
+
+        if character == '\\' && quote != Some('\'') {
+            let next = chars.get(index + 1)?;
+            current.push(character);
+            current.push(*next);
+            index += 2;
+            continue;
+        }
+
+        if quote != Some('\'') && character == '`' {
+            let (inner, next) = read_until(&chars, index + 1, '`')?;
+            segments.extend(shell_segments(&inner)?);
+            index = next;
+            continue;
+        }
+
+        if quote != Some('\'') && character == '$' && chars.get(index + 1) == Some(&'(') {
+            if chars.get(index + 2) == Some(&'(') {
+                return None;
+            }
+            let (inner, next) = read_balanced_parens(&chars, index + 2)?;
+            segments.extend(shell_segments(&inner)?);
+            index = next;
+            continue;
+        }
+
+        if matches!(character, '\'' | '"') {
+            match quote {
+                Some(open) if open == character => quote = None,
+                Some(_) => {}
+                None => quote = Some(character),
+            }
+            current.push(character);
+            index += 1;
+            continue;
+        }
+
+        if quote.is_none()
+            && SEGMENT_BREAKS.contains(&character)
+            && !(character == '&'
+                && is_redirection_ampersand(&current, chars.get(index + 1).copied()))
+        {
+            push_segment(&mut segments, &mut current);
+            index += 1;
+            continue;
+        }
+
+        current.push(character);
+        index += 1;
+    }
+
+    if quote.is_some() {
+        return None;
+    }
+    push_segment(&mut segments, &mut current);
+    Some(segments)
+}
+
+fn segment_argv(segment: &str) -> Option<Vec<String>> {
+    shlex::split(segment).filter(|tokens| !tokens.is_empty())
+}
+
+/// Evaluate a shell command string against the policy and return the aggregate
+/// [`Decision`] across every command it would run.
+pub fn evaluate(policy: &Policy, command: &str) -> Decision {
+    evaluate_command(policy, command).decision
+}
+
+pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
+    let Some(segments) = shell_segments(command) else {
+        return CommandEvaluation {
+            decision: Decision::Prompt,
+            matched_rule: true,
+            every_segment_matched_rule: false,
+        };
+    };
+    if segments.is_empty() {
+        return CommandEvaluation {
             decision: Decision::Allow,
-            matched_rules: Vec::new(),
+            matched_rule: false,
+            every_segment_matched_rule: false,
         };
     }
+
     let fallback = |_: &[String]| heuristic_decision(command);
-    policy.check(&argv, &fallback)
+    let mut decision = Decision::Allow;
+    let mut matched_rule = false;
+    let mut every_segment_matched_rule = true;
+
+    for segment in &segments {
+        let Some(argv) = segment_argv(segment) else {
+            decision = decision.max(Decision::Prompt);
+            every_segment_matched_rule = false;
+            continue;
+        };
+        let evaluation = policy.check(&argv, &fallback);
+        decision = decision.max(evaluation.decision);
+        if evaluation.is_match() {
+            matched_rule = true;
+        } else {
+            every_segment_matched_rule = false;
+        }
+    }
+
+    CommandEvaluation {
+        decision,
+        matched_rule,
+        every_segment_matched_rule,
+    }
 }
 
 #[cfg(test)]
@@ -381,5 +567,110 @@ mod tests {
         assert!(contents.contains(r#"pattern=["cargo", "test", "--workspace"]"#));
         let policy = load_policy_from_dir(temp.path()).expect("load policy");
         assert_eq!(evaluate(&policy, "cargo test --workspace"), Decision::Allow);
+    }
+
+    fn policy_allowing_git_status() -> Policy {
+        let mut policy = default_policy();
+        policy
+            .add_prefix_rule(&["git".to_string(), "status".to_string()], Decision::Allow)
+            .expect("allow rule");
+        policy
+    }
+
+    #[test]
+    fn a_prefix_allow_rule_does_not_authorize_a_chained_command() {
+        let policy = policy_allowing_git_status();
+        for command in [
+            "git status && rm -rf ./src",
+            "git status; rm -rf ./src",
+            "git status || rm -rf ./src",
+            "git status | rm -rf ./src",
+            "git status\nrm -rf ./src",
+            "git status\r\nrm -rf ./src",
+            "git status & rm -rf ./src",
+        ] {
+            let evaluation = evaluate_command(&policy, command);
+            assert!(
+                !evaluation.every_segment_matched_rule,
+                "`{command}` must not be auto-approved by the `git status` allow rule"
+            );
+            assert_ne!(
+                evaluation.decision,
+                Decision::Allow,
+                "`{command}` must not evaluate to Allow"
+            );
+        }
+    }
+
+    #[test]
+    fn a_chained_catastrophic_command_is_still_forbidden() {
+        let policy = policy_allowing_git_status();
+        assert_eq!(
+            evaluate(&policy, "git status && rm -rf /"),
+            Decision::Forbidden
+        );
+        assert_eq!(
+            evaluate(&policy, "git status $(rm -rf /)"),
+            Decision::Forbidden
+        );
+        assert_eq!(
+            evaluate(&policy, "git status `rm -rf /`"),
+            Decision::Forbidden
+        );
+        assert_eq!(
+            evaluate(&policy, "echo \"$(dd if=/dev/zero of=/dev/sda)\""),
+            Decision::Forbidden
+        );
+    }
+
+    #[test]
+    fn an_allow_rule_still_covers_the_command_it_names() {
+        let policy = policy_allowing_git_status();
+        let evaluation = evaluate_command(&policy, "git status --porcelain");
+        assert_eq!(evaluation.decision, Decision::Allow);
+        assert!(evaluation.every_segment_matched_rule);
+    }
+
+    #[test]
+    fn every_segment_must_match_before_confirmation_is_waived() {
+        let mut policy = policy_allowing_git_status();
+        policy
+            .add_prefix_rule(&["git".to_string(), "diff".to_string()], Decision::Allow)
+            .expect("allow rule");
+        let evaluation = evaluate_command(&policy, "git status && git diff");
+        assert_eq!(evaluation.decision, Decision::Allow);
+        assert!(evaluation.every_segment_matched_rule);
+    }
+
+    #[test]
+    fn operators_inside_quotes_are_not_segment_breaks() {
+        assert_eq!(
+            shell_segments("git commit -m 'fix && ship'").as_deref(),
+            Some(["git commit -m 'fix && ship'".to_string()].as_slice())
+        );
+        assert_eq!(
+            shell_segments("ls -la 2>&1").as_deref(),
+            Some(["ls -la 2>&1".to_string()].as_slice())
+        );
+    }
+
+    #[test]
+    fn unbalanced_quoting_fails_closed() {
+        let policy = policy_allowing_git_status();
+        assert_eq!(shell_segments("git status 'unterminated"), None);
+        let evaluation = evaluate_command(&policy, "git status 'unterminated");
+        assert_eq!(evaluation.decision, Decision::Prompt);
+        assert!(!evaluation.every_segment_matched_rule);
+    }
+
+    #[tokio::test]
+    async fn a_chained_command_cannot_be_persisted_as_an_always_allow_rule() {
+        let temp = tempdir().expect("tempdir");
+        let policy_path = temp.path().join("user-approved.rules");
+        let error = persist_allow_command_to(policy_path.clone(), "git status && rm -rf ./src")
+            .await
+            .expect_err("chained command must be rejected");
+        assert!(error.to_string().contains("shell operators"));
+        assert!(!policy_path.exists());
     }
 }

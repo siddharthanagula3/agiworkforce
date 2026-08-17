@@ -37,6 +37,12 @@ interface RefreshTokenRow {
   owner_terms_accepted_at: string | null;
 }
 
+function termsAcceptanceUrl(request: NextRequest, returnTo = '/'): string {
+  const url = new URL('/login/complete', new URL(request.url).origin);
+  url.searchParams.set('redirectTo', returnTo);
+  return url.toString();
+}
+
 type RotationResult =
   | {
       kind: 'rotated';
@@ -106,13 +112,10 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       return { kind: 'expired' };
     }
 
+    // A terms revision is a consent gate, not a compromise signal: withhold the token but leave
+    // the family intact and unused so the same device resumes once the account re-accepts on web.
+    // Revoking here makes every published terms bump destroy every live device session.
     if (current.owner_terms_version !== CURRENT_TERMS_VERSION || !current.owner_terms_accepted_at) {
-      await tx.execute(
-        `UPDATE device_refresh_tokens
-            SET revoked_at = COALESCE(revoked_at, $2)
-          WHERE family_id = $1`,
-        [current.family_id, nowIso],
-      );
       return { kind: 'terms_required' };
     }
 
@@ -155,9 +158,16 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
   });
 
   if (result.kind === 'terms_required') {
-    logger.warn({ reason: result.kind }, 'Device refresh requires current terms acceptance');
+    logger.warn(
+      { reason: result.kind },
+      'Device refresh withheld until current terms are accepted',
+    );
     return NextResponse.json(
-      { error: 'terms_acceptance_required' },
+      {
+        error: 'terms_acceptance_required',
+        terms_version: CURRENT_TERMS_VERSION,
+        acceptance_url: termsAcceptanceUrl(request),
+      },
       { status: 403, headers: { 'Cache-Control': 'no-store' } },
     );
   }

@@ -1,8 +1,10 @@
-
-import { Bot, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Bot, FolderOpen, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { homeDir } from '@tauri-apps/api/path';
+import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 import { type CustomAgentConfig, useCustomAgentsStore } from '../../stores/customAgentsStore';
+import { fileOpenWithDefaultApp } from '../../api/fileOps';
 import { Button } from '@/ui/Button';
 import { Badge } from '@/ui/Badge';
 import {
@@ -169,10 +171,23 @@ export function CustomAgentsList() {
     })),
   );
   const [editorMode, setEditorMode] = useState<EditorMode>({ kind: 'closed' });
+  const [openingFolder, setOpeningFolder] = useState(false);
 
   useEffect(() => {
     void fetchAgents();
   }, [fetchAgents]);
+
+  const handleOpenGlobalAgentsFolder = useCallback(async () => {
+    setOpeningFolder(true);
+    try {
+      const home = (await homeDir()).replace(/[/\\]+$/, '');
+      await fileOpenWithDefaultApp(`${home}/.claude/agents`);
+    } catch (err) {
+      toast.error(`Failed to open the global agents folder: ${String(err)}`);
+    } finally {
+      setOpeningFolder(false);
+    }
+  }, []);
 
   const handleCreate = useCallback(() => {
     setEditorMode({ kind: 'create' });
@@ -264,9 +279,23 @@ export function CustomAgentsList() {
       {/* Storage hints */}
       <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
         <p className="font-medium text-foreground">Agent storage</p>
-        <p>
+        <p className="flex items-center gap-1.5">
           <strong>Global compatibility path:</strong>{' '}
           <code className="rounded bg-muted px-1 py-0.5">~/.claude/agents/</code>
+          <button
+            type="button"
+            onClick={() => void handleOpenGlobalAgentsFolder()}
+            disabled={openingFolder}
+            aria-label="Open the global agents folder"
+            title="Open the global agents folder"
+            className="shrink-0 p-1 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            {openingFolder ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+          </button>
         </p>
         <p>
           <strong>Project compatibility path:</strong>{' '}

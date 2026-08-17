@@ -1,0 +1,144 @@
+{
+  "domain": "Composer, chat lifecycle & message rendering",
+  "summary": "Web's primary composer (ChatComposerNew.tsx) and message action row (MessageBubble.tsx) are more mature than the prior audit's broader four-surface matrix suggested: state-differentiated placeholders matching Claude's exact empty-state copy, a real 3-state send/stop/queue button, 7 named catalog-driven effort levels (vs ChatGPT's 3), a grouped '+' menu, and a response-action row with copy/thumbs-up-and-down/regenerate/read-aloud/branch that meets or beats all three benchmarked products on several axes. The gaps found are narrow and mostly single-control: no per-message timestamp anywhere in web's action row (while the weaker Chrome extension inexplicably has one), no second-stage LLM-cleaned conversation title (the truncated 50-char placeholder is permanent), a fully-built 172-line inline-edit component (EditableMessage.tsx) that is completely unwired while the real Edit action does something different (composer-prefill), and a one-line CSS regression that makes the shared code-block copy button hover-gated despite sitting inside an always-visible header bar. None of these are P0/P1; all are cheap, concrete, single-file fixes.",
+  "strengths": [
+    "State-differentiated composer placeholder text matching Claude's exact empty-state copy ('How can I help you today?') plus 3 additional internal states (turn-active/image-mode/video-mode) in one reused component \u2014 packages/ui/i18n/locales/en/chat.json:2,60, apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2258-2266",
+    "Real, wired 3(+1)-state send/stop/queue button that actually aborts the stream on click, not a decorative icon swap \u2014 apps/web/features/chat/components/Composer/SendButton.tsx:1-114, ChatComposerNew.tsx:1950,1498-1499",
+    "7 named, catalog-driven reasoning-effort levels (None/Minimal/Low/Medium/High/xHigh/Max) vs ChatGPT's 3 (Instant/Medium/High) \u2014 packages/contracts/types/src/design-system/effort.ts:6-14",
+    "Both thumbs-up and thumbs-down always visible by default in the response action row, matching Claude/Gemini's symmetric pattern rather than ChatGPT's asymmetric thumbs-down-only default \u2014 apps/web/features/chat/components/messages/MessageBubble.tsx:1838-1916",
+    "A visible per-response branch/fork action via the '...' more menu \u2014 something Claude's own product lacks entirely per an open Anthropic GitHub issue cited in the prior audit's RENDERING-009 \u2014 MessageBubble.tsx:1977-1981",
+    "A real right-hand research/sources panel with favicon+domain+snippet source cards and a live server-anchored elapsed timer, functionally close to ChatGPT's Activity panel despite a different trigger/file structure \u2014 apps/web/features/chat/components/research/ResearchPanel.tsx, ResearchActivity.tsx",
+    "Combined Model+Effort single-chip picker reaches model change in 2 clicks (open+pick), beating ChatGPT's 4-click nested submenu and matching Claude's click economy while showing both values at a glance \u2014 apps/web/features/chat/components/Composer/ComposerFooter.tsx:779-816",
+    "Composer '+' menu uses real section dividers grouping file-actions / Skills+Connectors / Research+web-search+Run-code, matching Claude's grouped pattern rather than ChatGPT's flat list \u2014 ChatComposerNew.tsx:2711-2712,2802-2803"
+  ],
+  "notWorthCopying": [
+    "ChatGPT's asymmetric thumbs-down-only default action row (hides thumbs-up until some other state) \u2014 our symmetric always-visible up+down (matching Claude/Gemini) is more honest UI; do not regress toward ChatGPT's pattern.",
+    "Gemini's long-table truncation-behind-a-manual-expand-control \u2014 hiding table rows by default trades completeness for a shorter view; our full-render-with-horizontal-scroll behavior is defensible and shouldn't be replaced just because a competitor truncates.",
+    "ChatGPT's 3-level-deep model picker (effort pill -> Advanced -> Model submenu row) \u2014 our single combined chip already beats this in click economy; do not regress toward deeper nesting when extending the picker.",
+    "Silently hiding a model the instant its deprecation_date arrives with zero advance warning is the actual bug to fix (composer-03) \u2014 the fix is adding an advance-warning state to the picker we already have, not importing ChatGPT's whole picker UI."
+  ],
+  "gaps": [
+    {
+      "id": "CLR-01",
+      "title": "Model picker never surfaces an inline retirement/deprecation warning for a model with a future deprecation_date",
+      "claimId": "composer-03",
+      "benchmark": "ChatGPT annotates a retiring model directly in the picker itself ('o3 \u2014 Leaving on August 26'), not only in release notes (01-chatgpt/composer.md)",
+      "ourState": "BUILT_NOT_WIRED",
+      "ourEvidence": "apps/web/shared/stores/model-store.ts:88-105 (isCurrentModel()) reads the catalog's deprecation_date and filters the model OUT of the picker once the date has passed, but a model with a future deprecation_date renders with zero warning \u2014 grepped ComposerFooter.tsx (ModelRow, lines 362-450) and the whole file for deprecat/retir/Leaving/sunset: only the filter's own comment matches, no UI badge exists. packages/contracts/types/src/models.json currently has zero non-null future deprecation_date entries, so this is latent, not actively visible.",
+      "severity": "P2",
+      "effort": "M",
+      "priorAudit": "NEW",
+      "recommendation": "Add an advance-warning state to ModelRow: when 0 < days-until(deprecation_date) <= N, render a 'Leaving on <date>' badge instead of silently removing the model at the deadline. Reuses the existing catalog field; no new data source needed."
+    },
+    {
+      "id": "CLR-02",
+      "title": "Conversation sidebar title is a permanent raw 50-char prompt truncation; no second-stage LLM-cleaned title ever replaces it",
+      "claimId": "composer-08",
+      "benchmark": "ChatGPT: instant truncated placeholder title is replaced shortly after by a distinct, clean LLM-generated title (01-chatgpt/composer.md)",
+      "ourState": "MISSING",
+      "ourEvidence": "apps/web/app/api/chat/conversations/[id]/messages/route.ts:115-133 ('Auto-title conversation from first user message') sets title = content.slice(0, 50) + '...' on the first user message and never updates it again. Grepped apps/web for generateTitle/titleGeneration/smartTitle/autoGenerateTitle: zero results anywhere in the codebase.",
+      "severity": "P2",
+      "effort": "M",
+      "priorAudit": "NEW",
+      "recommendation": "Add an async second-stage title job (small/cheap model call) that fires after the first assistant response completes and PATCHes web_conversations.title, mirroring ChatGPT's two-stage pattern. Cite the existing auto-title block as the insertion point."
+    },
+    {
+      "id": "CLR-03",
+      "title": "No per-message timestamp rendered anywhere in web's response action row (though the weaker Chrome extension has one)",
+      "claimId": "composer-11",
+      "benchmark": "ChatGPT and Claude both display a relative timestamp in or near each response's action row (01-chatgpt/composer.md, 02-claude/composer-and-chat-lifecycle.md)",
+      "ourState": "MISSING",
+      "ourEvidence": "message.timestamp exists as data (apps/web/features/chat/components/messages/MessageBubble.tsx:2215, used only for memo comparisons) but is never rendered as visible text \u2014 grepped the file for toLocaleTimeString/toLocaleDateString/format(message.timestamp/dayjs/date-fns: zero hits. The 'Slim badge row' comment at :1053 explicitly says 'no name/timestamp'. Contrast: apps/extension/src/features/side-panel/bubbles.ts:241-243,704-705 DOES render a timestamp span (formatTime(msg.timestamp)) in its otherwise much weaker action row.",
+      "severity": "P2",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Add a small relative-timestamp span near the action row (reuse the extension's formatTime pattern or a date-fns formatDistanceToNow), visible on hover or always-on to match Claude's pattern."
+    },
+    {
+      "id": "CLR-04",
+      "title": "Shared code-block copy button is hover-gated despite sitting inside an always-visible header bar, contradicting the persistent-chrome pattern it otherwise implements",
+      "claimId": "composer-22",
+      "benchmark": "ChatGPT and Gemini show code-block header chrome (language label + copy icon) at all times, not hover-gated (01-chatgpt/chat-lifecycle.md, 03-gemini/composer-and-markdown-rendering.md)",
+      "ourState": "PRESENT_WORSE",
+      "ourEvidence": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:52 \u2014 the Copy Button's className includes 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100'. The surrounding .code-block-header-bar (apps/web/app/globals.css:1004-1007) IS unconditionally visible with the language label always shown, but the one interactive control inside it is invisible until hover/focus \u2014 same weakness as Claude's pattern despite having Claude-beating persistent chrome around it.",
+      "severity": "P2",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Remove the opacity-0 default on the Copy button in CodeBlock (MarkdownContent.tsx:52) so it renders at full opacity by default, matching the always-visible language label beside it. One-line CSS-class fix, shared by web+desktop."
+    },
+    {
+      "id": "CLR-05",
+      "title": "'Edit' on a sent user message prefills the bottom composer instead of turning the message bubble into an inline textarea; a fully-built inline-edit component exists and is never imported anywhere",
+      "claimId": "composer-14",
+      "benchmark": "ChatGPT: hovering a user message reveals Edit; clicking it turns the bubble into an inline pre-filled textarea with Cancel/Send, without navigating away (01-chatgpt/composer.md)",
+      "ourState": "BUILT_NOT_WIRED",
+      "ourEvidence": "apps/web/features/chat/pages/WebChatPage.tsx:3401-3433 (handleEditMessage) calls setComposerPrefill(msg.content) instead of enabling in-place editing \u2014 the original message stays in the transcript, edits happen in the bottom composer, and resubmission deletes/replaces the message plus everything after it. Separately, apps/web/features/chat/components/messages/EditableMessage.tsx (172 lines, full Save/Cancel/auto-resize textarea UI, doc-comment says 'Ported from desktop EditableMessage') is exported from messages/index.ts:6 but grepped the entire apps/web tree and found zero import sites anywhere outside its own file and the barrel re-export \u2014 a real inline-edit component was built and never wired to the actual Edit action.",
+      "severity": "P2",
+      "effort": "M",
+      "priorAudit": "NEW",
+      "recommendation": "Wire the existing, already-built EditableMessage.tsx into MessageBubble.tsx's user-message render path, gated on an isEditing(messageId) state set by handleEditMessage instead of (or in addition to) the composer-prefill path. The component and its Save/Cancel contract already exist; this is a connection task, not a build task."
+    },
+    {
+      "id": "CLR-06",
+      "title": "No user-clickable 'Run' affordance on a plain Python (or any language) code block in chat \u2014 only Copy exists in the shared code-block header",
+      "claimId": "composer-20",
+      "benchmark": "ChatGPT: clicking '> Run' on a Python code block in plain chat opens a two-pane editor+console side panel with its own Run/copy-console/clear controls (01-chatgpt/chat-lifecycle.md)",
+      "ourState": "MISSING",
+      "ourEvidence": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:24-70 (CodeBlock) renders only a Copy button in the header bar for any language \u2014 no Run affordance, no language-specific branch. CodeExecutionBlock.tsx (apps/web/features/chat/components/messages/CodeExecutionBlock.tsx) is a different mechanism: it renders the OUTPUT of a code-execution tool call the model already initiated as part of an agentic 'Run code' turn, not a user-triggered Run button on an arbitrary markdown code fence.",
+      "severity": "P3",
+      "effort": "L",
+      "priorAudit": "NEW",
+      "recommendation": "Low priority \u2014 single-product ChatGPT differentiator, and building a real sandboxed two-pane execution panel is a substantial infra investment (see composer-21's sandbox-provisioning question, unverified here). Track separately from the existing agentic 'Run code' toggle, which already covers the model-initiated case."
+    },
+    {
+      "id": "CLR-07",
+      "title": "Inline citations render as a trailing numbered-badge pill row after the whole message, not claim-adjacent favicon+domain pills mid-sentence",
+      "claimId": "composer-17",
+      "benchmark": "ChatGPT embeds small favicon+domain pill badges directly after the sentence they support, not numbered footnote markers (01-chatgpt/composer.md)",
+      "ourState": "PARTIAL",
+      "ourEvidence": "apps/web/features/chat/components/messages/InlineSourceTags.tsx:17-54 \u2014 a numbered circular index badge (not a favicon) + title/hostname, rendered in a single trailing flex-wrap row after the entire message body, confirmed via full file read.",
+      "severity": "P2",
+      "effort": "L",
+      "priorAudit": "CONFIRMS_PRIOR",
+      "priorAuditRef": "audit/parity-2026-08-15/gaps/domain-rendering.json RENDERING-008",
+      "recommendation": "See RENDERING-008's existing recommendation (add a rich hover/focus popover, favicon, and consider claim-adjacent positioning); not re-filed as a separate row, only cross-referenced with this claim's specific live-observed benchmark detail (favicon+domain vs numbered badge)."
+    },
+    {
+      "id": "CLR-08",
+      "title": "No end-of-answer horizontal source-card carousel with OpenGraph-style hero images; the closest equivalent is a toggle-triggered side panel with small favicons",
+      "claimId": "composer-18",
+      "benchmark": "ChatGPT renders a horizontal row of rich source cards with full-bleed hero images, publisher favicon/name, headline, and timestamp at the end of a web-search answer; clicking opens a new tab (01-chatgpt/composer.md)",
+      "ourState": "PARTIAL",
+      "ourEvidence": "apps/web/features/chat/components/research/ResearchPanel.tsx:27-98 (SourceRow) \u2014 favicon (16px) + title + hostname + snippet in a vertical list inside a toggle-triggered right-side panel, not an inline end-of-answer horizontal carousel, and no hero/OpenGraph imagery anywhere in the file. It does match the 'opens in a new tab' behavior (source.url target=\"_blank\", :52-55).",
+      "severity": "P3",
+      "effort": "L",
+      "priorAudit": "CONFIRMS_PRIOR",
+      "priorAuditRef": "audit/parity-2026-08-15/gaps/domain-rendering.json RENDERING-008",
+      "recommendation": "Single-product ChatGPT differentiator; low priority relative to CLR-07/RENDERING-008's richer-popover fix, which would deliver more value for the same investment. If pursued, add hero-image cards as a distinct end-of-message row rather than reworking ResearchPanel."
+    },
+    {
+      "id": "CLR-09",
+      "title": "Composer '+' menu 'Connectors' entry is a settings-modal link-out, not an in-composer custom-MCP-registration flow",
+      "claimId": "composer-06",
+      "benchmark": "Claude's composer '+' menu -> 'Add connector' submenu includes 'Add custom connector' directly, without leaving the chat (02-claude/composer-and-chat-lifecycle.md)",
+      "ourState": "DIFFERENT_BY_DESIGN",
+      "ourEvidence": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2735-2775 \u2014 the 'Connectors' menu item calls openSettings('connectors') (:2750), navigating to the Settings modal; the in-code comment explains this is deliberate ('An inline connect toggle here would imply a mid-chat capability that does not exist'). Custom MCP registration genuinely exists at apps/web/features/connectors/pages/ConnectorsPage.tsx and ToolPermissionsPanel.tsx, just one navigation hop outside the composer.",
+      "severity": "P3",
+      "effort": "M",
+      "priorAudit": "NEW",
+      "recommendation": "Low priority \u2014 the capability exists and the current design has an honest rationale (avoiding a fake per-conversation-scoped toggle). If composer-adjacency is desired, open the existing ConnectorsPage flow in a modal/sheet anchored to the composer rather than a full settings navigation, preserving the honesty rationale."
+    },
+    {
+      "id": "CLR-10",
+      "title": "No always-visible per-response fork/branch icon with reassurance copy; branching is menu-gated only",
+      "claimId": "composer-13",
+      "benchmark": "Manus shows a persistent fork icon under every response labeled 'Continue in new task' with explicit copy: 'Your original task stays unchanged' (07-manus/01-overview-and-nav.md)",
+      "ourState": "DIFFERENT_BY_DESIGN",
+      "ourEvidence": "apps/web/features/chat/components/messages/MessageBubble.tsx:1977-1981 \u2014 'Branch conversation' exists only inside the '...' DropdownMenuContent (composer-12's ChatGPT-style pattern, confirmed present), not as an always-visible icon, and no reassurance copy resembling Manus's exists anywhere in the file.",
+      "severity": "P3",
+      "effort": "S",
+      "priorAudit": "NEW",
+      "recommendation": "Low priority \u2014 single-product Manus differentiator; the current menu-gated design (which already beats Claude's fully-invisible branching per RENDERING-009) is defensible. If pursued, promote the existing onBranch handler to an always-visible icon and add reassurance copy; no new backend logic needed."
+    }
+  ]
+}

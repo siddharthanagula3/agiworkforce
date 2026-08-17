@@ -116,13 +116,24 @@ function navItemsForMode(mode: V3Mode): NavItem[] {
 
 // ─── collapsed rail items ─────────────────────────────────────────────────────
 
-const RAIL_ITEMS: { id: string; icon: React.ElementType; title: string }[] = [
-  { id: 'projects', icon: FolderOpen, title: 'Projects' },
-  { id: 'artifacts', icon: Box, title: 'Artifacts' },
-  { id: 'schedules', icon: CalendarClock, title: 'Schedules' },
-  { id: 'customize', icon: Sliders, title: 'Customize' },
-  { id: 'settings', icon: Settings, title: 'Settings' },
-];
+type RailItem = { id: string; icon: React.ElementType; title: string };
+
+/**
+ * The collapsed icon rail used to be a fixed 5-item list regardless of
+ * `mode`, so Code mode (whose expanded nav has only "Desktop app" / "VS Code
+ * extension") still rendered a Projects/Artifacts/Schedules/Customize rail —
+ * exposing destinations Code mode never offers when expanded, including an
+ * Artifacts icon that resolved to the wrong route entirely. The collapsed
+ * rail now mirrors `navItemsForMode` exactly, plus a trailing Settings icon
+ * that has no expanded-nav equivalent (it opens general settings, distinct
+ * from the footer avatar's account menu).
+ */
+function railItemsForMode(mode: V3Mode): RailItem[] {
+  return [
+    ...navItemsForMode(mode).map(({ id, icon, label }) => ({ id, icon, title: label })),
+    { id: 'settings', icon: Settings, title: 'Settings' },
+  ];
+}
 
 // ─── avatar initials helper ───────────────────────────────────────────────────
 
@@ -196,6 +207,7 @@ export function WebSidebar({
   const totalItems = useMemo(() => groups.reduce((n, g) => n + g.items.length, 0), [groups]);
 
   const navItems = useMemo(() => navItemsForMode(mode), [mode]);
+  const railItems = useMemo(() => railItemsForMode(mode), [mode]);
 
   const handleNavClick = useCallback(
     (id: string) => {
@@ -207,7 +219,7 @@ export function WebSidebar({
         'cw-artifacts': 'work-artifacts',
         'cw-dispatch': 'work-dispatch',
         schedules: 'schedules',
-        settings: 'voice-settings',
+        settings: 'general-settings',
         'code-desktop': 'code-desktop',
         'code-vscode': 'code-vscode',
       };
@@ -537,7 +549,7 @@ export function WebSidebar({
             flex: 1,
           }}
         >
-          {RAIL_ITEMS.map((it) => {
+          {railItems.map((it) => {
             const Icon = it.icon;
             return (
               <button

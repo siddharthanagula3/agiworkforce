@@ -89,9 +89,45 @@ export function resolveCodeExecutionTools(provider: string): unknown[] {
     return [{ code_execution: {} }];
   }
   if (p === 'openai') {
-    return [{ type: 'code_interpreter' }];
+    // `container` is a required parameter of the Responses API code_interpreter
+    // tool; omitting it makes the whole request fail with
+    // "Missing required parameter: 'tools[0].container'", so the toggle would
+    // be lit and the turn would die rather than run code. 'auto' lets OpenAI
+    // create or reuse the container for the response.
+    return [{ type: 'code_interpreter', container: { type: 'auto' } }];
   }
   return [];
+}
+
+export interface TurnCodeExecutionInput {
+  provider: string;
+  stream: boolean | undefined;
+  e2bEnabled: boolean;
+  toolsCapable: boolean;
+  codeExecutionCapable: boolean;
+}
+
+export interface TurnCodeExecution {
+  tools: unknown[];
+  unavailable: boolean;
+}
+
+/**
+ * Resolve the execution tools for one turn the user asked to run code on, and
+ * report when that request resolved to nothing. `unavailable` is what stops the
+ * turn from silently dropping the capability: the caller must disclose it
+ * (see `buildCapabilityPreamble`) rather than run a turn where "Run code" is lit
+ * and no tool exists.
+ */
+export function resolveTurnCodeExecutionTools(input: TurnCodeExecutionInput): TurnCodeExecution {
+  const provider = input.provider.toLowerCase();
+  if (input.e2bEnabled && providerRoutesToE2B(provider) && input.stream === true) {
+    const tools: unknown[] = input.toolsCapable ? e2bExecutionToolDefs() : [];
+    return { tools, unavailable: tools.length === 0 };
+  }
+  if (!input.codeExecutionCapable) return { tools: [], unavailable: true };
+  const tools = resolveCodeExecutionTools(provider);
+  return { tools, unavailable: tools.length === 0 };
 }
 
 /**

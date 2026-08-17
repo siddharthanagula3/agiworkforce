@@ -1,4 +1,3 @@
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -58,5 +57,68 @@ describe('cloudSettingsMapping — language namespace', () => {
     const projected = projectionOf(useCloudSettingsStore.getState().speechLanguage);
     expect(useCloudSettingsStore.getState().speechLanguage).toBe('ja');
     expect(projected.language?.locale).toBeUndefined();
+  });
+});
+
+describe('cloudSettingsMapping — identity namespace the server actually reads', () => {
+  const SERVER_IDENTITY_NAMESPACE = 'general';
+  const SERVER_IDENTITY_KEYS = ['instructions', 'preferredName', 'workDescription'];
+
+  beforeEach(() => {
+    useCloudSettingsStore.setState({
+      personalization: {
+        fullName: 'Siddhartha Nagula',
+        nickname: 'Sid',
+        occupation: 'Software engineering',
+        instructions: 'Answer in bullet points.',
+        style: 'concise',
+        warmth: 50,
+        enthusiasm: 50,
+        headersLists: 50,
+        emoji: 50,
+      },
+    });
+  });
+
+  it('publishes nickname, occupation and instructions under the keys apps/web/lib/server/user-identity.ts reads', () => {
+    const payload = toCloudSettings(useCloudSettingsStore.getState()) as Record<string, unknown>;
+    const identity = payload[SERVER_IDENTITY_NAMESPACE] as Record<string, unknown> | undefined;
+
+    expect(identity).toBeDefined();
+    expect(Object.keys(identity ?? {}).sort()).toEqual(SERVER_IDENTITY_KEYS);
+    expect(identity?.['preferredName']).toBe('Sid');
+    expect(identity?.['workDescription']).toBe('Software engineering');
+    expect(identity?.['instructions']).toBe('Answer in bullet points.');
+  });
+
+  it('hydrates personalization from the identity namespace a web edit writes', () => {
+    applyCloudSettings({
+      general: {
+        preferredName: 'Sidd',
+        workDescription: 'Product management',
+        instructions: 'Skip the preamble.',
+      },
+    });
+
+    const { personalization } = useCloudSettingsStore.getState();
+    expect(personalization.nickname).toBe('Sidd');
+    expect(personalization.occupation).toBe('Product management');
+    expect(personalization.instructions).toBe('Skip the preamble.');
+  });
+
+  it('lets the identity namespace win over a stale personalization copy in the same document', () => {
+    applyCloudSettings({
+      personalization: { nickname: 'Stale', occupation: 'Stale', customInstructions: 'Stale' },
+      general: {
+        preferredName: 'Sid',
+        workDescription: 'Design / UX',
+        instructions: 'Cite sources.',
+      },
+    });
+
+    const { personalization } = useCloudSettingsStore.getState();
+    expect(personalization.nickname).toBe('Sid');
+    expect(personalization.occupation).toBe('Design / UX');
+    expect(personalization.instructions).toBe('Cite sources.');
   });
 });

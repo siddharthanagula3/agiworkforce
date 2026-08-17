@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -84,14 +83,20 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
 
   const db = getNeonDb();
 
+  let deleted: number;
   try {
-    await db.execute('delete from shared_sessions where token = $1 and owner_id = $2', [
+    deleted = await db.execute('delete from shared_sessions where token = $1 and owner_id = $2', [
       token,
       userId,
     ]);
   } catch (err) {
     logger.error({ err, token, userId }, 'Failed to revoke shared session');
     throw createError.internal('Failed to revoke share');
+  }
+
+  // A caller who merely holds the link must not be told the revocation worked.
+  if (deleted === 0) {
+    throw createError.notFound('Shared session not found');
   }
 
   return NextResponse.json({ success: true });

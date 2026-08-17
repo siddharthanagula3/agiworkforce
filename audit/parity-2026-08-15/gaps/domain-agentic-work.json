@@ -1,0 +1,153 @@
+[
+  {
+    "id": "AGENTIC-WORK-001",
+    "domain": "agentic-work",
+    "surface": "desktop-tauri",
+    "feature": "Background agents (push-to-background, pause/resume/cancel/take-over)",
+    "screen": "n/a — no screen exists",
+    "files": [
+      "apps/desktop/src-tauri/src/core/agent/background_agent.rs:1-48",
+      "apps/desktop/src-tauri/src/sys/commands/background_agents.rs:1-358",
+      "apps/desktop/src-tauri/src/lib.rs:2191-2193,2355-2362",
+      "apps/desktop/src/utils/registeredCommands.ts:174-184",
+      "apps/desktop/src/lib/tauri-mock.ts:1319-1369",
+      "apps/desktop/src/constants/event-names.ts:19-27",
+      "apps/desktop/src/stores/chat/agentWorkflowEvents.ts:1069-1082",
+      "apps/desktop/src/stores/backgroundTaskStore.ts:1-33",
+      "apps/desktop/src/features/agi/AgentTaskMonitor.tsx:14-23",
+      "apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs:2218-2222",
+      "apps/desktop/src-tauri/src/sys/security/tool_guard.rs:562-575"
+    ],
+    "currentState": "A complete Rust subsystem (`BackgroundAgentManager`, doc-commented as 'inspired by Cursor's & prefix pattern') supports up to 8 parallel autonomous agents with Queued/Running/Paused/Completed/Failed/Cancelled/TakenOver states, 24h default timeout, and 9 native events (created/started/progress/completed/failed/cancelled/paused/resumed/taken_over). 11 Tauri commands are registered (push, list, list_active, get, pause, resume, cancel, take_over, stats, cleanup, should_push). The ONLY way to create one is the LLM itself calling the approval-gated `background_agent_start` tool mid-conversation — there is no user-facing 'push to background' button or `&` prefix parser anywhere in the chat input. Once running, `apps/desktop/src/utils/registeredCommands.ts:174-184` shows all 11 commands appear only in an invoke-allowlist string array, and `apps/desktop/src/lib/tauri-mock.ts:1319-1369` shows them only in a dev/test mock — zero production `invoke()` call sites exist for list, list_active, pause, resume, take_over, stats, or cleanup anywhere in `apps/desktop/src`. The frontend listens to exactly 2 of the 9 native events (`background_agent:completed`, `background_agent:failed`, in `agentWorkflowEvents.ts:1069-1082`) solely to fire an OS notification and an action-log entry; `created`, `started`, and — critically — `progress` are never consumed, so there is no live view of what a background agent is doing. `AgentTaskMonitor.tsx` (the desktop task-monitor panel) wires only the unrelated generic `bg_*`/`background_task_*` job queue (`backgroundTaskStore.ts`, a simple named-task queue with no 'take over' concept at all), not `BackgroundAgentManager`. A code comment in `backgroundTaskStore.ts:7-8` points readers to a `backgroundAgentStore.ts` for the agent system — that file does not exist anywhere in the repository.",
+    "expectedState": "Claude Cowork's benchmark bar (shots-claude-desktop.md: agent task view, tool-call timeline, 'working on your computer' status) requires that any autonomous background-running agent be listable, watchable live, pausable, resumable, cancellable, and reclaimable (take-over) from a dedicated UI — the domain brief's own framing ('the user must always know what the agent is doing, what it has done, whether work is local or cloud'). At minimum: a 'Background agents' panel listing active/queued/paused/completed agents with live progress, and Pause/Resume/Cancel/Take Over buttons wired to the already-implemented Tauri commands.",
+    "benchmarkRef": "Claude Desktop — Cowork agent task view / tool-call timeline / working-on-computer status (shots-claude-desktop.md)",
+    "gapType": "dead-code",
+    "severity": "P0",
+    "evidence": "Grepped all 11 `background_agent_*` command names across `apps/desktop/src/**/*.{ts,tsx}`: every hit resolves to `registeredCommands.ts` (an allowlist string) or `tauri-mock.ts` (a dev mock) — never a production `invoke()` call. Grepped `background_agent:` event names across the same tree: only `completed` and `failed` are `listen()`-ed, in `agentWorkflowEvents.ts`; `progress`/`started`/`created`/`paused`/`resumed`/`taken_over` have zero listeners. Confirmed `AgentTaskMonitor.tsx` imports only `useBackgroundTaskStore` (the separate generic `bg_*` queue), not any agent-manager store, and that `backgroundAgentStore.ts` (named in a comment as the file that should wire this) does not exist via `find`. Confirmed via `tool_executor/mod.rs:2218-2222` that only `background_agent_start`/`get`/`cancel` are even reachable through the LLM tool-call path — `list`/`pause`/`resume`/`take_over`/`stats`/`cleanup`/`should_push` are unreachable by any caller, human or model. Confirmed `tool_guard.rs:562-575` requires approval for `background_agent_start` (mitigates unattended spawn, does not mitigate the missing control surface once running).",
+    "priorArtId": null,
+    "recommendation": "Build `useBackgroundAgentStore` wiring all 11 commands plus the 7 currently-unconsumed native events, and mount a Background Agents panel (list with live progress bars driven by the `progress` event, Pause/Resume/Cancel per row, Take Over to restore the conversation to the foreground) reachable from the sidebar or a status-bar indicator whenever `background_agent_list_active` returns a non-empty result. Ship the panel before shipping any UI-level way to request a background push (a manual '&' prefix or composer action), since a control surface that can create work but not manage it is worse than no control surface."
+  },
+  {
+    "id": "AGENTIC-WORK-002",
+    "domain": "agentic-work",
+    "surface": "web",
+    "feature": "Web Tasks entry point auth gating",
+    "screen": "/tasks",
+    "files": [
+      "apps/web/proxy.ts:145-152,232",
+      "apps/web/app/tasks/page.tsx:1-18",
+      "apps/web/app/chat/schedules/page.tsx:1-17",
+      "audit/parity-2026-08-15/inventory/web-route-sweep-findings.md:60-79"
+    ],
+    "currentState": "`apps/web/proxy.ts:145-152` defines `isProtectedAppRoute` as `['/chat(.*)', '/library(.*)', '/schedules(.*)', '/settings(.*)', '/billing(.*)', '/admin(.*)']` and only this matcher (line 232) triggers a redirect to `/login`. `/tasks` — the Tasks screen, i.e. the primary Cloud AGI Work run-history surface, linked from the shared web nav (`WebAppShell.tsx`, nav id `tasks`) — is absent from that list. `apps/web/app/tasks/page.tsx` itself performs no auth check either; it unconditionally renders `WebAppShell` + `TasksPage`. Its sibling scheduled-task screen at `/chat/schedules` IS covered (matches `/chat(.*)`). A local route-sweep (`web-route-sweep-findings.md`) independently observed this: hitting `/tasks` unauthenticated returns the full signed-in chrome (nav, search, 'Tasks — your Cloud work runs' heading, Active/All filters) stuck on a 'Loading account…' placeholder instead of redirecting to login.",
+    "expectedState": "Every primary authenticated destination redirects an anonymous visitor to `/login?redirectTo=/tasks`, exactly like `/chat`, `/library`, and `/schedules` already do. No authenticated route should render its full app chrome to a logged-out visitor.",
+    "benchmarkRef": "ChatGPT Web / Claude Web — Tasks and Cowork task lists are only ever reachable behind auth; an anonymous visit redirects straight to sign-in with no interstitial shell",
+    "gapType": "broken-workflow",
+    "severity": "P1",
+    "evidence": "Read `apps/web/proxy.ts:145-152` directly: `/tasks` is not one of the six matcher patterns. Read `apps/web/app/tasks/page.tsx` in full (18 lines): no session check, no redirect, unconditional render. Compared against `apps/web/app/chat/schedules/page.tsx`, which is covered by the `/chat(.*)` pattern. Cross-checked against the independently-gathered `web-route-sweep-findings.md`, which observed the same behavior against a live `next dev` server (not just static analysis).",
+    "priorArtId": null,
+    "recommendation": "Add `'/tasks(.*)'` to `isProtectedAppRoute` in `apps/web/proxy.ts:145-152`. One-line fix; add a regression test asserting an unauthenticated `/tasks` request 302s to `/login?redirectTo=%2Ftasks`, matching the existing test coverage pattern for `/chat` and `/schedules`."
+  },
+  {
+    "id": "AGENTIC-WORK-003",
+    "domain": "agentic-work",
+    "surface": "web",
+    "feature": "Durable background execution for AGI Work turns",
+    "screen": "n/a — server transport selection",
+    "files": [
+      "apps/web/lib/workflows/durable-initial-turns.ts:1-23",
+      "apps/web/app/api/llm/v1/chat/completions/route.ts:516-557",
+      "apps/web/app/api/llm/v1/chat/completions/approve/route.ts:288",
+      "apps/web/.env.example:219",
+      "CHANGELOG.md:328-336"
+    ],
+    "currentState": "A genuinely durable execution path exists: `startCloudAgentWorkflowExecution` (`apps/web/lib/workflows/start-cloud-agent-workflow.ts`) launches the agent turn on the Vercel Workflow DevKit transport (`workflow/api`'s `start()`), which survives the originating HTTP connection closing — this is real 'close the laptop, the task keeps running' infrastructure, not a stub. But `route.ts:533` only takes this path `if (processed.managedUsage && areDurableInitialTurnsEnabled())`. `durable-initial-turns.ts:9-14` states the flag is 'OFF unless explicitly enabled' by design (a poisoned `start()` could otherwise strand every paid turn), and `.env.example:219` ships it as `# AGI_DURABLE_INITIAL_TURNS=0` (commented out, i.e. unset/off by default). `CHANGELOG.md:328-336`, however, describes the same flag as a 'kill-switch' and states outright 'close the laptop and the run continues server-side' as a shipped, unconditional capability — the changelog framing (opt-out safety net) contradicts the code's actual default (opt-in, off until someone sets it). No file in the repository confirms the variable is set in the production environment. Mitigating factor: once a run reaches its first tool-approval checkpoint, `approve/route.ts:288` calls the same `startCloudAgentWorkflowExecution` unconditionally (no flag check), so any run that pauses for approval becomes durable regardless of the flag — only the pre-approval portion of a run's life is affected by the gate.",
+    "expectedState": "The initial-turn durability the CHANGELOG already claims as shipped should default to on (or the discrepancy between 'kill-switch' framing and opt-in default should be resolved and documented), and production configuration should be verifiable — an ops runbook or health check should assert `AGI_DURABLE_INITIAL_TURNS` is set in every environment where the 'continues after you close the laptop' claim is made to users.",
+    "benchmarkRef": "Claude Cowork remote/serverless execution ('works with device off') — cross-cutting-and-complaints.md:61, explicitly named as 'a genuine differentiator vs. ChatGPT Work's need for the desktop client'",
+    "gapType": "reliability-gap",
+    "severity": "P1",
+    "evidence": "Read `durable-initial-turns.ts` in full: default-false boolean gate, env var must equal '1'/'true'/'on'. Read `route.ts:516-557`: the durable path is inside `if (processed.managedUsage && areDurableInitialTurnsEnabled())`, with a fallback to the old request-scoped inline stream on any failure or when the flag is off. Grepped `.env.example` and found the var commented out at value `0`. Grepped CHANGELOG.md and found the shipped feature described as unconditional ('the run continues server-side') under a 'kill-switch' framing that implies default-on. Confirmed `approve/route.ts:288` calls the same starter unconditionally, so only the pre-approval segment of a run is affected by the flag.",
+    "priorArtId": null,
+    "recommendation": "Either flip the default to on now that the module comment's original startup-hang concern is handled by ordering (per the route.ts comment, a `start()` that throws safely falls through), or rename/redocument the flag so its off-by-default behavior is not described as a kill-switch. Add a deploy-time or health-check assertion that fails loudly if `AGI_DURABLE_INITIAL_TURNS` is unset in production while the product-facing copy promises background continuation."
+  },
+  {
+    "id": "AGENTIC-WORK-004",
+    "domain": "agentic-work",
+    "surface": "backend",
+    "feature": "Scheduled task recurrence cadence",
+    "screen": "Scheduled tasks create/edit form (all surfaces)",
+    "files": [
+      "apps/web/app/api/cron/run-schedules/route.ts:1-94",
+      "vercel.json:13-50",
+      "apps/web/lib/schedules/schedule-time.ts:305-411",
+      "packages/contracts/types/src/billing-catalog.ts:380-447",
+      "docs/current/gap-audit-2026-08-08.md:284-322"
+    ],
+    "currentState": "This updates prior finding GAP-P0-007, which reported the sweep as 'one daily batch of ten runs.' That specific defect is now fixed: `run-schedules/route.ts:32,52-74` drains due schedules in waves of 10 up to `MAX_WAVES = ceil(PLATFORM_SCHEDULE_RUNS_PER_SWEEP / 10)` within a 55s budget, so a single invocation can now clear up to 50 due runs, not 10, and schedule creation now honestly REJECTS any cadence the sweep cannot deliver: `assertDeliverableCadence` (`schedule-time.ts:384-411`) throws `'Scheduled tasks are swept once a day, so the shortest supported interval is 1 day'` for any interval or cron expression tighter than `SWEEP_INTERVAL_MS = 24h` (`schedule-time.ts:308`), and `schedule-cadence.test.ts` pins that constant to the actual `vercel.json` cron entry (`0 1 * * *`, once daily) so the two cannot drift apart silently again. The underlying architectural constraint is unchanged and is now explicit product policy rather than a silent bug: **the product cannot deliver any recurring or monitoring schedule finer than once per day**, because Vercel's Hobby-tier cron on this deployment only fires once daily (per `vercel.json`'s single `run-schedules` entry and the file's own comment: 'sized for an hourly sweep that was never deployed, against a daily cron').",
+    "expectedState": "Both ChatGPT Tasks (floor: 'cannot run more than once/hour') and Claude Cowork scheduled tasks / Claude Code routines ('hourly/daily/weekly... full tool/Skills access') support hourly cadence as their baseline; sub-daily monitoring tasks ('check every 15 minutes,' 'monitor this page hourly') are a mainstream use case neither this product can offer at all.",
+    "benchmarkRef": "cross-cutting-and-complaints.md:62 — ChatGPT Tasks ('cannot run more than once/hour') and Claude Cowork/routines ('hourly/daily/weekly')",
+    "gapType": "backend-gap",
+    "severity": "P1",
+    "evidence": "Read `run-schedules/route.ts` in full: confirmed the wave-loop and 55s budget replaced the single 10-row claim the prior audit described. Read `schedule-time.ts:295-411`: confirmed `assertDeliverableCadence` is called from the schedule write boundary (`schedule-service.ts` create/update path) and rejects sub-daily cadences with an honest error rather than silently accepting them. Read `billing-catalog.ts:380-447`: confirmed the documented reasoning ('sized for an hourly sweep that was never deployed') and the `schedule-cadence.test.ts` pin. Read `vercel.json`: confirmed exactly one daily cron entry for `run-schedules` (`0 1 * * *`), no second invocation anywhere in the file.",
+    "priorArtId": "GAP-P0-007",
+    "recommendation": "Either move `run-schedules` off Vercel's cron entirely onto a system that can fire hourly (a durable Workflow-scheduled trigger, matching the pattern already used for cloud agent runs in `apps/web/lib/workflows/cloud-agent-workflow.ts`, or an external scheduler like QStash/Inngest hitting the same claim/process functions), or explicitly productize 'daily only' with clear UI copy explaining the ceiling — but do not leave the gap unaddressed while marketing the feature as 'scheduled tasks' without qualification."
+  },
+  {
+    "id": "AGENTIC-WORK-005",
+    "domain": "agentic-work",
+    "surface": "cross-surface",
+    "feature": "Mid-run steering of an active AGI Work / Cloud agent run",
+    "screen": "Chat composer while a task is running",
+    "files": [
+      "apps/web/app/api/llm/v1/chat/completions/route.ts:165-199",
+      "packages/contracts/cloud-contracts/src/tool-approval-resume.ts:28-44"
+    ],
+    "currentState": "A conversation with an active managed run hard-rejects any new message with HTTP 409 `conversation_run_in_progress` and the message 'This conversation already has a response in progress. Stop it before sending a new message.' (`route.ts:173-197`). The only intervention surface while a run is active is the tool-approval resume endpoint, and its wire contract (`ToolApprovalDecisionSchema`, `tool-approval-resume.ts:29-32`) supports exactly two values, `'approved' | 'rejected'` — no free-text field for the user to redirect, add context, or qualify a decision ('approve, but skip the destructive step' is not expressible). The only way to redirect a running task is to fully Stop it, discarding in-flight progress, then start over.",
+    "expectedState": "A user should be able to send a follow-up instruction that reaches the running agent without stopping it — redirecting scope, adding a constraint, or answering a question the agent didn't explicitly pause to ask.",
+    "benchmarkRef": "ChatGPT Work / Codex — 'Remote Control (view/steer a running host session)', GA May 29 2026 (chatgpt-work-codex.md:158); domain brief explicitly names 'steering while running' as an expected agentic-work capability",
+    "gapType": "ux-gap",
+    "severity": "P1",
+    "evidence": "Read `route.ts:165-199` in full: the 409 branch is unconditional whenever `findActiveCloudAgentRunForConversation` returns a row, with no code path that instead injects the new message into the live run. Read `tool-approval-resume.ts` in full: `ToolApprovalResumeRequestSchema` accepts only `run_id` and an array of `{tool_call_id, decision}` pairs — no message/guidance field exists in the wire schema at all, so even the one interaction point during a paused-for-approval run cannot carry free text.",
+    "priorArtId": null,
+    "recommendation": "Add an optional `guidance: string` field to `ToolApprovalResumeRequestSchema` that gets appended to the transcript as a user turn before the tool loop resumes, giving the existing approval checkpoint a steering channel with the smallest possible schema change. Treat true mid-execution (non-checkpoint) interruption as a larger follow-up needing the workflow engine to expose an interrupt point."
+  },
+  {
+    "id": "AGENTIC-WORK-006",
+    "domain": "agentic-work",
+    "surface": "cross-surface",
+    "feature": "Standalone Cowork/workspace product surface",
+    "screen": "n/a — no dedicated entry surface exists",
+    "files": [
+      "apps/desktop/src/features/v3/DesktopShellV3.tsx",
+      "apps/web/features/tasks/components/TasksPage.tsx:1-48",
+      "docs/current/gap-audit-2026-08-08.md:795-812"
+    ],
+    "currentState": "This confirms prior finding P2-001 is still accurate: AGI Work exists as a mode toggle on the ordinary chat composer (Chat ⇄ AGI Work, wired through `DesktopShellV3`/shared `ChatInput`/`WorkScopePicker` per GAP-064 in `audit/ui-gaps.csv`) plus a run-history list at `/tasks` (web) built on the shared `TasksPage` from `packages/ui/unified-chat`. There is no independent, deep-linkable workspace object with its own creation surface parallel to — rather than nested inside — chat.",
+    "expectedState": "Per P2-001's own acceptance bar: independent workspace/run object, resumable task state, plan and progress, approvals, files/artifacts, background execution, schedule/trigger support, durable history — evaluated against a dedicated entry point, not a composer toggle.",
+    "benchmarkRef": "Claude Cowork as a distinct product surface, not a chat mode (cross-cutting-and-complaints.md:61)",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Re-read the composer mode-toggle wiring cited by GAP-064 in `audit/ui-gaps.csv` and confirmed AGI Work is still reached only via the shared chat composer's mode switch, not a separate top-level surface. Confirmed `/tasks` (`TasksPage`) is a run-history list, not a task-creation surface — new AGI Work runs are still created from the chat composer. No new evidence contradicts the original P2-001 finding; this row exists to record independent re-verification at `e15df56e3`, not to duplicate it.",
+    "priorArtId": "P2-001",
+    "recommendation": "No new action beyond what P2-001 already prescribes; sequence after the P0/P1 items above (background-agent control surface, durable-turn default, steering) since a standalone workspace product built on top of the current execution/visibility gaps would inherit all of them."
+  },
+  {
+    "id": "AGENTIC-WORK-007",
+    "domain": "agentic-work",
+    "surface": "backend",
+    "feature": "Scheduled task execution has no tool access",
+    "screen": "n/a — server execution path",
+    "files": [
+      "apps/web/lib/services/scheduled-agent-executor.ts:88-135",
+      "apps/web/lib/services/schedule-service.ts:1127-1192"
+    ],
+    "currentState": "`executeScheduledAgent` (`scheduled-agent-executor.ts:88-135`) builds its provider request as a single non-streaming chat completion with exactly two messages (a fixed system prompt and the saved task prompt), `max_tokens: 4096`, `stream: false`, and no `tools` field of any kind — no built-in tools, no MCP servers, no user connectors, no web search, no code execution, no file access. The system prompt itself ('Do not claim to have performed external actions unless a tool result proves it') reads as if tool use were expected, but no tool definitions are ever attached to the request. A scheduled task can only produce text derived from the model's own knowledge and the prompt; it cannot check a website, query a connector, or run code, regardless of what the user's saved prompt asks for.",
+    "expectedState": "Claude Cowork scheduled tasks and Claude Code 'routines' explicitly 'retain full Skills/connector access while running unattended.' Even ChatGPT's deliberately narrowed Tasks retain plain-text prompting as their floor — this product's scheduled tasks sit below that floor by omitting tool access entirely, not just voice/files/Custom GPTs.",
+    "benchmarkRef": "cross-cutting-and-complaints.md:117-119 — 'Claude Cowork's scheduled tasks and Claude Code's routines both retain full Skills/connector access while running unattended,' contrasted with ChatGPT's narrower (but still tool-capable within its own connector set) Tasks",
+    "gapType": "backend-gap",
+    "severity": "P1",
+    "evidence": "Read `scheduled-agent-executor.ts` end to end: the `openAIWireRequestToChatRequest` call at line 124-135 has no `tools`/`tool_choice` key. Grepped the whole file and `schedule-service.ts` for `tool|connector|mcp` — zero matches outside the misleading system-prompt sentence. Confirmed the executor is the sole `ScheduledTaskExecutor` implementation wired into `processDueScheduleRuns` via `processClaimedScheduleRun` (`schedule-service.ts:1127-1160`).",
+    "priorArtId": "GAP-168",
+    "recommendation": "Route scheduled execution through the same `runToolLoop`/tool-definition assembly already used by interactive chat (at minimum built-in tools: web search, code execution), gated by the same per-tier tool-availability rules, before extending to user connectors (GAP-168's mobile-UI binding gap is a smaller, downstream piece of this same backend gap)."
+  }
+]

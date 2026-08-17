@@ -81,14 +81,98 @@ pub async fn record_message_feedback(
     correction: Option<String>,
     _category: Option<String>,
 ) -> Result<(), String> {
+    // `correction` is user prose about a conversation. Support bundles keep the
+    // free-form `message` string, so formatting it in here would ship it to
+    // support; only its length is diagnostic. See `crate::sys::support_bundle`.
     tracing::info!(
-        "Message feedback: {} on message {} (conv {:?}, correction: {:?})",
-        feedback_type,
-        message_id,
-        conversation_id,
-        correction,
+        operation = "record_message_feedback",
+        message_id = %message_id,
+        conversation_id = ?conversation_id,
+        status = %feedback_type,
+        correction_chars = correction.as_deref().map_or(0, |text| text.chars().count()),
+        "Message feedback recorded"
     );
     // Store locally for analytics batch upload
     // In future: persist to SQLite analytics table
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sys::commands::error_reporting::error_get_logs;
+    use crate::sys::telemetry::logging::{create_file_appender, LogConfig};
+    use tracing_subscriber::layer::SubscriberExt;
+
+    const CORRECTION: &str = "the clinic is on Rosewood Lane, and my daughter's name is Ada";
+
+    /// Runs `record_message_feedback` against a real JSON file appender in a
+    /// temp log dir — the same writer telemetry startup opens, which also
+    /// publishes the dir the bundle readers use — then returns the bundle those
+    /// readers actually produce.
+    fn bundle_after_recording_feedback() -> Vec<String> {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let appender = create_file_appender(&LogConfig {
+            log_dir: dir.path().to_path_buf(),
+            max_files: 7,
+            rotation: tracing_appender::rolling::Rotation::DAILY,
+        })
+        .expect("appender opens");
+
+        let subscriber = tracing_subscriber::registry().with(
+            tracing_subscriber::fmt::layer()
+                .json()
+                .with_writer(std::sync::Mutex::new(appender))
+                .with_target(true)
+                .with_file(true)
+                .with_line_number(true),
+        );
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime");
+
+        tracing::subscriber::with_default(subscriber, || {
+            runtime
+                .block_on(record_message_feedback(
+                    "msg-77".to_string(),
+                    Some("conv-77".to_string()),
+                    "thumbs_down".to_string(),
+                    Some(CORRECTION.to_string()),
+                    Some("accuracy".to_string()),
+                ))
+                .expect("record_message_feedback succeeds");
+        });
+
+        runtime
+            .block_on(error_get_logs(MAX_BUNDLE_LINES))
+            .expect("error_get_logs succeeds")
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn message_feedback_correction_text_never_reaches_a_support_bundle() {
+        let bundle = bundle_after_recording_feedback();
+        let text = bundle.join("\n");
+
+        assert!(
+            text.contains("Message feedback recorded"),
+            "the feedback event must reach the bundle at all: {text}"
+        );
+        assert!(
+            !text.contains("Rosewood Lane") && !text.contains("Ada"),
+            "user correction prose must not reach a support bundle: {text}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn message_feedback_keeps_the_identifiers_support_needs() {
+        let bundle = bundle_after_recording_feedback();
+        let text = bundle.join("\n");
+
+        assert!(text.contains("message_id=msg-77"), "{text}");
+        assert!(text.contains("conversation_id="), "{text}");
+        assert!(text.contains("status=thumbs_down"), "{text}");
+    }
 }

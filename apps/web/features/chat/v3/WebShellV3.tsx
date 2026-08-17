@@ -1,41 +1,35 @@
-'use client';
-
-import { useCallback, useMemo, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  ChatInterface,
-  type ChatHostBridge,
-  type ChatInterfaceProps,
-} from '@agiworkforce/unified-chat';
-import type { ChatRuntime } from '@agiworkforce/unified-chat';
-import { WebSidebar } from './WebSidebar';
-import { WebEmptyChat } from './WebEmptyChat';
-import { WebSearchModalCmdK } from './WebSearchModalCmdK';
+/**
+ * WebShellV3 — route table for the v3 web sidebar's nav views.
+ *
+ * The v3 shell component itself is dead (its only mount was
+ * `UnifiedChatPage`, which has been removed — `/chat` is served by
+ * `WebChatPage` via `WebChatRoot`). What remains is a route table plus the
+ * `V3Mode` type used by `WebSidebar.tsx`, and `WebSidebar` itself now has no
+ * mount either: `CloudCodePage` moved to `WebAppShell`. So this whole `v3/`
+ * directory is currently reachable only from its own tests — it is awaiting a
+ * delete-or-adopt decision, not live code.
+ *
+ * Do not reintroduce a mounted shell component here without re-checking
+ * whether it actually has a route.
+ */
 
 // ─── mode type ───────────────────────────────────────────────────────────────
 
 export type V3Mode = 'chat' | 'work' | 'code';
 
-// ─── props ───────────────────────────────────────────────────────────────────
-
-export interface WebShellV3Props {
-  runtime: ChatRuntime | null;
-  className?: string;
-  hostBridge?: ChatHostBridge | null;
-  onModelSelectorClick?: () => void;
-  // AUDIT-FIX CMP-29: `onVoiceClick` removed — ChatInput owns the mic
-  // (useVoiceInput) and never invoked the forwarded handler.
-  onNavigateView?: ChatInterfaceProps['onNavigateView'];
-}
+// ─── view route table ─────────────────────────────────────────────────────────
 
 const VIEW_ROUTES: Record<string, string> = {
   projects: '/chat/projects',
-  artifacts: '/gallery',
+  // In-shell artifacts live at /chat/artifacts; /gallery is the public
+  // marketing-chrome gallery and drops the user outside the app shell.
+  artifacts: '/chat/artifacts',
   'customize-home': '/chat/customize',
   'work-projects': '/agi-work',
-  'work-artifacts': '/gallery',
+  'work-artifacts': '/chat/artifacts',
   'work-dispatch': '/agi-work',
   'voice-settings': '/settings/voice',
+  'general-settings': '/settings/general',
   account: '/settings/account',
   schedules: '/chat/schedules',
   'code-desktop': '/download',
@@ -44,135 +38,4 @@ const VIEW_ROUTES: Record<string, string> = {
 
 export function resolveWebViewRoute(view: string): string | undefined {
   return VIEW_ROUTES[view];
-}
-
-/**
- * v3 web shell.
- *
- * Layout mirrors DesktopShellV3: WebSidebar (240/64px collapsible) left +
- * main view area right. Uses web-compatible store imports instead of Tauri.
- * SearchModalCmdK bound to Ctrl+K / Cmd+K globally.
- */
-export function WebShellV3({
-  runtime,
-  className,
-  hostBridge,
-  onModelSelectorClick,
-  onNavigateView,
-}: WebShellV3Props) {
-  const router = useRouter();
-  const [mode, setMode] = useState<V3Mode>('chat');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const sidebarConversations = useMemo(
-    () => hostBridge?.getSnapshot().conversations ?? [],
-    [hostBridge],
-  );
-
-  // Global Ctrl+K / Cmd+K to open search
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setSearchOpen((o) => !o);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
-  const handleNewChat = useCallback(() => {
-    void (async () => {
-      try {
-        const hostConversationId = hostBridge?.createConversation?.('New Conversation');
-        if (hostConversationId) {
-          hostBridge?.selectConversation?.(hostConversationId);
-          return;
-        }
-
-        if (!runtime) return;
-        const created = await runtime.createConversation('New Conversation');
-        const conversationId = typeof created === 'string' ? created : created.id;
-        hostBridge?.selectConversation?.(conversationId);
-      } catch (error) {
-        console.error('Failed to create a new conversation', error);
-      }
-    })();
-  }, [hostBridge, runtime]);
-
-  const handleNavigateView = useCallback(
-    (view: string) => {
-      if (onNavigateView) {
-        onNavigateView(view as Parameters<NonNullable<typeof onNavigateView>>[0]);
-        return;
-      }
-      const route = resolveWebViewRoute(view);
-      if (route) {
-        router.push(route);
-      }
-    },
-    [onNavigateView, router],
-  );
-
-  const handleModeChange = useCallback(
-    (nextMode: V3Mode) => {
-      if (nextMode === 'code') {
-        router.push('/chat/code');
-        return;
-      }
-      setMode(nextMode);
-    },
-    [router],
-  );
-
-  const handleJumpConversation = useCallback(
-    (id: string) => {
-      hostBridge?.selectConversation?.(id);
-    },
-    [hostBridge],
-  );
-
-  return (
-    <div
-      className={className}
-      data-v3-shell=""
-      style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}
-    >
-      <WebSidebar
-        mode={mode}
-        onModeChange={handleModeChange}
-        onNewChat={handleNewChat}
-        onOpenSearch={() => setSearchOpen(true)}
-        onNavigateView={handleNavigateView}
-        onJumpConversation={handleJumpConversation}
-        onOpenAccountMenu={() => handleNavigateView('account')}
-        conversations={sidebarConversations}
-      />
-
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
-        <ChatInterface
-          runtime={runtime}
-          className="h-full w-full"
-          manageTheme={false}
-          enableShortcuts={true}
-          hostBridge={hostBridge}
-          onModelSelectorClick={onModelSelectorClick}
-          onNavigateView={onNavigateView}
-          emptyStateSlot={<WebEmptyChat />}
-          sidebarSlot={null}
-          showProvenanceFooter={true}
-        />
-      </div>
-
-      {searchOpen && (
-        <WebSearchModalCmdK
-          onClose={() => setSearchOpen(false)}
-          onNavigate={(dest, item) => {
-            if (dest === 'chat' && item.kind === 'chat') {
-              hostBridge?.selectConversation?.(item.id);
-            }
-          }}
-        />
-      )}
-    </div>
-  );
 }

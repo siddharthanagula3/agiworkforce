@@ -18,6 +18,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
+import { useDeleteAccount } from '../hooks/use-settings-queries';
 
 function formatDateTime(value: Date | null | undefined): string {
   if (!value) return '—';
@@ -191,60 +192,23 @@ export function AccountSection() {
   );
 
   // ── Delete account (canonical, working flow on this surface) ───────────────
+  // CSRF, the DELETE call, response parsing, and the post-success sign-out
+  // sequence all live in useDeleteAccount (features/settings/hooks/
+  // use-settings-queries.ts) — this is now the only account-deletion
+  // implementation in the app; PrivacySection's independent copy (which never
+  // signed the user out) was collapsed onto this hook.
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [deleteSucceeded, setDeleteSucceeded] = useState(false);
-  const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string | null>(null);
+  const deleteAccountMutation = useDeleteAccount();
 
-  const handleDeleteAccount = useCallback(async () => {
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-      const res = await fetch('/api/user/delete-account', { method: 'DELETE', headers });
-      const data: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const msg =
-          data !== null && typeof data === 'object' && 'error' in data
-            ? String((data as { error?: unknown }).error)
-            : 'Account deletion failed.';
-        throw new Error(msg);
-      }
-      const serverMessage =
-        data !== null && typeof data === 'object' && 'message' in data
-          ? String((data as { message?: unknown }).message)
-          : null;
-      setDeleteSuccessMessage(
-        serverMessage ?? 'Your account deletion has been scheduled. You will be signed out now.',
-      );
-      setIsDeleting(false);
-      setDeleteSucceeded(true);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Account deletion failed.');
-      setIsDeleting(false);
-    }
-  }, []);
+  const handleDeleteAccount = useCallback(() => {
+    deleteAccountMutation.mutate();
+  }, [deleteAccountMutation]);
 
   const handleDeleteSuccessContinue = useCallback(() => {
     setShowDeleteDialog(false);
-    void (async () => {
-      try {
-        await logout();
-        await clerkSignOut({ redirectUrl: '/' });
-      } catch (err) {
-        // The account is already deleted server-side at this point (this
-        // handler only runs after handleDeleteAccount succeeded) — if
-        // logout()/clerkSignOut() fail here (e.g. a network blip), fall back
-        // to a hard navigation instead of leaving the user stuck on a dead
-        // settings screen with no feedback and no way to reach '/'.
-        console.warn('[Account] Post-deletion sign-out failed, forcing navigation:', err);
-      } finally {
-        router.replace('/');
-      }
-    })();
-  }, [logout, clerkSignOut, router]);
+    void deleteAccountMutation.signOutAfterDeletion();
+  }, [deleteAccountMutation]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -382,9 +346,7 @@ export function AccountSection() {
             data-testid="delete-account-trigger"
             onClick={() => {
               setDeleteConfirmInput('');
-              setDeleteError(null);
-              setDeleteSucceeded(false);
-              setDeleteSuccessMessage(null);
+              deleteAccountMutation.reset();
               setShowDeleteDialog(true);
             }}
             style={{
@@ -695,21 +657,29 @@ export function AccountSection() {
       <AlertDialog
         open={showDeleteDialog}
         onOpenChange={(open) => {
-          if (!isDeleting && !deleteSucceeded) setShowDeleteDialog(open);
+          if (!deleteAccountMutation.isPending && !deleteAccountMutation.isSuccess) {
+            setShowDeleteDialog(open);
+          }
         }}
       >
         <AlertDialogContent>
-          {deleteSucceeded ? (
+          {deleteAccountMutation.isSuccess ? (
             <>
               <AlertDialogHeader>
                 <AlertDialogTitle data-testid="delete-account-success-title">
                   Account deletion scheduled
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  {deleteSuccessMessage ??
+                  {deleteAccountMutation.data?.message ??
                     'Your account deletion has been scheduled. You will be signed out now.'}
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              {deleteAccountMutation.data?.scheduledFor && (
+                <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '-8px 0 0' }}>
+                  Your data is permanently erased on{' '}
+                  {formatDateTime(new Date(deleteAccountMutation.data.scheduledFor))}.
+                </p>
+              )}
               <AlertDialogFooter>
                 <AlertDialogAction
                   data-testid="delete-account-success-continue"
@@ -749,22 +719,26 @@ export function AccountSection() {
                   data-testid="delete-confirm-input"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
                 />
-                {deleteError !== null && (
-                  <p className="mt-2 text-xs text-destructive">{deleteError}</p>
+                {deleteAccountMutation.error && (
+                  <p className="mt-2 text-xs text-destructive">
+                    {deleteAccountMutation.error.message}
+                  </p>
                 )}
               </div>
               <AlertDialogFooter>
-                <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                <AlertDialogCancel disabled={deleteAccountMutation.isPending}>
+                  Cancel
+                </AlertDialogCancel>
                 <AlertDialogAction
                   data-testid="delete-account-confirm"
                   onClick={(e) => {
                     e.preventDefault();
-                    void handleDeleteAccount();
+                    handleDeleteAccount();
                   }}
-                  disabled={deleteConfirmInput !== 'DELETE' || isDeleting}
+                  disabled={deleteConfirmInput !== 'DELETE' || deleteAccountMutation.isPending}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                 >
-                  {isDeleting ? 'Deleting...' : 'Delete account'}
+                  {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete account'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </>

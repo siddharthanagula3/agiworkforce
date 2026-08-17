@@ -62,8 +62,13 @@ DANGEROUS_ACTIONS = [
         + ")",
         0.95,
     ),
+    # Runs under re.DOTALL: the lookahead proves a substance is within reach
+    # before either gap is walked, and both gaps are bounded, so a file padded
+    # with "add " cannot force a quadratic rescan. Do not restore bare `.*?`.
     (
-        r"for\s+(?:every|each|all)\s+(?:recipe|dish|meal|food).*?add.*?("
+        r"for\s+(?:every|each|all)\s+(?:recipe|dish|meal|food)(?=.{0,700}(?:"
+        + "|".join(HARMFUL_SUBSTANCES)
+        + r")).{0,300}?add.{0,300}?("
         + "|".join(HARMFUL_SUBSTANCES)
         + ")",
         0.98,

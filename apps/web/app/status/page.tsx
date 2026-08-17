@@ -2,12 +2,13 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { runHealthChecks, type HealthCheckResult } from '../../lib/server/health-check';
+import { getCachedHealthChecks, type HealthCheckResult } from '../../lib/server/health-check';
+import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 
 export const metadata = buildMetadata({
   title: 'Status',
   description:
-    "A live health signal for AGI's hosted services, checked when you load the page — with an explicit statement of what the check does and does not cover.",
+    "A health signal for AGI's hosted services, re-checked every minute — with an explicit statement of what the check does and does not cover.",
   path: '/status',
 });
 
@@ -21,12 +22,13 @@ const HEALTH_LABEL: Record<HealthState, string> = {
 };
 
 const HEALTH_NOTE: Record<HealthState, string> = {
-  healthy: 'Every check below passed on this request.',
+  healthy: 'Every check below passed on the most recent run.',
   degraded:
     'Core serving passed, but a non-core dependency did not. Chat keeps working; billing may not.',
-  unhealthy: 'A core check failed on this request. The hosted platform cannot serve normally.',
+  unhealthy:
+    'A core check failed on the most recent run. The hosted platform cannot serve normally.',
   unknown:
-    'We could not complete the health check for this page load. If you are seeing errors, email us.',
+    'We could not complete the most recent health check. If you are seeing errors, email us.',
 };
 
 const COMPONENT_LABEL: Record<'healthy' | 'unhealthy', string> = {
@@ -45,7 +47,7 @@ async function fetchHealth(): Promise<HealthSignal> {
     const timeout = new Promise<null>((resolve) => {
       setTimeout(() => resolve(null), 4000);
     });
-    const result = await Promise.race([runHealthChecks(), timeout]);
+    const result = await Promise.race([getCachedHealthChecks(), timeout]);
     if (!result) {
       return { state: 'unknown', checkedAt: null, checks: null };
     }
@@ -87,7 +89,7 @@ export default async function StatusPage() {
   const checks = health.checks;
   const checkedLabel = health.checkedAt
     ? new Date(health.checkedAt).toUTCString()
-    : 'This page load';
+    : 'Not completed';
 
   return (
     <div data-design="agi">
@@ -105,9 +107,9 @@ export default async function StatusPage() {
           </h1>
           <p className="agi-fl-lede">
             No wall of evergreen badges. This page runs a real health check against AGI&rsquo;s
-            hosted services when you load it, and tells you exactly what that check does not cover.
-            Most of AGI doesn&rsquo;t depend on our servers at all &mdash; Local and BYOK work runs
-            on your device.
+            hosted services at most once a minute, shows you when that check ran, and tells you
+            exactly what it does not cover. Most of AGI doesn&rsquo;t depend on our servers at all
+            &mdash; Local and BYOK work runs on your device.
           </p>
           <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <ul className="agi-fl-mode-ribbon" aria-label="Where AGI runs">
@@ -121,14 +123,18 @@ export default async function StatusPage() {
         <section className="agi-fl-section" aria-labelledby="agi-status-signal-title">
           <p className="agi-fl-eyebrow">Live signal</p>
           <h2 id="agi-status-signal-title" className="agi-fl-h2">
-            Checked when you loaded this page.
+            Re-checked every {RENDER_CACHE_SECONDS.liveSignal} seconds.
           </h2>
           <p className="agi-fl-section-lede">
-            The result below was produced by this page load. It calls the health checks directly,
-            in-process, rather than making an HTTP request to our own health endpoint &mdash;
-            building a request URL out of inbound headers is a server-side request forgery vector,
-            so a status page that self-fetches is a status page with a security bug. Same checks the
-            monitored endpoint runs. Not a hand-edited badge.
+            The result below comes from a real run of the checks, shared by everyone who loads this
+            page inside the same window &mdash; the &ldquo;Checked&rdquo; column is the moment it
+            actually ran, not the moment you asked. It calls the health checks directly, in-process,
+            rather than making an HTTP request to our own health endpoint &mdash; building a request
+            URL out of inbound headers is a server-side request forgery vector, so a status page
+            that self-fetches is a status page with a security bug. Running them once per window
+            rather than once per visitor also keeps a traffic spike on this page from becoming load
+            on the very dependencies it is reporting on. Same checks the monitored endpoint runs.
+            Not a hand-edited badge.
           </p>
           <table className="agi-ledger">
             <thead>

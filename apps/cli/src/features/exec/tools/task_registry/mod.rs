@@ -495,16 +495,33 @@ pub(super) async fn execute_lsp_definition(args: &HashMap<String, String>) -> Re
 pub(super) async fn execute_lsp_hover(args: &HashMap<String, String>) -> Result<ToolResult> {
     lsp_request_for_file(args, "textDocument/hover").await
 }
+// Diagnostics are server-pushed (textDocument/publishDiagnostics) and the stdio
+// client has no notification reader, so nothing is ever collected. This must
+// fail loudly: a success with an empty diagnostic list reads as "file is clean"
+// to the model, which is a claim nothing here checked.
 pub(super) async fn execute_lsp_diagnostics(args: &HashMap<String, String>) -> Result<ToolResult> {
-    let _ = args;
+    let target = args
+        .get("file")
+        .map(String::as_str)
+        .filter(|f| !f.is_empty())
+        .unwrap_or("the requested file");
     Ok(ToolResult {
         tool_name: "lsp_diagnostics".into(),
-        success: true,
+        success: false,
         output: serde_json::json!({
-            "note": "LSP diagnostics are server-pushed (textDocument/publishDiagnostics). \
-                    The basic LSP client doesn't subscribe yet — wire up notifications in M-future.",
-            "next": "Use lsp_hover or lsp_definition for synchronous LSP probes."
-        }).to_string(),
+            "error": "unsupported",
+            "checked": false,
+            "message": format!(
+                "lsp_diagnostics is not implemented. The LSP client does not subscribe to \
+                 textDocument/publishDiagnostics, so no diagnostics were collected for {target}. \
+                 This is not an empty diagnostic list — nothing was checked, and no conclusion \
+                 about errors or warnings in this file may be drawn from it."
+            ),
+            "next": "Run the project's own compiler or linter (for example a type-check or lint \
+                    command) for real diagnostics; lsp_hover and lsp_definition remain available \
+                    for synchronous LSP probes."
+        })
+        .to_string(),
     })
 }
 
@@ -578,6 +595,60 @@ pub(super) async fn execute_lsp_document_symbols(
 
 pub(super) async fn execute_lsp_format(args: &HashMap<String, String>) -> Result<ToolResult> {
     lsp_request_for_file(args, "textDocument/formatting").await
+}
+
+#[cfg(test)]
+mod lsp_diagnostics_tests {
+    use std::collections::HashMap;
+
+    use super::execute_lsp_diagnostics;
+
+    /// The tool collects nothing, so it must not report success: a success with
+    /// no diagnostics is indistinguishable from "this file is clean".
+    ///
+    /// FAILS against the old stub, which returned success=true.
+    #[tokio::test]
+    async fn diagnostics_reports_failure_instead_of_a_clean_file() {
+        let mut args = HashMap::new();
+        args.insert("file".to_string(), "src/main.rs".to_string());
+
+        let result = execute_lsp_diagnostics(&args).await.expect("returns Ok");
+
+        assert!(
+            !result.success,
+            "lsp_diagnostics must not report success while it checks nothing: {}",
+            result.output
+        );
+
+        let payload: serde_json::Value =
+            serde_json::from_str(&result.output).expect("output is JSON");
+        assert_eq!(payload["checked"], serde_json::json!(false));
+        assert_eq!(payload["error"], serde_json::json!("unsupported"));
+        assert!(
+            payload["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("src/main.rs") && m.contains("nothing was checked")),
+            "message must name the file and deny any cleanliness claim: {}",
+            result.output
+        );
+        assert!(
+            !payload
+                .as_object()
+                .expect("object")
+                .contains_key("diagnostics"),
+            "an empty diagnostics list would be read as a clean file: {}",
+            result.output
+        );
+    }
+
+    #[tokio::test]
+    async fn diagnostics_fails_even_without_a_file_argument() {
+        let result = execute_lsp_diagnostics(&HashMap::new())
+            .await
+            .expect("returns Ok");
+        assert!(!result.success);
+        assert_eq!(result.tool_name, "lsp_diagnostics");
+    }
 }
 
 // ---------------------------------------------------------------------------

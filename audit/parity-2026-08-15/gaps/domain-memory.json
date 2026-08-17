@@ -1,0 +1,217 @@
+[
+  {
+    "id": "MEMORY-001",
+    "domain": "memory",
+    "surface": "desktop-tauri",
+    "feature": "Project memory tab shows/writes the wrong (global) memory store",
+    "screen": "Project Settings dialog — Memory tab",
+    "files": [
+      "apps/desktop/src/features/chat/ProjectSettingsDialog.tsx:1268-1291",
+      "apps/desktop/src/features/memory/MemoryManager.tsx:105-131",
+      "apps/desktop/src/stores/projectMemoryStore.ts:73-75,113-131",
+      "apps/desktop/src/api/projectMemory.ts:103,230,245",
+      "apps/desktop/src-tauri/src/sys/commands/chat/memory_handler.rs:80-136",
+      "apps/desktop/src-tauri/src/sys/commands/chat/send_message_setup.rs:252-261"
+    ],
+    "currentState": "Opening a Project's Settings > Memory tab mounts `<MemoryManager showCreateButton={true} showImportExport={false} />` next to copy that reads 'Memories help AGI remember important details about your project ... stored as memories for continuity.' `MemoryManager` reads and writes `useMemoryStore().memories` — the single flat, GLOBAL, device-wide memory list (`loadAll`, no `projectFolder`/`projectId` filter anywhere in its props or implementation). Meanwhile a fully separate, genuinely project-scoped memory pipeline already exists and is what the chat runtime actually uses at send time: `apps/desktop/src-tauri/src/sys/commands/chat/memory_handler.rs`'s `ChatMemoryHandler` (constructed `with_project_config` in `send_message_setup.rs:252`) calls `ProjectMemoryManager`-backed `load_project_memories`/`detect_and_save_decision`, which reads/writes a dedicated SQLite table keyed by project folder. The TypeScript side of that same pipeline (`projectMemoryStore.ts`'s `getProjectMemories(projectFolder)`, `searchProjectMemories`, `saveProjectContext`, backed by real `#[tauri::command]` handlers in `sys/commands/project_memory.rs`) has zero callers anywhere in the UI.",
+    "expectedState": "The Memory tab inside a Project's settings shows exactly the memories that are actually injected into that project's conversations (via `getProjectMemories(projectFolder)`), and 'Create memory' from that tab writes to the project-scoped store, not the global one. A user should never be able to see, edit, or delete an unrelated project's or general chat's memories from inside a project dialog, nor have a note they add there silently leak into every other project and every non-project chat.",
+    "benchmarkRef": "Claude — Cowork Projects: 'memory on by default and does not transfer cross-project' (research/claude-web-desktop.md:94,157,228); ChatGPT — project-only memory toggle scopes learnings to one Project (research/chatgpt-web-desktop.md:152).",
+    "gapType": "broken-workflow",
+    "severity": "P1",
+    "evidence": "Read ProjectSettingsDialog.tsx:1268-1291 (Memory tab mounts MemoryManager with the 'helps AGI remember ... your project' info box). Read MemoryManager.tsx:94-131 confirming its props have no project filter and it sources `s.memories` (global `useMemoryStore`, `loadAll`). Grepped `getProjectMemories|searchProjectMemories|saveProjectContext` across apps/desktop/src/**/*.tsx,ts — matches only inside the store/API definition files themselves, zero UI call sites. Confirmed the Rust side is real and live-wired by reading memory_handler.rs (load_project_memories, detect_and_save_decision keyed by project_path) and send_message_setup.rs:252-261 (ChatMemoryHandler::with_project_config + inject_memory_context called on every send). Confirmed the Tauri commands genuinely exist: `sys/commands/project_memory.rs` has `#[tauri::command] pub async fn get_project_memories` (line 200) and `search_project_memories` (line 213).",
+    "priorArtId": "CAP-027",
+    "recommendation": "Pass the active project's folder into `MemoryManager` (new `projectFolder` prop), swap its data source from the global `useMemoryStore` to `projectMemoryStore`'s `getProjectMemories(projectFolder)`/`searchProjectMemories`, and route 'Create memory' through `saveProjectContext`/the equivalent decision-save path so the visible list matches what `memory_handler.rs` actually injects at send time."
+  },
+  {
+    "id": "MEMORY-002",
+    "domain": "memory",
+    "surface": "web",
+    "feature": "Search and reference past chats",
+    "screen": "Chat send pipeline (no dedicated screen — a Capabilities toggle exists but nothing consumes it for retrieval)",
+    "files": [
+      "apps/web/lib/runtime/WebChatRuntime.ts:181-189",
+      "apps/web/lib/hooks/useChatStream.ts",
+      "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+      "apps/web/app/api/memory/search/route.ts:1-66",
+      "apps/mobile/src/features/memory/services/pastChatContext.ts",
+      "apps/mobile/stores/chat/chatExecutionStore.ts:1253-1296"
+    ],
+    "currentState": "Web's Memory system only ever injects the user's curated `MemoryFact` list (manually added, or server-side auto-extracted 'facts') as a leading system message — `buildMemorySystemContent`/`enrichManagedMemoryContext`. Neither the client runtime (`WebChatRuntime.ts`) nor the live production path (`useChatStream.ts` → `/api/llm/v1/chat/completions` → `request-processor.ts`) ever searches or retrieves excerpts from the user's OTHER past conversations at send time. `/api/memory/search` (ILIKE over `user_memories.content`) and `/api/search` (full-text over sessions/messages) both exist as callable routes but have zero callers from the chat send path — only from the sidebar search palette. Mobile already has the feature end-to-end: `pastChatContext.ts`'s `retrievePastChatContext()` scores past messages by query-term overlap, fences the result as untrusted data, and is wired into `chatExecutionStore.ts:1270-1288`, gated by the same `referencePastChats` preference and excluded for temporary chats.",
+    "expectedState": "When 'Search and reference chats' (or equivalent) is enabled, a Web chat turn should retrieve and inject relevant excerpts from the user's other conversations, not just the separately-curated memory-facts list, matching the mobile implementation's behavior and the competitive bar.",
+    "benchmarkRef": "Claude — 'Search and reference chats' toggle performs RAG-style search over prior conversations, surfaced as a visible tool call in the transcript (research/claude-web-desktop.md:158; shots-claude-desktop.md:371,414). ChatGPT — 'reference chat history' implicit pattern recall (research/chatgpt-web-desktop.md:149).",
+    "gapType": "missing-capability",
+    "severity": "P1",
+    "evidence": "Read WebChatRuntime.ts:181-189 (only `buildMemorySystemContent`/`withMemorySystemMessage`, no past-chat search call). Grepped `pastChat|past_chat|searchMemor|reference.*chat|search.*history` across request-processor.ts — zero matches, confirming the production server path has no equivalent either. Grepped `api/memory/search` and `api/search` usage across apps/web — only the global-search-service.ts sidebar palette calls `/api/search`; nothing calls `/api/memory/search` outside its own route/test file. Read apps/mobile's pastChatContext.ts and its call site in chatExecutionStore.ts:1253-1296 confirming a working reference implementation exists on another surface.",
+    "priorArtId": null,
+    "recommendation": "Port `pastChatContext.ts`'s retrieval/fencing/scoring logic (or a server-side equivalent built on `/api/search`) into Web's send path, gated by the existing `capabilities.memory`/`generateFromHistory` preference namespace and excluded for temporary/incognito chats, mirroring the ordering (persona, saved memory, then past-chat excerpts) mobile already uses."
+  },
+  {
+    "id": "MEMORY-003",
+    "domain": "memory",
+    "surface": "cross-surface",
+    "feature": "Import memory from other AI providers",
+    "screen": "Settings > Memory — Import",
+    "files": [
+      "apps/mobile/app/(app)/settings/memory-import.tsx",
+      "apps/mobile/src/features/memory/services/memoryImport.ts:1-300",
+      "apps/mobile/app/(app)/settings/memory.tsx:202-204,295-305",
+      "apps/web/features/settings/sections/CapabilitiesSection.tsx:169-174"
+    ],
+    "currentState": "Mobile ships a genuinely working, on-device memory import: `memoryImport.ts` parses ChatGPT (`conversations.json`), Claude, and Gemini/Takeout JSON exports (plus plain text/notes) with format auto-detection, per-source extraction heuristics, a preview of the first 3 facts with a total count before committing, and dedup via the existing `bulkInsert`. It is reachable from an Upload icon in the Memory screen header. Web explicitly ships none of this: `CapabilitiesSection.tsx:169-174` has a code comment stating the 'Import memory from other AI providers' row was deliberately removed because 'the web import flow is a placeholder (no working provider import endpoint)' — an honest avoidance of a dead control, but the capability itself does not exist on Web or Desktop. Desktop's prior-art row GAP-077 separately declined cross-provider import citing 'no ingestion or authorization contract' — a premise Mobile's own file-only, no-server-contract implementation disproves.",
+    "expectedState": "The same on-device, no-server-round-trip import capability Mobile already has should be reachable from Web and Desktop Settings > Memory, closing the parity gap and giving every surface the switching-cost-reduction competitors advertise.",
+    "benchmarkRef": "Claude Desktop — 'Import memory from other AI providers' → [Start import], described as providing a copy-paste prompt to fetch memory from the other account (shots-claude-desktop.md:374,578) — notably a manual flow, weaker than Mobile's automated parser.",
+    "gapType": "parity-gap",
+    "severity": "P2",
+    "evidence": "Read memory-import.tsx and memoryImport.ts in full, confirming real parsers for chatgpt/claude/gemini/text with truncation caps (MAX_FACT_CHARS, MAX_FACTS) and an 'On-device only' privacy notice. Confirmed reachability via memory.tsx:202-204 (handleImportPress) and the header Upload button at :295-305. Grepped `parseChatGPTExport|parseClaudeExport|memoryImport|memory-import|Import memory from other` across apps/web and apps/desktop — the only hit is the CapabilitiesSection.tsx comment explaining its deliberate absence.",
+    "priorArtId": null,
+    "recommendation": "Port memoryImport.ts's parsers (they have no server dependency) to a shared package, add a file-picker-based Import flow to Web's MemorySection and Desktop's Memory settings tab, writing into each surface's local/account memory store the same way Mobile's bulkInsert does."
+  },
+  {
+    "id": "MEMORY-004",
+    "domain": "memory",
+    "surface": "web",
+    "feature": "Project-scoped memory",
+    "screen": "Project Settings dialog — Memory section",
+    "files": [
+      "apps/web/db/neon/0010_memory.sql:1-10",
+      "apps/web/features/projects/components/ProjectSettingsDialog.tsx:229-251",
+      "apps/web/lib/services/managed-memory-context-service.ts:137-158"
+    ],
+    "currentState": "`user_memories` has no project column at all (0010_memory.sql), and `loadManagedMemoryContext` selects purely by `user_id` with no project dimension. The team already found and removed a decorative, non-functional memory-scope `<select>` from the Web Project Settings dialog — the current code has an explicit comment explaining it was 'one option (\"Default\"), no onChange, no state, and no persistence' and was replaced with honest static copy: 'This project can access memories from outside chats, and vice versa.' That is correct, non-misleading engineering, but it leaves the underlying capability fully absent: a Web user cannot opt a project into project-only memory or exclude global memory from a project's context, at all.",
+    "expectedState": "A Web user can scope a Project to its own memory (project-only, isolated from account-wide memory) the way ChatGPT and Claude project memory both support, with the setting actually persisted and enforced in `managed-memory-context-service.ts`.",
+    "benchmarkRef": "ChatGPT — 2026 update lets users opt individual Projects into project-only memory, and disables personal Memory entirely inside shared Projects (research/chatgpt-web-desktop.md:152). Claude — project memory 'scoped separately per project' (research/claude-web-desktop.md:156-157).",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Read 0010_memory.sql confirming no project_id/project_folder column. Read managed-memory-context-service.ts:137-158 (`loadManagedMemoryContext` query is `where user_id = $1`, no project predicate anywhere in the file). Read ProjectSettingsDialog.tsx:229-251, whose own comment documents the prior dead-dropdown finding and the current honest-but-absent state.",
+    "priorArtId": "CAP-027",
+    "recommendation": "Add a nullable `project_id` column to `user_memories`, a per-project `memoryScope: 'default' | 'project-only'` preference, and thread it through `loadManagedMemoryContext`/`persistManagedAutoMemoryFacts` so project-only memories never leak into the general account context and vice versa when the project opts in — matching the scope this domain audit's shared prior-art item (CAP-027) already calls for."
+  },
+  {
+    "id": "MEMORY-005",
+    "domain": "memory",
+    "surface": "backend",
+    "feature": "Memory search uses substring matching, not semantic similarity",
+    "screen": "n/a (backend retrieval)",
+    "files": [
+      "apps/web/app/api/memory/search/route.ts:37-47",
+      "apps/web/app/api/llm/v1/embeddings/route.ts",
+      "apps/web/db/neon/0010_memory.sql"
+    ],
+    "currentState": "`GET /api/memory/search` is a plain Postgres `ILIKE` substring search over `user_memories.content`, with its own docstring stating 'Simple ILIKE text search - can be upgraded to vector similarity later.' A real, fully-implemented OpenAI-compatible embeddings endpoint exists (`/api/llm/v1/embeddings`) but has no internal caller anywhere in the product — no `vector` column exists in any migration, so there is no semantic-similarity retrieval path for memory (or for chat history) at all today.",
+    "expectedState": "Memory (and past-chat) retrieval should rank by semantic relevance, not literal substring overlap, so a query like 'what did I say about my tech stack' can surface a memory that says 'prefers Rust' without the word 'stack' appearing verbatim.",
+    "benchmarkRef": "Claude — 'Search and reference chats' performs RAG-style search (research/claude-web-desktop.md:158). ChatGPT — Dreaming V3 memory system reports 82.8% factual recall on its own benchmark, implying semantic (not literal) matching (research/cross-cutting-and-complaints.md:51).",
+    "gapType": "performance-gap",
+    "severity": "P2",
+    "evidence": "Read /api/memory/search/route.ts:37-47 — literal `content ilike $2` with wildcard-escaping, no ranking beyond `order by updated_at desc`. Confirmed via the web-backend inventory doc (§13) and independently by grepping every apps/web/db/neon/*.sql migration for `vector` — no hits. Confirmed the embeddings route is real (306 lines, reserve/call/settle billing pattern) but has no internal caller per the inventory's own grep.",
+    "priorArtId": null,
+    "recommendation": "Add a pgvector column to `user_memories` (and optionally `messages`), backfill embeddings via the existing `/api/llm/v1/embeddings` endpoint on write, and switch `/api/memory/search` to a cosine-similarity ORDER BY with the ILIKE path kept only as a fallback when embeddings are unavailable."
+  },
+  {
+    "id": "MEMORY-006",
+    "domain": "memory",
+    "surface": "web",
+    "feature": "Memory settings surface lacks search, pin, and summary controls Mobile already has",
+    "screen": "Settings > Memory",
+    "files": [
+      "packages/ui/unified-chat/src/components/MemoryEditor.tsx:1-350",
+      "apps/web/app/api/memory/route.ts:36,49-56",
+      "apps/web/app/api/memory/[id]/route.ts:22-103",
+      "apps/mobile/app/(app)/settings/memory.tsx:337-476",
+      "apps/mobile/app/(app)/settings/memory-summary.tsx"
+    ],
+    "currentState": "Web's `MemoryEditor` is a flat add/edit/delete list with a 'Forget everything' destructive action — no search box, no pin/unpin, no category grouping, and no 'Memory summary' recap screen. This is a real capability gap, not just cosmetic: the `pinned` column exists in Postgres (migration 0047) and is read by `managed-memory-context-service.ts` to prioritize prompt inclusion, but the general CRUD routes `/api/memory` (GET/POST) and `/api/memory/[id]` (GET/PUT/DELETE) never select, return, or accept `pinned` at all — so even a future Web pin UI would need new API surface, not just new UI. Mobile's Memory screen already has all of this: a search bar, an 'All'/'Pinned' filter, per-item pin toggles (correctly routed around a documented cloud-vs-local pin bug — `togglePin` in store.ts explicitly avoids the SQLite-only path for cloud entries), and a dedicated read-only 'Memory summary' screen with an honest provenance line.",
+    "expectedState": "Web's Memory settings should let a user search their saved memories, pin important ones, and see an at-a-glance summary the way ChatGPT's 'Memory summary → Manage' and Mobile's own implementation already do.",
+    "benchmarkRef": "ChatGPT — 'Memory summary' with a Manage button showing 'an overview of what ChatGPT has learned about you' (shots-chatgpt-web-macos.md:207). Claude — memory redesigned into individually categorized, browsable entries (research/claude-web-desktop.md:151-153).",
+    "gapType": "frontend-gap",
+    "severity": "P2",
+    "evidence": "Read MemoryEditor.tsx in full — confirmed no search state, no pin affordance, no category field rendered. Read /api/memory/route.ts:36 and 49-56 and /api/memory/[id]/route.ts:22-103 — every select list and every returned/accepted object omits `pinned` entirely, despite migration 0047_user_memories_pinned.sql adding the column and managed-memory-context-service.ts:149 reading it. Read apps/mobile/app/(app)/settings/memory.tsx (search input, FILTER_CATEGORIES, memoryFreshness) and memory-summary.tsx for the reference implementation.",
+    "priorArtId": null,
+    "recommendation": "Add `pinned` to the `/api/memory` GET/PUT contracts, add a pin toggle + search input + a read-only summary route to Web's MemorySection, reusing the same `MemoryEditor` component with new optional props rather than diverging further from Mobile's UX."
+  },
+  {
+    "id": "MEMORY-007",
+    "domain": "memory",
+    "surface": "cross-surface",
+    "feature": "Memory facts never cite the chat they came from",
+    "screen": "Settings > Memory (list item)",
+    "files": [
+      "packages/ui/unified-chat/src/stores/memoryStore.ts:36-48,61,215-226",
+      "packages/ui/unified-chat/src/components/MemoryEditor.tsx:250-278",
+      "apps/mobile/src/features/settings/components/MemoryItem.tsx:1-158",
+      "apps/mobile/src/features/memory/services/consolidation.ts:184-226",
+      "apps/mobile/stores/memory/cloudMemoryStore.ts:22-42",
+      "apps/mobile/__tests__/conversation-delete-memory-facts.test.ts"
+    ],
+    "currentState": "The data model already carries per-fact provenance in one place: the shared `MemoryFact.sourceConversationId` (web/unified-chat) and Mobile's SQLite `memory_facts.source_conversation_id`, which Mobile's Local auto-consolidation (`consolidation.ts:225`) genuinely populates when it learns a fact mid-conversation, with a tested cleanup path that nulls the reference (not a cascade delete) when the source chat is deleted. Despite that, no surface ever renders it: `MemoryEditor.tsx`'s list item (used by Web and Desktop) has no 'from this chat' link, and Mobile's `MemoryItem.tsx` never reads `source_conversation_id` either. Cloud memory is worse than un-rendered — it is structurally absent: `CloudMemoryEntry` (cloudMemoryStore.ts:22-42) has no conversation-reference field at all, so any fact synced through the account (the majority of real usage) loses its origin permanently. Web's own manual `add()` call site in MemoryEditor.tsx never passes a `sourceConversationId` argument even though the store API accepts one.",
+    "expectedState": "A saved memory should let the user jump back to the conversation it was learned from, the way a citation works, at least for facts that genuinely originated in a specific chat (manually-added facts and imports correctly have no such origin).",
+    "benchmarkRef": "Domain brief's 'previous-chat citations' requirement; Claude's chat-search retrieval surfaces as a visible, attributable tool call rather than an anonymous fact (research/claude-web-desktop.md:158).",
+    "gapType": "missing-capability",
+    "severity": "P3",
+    "evidence": "Read memoryStore.ts:31-48 (field definition) and :215-226 (add() implementation storing it). Read MemoryEditor.tsx's list rendering (lines 250-278) — no reference to sourceConversationId anywhere in the component. Read MemoryItem.tsx in full — no source_conversation_id usage. Read consolidation.ts:203-226 confirming Local auto-consolidation does set it. Read cloudMemoryStore.ts's CloudMemoryEntry interface (lines 22-42) confirming no equivalent field exists for cloud-synced facts. Read conversation-delete-memory-facts.test.ts confirming the null-out-on-delete behavior is real and tested for the field that nothing surfaces.",
+    "priorArtId": null,
+    "recommendation": "Render a 'From: <conversation title>' chip in MemoryEditor/MemoryItem when `sourceConversationId` is present, linking to that conversation; add the field to `CloudMemoryEntry` and its wire contract so cloud-synced facts keep provenance; and pass a real `sourceConversationId` from any future in-chat 'save to memory' action."
+  },
+  {
+    "id": "MEMORY-008",
+    "domain": "memory",
+    "surface": "web",
+    "feature": "Memory suppression is content-term only, not source-scoped",
+    "screen": "Settings > Memory — Never remember",
+    "files": [
+      "apps/web/features/settings/components/MemoryExclusions.tsx:1-249",
+      "apps/web/lib/services/managed-memory-context-service.ts:75-135"
+    ],
+    "currentState": "The shipped 'Never remember' feature (`MemoryExclusions.tsx`) genuinely works and is well-designed — server-enforced (filtering happens in `persistManagedAutoMemoryFacts` before any candidate reaches the table, not just hidden client-side), case-insensitive substring matching, capped at 50 terms. But it only suppresses by literal content term ('my home address'). There is no way to suppress an entire irrelevant *source* — e.g. stop learning from a specific connector, a specific project's chats, or tool-assisted turns beyond the existing all-or-nothing `allowToolAssistedGeneration` toggle.",
+    "expectedState": "A user should be able to say 'never learn memories from my #finance connector' or 'never learn from this project' in addition to term-based exclusion, matching the intent of the tracked capability gap.",
+    "benchmarkRef": "n/a direct competitor citation for this exact control — tracked internally as an open capability gap.",
+    "gapType": "missing-capability",
+    "severity": "P2",
+    "evidence": "Read MemoryExclusions.tsx in full (term-based only, no source/connector/project dimension). Read managed-memory-context-service.ts:75-135 (`normalizeMemoryExclusions`/`isMemoryExcluded` operate purely on `content` strings, no source parameter). Cross-referenced audit/capability-gaps.csv:7 (CAP-006, class 'IrrelevantSource', status 'absent').",
+    "priorArtId": "CAP-006",
+    "recommendation": "Extend the exclusions model with a `sources: string[]` list (connector ids / project ids) alongside the existing `excludedTerms`, and check it in `persistManagedAutoMemoryFacts` against the turn's originating connector/project before content-term filtering runs."
+  },
+  {
+    "id": "MEMORY-009",
+    "domain": "memory",
+    "surface": "desktop-tauri",
+    "feature": "Orphaned legacy memory-browser component family",
+    "screen": "n/a (dead code)",
+    "files": [
+      "apps/desktop/src/features/memory/index.ts",
+      "apps/desktop/src/features/memory/MemoryViewer.tsx",
+      "apps/desktop/src/features/memory/MemoryBrowserModal.tsx",
+      "apps/desktop/src/features/memory/MemoryImportanceIndicator.tsx",
+      "apps/desktop/src/features/memory/MemoryBadge.tsx",
+      "apps/desktop/src/features/memory/SaveToMemoryButton.tsx",
+      "apps/desktop/src/features/settings/tabs/Memory.tsx:180-187"
+    ],
+    "currentState": "`MemoryViewer.tsx`, `MemoryBrowserModal.tsx`, `MemoryImportanceIndicator.tsx`, `MemoryBadge.tsx`, and `SaveToMemoryButton.tsx` are exported from the feature's barrel (`features/memory/index.ts`) but mounted nowhere in the app. The team's own comment in `Memory.tsx:180-187` documents this exact pattern for `MemoryBrowserModal` specifically ('its sole caller ... was never mounted — so a user could not get their memories out of the device at all') and worked around it by adding a direct Export button rather than fixing the orphaned modal.",
+    "expectedState": "Either these components are mounted somewhere reachable, or they are deleted; a five-file component family that only the barrel file references is maintenance cost with no user-facing benefit.",
+    "benchmarkRef": "n/a (internal hygiene, not a competitor gap).",
+    "gapType": "dead-code",
+    "severity": "P3",
+    "evidence": "Grepped each component name across apps/desktop/src, excluding the barrel and test files — MemoryViewer, MemoryImportanceIndicator, MemoryBadge, and SaveToMemoryButton have zero non-barrel, non-test references anywhere; MemoryBrowserModal appears only in the historical-bug comment in Memory.tsx, never as a mounted component.",
+    "priorArtId": null,
+    "recommendation": "Delete the five orphaned components and their barrel exports, or if a memory-browsing modal is still wanted (e.g. a lighter-weight quick-view than the full Settings tab), mount MemoryViewer/MemoryBrowserModal from an actual entry point and add a regression test asserting it renders."
+  },
+  {
+    "id": "MEMORY-010",
+    "domain": "memory",
+    "surface": "web",
+    "feature": "Unreachable second chat runtime injects memory without a temporary-chat check",
+    "screen": "n/a (dead code / latent bug)",
+    "files": [
+      "apps/web/lib/runtime/WebChatRuntime.ts:181-189",
+      "apps/web/features/chat/pages/UnifiedChatPage.tsx:44-67",
+      "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:976-996"
+    ],
+    "currentState": "`UnifiedChatPage.tsx` (self-documented as 'kept as an internal component while the Web chat implementation converges' and explicitly not exposed as a second public route) and its `WebChatRuntime.ts` have zero importers anywhere in the app besides their own tests — `/chat` renders a different page. `WebChatRuntime.ts`'s `sendMessage` unconditionally injects saved memory facts (`withMemorySystemMessage`) whenever the Memory capability is on, with no check for whether the target conversation is a temporary/incognito chat — unlike the live production path (`request-processor.ts:976-996`, `enrichManagedMemoryContext`), which correctly short-circuits on `isTemporary`.",
+    "expectedState": "Either this second runtime is deleted, or — if it is genuinely intended to converge into the live path — it must carry the same temporary-chat exclusion before it is ever wired to a route, so it cannot regress the memory/temporary-chat boundary the live path already enforces correctly.",
+    "benchmarkRef": "ChatGPT Temporary Chat bypasses Memory entirely (research/chatgpt-web-desktop.md:151). Claude Incognito chat is not saved to history or memory (research/claude-web-desktop.md:157).",
+    "gapType": "dead-code",
+    "severity": "P3",
+    "evidence": "Grepped `UnifiedChatPage` and `WebChatRuntime` across apps/web — no importer besides the component's own file and *.test.ts files; confirmed apps/web/app/chat/page.tsx does not reference either name. Read WebChatRuntime.ts:181-189, confirming memory injection is gated only on `isMemoryCapabilityEnabled()`, no temporary-chat parameter exists anywhere in the class. Read request-processor.ts:976-996 (`enrichManagedMemoryContext`) confirming the live path's `if (params.isTemporary) return;` guard that WebChatRuntime.ts lacks.",
+    "priorArtId": null,
+    "recommendation": "If UnifiedChatPage/WebChatRuntime are still on the roadmap, add the same `isTemporary` short-circuit before merging any route change that makes them reachable; otherwise delete both files rather than carry live-looking code with a known latent privacy gap."
+  }
+]

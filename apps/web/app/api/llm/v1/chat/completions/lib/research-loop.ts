@@ -13,8 +13,10 @@
  *     Wave 2, task #34): packages/ai/providers adapters via ADAPTER_PROVIDERS +
  *     startProviderStream, reshaped onto OpenAI-compatible SSE bytes by
  *     OpenAIWireAssembler. Every provider therefore reaches this loop on the
- *     same normalized wire (route.ts still keeps Anthropic on the existing
- *     single-turn research path for now -- scope, not a wire limitation).
+ *     same normalized wire, Anthropic included (route.ts's old
+ *     `provider !== 'anthropic'` exclusion is gone -- see the dispatch comment
+ *     there; it silently downgraded the DEFAULT provider to the single-turn
+ *     fallback while showing the same Deep Research badge).
  *   - Provider-native web search tools injected by request-processor.ts
  *     (google_search / web_search_preview) run inside each turn; the loop
  *     never fabricates search results.
@@ -41,7 +43,12 @@
 
 import 'server-only';
 
-import type { Citation, ResearchReportStatus, ResearchStep } from '@agiworkforce/types';
+import type {
+  Citation,
+  ResearchReportStatus,
+  ResearchStep,
+  ThinkingBlock,
+} from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import type { ToolLoopFailoverPlan } from './tool-loop';
@@ -524,6 +531,7 @@ export interface ResearchToolCall {
 }
 
 interface TurnResult {
+  /** The turn's client-facing wire text, `<thinking>` markers included. */
   text: string;
   finishReason: string | null;
   searchEvents: number;
@@ -532,6 +540,36 @@ interface TurnResult {
   toolCalls: ResearchToolCall[];
   promptTokens: number;
   completionTokens: number;
+}
+
+/** A completed turn plus the continuity data only the step sink can supply. */
+interface ResearchTurn extends TurnResult {
+  /**
+   * The turn's assistant text with NO inline `<thinking>`/`</thinking>`
+   * markers. Both wire modes the loop rides (`legacy-web` for Anthropic and
+   * Google, `openai-passthrough` for the other ten) render `thinking-delta`s
+   * as literal tag text inside `delta.content`, so `text` is the right thing
+   * to FORWARD to a client that strips them and the wrong thing to feed back
+   * into the thread, hand to the plan parser, or persist as a report body.
+   */
+  canonicalText: string;
+  /**
+   * Signed thinking blocks this turn produced (Anthropic extended thinking).
+   * Replayed on the assistant tool_use turn -- see `runFetchCalls`.
+   */
+  thinkingBlocks: ThinkingBlock[];
+}
+
+/**
+ * Remove inline `<thinking>` sections from an already-accumulated turn text,
+ * using the SAME parser the public agent-event text stream uses so the two can
+ * never disagree. Only a fallback: `ToolLoopStepSink.text` is authoritative
+ * whenever the provider stream really filled it (a test double or a future
+ * bridge that cannot may still leave it empty).
+ */
+function stripThinkingTags(text: string): string {
+  const projector = createPublicTextDeltaProjector();
+  return projector.push(text) + projector.flush();
 }
 
 /**
@@ -994,7 +1032,7 @@ export async function* runResearchLoop(
     turnMessages: typeof messages,
     forwardContent: boolean,
     turnOptions: { withoutTools?: boolean } = {},
-  ): AsyncGenerator<Uint8Array, TurnResult> {
+  ): AsyncGenerator<Uint8Array, ResearchTurn> {
     // Bound accumulated tool-result history so a long multi-round research run can't
     // overflow the model context window (shared with the main tool loop). In place +
     // message-preserving, so tool_call/result pairing stays valid.
@@ -1068,7 +1106,14 @@ export async function* runResearchLoop(
               },
             );
           }
-          return next.value;
+          return {
+            ...next.value,
+            // Same fallback shape as the usage reconciliation above: prefer the
+            // assembler's canonical capture, fall back to parsing the wire text
+            // for streams that cannot fill the sink.
+            canonicalText: stepSink.text || stripThinkingTags(next.value.text),
+            thinkingBlocks: stepSink.thinkingBlocks,
+          };
         }
         yield encoder.encode(next.value);
       }
@@ -1092,19 +1137,31 @@ export async function* runResearchLoop(
    */
   async function* runFetchCalls(
     calls: ResearchToolCall[],
-    assistantText: string,
+    turn: ResearchTurn,
     turnMessages: ProcessedRequest['llmRequest']['messages'],
     roundFetchCount: { count: number },
   ): AsyncGenerator<Uint8Array, boolean> {
-    turnMessages.push({
+    // Anthropic extended-thinking continuity (known-flaw
+    // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01), mirroring runToolLoop: when
+    // this turn produced signed thinking blocks, replay them ahead of the
+    // tool_use blocks and use the TAG-FREE text, so the follow-up request
+    // neither drops the signature nor double-represents reasoning as literal
+    // `<thinking>` text. Strictly gated on signed blocks: every other provider
+    // and every thinking-disabled turn pushes exactly what it pushed before.
+    const signedThinking = turn.thinkingBlocks.filter((block) => block.signature);
+    const assistantMessage: ProcessedRequest['llmRequest']['messages'][number] = {
       role: 'assistant',
-      content: assistantText,
+      content: signedThinking.length > 0 ? turn.canonicalText : turn.text,
       tool_calls: calls.map((c) => ({
         id: c.id,
         type: 'function' as const,
         function: { name: c.name, arguments: JSON.stringify(c.args) },
       })) as unknown[],
-    });
+    };
+    if (signedThinking.length > 0) {
+      assistantMessage.__canonicalThinking = signedThinking;
+    }
+    turnMessages.push(assistantMessage);
 
     for (const call of calls) {
       if (yield* flushCancellationIfRequested()) return true;
@@ -1168,7 +1225,7 @@ export async function* runResearchLoop(
           { withoutTools: true },
         );
         if (yield* flushCancellationIfRequested()) return;
-        const queries = parsePlanQueries(planTurn.text).filter(
+        const queries = parsePlanQueries(planTurn.canonicalText).filter(
           (query) =>
             !carriedQueries.some((carried) => carried.toLowerCase() === query.toLowerCase()),
         );
@@ -1198,6 +1255,20 @@ export async function* runResearchLoop(
     }
 
     let cutShortReason: string | null = null;
+    /**
+     * The real provider error from the last gathering round that threw.
+     *
+     * A round-1 failure reports the upstream message verbatim and stops, but a
+     * failure in round 2+ used to be logged and then dropped: the loop kept the
+     * partial material, ran synthesis anyway, and — when synthesis also came
+     * back empty — blamed "the model returned an empty report" and told the user
+     * to retry. Observed locally with an Anthropic key at $0: every upstream
+     * call was rejected with "Your credit balance is too low to access the
+     * Anthropic API", the user was told the model had gone quiet, and the
+     * suggested retry could never have succeeded. Keep the cause so the failure
+     * branch can name it instead of guessing.
+     */
+    let lastTurnError: string | null = null;
 
     // ── Gathering rounds ──
     for (let round = 1; round <= maxGatherRounds; round++) {
@@ -1237,7 +1308,7 @@ export async function* runResearchLoop(
       );
       yield encoder.encode(toolStatusEvent('running', responseModel, round));
 
-      let turn: TurnResult;
+      let turn: ResearchTurn;
       let roundSearchEvents = 0;
       try {
         if (yield* flushCancellationIfRequested()) return;
@@ -1278,8 +1349,7 @@ export async function* runResearchLoop(
           fetchPasses < MAX_FETCH_PASSES_PER_ROUND
         ) {
           fetchPasses += 1;
-          if (yield* runFetchCalls(turn.toolCalls, turn.text, turnMessages, roundFetchCount))
-            return;
+          if (yield* runFetchCalls(turn.toolCalls, turn, turnMessages, roundFetchCount)) return;
           const cumulativeAfterFetch = sources.toSearchResultsEvent(responseModel);
           if (cumulativeAfterFetch) yield encoder.encode(cumulativeAfterFetch);
           if (yield* flushCancellationIfRequested()) return;
@@ -1317,6 +1387,7 @@ export async function* runResearchLoop(
           return;
         }
         // Partial material exists: keep it and synthesize what we have.
+        lastTurnError = msg;
         cutShortReason = 'a web search round failed mid-run';
         break;
       }
@@ -1327,7 +1398,7 @@ export async function* runResearchLoop(
       yield planEvent();
 
       // Append the model's notes (truncated) so later turns build on them.
-      const notes = stripMarkers(turn.text).slice(0, MAX_NOTE_CHARS);
+      const notes = stripMarkers(turn.canonicalText).slice(0, MAX_NOTE_CHARS);
       messages.push({
         role: 'assistant',
         content: notes || '(no notes recorded this round)',
@@ -1337,7 +1408,7 @@ export async function* runResearchLoop(
       if (cumulative) yield encoder.encode(cumulative);
       yield status('searching', `Found ${sources.size} source${sources.size === 1 ? '' : 's'}`);
 
-      if (turn.text.includes(READY_MARKER)) break;
+      if (turn.canonicalText.includes(READY_MARKER)) break;
       if (totalSearches >= maxSearches) {
         cutShortReason = 'the search budget was reached';
         break;
@@ -1373,26 +1444,37 @@ export async function* runResearchLoop(
       // message (an empty body also skips client persistence, so the whole
       // run would vanish on reload). If the model produced no report text,
       // emit an honest failure as real content and an error status.
-      if (!synthesis.text.trim()) {
+      if (!synthesis.canonicalText.trim()) {
         logger.error(
-          { provider: processed.provider, requestId: processed.requestId, sources: sources.size },
+          {
+            provider: processed.provider,
+            requestId: processed.requestId,
+            sources: sources.size,
+            lastTurnError,
+          },
           '[research-loop] synthesis turn produced no text',
         );
         markPlanSteps([synthesisStepId], 'failed');
         yield planEvent();
-        yield status('error', 'Report generation returned no text');
+        // Attribute the failure to what actually caused it. "The model returned
+        // an empty report" is only credible when the gathering rounds really did
+        // gather something; with zero sources AND a captured upstream error the
+        // far likelier story is that every provider call was rejected, and
+        // telling the user to retry is then actively wrong — the retry cannot
+        // succeed until whatever rejected the call is fixed.
+        const upstreamFailed = lastTurnError !== null && sources.size === 0;
+        const statusLabel = upstreamFailed
+          ? 'Report generation failed upstream'
+          : 'Report generation returned no text';
+        const body = upstreamFailed
+          ? `Deep research could not complete: every provider call failed. Last error: ${lastTurnError}.` +
+            ' Retrying will not help until that is resolved.'
+          : `Deep research gathered ${sources.size} source${sources.size === 1 ? '' : 's'} across ${totalSearches} search${totalSearches === 1 ? '' : 'es'}, but the model returned an empty report.` +
+            ' Try running the research again.';
+        yield status('error', statusLabel);
         yield encoder.encode(
           sseData({
-            choices: [
-              {
-                delta: {
-                  content:
-                    `Deep research gathered ${sources.size} source${sources.size === 1 ? '' : 's'} across ${totalSearches} search${totalSearches === 1 ? '' : 'es'}, but the model returned an empty report.` +
-                    ' Try running the research again.',
-                },
-                index: 0,
-              },
-            ],
+            choices: [{ delta: { content: body }, index: 0 }],
             model: responseModel,
           }),
         );
@@ -1400,13 +1482,19 @@ export async function* runResearchLoop(
         if (cumulativeOnEmpty) yield encoder.encode(cumulativeOnEmpty);
         // Gathered sources are real and worth resuming from, so the row is
         // persisted even though the report body is empty.
-        await persistRun('failed', '', 'The model returned an empty report.');
+        await persistRun(
+          'failed',
+          '',
+          upstreamFailed
+            ? `Every provider call failed: ${lastTurnError}`
+            : 'The model returned an empty report.',
+        );
         yield encoder.encode(sseDone());
         return;
       }
       markPlanSteps([synthesisStepId], 'completed');
       yield planEvent();
-      await persistRun('completed', synthesis.text);
+      await persistRun('completed', synthesis.canonicalText);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error(

@@ -61,7 +61,7 @@ import type {
   CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
@@ -153,8 +153,7 @@ async function refundFailedReservation(
   );
 }
 
-function resolveAgentOriginSurface(request: NextRequest): CloudAgentOriginSurface {
-  const surface = resolveCloudChatSurface(request);
+function resolveAgentOriginSurface(surface: CloudChatSurface): CloudAgentOriginSurface {
   return surface === 'unknown' ? 'api' : surface;
 }
 
@@ -203,7 +202,7 @@ async function beginCloudAgentRun(
       userId,
       requestId: processed.requestId,
       ...(processed.conversationId ? { conversationId: processed.conversationId } : {}),
-      originSurface: resolveAgentOriginSurface(request),
+      originSurface: resolveAgentOriginSurface(processed.chatSurface),
       workMode,
       provider: processed.provider,
       model: processed.chatRequest.model,
@@ -304,17 +303,26 @@ async function dispatchChatCompletions(
   if (processed.chatRequest.stream) {
     // Deep Research path: bounded multi-turn research loop (plan -> search
     // rounds -> cited synthesis). Free requests are rejected in processRequest;
-    // this defense-in-depth gate keeps the paid-only contract explicit. The
-    // path is also gated to non-Anthropic providers (their raw streams
-    // are only normalized by buildStreamResponse; every other provider already
-    // emits OpenAI-compatible SSE, which the research loop consumes). Free
-    // trial and Anthropic keep the existing single-turn research behavior
-    // (research prompt + forced web_search) unchanged.
-    if (
-      processed.researchMode &&
-      !processed.freeTrial &&
-      processed.provider.toLowerCase() !== 'anthropic'
-    ) {
+    // this defense-in-depth gate keeps the paid-only contract explicit.
+    //
+    // EVERY adapter-backed provider takes this path, Anthropic included. The
+    // old `provider !== 'anthropic'` exclusion here was written when the loop
+    // was believed to consume raw provider SSE ("only normalized by
+    // buildStreamResponse"); that stopped being true when `buildToolLoopStream`
+    // was generalized off its Anthropic-only origin (restructure Wave 2, task
+    // #34). `runResearchLoop` dispatches solely through `buildToolLoopStream`,
+    // which reshapes every provider's canonical `StreamChunk`s onto
+    // OpenAI-compatible bytes via `OpenAIWireAssembler` using that provider's
+    // own `wireMode` -- Anthropic's `legacy-web` mode maps `server-tool-result`
+    // (`web_search_tool_result`) to `x_search_results`, `tool-use-*` to
+    // `tool_calls`, and `stop_reason: tool_use` to `finish_reason:
+    // 'tool_calls'`, which is exactly the shape `collectTurn` consumes.
+    // Keeping the exclusion meant Anthropic -- the DEFAULT provider -- lit the
+    // same Deep Research badge but silently ran the single-turn fallback: real
+    // citations, but no plan card, no process narration, and no persisted
+    // report. One badge, two behaviours. Verified end-to-end against the real
+    // Anthropic translation pipeline in research-loop.anthropic-wire.test.ts.
+    if (processed.researchMode && !processed.freeTrial) {
       const startedRun = await beginCloudAgentRun(request, userId, processed, 'research');
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
@@ -819,6 +827,21 @@ function managedTurnSlotExhaustedResponse(slot: ManagedTurnSlotResult): NextResp
   const headers: Record<string, string> = { ...getSecurityHeaders() };
   if (slot.limit !== null) headers['X-AGI-Concurrent-Turn-Limit'] = String(slot.limit);
   headers['X-AGI-Concurrent-Turns-Active'] = String(slot.active);
+
+  if (slot.denial === 'limiter-unavailable') {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'We cannot verify your concurrent-response limit right now. Please retry in a moment.',
+          type: 'server_error',
+          code: 'concurrency_limiter_unavailable',
+        },
+      },
+      { status: 503, headers: { ...headers, 'Retry-After': '30' } },
+    );
+  }
+
   return NextResponse.json(
     {
       error: {

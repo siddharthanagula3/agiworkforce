@@ -28,7 +28,10 @@ export const INITIAL_SCHEDULE_DRAFT: ScheduleDraft = {
   description: '',
   prompt: '',
   model: 'auto',
-  recurrence: 'daily',
+  // On-demand/manual is the safer default: a fresh dialog should not pre-load
+  // as a standing weekday-9am recurring automation the user has to notice and
+  // change. Matches Claude's Frequency default (sched-gap-17).
+  recurrence: 'once',
   cronExpression: '',
   scheduledLocal: '',
   intervalValue: '1',
@@ -222,6 +225,24 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
   };
 }
 
+const DERIVED_NAME_MAX_LENGTH = 60;
+
+/**
+ * sched-gap-08: `name` was a required free-text field with nothing to fall back
+ * on, so every schedule started with a chore that has one obvious answer. The
+ * task's own instructions are the content to derive from — the same first-line
+ * truncation the conversation titler uses as its stage-1 title, kept on the
+ * client because a schedule is created before any model runs.
+ */
+export function deriveScheduleName(prompt: string): string {
+  const firstLine = prompt.split('\n').find((line) => line.trim()) ?? '';
+  const collapsed = firstLine.trim().replace(/\s+/g, ' ');
+  if (collapsed.length <= DERIVED_NAME_MAX_LENGTH) return collapsed;
+  const cut = collapsed.slice(0, DERIVED_NAME_MAX_LENGTH);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > DERIVED_NAME_MAX_LENGTH / 3 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
 function addError(errors: ScheduleFormErrors, field: keyof ScheduleFormErrors, message: string) {
   if (!errors[field]) errors[field] = message;
 }
@@ -245,10 +266,10 @@ export function validateAndBuildScheduleRequest(
   options: ScheduleValidationOptions = {},
 ): ScheduleValidationResult {
   const errors: ScheduleFormErrors = {};
-  const name = draft.name.trim();
   const description = draft.description.trim();
   const prompt = draft.prompt.trim();
   const model = draft.model.trim();
+  const name = draft.name.trim() || deriveScheduleName(prompt);
 
   if (!name) addError(errors, 'name', 'Enter a schedule name.');
   else if (name.length > 500) addError(errors, 'name', 'Use 500 characters or fewer.');

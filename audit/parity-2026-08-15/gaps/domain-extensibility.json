@@ -1,0 +1,155 @@
+[
+  {
+    "id": "EXTENSIBILITY-001",
+    "domain": "extensibility",
+    "surface": "mobile",
+    "feature": "Skills catalog navigation",
+    "screen": "Drawer / Skills",
+    "files": [
+      "apps/mobile/src/features/drawer/components/DrawerContent.tsx:43,62-100",
+      "apps/mobile/app/(app)/_layout.tsx:73",
+      "apps/mobile/src/features/settings/index.tsx:636-638",
+      "apps/mobile/src/features/skills/SkillsScreen.tsx",
+      "apps/mobile/app/(app)/skills/index.tsx"
+    ],
+    "currentState": "SkillsScreen.tsx (655 lines) is a complete, tested, Cloud-mode-gated Skills catalog with search, source badges, and empty/error states, registered at the /(app)/skills route. Nothing navigates to it: DrawerContent.tsx's PRIMARY_ITEMS array (chats, projects, library, schedules, remote) has no skills entry, and _layout.tsx explicitly hides the drawer item (`options={HIDDEN}`). Settings' Cloud section has a comment claiming Skills 'has a supported top-level Cloud catalog in the drawer and is intentionally not duplicated as a settings control' (settings/index.tsx:636-638), but that drawer entry was removed by a later commit (1e858a7f1, an ancestor of HEAD) which also changed the drawer test to assert the row's absence. `/(app)/skills` now appears in only two places repo-wide outside its own route file: an unused RoutePath union member and the route wrapper's own header comment.",
+    "expectedState": "A complete, tested screen should be reachable from at least one place in the app (drawer or Settings), matching ChatGPT iOS's first-class Skills tab with search and a teaching empty state.",
+    "benchmarkRef": "ChatGPT iOS — Skills tab (shots-chatgpt-ios-shell-settings.md:47,115-117, 'You don't have any skills yet' / 'Search Skills')",
+    "gapType": "broken-workflow",
+    "severity": "P1",
+    "evidence": "Read DrawerContent.tsx (PRIMARY_ITEMS array, RoutePath union), app/(app)/_layout.tsx (HIDDEN drawer-item style on skills/index), and settings/index.tsx (stale comment). Cross-checked against audit/parity-2026-08-15/gaps/done-claim-verification.md:83-102, which independently reached the same conclusion via git history (commit 1e858a7f1) and a repo-wide grep for the route path.",
+    "priorArtId": "GAP-001",
+    "recommendation": "Add a Skills row back to either PRIMARY_ITEMS (drawer) or the Settings Cloud section (settings/index.tsx, next to Connectors) and remove the now-false comment. Update drawer-content.test.tsx's assertion of absence to assert presence instead."
+  },
+  {
+    "id": "EXTENSIBILITY-002",
+    "domain": "extensibility",
+    "surface": "desktop-tauri",
+    "feature": "Connectors/MCP settings information architecture",
+    "screen": "Settings > Connections, Settings > Connectors",
+    "files": [
+      "apps/desktop/src/features/settings/tabs/Connections/index.tsx:1-38",
+      "apps/desktop/src/features/settings/tabs/Connectors/index.tsx:1-79"
+    ],
+    "currentState": "Desktop settings ships two adjacent, near-homograph tabs. 'Connections' (Connections/index.tsx) renders only MobileCompanionPanel — phone-pairing/remote-control, nothing MCP-related. 'Connectors' (Connectors/index.tsx) stacks five conceptually distinct subsystems in one vertical scroll behind lazy Suspense boundaries: ConnectorGallery (browse/install), ConnectorHealthDashboard (live per-server status), MCPServerSettings (config for the MCP server AGI itself exposes — port + bearer token), MCPWorkspace (client-side: the MCP servers this app connects TO, their tools/credentials/config editor), and CloudStoragePanel (Google Drive/Dropbox/OneDrive file browser, an entirely separate OAuth2 system). In-code comments on the Connectors tab itself document that three of these five components (MCPServerSettings, MCPWorkspace, CloudStoragePanel) were previously unreachable from any nav before being mounted here.",
+    "expectedState": "Either merge 'Connections' and 'Connectors' under one unambiguous label, or rename one of them, and split the five-subsystem 'Connectors' tab into separately-scoped destinations the way the benchmark does.",
+    "benchmarkRef": "Claude Desktop — Skills / Connectors / Plugins as three separate, cleanly-scoped settings destinations (shots-claude-desktop.md:306-308,545-547); Codex macOS — a single counted Plugins/Apps/MCPs/Skills tab strip with search, at least giving the user one navigable list instead of five stacked panels (shots-codex-macos-settings.md:407-426)",
+    "gapType": "architecture-gap",
+    "severity": "P1",
+    "evidence": "Read both tab files directly. Connections/index.tsx:1-38 confirmed to render only <MobileCompanionPanel />. Connectors/index.tsx:1-79 confirmed to lazy-mount all five components in sequence with in-code comments documenting their prior unreachable-from-nav state. Cross-checked against audit/parity-2026-08-15/gaps/done-claim-verification.md:65-77, which independently found GAP-083's claim (that MCPWorkspace is mounted from Connections) false — it is mounted from Connectors — and flagged the naming collision as a secondary finding.",
+    "priorArtId": "GAP-083",
+    "recommendation": "Rename 'Connections' to something unambiguous (e.g. 'Mobile pairing' or 'Remote control') so it no longer reads as a synonym for 'Connectors', and split the Connectors tab's five components into a segmented sub-view (Gallery / Health / MCP servers / Cloud storage) instead of one continuous scroll — this also closes the related, already-open GAP-248 (no unified tab strip with counts)."
+  },
+  {
+    "id": "EXTENSIBILITY-003",
+    "domain": "extensibility",
+    "surface": "desktop-tauri",
+    "feature": "MCP server slopsquatting allow-list",
+    "screen": "n/a (backend security control)",
+    "files": [
+      "apps/desktop/src-tauri/src/core/mcp/config.rs:1642-1668",
+      "apps/desktop/src-tauri/mcp-allowlist.json",
+      "apps/desktop/src-tauri/tauri.conf.json:50-86"
+    ],
+    "currentState": "install_bundle() in config.rs loads mcp-allowlist.json via `std::path::PathBuf::from(\"mcp-allowlist.json\")` — a path relative to the process's current working directory, not the app's resource or config directory. The file's own comment documents the fallback: 'Absence of the file = open mode (dev)'. tauri.conf.json's `bundle` block (lines 50-86) has no `resources` entry referencing mcp-allowlist.json, so the file is never packaged into any release build. In every shipped installer, the CWD-relative lookup fails, the allow-list silently resolves to None, and install_bundle() skips the entire allow-list check — any npm package (including a typosquatted/slopsquatted one) can be installed as an MCP server via bundle install.",
+    "expectedState": "A named supply-chain defense control (its own comment calls it 'AUDIT-FIX: CI-5 — slopsquatting defense') should actually run in the builds it ships in. The allow-list should load from a path that resolves correctly in a packaged app (Tauri resource dir via tauri::api::path, or bundled as a declared resource) and fail closed (reject, not silently open) when the file cannot be found in a release build.",
+    "benchmarkRef": "n/a — this is a security control unique to this codebase, not a benchmarked UX surface; judged against the control's own stated intent",
+    "gapType": "security-gap",
+    "severity": "P1",
+    "evidence": "Read config.rs:1642-1668 directly: confirmed CWD-relative PathBuf construction and open-mode fallback. Grepped tauri.conf.json for 'resources'/'bundle' and confirmed no resources array exists anywhere in the bundle config. Confirmed mcp-allowlist.json exists only at apps/desktop/src-tauri/mcp-allowlist.json with no other repo references to its filename outside config.rs's two lines.",
+    "priorArtId": null,
+    "recommendation": "Bundle mcp-allowlist.json as a Tauri resource (add it to tauui.conf.json's bundle.resources), resolve its path at runtime via the app's resource-dir API instead of a bare relative PathBuf, and change the missing-file fallback to fail closed in release builds (only open-mode in debug_assertions)."
+  },
+  {
+    "id": "EXTENSIBILITY-004",
+    "domain": "extensibility",
+    "surface": "cross-surface",
+    "feature": "Automatic (progressive-disclosure) skill invocation",
+    "screen": "Chat composer / tool loop",
+    "files": [
+      "apps/desktop/src-tauri/src/sys/commands/skills.rs:342-414",
+      "apps/desktop/src/stores/skillMarketplaceStore.ts:247,348-354",
+      "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:316-329,461-473,2272-2322"
+    ],
+    "currentState": "Skills can only be invoked explicitly across every surface checked. Desktop has a real token-matching heuristic, skill_match_for_message (Rust, skills.rs:342-414), exposed to the frontend as matchForMessage in skillMarketplaceStore.ts:247,348-354 — but grepping the entire desktop frontend for callers of matchForMessage finds only its own interface declaration and implementation; no chat component ever calls it. Web's tool loop requires an explicit client-supplied skill_name field (request-processor.ts) and returns a validation error (skill_not_found/skill_catalog_unavailable/skill_model_unsupported) if it is absent or invalid — there is no server-side relevance matching against the user's message at all. The result: a skill is only ever loaded because a user manually picked it (slash command on desktop, explicit selection on web), never because the assistant recognized the message needed it.",
+    "expectedState": "The model (or a lightweight pre-turn classifier) should be able to surface or load a relevant skill based on message content without the user having to know the skill exists and name it, matching Claude's defining 'progressive disclosure' behavior for skills.",
+    "benchmarkRef": "Claude web/desktop — 'Automatic — Claude decides relevance and loads the skill (progressive disclosure); users can force it' (claude-web-desktop.md:33,111)",
+    "gapType": "missing-capability",
+    "severity": "P1",
+    "evidence": "Grepped apps/desktop/src for 'matchForMessage\\b' (2 hits: interface + implementation, zero call sites in features/chat or features/v3). Read skills.rs:342-414 to confirm skill_match_for_message is a real tokenizing matcher, not a stub. Read request-processor.ts:316-329,461-473,2272-2322 to confirm web's skill path is 100% explicit-selection with no server-side relevance scoring.",
+    "priorArtId": null,
+    "recommendation": "Wire the existing matchForMessage call into the desktop chat composer (e.g. surface top matches as dismissible chips before send, mirroring how the benchmark surfaces suggested skills) as the smallest end-to-end slice; extend the same relevance signal to web's request-processor as a follow-up so the two surfaces don't diverge."
+  },
+  {
+    "id": "EXTENSIBILITY-005",
+    "domain": "extensibility",
+    "surface": "desktop-tauri",
+    "feature": "Cloud skill install path",
+    "screen": "Settings (Cloud) > Skills",
+    "files": [
+      "apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx:907-950",
+      "packages/ui/ui/src/settings-modal/types.ts:72",
+      "packages/ui/ui/src/settings-modal/SettingsModal.tsx:422-438"
+    ],
+    "currentState": "DesktopCloudSettingsModal.tsx's Skills section fetches the same Managed Cloud skill catalog Web uses (listCloudSkills()) and, for each downloadable entry, builds a downloadHref pointing at ${WEB_APP_URL}/api/skills/${name}/download. SettingsModal.tsx renders that downloadHref as a plain `<a href download>` (or adapter.openHref) — a raw file save, nothing more. There is no code path anywhere in apps/desktop that takes a downloaded skill file and writes it into ~/.agiworkforce/skills/ (the 'Managed' directory the local SkillManager actually scans, per core/skills/skill.rs:14-15) or otherwise registers it with skill_reload(). A user who clicks 'download' on a Cloud skill gets a file in their Downloads folder and no way to make it appear in the local SkillMarketplace or be invoked in chat, short of manually finding the right directory and file format themselves.",
+    "expectedState": "Clicking 'download'/'add' on a directory skill should make the skill usable — either a genuine one-click install into the local skill directory, or, if that is out of scope, copy naming clearly ('Save file' rather than implying a working install) plus documented next steps for what to do with the file.",
+    "benchmarkRef": "Claude web — directory skill install is a one-click '+' that adds the skill (view-only, but immediately usable); only *customizing* a shared skill requires download-and-reupload (shots-claude-web.md:769-770, 'Installs/adds that plugin, connector, or skill'; :353, 'must know to download-and-reupload rather than edit in place')",
+    "gapType": "broken-workflow",
+    "severity": "P2",
+    "evidence": "Read DesktopCloudSettingsModal.tsx:907-950 to confirm downloadHref construction and the absence of any import/reload call adjacent to it. Grepped apps/desktop/src and packages/ui for 'downloadHref' (4 hits total: the modal that builds it, the shared type definition, the SettingsModal renderer, and a test) — all render-a-link, none write-to-disk. Read core/skills/skill.rs:5-15 to confirm the local Managed skill directory (~/.agiworkforce/skills/) that skill_reload() actually scans is a distinct filesystem location the download flow never touches.",
+    "priorArtId": null,
+    "recommendation": "Add a native command (skill_import_from_download or similar) that accepts the downloaded bytes/path, validates the SKILL.md shape, writes it into the Managed skills directory, and calls skill_reload() — wire it behind the existing downloadHref button as a Tauri-side save-and-import instead of a browser-style file download."
+  },
+  {
+    "id": "EXTENSIBILITY-006",
+    "domain": "extensibility",
+    "surface": "web",
+    "feature": "Connector catalog default connectivity",
+    "screen": "/connectors",
+    "files": [
+      "apps/web/app/api/connectors/route.ts:1-19,114-120,384-429",
+      "apps/web/lib/connectors/oauth-registry.ts:144-166,225-231",
+      "apps/web/features/connectors/data/connectors.ts"
+    ],
+    "currentState": "The connector catalog lists 89 ids (confirmed via grep -c \"id: '\" on connectors.ts). Connecting any of them server-side requires either (a) being the GitHub App flow, (b) being a user-defined custom remote MCP connector, or (c) the operator having set CONNECTOR_OAUTH_<ID>_CLIENT_ID/_SECRET env vars or populated CONNECTOR_OAUTH_PROVIDERS_JSON for that specific id (oauth-registry.ts:144-166) — with no descriptor for any well-known provider shipped by default, the registry starts empty. Absent that operator configuration, POST /api/connectors 501s with 'Connector authorization is not implemented for this provider' for every id that isn't GitHub or a custom MCP entry (route.ts:416-429). The route's own comment documents that a maintained allowlist for the other 55+ non-GitHub ids doesn't exist (route.ts:114-120). This architecture is honest (the UI shows real 'Coming soon'/'Not yet available on web' labels, not fake Connect buttons) but the net effect is that the large majority of an 89-entry catalog cannot be connected in a stock deployment.",
+    "expectedState": "A connector directory of this breadth should ship with working OAuth app registrations for at least the handful of highest-value providers (Slack, Notion, Google Drive, Linear) pre-configured, the way Claude's and ChatGPT's directories work for major providers without any deployment-specific setup.",
+    "benchmarkRef": "Claude web — Connectors directory works for major providers out of the box (claude-web-desktop.md:131-145); ChatGPT — 'Built-in connectors/apps: Google Drive, Gmail, Google Calendar, Outlook, SharePoint, Dropbox, Box, Microsoft Teams, Slack...' (chatgpt-web-desktop.md:163)",
+    "gapType": "backend-gap",
+    "severity": "P2",
+    "evidence": "Read route.ts:1-19 (module docstring on the honest-gating design), :114-120 (comment on the missing 55-id allowlist), :384-429 (the 501 branch). Read oauth-registry.ts:144-166 to confirm credentials are entirely env-driven with no shipped descriptors for common providers. Ran grep -c \"id: '\" apps/web/features/connectors/data/connectors.ts -> 89. This is the Web-surface counterpart to the already-tracked mobile finding (known-flaws.md MOBILE-CONNECTORS-501, mobile.md:276,284-291) but for Web specifically, which has no equivalent tracked row (GAP-257/GAP-269 cover only visual polish, not the underlying non-functional-by-default state).",
+    "priorArtId": null,
+    "recommendation": "Register first-party OAuth apps for the 4-6 highest-usage providers (Slack, Notion, Google Drive, Linear) and ship their client ids as part of the default deployment config (or CONNECTOR_OAUTH_PROVIDERS_JSON default), so a stock install has at least a handful of connectors that actually work without operator setup."
+  },
+  {
+    "id": "EXTENSIBILITY-007",
+    "domain": "extensibility",
+    "surface": "extension-chrome",
+    "feature": "Skills/Plugins/Connectors surface",
+    "screen": "Extension options page, side panel composer",
+    "files": ["apps/extension/src/options.ts", "apps/extension/src/side_panel.ts:9412-9477"],
+    "currentState": "apps/extension/src/options.ts contains zero occurrences of 'connector', 'plugin', or 'skill' (grep -n -i confirmed no matches) — there is no management surface for any of the three products anywhere in the Chrome extension. The side panel's attach ('+') menu offers only 2 items (Take a screenshot, file upload) where the shared desktop AttachmentMenu component offers 7, including Select folder, Record skill, Research, explicit Web search, Run code, and Writing style (side_panel.ts:9412-9477, cross-checked against extension-chrome.md:408). There is no SkillMentionPicker component and no '@skill' or 'SkillMention' string anywhere in the extension's source (extension-chrome.md:402).",
+    "expectedState": "At minimum, Skills — which are a fully real, working feature on web/desktop/CLI — should be invocable from the Chrome side panel composer (slash command or @mention), and Connectors should be visible/manageable in the options page, matching the benchmark's contemporaneous move to bring exactly this into the browser.",
+    "benchmarkRef": "Claude — Cowork reached the Chrome extension side panel in August 2026 with 'skills/plugins/connectors now work in-browser for the first time' (claude-web-desktop.md:205,329)",
+    "gapType": "missing-capability",
+    "severity": "P2",
+    "evidence": "Ran grep -n -i \"connector|plugin|skill\" against apps/extension/src/options.ts directly (zero matches). Cross-checked the attach-menu item-count and SkillMentionPicker absence against audit/parity-2026-08-15/inventory/extension-chrome.md:402,408,414,468, which independently found the same composer-drift gap.",
+    "priorArtId": "GAP-122",
+    "recommendation": "Add a Skill @mention/slash affordance to the side panel composer, reusing the same skill catalog service the shared chat components already consume — this doesn't require the plugin-registry work GAP-122 correctly defers, since Skills (unlike Plugins) already have a real, installable, working catalog today."
+  },
+  {
+    "id": "EXTENSIBILITY-008",
+    "domain": "extensibility",
+    "surface": "backend",
+    "feature": "Organization skill/plugin governance",
+    "screen": "n/a (no UI exists to audit; capability-level finding)",
+    "files": ["audit/capability-gaps.csv:9-10"],
+    "currentState": "No enforced, single-source org/tenant policy exists for either skills or plugins. Per capability-gaps.csv (a sibling prior-art ledger, distinct from ui-gaps.csv): CAP-009 'Organization plugin governance' is Open, describing 'duplicate policy labels' that need unifying around one persisted and enforced contract; CAP-010 'Organization skill policies' is Deferred, requiring tenant policy ownership and request-path enforcement that doesn't exist yet. Direct verification: neither apps/web/lib/services/plugin-installation-service.ts nor plugin-registry-service.ts contains any org/tenant/team-scoped filtering logic (grep for 'org|organization|admin|tenant|team' returns only an unrelated future-admin-path comment).",
+    "expectedState": "An org owner should be able to push a skill or plugin org-wide with a default enabled/disabled state, and enforce which plugins/connectors members can install — a single persisted, request-path-enforced policy, not duplicated labels in disconnected places.",
+    "benchmarkRef": "Claude — org owners upload a skill zip at Organization settings > Skills, instantly provisioned org-wide with three independent sharing toggles (peer-to-peer, org-wide publish, group-based); allowedPluginMarketplaces restricts which marketplaces are usable org-wide (claude-web-desktop.md:115,142)",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Read audit/capability-gaps.csv rows CAP-009 and CAP-010 directly. Grepped apps/web/lib/services/plugin-installation-service.ts and plugin-registry-service.ts for org/tenant/team scoping — only one unrelated comment matched ('a future admin path'), confirming no enforcement exists today.",
+    "priorArtId": "CAP-009",
+    "recommendation": "Not a new build recommendation beyond what CAP-009/CAP-010 already specify — flagged here so this domain's report doesn't silently omit org governance. Prioritize CAP-009 (unify the duplicate plugin policy labels into one enforced contract) before CAP-010, since plugins already have a real registry to attach a policy to."
+  }
+]

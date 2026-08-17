@@ -2,11 +2,9 @@
 import { execSync } from 'node:child_process';
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const root = process.cwd();
-const strictMode = process.argv.includes('--strict');
-const changedMode = process.argv.includes('--changed');
-const stagedMode = process.argv.includes('--staged');
 
 const SKIP_DIRS = new Set([
   '.agent',
@@ -28,9 +26,13 @@ const SKIP_DIRS = new Set([
 
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.rs', '.ts', '.tsx']);
 const MANIFEST_BASENAMES = new Set(['package.json', 'Cargo.toml']);
-const EXEMPT_FILES = new Set(['scripts/check-llm-failure-guardrails.mjs']);
+const EXEMPT_FILES = new Set([
+  'scripts/check-llm-failure-guardrails.mjs',
+  'scripts/check-llm-failure-guardrails.test.mjs',
+]);
 const EXEMPT_PATH_PREFIXES = ['docs/archive/', 'apps/desktop/archive/'];
 const TAXONOMY_PATH = 'docs/agent-context/llm-failure-taxonomy.json';
+const SKIP_RATCHET_PATH = 'scripts/config/skipped-test-ratchet.json';
 
 const TEST_THEATER_PATTERNS = [
   {
@@ -102,6 +104,17 @@ const STRICT_SOURCE_PATTERNS = [
   {
     regex: /\bdangerouslySetInnerHTML\b/g,
     label: 'raw HTML rendering sink',
+  },
+];
+
+const SKIP_CENSUS_PATTERNS = [
+  {
+    regex: /\b(?:describe|it|test)\.skip(?:If)?\s*\(/g,
+    kind: 'js-skip',
+  },
+  {
+    regex: /#\s*\[\s*ignore\s*(?:=\s*"([^"]*)")?\s*\]/g,
+    kind: 'rust-ignore',
   },
 ];
 
@@ -211,6 +224,137 @@ function collectPatternViolations(files, patterns, { productionOnly = false } = 
   return violations;
 }
 
+export function scanSkipSites(relativePath, text) {
+  const sites = [];
+  const lines = text.split('\n');
+  for (const { regex, kind } of SKIP_CENSUS_PATTERNS) {
+    regex.lastIndex = 0;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const lineNo = lineForOffset(text, match.index);
+      if (isCommentLine(lines[lineNo - 1] ?? '')) continue;
+      const reason = match[1];
+      const justification =
+        kind === 'rust-ignore' && typeof reason === 'string' && reason.trim() !== ''
+          ? 'reason'
+          : isAllowedByAnnotation(lines, lineNo)
+            ? 'annotated'
+            : 'none';
+      sites.push({ path: relativePath, line: lineNo, kind, justification });
+    }
+  }
+  return sites.sort((a, b) => a.line - b.line);
+}
+
+function collectSkipCensus(files) {
+  const sites = [];
+  for (const file of files) {
+    const relativePath = rel(file);
+    if (EXEMPT_FILES.has(relativePath)) continue;
+    if (isExemptPath(relativePath)) continue;
+    if (!SOURCE_EXTENSIONS.has(path.extname(file))) continue;
+    sites.push(...scanSkipSites(relativePath, readFileSync(file, 'utf8')));
+  }
+  return sites.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+}
+
+export function unjustifiedByPath(sites) {
+  const counts = new Map();
+  for (const site of sites) {
+    if (site.justification !== 'none') continue;
+    counts.set(site.path, (counts.get(site.path) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function summarizeSkipCensus(sites) {
+  const tally = { total: sites.length, reason: 0, annotated: 0, unjustified: 0 };
+  for (const site of sites) {
+    if (site.justification === 'reason') tally.reason += 1;
+    else if (site.justification === 'annotated') tally.annotated += 1;
+    else tally.unjustified += 1;
+  }
+  return tally;
+}
+
+export function validateSkipRatchet(config) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return [`${SKIP_RATCHET_PATH} must be a JSON object`];
+  }
+  if (!Array.isArray(config.debt)) {
+    return [`${SKIP_RATCHET_PATH} must declare a "debt" array`];
+  }
+  const errors = [];
+  const seen = new Set();
+  for (const [index, entry] of config.debt.entries()) {
+    const prefix = `${SKIP_RATCHET_PATH} debt[${index}]`;
+    if (!entry || typeof entry !== 'object') {
+      errors.push(`${prefix} must be an object`);
+      continue;
+    }
+    if (typeof entry.path !== 'string' || entry.path.trim() === '') {
+      errors.push(`${prefix} must name a path`);
+    } else if (seen.has(entry.path)) {
+      errors.push(`${prefix} duplicates path ${entry.path}`);
+    } else {
+      seen.add(entry.path);
+    }
+    if (!Number.isInteger(entry.count) || entry.count < 1) {
+      errors.push(`${prefix} count must be a positive integer`);
+    }
+    if (typeof entry.reason !== 'string' || entry.reason.trim().length < 20) {
+      errors.push(`${prefix} must record a reason of at least 20 characters`);
+    }
+    if (typeof entry.trackedBy !== 'string' || entry.trackedBy.trim() === '') {
+      errors.push(`${prefix} must name a tracking id`);
+    }
+  }
+  return errors;
+}
+
+export function diffSkipRatchet(actual, debt, { detectStale = true } = {}) {
+  const declared = new Map();
+  for (const entry of debt) {
+    if (!entry || typeof entry.path !== 'string') continue;
+    declared.set(entry.path, (declared.get(entry.path) ?? 0) + (entry.count ?? 0));
+  }
+  const violations = [];
+  for (const file of [...actual.keys()].sort()) {
+    const count = actual.get(file);
+    const allowed = declared.get(file) ?? 0;
+    if (count > allowed) {
+      violations.push(
+        `${file} has ${count} undeclared skipped/ignored test(s) (${allowed} declared in ${SKIP_RATCHET_PATH}) — give each an inline reason, an llm-guardrail-allow: annotation, or declare it as tracked debt`,
+      );
+    }
+  }
+  if (!detectStale) return violations;
+  for (const file of [...declared.keys()].sort()) {
+    const allowed = declared.get(file);
+    const count = actual.get(file) ?? 0;
+    if (count < allowed) {
+      violations.push(
+        `${SKIP_RATCHET_PATH} declares ${allowed} unjustified skip(s) for ${file} but ${count} reproduce — lower the count, this list only ratchets down`,
+      );
+    }
+  }
+  return violations;
+}
+
+function collectSkipRatchetViolations(sites, { detectStale }) {
+  const full = path.join(root, SKIP_RATCHET_PATH);
+  if (!existsSync(full)) return [`${SKIP_RATCHET_PATH} missing`];
+  let config;
+  try {
+    config = JSON.parse(readFileSync(full, 'utf8'));
+  } catch (error) {
+    return [`${SKIP_RATCHET_PATH} invalid JSON: ${error.message}`];
+  }
+  const errors = validateSkipRatchet(config);
+  if (errors.length > 0) return errors;
+  return diffSkipRatchet(unjustifiedByPath(sites), config.debt, { detectStale });
+}
+
 function collectManifestViolations(files) {
   const violations = [];
   for (const file of files) {
@@ -311,31 +455,52 @@ function collectVitestDrift(files) {
   return violations;
 }
 
-const files = stagedMode
-  ? gitFiles('diff --cached --name-only --diff-filter=ACMRTUXB')
-  : changedMode
-    ? gitFiles('diff --name-only --diff-filter=ACMRTUXB HEAD')
-    : walk(root);
+export function main(argv = process.argv.slice(2)) {
+  const strictMode = argv.includes('--strict');
+  const changedMode = argv.includes('--changed');
+  const stagedMode = argv.includes('--staged');
+  const wholeTree = !changedMode && !stagedMode;
 
-const violations = [
-  ...collectTaxonomyViolations(),
-  ...collectPatternViolations(files, TEST_THEATER_PATTERNS),
-  ...collectPatternViolations(files, PRODUCTION_STUB_PATTERNS, { productionOnly: true }),
-  ...collectVitestDrift(files),
-];
+  const files = stagedMode
+    ? gitFiles('diff --cached --name-only --diff-filter=ACMRTUXB')
+    : changedMode
+      ? gitFiles('diff --name-only --diff-filter=ACMRTUXB HEAD')
+      : walk(root);
 
-if (strictMode || changedMode || stagedMode) {
-  violations.push(...collectPatternViolations(files, STRICT_SOURCE_PATTERNS));
-  violations.push(
-    ...collectPatternViolations(files, STRICT_PRODUCTION_PATTERNS, { productionOnly: true }),
+  const census = collectSkipCensus(files);
+  const tally = summarizeSkipCensus(census);
+
+  const violations = [
+    ...collectTaxonomyViolations(),
+    ...collectPatternViolations(files, TEST_THEATER_PATTERNS),
+    ...collectPatternViolations(files, PRODUCTION_STUB_PATTERNS, { productionOnly: true }),
+    ...collectVitestDrift(files),
+    ...collectSkipRatchetViolations(census, { detectStale: wholeTree }),
+  ];
+
+  if (strictMode || changedMode || stagedMode) {
+    violations.push(...collectPatternViolations(files, STRICT_SOURCE_PATTERNS));
+    violations.push(
+      ...collectPatternViolations(files, STRICT_PRODUCTION_PATTERNS, { productionOnly: true }),
+    );
+    violations.push(...collectManifestViolations(files));
+  }
+
+  console.log(
+    `skip census (${wholeTree ? 'whole tree' : 'changed files'}): ${tally.total} skipped/ignored test site(s) — ` +
+      `${tally.reason} with an inline reason, ${tally.annotated} annotated, ${tally.unjustified} unjustified`,
   );
-  violations.push(...collectManifestViolations(files));
+
+  if (violations.length > 0) {
+    console.error('check:llm-failures FAIL');
+    for (const violation of violations) console.error(`- ${violation}`);
+    return 1;
+  }
+
+  console.log('check:llm-failures PASS');
+  return 0;
 }
 
-if (violations.length > 0) {
-  console.error('check:llm-failures FAIL');
-  for (const violation of violations) console.error(`- ${violation}`);
-  process.exit(1);
-}
-
-console.log('check:llm-failures PASS');
+const isEntrypoint =
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (isEntrypoint) process.exit(main());

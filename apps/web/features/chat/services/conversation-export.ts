@@ -1,7 +1,16 @@
 import type { ChatSession, ChatMessage } from '../types';
 
+export interface ExportContentOptions {
+  includeTimestamps?: boolean;
+}
+
 export class ChatExportService {
-  exportAsMarkdown(session: ChatSession, messages: ChatMessage[]): string {
+  exportAsMarkdown(
+    session: ChatSession,
+    messages: ChatMessage[],
+    options: ExportContentOptions = {},
+  ): string {
+    const includeTimestamps = options.includeTimestamps !== false;
     let markdown = `# ${session.title}\n\n`;
     markdown += `**Created:** ${session.createdAt.toLocaleString()}\n`;
     markdown += `**Last Updated:** ${session.updatedAt.toLocaleString()}\n`;
@@ -11,7 +20,9 @@ export class ChatExportService {
     for (const message of messages) {
       const role = message.role === 'user' ? '👤 User' : '🤖 Assistant';
       markdown += `## ${role}\n`;
-      markdown += `*${message.createdAt.toLocaleString()}*\n\n`;
+      if (includeTimestamps) {
+        markdown += `*${message.createdAt.toLocaleString()}*\n\n`;
+      }
       markdown += `${message.content}\n\n`;
 
       const attachments = message.metadata?.attachments as
@@ -55,13 +66,18 @@ export class ChatExportService {
     return JSON.stringify(data, null, 2);
   }
 
-  exportAsHTML(session: ChatSession, messages: ChatMessage[]): string {
+  exportAsHTML(
+    session: ChatSession,
+    messages: ChatMessage[],
+    options: ExportContentOptions = {},
+  ): string {
+    const includeTimestamps = options.includeTimestamps !== false;
     let html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${session.title}</title>
+  <title>${this.escapeHtml(session.title)}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -109,7 +125,7 @@ export class ChatExportService {
 </head>
 <body>
   <div class="header">
-    <h1>${session.title}</h1>
+    <h1>${this.escapeHtml(session.title)}</h1>
     <p><strong>Created:</strong> ${session.createdAt.toLocaleString()}</p>
     <p><strong>Messages:</strong> ${messages.length}</p>
   </div>
@@ -121,8 +137,11 @@ export class ChatExportService {
 
       html += `  <div class="message ${roleClass}">
     <div class="role">${roleLabel}</div>
-    <div class="timestamp">${message.createdAt.toLocaleString()}</div>
-    <div class="content">${this.escapeHtml(message.content)}</div>
+`;
+      if (includeTimestamps) {
+        html += `    <div class="timestamp">${message.createdAt.toLocaleString()}</div>\n`;
+      }
+      html += `    <div class="content">${this.escapeHtml(message.content)}</div>
 `;
 
       const htmlAttachments = message.metadata?.attachments as
@@ -153,7 +172,12 @@ export class ChatExportService {
     return html;
   }
 
-  exportAsText(session: ChatSession, messages: ChatMessage[]): string {
+  exportAsText(
+    session: ChatSession,
+    messages: ChatMessage[],
+    options: ExportContentOptions = {},
+  ): string {
+    const includeTimestamps = options.includeTimestamps !== false;
     let text = `${session.title}\n`;
     text += `${'='.repeat(session.title.length)}\n\n`;
     text += `Created: ${session.createdAt.toLocaleString()}\n`;
@@ -163,7 +187,9 @@ export class ChatExportService {
 
     for (const message of messages) {
       const role = message.role === 'user' ? 'User' : 'Assistant';
-      text += `[${role}] ${message.createdAt.toLocaleString()}\n`;
+      text += includeTimestamps
+        ? `[${role}] ${message.createdAt.toLocaleString()}\n`
+        : `[${role}]\n`;
       text += `${message.content}\n`;
 
       const textAttachments = message.metadata?.attachments as
@@ -268,9 +294,12 @@ export class ChatExportService {
   }
 
   private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   private sanitizeFilename(filename: string): string {

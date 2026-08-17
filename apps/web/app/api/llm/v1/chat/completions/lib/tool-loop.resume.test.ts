@@ -71,6 +71,7 @@ function makeFreshProcessed(
   overrides: Partial<ProcessedRequest['chatRequest']> = {},
 ): ProcessedRequest {
   return {
+    chatSurface: 'web' as const,
     requestId: 'req-1',
     chatRequest: { model: 'gpt-test', messages: [], stream: true, ...overrides } as never,
     conversationId: undefined,

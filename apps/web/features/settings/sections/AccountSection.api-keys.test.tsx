@@ -27,6 +27,22 @@ vi.mock('../components/Settings/ApiKeys', () => ({
   ApiKeysManager: () => <div>Scoped API key manager</div>,
 }));
 
+// This suite only exercises the API-key manager mount, not account deletion
+// (see AccountSection.delete.test.tsx for the real useDeleteAccount
+// integration, including a QueryClientProvider). Stub the hook here so
+// mounting AccountSection doesn't require a QueryClient.
+vi.mock('../hooks/use-settings-queries', () => ({
+  useDeleteAccount: () => ({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+    isSuccess: false,
+    error: null,
+    data: undefined,
+    signOutAfterDeletion: vi.fn(async () => {}),
+  }),
+}));
+
 describe('AccountSection API keys', () => {
   it('mounts the scoped API-key manager on the reachable Account surface', () => {
     render(<AccountSection />);

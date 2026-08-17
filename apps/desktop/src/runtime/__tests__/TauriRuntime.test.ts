@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PersonalizationPreferences } from '../../stores/settingsStore';
 
 const FIXTURE_MODEL_ID = 'fixture-model';
@@ -75,24 +75,17 @@ vi.mock('../../stores/settingsStore', () => ({
   },
 }));
 
+const [{ useArtifactStore }, { TauriRuntime }] = await Promise.all([
+  import('../../stores/artifactStore'),
+  import('../TauriRuntime'),
+]);
+
 describe('TauriRuntime', () => {
-  let resetArtifactStore: () => void;
-
-  beforeAll(async () => {
-    const [{ useArtifactStore }] = await Promise.all([
-      import('../../stores/artifactStore'),
-      import('../TauriRuntime'),
-    ]);
-    resetArtifactStore = () => useArtifactStore.getState().resetOnLogout();
-  }, 20_000);
-
   it('does not advertise the shared per-conversation agent control without a native wire field', async () => {
-    const { TauriRuntime } = await import('../TauriRuntime');
     expect(new TauriRuntime().supportsAgentControl).toBe(false);
   });
 
   it('advertises reasoning effort, which it does forward to the native command', async () => {
-    const { TauriRuntime } = await import('../TauriRuntime');
     // ChatInterface reads `supportsReasoningEffort ?? supportsAgentControl !== false`,
     // so leaving this undefined on a runtime with supportsAgentControl:false
     // hid both the effort chip and the thinking control while sendMessage kept
@@ -102,7 +95,7 @@ describe('TauriRuntime', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    resetArtifactStore();
+    useArtifactStore.getState().resetOnLogout();
     listenHandlers.clear();
     executionModeByConversationId.clear();
     projectIdByConversationId.clear();
@@ -165,7 +158,6 @@ describe('TauriRuntime', () => {
   });
 
   it('creates and maps a backend conversation before starting a stream', async () => {
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
@@ -199,7 +191,6 @@ describe('TauriRuntime', () => {
   });
 
   it('forwards an explicit Local Web-search turn as the narrow native search scope', async () => {
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Find current release notes', {
@@ -224,7 +215,6 @@ describe('TauriRuntime', () => {
       emojiUsage: 'never',
     };
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
@@ -240,7 +230,6 @@ describe('TauriRuntime', () => {
   });
 
   it('leaves customInstructions unset for a neutral (default) personalization', async () => {
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
@@ -257,7 +246,6 @@ describe('TauriRuntime', () => {
     executionModeByConversationId.set('frontend-conversation-id', 'local_only');
     projectIdByConversationId.set('frontend-conversation-id', 'proj-42');
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from a project chat', {
@@ -277,7 +265,6 @@ describe('TauriRuntime', () => {
   it('reuses an existing backend id for mapped conversations', async () => {
     uuidToDbIdMock.mockReturnValue(77);
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     invokeMock.mockImplementation(async (command: string) => {
@@ -329,7 +316,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('byok-fork', 'Use my OpenAI key', {
@@ -361,7 +347,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
     await runtime.sendMessage('stale-cloud-conversation', 'Stay on this device');
 
@@ -375,7 +360,6 @@ describe('TauriRuntime', () => {
   });
 
   it('never forwards enableAgentMode:true for the default AgentControl mode', async () => {
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
@@ -425,7 +409,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
@@ -454,7 +437,6 @@ describe('TauriRuntime', () => {
       'lo\\nWorld"}',
     ];
 
-    const { useArtifactStore } = await import('../../stores/artifactStore');
     type Draft = ReturnType<typeof useArtifactStore.getState>['draft'];
     const draftSnapshots: Draft[] = [];
     useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
@@ -505,7 +487,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write release notes');
 
     expect(draftSnapshots).toHaveLength(1);
@@ -557,10 +538,8 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { useArtifactStore } = await import('../../stores/artifactStore');
     useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write some code');
 
     const finalState = useArtifactStore.getState();
@@ -599,10 +578,8 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { useArtifactStore } = await import('../../stores/artifactStore');
     useArtifactStore.setState({ draft: null, panelOpen: false, activeArtifactId: null });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write some code');
 
     expect(useArtifactStore.getState().draft).toBeNull();
@@ -645,7 +622,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
     const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
     runtime.onStream((event) => events.push(event));
@@ -737,7 +713,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
     const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
     runtime.onStream((event) => events.push(event));
@@ -802,7 +777,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Create a React counter');
@@ -862,7 +836,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
     runtime.onStream((event) => {
       if (event.type === 'artifact') controller.abort();
@@ -912,7 +885,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     const events: import('@agiworkforce/unified-chat').StreamEvent[] = [];
@@ -1003,7 +975,6 @@ describe('TauriRuntime', () => {
       return undefined;
     });
 
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     const messages = await runtime.loadMessages('42');
@@ -1032,7 +1003,6 @@ describe('TauriRuntime', () => {
   });
 
   it('encodes attachments to base64 and forwards them on chat_send_message', async () => {
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     const textFile = new File(['hello world file contents'], 'notes.txt', {
@@ -1072,7 +1042,6 @@ describe('TauriRuntime', () => {
   });
 
   it('omits attachments entirely when none were attached', async () => {
-    const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {

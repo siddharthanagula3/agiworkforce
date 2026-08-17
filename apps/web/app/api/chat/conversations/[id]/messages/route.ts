@@ -21,6 +21,8 @@ import {
 } from '@/lib/server/neon-chat';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { scheduleConversationTitleGeneration } from './lib/generate-title';
+import { scheduleArtifactIndexing } from './lib/index-artifacts';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -112,7 +114,26 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     throw createError.internal('Failed to save message');
   }
 
-  // Auto-title conversation from first user message
+  // Index any artifacts this assistant message produces, so the gallery can
+  // list them without this (or any other) device having opened the
+  // conversation. Metadata only — the content stays in the message and is
+  // re-derived on demand. Fire-and-forget: the index is a discovery aid, so it
+  // must never delay or fail saving the message.
+  if (role === 'assistant' && message?.id) {
+    scheduleArtifactIndexing({
+      db,
+      userId,
+      conversationId,
+      messageId: message.id,
+      content: content.trim(),
+    });
+  }
+
+  // Auto-title conversation from first user message. Two stages: an
+  // immediate character truncation (below, synchronous — the row must never
+  // sit blank), then a short LLM-generated title that replaces it in the
+  // background once ready (agentic-modes-gap-06). Generation is fire-and-forget
+  // so a slow or failing provider can never delay or break this response.
   if (role === 'user') {
     const [row] = await db.query<{ count: string }>(
       'select count(*)::text as count from web_messages where conversation_id = $1',
@@ -120,16 +141,25 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     );
 
     if (Number(row?.count ?? 0) <= 1) {
-      // First message - generate title
-      const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
+      // First message - immediate truncated title
+      const truncatedTitle = content.slice(0, 50) + (content.length > 50 ? '...' : '');
       await db.execute(
         `update web_conversations
             set title = $1, updated_at = now()
           where id = $2
             and user_id = $3
             and organization_id is not distinct from $4`,
-        [title, conversationId, userId, organizationId],
+        [truncatedTitle, conversationId, userId, organizationId],
       );
+
+      scheduleConversationTitleGeneration(request, {
+        db,
+        conversationId,
+        userId,
+        organizationId,
+        content,
+        expectedCurrentTitle: truncatedTitle,
+      });
     }
   }
 

@@ -42,6 +42,7 @@ describe('authenticateToken Middleware', () => {
     mockRes = {
       status: vi.fn().mockReturnThis(),
       json: vi.fn().mockReturnThis(),
+      setHeader: vi.fn().mockReturnThis(),
     };
     mockNext = vi.fn();
   });

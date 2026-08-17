@@ -621,7 +621,24 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'research_status': {
-          if (assistantMessageIdRef.current) {
+          // Research phases stream long before the first content token, so the
+          // placeholder has to be created here or the whole planning/searching
+          // run shows nothing.
+          if (!assistantMessageIdRef.current) {
+            const id = crypto.randomUUID();
+            assistantMessageIdRef.current = id;
+            addMsg(
+              {
+                id,
+                role: 'assistant',
+                content: '',
+                timestamp: new Date().toISOString(),
+                isStreaming: true,
+                metadata: { research: event.status },
+              },
+              convId,
+            );
+          } else {
             const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
             if (msg) {

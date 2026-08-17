@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Switch } from '@agiworkforce/ui';
-import { getCsrfToken } from '@/lib/client/csrf';
+import { Switch, useConfirm } from '@agiworkforce/ui';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { setTelemetryConsentCache } from '@/lib/sentry-shared';
@@ -16,7 +15,6 @@ import {
   type BulkConversationAction,
 } from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
-import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
 const NAMESPACE = 'privacy';
 
@@ -120,6 +118,22 @@ function ExpandableSection({ title, children }: { title: string; children: React
 
 export function PrivacySection() {
   const router = useRouter();
+  /**
+   * Destructive-action confirmation (shell-nav-ia-gap-01 remainder).
+   *
+   * Archive-all and delete-all-chats used native `window.confirm()` — an OS
+   * alert with browser chrome, not the product's own dialog — for the two
+   * highest-stakes bulk actions on this page (delete-all is the single
+   * highest-stakes action in the app: every active AND archived conversation,
+   * irreversibly). `useConfirm` is the shared promise-based wrapper around
+   * the styled AlertDialog primitive (packages/ui/ui/src/primitives/
+   * ConfirmDialog.tsx) already wired into WebChatPage/WebAppShell/
+   * MessageBubble for the same class of action. Same await-a-boolean shape as
+   * `window.confirm`, so the guards below read the same, but the user sees a
+   * dialog with a red confirm and copy naming the exact, specific
+   * consequence instead of a generic browser prompt.
+   */
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
   const subscription = useBillingStore((s) => s.subscription);
   const hasHostedCloud = subscription?.status === 'active' && subscription.tier !== 'free';
   const conversations = useChatStore((state) => state.conversations);
@@ -136,12 +150,6 @@ export function PrivacySection() {
   const [bulkAction, setBulkAction] = useState<BulkConversationAction | null>(null);
   const [conversationActionError, setConversationActionError] = useState<string | null>(null);
   const [conversationActionNotice, setConversationActionNotice] = useState<string | null>(null);
-
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteInput, setDeleteInput] = useState('');
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,12 +224,14 @@ export function PrivacySection() {
   }
 
   async function handleArchiveAllChats() {
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm('Archive every chat? You can restore them from Archived chats.')
-    ) {
-      return;
-    }
+    const confirmed = await confirmDestructive({
+      title: 'Archive every chat?',
+      description:
+        'Every chat will move out of the sidebar. You can restore them from Archived chats at any time — this does not delete anything.',
+      confirmText: 'Archive all',
+      variant: 'default',
+    });
+    if (!confirmed) return;
 
     setBulkAction('archive_all');
     setConversationActionError(null);
@@ -250,14 +260,18 @@ export function PrivacySection() {
       setConversationActionError('Finish or stop active replies before deleting all chats.');
       return;
     }
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(
-        'Permanently delete every chat, including archived chats? This cannot be undone.',
-      )
-    ) {
-      return;
-    }
+    // Highest-stakes destructive action in the app: every active AND
+    // archived conversation, gone, with no restore path (unlike "Delete all
+    // archived", which at least leaves active chats untouched). The count
+    // makes the scope concrete instead of a vague "every chat".
+    const chatCount = conversations.length;
+    const confirmed = await confirmDestructive({
+      title: 'Delete all chats?',
+      description: `Permanently delete all ${chatCount} chat${chatCount === 1 ? '' : 's'} in your account, including every archived chat and its messages. This cannot be undone.`,
+      confirmText: 'Delete all chats',
+      variant: 'destructive',
+    });
+    if (!confirmed) return;
 
     setBulkAction('delete_all');
     setConversationActionError(null);
@@ -280,31 +294,9 @@ export function PrivacySection() {
     }
   }
 
-  async function handleDeleteAccount() {
-    if (deleteInput !== 'DELETE') return;
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      const csrfToken = await getCsrfToken();
-      const res = await fetch('/api/user/delete-account', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? 'Deletion failed');
-      }
-      setDeleteSuccess(true);
-      setShowDeleteConfirm(false);
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Account deletion failed.');
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {destructiveConfirmDialog}
       <div>
         <h1
           style={{
@@ -750,8 +742,16 @@ export function PrivacySection() {
         </div>
       </section>
 
-      {/* Delete account */}
+      {/* Delete account — cross-link only. This used to be a second, independent
+          delete-account implementation (its own fetch, its own hardcoded
+          "within 24 hours" string, and — unlike Account settings — no sign-out
+          afterward, which left a live client session against an account
+          scheduled for erasure). Deletion now has exactly one implementation,
+          on Account settings, via useDeleteAccount. Same pattern as
+          SecuritySection's session-management cross-link: point at the owning
+          surface instead of re-implementing it here. */}
       <section
+        aria-label="Account deletion availability"
         style={{
           border: '1px solid rgba(218,119,86,0.35)',
           borderRadius: 'var(--radius-lg)',
@@ -770,115 +770,18 @@ export function PrivacySection() {
         >
           Danger zone
         </div>
-        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {deleteSuccess ? (
-            <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
-              Account deletion scheduled. Your account and all data will be permanently deleted
-              within 24 hours. To stop this, email {CONTACT_EMAIL} before then.
-            </p>
-          ) : (
-            <>
-              <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-                Permanently delete your account and all associated data. This cannot be undone.
-              </p>
-              {!showDeleteConfirm ? (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  style={{
-                    alignSelf: 'flex-start',
-                    padding: '7px 14px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: 'var(--chat-accent-primary, #c8892a)',
-                    background: 'transparent',
-                    border: '1px solid rgba(218,119,86,0.5)',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Delete account
-                </button>
-              ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10,
-                    padding: '14px 16px',
-                    background: 'rgba(218,119,86,0.06)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid rgba(218,119,86,0.2)',
-                  }}
-                >
-                  <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0 }}>
-                    This will permanently delete all conversations, settings, and billing history.
-                    Type <strong>DELETE</strong> to confirm.
-                  </p>
-                  <input
-                    type="text"
-                    value={deleteInput}
-                    onChange={(e) => setDeleteInput(e.target.value)}
-                    placeholder="Type DELETE to confirm"
-                    style={{
-                      fontSize: 13,
-                      padding: '7px 10px',
-                      background: 'var(--bg-base)',
-                      color: 'var(--text-1)',
-                      border: '1px solid rgba(218,119,86,0.4)',
-                      borderRadius: 'var(--radius-md)',
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      type="button"
-                      onClick={handleDeleteAccount}
-                      disabled={deleteInput !== 'DELETE' || deleting}
-                      style={{
-                        padding: '7px 14px',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: '#fff',
-                        background:
-                          deleteInput !== 'DELETE' || deleting
-                            ? 'rgba(218,119,86,0.4)'
-                            : 'var(--chat-accent-primary, #c8892a)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-md)',
-                        cursor: deleteInput !== 'DELETE' || deleting ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      {deleting ? 'Deleting...' : 'Confirm deletion'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowDeleteConfirm(false);
-                        setDeleteInput('');
-                        setDeleteError(null);
-                      }}
-                      style={{
-                        padding: '7px 14px',
-                        fontSize: 12,
-                        color: 'var(--text-2)',
-                        background: 'transparent',
-                        border: '1px solid var(--settings-border)',
-                        borderRadius: 'var(--radius-md)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  {deleteError && (
-                    <span style={{ fontSize: 12, color: 'var(--chat-accent-primary, #c8892a)' }}>
-                      {deleteError}
-                    </span>
-                  )}
-                </div>
-              )}
-            </>
-          )}
+        <div style={{ padding: '16px 20px' }}>
+          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
+            Permanently deleting your account, including all conversations and billing history, is
+            handled from{' '}
+            <SettingsSectionLink
+              section="account"
+              style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+            >
+              Account settings
+            </SettingsSectionLink>
+            .
+          </p>
         </div>
       </section>
     </div>

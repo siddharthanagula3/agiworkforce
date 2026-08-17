@@ -45,17 +45,29 @@ function resolveScanner() {
   return null;
 }
 
+const DEFAULT_SCAN_TIMEOUT_MS = 120_000;
+
+function scanTimeoutMs() {
+  const raw = Number(process.env['SKILL_VETTING_SCAN_TIMEOUT_MS']);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_SCAN_TIMEOUT_MS;
+}
+
 function scanVerdict(scanner, packageDir, reportDir) {
   const reportPath = join(reportDir, `${Buffer.from(packageDir).toString('hex').slice(-32)}.json`);
+  const timeout = scanTimeoutMs();
   try {
     execFileSync(
       scanner,
       ['scan', packageDir, '--no-llm', '--format', 'json', '--output', reportPath],
-      { cwd: VETTING_ROOT, stdio: 'ignore' },
+      { cwd: VETTING_ROOT, stdio: 'ignore', timeout, killSignal: 'SIGKILL' },
     );
-  } catch {
+  } catch (error) {
     // A nonzero exit only means "risk score > 50"; the report is still written
-    // and is the authoritative source of the verdict.
+    // and is the authoritative source of the verdict. A timeout is different:
+    // the scanned package stalled the scanner, so no verdict exists at all.
+    if (error?.['code'] === 'ETIMEDOUT' || error?.['signal'] === 'SIGKILL') {
+      return { recommendation: null, error: `scanner timed out after ${timeout}ms` };
+    }
   }
   if (!existsSync(reportPath)) {
     return { recommendation: null, error: 'scanner produced no report' };

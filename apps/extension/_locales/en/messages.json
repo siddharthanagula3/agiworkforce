@@ -122,6 +122,34 @@
     "message": "Retry Pairing",
     "description": "Button that restarts desktop pairing after a failure"
   },
+  "spPairingAwaitingCode": {
+    "message": "Enter the code shown in Desktop",
+    "description": "Desktop pairing status while the user copies the code off the Desktop window"
+  },
+  "spPairingCodeHint": {
+    "message": "Desktop is showing a pairing code. Type it here to finish.",
+    "description": "Instruction above the pairing code input"
+  },
+  "spPairingCodePlaceholder": {
+    "message": "ABCD-EFGH",
+    "description": "Placeholder for the pairing code input"
+  },
+  "spPairingCodeSubmit": {
+    "message": "Confirm Code",
+    "description": "Button that sends the typed pairing code to Desktop"
+  },
+  "spPairingSecretHint": {
+    "message": "Operator setup: paste the desktop bridge token to pair without a code.",
+    "description": "Instruction above the operator bridge-token input"
+  },
+  "spPairingSecretPlaceholder": {
+    "message": "Desktop bridge token",
+    "description": "Placeholder for the operator bridge-token input"
+  },
+  "spPairingSecretSave": {
+    "message": "Save Bridge Token",
+    "description": "Button that stores the operator-supplied desktop bridge token"
+  },
 
   "spAllowlistNoSite": {
     "message": "No site to add on this page",

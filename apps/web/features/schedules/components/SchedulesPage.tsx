@@ -28,10 +28,45 @@ import {
   validateAndBuildScheduleRequest,
 } from '../lib/schedule-form';
 import { scheduleApi, type ScheduleApi } from '../services/schedule-api';
+import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import type { ScheduleDraft, ScheduleFormErrors, ScheduleRun, ScheduleTask } from '../types';
+
+export const SCHEDULE_MATURITY_LABEL = 'Alpha';
+export const SCHEDULE_MATURITY_TITLE = `Schedules run on Managed Cloud, which is in ${MANAGED_CLOUD_STATUS}. An unattended run can fail or be skipped, and behaviour may change.`;
 
 const SCHEDULE_PAGE_SIZE = 50;
 const RUN_PAGE_SIZE = 20;
+
+type ScheduleStatusFilter = 'all' | ScheduleTask['status'];
+
+const STATUS_FILTERS: Array<{ id: ScheduleStatusFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'active', label: 'Active' },
+  { id: 'paused', label: 'Paused' },
+  { id: 'completed', label: 'Completed' },
+  { id: 'failed', label: 'Failed' },
+  { id: 'expired', label: 'Expired' },
+];
+
+/**
+ * How often to re-check whether a "due" schedule is actually mid-run.
+ *
+ * There is no push channel and no schedule-level 'running' status (the
+ * enum only has active/paused/completed/failed/expired — see
+ * ManagedCloudScheduleTaskSchema), so this polls the one signal that does
+ * carry it: the schedule's own run history.
+ */
+const RUNNING_POLL_INTERVAL_MS = 6_000;
+
+/**
+ * How long a schedule stays a polling candidate after its `nextExecutionAt`
+ * passes. Bounds the cost of `RUNNING_POLL_INTERVAL_MS` polling to schedules
+ * that could plausibly be executing right now, instead of re-checking every
+ * enabled schedule on the page every tick — `nextExecutionAt` does not
+ * change again until the next full schedule-list refresh, so without this
+ * bound a stale due time would poll forever.
+ */
+const RUNNING_DUE_WINDOW_MS = 2 * 60_000;
 
 const EMPTY_HISTORY: ScheduleHistoryState = {
   status: 'idle',
@@ -97,6 +132,8 @@ export function SchedulesPage({
   const [deleteTarget, setDeleteTarget] = useState<ScheduleTask | null>(null);
   const [actionMessage, setActionMessage] = useState('');
   const manualRunKeys = useRef<Record<string, string>>({});
+  const [statusFilter, setStatusFilter] = useState<ScheduleStatusFilter>('all');
+  const [runningScheduleIds, setRunningScheduleIds] = useState<Set<string>>(new Set());
 
   const draftDirty = dialogOpen && JSON.stringify(draft) !== initialDraftRef.current;
 
@@ -151,6 +188,55 @@ export function SchedulesPage({
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [draftDirty]);
+
+  // Transient "running now" indicator for schedule rows (sched-gap-07). Only
+  // schedules whose next execution is due — recently passed and still inside
+  // RUNNING_DUE_WINDOW_MS — are checked, so an idle list with nothing due
+  // issues no requests at all.
+  useEffect(() => {
+    const computeDueSchedules = () => {
+      const now = Date.now();
+      return schedules.filter((schedule) => {
+        if (!schedule.isEnabled || schedule.status !== 'active' || !schedule.nextExecutionAt) {
+          return false;
+        }
+        const dueAt = new Date(schedule.nextExecutionAt).getTime();
+        return Number.isFinite(dueAt) && dueAt <= now && now - dueAt <= RUNNING_DUE_WINDOW_MS;
+      });
+    };
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const poll = async () => {
+      const due = computeDueSchedules();
+      if (due.length === 0) {
+        setRunningScheduleIds((current) => (current.size === 0 ? current : new Set()));
+        return;
+      }
+      const results = await Promise.allSettled(
+        due.map((schedule) =>
+          api.listRuns(schedule.id, { limit: 1, offset: 0, signal: controller.signal }),
+        ),
+      );
+      if (cancelled) return;
+      const next = new Set<string>();
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value.runs[0]?.status === 'running') {
+          next.add(due[index]!.id);
+        }
+      });
+      setRunningScheduleIds(next);
+    };
+
+    void poll();
+    const timer = setInterval(() => void poll(), RUNNING_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [schedules, api]);
 
   const setOperation = (scheduleId: string, operation: ScheduleOperation) => {
     setOperations((current) => ({ ...current, [scheduleId]: operation }));
@@ -365,6 +451,30 @@ export function SchedulesPage({
     [schedules],
   );
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<ScheduleStatusFilter, number> = {
+      all: sortedSchedules.length,
+      active: 0,
+      paused: 0,
+      completed: 0,
+      failed: 0,
+      expired: 0,
+    };
+    for (const schedule of sortedSchedules) counts[schedule.status] += 1;
+    return counts;
+  }, [sortedSchedules]);
+
+  const filteredSchedules = useMemo(
+    () =>
+      statusFilter === 'all'
+        ? sortedSchedules
+        : sortedSchedules.filter((schedule) => schedule.status === statusFilter),
+    [sortedSchedules, statusFilter],
+  );
+
+  const statusFilterLabel =
+    STATUS_FILTERS.find((filter) => filter.id === statusFilter)?.label ?? 'All';
+
   return (
     <main className="min-h-full bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
@@ -373,6 +483,13 @@ export function SchedulesPage({
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
               <CalendarClock className="h-4 w-4" aria-hidden="true" />
               Managed Cloud
+              <span
+                data-testid="schedule-maturity-badge"
+                title={SCHEDULE_MATURITY_TITLE}
+                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300"
+              >
+                {SCHEDULE_MATURITY_LABEL}
+              </span>
             </div>
             <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
               Schedules
@@ -443,30 +560,79 @@ export function SchedulesPage({
         )}
 
         {listStatus === 'success' && sortedSchedules.length > 0 && (
+          <div
+            role="group"
+            aria-label="Filter schedules by status"
+            className="flex flex-wrap items-center gap-2"
+          >
+            {STATUS_FILTERS.map((filter) => {
+              const count = statusCounts[filter.id];
+              if (filter.id !== 'all' && count === 0) return null;
+              const selected = statusFilter === filter.id;
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setStatusFilter(filter.id)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    selected
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  {filter.label} <span className="tabular-nums opacity-70">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {listStatus === 'success' && sortedSchedules.length > 0 && (
           <section aria-label="Your Schedules" className="space-y-4">
             {listError && (
               <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                 {listError} Retry loading more schedules.
               </p>
             )}
-            {sortedSchedules.map((schedule) => (
-              <ScheduleCard
-                key={schedule.id}
-                schedule={schedule}
-                operation={operations[schedule.id] ?? null}
-                error={rowErrors[schedule.id] ?? null}
-                historyExpanded={expandedHistoryId === schedule.id}
-                history={historyById[schedule.id] ?? EMPTY_HISTORY}
-                onToggleEnabled={(selected) => void toggleEnabled(selected)}
-                onRunNow={(selected) => void runNow(selected)}
-                onEdit={openEdit}
-                onDelete={setDeleteTarget}
-                onToggleHistory={toggleHistory}
-                onRetryHistory={(selected) => void loadHistory(selected)}
-                onLoadMoreHistory={(selected) => void loadHistory(selected, true)}
-              />
-            ))}
-            {hasMoreSchedules && (
+            {filteredSchedules.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No {statusFilterLabel.toLowerCase()} schedules.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => setStatusFilter('all')}
+                >
+                  Show All Schedules
+                </Button>
+              </div>
+            ) : (
+              filteredSchedules.map((schedule) => (
+                <ScheduleCard
+                  key={schedule.id}
+                  schedule={schedule}
+                  operation={operations[schedule.id] ?? null}
+                  error={rowErrors[schedule.id] ?? null}
+                  isRunningNow={
+                    operations[schedule.id] === 'run' || runningScheduleIds.has(schedule.id)
+                  }
+                  historyExpanded={expandedHistoryId === schedule.id}
+                  history={historyById[schedule.id] ?? EMPTY_HISTORY}
+                  onToggleEnabled={(selected) => void toggleEnabled(selected)}
+                  onRunNow={(selected) => void runNow(selected)}
+                  onEdit={openEdit}
+                  onDelete={setDeleteTarget}
+                  onToggleHistory={toggleHistory}
+                  onRetryHistory={(selected) => void loadHistory(selected)}
+                  onLoadMoreHistory={(selected) => void loadHistory(selected, true)}
+                />
+              ))
+            )}
+            {hasMoreSchedules && filteredSchedules.length > 0 && (
               <div className="flex justify-center pt-2">
                 <Button
                   type="button"
@@ -507,7 +673,7 @@ export function SchedulesPage({
             <DialogTitle>{editing ? 'Edit Schedule' : 'Create Schedule'}</DialogTitle>
             <DialogDescription>
               Configure a text-only Managed Cloud task. The server validates timing again before
-              saving.
+              saving. {SCHEDULE_MATURITY_TITLE}
             </DialogDescription>
           </DialogHeader>
           <ScheduleForm

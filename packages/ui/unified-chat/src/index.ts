@@ -151,7 +151,21 @@ export type { AgentControlProps } from './components/AgentControl';
 export { ModelSelector } from './components/ModelSelector';
 export type { ModelSelectorProps } from './components/ModelSelector';
 export { AttachmentMenu } from './components/AttachmentMenu';
-export { getWritingStyleInstruction, type WritingStyle } from './lib/writingStyle';
+export {
+  getWritingStyleInstruction,
+  isWritingStyle,
+  loadWritingStyle,
+  saveWritingStyle,
+  WRITING_STYLE_STORAGE_KEY,
+  type WritingStyle,
+} from './lib/writingStyle';
+export {
+  LARGE_PASTE_THRESHOLD,
+  isLargePaste,
+  isPastedTextFileName,
+  largePasteToFile,
+  pastedTextFileName,
+} from './lib/largePaste';
 export { SendButton } from './components/SendButton';
 export type { SendButtonProps, SendButtonMode } from './components/SendButton';
 export { Disclaimer } from './components/Disclaimer';
@@ -161,6 +175,11 @@ export { ConversationItem } from './components/ConversationItem';
 export { UserProfile } from './components/UserProfile';
 
 export { MessageList } from './components/MessageList';
+export {
+  ResearchStatusChip,
+  readMessageResearchStatus,
+  type MessageResearchStatus,
+} from './components/ResearchStatusChip';
 export { MessageBubble, MarkdownLite } from './components/MessageBubble';
 export {
   MessageLimitCard,
@@ -388,8 +407,6 @@ export type { Checkpoint, Branch } from './stores/checkpointStore';
 
 export { ArtifactRenderer, isTabularType } from './components/ArtifactRenderer';
 export type { ArtifactRendererProps } from './components/ArtifactRenderer';
-export { ArtifactsSidebar } from './components/ArtifactsSidebar';
-export type { ArtifactsSidebarProps } from './components/ArtifactsSidebar';
 export { SidecarPanel } from './components/sidecar/SidecarPanel';
 export type { SidecarPanelProps, SidecarPanelType } from './components/sidecar/SidecarPanel';
 export { PresentationArtifact } from './components/artifact-components/PresentationArtifact';

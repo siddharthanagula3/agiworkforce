@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -54,10 +53,7 @@ export default function InlineToolCallDemoPage() {
             R22 inline tool-call badge · static smoke-test harness
           </h1>
           <p className="mt-2 text-sm text-stone-500">
-            Synthetic props. Reference:{' '}
-            <code className="font-mono text-xs">
-              ~/Desktop/reference/ui/desktop/claude-artifacts/02_*.png, 06_*.png, 08_*.png
-            </code>
+            Synthetic props. Reference: desktop tool-call captures 02, 06 and 08.
           </p>
         </header>
 

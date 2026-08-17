@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { getAutoRoutingProfiles, getCoreManualModelOptions } from '@agiworkforce/types';
-import { describeSweepCadence } from '@/lib/schedules/schedule-time';
+import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import {
+  createInitialScheduleDraft,
+  deriveScheduleName,
   INITIAL_SCHEDULE_DRAFT,
   isoToZonedLocalInput,
   scheduleToDraft,
@@ -69,6 +71,19 @@ describe('schedule form contract', () => {
     ]);
   });
 
+  it('starts a fresh draft on demand instead of a standing weekday-9am automation', () => {
+    expect(createInitialScheduleDraft().recurrence).toBe('once');
+    expect(
+      validateAndBuildScheduleRequest(
+        { ...createInitialScheduleDraft(), name: 'Morning brief', prompt: 'Summarize my day.' },
+        new Date('2026-07-15T12:00:00.000Z'),
+      ),
+    ).toEqual({
+      ok: false,
+      errors: expect.objectContaining({ scheduledLocal: 'Choose when this task should run.' }),
+    });
+  });
+
   it('builds the exact supported recurring payload without notification claims', () => {
     const result = validateAndBuildScheduleRequest(
       draft({
@@ -126,6 +141,7 @@ describe('schedule form contract', () => {
     const result = validateAndBuildScheduleRequest(
       draft({
         name: ' ',
+        prompt: ' ',
         recurrence: 'weekly',
         daysOfWeek: [],
         timezone: 'Not/A_Timezone',
@@ -165,27 +181,29 @@ describe('schedule form contract', () => {
   });
 
   it('allows an unchanged legacy interval through an unrelated edit but rejects a new one', () => {
+    const legacyMinutes = Math.max(1, Math.floor(SWEEP_INTERVAL_MS / 60_000 / 2));
+    const legacyIntervalMs = legacyMinutes * 60_000;
     const legacyDraft = draft({
       name: 'Renamed legacy task',
       recurrence: 'interval',
-      intervalValue: '1',
-      intervalUnit: 'hours',
+      intervalValue: String(legacyMinutes),
+      intervalUnit: 'minutes',
     });
 
     expect(
       validateAndBuildScheduleRequest(legacyDraft, new Date('2026-07-15T12:00:00.000Z'), {
-        existingIntervalMs: 60 * 60_000,
+        existingIntervalMs: legacyIntervalMs,
       }),
     ).toMatchObject({
       ok: true,
-      payload: { name: 'Renamed legacy task', intervalMs: 60 * 60_000 },
+      payload: { name: 'Renamed legacy task', intervalMs: legacyIntervalMs },
     });
 
     expect(
       validateAndBuildScheduleRequest(
-        { ...legacyDraft, intervalValue: '2' },
+        { ...legacyDraft, intervalValue: String(legacyMinutes + 1) },
         new Date('2026-07-15T12:00:00.000Z'),
-        { existingIntervalMs: 60 * 60_000 },
+        { existingIntervalMs: legacyIntervalMs },
       ),
     ).toMatchObject({
       ok: false,
@@ -242,5 +260,40 @@ describe('schedule form contract', () => {
     expect(isoToZonedLocalInput('2026-07-15T13:30:00.000Z', 'America/New_York')).toBe(
       '2026-07-15T09:30',
     );
+  });
+});
+
+// sched-gap-08: the schedule name was a required field that had to be typed even
+// though the task's own instructions already say what it is.
+describe('deriveScheduleName', () => {
+  it('names an unnamed schedule from its instructions instead of refusing to save', () => {
+    const result = validateAndBuildScheduleRequest(
+      draft({
+        name: '  ',
+        recurrence: 'daily',
+        prompt: 'Summarize yesterday’s support tickets\nGroup them by product.',
+      }),
+      new Date('2026-07-15T12:00:00.000Z'),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      payload: { name: 'Summarize yesterday’s support tickets' },
+    });
+  });
+
+  it('never lets a derived name exceed the server field limit', () => {
+    const name = deriveScheduleName('word '.repeat(200));
+    expect(name.length).toBeLessThanOrEqual(61);
+    expect(name.endsWith('…')).toBe(true);
+  });
+
+  it('keeps a name the user actually typed', () => {
+    expect(
+      validateAndBuildScheduleRequest(
+        draft({ name: 'Morning brief', recurrence: 'daily' }),
+        new Date('2026-07-15T12:00:00.000Z'),
+      ),
+    ).toMatchObject({ ok: true, payload: { name: 'Morning brief' } });
   });
 });

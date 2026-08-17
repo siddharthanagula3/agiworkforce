@@ -126,8 +126,16 @@ describe('BillingSection', () => {
       ),
     ).toBeTruthy();
 
-    // No Stripe round-trips for an account with no Stripe customer.
-    expect(fetchMock).not.toHaveBeenCalled();
+    // No Stripe round-trips for an account with no Stripe customer — but the
+    // credit ledger still applies to it (usage debits happen regardless of
+    // who bills the subscription), so credit-history is the one call an
+    // Apple-billed account does make.
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/billing/payment-methods', expect.anything());
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/billing/invoices', expect.anything());
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/billing/overage', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/api/billing/credit-history', {
+      credentials: 'include',
+    });
   });
 
   it('sends a Play-billed plan to Google and says where receipts live', () => {
@@ -203,7 +211,17 @@ describe('BillingSection', () => {
         'This plan is managed by your organization. Contact an administrator to change it.',
       ),
     ).toBeTruthy();
-    expect(global.fetch).not.toHaveBeenCalled();
+    // Same distinction as the Apple-billed case above: no Stripe round-trips,
+    // but the credit ledger is not Stripe-specific.
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      '/api/billing/payment-methods',
+      expect.anything(),
+    );
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/billing/invoices', expect.anything());
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/billing/overage', expect.anything());
+    expect(global.fetch).toHaveBeenCalledWith('/api/billing/credit-history', {
+      credentials: 'include',
+    });
   });
 
   it('offers web plans again after a store-owned subscription is terminal', () => {

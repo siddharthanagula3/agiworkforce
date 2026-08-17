@@ -13,7 +13,24 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   create_folder: 'create a folder in that sandbox',
   create_office_file: 'produce .docx and .pptx files',
   skill: 'load a skill: a packaged set of instructions for a specific kind of task',
+  code_execution: 'run code in a hosted sandbox and read back its real output',
+  code_interpreter: 'run code in a hosted sandbox and read back its real output',
 };
+
+const CODE_EXECUTION_TOOL_NAMES = ['execute_code', 'code_execution', 'code_interpreter'];
+
+function providerNativeCodeExecutionName(record: Record<string, unknown>): string | null {
+  const type = record['type'];
+  if (typeof type === 'string') {
+    if (type === 'code_interpreter' || type.startsWith('code_interpreter_')) {
+      return 'code_interpreter';
+    }
+    if (type === 'code_execution' || type.startsWith('code_execution_')) return 'code_execution';
+  }
+  const googleTool = record['code_execution'];
+  if (googleTool && typeof googleTool === 'object') return 'code_execution';
+  return null;
+}
 
 export function extractToolNames(tools: unknown[] | undefined): string[] {
   if (!Array.isArray(tools)) return [];
@@ -43,6 +60,11 @@ export function extractToolNames(tools: unknown[] | undefined): string[] {
     }
     if (record['google_search'] && typeof record['google_search'] === 'object') {
       names.push('web_search');
+      continue;
+    }
+    const nativeCodeExecution = providerNativeCodeExecutionName(record);
+    if (nativeCodeExecution) {
+      names.push(nativeCodeExecution);
     }
   }
   return [...new Set(names)];
@@ -52,6 +74,12 @@ export interface CapabilityPreambleInput {
   tools: unknown[] | undefined;
   timeZone?: string;
   now?: Date;
+  /**
+   * The user turned "Run code" on for this turn but no execution tool could be
+   * attached for the routed model. Without this the turn runs identically to one
+   * where the toggle was never touched, so the drop has to be disclosed.
+   */
+  codeExecutionUnavailable?: boolean;
 }
 
 function formatLocalInstant(now: Date, timeZone: string | undefined): string | null {
@@ -88,6 +116,9 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
   const hasFileCreation = toolNames.some((name) =>
     ['execute_code', 'write_file', 'create_folder', 'create_office_file'].includes(name),
   );
+  const hasCodeExecution =
+    !input.codeExecutionUnavailable &&
+    toolNames.some((name) => CODE_EXECUTION_TOOL_NAMES.includes(name));
 
   const timeContext =
     `The current UTC date and time is ${currentUtcTimestamp}. ` +
@@ -127,6 +158,15 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
       );
     }
 
+    if (hasCodeExecution) {
+      sections.push(
+        'Code execution is already enabled. When the user asks you to run, compute, test, or ' +
+          'verify something, run it with that tool and report the output you actually got. ' +
+          'Never tell the user you cannot execute code on this turn, and never present code ' +
+          'you did not run as though you had run it.',
+      );
+    }
+
     if (hasFileCreation) {
       sections.push(
         'When the user asks for a downloadable file or a finished deliverable, create the ' +
@@ -142,6 +182,17 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
       'No tools are available on this turn: you cannot browse the web, run code, or read ' +
         'or write files. If the user asks for one of those, say so plainly rather than ' +
         'pretending to have done it, and answer from your own knowledge where you can.',
+    );
+  }
+
+  if (input.codeExecutionUnavailable) {
+    sections.push(
+      'The user turned "Run code" on for this turn, but no code-execution tool could be ' +
+        'attached for the model handling it, so you cannot actually run anything. Tell the ' +
+        'user that plainly before you answer, and name the limit: code execution is not ' +
+        'available for the model this turn was routed to. Write code if it helps, but ' +
+        'present it as code you have not run — never report output, results, or timings as ' +
+        'though you had executed it.',
     );
   }
 

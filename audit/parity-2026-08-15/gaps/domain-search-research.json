@@ -1,0 +1,119 @@
+[
+  {
+    "id": "SEARCH-RESEARCH-001",
+    "domain": "search-research",
+    "surface": "backend",
+    "feature": "Deep Research — Anthropic/free-trial fallback path",
+    "screen": "Chat composer 'Research' toggle / ResearchPanel 'Report' tab",
+    "files": [
+      "apps/web/app/api/llm/v1/chat/completions/route.ts:301-318",
+      "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1062-1071,1102-1127,2231-2238",
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic.ts:30-160",
+      "apps/web/features/chat/components/research/ResearchPanel.tsx:122-193",
+      "apps/web/features/chat/components/Composer/ChatComposerNew.tsx:725-733,780-781,2814-2818"
+    ],
+    "currentState": "The multi-stage `runResearchLoop` (plan → search rounds → cited synthesis, persisted `research_reports` row, retry-with-carried-sources, `x_research_status`/`x_research_plan` progress events) only runs when `chatRequest.stream && researchMode && !processed.freeTrial && processed.provider.toLowerCase() !== 'anthropic'` (route.ts:314-316). Anthropic-backed conversations and free-trial users instead fall through to `applyResearchMode()` (request-processor.ts:1062-1071), which just prepends a research system prompt and forces the native Anthropic `web_search_20260209` tool on with `max_uses: 20` for one ordinary turn (request-processor.ts:1109-1118) — no plan, no phase events, no `research_reports` row. The route's own comment says this path exists because 'their raw streams are only normalized by buildStreamResponse,' but `tool-loop-anthropic.ts`'s own header comment documents that this normalization (`buildToolLoopStream` → `chunksToOpenAiSse`/`OpenAIWireAssembler`) was already GENERALIZED to cover Anthropic months ago and is the exact mechanism `research-loop.ts`'s own `runTurn()` calls today — the stated technical reason for excluding Anthropic no longer holds. Client-side, the composer's Research toggle (`modelSupportsResearch`, ChatComposerNew.tsx:732-733) is gated purely on model-catalog capability, not provider, so it renders and enables identically for an Anthropic model. Because the single-turn fallback never emits `x_research_status`/`x_research_plan`, `ResearchActivity` never mounts for that turn (no plan, no phase label, no Retry control), and the ResearchPanel 'Report' tab permanently shows 'No saved report yet' for any conversation that only ever used Anthropic/free-trial research turns, because `persistReport` is only invoked inside `runResearchLoop`.",
+    "expectedState": "Selecting a Claude/Anthropic model and turning on 'Research' produces the same multi-stage, plan-visible, persisted-report experience as any other provider — matching Claude's own Research product (plan → multi-step search → cited report) and avoiding a mode that silently behaves differently depending on which model happens to be selected.",
+    "benchmarkRef": "Claude web/desktop — Research mode (multi-step web_search + document reads → structured cited report, research-loop.md §8) and Anthropic's own 'Advanced Research'; ChatGPT Deep Research (chatgpt-web-desktop.md §2, 'Deep Research chip').",
+    "gapType": "partial-implementation",
+    "severity": "P1",
+    "evidence": "Read route.ts:301-359 (gate + persistReport wiring), request-processor.ts:1062-1127 and 2231-2238 (single-turn fallback + researchMode flag), research-loop.ts in full (persistRun only called inside the loop), tool-loop-anthropic.ts:30-115 (comment documents the generalization that undermines the route.ts exclusion rationale — buildToolLoopStream already normalizes Anthropic to OpenAI-shaped SSE and is what research-loop.ts's own runTurn() calls). Confirmed ADAPTER_PROVIDERS has an 'anthropic' entry (adapter-providers.ts:84). Read ResearchPanel.tsx ReportTab (empty-state copy for no persisted report) and ChatComposerNew.tsx's modelSupportsResearch gate (no provider check). Read useChatStream.ts:1388-1461 confirming MessageResearchState is populated only from x_research_status/x_research_plan deltas, which the Anthropic path never emits.",
+    "priorArtId": "CAP-045",
+    "recommendation": "Re-verify (with a live test) whether buildToolLoopStream's Anthropic normalization is now safe for the research loop's multi-turn shape; if so, drop the `provider.toLowerCase() !== 'anthropic'` exclusion and route Anthropic through runResearchLoop like every other provider. If a real remaining blocker exists (e.g. Anthropic's native web_search tool_use blocks don't cleanly round-trip through multiple loop turns), gate the composer's Research toggle on provider capability too, and give the single-turn fallback its own honestly-labeled affordance (e.g. 'web search' not 'Research') instead of silently reusing the Research toggle and control surface."
+  },
+  {
+    "id": "SEARCH-RESEARCH-002",
+    "domain": "search-research",
+    "surface": "cross-surface",
+    "feature": "Deep Research progress/plan UI and persisted report retrieval",
+    "screen": "n/a — no equivalent to web's ResearchActivity/ResearchPanel exists on other surfaces",
+    "files": [
+      "apps/desktop/src/runtime/cloudStreamDeltas.ts:300,501-534,677",
+      "apps/desktop/src/features/v3/DesktopShellV3.tsx (no research_status/x_research_plan consumer)",
+      "apps/web/app/api/research/reports/route.ts:1-76",
+      "apps/mobile/src/features/chat/components/AddToChatSheet.tsx:127-136,761-767",
+      "apps/mobile/src/features/chat/utils/toolCallAccumulator.ts"
+    ],
+    "currentState": "The Deep Research plan/progress SSE contract (`x_research_status`, `x_research_plan`) and the durable `GET /api/research/reports` read endpoint are consumed by exactly one client: the web app's `ResearchActivity`/`ResearchPanel`/`ResearchReportView` components. Desktop (Tauri, Cloud mode) gets closest — `cloudStreamDeltas.ts` actually parses `x_research_status` into a `research_status` event and a `.research` field on the message state (lines 501-534, 677) — but grep across `apps/desktop/src` finds zero components that read that field; the data is captured and then never rendered, so a Desktop Cloud user running 'Deep research' sees no plan, no phase label ('Searching the web (round 2)', 'Writing report'), and no source/report panel. Mobile has a 'Deep research' toggle (`AddToChatSheet.tsx:761-767`, labelled 'Multi-step research with cited sources') that sends `research: true`, but `toolCallAccumulator.ts` (the mobile SSE parser) has no `x_research_status`/`x_research_plan` handling at all — a mobile research run renders as an ordinary streamed answer with citation chips, no visible plan or phase. The Chrome extension has neither the toggle nor the parser. None of the three non-web surfaces ever call `GET /api/research/reports`, so a Deep Research report a user started on mobile or desktop is durably saved server-side but is only readable by opening the web app.",
+    "expectedState": "A Deep Research run started from any authenticated surface shows equivalent progress (phase, plan, source/search counts) while running and is reachable as a saved report afterward from any surface — at minimum, Desktop Cloud (which already parses the events) should render them, and every surface should be able to open a previously-run report via `/api/research/reports`.",
+    "benchmarkRef": "Claude Research and ChatGPT Deep Research are both available with consistent progress/report UI across web, desktop, and mobile (claude-web-desktop.md §8, chatgpt-web-desktop.md §2).",
+    "gapType": "integration-gap",
+    "severity": "P1",
+    "evidence": "Grepped `x_research_status|x_research_plan|research_reports|ResearchReport|researchMode` across apps/mobile/src and apps/extension/src — zero hits outside an unrelated `research: false` snapshot flag and UI label strings. Grepped `apps/desktop/src` for the same and found only `cloudStreamDeltas.ts` (parser, populates state) and Sidebar.tsx (nav label) — no consumer of the parsed `research`/`researchStatus` field anywhere else in the app. Grepped `research/reports` across apps/mobile, apps/desktop/src, apps/extension, apps/extension-vscode, apps/cli — zero callers; the only caller anywhere in the repo is `apps/web/features/chat/components/research/ResearchPanel.tsx`'s `ReportTab`.",
+    "priorArtId": "CAP-045",
+    "recommendation": "Smallest slice: wire Desktop's already-parsed `research` state into a compact progress indicator (phase + counts) in the Cloud chat message view, since the data is already there. Then extend `GET /api/research/reports` calls to Desktop/Mobile so a finished report can be reopened from any surface, reusing the web `ResearchReportView`'s markdown-rendering approach."
+  },
+  {
+    "id": "SEARCH-RESEARCH-003",
+    "domain": "search-research",
+    "surface": "backend",
+    "feature": "Deep Research connected-data / connector integration",
+    "screen": "n/a — research-loop.ts tool selection",
+    "files": ["apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts:953-966"],
+    "currentState": "`runResearchLoop` explicitly strips every client-supplied function tool except `url_fetch` before running gathering rounds (research-loop.ts:953-966, comment: 'No other function tool is executed by this loop, so none other is offered'). This means a user's connected connectors (Google Drive, Notion, Slack, custom MCP servers, etc.) — even read-only ones — are never available during a Deep Research run; the loop can only search the open web and fetch individual URLs, never search or read from a connected data source.",
+    "expectedState": "Deep Research can optionally draw on the user's connected read-only data sources (Google Workspace, connectors) alongside web search, the way Claude's Research mode does, while still excluding write-capable tools for safety.",
+    "benchmarkRef": "Claude Research — 'combines web search + connected data (Google Workspace, other connectors) into a multi-step, cited report' with official guidance to disable only write-capable MCP tools (claude-web-desktop.md §8).",
+    "gapType": "missing-capability",
+    "severity": "P2",
+    "evidence": "Read research-loop.ts:953-966, the `researchTools` filter that keeps only `isUrlFetchTool` entries from `processed.llmRequest.tools`. Cross-referenced against web-backend.md §4 (Tool runtime) confirming connector tools are otherwise available in the ordinary chat tool loop (`user-connector-tools.ts`), so this is a deliberate research-loop-specific narrowing, not a general connector-availability gap.",
+    "priorArtId": "CAP-045",
+    "recommendation": "Extend the research-loop tool filter to also allow the user's read-only connector tools (using the existing `connector-tool-permissions.ts` allow/ask/deny verdicts to exclude anything not explicitly read-only or already denied), matching Claude's guidance of disabling only write-capable tools during Research."
+  },
+  {
+    "id": "SEARCH-RESEARCH-004",
+    "domain": "search-research",
+    "surface": "backend",
+    "feature": "Semantic/vector search across chats, memory, and project knowledge",
+    "screen": "Global search (Cmd/Ctrl-K), Settings memory search, Projects knowledge files",
+    "files": [
+      "apps/web/app/api/search/route.ts:186,221,249,281",
+      "apps/web/app/api/memory/search/route.ts:37,43",
+      "apps/web/app/api/llm/v1/embeddings/route.ts",
+      "apps/web/db/neon/*.sql (no vector column type in any of 119 migrations)"
+    ],
+    "currentState": "Every search surface in the product is Postgres `ILIKE` substring matching: `GET/POST/DELETE /api/search/route.ts` (sessions/messages/projects/files, ordered only by `updated_at desc`) and `GET /api/memory/search/route.ts` (`content ilike $2` over `user_memories`, whose own comment reads 'Simple ILIKE text search - can be upgraded to vector similarity later'). A real, fully-implemented OpenAI-compatible embeddings gateway exists (`POST /api/llm/v1/embeddings/route.ts`, 306 lines, reserve/call/settle billing) but has zero internal callers anywhere in the repo — it is a public API surface only. No `vector` column type appears in any of the 119 SQL migrations under `apps/web/db/neon/`. Project 'knowledge files' are stuffed into every turn's prompt verbatim (`project-knowledge-extraction.ts:270`) rather than retrieved by similarity.",
+    "expectedState": "A query that paraphrases past content (e.g. 'the trip I planned last month' when the actual chat said 'Lisbon itinerary') should still surface the relevant chat/memory — the implicit recall behavior ChatGPT's 'Reference chat history' and Claude's 'Search and reference chats' both rely on. Exact-substring ILIKE cannot do this.",
+    "benchmarkRef": "ChatGPT memory — 'Reference chat history' implicit pattern recall (chatgpt-web-desktop.md §8); Claude iOS — 'Search and reference chats' toggle, 'Allow Claude to search for relevant details in past chats' (shots-claude-ios.md:412-414).",
+    "gapType": "architecture-gap",
+    "severity": "P2",
+    "evidence": "Read search/route.ts (ILIKE queries at the cited lines, no ranking beyond updated_at), memory/search/route.ts (ILIKE + its own upgrade-later comment), embeddings/route.ts (confirmed real, billing-wired, but grepped for callers — none found outside its own tests), and grepped `vector` across every apps/web/db/neon/*.sql migration — the only hit is an unrelated 'attack vector' comment in 0083_sso_connections_clerk_link.sql. Cross-checked against web-backend.md §13, which independently reaches the same conclusion.",
+    "priorArtId": null,
+    "recommendation": "Add a pgvector column + index on `user_memories` (and optionally message content), backfill via the already-implemented `/api/llm/v1/embeddings` endpoint, and add a similarity-ranked fallback path to memory/search and global search when ILIKE returns few/no hits — the smallest slice that stops the working embeddings endpoint from being generation-only dead capacity."
+  },
+  {
+    "id": "SEARCH-RESEARCH-005",
+    "domain": "search-research",
+    "surface": "extension-chrome",
+    "feature": "Manual web-search activation in the Chrome extension side panel",
+    "screen": "Side panel composer",
+    "files": [
+      "apps/extension/src/side_panel.ts",
+      "apps/extension/src/features/cloud-bridge/managedChatHandler.ts:20-46",
+      "apps/extension/src/features/side-panel/bubbles.ts:389-428,533-588"
+    ],
+    "currentState": "The Chrome extension's side panel has no manual 'Search the web' toggle and no 'Deep research' entry point anywhere — grepped the whole `side_panel.ts` (10,933 lines) for search/web-search/Deep Research UI strings and toggle wiring: zero hits, and `managedChatHandler.ts`'s outbound request builder never sets a `research`/explicit web-search field (only a routing-classification `'research'` task-type enum value used for model routing, unrelated to the feature). Search results DO render when a model autonomously invokes the tool — `bubbles.ts` has a real 'agent activity' sources renderer (lines 389-428, 533-588) — but the user has no way to force a search, see a query before it runs, or request current-data results on demand; search only happens if the model decides to call it.",
+    "expectedState": "A user can explicitly request a web search (or, at minimum, see that automatic search is available/active) from the extension composer, matching the manual-activation pattern present on web and mobile.",
+    "benchmarkRef": "Claude in Chrome — standalone extension with the same capability set as claude.ai including web search (claude-code-chrome-ide.md §4.3); ChatGPT's composer Tools menu exposes an explicit 'Web search' entry (chatgpt-web-desktop.md §2).",
+    "gapType": "missing-capability",
+    "severity": "P2",
+    "evidence": "Grepped side_panel.ts for 'toggle'/'Toggle' combined with 'search'/'web' — zero matches. Grepped managedChatHandler.ts and freeTrialClient.ts for a 'research' boolean field distinct from the ROUTING_TASKS classification set — zero matches. Read bubbles.ts's `appendActivitySources` (source-list rendering exists for whatever the model already searched) confirming search results CAN render, just cannot be user-initiated.",
+    "priorArtId": null,
+    "recommendation": "Add an explicit 'Search the web' toggle to the side panel composer (mirroring the existing agent-activity source rendering it can already display), wired to set `web_search: true` on the outbound managed-chat request the way the web composer's toggle does."
+  },
+  {
+    "id": "SEARCH-RESEARCH-006",
+    "domain": "search-research",
+    "surface": "backend",
+    "feature": "Image / current-data (weather, stocks, sports) search result types",
+    "screen": "n/a",
+    "files": ["apps/web/lib/web-search/web-search-tool.ts:117-123"],
+    "currentState": "`WebSearchResultItem` (the platform `web_search` tool's result shape) carries only `{url, title, snippet, date}` — no image results and no structured current-data card types (weather/stock/sports). Grepped for `image_search`/`imageSearch`/`search_images` across `apps/web` and `packages` — zero hits.",
+    "expectedState": "Not asserted as a hard requirement — the benchmark evidence itself is weak here (cross-cutting-and-complaints.md flags ChatGPT's own rich result cards as 'UNVERIFIED — treat as a gap requiring a first-party or hands-on check'). Flagged as a differentiation opportunity, not a confirmed parity gap: an image-results grid and lightweight current-data cards (weather/stock/sports) inside search-grounded answers would meaningfully raise perceived search quality if built.",
+    "benchmarkRef": "ChatGPT web/desktop — rich cards for shopping/sports/weather/stocks/finance (chatgpt-web-desktop.md §3, itself marked UNVERIFIED in the source research).",
+    "gapType": "missing-capability",
+    "severity": "P3",
+    "evidence": "Read web-search-tool.ts's WebSearchResultItem interface (url/title/snippet/date only). Grepped repo-wide for any image-search or structured-card search result type — none found. Cross-checked the benchmark doc's own confidence level on this feature (explicitly flagged unverified for ChatGPT itself), so this is filed at low severity/low confidence rather than as a confirmed regression.",
+    "priorArtId": null,
+    "recommendation": "Low priority. If pursued, extend the Perplexity Search API integration (which supports richer result types) to optionally request image results, and add a lightweight card renderer reusing the existing 'rich cards' framework (Calculation/Comparison/Recipe/Steps) already in `features/chat/components/cards/*`."
+  }
+]

@@ -14,7 +14,6 @@ import { WindowSelector } from './WindowSelector';
 import { useScreenCapture } from '../../hooks/useScreenCapture';
 import type { Region, CaptureResult, WindowInfo } from '../../types/capture';
 import { toast } from 'sonner';
-import { isTauri } from '../../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
 interface ScreenCaptureButtonProps {
@@ -42,11 +41,6 @@ export function ScreenCaptureButton({
   const [showWindowSelector, setShowWindowSelector] = useState(false);
   const { captureFullScreen, captureRegion, captureWindow, getAvailableWindows, isCapturing } =
     useScreenCapture();
-  const isMacOS =
-    typeof navigator !== 'undefined' &&
-    (/Mac|iPhone|iPad|iPod/i.test(navigator.platform || '') ||
-      /Mac OS X|Darwin/i.test(navigator.userAgent || ''));
-  const useNativeDesktopPicker = isMacOS && isTauri;
 
   const handleFullScreen = async () => {
     try {
@@ -62,30 +56,11 @@ export function ScreenCaptureButton({
     }
   };
 
-  const handleRegionCapture = async () => {
-    if (useNativeDesktopPicker) {
-      setShowRegionSelector(true);
-      return;
-    }
+  const handleRegionCapture = () => {
     setShowRegionSelector(true);
   };
 
   const handleWindowCapture = async () => {
-    if (useNativeDesktopPicker) {
-      try {
-        const windows = await getAvailableWindows();
-        if (windows.length === 0) {
-          toast.error('No windows available for capture');
-          return;
-        }
-        setShowWindowSelector(true);
-      } catch (error) {
-        toast.error('Failed to get available windows');
-        console.error('Window list error:', error);
-      }
-      return;
-    }
-
     try {
       const windows = await getAvailableWindows();
       if (windows.length === 0) {
@@ -199,13 +174,11 @@ export function ScreenCaptureButton({
           <DropdownMenuItem onClick={handleFullScreen} disabled={isCapturing || disabled}>
             <Monitor className="mr-2 h-4 w-4" />
             <span>Capture Full Screen</span>
-            <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+S</span>
           </DropdownMenuItem>
 
           <DropdownMenuItem onClick={handleRegionCapture} disabled={isCapturing || disabled}>
             <CropIcon className="mr-2 h-4 w-4" />
             <span>Capture Region</span>
-            <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+R</span>
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />
@@ -213,7 +186,6 @@ export function ScreenCaptureButton({
           <DropdownMenuItem onClick={handleWindowCapture} disabled={isCapturing || disabled}>
             <Image className="mr-2 h-4 w-4" />
             <span>Capture Window</span>
-            <span className="ml-auto text-xs text-muted-foreground">Ctrl+Shift+W</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

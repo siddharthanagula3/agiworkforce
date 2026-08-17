@@ -136,7 +136,40 @@ function formatElapsed(seconds: number): string {
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-function GeneratingCard() {
+/**
+ * Explicit lookup, not string-interpolated class names: Tailwind's build-time
+ * scanner only sees literal class strings in source, so `aspect-[${ratio}]`
+ * would silently produce no rule at runtime. Every ratio the picker offers
+ * (see IMAGE_ASPECT_OPTIONS in ../lib/imageGenerationOptions) is enumerated
+ * here; 'auto' and any unrecognized value fall back to 3:2, matching this
+ * card's pre-existing fixed 420x280 shape so old behavior is the default.
+ */
+const IMAGE_ASPECT_CLASSES: Readonly<Record<string, string>> = {
+  '1:1': 'aspect-square',
+  '2:3': 'aspect-[2/3]',
+  '3:4': 'aspect-[3/4]',
+  '4:5': 'aspect-[4/5]',
+  '9:16': 'aspect-[9/16]',
+  '9:21': 'aspect-[9/21]',
+  '3:2': 'aspect-[3/2]',
+  '4:3': 'aspect-[4/3]',
+  '5:4': 'aspect-[5/4]',
+  '16:9': 'aspect-video',
+  '21:9': 'aspect-[21/9]',
+};
+// Written as a literal (not indexed from the map above) so its type stays
+// `string` under noUncheckedIndexedAccess; keep it in sync with the '3:2' entry.
+const DEFAULT_IMAGE_ASPECT_CLASS = 'aspect-[3/2]';
+
+function imageAspectClass(aspectRatio: ImageAspectRatio | undefined): string {
+  if (!aspectRatio) return DEFAULT_IMAGE_ASPECT_CLASS;
+  return IMAGE_ASPECT_CLASSES[aspectRatio] ?? DEFAULT_IMAGE_ASPECT_CLASS;
+}
+
+function GeneratingCard({
+  aspectRatio,
+  capHeight,
+}: { aspectRatio?: ImageAspectRatio; capHeight?: boolean } = {}) {
   const startedAt = useRef(Date.now());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -151,7 +184,16 @@ function GeneratingCard() {
     <div
       className={cn(
         'relative mt-3 flex items-center justify-center overflow-hidden rounded-2xl',
-        'h-[280px] w-full max-w-[420px]',
+        'w-full max-w-[420px]',
+        imageAspectClass(aspectRatio),
+        // ResultCard's <img> is `w-full` with `style={{ maxHeight: 420 }}` — a
+        // tall portrait aspect (e.g. 9:16) renders far shorter than its raw
+        // ratio implies once that cap applies. Mirroring the same cap here
+        // (only for the transcript placeholder, not the EditPanel's freer
+        // regenerate view) keeps state A and state B the same box size, so a
+        // portrait placeholder doesn't overshoot and then collapse when the
+        // real image lands.
+        capHeight && 'max-h-[420px]',
         // Subtle dot-grid texture
         'bg-[#1a1a1f]',
       )}
@@ -541,7 +583,7 @@ function EditPanel({
         {/* Image area */}
         <div className="flex flex-1 flex-col items-center justify-center overflow-hidden bg-[#0f0f12] p-4">
           {generating ? (
-            <GeneratingCard />
+            <GeneratingCard aspectRatio={currentAspect} />
           ) : (
             <img
               src={currentUrl}
@@ -841,7 +883,7 @@ export function ImageGenerationCard({
   // elapsed time; rotating pseudo-stages such as "Painting details" and
   // "Almost there" implied provider telemetry we do not receive.
   if (!imageUrl && isGenerating) {
-    return <GeneratingCard />;
+    return <GeneratingCard aspectRatio={aspectRatio} capHeight />;
   }
 
   // A failed/disconnected request must never leave an infinite loading card.

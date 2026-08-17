@@ -79,6 +79,29 @@ export {
 } from './async';
 
 export {
+  CircuitBreaker,
+  CircuitOpenError,
+  DependencyOverloadedError,
+  DependencyTimeoutError,
+  circuitBreakerSnapshots,
+  getCircuitBreaker,
+  isDependencyUnavailableError,
+  resetCircuitBreakers,
+} from './circuitBreaker';
+
+export type {
+  CircuitBreakerOptions,
+  CircuitBreakerSnapshot,
+  CircuitLease,
+  CircuitState,
+  CircuitStateChange,
+  LeaseOptions as CircuitLeaseOptions,
+  DependencyRejection,
+  DependencyRejectionReason,
+  ExecuteOptions as CircuitBreakerExecuteOptions,
+} from './circuitBreaker';
+
+export {
   AppError,
   createError,
   isAppError,

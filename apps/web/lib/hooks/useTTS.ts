@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const VOICE_STORAGE_KEY = 'agi:tts-voice-uri';
 
+// The settings picker and the chat read-aloud button mount separate instances of
+// this hook at the same time, so a new choice has to reach the live one without a
+// reload; localStorage alone only propagates on mount.
+const voiceSubscribers = new Set<(uri: string | null) => void>();
+
 function readStoredVoiceUri(): string | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -64,8 +69,6 @@ export function useTTS(): UseTTSReturn {
     setIsSupported(browserSupportsSpeech);
     if (!browserSupportsSpeech) return;
 
-    setVoiceUriState(readStoredVoiceUri());
-
     const synth = window.speechSynthesis;
     const syncVoices = () => setVoices(synth.getVoices());
     syncVoices();
@@ -77,8 +80,16 @@ export function useTTS(): UseTTSReturn {
     };
   }, []);
 
+  useEffect(() => {
+    setVoiceUriState(readStoredVoiceUri());
+    const apply = (uri: string | null) => setVoiceUriState(uri);
+    voiceSubscribers.add(apply);
+    return () => {
+      voiceSubscribers.delete(apply);
+    };
+  }, []);
+
   const setVoiceUri = useCallback((uri: string | null) => {
-    setVoiceUriState(uri);
     try {
       if (uri) window.localStorage.setItem(VOICE_STORAGE_KEY, uri);
       else window.localStorage.removeItem(VOICE_STORAGE_KEY);
@@ -86,6 +97,7 @@ export function useTTS(): UseTTSReturn {
       // Preference does not persist across reloads in this browser mode; the
       // in-memory choice still applies for the session.
     }
+    voiceSubscribers.forEach((notify) => notify(uri));
   }, []);
 
   const selectedVoice = useMemo(

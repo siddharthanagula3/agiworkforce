@@ -259,8 +259,10 @@ export default function MobileLegalPage() {
             Regulation (EU) 2024/1689, the app discloses clearly within the conversation interface
             that responses are AI-generated. Conversation exports include a machine-readable marker
             and a human-readable disclosure block per Art. 50(2). AGI Mobile does not engage in
-            practices prohibited under Art. 5, including subliminal manipulation, biometric
-            categorisation, or social scoring.
+            practices prohibited under Art. 5, including subliminal manipulation; biometric
+            categorisation to infer protected or sensitive attributes; real-time remote biometric
+            identification in public spaces; social scoring; emotion inference in workplace or
+            educational settings; or predictive policing based solely on automated profiling.
           </p>
 
           <h3

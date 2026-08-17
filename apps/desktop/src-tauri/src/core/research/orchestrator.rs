@@ -995,12 +995,13 @@ fn parse_confidence(s: Option<&str>) -> ConfidenceLevel {
     }
 }
 
-/// Truncates content to a maximum length.
+/// Truncates content to a maximum length in bytes, never splitting a codepoint.
 fn truncate_content(content: &str, max_len: usize) -> String {
     if content.len() <= max_len {
         content.to_string()
     } else {
-        format!("{}...", &content[..max_len.saturating_sub(3)])
+        let end = crate::core::agi::floor_char_boundary(content, max_len.saturating_sub(3));
+        format!("{}...", &content[..end])
     }
 }
 
@@ -1033,6 +1034,26 @@ That's the result."#;
     fn test_truncate_content() {
         assert_eq!(truncate_content("short", 10), "short");
         assert_eq!(truncate_content("this is a long string", 10), "this is...");
+    }
+
+    #[test]
+    fn test_truncate_content_multibyte_snippet_does_not_panic() {
+        let content = format!("{}{}", "a".repeat(495), "日本語のテキスト".repeat(20));
+        assert!(!content.is_char_boundary(497));
+
+        let truncated = truncate_content(&content, 500);
+
+        assert!(truncated.ends_with("..."));
+        assert_eq!(truncated, format!("{}...", "a".repeat(495)));
+    }
+
+    #[test]
+    fn test_truncate_content_emoji_at_every_cap() {
+        let content = "🚀ロケット".repeat(40);
+        for cap in 3..content.len() {
+            let truncated = truncate_content(&content, cap);
+            assert!(truncated.len() <= cap);
+        }
     }
 
     #[test]

@@ -10,12 +10,19 @@
 
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Check, ChevronDown, ChevronRight, ListChecks, Circle } from 'lucide-react';
 import { Badge, Card, CardContent, CardHeader } from '@agiworkforce/ui';
 import { Progress } from '@agiworkforce/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import {
+  CardExtraSections,
+  appendExtraLine,
+  openExtraSection,
+  stripListMarker,
+  type ExtraSection,
+} from './card-extras';
 
 interface ParsedStep {
   title: string;
@@ -26,6 +33,7 @@ interface ParsedSteps {
   title: string;
   description: string;
   steps: ParsedStep[];
+  extraSections: ExtraSection[];
 }
 
 function parseSteps(content: string): ParsedSteps {
@@ -35,7 +43,9 @@ function parseSteps(content: string): ParsedSteps {
   let description = '';
   const steps: ParsedStep[] = [];
   const descLines: string[] = [];
+  const extraSections: ExtraSection[] = [];
   let inPreamble = true;
+  let extraHeading: string | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const trimmed = (lines[i] ?? '').trim();
@@ -59,6 +69,7 @@ function parseSteps(content: string): ParsedSteps {
     const match = stepHeaderMatch || altStepMatch;
     if (match) {
       inPreamble = false;
+      extraHeading = null;
       steps.push({
         title: (match[2] ?? '').replace(/\*\*/g, '').trim(),
         details: [],
@@ -66,21 +77,40 @@ function parseSteps(content: string): ParsedSteps {
       continue;
     }
 
+    const heading = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      const level = (heading[1] ?? '').length;
+      const text = (heading[2] ?? '').replace(/\*\*/g, '').trim();
+      const lastStep = steps[steps.length - 1];
+      // A deeper heading inside a step is part of that step, so it stays with
+      // it; a sibling heading opens a section of its own after the checklist.
+      if (extraHeading === null && !inPreamble && level >= 3 && lastStep) {
+        if (text) lastStep.details.push(text);
+        continue;
+      }
+      extraHeading = text;
+      openExtraSection(extraSections, text);
+      continue;
+    }
+
+    if (extraHeading !== null) {
+      appendExtraLine(extraSections, extraHeading, stripListMarker(trimmed));
+      continue;
+    }
+
     // Preamble text
-    if (inPreamble && !trimmed.startsWith('#')) {
+    if (inPreamble) {
       descLines.push(trimmed);
       continue;
     }
 
     // Step detail lines (belongs to last step)
-    if (steps.length > 0) {
-      const lastStep = steps[steps.length - 1];
-      if (lastStep) {
-        // Skip sub-section headers that are not steps
-        if (/^#{3,}\s+/.test(trimmed)) continue;
-        const detailText = trimmed.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '');
-        if (detailText) lastStep.details.push(detailText);
-      }
+    const lastStep = steps[steps.length - 1];
+    if (lastStep) {
+      const detailText = trimmed.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '');
+      if (detailText) lastStep.details.push(detailText);
+    } else {
+      appendExtraLine(extraSections, '', stripListMarker(trimmed));
     }
   }
 
@@ -94,17 +124,121 @@ function parseSteps(content: string): ParsedSteps {
     title: title || 'Step-by-Step Guide',
     description,
     steps,
+    extraSections,
   };
+}
+
+const DESCRIPTION_CHAR_BUDGET = 180;
+
+/**
+ * A CSS `line-clamp` cuts wherever the line happens to end, which lands the
+ * ellipsis mid-phrase ("…if you hit any…"). The preamble is bounded here
+ * instead so the visible text always stops on a sentence — or, failing that, on
+ * a whole word.
+ */
+export function clampToSentence(text: string, budget = DESCRIPTION_CHAR_BUDGET): string {
+  const full = text.trim();
+  if (full.length <= budget) return full;
+
+  const sentences = full.match(/[^.!?]+(?:[.!?]+["')\]]*\s*|$)/g) ?? [];
+  let kept = '';
+  for (const sentence of sentences) {
+    const next = kept + sentence;
+    if (kept && next.trim().length > budget) break;
+    kept = next;
+    if (kept.trim().length >= budget) break;
+  }
+  kept = kept.trim();
+
+  if (kept && kept.length <= budget && /[.!?]["')\]]*$/.test(kept)) return `${kept} …`;
+
+  const head = full.slice(0, budget);
+  const lastSpace = head.lastIndexOf(' ');
+  return `${(lastSpace > 0 ? head.slice(0, lastSpace) : head).replace(/[\s,;:]+$/, '')}…`;
 }
 
 interface StepsCardProps {
   content: string;
+  messageId?: string;
 }
 
-export function StepsCard({ content }: StepsCardProps) {
+/**
+ * Ticking a step is a user edit, not a render detail, so it has to outlive the
+ * component. It previously lived in `useState` alone, which meant every reload
+ * or navigation silently reset a half-finished checklist back to 0/N.
+ *
+ * The assistant message id is client-generated and sent to the API as
+ * `assistant_message_id`, so the persisted row keeps the same id the browser
+ * used while streaming — which makes it a stable per-card key across reloads.
+ * The content hash remains only for callers that render a card outside a
+ * message (previews, tests); it cannot tell two byte-identical checklists in
+ * one conversation apart, which is exactly why the id is preferred.
+ */
+function hashContent(input: string): string {
+  // FNV-1a, 32-bit. Only needs to be stable and collision-resistant enough to
+  // separate cards within one conversation — not cryptographic.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function storageKey(content: string, messageId?: string): string {
+  const conversation =
+    typeof window === 'undefined'
+      ? 'ssr'
+      : (window.location.pathname.match(/\/chat\/([^/?#]+)/)?.[1] ?? 'no-conversation');
+  const identity = messageId ? `m:${messageId}` : hashContent(content);
+  return `agi:steps-card:${conversation}:${identity}`;
+}
+
+function readPersisted(key: string): Set<number> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((n): n is number => typeof n === 'number' && n >= 0));
+  } catch {
+    // Private mode, quota, or malformed value: fall back to empty rather than
+    // breaking the card.
+    return new Set();
+  }
+}
+
+export function StepsCard({ content, messageId }: StepsCardProps) {
   const parsed = useMemo(() => parseSteps(content), [content]);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const descriptionPreview = useMemo(
+    () => clampToSentence(parsed.description),
+    [parsed.description],
+  );
+  const key = useMemo(() => storageKey(content, messageId), [content, messageId]);
+  // Lazy initializer so the first paint already shows the restored state and
+  // the progress bar never flashes 0% before filling in.
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => readPersisted(key));
   const [expandedStep, setExpandedStep] = useState<number | null>(0);
+
+  // Re-read when the card identity changes (e.g. navigating between two chats
+  // that both render a checklist without unmounting this component).
+  useEffect(() => {
+    setCompletedSteps(readPersisted(key));
+  }, [key]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (completedSteps.size === 0) {
+        window.localStorage.removeItem(key);
+      } else {
+        window.localStorage.setItem(key, JSON.stringify([...completedSteps].sort((a, b) => a - b)));
+      }
+    } catch {
+      // Persisting is best-effort; a full quota must not break ticking a box.
+    }
+  }, [key, completedSteps]);
 
   const toggleStep = useCallback((index: number) => {
     setCompletedSteps((prev) => {
@@ -127,18 +261,21 @@ export function StepsCard({ content }: StepsCardProps) {
   const allComplete = completedSteps.size === parsed.steps.length && parsed.steps.length > 0;
 
   return (
-    <Card className="steps-card overflow-hidden border-teal-200/50 dark:border-teal-800/30">
-      <CardHeader className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-950/20 dark:to-cyan-950/20 pb-4">
+    <Card className="steps-card overflow-hidden border-[var(--chat-border)]">
+      <CardHeader className="border-b border-[var(--chat-border-subtle)] bg-[var(--chat-surface-hover)] pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/40">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--chat-surface-elevated)]">
               <ListChecks className="h-5 w-5 text-teal-700 dark:text-teal-400" aria-hidden="true" />
             </div>
             <div>
               <h3 className="text-lg font-semibold leading-tight">{parsed.title}</h3>
               {parsed.description && (
-                <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
-                  {parsed.description}
+                <p
+                  className="mt-0.5 text-sm text-muted-foreground"
+                  title={descriptionPreview === parsed.description ? undefined : parsed.description}
+                >
+                  {descriptionPreview}
                 </p>
               )}
             </div>
@@ -199,7 +336,7 @@ export function StepsCard({ content }: StepsCardProps) {
                         'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all',
                         isCompleted
                           ? 'border-emerald-500 bg-emerald-500 text-white'
-                          : 'border-muted-foreground/30 hover:border-teal-500',
+                          : 'border-muted-foreground/30 hover:border-[var(--chat-accent-primary)]',
                       )}
                       aria-label={
                         isCompleted
@@ -271,6 +408,8 @@ export function StepsCard({ content }: StepsCardProps) {
             );
           })}
         </div>
+
+        <CardExtraSections sections={parsed.extraSections} />
       </CardContent>
     </Card>
   );

@@ -1,6 +1,5 @@
-
 import rateLimit, { type Options, type Store, ipKeyGenerator } from 'express-rate-limit';
-import type { RequestHandler, Request } from 'express';
+import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { BILLING_PLAN_PRODUCT_LIMITS, getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 import { logger } from '../lib/logger';
 
@@ -25,6 +24,26 @@ export function resolveRateLimitRedisUrl(
 
 const REDIS_SETUP_HINT =
   'Set RATE_LIMIT_REDIS_URL to a rediss:// endpoint (Upstash exposes one alongside its REST URL).';
+
+export const RATE_LIMIT_OUTAGE_POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
+
+export type RateLimitOutagePolicy = 'fail-closed' | 'fail-open';
+
+export function resolveRateLimitOutagePolicy(
+  env: NodeJS.ProcessEnv = process.env,
+): RateLimitOutagePolicy {
+  const configured = env[RATE_LIMIT_OUTAGE_POLICY_ENV]?.trim().toLowerCase();
+  if (configured === 'fail-closed' || configured === 'fail-open') return configured;
+  if (configured) {
+    logger.error(
+      { [RATE_LIMIT_OUTAGE_POLICY_ENV]: configured },
+      'Unrecognised rate-limit outage policy; enforcing fail-closed',
+    );
+    return 'fail-closed';
+  }
+  const redisConfigured = resolveRateLimitRedisUrl(env).reason === 'ok';
+  return redisConfigured || env['NODE_ENV'] === 'production' ? 'fail-closed' : 'fail-open';
+}
 
 function getOrCreateStore(): Store | undefined {
   if (_storeInitialized) return _sharedStore;
@@ -130,11 +149,7 @@ export function warnIfMultiInstanceWithoutRedis(): void {
   const explicitMulti = process.env['RATE_LIMIT_MULTI_INSTANCE'] === '1';
   const redisConfigured = resolveRateLimitRedisUrl().reason === 'ok';
 
-  const looksMultiInstance =
-    explicitMulti ||
-    flyMachineCount > 1 ||
-    numInstancesHint > 1 ||
-    false;
+  const looksMultiInstance = explicitMulti || flyMachineCount > 1 || numInstancesHint > 1 || false;
 
   if (!looksMultiInstance) return;
 
@@ -162,6 +177,45 @@ const TIER_SCALED_KEYS: ReadonlySet<RateLimitKey> = new Set<RateLimitKey>([
   'cloud-chat-patch',
   'cloud-chat-send',
 ]);
+
+const METERED_CEILING_KEYS: ReadonlySet<RateLimitKey> = new Set<RateLimitKey>([
+  ...TIER_SCALED_KEYS,
+  'credits-deduct',
+  'mcp-call',
+]);
+
+export function limiterFailsClosed(
+  key: RateLimitKey,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return METERED_CEILING_KEYS.has(key) && resolveRateLimitOutagePolicy(env) === 'fail-closed';
+}
+
+const LIMITER_UNAVAILABLE_RETRY_SECONDS = 30;
+
+function respondLimiterUnavailable(
+  res: Response,
+  key: RateLimitKey,
+  reason: 'no-shared-store' | 'store-error',
+  error?: unknown,
+): void {
+  logger.error(
+    {
+      event: 'rate_limiter_unavailable',
+      limiterKey: key,
+      reason,
+      error: error instanceof Error ? error.message : error ? String(error) : undefined,
+    },
+    'Metered ceiling unenforceable — refusing the request (fail-closed). ' + REDIS_SETUP_HINT,
+  );
+
+  res.setHeader('Retry-After', String(LIMITER_UNAVAILABLE_RETRY_SECONDS));
+  res.status(503).json({
+    error: 'RATE_LIMITER_UNAVAILABLE',
+    message: 'Usage ceilings cannot be verified right now. Please retry shortly.',
+    retryAfter: LIMITER_UNAVAILABLE_RETRY_SECONDS,
+  });
+}
 
 const MAX_TIER_CONCURRENCY = Math.max(
   1,
@@ -207,17 +261,23 @@ function keyGenerator(req: Request): string {
  * // Apply to a route
  * router.post('/deduct', createRateLimiter('credits-deduct'), handler);
  */
-export function createRateLimiter(key: RateLimitKey): RequestHandler {
+export function createRateLimiter(key: RateLimitKey, storeOverride?: Store): RequestHandler {
   const config = rateLimitConfigs[key];
 
-  const store = getOrCreateStore();
+  const store = storeOverride ?? getOrCreateStore();
 
   const tierScaled = TIER_SCALED_KEYS.has(key);
+  const failClosed = limiterFailsClosed(key);
+
+  if (failClosed && !store) {
+    return (_req, res) => respondLimiterUnavailable(res, key, 'no-shared-store');
+  }
 
   const options: Partial<Options> = {
     windowMs: config.windowMs,
     max: tierScaled ? (req: Request) => resolveTierRateLimitMax(key, req.planTier) : config.max,
     ...(store ? { store } : {}),
+    passOnStoreError: !failClosed,
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator,
@@ -259,6 +319,16 @@ export function createRateLimiter(key: RateLimitKey): RequestHandler {
     },
   };
 
-  return rateLimit(options);
-}
+  const limiter = rateLimit(options);
+  if (!failClosed) return limiter;
 
+  return (req, res, next) => {
+    limiter(req, res, ((error?: unknown) => {
+      if (!error) {
+        next();
+        return;
+      }
+      respondLimiterUnavailable(res, key, 'store-error', error);
+    }) as NextFunction);
+  };
+}

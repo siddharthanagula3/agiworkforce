@@ -1,4 +1,3 @@
-
 export interface GarnishShortcuts {
   quickAskShortcut: string;
   screenshotShortcut: string;
@@ -24,6 +23,49 @@ export function normalizeShortcuts(raw: unknown): GarnishShortcuts {
       ? screenshot
       : DEFAULT_SHORTCUTS.screenshotShortcut,
   };
+}
+
+export type ShortcutKey = keyof GarnishShortcuts;
+
+export const SHORTCUT_CHOICES: Record<ShortcutKey, readonly string[]> = {
+  quickAskShortcut: [
+    DEFAULT_SHORTCUTS.quickAskShortcut,
+    'CommandOrControl+Shift+Space',
+    'CommandOrControl+Alt+A',
+  ],
+  screenshotShortcut: [
+    DEFAULT_SHORTCUTS.screenshotShortcut,
+    'CommandOrControl+Shift+4',
+    'CommandOrControl+Alt+S',
+  ],
+};
+
+export function shortcutChoices(key: ShortcutKey, current: string): string[] {
+  const presets = SHORTCUT_CHOICES[key];
+  if (!isUsableAccelerator(current) || presets.includes(current)) return [...presets];
+  return [current, ...presets];
+}
+
+const MAC_MODIFIER_SYMBOLS: Record<string, string> = {
+  commandorcontrol: '⌘',
+  cmdorctrl: '⌘',
+  command: '⌘',
+  cmd: '⌘',
+  control: '⌃',
+  ctrl: '⌃',
+  alt: '⌥',
+  option: '⌥',
+  shift: '⇧',
+};
+
+export function describeAccelerator(accelerator: string, platform: string): string {
+  const parts = accelerator.split('+');
+  if (platform !== 'darwin') {
+    return parts
+      .map((part) => (/^(commandorcontrol|cmdorctrl)$/i.test(part) ? 'Ctrl' : part))
+      .join('+');
+  }
+  return parts.map((part) => MAC_MODIFIER_SYMBOLS[part.toLowerCase()] ?? part).join('');
 }
 
 export function parseSettingsFile(contents: string): GarnishShortcuts {

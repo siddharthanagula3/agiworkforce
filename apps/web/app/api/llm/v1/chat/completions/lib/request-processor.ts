@@ -7,11 +7,7 @@ import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { AgiWorkGoalSchema } from './agiwork-plan';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
-import {
-  resolveCodeExecutionTools,
-  e2bExecutionToolDefs,
-  providerRoutesToE2B,
-} from '@/lib/e2b/execution-tools';
+import { resolveTurnCodeExecutionTools, providerRoutesToE2B } from '@/lib/e2b/execution-tools';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
@@ -48,7 +44,7 @@ import {
   canUseBillingPlanCapability,
   isValidIanaTimeZone,
 } from '@agiworkforce/types';
-import type { RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
+import type { ModelCapabilities, RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
 import {
   applyConversationContext,
   classifyTaskFamily,
@@ -67,6 +63,7 @@ import type {
 import { trimMessagesToContextWindow } from './context-window';
 import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
 import type { AuthGateSuccess } from './auth-gate';
+import { resolveAuthenticatedSurface } from './request-surface';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
@@ -103,7 +100,7 @@ import {
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
 import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
-import { resolveCloudChatSurface, type CloudChatSurface } from '@/lib/free-chat-surface-policy';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { buildCapabilityPreamble, extractToolNames } from './capability-preamble';
 import {
   createManagedOfficeFileToolDefinition,
@@ -470,6 +467,7 @@ export function resolveManagedUsageLeaseSeconds(
 
 export type ProcessedRequest = {
   requestId: string;
+  chatSurface: CloudChatSurface;
   organizationId?: string | null;
   managedUsage?: ManagedUsageRequestReservation;
   chatRequest: ChatCompletionRequest;
@@ -774,6 +772,13 @@ export function applyJsonObjectMode(chatRequest: ChatCompletionRequest): void {
   } else {
     chatRequest.messages.unshift({ role: 'system', content: JSON_OBJECT_DIRECTIVE });
   }
+}
+
+export function researchModeAllowed(
+  chatRequest: Pick<ChatCompletionRequest, 'research'>,
+  caps: Partial<ModelCapabilities> | undefined,
+): boolean {
+  return chatRequest.research === true && (caps?.research ?? false);
 }
 
 export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
@@ -1185,7 +1190,7 @@ export async function processRequest(
   }
 
   // round trips — scoped-db handshake, ownership lookup, safety preference,
-  const scopedDbPromise = getUserScopedDb(request);
+  const scopedDbPromise = getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
 
   const requestedModel = chatRequest.model;
@@ -1200,7 +1205,7 @@ export async function processRequest(
       : CreditService.getBalance(userId);
   creditBalancePromise?.catch(() => {});
 
-  const chatSurface = resolveCloudChatSurface(request);
+  const chatSurface = resolveAuthenticatedSurface(request, auth);
   const customInstructionsPromise =
     chatSurface === 'api'
       ? null
@@ -1817,7 +1822,7 @@ export async function processRequest(
     applyJsonObjectMode(chatRequest);
   }
 
-  const researchMode = chatRequest.research === true && (resolvedModelCaps?.search ?? false);
+  const researchMode = researchModeAllowed(chatRequest, resolvedModelCaps);
   if (researchMode) {
     applyResearchMode(chatRequest);
   }
@@ -2333,14 +2338,19 @@ export async function processRequest(
     });
   }
 
+  let codeExecutionUnavailable = false;
   if (chatRequest.code_execution) {
-    if (e2bCutoverEnabled() && providerRoutesToE2B(providerLower) && chatRequest.stream) {
-      if (resolvedModelCaps?.tools ?? true) {
-        resolvedTools = [...(resolvedTools ?? []), ...e2bExecutionToolDefs()];
-      }
-    } else if (resolvedModelCaps?.codeExecution ?? true) {
-      resolvedTools = [...(resolvedTools ?? []), ...resolveCodeExecutionTools(providerLower)];
+    const turnCodeExecution = resolveTurnCodeExecutionTools({
+      provider: providerLower,
+      stream: chatRequest.stream,
+      e2bEnabled: e2bCutoverEnabled(),
+      toolsCapable: resolvedModelCaps?.tools ?? true,
+      codeExecutionCapable: resolvedModelCaps?.codeExecution === true,
+    });
+    if (turnCodeExecution.tools.length > 0) {
+      resolvedTools = [...(resolvedTools ?? []), ...turnCodeExecution.tools];
     }
+    codeExecutionUnavailable = turnCodeExecution.unavailable;
   }
 
   if (
@@ -2354,6 +2364,7 @@ export async function processRequest(
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
       timeZone: chatRequest.client_timezone,
+      codeExecutionUnavailable,
     });
 
     const customInstructionsPreamble = await customInstructionsPromise;
@@ -2427,6 +2438,7 @@ export async function processRequest(
   return {
     ok: true,
     requestId,
+    chatSurface,
     organizationId,
     managedUsage,
     chatRequest,

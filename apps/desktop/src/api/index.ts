@@ -1,4 +1,3 @@
-
 export {
   OllamaClient,
   ollamaCheckStatus,
@@ -318,7 +317,6 @@ export * from './media';
 export * from './migration';
 export * from './orchestrator';
 export * from './reflection';
-export * from './teamsApi';
 export * from './accountApi';
 
 export * from './agi';
