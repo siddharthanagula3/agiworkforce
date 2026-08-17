@@ -13,7 +13,10 @@ import {
   type HmacSessionState,
 } from '@/lib/dispatchHmac';
 import { parseAgent, MAX_AGENTS_PER_UPDATE } from '@/lib/dispatchAgentValidator';
-import { createControlAckTracker, type ControlDelivery } from '@/lib/controlAckTracker';
+import {
+  createControlAckTracker,
+  type ControlDelivery,
+} from '@/src/integrations/controlAckTracker';
 
 interface RTCConfiguration {
   iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }>;
