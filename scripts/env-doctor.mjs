@@ -185,7 +185,10 @@ const platformProvidedKeys = new Set([
   'PATHEXT',
   'SHELL',
   'TERM',
+  'VERCEL_DEPLOYMENT_ID',
   'VERCEL_ENV',
+  'VERCEL_GIT_COMMIT_SHA',
+  'GITHUB_SHA',
 ]);
 
 const sourceScans = [
