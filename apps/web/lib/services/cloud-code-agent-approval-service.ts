@@ -260,9 +260,12 @@ async function resolveCloudCodeAgentApproval(
   const claimed = await db.query<{ id: string }>(
     `update cloud_code_agent_turns
         set state = 'running', updated_at = now()
-      where id = $1 and state = 'awaiting_approval'
+      where id = $1
+        and state = 'awaiting_approval'
+        and user_id = $2
+        and organization_id is not distinct from $3
       returning id`,
-    [turnId],
+    [turnId, owner.userId, owner.organizationId],
   );
   if (!claimed[0]) {
     throw new CloudCodeConflictError('This turn is no longer waiting for an approval');
