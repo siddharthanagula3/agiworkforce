@@ -923,16 +923,6 @@
       "evidence": ["crates/agiworkforce-utils-image/Cargo.toml", "cargo metadata"]
     },
     {
-      "kind": "service",
-      "canonicalOwner": "Backend and data",
-      "consumers": ["apps/web", "apps/mobile", "apps/extension", "apps/extension-vscode"],
-      "deployability": "deployable-service",
-      "trustBoundary": "managed-cloud authentication, provider egress, tools and tenant data",
-      "status": "active-stale-package-description",
-      "action": "keep",
-      "evidence": ["apps/web/app/api/v1/providers", "apps/mobile/lib/providerStreamClient.ts"]
-    },
-    {
       "path": "services/signaling-server",
       "kind": "service",
       "canonicalOwner": "Backend and realtime",
