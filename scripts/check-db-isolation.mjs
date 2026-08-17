@@ -256,6 +256,7 @@ const UNPOLICED_APP_ENFORCED_TABLES = new Map([
     'message_bookmarks',
     'message_reactions',
     'search_history',
+    'shared_conversations',
     'support_ticket_replies',
     'support_tickets',
     'user_shortcuts',
