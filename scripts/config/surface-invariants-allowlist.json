@@ -16,11 +16,6 @@
         "id": "desktop:apps/desktop/src/features/settings/index.ts",
         "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
         "trackedBy": "SIX-32"
-      },
-      {
-        "id": "desktop:apps/desktop/src/features/settings/tabs/Skills/index.tsx",
-        "reason": "Desktop settings component with no settings-modal mount point, found by the first real reachability walk. Deleting or mounting it is the desktop wave call; declared here so no NEW unmounted section can land.",
-        "trackedBy": "SIX-32"
       }
     ],
     "route-has-navigation": [
