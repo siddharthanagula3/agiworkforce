@@ -96,7 +96,7 @@
     "country-to-currency": "3.0.1",
     "date-fns": "^4.1.0",
     "docx": "^9.6.1",
-    "dompurify": "^3.3.3",
+    "dompurify": "^3.4.13",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.38.0",
     "google-auth-library": "11.0.1",

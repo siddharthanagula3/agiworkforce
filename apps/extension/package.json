@@ -46,7 +46,7 @@
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
-    "dompurify": "^3.3.3"
+    "dompurify": "^3.4.13"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.40",
