@@ -36,7 +36,11 @@ describe('macOS release contract', () => {
     expect(workflow).toContain('xcrun stapler validate "$app_path"');
     expect(workflow).toContain('xcrun stapler validate "${dmgs[0]}"');
     expect(workflow).toContain('minisign -Vm "${updaters[0]}"');
-    expect(workflow).toContain('needs: [prepare-release, build-linux, build-macos]');
+    // Matched loosely because Prettier reflows this YAML block between one line
+    // and many; the invariant is which jobs must pass first, not their layout.
+    expect(workflow).toMatch(
+      /publish-release:[\s\S]*?needs:\s*\[\s*prepare-release,\s*build-linux,\s*build-macos,\s*clean-install-linux,\s*upgrade-from-previous-linux,?\s*\]/,
+    );
     expect(workflow).toContain('macos-universal-artifacts darwin-aarch64 .app.tar.gz');
     expect(workflow).toContain('macos-universal-artifacts darwin-x86_64 .app.tar.gz');
   });
