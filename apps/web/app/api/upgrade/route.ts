@@ -9,6 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { resolvePlanTier } from '@/lib/price-tier-mapping';
 import { UpgradeApplyRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -208,8 +209,32 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     throw createError.internal(message);
   }
 
+  // Re-checked against the LIVE Stripe price, not just the DB row.
+  //
+  // The eligibility test above reads subscriptions.plan_tier, which this route
+  // deliberately does not write — the webhook does, and until it lands the
+  // column is behind Stripe. In that window the DB can still say `pro` while
+  // Stripe is already on `max_15x`, and isUpgrade(pro -> pro) would wave through
+  // a change that is really a DOWNGRADE. always_invoice then issues the unused
+  // difference as customer BALANCE rather than a refund, so someone who had just
+  // paid the full jump to Max 15x would be left on Pro with the difference stuck
+  // as credit. A webhook that never arrives makes the window permanent.
+  const livePlanTier = resolvePlanTier(null, stripeItem.price.id);
+  const effectiveCurrentTier = livePlanTier ?? currentTier;
+  const liveSameTierSeatChange =
+    effectiveCurrentTier === targetPlan && isPerSeatBillingPlan(targetPlan);
+  if (!liveSameTierSeatChange && !isUpgrade(effectiveCurrentTier, targetPlan)) {
+    logger.warn(
+      { userId, stripeSubId, dbTier: currentTier, livePlanTier, targetPlan },
+      'Refused a plan change that is not an upgrade against the live Stripe price',
+    );
+    throw createError.validation(
+      `Cannot upgrade from ${effectiveCurrentTier} to ${targetPlan}. Use the billing portal to change or downgrade your plan.`,
+    );
+  }
+
   const planChange = classifyPlanChange({
-    currentTier,
+    currentTier: effectiveCurrentTier,
     targetPlan,
     requestedSeats,
     currentSeats: currentSeatsFromStripeItem(stripeItem.quantity),
