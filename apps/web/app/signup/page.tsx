@@ -2,7 +2,7 @@ import { SignUp } from '@clerk/nextjs';
 import { AuthShell } from '@/features/marketing/components/AuthShell';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 import { agiClerkAppearance } from '../auth/clerkAppearance';
-import { TermsGate } from './TermsGate';
+import { TermsNotice } from './TermsNotice';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -31,7 +31,7 @@ export default async function SignupPage({
         'Local Mode stays free, private & account-free',
       ]}
     >
-      <TermsGate>
+      <div className="flex flex-col gap-4">
         <SignUp
           routing="hash"
           signInUrl={signInUrl}
@@ -39,7 +39,8 @@ export default async function SignupPage({
           signInFallbackRedirectUrl={redirectTo}
           appearance={agiClerkAppearance}
         />
-      </TermsGate>
+        <TermsNotice action="creating an account" />
+      </div>
     </AuthShell>
   );
 }

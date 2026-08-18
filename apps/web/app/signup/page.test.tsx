@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
 const signUpProps = vi.hoisted(() => vi.fn());
@@ -32,8 +31,6 @@ describe('/signup Desktop surface', () => {
     );
 
     expect(screen.getByTestId('auth-shell')).toHaveAttribute('data-embedded', 'true');
-
-    await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
 
     expect(signUpProps).toHaveBeenCalledWith(
       expect.objectContaining({
