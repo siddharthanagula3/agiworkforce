@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
 const signUpProps = vi.hoisted(() => vi.fn());
@@ -18,65 +17,63 @@ vi.mock('@/features/marketing/components/AuthShell', () => ({
   ),
 }));
 
-import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import SignupPage from './page';
 
 async function renderSignup(redirectTo = '/chat') {
   render(await SignupPage({ searchParams: Promise.resolve({ redirectTo }) }));
 }
 
-describe('/signup terms clickwrap', () => {
+/**
+ * Founder decision 2026-08-17: no clickwrap above the form. The checkbox blocked
+ * the auth widget until ticked, which met people with a consent wall before
+ * anything identified them and re-appeared whenever the stored marker was gone.
+ * Assent now sits against the button being pressed, and the durable record is
+ * still written server-side by /signup/complete — which is what makes "what did
+ * they agree to, and when" answerable at all.
+ */
+describe('/signup terms assent', () => {
   beforeEach(() => {
     window.localStorage.clear();
     signUpProps.mockClear();
   });
 
-  it('does not mount account creation until the terms are accepted', async () => {
+  it('mounts account creation immediately, with no checkbox in the way', async () => {
     await renderSignup();
 
-    expect(screen.queryByTestId('clerk-sign-up')).not.toBeInTheDocument();
-    expect(signUpProps).not.toHaveBeenCalled();
-    expect(screen.getByTestId('terms-gate-blocked')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox')).toHaveAccessibleName(
-      /agree to the terms of service.*acknowledge the privacy policy/i,
+    expect(screen.getByTestId('clerk-sign-up')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('terms-gate-blocked')).not.toBeInTheDocument();
+  });
+
+  it('states the agreement against the action, naming the clauses that need it', async () => {
+    await renderSignup();
+
+    // The arbitration clause and class-action waiver are the terms that most
+    // need to have been shown; a bare "see our terms" link would not name them.
+    const notice = screen.getByText(/by creating an account/i);
+    expect(notice).toHaveTextContent(/arbitration clause and class-action waiver/i);
+    expect(screen.getByRole('link', { name: /terms of service/i })).toHaveAttribute(
+      'href',
+      '/terms',
+    );
+    expect(screen.getByRole('link', { name: /privacy policy/i })).toHaveAttribute(
+      'href',
+      '/privacy',
     );
   });
 
-  it('mounts account creation once the box is ticked, and routes the new account through the recorder', async () => {
+  it('routes the new account through the recorder that stores the accepted version', async () => {
     await renderSignup('/chat');
 
-    await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
-
-    expect(screen.getByTestId('clerk-sign-up')).toBeInTheDocument();
     expect(signUpProps).toHaveBeenCalledWith(
-      expect.objectContaining({
-        forceRedirectUrl: '/signup/complete?redirectTo=%2Fchat',
-      }),
+      expect.objectContaining({ forceRedirectUrl: '/signup/complete?redirectTo=%2Fchat' }),
     );
   });
 
   it('sends the new account to the recorder with a prop search params cannot override', async () => {
     await renderSignup('/chat');
 
-    await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
-
     const props = signUpProps.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(props['fallbackRedirectUrl']).toBeUndefined();
-  });
-
-  it('restores consent on the OAuth return trip so the widget is not unmounted mid-flow', async () => {
-    window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
-
-    await renderSignup();
-
-    expect(await screen.findByTestId('clerk-sign-up')).toBeInTheDocument();
-  });
-
-  it('re-prompts when the stored consent names a superseded revision', async () => {
-    window.localStorage.setItem('agi.terms-accepted-version', '1970-01-01');
-
-    await renderSignup();
-
-    expect(screen.queryByTestId('clerk-sign-up')).not.toBeInTheDocument();
   });
 });
