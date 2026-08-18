@@ -41,6 +41,44 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
+/**
+ * What Stripe will actually charge the moment the upgrade is confirmed.
+ *
+ * NOT `preview.amount_due`. `invoices.createPreview` defaults to
+ * `preview_mode: 'next'`, so its total also carries the NEXT period's recurring
+ * subscription line — a line that is not billed today. Quoting it overstated the
+ * charge by one full period of the new plan: pro -> max mid-cycle read "$140.00
+ * today" against a $40.00 invoice.
+ *
+ * `subscriptions.update` with `proration_behavior: 'always_invoice'` raises an
+ * invoice containing the proration lines only. Confirmed against a real
+ * Anthropic upgrade (Max 5x -> Max 20x, same day): the invoice held exactly
+ * `$200.00` for the new plan over the remaining period and `-$99.89` unused time
+ * on the old one, totalling `$100.11 + $6.61` tax = `$106.72`. No renewal line.
+ *
+ * Stripe's guidance is to select `parent.subscription_item_details.proration`,
+ * and tax is summed per line because the figure shown must be the amount taken,
+ * which for that invoice was the tax-inclusive $106.72 rather than $100.11.
+ */
+function immediateProrationTotalCents(preview: Stripe.Invoice): number {
+  const lines = preview.lines?.data ?? [];
+  const prorationLines = lines.filter(
+    (line) =>
+      (line as { parent?: { subscription_item_details?: { proration?: boolean } } }).parent
+        ?.subscription_item_details?.proration === true,
+  );
+
+  // A preview with no proration lines means Stripe found nothing to settle now;
+  // that is a genuine zero, not a reason to fall back to the inflated total.
+  return prorationLines.reduce((total, line) => {
+    const tax = (line.taxes ?? []).reduce(
+      (sum: number, entry: { amount?: number }) => sum + (entry.amount ?? 0),
+      0,
+    );
+    return total + line.amount + tax;
+  }, 0);
+}
+
 async function handleUpgradePreview(request: NextRequest): Promise<NextResponse> {
   const { userId } = await getClerkAuthUser(request);
 
@@ -296,7 +334,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     plan: targetPlan,
     billingInterval,
     currency: preview.currency,
-    amountDueNowCents: preview.amount_due,
+    amountDueNowCents: immediateProrationTotalCents(preview),
     recurringAmountCents: priceSelection.amountMinor * requestedSeats,
     seats: requestedSeats,
     previewToken: createUpgradePreviewToken(
