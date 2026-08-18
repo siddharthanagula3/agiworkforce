@@ -268,18 +268,18 @@
       "speed": "medium",
       "released": "April 2026"
     },
-    "gemini-3.6-flash": {
+    "gemini-3.7-flash": {
       "contextWindow": 1048576,
-      "inputCost": 1.5,
-      "outputCost": 7.5,
-      "cached_input": 0.15,
+      "inputCost": 0.75,
+      "outputCost": 3.75,
+      "cached_input": 0.075,
       "capabilities": {
         "streaming": true,
         "tools": true,
         "vision": true,
         "json": true,
         "thinking": true,
-        "computerUse": false,
+        "computerUse": true,
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
@@ -288,13 +288,8 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": {
-        "sweBenchPro": 55.1,
-        "terminalBench2": 76.2,
-        "osWorldVerified": 78.4
-      },
       "speed": "fast",
-      "released": "July 2026"
+      "released": "August 2026"
     },
     "glm-5.2": {
       "contextWindow": 1000000,
