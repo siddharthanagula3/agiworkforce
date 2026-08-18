@@ -60,7 +60,17 @@ function getStripe(): Stripe {
  * and tax is summed per line because the figure shown must be the amount taken,
  * which for that invoice was the tax-inclusive $106.72 rather than $100.11.
  */
-function immediateProrationTotalCents(preview: Stripe.Invoice): number {
+export interface UpgradeChargeBreakdown {
+  /** One row per proration line, in Stripe's order, for an itemized receipt. */
+  lineItems: { description: string; amountCents: number }[];
+  subtotalCents: number;
+  taxCents: number;
+  totalDueTodayCents: number;
+  /** End of the period being started, so the UI can state the renewal date. */
+  renewsAt: string | null;
+}
+
+function immediateProrationBreakdown(preview: Stripe.Invoice): UpgradeChargeBreakdown {
   const lines = preview.lines?.data ?? [];
   const prorationLines = lines.filter(
     (line) =>
@@ -70,13 +80,30 @@ function immediateProrationTotalCents(preview: Stripe.Invoice): number {
 
   // A preview with no proration lines means Stripe found nothing to settle now;
   // that is a genuine zero, not a reason to fall back to the inflated total.
-  return prorationLines.reduce((total, line) => {
+  let subtotalCents = 0;
+  let taxCents = 0;
+  const lineItems = prorationLines.map((line) => {
     const tax = (line.taxes ?? []).reduce(
       (sum: number, entry: { amount?: number }) => sum + (entry.amount ?? 0),
       0,
     );
-    return total + line.amount + tax;
-  }, 0);
+    subtotalCents += line.amount;
+    taxCents += tax;
+    return { description: line.description ?? '', amountCents: line.amount };
+  });
+
+  // The charge line is the positive one; credits for unused time are negative.
+  // Its period end is the renewal date the user should be told about.
+  const chargeLine = prorationLines.find((line) => line.amount > 0);
+  const periodEnd = (chargeLine as { period?: { end?: number } } | undefined)?.period?.end;
+
+  return {
+    lineItems,
+    subtotalCents,
+    taxCents,
+    totalDueTodayCents: subtotalCents + taxCents,
+    renewsAt: typeof periodEnd === 'number' ? new Date(periodEnd * 1000).toISOString() : null,
+  };
 }
 
 async function handleUpgradePreview(request: NextRequest): Promise<NextResponse> {
@@ -330,11 +357,14 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     throw createError.internal('Failed to preview the upgrade cost');
   }
 
+  const charge = immediateProrationBreakdown(preview);
+
   return NextResponse.json({
     plan: targetPlan,
     billingInterval,
     currency: preview.currency,
-    amountDueNowCents: immediateProrationTotalCents(preview),
+    amountDueNowCents: charge.totalDueTodayCents,
+    charge,
     recurringAmountCents: priceSelection.amountMinor * requestedSeats,
     seats: requestedSeats,
     previewToken: createUpgradePreviewToken(

@@ -1,4 +1,3 @@
-
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { loadStripe } from '@stripe/stripe-js';
@@ -221,11 +220,62 @@ export async function upgradeToTeamPlan(data: {
   });
 }
 
+/**
+ * The itemized charge, so the dialog can show a receipt rather than one number.
+ * Mirrors what Stripe will invoice: a line per proration, then subtotal, tax and
+ * the total actually taken today.
+ */
+export interface UpgradeChargeBreakdown {
+  lineItems: { description: string; amountCents: number }[];
+  subtotalCents: number;
+  taxCents: number;
+  totalDueTodayCents: number;
+  renewsAt: string | null;
+}
+
+export interface UpgradePreviewResult {
+  amountDueNowCents: number;
+  currency: string;
+  previewToken: string;
+  /** Null when the server sent no breakdown; the dialog then shows the total alone. */
+  charge: UpgradeChargeBreakdown | null;
+}
+
+function parseChargeBreakdown(value: unknown): UpgradeChargeBreakdown | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  if (
+    typeof raw['subtotalCents'] !== 'number' ||
+    typeof raw['taxCents'] !== 'number' ||
+    typeof raw['totalDueTodayCents'] !== 'number' ||
+    !Array.isArray(raw['lineItems'])
+  ) {
+    return null;
+  }
+  const lineItems = raw['lineItems']
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .filter(
+      (item) => typeof item['description'] === 'string' && typeof item['amountCents'] === 'number',
+    )
+    .map((item) => ({
+      description: item['description'] as string,
+      amountCents: item['amountCents'] as number,
+    }));
+
+  return {
+    lineItems,
+    subtotalCents: raw['subtotalCents'],
+    taxCents: raw['taxCents'],
+    totalDueTodayCents: raw['totalDueTodayCents'],
+    renewsAt: typeof raw['renewsAt'] === 'string' ? raw['renewsAt'] : null,
+  };
+}
+
 export async function previewUpgrade(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
   seats?: number;
-}): Promise<{ amountDueNowCents: number; currency: string; previewToken: string }> {
+}): Promise<UpgradePreviewResult> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
 
@@ -250,6 +300,7 @@ export async function previewUpgrade(data: {
     amountDueNowCents?: unknown;
     currency?: unknown;
     previewToken?: unknown;
+    charge?: unknown;
     error?: unknown;
     checkout?: {
       amountDueNowCents?: unknown;
@@ -281,6 +332,7 @@ export async function previewUpgrade(data: {
     amountDueNowCents: result.amountDueNowCents,
     currency: result.currency,
     previewToken: result.previewToken,
+    charge: parseChargeBreakdown(result.charge),
   };
 }
 
