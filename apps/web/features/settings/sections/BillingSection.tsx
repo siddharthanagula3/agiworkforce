@@ -568,6 +568,31 @@ export function BillingSection() {
     );
   }
 
+  // Any absent subscription, not just the 401 and error cases above. When
+  // /api/me succeeds the store always writes one, and a genuinely free account
+  // carries tier 'free' from the server — so null only ever means we did not
+  // get an answer. The two guards above each named a specific cause, which left
+  // every other cause falling through to `tier = 'free'`: observed 2026-08-17
+  // with a Basic account shown "Free plan" and an Upgrade button, beside a
+  // Usage panel correctly reading Basic from its own request.
+  if (!subscription) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
+        <p role="alert" style={{ margin: 0, color: 'var(--danger, #b3261e)', fontSize: 14 }}>
+          We couldn&rsquo;t read your plan just now. Your subscription has not changed.
+        </p>
+        <button
+          type="button"
+          onClick={() => void refreshUser()}
+          style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 'var(--radius-md)' }}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
       <div>

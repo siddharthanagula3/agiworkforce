@@ -133,9 +133,92 @@ describe('POST /api/upgrade/preview', () => {
       },
     });
     stripeMocks.createInvoicePreview.mockResolvedValue({
-      amount_due: 10_042,
+      // createPreview defaults to preview_mode 'next', so amount_due also
+      // carries the next period's recurring line. Only the proration lines are
+      // billed when the upgrade is confirmed, so the fixture models both and
+      // amount_due deliberately disagrees with the expected quote.
+      amount_due: 30_042,
       currency: 'usd',
+      lines: {
+        data: [
+          {
+            amount: 10_042,
+            parent: { subscription_item_details: { proration: true } },
+            taxes: [],
+          },
+          {
+            amount: 20_000,
+            parent: { subscription_item_details: { proration: false } },
+            taxes: [],
+          },
+        ],
+      },
     });
+  });
+
+  // Both fixtures are transcribed from real Anthropic upgrade invoices, so the
+  // expected totals are what a production Stripe `always_invoice` upgrade
+  // actually charged rather than a number derived from the same code under test.
+  it('quotes the tax-inclusive proration total, matching a real Pro to Max 5x invoice', async () => {
+    // Invoice DGHE2KZA-0006: Max 5x $100.00 (+$6.60 tax) and unused Claude Pro
+    // -$19.36 (-$1.28 tax) => $85.96 charged.
+    stripeMocks.createInvoicePreview.mockResolvedValue({
+      amount_due: 18_596,
+      currency: 'usd',
+      lines: {
+        data: [
+          {
+            amount: 10_000,
+            parent: { subscription_item_details: { proration: true } },
+            taxes: [{ amount: 660 }],
+          },
+          {
+            amount: -1_936,
+            parent: { subscription_item_details: { proration: true } },
+            taxes: [{ amount: -128 }],
+          },
+          {
+            amount: 10_000,
+            parent: { subscription_item_details: { proration: false } },
+            taxes: [{ amount: 660 }],
+          },
+        ],
+      },
+    });
+
+    const response = await POST(makeRequest());
+    expect(await response.json()).toMatchObject({ amountDueNowCents: 8_596 });
+  });
+
+  it('matches a real Max 5x to Max 20x invoice', async () => {
+    // Invoice DGHE2KZA-0007: Max 20x $200.00 and unused Max 5x -$89.13,
+    // subtotal $110.87 with $7.32 tax => $118.19 charged.
+    stripeMocks.createInvoicePreview.mockResolvedValue({
+      amount_due: 31_819,
+      currency: 'usd',
+      lines: {
+        data: [
+          {
+            amount: 20_000,
+            parent: { subscription_item_details: { proration: true } },
+            taxes: [{ amount: 1_320 }],
+          },
+          {
+            amount: -8_913,
+            parent: { subscription_item_details: { proration: true } },
+            taxes: [{ amount: -588 }],
+          },
+          {
+            amount: 20_000,
+            parent: { subscription_item_details: { proration: false } },
+            taxes: [{ amount: 1_320 }],
+          },
+        ],
+      },
+    });
+
+    const response = await POST(makeRequest());
+    expect(await response.json()).toMatchObject({ amountDueNowCents: 11_819 });
   });
 
   it('previews an owned live Stripe subscription', async () => {
