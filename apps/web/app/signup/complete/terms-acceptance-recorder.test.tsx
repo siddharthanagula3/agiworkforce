@@ -23,7 +23,7 @@ import SignupCompletePage from './page';
 
 describe('signup terms recorder', () => {
   beforeEach(() => {
-    window.sessionStorage.clear();
+    window.localStorage.clear();
     mocks.replace.mockReset();
     mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
     vi.stubGlobal(
@@ -33,7 +33,7 @@ describe('signup terms recorder', () => {
   });
 
   it('records the acceptance before handing the new account on to the app', async () => {
-    window.sessionStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
+    window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
     render(<RecordTermsAcceptance redirectTo="/chat" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
@@ -48,16 +48,16 @@ describe('signup terms recorder', () => {
     expect(init.body).toBe(
       JSON.stringify({ surface: 'web-signup', version: POLICY_LAST_UPDATED.terms }),
     );
-    expect(window.sessionStorage.getItem('agi.terms-accepted-version')).toBeNull();
+    expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
   });
 
   it('consumes the pre-auth marker without rewriting a current acceptance', async () => {
-    window.sessionStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
+    window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
 
     render(<ContinueWithCurrentTerms redirectTo="/chat" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat'));
-    expect(window.sessionStorage.getItem('agi.terms-accepted-version')).toBeNull();
+    expect(window.localStorage.getItem('agi.terms-accepted-version')).toBeNull();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
@@ -110,7 +110,7 @@ describe('signup terms recorder', () => {
 
 describe('/signup/complete terms gate', () => {
   beforeEach(() => {
-    window.sessionStorage.clear();
+    window.localStorage.clear();
     mocks.replace.mockReset();
     mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
     vi.stubGlobal(
@@ -141,7 +141,7 @@ describe('/signup/complete terms gate', () => {
   });
 
   it('does not let a pre-auth marker authorize the post-auth account write', async () => {
-    window.sessionStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
+    window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
 
     await renderComplete();
 
