@@ -173,6 +173,8 @@ function decodeJwtSub(jwt: string): string {
   return sub;
 }
 
+const DEFAULT_CONNECTION_TIMEOUT_MS = 10_000;
+
 export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
   pool?: Pool;
   poolPromise?: Promise<Pool>;
@@ -214,7 +216,15 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
         const mod = await loadNeon();
         return new mod.Pool({
           connectionString: config.connectionString,
+          connectionTimeoutMillis: config.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS,
           ...(config.poolSize !== undefined ? { max: config.poolSize } : {}),
+          ...(config.statementTimeoutMs !== undefined
+            ? { statement_timeout: config.statementTimeoutMs }
+            : {}),
+          ...(config.queryTimeoutMs !== undefined ? { query_timeout: config.queryTimeoutMs } : {}),
+          ...(config.applicationName !== undefined
+            ? { application_name: config.applicationName }
+            : {}),
         });
       })();
       this.ownsPool = true;
