@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
@@ -167,6 +167,9 @@ interface CompareRow {
  * models" — so the row is a single constant rather than a per-plan
  * derivation; there is no weaker/stronger variant by tier to compute.
  */
+const UPGRADE_SETTLE_ATTEMPTS = 6;
+const UPGRADE_SETTLE_INTERVAL_MS = 1_000;
+
 const TRAINING_DATA_DISCLOSURE = 'No';
 
 function formatLimit(limit: BillingPlanLimit, singular: string, plural: string): string {
@@ -280,9 +283,30 @@ export default function PricingPage() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const authInitialized = useAuthStore((s) => s.initialized);
-  const { data: billing, isLoading: billingLoading } = useBillingData();
+  const { data: billing, isLoading: billingLoading, refetch: refetchBilling } = useBillingData();
   const accountSubscription = useBillingStore((s) => s.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
+  /**
+   * The plan is not current the moment /api/upgrade returns.
+   *
+   * That route answers `activation: 'webhook_pending'` — Stripe has charged, but
+   * plan_tier is only written when customer.subscription.updated arrives. A
+   * single refetch on confirm therefore races the webhook and usually re-reads
+   * the OLD plan, which is what left this page offering "Get Max" next to a
+   * toast saying the upgrade had succeeded.
+   *
+   * So poll, briefly, until the plan actually moves. Bounded because a webhook
+   * that never lands must not spin forever: the page then keeps the plan it last
+   * read, which the query's own refetch-on-focus corrects.
+   */
+  const settleUpgradedPlan = useCallback(async () => {
+    const planBeforeUpgrade = billing?.plan;
+    for (let attempt = 0; attempt < UPGRADE_SETTLE_ATTEMPTS; attempt += 1) {
+      const { data } = await refetchBilling();
+      if (data?.plan && data.plan !== planBeforeUpgrade) return;
+      await new Promise((resolve) => setTimeout(resolve, UPGRADE_SETTLE_INTERVAL_MS));
+    }
+  }, [billing?.plan, refetchBilling]);
 
   // Nine billing tiers exist, but showing all nine at once is where people stall.
   // ChatGPT and Claude both segment by audience first and then show three or four
@@ -558,8 +582,8 @@ export default function PricingPage() {
     }
 
     // A mid-cycle upgrade charges the saved card immediately with no Stripe
-    // screen — confirm the exact prorated amount first via UpgradeConfirmDialog
-    // instead of charging silently.
+    // screen, so it has to pass through an order screen that prices the
+    // proration, names the card and takes assent before anything is charged.
     if (hasActivePaidPlan) {
       if (!billingPolicyReady) {
         toast.error('Billing details are still loading. Please try again in a moment.');
@@ -569,16 +593,16 @@ export default function PricingPage() {
         toast.error(billingOwnerPlanChangeMessage(accountSubscription?.subscription_source));
         return;
       }
+      // Team stays on the dialog: its price depends on a seat count and interval
+      // chosen here, which /upgrade/[plan] has no picker for.
+      if (plan !== 'team') {
+        const yearly = plan === 'pro' && annual;
+        router.push(`/upgrade/${plan}${yearly ? '?interval=yearly' : ''}`);
+        return;
+      }
       setUpgradeConfirm({
         plan,
-        billingInterval:
-          plan === 'pro'
-            ? annual
-              ? 'yearly'
-              : 'monthly'
-            : plan === 'team'
-              ? teamInterval
-              : 'monthly',
+        billingInterval: teamInterval,
         ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats } : {}),
       });
       return;
@@ -1514,6 +1538,7 @@ export default function PricingPage() {
         onConfirmed={() => {
           setUpgradeConfirm(null);
           toast.success('Your plan has been upgraded.');
+          void settleUpgradedPlan();
         }}
       />
     </div>

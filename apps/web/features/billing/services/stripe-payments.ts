@@ -51,7 +51,60 @@ export class CheckoutRequiredError extends Error {
   }
 }
 
-export async function openBillingPortal(): Promise<void> {
+export interface SavedPaymentMethod {
+  id: string;
+  type: string;
+  isDefault: boolean;
+  card: { brand: string; last4: string; expMonth: number; expYear: number } | null;
+}
+
+interface PaymentMethodApiEntry {
+  id?: unknown;
+  type?: unknown;
+  is_default?: unknown;
+  card?: { brand?: unknown; last4?: unknown; exp_month?: unknown; exp_year?: unknown };
+}
+
+/**
+ * The method Stripe will actually charge, so the upgrade screen can name it
+ * instead of saying "your saved card" and hoping.
+ */
+export async function fetchSavedPaymentMethods(): Promise<SavedPaymentMethod[]> {
+  const authToken = await getAuthToken();
+  if (!authToken) return [];
+
+  const response = await fetch('/api/billing/payment-methods', {
+    headers: { Authorization: `Bearer ${authToken}` },
+    cache: 'no-store',
+  });
+  if (!response.ok) return [];
+
+  const body = (await response.json().catch(() => ({}))) as {
+    payment_methods?: PaymentMethodApiEntry[];
+  };
+  return (body.payment_methods ?? []).flatMap((entry) => {
+    if (typeof entry.id !== 'string') return [];
+    const card =
+      entry.card && typeof entry.card.last4 === 'string'
+        ? {
+            brand: typeof entry.card.brand === 'string' ? entry.card.brand : 'card',
+            last4: entry.card.last4,
+            expMonth: typeof entry.card.exp_month === 'number' ? entry.card.exp_month : 0,
+            expYear: typeof entry.card.exp_year === 'number' ? entry.card.exp_year : 0,
+          }
+        : null;
+    return [
+      {
+        id: entry.id,
+        type: typeof entry.type === 'string' ? entry.type : 'card',
+        isDefault: entry.is_default === true,
+        card,
+      },
+    ];
+  });
+}
+
+export async function openBillingPortal(returnPath?: string): Promise<void> {
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to access billing.');
@@ -64,7 +117,7 @@ export async function openBillingPortal(): Promise<void> {
       Authorization: `Bearer ${authToken}`,
       'Idempotency-Key': `agi.checkout.web.${crypto.randomUUID()}`,
     }),
-    body: JSON.stringify({}),
+    body: JSON.stringify(returnPath ? { returnPath } : {}),
   });
 
   if (!response.ok) {
@@ -393,8 +446,14 @@ export async function upgradePlanMidCycle(data: {
     const stripe = await loadStripe(publishableKey);
     if (!stripe) throw new Error('Payment authentication could not be loaded. Please try again.');
 
+    // `redirect: 'if_required'` still hands off to the issuer's page when the
+    // card demands a full redirect rather than an inline challenge, and Stripe
+    // refuses to confirm at all without somewhere to come back to. Returning to
+    // /pricing puts the user where they started, on a page that re-reads the
+    // plan when it regains focus.
     const { error, paymentIntent } = await stripe.confirmPayment({
       clientSecret: result.clientSecret,
+      confirmParams: { return_url: `${window.location.origin}/pricing` },
       redirect: 'if_required',
     });
     if (error) throw new Error(error.message || 'Payment authentication failed.');

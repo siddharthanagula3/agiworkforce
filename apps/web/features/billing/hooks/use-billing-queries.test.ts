@@ -1,6 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createElement, type ReactNode } from 'react';
+import { renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ManagedUsageSummaryResponse } from '@agiworkforce/types';
-import { buildBillingInfoFromUsage } from './use-billing-queries';
+
+const authMocks = vi.hoisted(() => ({ token: vi.fn(async () => 'jwt-token') }));
+
+vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: () => authMocks.token() }));
+vi.mock('@shared/stores/authentication-store', () => ({
+  useAuthStore: () => ({ user: { id: 'user-1' } }),
+}));
+vi.mock('@shared/lib/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
+import { buildBillingInfoFromUsage, useBillingData } from './use-billing-queries';
 
 const usage: ManagedUsageSummaryResponse = {
   plan_tier: 'pro',
@@ -52,5 +67,66 @@ describe('buildBillingInfoFromUsage', () => {
     expect(max15x.features).toContain('Unlimited projects');
     expect(max15x.features).toContain('Unlimited custom MCP servers');
     expect(max15x.features).toContain('Video generation');
+  });
+});
+
+describe('useBillingData freshness', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    authMocks.token.mockResolvedValue('jwt-token');
+  });
+
+  function wrapper(client: QueryClient) {
+    return ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+  }
+
+  it('re-reads the plan when the tab regains focus after an upgrade elsewhere', async () => {
+    // 3DS authentication, the Stripe portal and Checkout all leave the app and
+    // come back within seconds. A stale window would suppress this refetch and
+    // render the plan the user just paid to leave.
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ ...usage, plan_tier: 'max' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useBillingData(), { wrapper: wrapper(client) });
+    await waitFor(() => expect(result.current.data?.plan).toBe('max'));
+    const readsBeforeReturn = fetchMock.mock.calls.length;
+
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ ...usage, plan_tier: 'max_15x' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    window.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+
+    await waitFor(() => expect(result.current.data?.plan).toBe('max_15x'));
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(readsBeforeReturn);
+  });
+
+  it('asks the server rather than accepting a cached upgrade-window response', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(usage), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useBillingData(), { wrapper: wrapper(client) });
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/usage',
+      expect.objectContaining({ cache: 'no-store' }),
+    );
   });
 });

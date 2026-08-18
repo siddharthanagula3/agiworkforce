@@ -96,8 +96,28 @@ function getValidatedOrigin(request: Request): string {
   return fallbackOrigin;
 }
 
+/**
+ * Same-origin relative paths only.
+ *
+ * This value is handed to Stripe as the page to send the user back to, so an
+ * absolute URL or a protocol-relative `//host` would turn the portal into an
+ * open redirect off our own domain.
+ */
+function resolveReturnPath(value: unknown): string {
+  if (typeof value !== 'string') return '/pricing';
+  if (!value.startsWith('/') || value.startsWith('//')) return '/pricing';
+  return value;
+}
+
 async function handlePortal(request: NextRequest) {
   const { userId, email: userEmail } = await getClerkAuthUser(request);
+  const returnPath = resolveReturnPath(
+    await request
+      .clone()
+      .json()
+      .then((body: { returnPath?: unknown }) => body?.returnPath)
+      .catch(() => undefined),
+  );
 
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) {
@@ -244,7 +264,7 @@ async function handlePortal(request: NextRequest) {
       const origin = getValidatedOrigin(request);
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,
-        return_url: `${origin}/pricing`,
+        return_url: `${origin}${returnPath}`,
       });
 
       logger.info(
@@ -344,7 +364,7 @@ async function handlePortal(request: NextRequest) {
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${origin}/pricing`,
+      return_url: `${origin}${returnPath}`,
     });
 
     logger.info(
