@@ -81,6 +81,9 @@ export interface CreateDatabaseClientOptions {
   provider?: DatabaseProvider;
   connectionString?: string;
   poolSize?: number;
+  connectionTimeoutMs?: number;
+  statementTimeoutMs?: number;
+  queryTimeoutMs?: number;
   applicationName?: string;
   unsafeAllowUnverifiedJwtSubject?: boolean;
 }
@@ -113,6 +116,10 @@ export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): Da
       }
       const cfg: NeonDatabaseAdapterConfig = { connectionString };
       if (opts.poolSize !== undefined) cfg.poolSize = opts.poolSize;
+      if (opts.connectionTimeoutMs !== undefined)
+        cfg.connectionTimeoutMs = opts.connectionTimeoutMs;
+      if (opts.statementTimeoutMs !== undefined) cfg.statementTimeoutMs = opts.statementTimeoutMs;
+      if (opts.queryTimeoutMs !== undefined) cfg.queryTimeoutMs = opts.queryTimeoutMs;
       if (opts.applicationName !== undefined) cfg.applicationName = opts.applicationName;
       if (opts.unsafeAllowUnverifiedJwtSubject === true) {
         cfg.unsafeAllowUnverifiedJwtSubject = true;

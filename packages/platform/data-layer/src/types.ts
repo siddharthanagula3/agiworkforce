@@ -36,6 +36,7 @@
 export interface DatabaseConnectionConfig {
   connectionString: string;
   poolSize?: number;
+  connectionTimeoutMs?: number;
   statementTimeoutMs?: number;
   queryTimeoutMs?: number;
   applicationName?: string;
