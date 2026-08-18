@@ -6,6 +6,17 @@ export function isUrlFetchTool(name: string): boolean {
   return name === URL_FETCH_TOOL;
 }
 
+export const URL_FETCH_MAX_CALLS_PER_TURN = 5;
+export const URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN = 15;
+
+export function urlFetchBudgetExhaustedMessage(limit: number): string {
+  return (
+    `Fetch budget reached: this turn has already fetched its ${limit} allowed ` +
+    'pages. No further fetches will run. Answer now using the pages you already ' +
+    'read, and say plainly which parts you could not confirm.'
+  );
+}
+
 export const URL_FETCH_TIMEOUT_MS = 10_000;
 export const URL_FETCH_MAX_RESPONSE_BYTES = 1_572_864;
 export const URL_FETCH_MAX_CONTENT_CHARS = 20_000;

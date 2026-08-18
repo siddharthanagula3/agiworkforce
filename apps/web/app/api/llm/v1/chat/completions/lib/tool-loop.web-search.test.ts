@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -272,6 +271,57 @@ describe('tool-loop web_search integration', () => {
         query: 'today news',
         max_results: 5,
       });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('never attaches more sources to one turn than the per-call cap times the call budget', async () => {
+    const searches = WEB_SEARCH_MAX_CALLS_PER_TURN + 3;
+    for (let i = 0; i < searches; i++) {
+      factoryMocks.streamRequest.mockResolvedValueOnce(
+        toolCallStream('web_search', { query: `query ${i}` }, `call_source_ceiling_${i}`),
+      );
+    }
+    factoryMocks.streamRequest.mockResolvedValueOnce(finalAnswerStream('Done.'));
+
+    let batch = 0;
+    const fetchMock = vi.fn(async () => {
+      const offset = batch++ * 100;
+      return new Response(
+        JSON.stringify({
+          results: Array.from({ length: 40 }, (_, i) => ({
+            title: `Result ${offset + i}`,
+            url: `https://news.example/${offset + i}`,
+            snippet: 's',
+          })),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+    try {
+      const output = await collect(
+        runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
+      );
+
+      const emittedCounts = output
+        .split('\n')
+        .filter((line) => line.startsWith('data: {'))
+        .flatMap((line) => {
+          const payload = JSON.parse(line.slice('data: '.length)) as {
+            choices?: Array<{ delta?: { x_search_results?: { content?: unknown[] } } }>;
+          };
+          const content = payload.choices?.[0]?.delta?.x_search_results?.content;
+          return Array.isArray(content) ? [content.length] : [];
+        });
+
+      const ceiling = WEB_SEARCH_MAX_CALLS_PER_TURN * WEB_SEARCH_MAX_RESULTS;
+      expect(emittedCounts.length).toBeGreaterThan(0);
+      expect(Math.max(...emittedCounts)).toBeLessThanOrEqual(ceiling);
     } finally {
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();
