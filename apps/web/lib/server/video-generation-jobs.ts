@@ -2,6 +2,11 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import {
+  VIDEO_ADMISSION_CEILING_SECONDS,
+  VIDEO_ADMISSION_FLOOR_SECONDS,
+  VIDEO_GENERATION_ADMISSION_SECONDS,
+} from '@/lib/workflows/video-generation-timing';
 
 export type VideoJobProvider = 'google' | 'runway' | 'openrouter';
 export type VideoJobStatus =
@@ -219,7 +224,7 @@ export async function acquireVideoGenerationAdmission(input: {
     `update public.profiles
         set video_generation_admission_token = $2,
             video_generation_admission_expires_at = now() + make_interval(
-              secs => greatest(60, least($3, 600))
+              secs => greatest($4::int, least($3::int, $5::int))
             )
       where id = $1
         and deletion_requested_at is null
@@ -233,7 +238,13 @@ export async function acquireVideoGenerationAdmission(input: {
           or video_generation_admission_expires_at <= now()
         )
       returning id`,
-    [input.userId, input.admissionToken, input.admissionSeconds ?? 300],
+    [
+      input.userId,
+      input.admissionToken,
+      input.admissionSeconds ?? VIDEO_GENERATION_ADMISSION_SECONDS,
+      VIDEO_ADMISSION_FLOOR_SECONDS,
+      VIDEO_ADMISSION_CEILING_SECONDS,
+    ],
   );
   return Boolean(rows[0]);
 }

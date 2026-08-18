@@ -46,6 +46,7 @@ import {
   releaseVideoGenerationAdmission,
   type VideoGenerationJob,
 } from '@/lib/server/video-generation-jobs';
+import { VIDEO_GENERATION_ADMISSION_SECONDS } from '@/lib/workflows/video-generation-timing';
 import { isVideoJobStoreReady } from '@/lib/server/video-job-store-readiness';
 import { syncVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
 import {
@@ -90,7 +91,7 @@ import {
  * Requires Max 15x or an Enterprise subscription.
  */
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 export const runtime = 'nodejs';
 
 type VideoProvider = ManagedMediaVideoProvider;
@@ -946,13 +947,13 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       db: scopedDb,
       userId,
       admissionToken,
-      admissionSeconds: 300,
+      admissionSeconds: VIDEO_GENERATION_ADMISSION_SECONDS,
     });
     if (!admitted) {
       return managedUsageErrorResponse(
         request,
         new ManagedUsageRequestError(
-          'Video generation cannot start while account data is being erased or another video request is entering its durable billing boundary. Retry shortly.',
+          'A previous video request is still being set up, or account data is being erased. Try again in about a minute.',
           409,
           'video_generation_admission_busy',
         ),
