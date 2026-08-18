@@ -133,16 +133,15 @@ describe('POST /api/upgrade/preview', () => {
       },
     });
     stripeMocks.createInvoicePreview.mockResolvedValue({
-      // createPreview defaults to preview_mode 'next', so amount_due also
-      // carries the next period's recurring line. Only the proration lines are
-      // billed when the upgrade is confirmed, so the fixture models both and
-      // amount_due deliberately disagrees with the expected quote.
-      amount_due: 30_042,
+      // The shape `billing_cycle_anchor: 'now'` actually returns: a proration
+      // credit for unused time on the old plan, and the new plan's full period
+      // as a NON-proration line. Both are charged today, and the cycle restarts.
+      amount_due: 10_042,
       currency: 'usd',
       lines: {
         data: [
           {
-            amount: 10_042,
+            amount: -9_958,
             parent: { subscription_item_details: { proration: true } },
             taxes: [],
           },
@@ -167,11 +166,6 @@ describe('POST /api/upgrade/preview', () => {
       currency: 'usd',
       lines: {
         data: [
-          {
-            amount: 10_000,
-            parent: { subscription_item_details: { proration: true } },
-            taxes: [{ amount: 660 }],
-          },
           {
             amount: -1_936,
             parent: { subscription_item_details: { proration: true } },
@@ -198,11 +192,6 @@ describe('POST /api/upgrade/preview', () => {
       currency: 'usd',
       lines: {
         data: [
-          {
-            amount: 20_000,
-            parent: { subscription_item_details: { proration: true } },
-            taxes: [{ amount: 1_320 }],
-          },
           {
             amount: -8_913,
             parent: { subscription_item_details: { proration: true } },
@@ -239,10 +228,9 @@ describe('POST /api/upgrade/preview', () => {
     expect(subscriptionDetails).toMatchObject({
       proration_behavior: 'always_invoice',
     });
-    expect(subscriptionDetails).toMatchObject({ billing_cycle_anchor: 'unchanged' });
-    expect(
-      stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details?.proration_date,
-    ).toEqual(expect.any(Number));
+    expect(subscriptionDetails).toMatchObject({ billing_cycle_anchor: 'now' });
+    // Stripe rejects proration_date alongside an anchor reset.
+    expect(subscriptionDetails).not.toHaveProperty('proration_date');
   });
 
   it('returns localized full-price checkout for an ended organization-managed plan', async () => {

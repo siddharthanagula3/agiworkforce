@@ -6,6 +6,7 @@ import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 const testState = vi.hoisted(() => ({
   auth: { user: null as null | { id: string; email: string }, initialized: true },
   billing: null as null | { plan: string; status: string },
+  billingVersion: 0,
   account: {
     subscription: null as null | {
       tier: string;
@@ -35,6 +36,18 @@ const routerMocks = vi.hoisted(() => ({
   push: vi.fn(),
 }));
 
+const billingMocks = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  return {
+    refetch: vi.fn(),
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    emit: () => listeners.forEach((listener) => listener()),
+  };
+});
+
 vi.mock('next/navigation', () => ({ useRouter: () => routerMocks }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -63,8 +76,17 @@ vi.mock('@shared/stores/authentication-store', () => ({
 vi.mock('@features/billing/services/stripe-payments', () => ({
   ...stripeMocks,
 }));
+// The real hook re-renders on refetch; a plain object literal would not, and the
+// stale-plan bug this file guards is only visible once a refetch can move the UI.
 vi.mock('@features/billing/hooks/use-billing-queries', () => ({
-  useBillingData: () => ({ data: testState.billing, isLoading: false }),
+  useBillingData: () => {
+    React.useSyncExternalStore(
+      billingMocks.subscribe,
+      () => testState.billingVersion,
+      () => testState.billingVersion,
+    );
+    return { data: testState.billing, isLoading: false, refetch: billingMocks.refetch };
+  },
 }));
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: unknown) => unknown) => selector(testState.account),
@@ -112,6 +134,8 @@ describe('PricingPage', () => {
     testState.auth.user = null;
     testState.auth.initialized = true;
     testState.billing = null;
+    testState.billingVersion += 1;
+    billingMocks.refetch.mockImplementation(async () => ({ data: testState.billing }));
     testState.account.subscription = null;
     testState.account.initialized = true;
     testState.account.isLoading = false;
@@ -440,7 +464,49 @@ describe('PricingPage', () => {
     expect(screen.queryByRole('button', { name: /INR/i })).not.toBeInTheDocument();
   });
 
-  it('confirms the prorated amount before charging an active paid subscriber mid-cycle', async () => {
+  it('sends an active paid subscriber to the order screen instead of charging from the card', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    testState.billing = { plan: 'pro', status: 'active' };
+    testState.account.subscription = {
+      tier: 'pro',
+      status: 'active',
+      subscription_source: 'stripe',
+    };
+
+    render(<PricingPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'maxCta' }));
+
+    // A mid-cycle upgrade bills the saved card with no Stripe screen in the way,
+    // so the pricing card must not be able to start one. /upgrade/max is where
+    // the proration is priced, the payment method named and assent taken.
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledWith('/upgrade/max'));
+    expect(stripeMocks.upgradePlanMidCycle).not.toHaveBeenCalled();
+    expect(stripeMocks.upgradeToMaxPlan).not.toHaveBeenCalled();
+  });
+
+  it('carries the yearly choice to the order screen so it does not price monthly', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    testState.billing = { plan: 'basic', status: 'active' };
+    testState.account.subscription = {
+      tier: 'basic',
+      status: 'active',
+      subscription_source: 'stripe',
+    };
+
+    render(<PricingPage />);
+    fireEvent.click(screen.getByRole('button', { name: /annual/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'proCta' }));
+
+    await waitFor(() =>
+      expect(routerMocks.push).toHaveBeenCalledWith('/upgrade/pro?interval=yearly'),
+    );
+  });
+
+  it('keeps refetching after confirm until the webhook has actually moved the plan', async () => {
+    // Team still confirms in-page, because its price depends on a seat count
+    // chosen here. /api/upgrade answers `webhook_pending`: Stripe has charged,
+    // but plan_tier is only written when customer.subscription.updated lands, so
+    // a single refetch on confirm re-reads the OLD plan.
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'pro', status: 'active' };
     testState.account.subscription = {
@@ -455,25 +521,34 @@ describe('PricingPage', () => {
     });
     stripeMocks.upgradePlanMidCycle.mockResolvedValueOnce({ activation: 'webhook_pending' });
 
-    render(<PricingPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'maxCta' }));
+    let polls = 0;
+    billingMocks.refetch.mockImplementation(async () => {
+      polls += 1;
+      // Still `pro` on the first read — the webhook has not landed yet.
+      if (polls > 1) {
+        testState.billing = { plan: 'team', status: 'active' };
+        testState.billingVersion += 1;
+        billingMocks.emit();
+      }
+      return { data: testState.billing };
+    });
 
-    // The upgrade must NOT charge silently: it opens the confirm dialog, which
-    // previews the exact prorated amount first, and only charges on confirm.
+    render(<PricingPage />);
+    await showTeamAndEnterprise();
+    fireEvent.click(screen.getByRole('button', { name: 'teamCta' }));
+
     const confirmBtn = await screen.findByRole('button', { name: /confirm/i });
     await waitFor(() => expect(confirmBtn).toBeEnabled());
-    expect(stripeMocks.upgradePlanMidCycle).not.toHaveBeenCalled();
-
     fireEvent.click(confirmBtn);
-    await waitFor(() =>
-      expect(stripeMocks.upgradePlanMidCycle).toHaveBeenCalledWith({
-        plan: 'max',
-        billingInterval: 'monthly',
-        previewToken: 'signed-preview-token',
-      }),
-    );
-    expect(stripeMocks.upgradeToMaxPlan).not.toHaveBeenCalled();
-  });
+
+    await waitFor(() => expect(stripeMocks.upgradePlanMidCycle).toHaveBeenCalled());
+    // One refetch was not enough; the page only stops offering Team once a later
+    // poll reads the plan the user has already paid for.
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'teamCta' })).toBeNull(), {
+      timeout: 10_000,
+    });
+    expect(billingMocks.refetch.mock.calls.length).toBeGreaterThan(1);
+  }, 15_000);
 
   it.each([
     ['apple', 'Manage with Apple'],
