@@ -13,14 +13,17 @@ export const WEB_SEARCH_TIMEOUT_MS = 15_000;
  * Results requested from Perplexity and returned to the model for ONE call —
  * capped well under Perplexity's max of 20 to bound tool-result token cost.
  *
- * 10 is the answer-shaped size: enough independent sources to cross-check a
+ * 5 is the answer-shaped size: enough independent sources to cross-check a
  * claim in a single pass, few enough that the citation list under a normal chat
  * answer stays readable. A question that needs more breadth gets it by issuing
  * ANOTHER search (see {@link WEB_SEARCH_MAX_CALLS_PER_TURN}), not by widening
  * one call — that is what keeps a two-line question from returning a
  * research-report's worth of links.
+ *
+ * This is a CEILING, not a default: `executeWebSearch` clamps any caller
+ * override down to it, so no call site can widen a single search.
  */
-export const WEB_SEARCH_MAX_RESULTS = 10;
+export const WEB_SEARCH_MAX_RESULTS = 5;
 export const WEB_SEARCH_FREE_MAX_RESULTS = 5;
 export const WEB_SEARCH_MAX_CALLS_PER_TURN = 3;
 export const WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN = 10;
@@ -133,7 +136,10 @@ export async function executeWebSearch(
 
   const fetchImpl = overrides.fetchImpl ?? fetch;
   const timeoutMs = overrides.timeoutMs ?? WEB_SEARCH_TIMEOUT_MS;
-  const maxResults = overrides.maxResults ?? WEB_SEARCH_MAX_RESULTS;
+  const maxResults = Math.max(
+    1,
+    Math.min(overrides.maxResults ?? WEB_SEARCH_MAX_RESULTS, WEB_SEARCH_MAX_RESULTS),
+  );
 
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), timeoutMs);

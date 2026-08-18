@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 import {
@@ -282,6 +281,23 @@ describe('hardening: untrusted-payload bounds and injection defenses', () => {
     );
     expect(outcome.ok).toBe(true);
     if (outcome.ok) expect(outcome.results).toHaveLength(5);
+  });
+
+  it('treats WEB_SEARCH_MAX_RESULTS as a ceiling an override cannot raise', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      url: `https://example.com/${i}`,
+      title: `T${i}`,
+      snippet: 's',
+    }));
+    const fetchImpl = fetchReturning(jsonResponse({ results: many }));
+    const outcome = await executeWebSearch(
+      { query: 'q' },
+      { apiKey: 'k', maxResults: 999, fetchImpl },
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.results).toHaveLength(WEB_SEARCH_MAX_RESULTS);
+    const call = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(call[1].body as string).max_results).toBe(WEB_SEARCH_MAX_RESULTS);
   });
 
   it('truncates an oversized snippet before returning it to the model', async () => {
