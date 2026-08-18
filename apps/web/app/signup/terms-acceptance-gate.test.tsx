@@ -27,7 +27,7 @@ async function renderSignup(redirectTo = '/chat') {
 
 describe('/signup terms clickwrap', () => {
   beforeEach(() => {
-    window.sessionStorage.clear();
+    window.localStorage.clear();
     signUpProps.mockClear();
   });
 
@@ -65,7 +65,7 @@ describe('/signup terms clickwrap', () => {
   });
 
   it('restores consent on the OAuth return trip so the widget is not unmounted mid-flow', async () => {
-    window.sessionStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
+    window.localStorage.setItem('agi.terms-accepted-version', POLICY_LAST_UPDATED.terms);
 
     await renderSignup();
 
@@ -73,7 +73,7 @@ describe('/signup terms clickwrap', () => {
   });
 
   it('re-prompts when the stored consent names a superseded revision', async () => {
-    window.sessionStorage.setItem('agi.terms-accepted-version', '1970-01-01');
+    window.localStorage.setItem('agi.terms-accepted-version', '1970-01-01');
 
     await renderSignup();
 

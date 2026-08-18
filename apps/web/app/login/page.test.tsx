@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
 const signInProps = vi.hoisted(() => vi.fn());
@@ -28,12 +27,17 @@ describe('/login Desktop surface', () => {
     signInProps.mockClear();
   });
 
-  it('does not mount Clerk authentication until the clickwrap is accepted', async () => {
+  it('mounts sign-in without a clickwrap, because terms belong to signup', async () => {
+    // Founder decision 2026-08-17. A returning user has already accepted; asking
+    // again at sign-in re-prompted on every browser session and blocked people
+    // out of accounts they had paid for. Acceptance is still enforced where it
+    // can actually be attributed: at /signup before Clerk mounts, and at
+    // /login/complete against the version recorded on the account.
     render(await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
-    expect(screen.queryByTestId('clerk-sign-in')).not.toBeInTheDocument();
-    expect(screen.getByTestId('terms-gate-blocked')).toHaveTextContent(/sign in/i);
-    expect(signInProps).not.toHaveBeenCalled();
+    expect(screen.getByTestId('clerk-sign-in')).toBeInTheDocument();
+    expect(screen.queryByTestId('terms-gate-blocked')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /terms of service/i })).not.toBeInTheDocument();
   });
 
   it('keeps device approval and account creation inside the embedded Desktop flow', async () => {
@@ -45,7 +49,6 @@ describe('/login Desktop surface', () => {
     );
 
     expect(screen.getByTestId('auth-shell')).toHaveAttribute('data-embedded', 'true');
-    await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
     expect(signInProps).toHaveBeenCalledWith(
       expect.objectContaining({
         forceRedirectUrl:
@@ -58,7 +61,6 @@ describe('/login Desktop surface', () => {
 
   it('routes an account created from the sign-in card through the terms clickwrap', async () => {
     render(await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
-    await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
 
     const props = signInProps.mock.lastCall?.[0] as Record<string, unknown>;
     expect(props['signUpForceRedirectUrl']).toBe('/signup/complete?redirectTo=%2Fchat');
@@ -67,7 +69,6 @@ describe('/login Desktop surface', () => {
 
   it('forces successful sign-in through durable acceptance verification', async () => {
     render(await LoginPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
-    await userEvent.click(screen.getByRole('checkbox', { name: /terms of service/i }));
 
     const props = signInProps.mock.lastCall?.[0] as Record<string, unknown>;
     expect(props['forceRedirectUrl']).toBe('/login/complete?redirectTo=%2Fchat');
