@@ -8,6 +8,7 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({
 }));
 
 import {
+  acquireVideoGenerationAdmission,
   claimVideoIncidentAlert,
   claimVideoSettlementIncidentByReservation,
   completeVideoIncidentAlert,
@@ -267,5 +268,34 @@ describe('video settlement feeds the COGS ledger', () => {
         usage: expect.objectContaining({ operation: 'video', durationSecs: 6 }),
       }),
     );
+  });
+});
+
+describe('acquireVideoGenerationAdmission SQL', () => {
+  it('casts every make_interval bound so Postgres can resolve the function', async () => {
+    let sql = '';
+    let params: unknown[] = [];
+    const db = {
+      query: async (text: string, values: unknown[]) => {
+        sql = text;
+        params = values;
+        return [{ id: 'user-1' }];
+      },
+    } as unknown as never;
+
+    await acquireVideoGenerationAdmission({
+      db,
+      userId: 'user-1',
+      admissionToken: 'admission-token-123',
+    });
+
+    const interval = /make_interval\(([\s\S]*?)\)\s*\n/.exec(sql)?.[1] ?? '';
+    expect(interval).toContain('secs =>');
+    const placeholders = interval.match(/\$\d+(::\w+)?/g) ?? [];
+    expect(placeholders.length).toBeGreaterThan(0);
+    for (const placeholder of placeholders) {
+      expect(placeholder).toMatch(/::(int|integer|numeric)$/);
+    }
+    expect(params.length).toBeGreaterThanOrEqual(5);
   });
 });

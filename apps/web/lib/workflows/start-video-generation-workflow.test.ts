@@ -64,6 +64,20 @@ describe('video generation workflow starter', () => {
     expect(input).not.toHaveProperty('userId');
   });
 
+  it('rejects instead of burning the invocation when the workflow engine never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const { VIDEO_WORKFLOW_START_DEADLINE_MS } = await import('./video-generation-timing');
+      mocks.start.mockReturnValueOnce(new Promise(() => {}));
+      const pending = startVideoGenerationWorkflowOwner({ jobId: 'job-1' });
+      const assertion = expect(pending).rejects.toThrow(/exceeded its deadline/);
+      await vi.advanceTimersByTimeAsync(VIDEO_WORKFLOW_START_DEADLINE_MS);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('recovers a committed attachment whose response was lost', async () => {
     mocks.attach.mockRejectedValueOnce(new Error('connection lost'));
     mocks.get.mockResolvedValueOnce({ workflowRunId: 'wrun-video-1' });

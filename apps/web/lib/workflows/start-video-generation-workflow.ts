@@ -10,17 +10,38 @@ import {
   videoGenerationWorkflow,
   videoProviderTaskAttachmentWorkflow,
 } from './video-generation-workflow';
+import { VIDEO_WORKFLOW_START_DEADLINE_MS } from './video-generation-timing';
+
+async function withDeadline<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Durable video workflow start exceeded its deadline.')),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 export async function startVideoGenerationWorkflowOwner(input: {
   jobId: string;
 }): Promise<{ workflowRunId: string; cancel: () => Promise<void> }> {
-  const run = await start(videoGenerationWorkflow, [
-    {
-      version: 1,
-      jobId: input.jobId,
-      startedAtEpochMs: Date.now(),
-    },
-  ]);
+  const run = await withDeadline(
+    start(videoGenerationWorkflow, [
+      {
+        version: 1,
+        jobId: input.jobId,
+        startedAtEpochMs: Date.now(),
+      },
+    ]),
+    VIDEO_WORKFLOW_START_DEADLINE_MS,
+  );
   return { workflowRunId: run.runId, cancel: () => run.cancel() };
 }
 
