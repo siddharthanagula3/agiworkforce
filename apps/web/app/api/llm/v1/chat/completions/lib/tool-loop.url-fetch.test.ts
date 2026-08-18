@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
@@ -14,7 +13,7 @@ vi.mock('./tool-loop-anthropic', () => ({
 
 import { runToolLoop, fetchSourcesEvent } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
-import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
+import { urlFetchToolDef, URL_FETCH_MAX_CALLS_PER_TURN } from '@/lib/url-fetch/url-fetch-tool';
 
 function sseStream(events: unknown[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -194,5 +193,70 @@ describe('tool-loop url_fetch integration', () => {
       { type: 'web_search_result', url: 'https://a.example/', title: 'A', position: 1 },
       { type: 'web_search_result', url: 'https://b.example/', title: 'B', position: 2 },
     ]);
+  });
+  it(`stops fetching after ${URL_FETCH_MAX_CALLS_PER_TURN} pages so one turn cannot amass an unbounded source list`, async () => {
+    const attempts = URL_FETCH_MAX_CALLS_PER_TURN + 8;
+    for (let i = 0; i < attempts; i++) {
+      factoryMocks.streamRequest.mockResolvedValueOnce(
+        sseStream([
+          {
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: `call_url_fetch_budget_${i}`,
+                      type: 'function',
+                      function: {
+                        name: 'url_fetch',
+                        arguments: JSON.stringify({ url: `https://site${i}.example/` }),
+                      },
+                    },
+                  ],
+                },
+                index: 0,
+              },
+            ],
+            model: 'test-model',
+          },
+          { choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }], model: 'test-model' },
+        ]),
+      );
+    }
+    factoryMocks.streamRequest.mockResolvedValueOnce(
+      finalAnswerStream('Answering from what I read.'),
+    );
+
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(PAGE_HTML, {
+          status: 200,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const output = await collect(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+
+      expect(fetchMock).toHaveBeenCalledTimes(URL_FETCH_MAX_CALLS_PER_TURN);
+      expect(output).toContain('Fetch budget reached');
+
+      const emitted = output
+        .split('\n')
+        .filter((line) => line.startsWith('data: {'))
+        .flatMap((line) => {
+          const payload = JSON.parse(line.slice('data: '.length)) as {
+            choices?: Array<{ delta?: { x_search_results?: { content?: unknown[] } } }>;
+          };
+          const content = payload.choices?.[0]?.delta?.x_search_results?.content;
+          return Array.isArray(content) ? [content.length] : [];
+        });
+      expect(emitted.length).toBeGreaterThan(0);
+      expect(Math.max(...emitted)).toBeLessThanOrEqual(URL_FETCH_MAX_CALLS_PER_TURN);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

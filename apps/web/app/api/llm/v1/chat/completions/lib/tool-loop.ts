@@ -88,7 +88,13 @@ import {
   persistGeneratedFiles,
   type GeneratedFileRef,
 } from '@/lib/server/container-files';
-import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
+import {
+  executeUrlFetch,
+  isUrlFetchTool,
+  URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN,
+  URL_FETCH_MAX_CALLS_PER_TURN,
+  urlFetchBudgetExhaustedMessage,
+} from '@/lib/url-fetch/url-fetch-tool';
 import {
   isWebSearchTool,
   executeWebSearch,
@@ -97,6 +103,7 @@ import {
   WEB_SEARCH_FREE_MAX_RESULTS,
   WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN,
   WEB_SEARCH_MAX_CALLS_PER_TURN,
+  WEB_SEARCH_MAX_RESULTS,
   webSearchResultsToFetchedSources,
 } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
@@ -1385,11 +1392,16 @@ export async function* runToolLoop(
 
   const fetchedSources: FetchedSource[] = [];
   const searchedSources: FetchedSource[] = [];
+  const agiWorkTurn = processed.chatRequest?.work_mode === 'agiwork';
   let webSearchCallsUsed = 0;
-  const webSearchCallBudget =
-    processed.chatRequest?.work_mode === 'agiwork'
-      ? WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN
-      : WEB_SEARCH_MAX_CALLS_PER_TURN;
+  const webSearchCallBudget = agiWorkTurn
+    ? WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN
+    : WEB_SEARCH_MAX_CALLS_PER_TURN;
+  let urlFetchCallsUsed = 0;
+  const urlFetchCallBudget = agiWorkTurn
+    ? URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN
+    : URL_FETCH_MAX_CALLS_PER_TURN;
+  const turnSourceBudget = webSearchCallBudget * WEB_SEARCH_MAX_RESULTS + urlFetchCallBudget;
   const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
   const conversationId = processed.conversationId;
@@ -1586,6 +1598,15 @@ export async function* runToolLoop(
           });
         }
       }
+      if (isUrlFetchTool(tc.qualifiedName)) {
+        urlFetchCallsUsed += 1;
+        if (urlFetchCallsUsed > urlFetchCallBudget) {
+          return Promise.resolve({
+            content: urlFetchBudgetExhaustedMessage(urlFetchCallBudget),
+            isError: false,
+          });
+        }
+      }
       const execute = () =>
         runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor, {
           userId: options.userId,
@@ -1698,12 +1719,19 @@ export async function* runToolLoop(
         );
       }
 
-      if (source && !fetchedSources.some((s) => s.url === source.url)) {
+      const turnSourceCount = () => fetchedSources.length + searchedSources.length;
+
+      if (
+        source &&
+        turnSourceCount() < turnSourceBudget &&
+        !fetchedSources.some((s) => s.url === source.url)
+      ) {
         fetchedSources.push(source);
         sourcesAdded = true;
       }
 
       for (const s of sources ?? []) {
+        if (turnSourceCount() >= turnSourceBudget) break;
         if (!searchedSources.some((existing) => existing.url === s.url)) {
           searchedSources.push(s);
           searchSourcesAdded = true;
