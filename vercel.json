@@ -5,7 +5,7 @@
   "installCommand": "corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install --frozen-lockfile",
   "outputDirectory": "apps/web/.next",
   "framework": "nextjs",
-  "ignoreCommand": "bash scripts/vercel-ignore-build.sh",
+  "ignoreCommand": "bash vercel-ignore-build.sh",
   "git": {
     "deploymentEnabled": {
       "main": false
