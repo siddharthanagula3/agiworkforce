@@ -96,6 +96,7 @@ const isProtectedAppRoute = createRouteMatcher([
   '/tasks(.*)',
   '/settings(.*)',
   '/billing(.*)',
+  '/upgrade(.*)',
   '/admin(.*)',
 ]);
 
@@ -116,6 +117,7 @@ const isClerkSessionRoute = createRouteMatcher([
   '/tasks(.*)',
   '/settings(.*)',
   '/billing(.*)',
+  '/upgrade(.*)',
   '/admin(.*)',
   '/api/(.*)',
 ]);

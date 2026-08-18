@@ -184,8 +184,13 @@ describe('stripe payments', () => {
       previewToken: 'signed-preview-token',
     });
     expect(stripeJsMocks.loadStripe).toHaveBeenCalledWith('pk_test_example');
+    // A card that demands a full redirect rather than an inline challenge gets
+    // handed to the issuer's page, and Stripe refuses to confirm without
+    // somewhere to come back to. /pricing is where the upgrade started and it
+    // re-reads the plan on focus.
     expect(stripeJsMocks.confirmPayment).toHaveBeenCalledWith({
       clientSecret: 'pi_upgrade_secret',
+      confirmParams: { return_url: `${window.location.origin}/pricing` },
       redirect: 'if_required',
     });
   });

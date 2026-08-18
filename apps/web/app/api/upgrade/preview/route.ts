@@ -78,19 +78,24 @@ export interface UpgradeChargeBreakdown {
   renewsAt: string | null;
 }
 
+/**
+ * Under `billing_cycle_anchor: 'now'` the invoice holds two kinds of line, and
+ * both are due today:
+ *
+ *   proration=true   -$1.05   Unused time on Basic
+ *   proration=false  $20.00   1 x Pro (at $20.00 / month)
+ *
+ * The new plan's charge is NOT a proration line, because the cycle restarts and
+ * a full period is being bought outright. Filtering to proration lines would
+ * therefore show the credit and drop the charge it offsets, quoting -$1.05.
+ * Every line on this preview belongs on the bill.
+ */
 function immediateProrationBreakdown(preview: Stripe.Invoice): UpgradeChargeBreakdown {
   const lines = preview.lines?.data ?? [];
-  const prorationLines = lines.filter(
-    (line) =>
-      (line as { parent?: { subscription_item_details?: { proration?: boolean } } }).parent
-        ?.subscription_item_details?.proration === true,
-  );
 
-  // A preview with no proration lines means Stripe found nothing to settle now;
-  // that is a genuine zero, not a reason to fall back to the inflated total.
   let subtotalCents = 0;
   let taxCents = 0;
-  const lineItems = prorationLines.map((line) => {
+  const lineItems = lines.map((line) => {
     const tax = (line.taxes ?? []).reduce(
       (sum: number, entry: { amount?: number }) => sum + (entry.amount ?? 0),
       0,
@@ -101,8 +106,8 @@ function immediateProrationBreakdown(preview: Stripe.Invoice): UpgradeChargeBrea
   });
 
   // The charge line is the positive one; credits for unused time are negative.
-  // Its period end is the renewal date the user should be told about.
-  const chargeLine = prorationLines.find((line) => line.amount > 0);
+  // Its period end is the new renewal date, which the anchor reset has moved.
+  const chargeLine = lines.find((line) => line.amount > 0);
   const periodEnd = (chargeLine as { period?: { end?: number } } | undefined)?.period?.end;
 
   const totalCents = subtotalCents + taxCents;
@@ -361,8 +366,10 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
       subscription_details: {
         items: [{ id: stripeItemId, price: newPriceId, quantity: requestedSeats }],
         proration_behavior: 'always_invoice',
-        billing_cycle_anchor: 'unchanged',
-        proration_date: prorationDate,
+        // The cycle restarts on upgrade: a full period of the new plan is bought
+        // today, less credit for unused time on the old one, and the renewal date
+        // moves. Stripe rejects `proration_date` alongside this.
+        billing_cycle_anchor: 'now',
       },
     });
   } catch (err) {

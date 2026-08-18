@@ -733,7 +733,7 @@ export function BillingSection() {
         >
           {canAdjustPlan ? (
             <SettingsPageLink
-              href="/pricing"
+              href="/upgrade"
               style={{
                 padding: '7px 14px',
                 background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary, #c8892a)',

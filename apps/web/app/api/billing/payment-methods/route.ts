@@ -37,10 +37,11 @@ async function handleGetPaymentMethods(request: NextRequest) {
 
   const db = getNeonDb();
 
-  type SubRow = Pick<SubscriptionRow, 'stripe_customer_id'>;
+  type SubRow = Pick<SubscriptionRow, 'stripe_customer_id' | 'stripe_subscription_id'>;
   const [sub] = await db
     .query<SubRow>(
-      `select stripe_customer_id from public.subscriptions where user_id = $1 limit 1`,
+      `select stripe_customer_id, stripe_subscription_id
+         from public.subscriptions where user_id = $1 limit 1`,
       [userId],
     )
     .catch(() => [] as SubRow[]);
@@ -55,15 +56,32 @@ async function handleGetPaymentMethods(request: NextRequest) {
       return NextResponse.json({ payment_methods: [] });
     }
 
-    const defaultPmId =
+    const customerDefaultPmId =
       typeof customer.invoice_settings?.default_payment_method === 'string'
         ? customer.invoice_settings.default_payment_method
         : ((customer.invoice_settings?.default_payment_method as Stripe.PaymentMethod | null)?.id ??
           null);
 
+    // A subscription may carry its own default, and that is the one Stripe
+    // actually charges for it. Marking the customer default here would name a
+    // card the renewal will not touch.
+    const defaultPmId =
+      (sub.stripe_subscription_id
+        ? await stripe.subscriptions
+            .retrieve(sub.stripe_subscription_id)
+            .then((subscription) =>
+              typeof subscription.default_payment_method === 'string'
+                ? subscription.default_payment_method
+                : (subscription.default_payment_method?.id ?? null),
+            )
+            .catch(() => null)
+        : null) ?? customerDefaultPmId;
+
+    // Every type, not just cards. Checkout with Link stores a `link` method, and
+    // filtering to cards reported "no payment method on file" to users who had
+    // just paid with one.
     const stripePaymentMethods = await stripe.paymentMethods.list({
       customer: sub.stripe_customer_id,
-      type: 'card',
     });
 
     const payment_methods = stripePaymentMethods.data.map((pm) => ({

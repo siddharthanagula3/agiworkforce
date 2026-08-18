@@ -109,6 +109,10 @@ async function fetchUsageSummary(): Promise<UsageApiResponse | null> {
   try {
     const res = await fetch('/api/usage', {
       headers: { Authorization: `Bearer ${token}` },
+      // The upgrade flow polls this within seconds of the previous read, waiting
+      // for a webhook to move plan_tier. A cache hit there returns the plan the
+      // user just paid to leave.
+      cache: 'no-store',
     });
     if (!res.ok) {
       logger.warn('[BillingQuery] /api/usage returned', res.status);
@@ -139,9 +143,15 @@ export function useBillingData(): UseQueryResult<BillingInfo | null, Error> {
       return usage ? buildBillingInfoFromUsage(usage) : null;
     },
     enabled: !!user?.id,
-    staleTime: 2 * 60 * 1000, // 2 minutes - billing data changes infrequently
-    gcTime: 10 * 60 * 1000, // 10 minutes cache
-    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    // Zero, not "billing changes infrequently". Every upgrade path that leaves
+    // the app — 3DS authentication, the Stripe portal, Checkout — returns within
+    // seconds, and refetchOnWindowFocus does nothing while the data is still
+    // fresh. A stale window here renders the plan the user just paid to leave.
+    // gcTime is kept so the cached plan still paints instantly while it
+    // revalidates.
+    staleTime: 0,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
     meta: {
       errorMessage: 'Failed to load billing information',
     },
