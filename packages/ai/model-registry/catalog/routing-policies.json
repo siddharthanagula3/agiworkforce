@@ -364,7 +364,7 @@
         "providerTask": { "provider": "openai", "task": "chat" }
       },
       "general_premium": {
-        "modelKey": "gemini-3.6-flash"
+        "modelKey": "gemini-3.7-flash"
       },
       "flagship_general": {
         "providerTask": { "provider": "openai", "task": "complex_reasoning" }
@@ -409,10 +409,10 @@
         "modelKey": "gemini-3.5-flash-lite"
       },
       "vision_premium": {
-        "modelKey": "gemini-3.6-flash"
+        "modelKey": "gemini-3.7-flash"
       },
       "multimodal_balanced": {
-        "modelKey": "gemini-3.6-flash"
+        "modelKey": "gemini-3.7-flash"
       },
       "long_context_balanced": {
         "modelKey": "gemini-3.1-pro-preview"
@@ -421,7 +421,7 @@
         "modelKey": "gemini-3.5-flash-lite"
       },
       "search_premium": {
-        "modelKey": "gemini-3.6-flash"
+        "modelKey": "gemini-3.7-flash"
       },
       "browser_dom": {
         "modelKey": "claude-sonnet-5"
@@ -460,7 +460,7 @@
         "modelKey": "qwen-3.7-plus"
       },
       "multimodal_pro": {
-        "modelKey": "gemini-3.6-flash"
+        "modelKey": "gemini-3.7-flash"
       },
       "long_context_pro": {
         "modelKey": "gemini-3.1-pro-preview"
