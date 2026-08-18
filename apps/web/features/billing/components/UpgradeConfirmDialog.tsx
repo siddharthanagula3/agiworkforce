@@ -215,6 +215,27 @@ export function UpgradeConfirmDialog({
                   {formatMoney(amountDue.charge.taxCents, amountDue.currency)}
                 </dd>
               </div>
+              {/*
+                Total and Total due today are different numbers whenever the
+                account carries a Stripe balance, so both are shown rather than
+                collapsing them and leaving the difference unexplained.
+              */}
+              {amountDue.charge.appliedBalanceCents !== 0 ? (
+                <>
+                  <div className="mt-1 flex justify-between gap-4 border-t pt-2">
+                    <dt className="text-[color:var(--text-2,#52525b)]">Total</dt>
+                    <dd className="tabular-nums">
+                      {formatMoney(amountDue.charge.totalCents, amountDue.currency)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-[color:var(--text-2,#52525b)]">Applied balance</dt>
+                    <dd className="tabular-nums">
+                      {formatMoney(amountDue.charge.appliedBalanceCents, amountDue.currency)}
+                    </dd>
+                  </div>
+                </>
+              ) : null}
               <div className="mt-1 flex justify-between gap-4 border-t pt-2 font-semibold">
                 <dt>Total due today</dt>
                 <dd className="tabular-nums">

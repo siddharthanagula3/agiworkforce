@@ -33,6 +33,8 @@ describe('UpgradeConfirmDialog order details', () => {
         ],
         subtotalCents: 11_087,
         taxCents: 732,
+        totalCents: 11_819,
+        appliedBalanceCents: 0,
         totalDueTodayCents: 11_819,
         renewsAt: '2026-03-26T00:00:00.000Z',
       },
@@ -58,6 +60,40 @@ describe('UpgradeConfirmDialog order details', () => {
     expect(receipt).toHaveTextContent('$118.19');
   });
 
+  it('separates Total from Total due today when a stripe balance is applied', async () => {
+    // Claude's Pro monthly upgrade screen: Total $21.32, Applied balance $0.03,
+    // Total due today $21.35. A positive Stripe balance is owed, so it ADDS —
+    // collapsing the two rows would understate what actually gets taken.
+    paymentMocks.previewUpgrade.mockResolvedValue({
+      amountDueNowCents: 2_135,
+      currency: 'usd',
+      previewToken: 'tok_preview',
+      charge: {
+        lineItems: [{ description: 'Pro plan', amountCents: 2_000 }],
+        subtotalCents: 2_000,
+        taxCents: 132,
+        totalCents: 2_132,
+        appliedBalanceCents: 3,
+        totalDueTodayCents: 2_135,
+        renewsAt: '2026-09-17T00:00:00.000Z',
+      },
+    });
+
+    render(
+      <UpgradeConfirmDialog
+        request={{ plan: 'pro', billingInterval: 'monthly' }}
+        onCancel={() => {}}
+        onConfirmed={() => {}}
+      />,
+    );
+
+    const receipt = await screen.findByRole('region', { name: 'Order details' });
+    expect(receipt).toHaveTextContent('Applied balance');
+    expect(receipt).toHaveTextContent('$21.32');
+    expect(receipt).toHaveTextContent('$0.03');
+    expect(receipt).toHaveTextContent('$21.35');
+  });
+
   it('states the amount on the confirm button so it cannot disagree with the receipt', async () => {
     paymentMocks.previewUpgrade.mockResolvedValue({
       amountDueNowCents: 8_596,
@@ -70,6 +106,8 @@ describe('UpgradeConfirmDialog order details', () => {
         ],
         subtotalCents: 8_064,
         taxCents: 532,
+        totalCents: 8_596,
+        appliedBalanceCents: 0,
         totalDueTodayCents: 8_596,
         renewsAt: null,
       },

@@ -65,6 +65,14 @@ export interface UpgradeChargeBreakdown {
   lineItems: { description: string; amountCents: number }[];
   subtotalCents: number;
   taxCents: number;
+  /** Invoice total before the customer balance is applied. */
+  totalCents: number;
+  /**
+   * Stripe's customer balance, signed as Stripe signs it: positive is owed and
+   * increases what is taken, negative is credit and reduces it. Separate from
+   * the total because it is not part of the invoice — it is settled against it.
+   */
+  appliedBalanceCents: number;
   totalDueTodayCents: number;
   /** End of the period being started, so the UI can state the renewal date. */
   renewsAt: string | null;
@@ -97,11 +105,16 @@ function immediateProrationBreakdown(preview: Stripe.Invoice): UpgradeChargeBrea
   const chargeLine = prorationLines.find((line) => line.amount > 0);
   const periodEnd = (chargeLine as { period?: { end?: number } } | undefined)?.period?.end;
 
+  const totalCents = subtotalCents + taxCents;
+  const appliedBalanceCents = preview.starting_balance ?? 0;
+
   return {
     lineItems,
     subtotalCents,
     taxCents,
-    totalDueTodayCents: subtotalCents + taxCents,
+    totalCents,
+    appliedBalanceCents,
+    totalDueTodayCents: totalCents + appliedBalanceCents,
     renewsAt: typeof periodEnd === 'number' ? new Date(periodEnd * 1000).toISOString() : null,
   };
 }

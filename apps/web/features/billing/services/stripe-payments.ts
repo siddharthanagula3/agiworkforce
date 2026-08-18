@@ -229,6 +229,9 @@ export interface UpgradeChargeBreakdown {
   lineItems: { description: string; amountCents: number }[];
   subtotalCents: number;
   taxCents: number;
+  totalCents: number;
+  /** Signed as Stripe signs it: positive is owed and adds to what is taken. */
+  appliedBalanceCents: number;
   totalDueTodayCents: number;
   renewsAt: string | null;
 }
@@ -262,10 +265,19 @@ function parseChargeBreakdown(value: unknown): UpgradeChargeBreakdown | null {
       amountCents: item['amountCents'] as number,
     }));
 
+  const totalCents =
+    typeof raw['totalCents'] === 'number'
+      ? raw['totalCents']
+      : raw['subtotalCents'] + raw['taxCents'];
+  const appliedBalanceCents =
+    typeof raw['appliedBalanceCents'] === 'number' ? raw['appliedBalanceCents'] : 0;
+
   return {
     lineItems,
     subtotalCents: raw['subtotalCents'],
     taxCents: raw['taxCents'],
+    totalCents,
+    appliedBalanceCents,
     totalDueTodayCents: raw['totalDueTodayCents'],
     renewsAt: typeof raw['renewsAt'] === 'string' ? raw['renewsAt'] : null,
   };
