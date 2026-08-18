@@ -257,6 +257,12 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         items: [{ id: stripeItem.id, price: newPriceId, quantity: requestedSeats }],
         proration_behavior: 'always_invoice',
         proration_date: prorationDate,
+        // Stated explicitly, and it must stay equal to the preview's anchor.
+        // The preview passed 'unchanged' while this call passed nothing at all,
+        // so the two agreed only because Stripe's default happens to match — the
+        // same silent-drift shape as the amount_due bug, where the number quoted
+        // and the number charged came from different rules.
+        billing_cycle_anchor: 'unchanged',
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
         metadata: {
