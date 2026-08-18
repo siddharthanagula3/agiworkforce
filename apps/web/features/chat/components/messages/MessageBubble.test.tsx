@@ -264,7 +264,7 @@ describe('MessageBubble', () => {
       expect(screen.getByText('finished')).toBeInTheDocument();
     });
 
-    it('renders compact citation markers directly with assistant prose', () => {
+    it('does not repeat sources under the prose that the search tool box already lists', () => {
       render(
         <MessageBubble
           message={makeMessage({
@@ -283,10 +283,9 @@ describe('MessageBubble', () => {
         />,
       );
 
-      const citation = screen.getByRole('link', { name: 'Source 1: Primary source' });
-      expect(citation).toHaveAttribute('href', 'https://example.com/research');
-      expect(citation).toHaveAttribute('target', '_blank');
-      expect(citation).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(screen.getByText('A sourced answer.')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Source 1: Primary source' })).toBeNull();
+      expect(screen.queryByRole('link', { name: /https:\/\/example\.com\/research/ })).toBeNull();
     });
 
     it('uses the image provider progress card without a duplicate Thinking indicator', () => {

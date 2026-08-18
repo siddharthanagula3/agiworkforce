@@ -100,7 +100,6 @@ import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { formatBytes } from '@shared/utils/format';
 import { ComparisonResponse } from './ComparisonResponse';
-import { InlineSourceTags, type Citation } from './InlineSourceTags';
 import type { InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { useComparisonStore } from '../../stores/comparison-store';
@@ -1120,16 +1119,6 @@ const MessageBubbleComponent = function MessageBubble({
     // URL are dropped here rather than rendered as dead links.
     return { searchSources: dedupeResearchSources(collected), searchQuery: query };
   }, [isUser, message.metadata?.searchResults, message.metadata?.citations]);
-  const inlineCitations = useMemo<Citation[]>(
-    () =>
-      searchSources.map((source, index) => ({
-        index: source.citationIndex ?? index + 1,
-        url: source.url,
-        title: source.title,
-        snippet: source.snippet,
-      })),
-    [searchSources],
-  );
 
   // Mirror this message's web-search sources into the right-hand Sources panel
   // (research-panel store) so the "Sources" view showcases them, not just the
@@ -1424,10 +1413,6 @@ const MessageBubbleComponent = function MessageBubble({
               })()
             )}
           </div>
-          {!isUser && inlineCitations.length > 0 && (
-            <InlineSourceTags citations={inlineCitations} />
-          )}
-
           {/* Interactive cards sit AFTER the prose that motivated them and
               before the artifact chip, matching where the model emitted them.
               A card that fails to render its kind still renders its authored
