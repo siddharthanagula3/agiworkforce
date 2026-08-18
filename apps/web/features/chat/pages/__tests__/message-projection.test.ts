@@ -126,6 +126,37 @@ describe('WebChatPage account identity', () => {
     });
   });
 
+  it('does not call an unknown tier Free once the policy reports ready', () => {
+    // The live regression on 2026-08-17: Basic and Max 15x accounts rendered
+    // "Free plan" with an Upgrade button. billingPolicyReady was true while the
+    // subscription was still null, and the Free fallback filled the gap. The
+    // button then started Stripe CHECKOUT rather than the in-app upgrade, and
+    // the server refused it because a real subscription already existed.
+    expect(
+      resolveChatAccountDisplay(
+        { id: 'user-1', name: 'Dasardhi', email: 'dasardhi@example.com' },
+        null,
+        true,
+      ),
+    ).toEqual({
+      displayName: 'Dasardhi',
+      userInitial: 'D',
+      tierLabel: null,
+      showFreeUpgrade: false,
+      isLoading: false,
+    });
+  });
+
+  it('still offers the upgrade nudge when the server actually reports free', () => {
+    expect(
+      resolveChatAccountDisplay(
+        { id: 'user-2', name: 'Demo', email: 'demo@example.com' },
+        'free',
+        true,
+      ),
+    ).toMatchObject({ showFreeUpgrade: true });
+  });
+
   it('shows a neutral loading state when neither identity nor policy is ready', () => {
     expect(resolveChatAccountDisplay(null, null, false)).toEqual({
       displayName: 'Loading account',

@@ -357,12 +357,29 @@ export function resolveChatAccountDisplay(
   }
 
   const settledDisplayName = displayName || 'User';
-  const tier = subscriptionTier ?? 'free';
+
+  // An absent tier is NOT Free. `user` resolves from Clerk the moment the
+  // session hydrates (see resolveChatAccountUser), but `subscription` has no
+  // such fallback, so this ran with a real name beside an unknown plan and
+  // filled the gap with 'free'. A Basic subscriber was then shown "Free plan"
+  // with an Upgrade button that starts Stripe CHECKOUT — which the server
+  // refuses, correctly, because a second subscription alongside the existing
+  // one is a double charge. Render no tier until one is actually known.
+  if (subscriptionTier == null) {
+    return {
+      displayName: settledDisplayName,
+      userInitial: accountInitial(settledDisplayName),
+      tierLabel: null,
+      showFreeUpgrade: false,
+      isLoading: false,
+    };
+  }
+
   return {
     displayName: settledDisplayName,
     userInitial: accountInitial(settledDisplayName),
-    tierLabel: getBillingPlanPricing(tier).label,
-    showFreeUpgrade: tier === 'free',
+    tierLabel: getBillingPlanPricing(subscriptionTier).label,
+    showFreeUpgrade: subscriptionTier === 'free',
     isLoading: false,
   };
 }
@@ -4199,12 +4216,18 @@ export default function WebChatPage() {
    * saw Free marked "Your current plan" beside an "Upgrade to Basic — $7/month"
    * button — a downgrade presented as an upgrade.
    *
-   * `billingPolicyReady` already encodes "do we actually know the plan", so the
-   * Free fallback is only applied once the answer is trustworthy. Until then the
-   * tier is undefined and the dialog withholds the current-plan claim rather
-   * than guessing.
+   * There is no Free fallback at all, because there is nothing to fall back
+   * from: when /api/me succeeds the store always writes a subscription, and a
+   * genuinely free account carries tier 'free' from the server. So a null
+   * subscription never means "free" — it means "not known yet", and gating that
+   * on `billingPolicyReady` was not enough, since that returns true whenever
+   * /api/me settled without an error even though it leaves `subscription` null
+   * on the paths that do not populate it. Observed again on 2026-08-17: Basic
+   * and Max 15x accounts both rendered "Free plan" with an Upgrade button that
+   * starts Stripe checkout, which the server then refused with "Use the in-app
+   * upgrade flow" because a real subscription existed.
    */
-  const currentTier = subscription?.tier ?? (billingPolicyReady ? 'free' : undefined);
+  const currentTier = subscription?.tier;
   const {
     displayName,
     userInitial,
