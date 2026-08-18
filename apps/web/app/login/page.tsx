@@ -2,7 +2,6 @@ import { SignIn } from '@clerk/nextjs';
 import { AuthShell } from '@/features/marketing/components/AuthShell';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 import { agiClerkAppearance } from '../auth/clerkAppearance';
-import { TermsGate } from '../signup/TermsGate';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -34,15 +33,26 @@ export default async function LoginPage({
         'Your route is visible before work leaves a device',
       ]}
     >
-      <TermsGate blockedMessage="Accept the terms above to sign in to your account.">
-        <SignIn
-          routing="hash"
-          signUpUrl={signUpUrl}
-          forceRedirectUrl={loginCompleteUrl}
-          signUpForceRedirectUrl={signUpCompleteUrl}
-          appearance={agiClerkAppearance}
-        />
-      </TermsGate>
+      {/*
+        No clickwrap here: terms are accepted at SIGNUP (founder decision,
+        2026-08-17). Sign-in cannot know who is signing in, so gating it asked
+        returning users to re-accept terms their account had already recorded.
+        The guarantee still holds on every path that can create an account or
+        change what was agreed:
+          - /signup mounts the pre-auth clickwrap before Clerk.
+          - signUpForceRedirectUrl sends an account created from THIS card to
+            /signup/complete, which gates and records.
+          - forceRedirectUrl sends every successful sign-in to /login/complete,
+            which checks hasAcceptedCurrentTerms(userId) server-side and prompts
+            only when the recorded version is missing or stale.
+      */}
+      <SignIn
+        routing="hash"
+        signUpUrl={signUpUrl}
+        forceRedirectUrl={loginCompleteUrl}
+        signUpForceRedirectUrl={signUpCompleteUrl}
+        appearance={agiClerkAppearance}
+      />
     </AuthShell>
   );
 }
