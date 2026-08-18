@@ -91,6 +91,40 @@ function makeJwt(payload: Record<string, unknown>): string {
   return `${b64u('{"alg":"HS256","typ":"JWT"}')}.${b64u(JSON.stringify(payload))}.sig`;
 }
 
+describe('NeonDatabaseAdapter pool configuration', () => {
+  it('always bounds connection acquisition so a dead socket cannot hang forever', async () => {
+    state.poolQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+    });
+    await adapter.query('select 1');
+    expect(state.lastPoolConfig).toMatchObject({
+      connectionTimeoutMillis: expect.any(Number),
+    });
+    expect(
+      (state.lastPoolConfig as { connectionTimeoutMillis: number }).connectionTimeoutMillis,
+    ).toBeGreaterThan(0);
+  });
+
+  it('forwards every declared timeout and application name to the driver', async () => {
+    state.poolQueryHandler = async () => ({ rows: [], rowCount: 0 });
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      connectionTimeoutMs: 1_234,
+      statementTimeoutMs: 5_678,
+      queryTimeoutMs: 9_012,
+      applicationName: 'agi-test',
+    });
+    await adapter.query('select 1');
+    expect(state.lastPoolConfig).toMatchObject({
+      connectionTimeoutMillis: 1_234,
+      statement_timeout: 5_678,
+      query_timeout: 9_012,
+      application_name: 'agi-test',
+    });
+  });
+});
+
 describe('NeonDatabaseAdapter.query', () => {
   it('passes sql + params to pool.query and returns rows', async () => {
     state.poolQueryHandler = async () => ({ rows: [{ id: 'u1' }], rowCount: 1 });
@@ -202,7 +236,6 @@ describe('NeonDatabaseAdapter.transaction', () => {
 });
 
 describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATALAYER-JWT)', () => {
-
   it('THROWS by default — refuses an attacker-influenced JWT when no opt-in flag is set', () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
