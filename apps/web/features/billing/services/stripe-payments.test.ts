@@ -76,11 +76,39 @@ describe('stripe payments', () => {
       }),
     } as Response);
 
+    // charge is null when the server sends no breakdown, so the dialog falls
+    // back to stating the total on its own rather than rendering an empty receipt.
     await expect(previewUpgrade({ plan: 'max_15x' })).resolves.toEqual({
       amountDueNowCents: 10_042,
       currency: 'usd',
       previewToken: 'signed-preview-token',
+      charge: null,
     });
+  });
+
+  it('passes through the itemized charge so the dialog can show a receipt', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        amountDueNowCents: 11_819,
+        currency: 'usd',
+        previewToken: 'signed-preview-token',
+        charge: {
+          lineItems: [
+            { description: 'Max plan - 20x', amountCents: 20_000 },
+            { description: 'Unused time on Max plan - 5x', amountCents: -8_913 },
+          ],
+          subtotalCents: 11_087,
+          taxCents: 732,
+          totalDueTodayCents: 11_819,
+          renewsAt: '2026-03-26T00:00:00.000Z',
+        },
+      }),
+    } as Response);
+
+    const result = await previewUpgrade({ plan: 'max_15x' });
+    expect(result.charge?.totalDueTodayCents).toBe(11_819);
+    expect(result.charge?.lineItems).toHaveLength(2);
   });
 
   it('surfaces a typed checkout fallback when the stored subscription is stale', async () => {
