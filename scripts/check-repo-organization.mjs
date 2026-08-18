@@ -62,6 +62,9 @@ const allowedRootFiles = new Set([
   'tsconfig.base.json',
   'turbo.json',
   'vercel.json',
+  // Must live at the root: .vercelignore excludes /scripts, so an
+  // ignoreCommand pointing into it can never find its own script.
+  'vercel-ignore-build.sh',
 ]);
 
 const knownRootDebt = new Set([
