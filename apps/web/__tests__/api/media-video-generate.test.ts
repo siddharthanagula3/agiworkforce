@@ -1044,6 +1044,25 @@ describe('POST /api/media/video/generate', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
+    it('scopes admission to job setup rather than the whole invocation budget', async () => {
+      const { maxDuration } = await import('@/app/api/media/video/generate/route');
+      const { VIDEO_GENERATION_ADMISSION_SECONDS } =
+        await import('@/lib/workflows/video-generation-timing');
+
+      await POST(
+        makeAuthedRequest({
+          prompt: 'a sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+        }),
+      );
+
+      expect(durableJobMocks.admit).toHaveBeenCalledWith(
+        expect.objectContaining({ admissionSeconds: VIDEO_GENERATION_ADMISSION_SECONDS }),
+      );
+      expect(VIDEO_GENERATION_ADMISSION_SECONDS).toBeLessThan(maxDuration);
+    });
+
     it('does not reserve credits when a data/account erasure fence owns admission', async () => {
       durableJobMocks.admit.mockResolvedValueOnce(false);
 
