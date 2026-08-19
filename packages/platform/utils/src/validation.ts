@@ -352,7 +352,7 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
     /<\/script\s*\/?>/i, // Match closing script tag with optional space/slash
     /javascript:/i,
     /^on\w+\s*=/i,
-    /[^\w-]on\w+\s*=/i,
+    /[^\w-]on\w{1,32}\s*=/i,
     /<iframe/i,
     /<object/i,
     /<embed/i,
