@@ -191,26 +191,26 @@ export function UpgradeConfirmDialog({
         {amountDue?.charge ? (
           <section
             aria-label="Order details"
-            className="rounded-lg border border-[color:var(--border,rgba(0,0,0,0.12))] p-4 text-sm"
+            className="rounded-lg border border-border p-4 text-sm"
           >
             <h3 className="mb-3 font-medium">Order details</h3>
             <dl className="flex flex-col gap-2">
               {amountDue.charge.lineItems.map((item) => (
                 <div key={item.description} className="flex justify-between gap-4">
-                  <dt className="text-[color:var(--text-2,#52525b)]">{item.description}</dt>
+                  <dt className="text-[color:var(--text-2)]">{item.description}</dt>
                   <dd className="tabular-nums">
                     {formatMoney(item.amountCents, amountDue.currency)}
                   </dd>
                 </div>
               ))}
               <div className="mt-1 flex justify-between gap-4 border-t pt-2">
-                <dt className="text-[color:var(--text-2,#52525b)]">Subtotal</dt>
+                <dt className="text-[color:var(--text-2)]">Subtotal</dt>
                 <dd className="tabular-nums">
                   {formatMoney(amountDue.charge.subtotalCents, amountDue.currency)}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-[color:var(--text-2,#52525b)]">Tax</dt>
+                <dt className="text-[color:var(--text-2)]">Tax</dt>
                 <dd className="tabular-nums">
                   {formatMoney(amountDue.charge.taxCents, amountDue.currency)}
                 </dd>
@@ -223,13 +223,13 @@ export function UpgradeConfirmDialog({
               {amountDue.charge.appliedBalanceCents !== 0 ? (
                 <>
                   <div className="mt-1 flex justify-between gap-4 border-t pt-2">
-                    <dt className="text-[color:var(--text-2,#52525b)]">Total</dt>
+                    <dt className="text-[color:var(--text-2)]">Total</dt>
                     <dd className="tabular-nums">
                       {formatMoney(amountDue.charge.totalCents, amountDue.currency)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <dt className="text-[color:var(--text-2,#52525b)]">Applied balance</dt>
+                    <dt className="text-[color:var(--text-2)]">Applied balance</dt>
                     <dd className="tabular-nums">
                       {formatMoney(amountDue.charge.appliedBalanceCents, amountDue.currency)}
                     </dd>
@@ -248,7 +248,7 @@ export function UpgradeConfirmDialog({
               user is most likely to be surprised by later, so it must not be
               conditional on Stripe having returned a period end.
             */}
-            <p className="mt-3 text-xs text-[color:var(--text-3,#71717a)]">
+            <p className="mt-3 text-xs text-[color:var(--text-3)]">
               {amountDue.charge.renewsAt
                 ? `Renews ${formatRenewalDate(amountDue.charge.renewsAt)}, then ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`
                 : `Renewal date stays the same, at ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`}
@@ -256,7 +256,7 @@ export function UpgradeConfirmDialog({
           </section>
         ) : null}
 
-        {error ? <p className="text-sm text-[color:var(--state-danger,#ef4444)]">{error}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={confirming}>
