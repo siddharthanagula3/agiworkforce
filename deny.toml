@@ -25,10 +25,22 @@ feature-depth = 1
 # cargo-deny 0.20's advisories check has no separate unmaintained/vulnerability
 # lint-level knobs (removed from the config-v2 schema) — RUSTSEC vulnerability,
 # unmaintained, unsound, and yanked advisories are denied by default. This
-# section only needs an `ignore` list, which is empty: no advisory has been
-# triaged as an accepted risk yet.
+# section only needs an `ignore` list.
+#
+# RUSTSEC-2026-0258 (h2 unbounded empty DATA frames) is the one accepted risk.
+# The 0.4 line is patched — Cargo.lock holds h2 0.4.16, at or above the fixed
+# version, so this ID cannot match it. What remains is h2 0.3.27, reachable
+# only through hyper 0.14, which async-stripe 0.31 and oauth2 4.4 both pin.
+# Neither can move: async-stripe has published nothing stable past 0.31 (only
+# 1.0.0-rc.*, a full API rewrite of billing code), and oauth2 5.x is a tracked
+# call-site port (see apps/desktop/src-tauri/Cargo.toml). Both crates use h2
+# strictly as an HTTP client against Stripe and the identity provider, so
+# exploiting this needs one of those endpoints to be hostile, and the advisory
+# rates it Low. Re-check when async-stripe 1.0 ships stable.
 [advisories]
-ignore = []
+ignore = [
+    { id = "RUSTSEC-2026-0258", reason = "h2 0.3.27 via hyper 0.14 (async-stripe 0.31 + oauth2 4.4); no 0.3.x patch exists and both parents are pinned upstream. Client-side only, Low severity. Revisit on async-stripe 1.0 stable." },
+]
 
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
 [licenses]
