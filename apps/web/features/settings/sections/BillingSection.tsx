@@ -535,7 +535,7 @@ export function BillingSection() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
-        <p role="alert" style={{ margin: 0, color: 'var(--danger, #b3261e)', fontSize: 14 }}>
+        <p role="alert" style={{ margin: 0, color: 'var(--settings-destructive)', fontSize: 14 }}>
           Your session expired before we could read your plan. Your subscription has not changed
           &mdash; sign in again to see it.
         </p>
@@ -554,7 +554,7 @@ export function BillingSection() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
-        <p role="alert" style={{ margin: 0, color: 'var(--danger, #b3261e)', fontSize: 14 }}>
+        <p role="alert" style={{ margin: 0, color: 'var(--settings-destructive)', fontSize: 14 }}>
           We couldn&rsquo;t load your billing account. Your plan has not been changed.
         </p>
         <button
@@ -579,7 +579,7 @@ export function BillingSection() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
-        <p role="alert" style={{ margin: 0, color: 'var(--danger, #b3261e)', fontSize: 14 }}>
+        <p role="alert" style={{ margin: 0, color: 'var(--settings-destructive)', fontSize: 14 }}>
           We couldn&rsquo;t read your plan just now. Your subscription has not changed.
         </p>
         <button
@@ -806,7 +806,7 @@ export function BillingSection() {
             style={{
               padding: '0 20px 16px',
               fontSize: 13,
-              color: 'var(--danger, #b3261e)',
+              color: 'var(--settings-destructive)',
             }}
           >
             {portalError}
@@ -894,7 +894,7 @@ export function BillingSection() {
           {paymentMethods.status === 'error' && (
             <div
               role="alert"
-              style={{ padding: '0 20px 16px', color: 'var(--danger, #b3261e)', fontSize: 13 }}
+              style={{ padding: '0 20px 16px', color: 'var(--settings-destructive)', fontSize: 13 }}
             >
               {paymentMethods.message}{' '}
               <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
@@ -1007,7 +1007,10 @@ export function BillingSection() {
               </button>
             </div>
             {topUpError && (
-              <p role="alert" style={{ margin: 0, fontSize: 13, color: 'var(--danger, #b3261e)' }}>
+              <p
+                role="alert"
+                style={{ margin: 0, fontSize: 13, color: 'var(--settings-destructive)' }}
+              >
                 {topUpError}
               </p>
             )}
@@ -1046,7 +1049,11 @@ export function BillingSection() {
                 {overageError && (
                   <p
                     role="alert"
-                    style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--danger, #b3261e)' }}
+                    style={{
+                      margin: '6px 0 0',
+                      fontSize: 12,
+                      color: 'var(--settings-destructive)',
+                    }}
                   >
                     {overageError}
                   </p>
@@ -1161,7 +1168,7 @@ export function BillingSection() {
         ) : creditHistory.status === 'error' ? (
           <div
             role="alert"
-            style={{ padding: '16px 20px', color: 'var(--danger, #b3261e)', fontSize: 13 }}
+            style={{ padding: '16px 20px', color: 'var(--settings-destructive)', fontSize: 13 }}
           >
             {creditHistory.message}{' '}
             <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
@@ -1279,7 +1286,7 @@ export function BillingSection() {
         ) : invoices.status === 'error' ? (
           <div
             role="alert"
-            style={{ padding: '16px 20px', color: 'var(--danger, #b3261e)', fontSize: 13 }}
+            style={{ padding: '16px 20px', color: 'var(--settings-destructive)', fontSize: 13 }}
           >
             {invoices.message}{' '}
             <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
