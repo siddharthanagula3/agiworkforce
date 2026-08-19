@@ -1,4 +1,3 @@
-
 import { test, expect } from '@playwright/test';
 
 async function assertNoSignedOutMeCalls(
@@ -44,7 +43,12 @@ test.describe('authenticated routes stay quiet when signed out', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveURL(/\/login(?:\?|$)/);
-    await expect(page.getByRole('heading', { name: 'Sign in to AGI' })).toBeVisible();
+    // AuthShell's own heading, not Clerk's. "Sign in to AGI" is rendered by the
+    // <SignIn> card once Clerk's UI loads from its frontend API, so asserting it
+    // made this test a probe of a third party — and it never held on a runner
+    // with no reachable Clerk instance. What is being checked here is that the
+    // redirect landed on our login page, which this proves without leaving it.
+    await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
     expect(unauthorized).toEqual([]);
   });
 });
