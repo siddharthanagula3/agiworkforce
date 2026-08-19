@@ -64,6 +64,12 @@ test('Desktop cloud sign-in matches its reviewed pixel baseline', async ({ page 
       path: diffPath,
       contentType: 'image/png',
     });
+    // The reviewed baseline can only be refreshed from a render produced by the
+    // environment the gate runs in, so ship the exact bytes with the report.
+    await testInfo.attach('visual-actual', {
+      path: actualPath,
+      contentType: 'image/png',
+    });
   }
 
   expect(comparison.withinBudget, describeComparison(comparison)).toBe(true);
