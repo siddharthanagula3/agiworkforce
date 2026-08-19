@@ -43,6 +43,19 @@ export async function auditPage(browser, pageDefinition, colorScheme) {
   const page = await context.newPage();
   const url = new URL(pageDefinition.path, `${baseUrl}/`).toString();
 
+  // A navigation that dies mid-redirect reports only the URL it was asked for,
+  // so "ERR_NAME_NOT_RESOLVED at <our own origin>" is what a bounce to an
+  // unreachable third party looks like. Record where it was actually sent.
+  const navigations = [];
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations.push(frame.url());
+  });
+  page.on('request', (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      navigations.push(request.url());
+    }
+  });
+
   try {
     console.log(`Auditing ${pageDefinition.name} (${colorScheme}): ${url}`);
     const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
@@ -72,6 +85,13 @@ export async function auditPage(browser, pageDefinition, colorScheme) {
       inapplicable: results.inapplicable,
       summary: summarize(results.violations, results.passes),
     };
+  } catch (error) {
+    const chain = navigations.filter((entry, index) => entry !== navigations[index - 1]);
+    if (chain.length > 1) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`${message} (navigation chain: ${chain.join(' -> ')})`);
+    }
+    throw error;
   } finally {
     await context.close();
   }

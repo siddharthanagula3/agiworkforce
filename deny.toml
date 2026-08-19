@@ -25,11 +25,28 @@ feature-depth = 1
 # cargo-deny 0.20's advisories check has no separate unmaintained/vulnerability
 # lint-level knobs (removed from the config-v2 schema) — RUSTSEC vulnerability,
 # unmaintained, unsound, and yanked advisories are denied by default. This
-# section only needs an `ignore` list. It stays empty: the advisories step is
-# registered non-blocking in ci.yml, so accepted warning-policy debt is reported
+# section only needs an `ignore` list, and it holds exactly one reviewed
+# exception. Anything else belongs in the non-blocking advisories step, which is
+# registered continue-on-error in ci.yml so warning-policy debt stays reported
 # rather than silenced here.
+#
+# RUSTSEC-2026-0258 (h2 unbounded empty DATA frames) has no fix on the line we
+# are stuck on. Cargo.lock holds h2 0.4.16 — at the patched version, so the ID
+# cannot match it. What remains is h2 0.3.27, and the advisory names no 0.3.x
+# fix: none is published. It arrives only through hyper 0.14, which async-stripe
+# 0.31 and oauth2 4.4 both pin, and neither can move — async-stripe has shipped
+# nothing stable past 0.31 (only 1.0.0-rc.*, an API rewrite of ~900 lines of
+# billing code in sys/billing/stripe_client.rs) and oauth2 5.x is a tracked
+# call-site port (see apps/desktop/src-tauri/Cargo.toml). Both use h2 strictly as
+# an HTTP client against Stripe and the identity provider, so reaching the flaw
+# needs one of those endpoints to be hostile, and the advisory rates it Low.
+# Re-check when async-stripe 1.0 ships stable.
+#
+# scripts/check-security-gates.mjs reads every quoted string in this list as an
+# advisory id, so each entry stays a bare id registered in
+# .github/security-gate-policy.json, and the reasoning stays in this comment.
 [advisories]
-ignore = []
+ignore = ["RUSTSEC-2026-0258"]
 
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
 [licenses]
