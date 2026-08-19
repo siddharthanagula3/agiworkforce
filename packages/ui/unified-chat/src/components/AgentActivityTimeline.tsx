@@ -113,14 +113,19 @@ function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
 
 const GENERIC_CONNECTOR_LABELS = new Set(['connector', 'mcp', 'tool', 'action']);
 
+const SUMMARY_VERBS = new Set(['using', 'review']);
+const SUMMARY_NOUNS = new Set(['connector', 'tool', 'action']);
+
 // A custom connector's qualified name is an opaque `mcp__custom-<id>__<tool>`, so the
 // user's chosen display name only reaches this component inside the server-built summary
 // ("Using <Name> connector" / "Review <Name> action" from canonicalToolSummary).
 function summaryConnectorInitial(summary: string): string | undefined {
-  const label = /^(?:using|review)\s+(.+?)\s+(?:connector|tool|action)$/i
-    .exec(summary.trim())?.[1]
-    ?.trim();
-  if (!label || GENERIC_CONNECTOR_LABELS.has(label.toLowerCase())) return undefined;
+  const words = summary.trim().split(/\s+/);
+  if (words.length < 3) return undefined;
+  if (!SUMMARY_VERBS.has(words[0]!.toLowerCase())) return undefined;
+  if (!SUMMARY_NOUNS.has(words[words.length - 1]!.toLowerCase())) return undefined;
+  const label = words.slice(1, -1).join(' ');
+  if (GENERIC_CONNECTOR_LABELS.has(label.toLowerCase())) return undefined;
   return label.match(/[\p{L}\p{N}]/u)?.[0]?.toUpperCase();
 }
 

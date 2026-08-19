@@ -54,9 +54,9 @@ export const ARTIFACT_CSP_CONTENT = buildArtifactCspContent();
 export const ARTIFACT_RENDERER_CSP_CONTENT = artifactCspDirectives(true, []);
 
 export function extractMetaCspContent(html: string): string | null {
-  const meta = html.match(
-    /<meta\b[^>]*http-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>/i,
-  )?.[0];
+  const meta = html
+    .match(/<meta\b[^>]*>/gi)
+    ?.find((tag) => /http-equiv\s*=\s*["']Content-Security-Policy["']/i.test(tag));
   const content = meta?.match(/content\s*=\s*"([^"]*)"/i)?.[1];
   if (content === undefined) return null;
   return content.replace(/\s+/g, ' ').trim();
