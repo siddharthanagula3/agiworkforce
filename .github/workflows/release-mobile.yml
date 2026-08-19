@@ -106,7 +106,8 @@ jobs:
   device-matrix-e2e:
     name: Device matrix E2E (${{ matrix.device }})
     needs: validate
-    runs-on: macos-15
+    # Same Xcode floor as CI's Mobile E2E: clerk-ios needs Swift tools 6.2.
+    runs-on: macos-26
     timeout-minutes: 90
     strategy:
       fail-fast: false

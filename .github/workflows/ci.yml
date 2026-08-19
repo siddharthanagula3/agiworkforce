@@ -634,6 +634,12 @@ jobs:
       # Keep deterministic-mock E2E independent of repository secrets.
       NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       CLERK_SECRET_KEY: test-clerk-secret-key
+      # Without this the sign-in card renders its "in-app sign-in is not
+      # configured" fallback instead of the real form, and the reviewed pixel
+      # baseline can never match. Only the pk_test_ prefix is read here
+      # (getClerkPublishableKey), and the transport is mocked, so a placeholder
+      # is enough and no secret belongs in this job.
+      VITE_CLERK_PUBLISHABLE_KEY: pk_test_mock
     steps:
       - uses: actions/checkout@v6
 
@@ -801,7 +807,10 @@ jobs:
 
   mobile-e2e:
     name: Mobile E2E (iOS simulator)
-    runs-on: macos-15
+    # macos-15 pins Xcode 16.4, whose Swift tools version cannot read
+    # clerk-ios >= 1.2.0 (tools 6.2), so SPM resolution fails before the app
+    # ever builds. macos-26 ships the Xcode 26 line that understands it.
+    runs-on: macos-26
     needs: scope
     if: needs.scope.outputs.mobile_changed == 'true'
     timeout-minutes: 75
@@ -888,6 +897,13 @@ jobs:
       NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       CLERK_SECRET_KEY: test-clerk-secret-key
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_mock
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      # `next start` sets NODE_ENV=production, so instrumentation.ts treats a
+      # missing billing key as a fatal boot error. These flows are signed-out
+      # a11y and public-auth checks that never reach Stripe, and putting real
+      # or realistic keys on a public CI runner would be worse than booting
+      # degraded — so take the escape hatch the validator documents.
+      AGI_ALLOW_INVALID_ENV: '1'
     steps:
       - uses: actions/checkout@v6
 
