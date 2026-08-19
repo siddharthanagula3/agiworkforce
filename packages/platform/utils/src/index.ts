@@ -179,3 +179,7 @@ export {
 export { formatThinkingDuration, deriveReasoningPhrase } from './reasoning';
 
 export { normalizeDisplayName, resolveAccountDisplayName, accountInitial } from './displayName';
+
+// pathContainment stays off this barrel deliberately: it imports `node:path`,
+// which Metro cannot resolve, so re-exporting it here makes the mobile bundle
+// unbuildable. Node-only consumers import '@agiworkforce/utils/path-containment'.

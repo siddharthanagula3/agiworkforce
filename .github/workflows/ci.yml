@@ -232,7 +232,7 @@ jobs:
             echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
             echo "NEON_DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
             echo "CLERK_SECRET_KEY=test-clerk-secret-key"
-            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_mock"
+            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA"
           } >> "$GITHUB_ENV"
 
       - name: Apply and verify canonical Postgres migrations
@@ -287,7 +287,7 @@ jobs:
             echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
             echo "NEON_DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
             echo "CLERK_SECRET_KEY=test-clerk-secret-key"
-            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_mock"
+            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA"
           } >> "$GITHUB_ENV"
 
       - name: Prepare the test database
@@ -641,10 +641,12 @@ jobs:
       CLERK_SECRET_KEY: test-clerk-secret-key
       # Without this the sign-in card renders its "in-app sign-in is not
       # configured" fallback instead of the real form, and the reviewed pixel
-      # baseline can never match. Only the pk_test_ prefix is read here
-      # (getClerkPublishableKey), and the transport is mocked, so a placeholder
-      # is enough and no secret belongs in this job.
-      VITE_CLERK_PUBLISHABLE_KEY: pk_test_mock
+      # baseline can never match. Clerk parses the key rather than just reading
+      # its prefix — it must base64-decode to a `<host>$` string or the SDK
+      # throws "Publishable key not valid" — so this is the fake
+      # clerk.example.test key scripts/check-clerk-bot-protection.test.mjs
+      # builds, not a secret.
+      VITE_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA
     steps:
       - uses: actions/checkout@v6
 
@@ -918,7 +920,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       CLERK_SECRET_KEY: test-clerk-secret-key
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_mock
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       # `next start` sets NODE_ENV=production, so instrumentation.ts treats a
       # missing billing key as a fatal boot error. These flows are signed-out
