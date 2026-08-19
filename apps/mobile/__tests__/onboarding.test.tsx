@@ -299,7 +299,7 @@ describe('Onboarding', () => {
         fireEvent.press(getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
-      expect(getByTestId('disclosure-privacy-notice')).toBeTruthy();
+      expect(getByTestId('disclosure-privacy-card')).toBeTruthy();
       expect(getByText(/the messages you send/)).toBeTruthy();
       expect(getByText(/device identifier/)).toBeTruthy();
       expect(getByText(/your chats stay on this device/)).toBeTruthy();
@@ -320,7 +320,7 @@ describe('Onboarding', () => {
       expect(mockOpenInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/privacy');
 
       await act(async () => {
-        fireEvent.press(getByTestId('disclosure-india-notice-link'));
+        fireEvent.press(getByTestId('disclosure-dpdp-notice-link'));
         await Promise.resolve();
       });
       expect(mockOpenInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/privacy/india');

@@ -23,6 +23,7 @@ jest.mock('../services/api', () => {
   MockApiPaywallError.prototype = Object.create(Error.prototype);
   return {
     api: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
+    apiFetch: jest.fn(),
     ApiPaywallError: MockApiPaywallError,
   };
 });
@@ -69,7 +70,7 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-import { api } from '../services/api';
+import { api, apiFetch } from '../services/api';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
 import { useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
@@ -95,6 +96,17 @@ import {
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
+const mockApiFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
+
+function jsonResponse(body: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'Content-Type': 'application/json' }),
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
+}
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000001';
 const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
@@ -253,23 +265,23 @@ describe('cloud send → sync write-through', () => {
         model: CLOUD_MODEL,
       },
     ]);
-    mockPost.mockImplementationOnce((async (
-      _path: string,
-      body: { id: string; title: string },
-    ) => ({
-      conversation: {
-        id: body.id,
-        title: body.title,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        project_id: null,
-        pinned: false,
-        starred: false,
-        archived: false,
-        is_temporary: false,
-        model: CLOUD_MODEL,
-      },
-    })) as never);
+    mockApiFetch.mockImplementationOnce((async (_input: RequestInfo | URL, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { id: string; title: string };
+      return jsonResponse({
+        conversation: {
+          id: body.id,
+          title: body.title,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          project_id: null,
+          pinned: false,
+          starred: false,
+          archived: false,
+          is_temporary: false,
+          model: CLOUD_MODEL,
+        },
+      });
+    }) as never);
 
     const forkId = await useChatStore.getState().forkConversation(CONV_ID);
 

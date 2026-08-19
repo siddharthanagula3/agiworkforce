@@ -1,4 +1,3 @@
-
 import { Alert } from 'react-native';
 import { act, waitFor } from '@testing-library/react-native';
 
@@ -231,6 +230,7 @@ function resetStore() {
     billingTier: 'free',
     billingStatus: 'none',
     grantedCapabilities: ['canUseWebSearch', 'canUseConnectors'],
+    capabilityDocument: null,
     capabilityHandshakeReceived: true,
     capabilityHandshakeVersion: 'test-mobile-capabilities',
     codeExecutionAvailable: false,

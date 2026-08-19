@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,7 +33,6 @@ const DEBOUNCE_SITES = [
   'apps/desktop/src/features/chat/CommandPalette.tsx',
   'apps/desktop/src/features/skill-marketplace/SkillSearchBar.tsx',
   'apps/desktop/src/features/code/FileTree.tsx',
-  'apps/desktop/src/features/memory/MemorySearch.tsx',
   'apps/desktop/src/features/mcp/MCPBundleBrowser.tsx',
   'apps/desktop/src/stores/chat/chatStore.ts',
   'apps/mobile/stores/chat/chatViewStore.ts',
@@ -41,7 +40,15 @@ const DEBOUNCE_SITES = [
 ] as const;
 
 function readSurface(relativePath: string): string {
-  return readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
+  const absolute = path.join(REPO_ROOT, relativePath);
+  if (!existsSync(absolute)) {
+    throw new Error(
+      `${relativePath} no longer exists. A surface listed in this contract was moved or ` +
+        'deleted — update SCHEDULE_PAGINATION_SITES/DEBOUNCE_SITES instead of leaving the ' +
+        'list pointing at a missing file.',
+    );
+  }
+  return readFileSync(absolute, 'utf8');
 }
 
 describe('schedules pagination contract', () => {

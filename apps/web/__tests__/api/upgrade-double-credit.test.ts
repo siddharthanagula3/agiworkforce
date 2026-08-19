@@ -168,10 +168,11 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
       expect.objectContaining({ idempotencyKey: expect.any(String) }),
     );
     expect(stripeMocks.updateSubscription.mock.calls[0]?.[1]).toMatchObject({
-      proration_date: 1_700_000_000,
+      billing_cycle_anchor: 'now',
     });
-    expect(stripeMocks.updateSubscription.mock.calls[0]?.[1]).not.toHaveProperty(
-      'billing_cycle_anchor',
+    expect(stripeMocks.updateSubscription.mock.calls[0]?.[1]).not.toHaveProperty('proration_date');
+    expect(stripeMocks.updateSubscription.mock.calls[0]?.[2]?.idempotencyKey).toContain(
+      '1700000000',
     );
     expect(stripeMocks.retrieveCustomer).not.toHaveBeenCalled();
     expect(stripeMocks.updateCustomer).not.toHaveBeenCalled();
