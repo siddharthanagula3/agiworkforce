@@ -1,6 +1,5 @@
-
 import * as vscode from 'vscode';
-import { isContainedIn } from '@agiworkforce/utils';
+import { isContainedIn } from '@agiworkforce/utils/path-containment';
 
 export async function getActiveWorkspaceFolder(): Promise<vscode.WorkspaceFolder | undefined> {
   const folders = vscode.workspace.workspaceFolders;
