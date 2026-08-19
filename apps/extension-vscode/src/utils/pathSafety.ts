@@ -13,7 +13,8 @@
 
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
-import { resolveContained, isSensitiveFile, type ContainmentResult } from '@agiworkforce/utils';
+import { isSensitiveFile } from '@agiworkforce/utils';
+import { resolveContained, type ContainmentResult } from '@agiworkforce/utils/path-containment';
 
 export type SafeResolveResult =
   | { ok: true; uri: vscode.Uri; folder: vscode.WorkspaceFolder; resolvedPath: string }

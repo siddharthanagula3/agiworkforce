@@ -17,12 +17,74 @@
     "./managed-chat-idempotency": "./src/managedChatIdempotency.ts",
     "./managed-media-idempotency": "./src/managedMediaIdempotency.ts",
     "./markdown-source": "./src/markdownSource.ts",
+    "./path-containment": "./src/pathContainment.ts",
     "./privacy-handoff": "./src/privacyHandoff.ts",
     "./reasoning": "./src/reasoning.ts",
     "./retry-policy": "./src/retryPolicy.ts",
     "./signaling": "./src/signaling.ts",
     "./uuidv7": "./src/uuidv7.ts",
     "./voice": "./src/voice.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "async": [
+        "./src/async.ts"
+      ],
+      "circuit-breaker": [
+        "./src/circuitBreaker.ts"
+      ],
+      "composer-paste": [
+        "./src/composerPaste.ts"
+      ],
+      "crypto": [
+        "./src/crypto.ts"
+      ],
+      "display-name": [
+        "./src/displayName.ts"
+      ],
+      "fence": [
+        "./src/fence.ts"
+      ],
+      "format": [
+        "./src/format.ts"
+      ],
+      "interaction-timings": [
+        "./src/interactionTimings.ts"
+      ],
+      "logger": [
+        "./src/logger.ts"
+      ],
+      "managed-chat-idempotency": [
+        "./src/managedChatIdempotency.ts"
+      ],
+      "managed-media-idempotency": [
+        "./src/managedMediaIdempotency.ts"
+      ],
+      "markdown-source": [
+        "./src/markdownSource.ts"
+      ],
+      "path-containment": [
+        "./src/pathContainment.ts"
+      ],
+      "privacy-handoff": [
+        "./src/privacyHandoff.ts"
+      ],
+      "reasoning": [
+        "./src/reasoning.ts"
+      ],
+      "retry-policy": [
+        "./src/retryPolicy.ts"
+      ],
+      "signaling": [
+        "./src/signaling.ts"
+      ],
+      "uuidv7": [
+        "./src/uuidv7.ts"
+      ],
+      "voice": [
+        "./src/voice.ts"
+      ]
+    }
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

@@ -5,14 +5,14 @@
     {
       "id": "js-dependency-audit-critical",
       "job": "security",
-      "step": "Dependency audit (JS) — critical (blocking)",
+      "step": "Dependency audit (JS) \u2014 critical (blocking)",
       "tool": "pnpm audit",
       "blocksAt": "critical"
     },
     {
       "id": "js-dependency-audit-high",
       "job": "security",
-      "step": "Dependency audit (JS) — high (blocking, FIX-043)",
+      "step": "Dependency audit (JS) \u2014 high (blocking, FIX-043)",
       "tool": "pnpm audit",
       "blocksAt": "high"
     },
@@ -26,14 +26,14 @@
     {
       "id": "rust-dependency-policy",
       "job": "rust-desktop-cli",
-      "step": "Dependency policy (Rust) — bans/sources/licenses (blocking)",
+      "step": "Dependency policy (Rust) \u2014 bans/sources/licenses (blocking)",
       "tool": "cargo deny",
       "blocksAt": "any-policy-violation"
     },
     {
       "id": "rust-dependency-vulnerabilities",
       "job": "rust-desktop-cli",
-      "step": "Dependency vulnerabilities (Rust) — blocking",
+      "step": "Dependency vulnerabilities (Rust) \u2014 blocking",
       "tool": "cargo deny",
       "blocksAt": "vulnerability"
     },
@@ -59,7 +59,7 @@
       "id": "rust-advisory-maintenance-classes",
       "kind": "continue-on-error",
       "job": "rust-desktop-cli",
-      "step": "Dependency advisories (Rust) — non-blocking warning-policy debt",
+      "step": "Dependency advisories (Rust) \u2014 non-blocking warning-policy debt",
       "reason": "Unmaintained, unsound, and yanked warnings on transitive crates with no upstream replacement. RUSTSEC vulnerabilities are still blocking in the step above.",
       "owner": "Platform lead",
       "tracking": "RUST-DEPENDENCY-ADVISORIES-01 (docs/agent-context/known-flaws.md)"
@@ -88,15 +88,6 @@
       "reason": "Reviewed non-credential fixtures keyed on (path, format); an entry that stops matching fails the scan as stale.",
       "owner": "Platform lead",
       "tracking": "CRIT-017"
-    },
-    {
-      "id": "cargo-deny-advisory-ignores",
-      "kind": "cargo-deny-advisory-ignore",
-      "path": "deny.toml",
-      "advisories": ["RUSTSEC-2026-0258"],
-      "reason": "RUSTSEC-2026-0258 (h2 unbounded empty DATA frames). The 0.4 line is patched to 0.4.16; h2 0.3.27 has no 0.3.x fix and is reachable only through hyper 0.14, which async-stripe 0.31 and oauth2 4.4 both pin. Both use it strictly as an HTTP client against Stripe and the identity provider, and the advisory rates it Low. Revisit when async-stripe 1.0 ships stable.",
-      "owner": "Platform lead",
-      "tracking": "CRIT-018"
     }
   ]
 }

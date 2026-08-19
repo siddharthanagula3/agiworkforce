@@ -1,4 +1,3 @@
-
 import { device, element, by, waitFor } from 'detox';
 
 jest.setTimeout(540000);
@@ -15,15 +14,10 @@ describe('Onboarding — local setup with cloud invite gate', () => {
     await device.terminateApp();
   });
 
-  it('shows the age gate on first launch and passes it with an adult age', async () => {
-    await waitFor(element(by.id('age-gate-root')))
-      .toBeVisible()
-      .withTimeout(8000);
-    await element(by.id('age-gate-input')).typeText('30');
-    await element(by.id('age-gate-continue-btn')).tap();
-  });
-
-  it('shows the hero screen after the age gate', async () => {
+  // The age gate guards Cloud sign-in rather than first launch — see the
+  // routing effect in app/_layout.tsx. A first run in Local Mode goes straight
+  // to the hero, so there is nothing to pass here.
+  it('shows the hero screen on first launch', async () => {
     await waitFor(element(by.id('onboarding-hero-screen')))
       .toBeVisible()
       .withTimeout(8000);
