@@ -920,7 +920,15 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       CLERK_SECRET_KEY: test-clerk-secret-key
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA
+      # The same public, non-routable clerk-ci.invalid fixture the packaging
+      # jobs use, and live-format on purpose. A pk_test_ key names a Clerk
+      # DEVELOPMENT instance, and those issue a dev-browser JWT via a handshake
+      # redirect to their frontend API before any route calling auth() renders
+      # — the reason validate-env.ts warns about pk_test in production. `/` is
+      # the only audited page that calls auth(), so it chased that redirect to
+      # a host that does not resolve and was the one page never scanned. A live
+      # instance reads cookies directly: no cookies, signed out, no redirect.
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
       # `next start` sets NODE_ENV=production, so instrumentation.ts treats a
       # missing billing key as a fatal boot error. These flows are signed-out
