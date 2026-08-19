@@ -45,14 +45,28 @@ export function largePasteToFile(
   return new File([text], pastedTextFileName(sequence), { type: PASTED_TEXT_MIME_TYPE });
 }
 
+/**
+ * `items` is what a paste populates; `files` is what a drop populates most
+ * reliably. Reading only one of them silently drops attachments on the other
+ * surface, so both are consulted before giving up.
+ */
 export function filesFromDataTransfer(transfer: DataTransfer | null | undefined): File[] {
-  const items = transfer?.items;
-  if (!items) return [];
+  if (!transfer) return [];
   const files: File[] = [];
-  for (let index = 0; index < items.length; index += 1) {
-    const item = items[index];
-    if (!item || item.kind !== 'file') continue;
-    const file = item.getAsFile();
+  const items = transfer.items;
+  if (items) {
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      if (!item || item.kind !== 'file') continue;
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+  }
+  if (files.length > 0) return files;
+  const dropped = transfer.files;
+  if (!dropped) return files;
+  for (let index = 0; index < dropped.length; index += 1) {
+    const file = dropped[index];
     if (file) files.push(file);
   }
   return files;

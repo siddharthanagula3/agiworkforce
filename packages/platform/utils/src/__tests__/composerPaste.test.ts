@@ -11,6 +11,7 @@ type FakeItem = { kind: string; getAsFile: () => File | null };
 
 function fakeTransfer(options: {
   items?: FakeItem[];
+  files?: File[];
   text?: string;
   types?: string[];
 }): DataTransfer {
@@ -19,8 +20,17 @@ function fakeTransfer(options: {
     { length: items.length },
     Object.fromEntries(items.map((item, index) => [index, item])),
   );
+  const files = options.files;
   return {
-    items: indexed,
+    items: options.items === undefined && files ? undefined : indexed,
+    ...(files
+      ? {
+          files: Object.assign(
+            { length: files.length },
+            Object.fromEntries(files.map((file, index) => [index, file])),
+          ),
+        }
+      : {}),
     types: options.types ?? [],
     getData: (type: string) => (type === 'text/plain' ? (options.text ?? '') : ''),
   } as unknown as DataTransfer;
@@ -74,6 +84,12 @@ describe('composer paste policy', () => {
       ),
     ).toEqual([png]);
     expect(filesFromDataTransfer(null)).toEqual([]);
+  });
+
+  it('reads a drop that populates only `files`', () => {
+    const png = new File([new Uint8Array([1])], 'dropped.png', { type: 'image/png' });
+
+    expect(filesFromDataTransfer(fakeTransfer({ files: [png], types: ['Files'] }))).toEqual([png]);
   });
 
   it('detects a file drag only when the drag carries Files', () => {
