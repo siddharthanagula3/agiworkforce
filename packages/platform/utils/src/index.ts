@@ -170,9 +170,6 @@ export type {
   RedactedHandoffContextItem,
 } from './privacyHandoff';
 
-export { resolveContained, isContainedIn } from './pathContainment';
-export type { ContainmentResult } from './pathContainment';
-
 export {
   fenceUntrustedContent,
   fenceUntrustedMemoryContent,
