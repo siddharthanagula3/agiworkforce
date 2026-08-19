@@ -97,7 +97,7 @@ test('the durable-turn kill-switch configured in production is reconciled as dri
     },
     {
       fetchImpl: async (url, init) => {
-        if (String(url).startsWith('https://pager.invalid')) {
+        if (new URL(String(url)).hostname === 'pager.invalid') {
           posted.push(JSON.parse(init.body));
           return okResponse({});
         }
@@ -129,7 +129,7 @@ test('a fail-open rate-limit policy override in production is reconciled as drif
     },
     {
       fetchImpl: async (url, init) => {
-        if (String(url).startsWith('https://pager.invalid')) {
+        if (new URL(String(url)).hostname === 'pager.invalid') {
           posted.push(JSON.parse(init.body));
           return okResponse({});
         }
@@ -181,7 +181,7 @@ test('drift pages the on-call webhook with names only and exits non-zero', async
 
   const code = await run(['--scope', 'web', '--target', 'production'], env, {
     fetchImpl: async (url, init) => {
-      if (String(url).startsWith('https://pager.invalid')) {
+      if (new URL(String(url)).hostname === 'pager.invalid') {
         posted.push(JSON.parse(init.body));
         return okResponse({});
       }
@@ -213,7 +213,7 @@ test('a satisfied production environment exits zero and pages nobody', async () 
     { VERCEL_TOKEN: 't', VERCEL_PROJECT_ID: 'p' },
     {
       fetchImpl: async (url) => {
-        if (!String(url).startsWith('https://api.vercel.com')) {
+        if (new URL(String(url)).hostname !== 'api.vercel.com') {
           posted.push(url);
           return okResponse({});
         }
