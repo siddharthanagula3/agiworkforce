@@ -88,6 +88,15 @@
       "reason": "Reviewed non-credential fixtures keyed on (path, format); an entry that stops matching fails the scan as stale.",
       "owner": "Platform lead",
       "tracking": "CRIT-017"
+    },
+    {
+      "id": "cargo-deny-advisory-ignores",
+      "kind": "cargo-deny-advisory-ignore",
+      "path": "deny.toml",
+      "advisories": ["RUSTSEC-2026-0258"],
+      "reason": "RUSTSEC-2026-0258 (h2 unbounded empty DATA frames), Low severity, no fix published on the 0.3 line. h2 0.4 is already at the patched 0.4.16; h2 0.3.27 reaches the graph only through hyper 0.14, pinned by async-stripe 0.31 and oauth2 4.4, both of which use it as an HTTP client against Stripe and the identity provider. Clearing it needs the async-stripe 1.0 billing port and the oauth2 5.x call-site port. Re-check when async-stripe 1.0 ships stable.",
+      "owner": "Platform lead",
+      "tracking": "CRIT-018"
     }
   ]
 }

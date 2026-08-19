@@ -74,6 +74,10 @@ test('an unregistered cargo-deny advisory ignore fails the build', () => {
   assert.ok(failures.some((message) => message.includes('RUSTSEC-2000-0001')));
 });
 
-test('the checked-in cargo-deny advisory ignore list is empty', () => {
-  assert.deepEqual(parseDenyAdvisoryIgnores(denyToml), []);
+// Pinned to the exact accepted set rather than asserting emptiness: an ignore
+// is how a vulnerability with no published fix stops blocking, and pinning it
+// here means adding a second one is a deliberate edit to this file, not a quiet
+// line in deny.toml.
+test('the checked-in cargo-deny advisory ignore list holds only the reviewed exception', () => {
+  assert.deepEqual(parseDenyAdvisoryIgnores(denyToml), ['RUSTSEC-2026-0258']);
 });
