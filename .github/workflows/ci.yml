@@ -892,6 +892,23 @@ jobs:
     needs: scope
     if: needs.scope.outputs.web_changed == 'true'
     timeout-minutes: 30
+    # DATABASE_URL below points at a Postgres this job never started, so every
+    # page answered 500 from the health check. The env-validation crash used to
+    # kill the server first and hide it.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: agiworkforce_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
@@ -922,6 +939,9 @@ jobs:
       - name: Install Chromium
         working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare the test database
+        run: pnpm db:migrate -- apply --target ci
 
       - name: Build Web app
         run: pnpm --filter @agiworkforce/web build

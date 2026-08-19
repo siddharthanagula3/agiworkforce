@@ -500,7 +500,16 @@ try {
       waitUntil: 'domcontentloaded',
       timeout: 20000,
     });
-    await page.waitForTimeout(1500);
+    // The account row renders "Checking your account…" with no controls until
+    // the status probe settles, and in CI that probe retries against an
+    // unroutable Clerk fixture. Wait for the settled row, not a fixed delay.
+    await page.waitForFunction(
+      () =>
+        Boolean(
+          document.getElementById('opt-signin-btn') || document.getElementById('opt-logout-btn'),
+        ),
+      { timeout: 30000 },
+    );
     const accountState = await page.evaluate(() => ({
       signInVisible: Boolean(document.getElementById('opt-signin-btn')),
       logOutVisible: Boolean(document.getElementById('opt-logout-btn')),
