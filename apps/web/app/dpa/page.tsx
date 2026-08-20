@@ -205,20 +205,20 @@ const DPDP_DUTIES: { k: string; v: string }[] = [
 ];
 
 const SECTIONS = [
-  '01 &middot; Parties, scope, and precedence',
-  '02 &middot; Definitions',
-  '03 &middot; Role allocation, by trust boundary',
-  '04 &middot; AGI&rsquo;s obligations as processor',
-  '05 &middot; Sub-processors',
-  '06 &middot; International transfers',
-  '07 &middot; Annex I &mdash; processing details',
-  '08 &middot; Annex II &mdash; technical and organisational measures',
-  '09 &middot; Deletion, return, and data-subject requests',
-  '10 &middot; Personal data breach',
-  '11 &middot; Audit',
-  '12 &middot; Alpha status, liability, and term',
-  '13 &middot; Annex IV &mdash; India (DPDP Act, 2023)',
-  '14 &middot; Signature',
+  '01 · Parties, scope, and precedence',
+  '02 · Definitions',
+  '03 · Role allocation, by trust boundary',
+  '04 · AGI’s obligations as processor',
+  '05 · Sub-processors',
+  '06 · International transfers',
+  '07 · Annex I — processing details',
+  '08 · Annex II — technical and organisational measures',
+  '09 · Deletion, return, and data-subject requests',
+  '10 · Personal data breach',
+  '11 · Audit',
+  '12 · Alpha status, liability, and term',
+  '13 · Annex IV — India (DPDP Act, 2023)',
+  '14 · Signature',
 ] as const;
 
 export default function DpaPage() {
