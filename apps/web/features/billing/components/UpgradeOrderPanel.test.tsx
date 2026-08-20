@@ -182,4 +182,24 @@ describe('UpgradeOrderPanel', () => {
     expect(notice).toHaveTextContent('Sep 17, 2026');
     expect(notice).toHaveTextContent('$100/month + tax');
   });
+
+  // Production, 2026-08-19: every Stripe price id was a test-mode object while
+  // the secret key was live, so the preview 400'd for every plan and the order
+  // card rendered its heading over an empty body.
+  it('says there is no order rather than showing an empty card when the preview fails', async () => {
+    paymentMocks.previewUpgrade.mockRejectedValue(
+      new Error('Checkout pricing is not configured for max monthly in your region.'),
+    );
+    renderPanel();
+
+    expect(await screen.findByText(/no charge could be calculated/i)).toBeVisible();
+    expect(
+      screen.getByText('Checkout pricing is not configured for max monthly in your region.'),
+    ).toBeVisible();
+
+    // Nothing was priced, so consent cannot enable a charge either.
+    const subscribe = screen.getByRole('button', { name: /subscribe to/i });
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(subscribe).toBeDisabled();
+  });
 });
