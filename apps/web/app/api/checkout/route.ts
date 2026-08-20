@@ -39,6 +39,18 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== 'false' &&
   CHECKOUT_ENABLED_RAW !== 'off';
 
+// Stripe answers `resource_missing` when the id names nothing in this account.
+// For a stored customer that is a definite answer, not an outage: the customer
+// is gone, so it cannot be carrying a subscription.
+function isResourceMissing(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'resource_missing'
+  );
+}
+
 async function findLiveStripeSubscription(
   stripe: Stripe,
   customerId: string,
@@ -171,6 +183,45 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   let hadStoredStripeCustomer = false;
 
+  async function createStripeCustomerForUser(): Promise<string | null> {
+    try {
+      const customer = await stripe.customers.create(
+        {
+          email: user.email,
+          metadata: {
+            user_id: user.id,
+          },
+        },
+        { idempotencyKey: `checkout-customer:${user.id}` },
+      );
+
+      try {
+        await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
+          customer.id,
+          user.id,
+        ]);
+      } catch (error) {
+        logger.error(
+          { error, userId: user.id, stripeCustomerId: customer.id },
+          'Created Stripe customer but could not persist the profile link',
+        );
+      }
+
+      logger.info(
+        { userId: user.id, customerId: customer.id },
+        'Created new Stripe customer and stored in profile',
+      );
+      return customer.id;
+    } catch (err) {
+      logger.error(
+        { error: err, userId: user.id },
+        'Failed to create Stripe customer, proceeding without customer ID',
+      );
+      // Continue without customer ID - Stripe will create one during checkout
+      return null;
+    }
+  }
+
   if (isStripeCustomerId(profile?.stripe_customer_id)) {
     stripeCustomerId = profile.stripe_customer_id;
     hadStoredStripeCustomer = true;
@@ -186,41 +237,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       'Using existing Stripe customer from subscription',
     );
   } else {
-    try {
-      const customer = await stripe.customers.create(
-        {
-          email: user.email,
-          metadata: {
-            user_id: user.id,
-          },
-        },
-        { idempotencyKey: `checkout-customer:${user.id}` },
-      );
-      stripeCustomerId = customer.id;
-
-      try {
-        await db.execute('update profiles set stripe_customer_id = $1 where id = $2', [
-          stripeCustomerId,
-          user.id,
-        ]);
-      } catch (error) {
-        logger.error(
-          { error, userId: user.id, stripeCustomerId },
-          'Created Stripe customer but could not persist the profile link',
-        );
-      }
-
-      logger.info(
-        { userId: user.id, customerId: stripeCustomerId },
-        'Created new Stripe customer and stored in profile',
-      );
-    } catch (err) {
-      logger.error(
-        { error: err, userId: user.id },
-        'Failed to create Stripe customer, proceeding without customer ID',
-      );
-      // Continue without customer ID - Stripe will create one during checkout
-    }
+    stripeCustomerId = await createStripeCustomerForUser();
   }
 
   if (hadStoredStripeCustomer && stripeCustomerId) {
@@ -228,13 +245,27 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     try {
       liveSubscription = await findLiveStripeSubscription(stripe, stripeCustomerId);
     } catch (error) {
-      logger.error(
-        { error, userId: user.id, customerId: stripeCustomerId },
-        'Failed to verify existing Stripe subscriptions before checkout',
+      if (!isResourceMissing(error)) {
+        logger.error(
+          { error, userId: user.id, customerId: stripeCustomerId },
+          'Failed to verify existing Stripe subscriptions before checkout',
+        );
+        throw createError.serviceUnavailable(
+          'Billing details could not be verified. No checkout was created; please retry.',
+        );
+      }
+
+      // A stored id Stripe does not recognise, which is what every customer
+      // created before the test-to-live migration became. Refusing here left
+      // those accounts unable to subscribe at all, and the guard below has
+      // nothing to protect: a customer this account does not have cannot be
+      // billing a subscription. Drop the dead link and start a fresh customer.
+      logger.warn(
+        { userId: user.id, customerId: stripeCustomerId },
+        'Stored Stripe customer does not exist in this account; replacing it',
       );
-      throw createError.serviceUnavailable(
-        'Billing details could not be verified. No checkout was created; please retry.',
-      );
+      hadStoredStripeCustomer = false;
+      stripeCustomerId = await createStripeCustomerForUser();
     }
 
     if (liveSubscription) {

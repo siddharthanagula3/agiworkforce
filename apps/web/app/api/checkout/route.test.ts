@@ -327,6 +327,29 @@ describe('POST /api/checkout', () => {
       expect(response.status).toBe(200);
       expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
     });
+
+    // Production, 2026-08-20: every customer created against the test-mode key
+    // became an id the live account does not have, and the unreadable-state
+    // branch above turned that into a permanent 503 for those accounts.
+    it('replaces a stored customer this Stripe account does not have', async () => {
+      returningCustomerWithNoRecordedSubscription();
+      // A distinct id so the assertions below cannot pass on the stale one.
+      stripeMocks.createCustomer.mockResolvedValue({ id: 'cus_new_1' });
+      stripeMocks.listSubscriptions.mockRejectedValue(
+        Object.assign(new Error("No such customer: 'cus_123'"), { code: 'resource_missing' }),
+      );
+
+      const response = await POST(makeRequest());
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.createCustomer).toHaveBeenCalledTimes(1);
+      // The dead link must not outlive the request that found it.
+      expect(dbMocks.execute).toHaveBeenCalledWith(
+        expect.stringContaining('update profiles set stripe_customer_id'),
+        expect.arrayContaining(['cus_new_1']),
+      );
+      expect(stripeMocks.createCheckoutSession).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('does not create a customer or checkout when billing state cannot be verified', async () => {
