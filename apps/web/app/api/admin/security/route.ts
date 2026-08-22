@@ -8,7 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { isDbUnavailableError } from '@/lib/db-error';
 import { createError, isAppError, type AppError } from '@/lib/errors';
-import { assertAccountActive } from '@/lib/api-auth';
+import { assertAccountActive, getClerkAuthorizedParties } from '@/lib/api-auth';
 import { readJsonBody } from '@/lib/read-json-body';
 
 function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
@@ -57,8 +57,10 @@ async function verifyAdminAccess(request: NextRequest): Promise<AdminAccess> {
     const { clerkClient, verifyToken } = await import('@clerk/nextjs/server');
     const client = await clerkClient();
 
+    const authorizedParties = getClerkAuthorizedParties();
     const payload = await verifyToken(authHeader.slice(7), {
       secretKey: process.env['CLERK_SECRET_KEY'],
+      ...(authorizedParties.length > 0 ? { authorizedParties } : {}),
     });
     const userId = payload.sub;
 
