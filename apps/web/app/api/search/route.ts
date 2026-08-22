@@ -353,7 +353,8 @@ async function handleGet(request: NextRequest) {
     fileMatches: fileResults.length,
   };
 
-  if (q.trim()) {
+  const crossSiteNavigation = request.headers.get('sec-fetch-site') === 'cross-site';
+  if (q.trim() && !crossSiteNavigation) {
     db.query('select track_search($1, $2, $3, $4)', [
       userId,
       organizationId,

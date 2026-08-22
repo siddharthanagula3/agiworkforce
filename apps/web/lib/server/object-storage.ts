@@ -6,6 +6,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Readable } from 'node:stream';
@@ -230,13 +231,14 @@ export class StoredObjectTooLargeError extends Error {
 export interface StoredObjectHead {
   contentLength: number | undefined;
   contentType: string | undefined;
+  etag: string | undefined;
 }
 
 async function headObjectInBucket(bucket: string, key: string): Promise<StoredObjectHead | null> {
   const client = getR2Client();
   try {
     const res = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
-    return { contentLength: res.ContentLength, contentType: res.ContentType };
+    return { contentLength: res.ContentLength, contentType: res.ContentType, etag: res.ETag };
   } catch (error) {
     const name = (error as { name?: string } | null)?.name;
     if (name === 'NoSuchKey' || name === 'NotFound') return null;
@@ -248,11 +250,17 @@ export function headPrivateObject(key: string): Promise<StoredObjectHead | null>
   return headObjectInBucket(getPrivateBucketName(), key);
 }
 
+export interface BoundedStoredObject {
+  data: Buffer;
+  contentType: string | undefined;
+  etag: string | undefined;
+}
+
 async function getBoundedObjectFromBucket(
   bucket: string,
   key: string,
   maxBytes: number,
-): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+): Promise<BoundedStoredObject | null> {
   const head = await headObjectInBucket(bucket, key);
   if (!head) return null;
   if (head.contentLength === undefined || head.contentLength > maxBytes) {
@@ -279,21 +287,49 @@ async function getBoundedObjectFromBucket(
   } finally {
     await reader.cancel().catch(() => undefined);
   }
-  return { data: Buffer.concat(chunks), contentType: stream.contentType };
+  return { data: Buffer.concat(chunks), contentType: stream.contentType, etag: head.etag };
 }
 
 export function getBoundedObject(
   key: string,
   maxBytes: number,
-): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+): Promise<BoundedStoredObject | null> {
   return getBoundedObjectFromBucket(getPublicBucketName(), key, maxBytes);
 }
 
 export function getBoundedPrivateObject(
   key: string,
   maxBytes: number,
-): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+): Promise<BoundedStoredObject | null> {
   return getBoundedObjectFromBucket(getPrivateBucketName(), key, maxBytes);
+}
+
+// Copies only if the source still carries the ETag the caller inspected, so the bytes that
+// were scanned are the bytes that get served; a swap after the scan fails the precondition.
+export async function copyPrivateObjectIfUnchanged(params: {
+  sourceKey: string;
+  destinationKey: string;
+  etag: string;
+}): Promise<boolean> {
+  const bucket = getPrivateBucketName();
+  try {
+    await getR2Client().send(
+      new CopyObjectCommand({
+        Bucket: bucket,
+        Key: params.destinationKey,
+        CopySource: `${bucket}/${params.sourceKey.split('/').map(encodeURIComponent).join('/')}`,
+        CopySourceIfMatch: params.etag,
+        MetadataDirective: 'COPY',
+      }),
+    );
+    return true;
+  } catch (error) {
+    const name = (error as { name?: string } | null)?.name;
+    const status = (error as { $metadata?: { httpStatusCode?: number } } | null)?.$metadata
+      ?.httpStatusCode;
+    if (name === 'PreconditionFailed' || status === 412) return false;
+    throw error;
+  }
 }
 
 export function getObjectStream(key: string, range?: string): Promise<StoredObjectStream | null> {

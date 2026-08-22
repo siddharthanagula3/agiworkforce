@@ -96,7 +96,8 @@ export function verifyDeveloperTokenSignature(token: string): VerifiedDeveloperT
 }
 
 export async function isDeveloperTokenRevoked(token: VerifiedDeveloperToken): Promise<boolean> {
-  const rows = await getNeonDb().query<{ jti: string }>(
+  const db = getNeonDb();
+  const rows = await db.query<{ jti: string }>(
     `SELECT jti
        FROM revoked_jwts
       WHERE jti = $1
@@ -104,7 +105,21 @@ export async function isDeveloperTokenRevoked(token: VerifiedDeveloperToken): Pr
       LIMIT 1`,
     [token.jti, token.userId],
   );
-  return rows.length > 0;
+  if (rows.length > 0) return true;
+  if (!token.sessionFamilyId) return false;
+
+  const liveFamilyRows = await db.query<{ id: string }>(
+    `SELECT id
+       FROM device_refresh_tokens
+      WHERE family_id = $1
+        AND user_id = $2
+        AND revoked_at IS NULL
+        AND used_at IS NULL
+        AND expires_at > now()
+      LIMIT 1`,
+    [token.sessionFamilyId, token.userId],
+  );
+  return liveFamilyRows.length === 0;
 }
 
 export async function revokeDeveloperToken(token: VerifiedDeveloperToken): Promise<boolean> {

@@ -72,6 +72,20 @@ afterEach(() => {
   delete process.env['GOOGLE_API_KEY'];
 });
 
+describe('POST /api/llm/v1/embeddings — managed compute kill switch', () => {
+  it('refuses before reserving or calling the provider when the kill switch is engaged', async () => {
+    vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', '0');
+    try {
+      const response = await POST(post({ input: ['first'] }));
+      expect(response.status).toBe(403);
+      expect(mocks.reserve).not.toHaveBeenCalled();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
 describe('POST /api/llm/v1/embeddings — success', () => {
   it('returns one indexed embedding per input', async () => {
     googleReturns([

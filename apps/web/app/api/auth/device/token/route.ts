@@ -25,6 +25,7 @@ const TokenPollSchema = z.object({ device_code: z.string().uuid() });
 
 interface DeviceRow {
   device_id: string;
+  device_name: string | null;
   user_code: string;
   expires_at: string;
   status: string;
@@ -59,7 +60,7 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
 
   const db = getNeonDb();
   const rows = await db.query<DeviceRow>(
-    `SELECT device_id, user_code, expires_at, status, user_id, user_email
+    `SELECT device_id, device_name, user_code, expires_at, status, user_id, user_email
        FROM device_authorization_codes
       WHERE device_id = $1`,
     [deviceCode],
@@ -137,14 +138,16 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
 
     await tx.execute(
       `INSERT INTO device_refresh_tokens
-         (family_id, user_id, user_email, token_hash, expires_at)
-       VALUES ($1, $2, $3, $4, $5)`,
+         (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         familyId,
         record.user_id,
         record.user_email,
         refreshCredential.tokenHash,
         refreshCredential.expiresAt,
+        record.device_id,
+        record.device_name,
       ],
     );
     return true;

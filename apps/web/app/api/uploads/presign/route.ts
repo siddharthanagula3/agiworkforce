@@ -19,7 +19,11 @@ import {
   deleteProjectKnowledgeObject,
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
-import { IMAGE_ATTACHMENT_MIME_TYPES, validateAttachmentMeta } from '@agiworkforce/types';
+import {
+  IMAGE_ATTACHMENT_MIME_TYPES,
+  MAX_AVATAR_BYTES,
+  validateAttachmentMeta,
+} from '@agiworkforce/types';
 import { secureFilenameSegment } from '@/lib/secure-random';
 import { randomUUID } from 'node:crypto';
 import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
@@ -43,7 +47,6 @@ const CleanupRequestSchema = z.object({
     .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
 });
 
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 function extOf(name: string): string {
   const dot = name.lastIndexOf('.');

@@ -54,6 +54,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 import { runToolLoop, type ToolLoopProviderExecutor } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import type { E2BExecutor } from '@/lib/e2b/types';
+import { e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
 
 function sseStreamFrom(lines: string[]): ReadableStream {
   const encoder = new TextEncoder();
@@ -98,6 +99,7 @@ function makeProcessed(conversationId?: string): ProcessedRequest {
       messages: [{ role: 'user', content: 'run print(1+1)' }],
       max_tokens: 1000,
       stream: true,
+      tools: e2bExecutionToolDefs(),
     },
   };
 }

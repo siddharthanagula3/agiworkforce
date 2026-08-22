@@ -62,6 +62,27 @@ describe('createCloudCodeToolRunner path safety', () => {
     expect(result.output).toContain('read limit');
   });
 
+  it('keeps shared file tools inside the workspace', async () => {
+    const executor = executorStub({
+      writeFile: vi.fn(async () => ({ ok: true, output: 'wrote' })),
+      createFolder: vi.fn(async () => ({ ok: true, output: 'made' })),
+    });
+    const runner = createCloudCodeToolRunner(executor, '/workspace');
+
+    const escaped = await runner.runSharedExecutionTool('write_file', {
+      path: '../../home/user/.bashrc',
+      content: 'x',
+    });
+    expect(escaped.isError).toBe(true);
+    expect(executor.writeFile).not.toHaveBeenCalled();
+
+    await runner.runSharedExecutionTool('write_file', { path: 'src/a.ts', content: 'x' });
+    expect(executor.writeFile).toHaveBeenCalledWith({ path: '/workspace/src/a.ts', content: 'x' });
+
+    await runner.runSharedExecutionTool('create_folder', { path: 'src/new' });
+    expect(executor.createFolder).toHaveBeenCalledWith({ path: '/workspace/src/new' });
+  });
+
   it('refuses traversal in listFiles too', async () => {
     const executor = executorStub();
     const runner = createCloudCodeToolRunner(executor, '/workspace');

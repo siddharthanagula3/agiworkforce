@@ -78,21 +78,6 @@ export function hashMobileIapPurchaseToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function decodeUntrustedJwsPayload(jws: string): Record<string, unknown> {
-  const segments = jws.split('.');
-  if (segments.length !== 3 || !segments[1]) {
-    throw createError.badRequest('Malformed App Store transaction.');
-  }
-  try {
-    return JSON.parse(Buffer.from(segments[1], 'base64url').toString('utf8')) as Record<
-      string,
-      unknown
-    >;
-  } catch {
-    throw createError.badRequest('Malformed App Store transaction.');
-  }
-}
-
 function readAppleRootCertificates(): Buffer[] {
   const raw = process.env['APPLE_APP_STORE_ROOT_CA_CERTS_BASE64_JSON']?.trim();
   if (!raw) {
@@ -121,9 +106,14 @@ function createAppleVerifier(environment: Environment): SignedDataVerifier {
   );
 }
 
-function appleEnvironmentHint(jws: string): Environment {
-  const hint = decodeUntrustedJwsPayload(jws)['environment'];
-  return hint === Environment.SANDBOX ? Environment.SANDBOX : Environment.PRODUCTION;
+// The trust environment must come from deployment config, never from the unverified JWS
+// payload: a Sandbox-signed transaction is a free test purchase and must not unlock
+// production entitlements.
+function configuredAppleEnvironment(): Environment {
+  const raw = process.env['APPLE_APP_STORE_ENVIRONMENT']?.trim().toLowerCase() ?? '';
+  if (raw === '' || raw === 'production') return Environment.PRODUCTION;
+  if (raw === 'sandbox') return Environment.SANDBOX;
+  throw createError.serviceUnavailable('App Store verification environment is invalid.');
 }
 
 export interface VerifiedAppleStoreNotification {
@@ -134,15 +124,7 @@ export interface VerifiedAppleStoreNotification {
 export async function verifyAppleStoreNotification(
   signedPayload: string,
 ): Promise<VerifiedAppleStoreNotification> {
-  const outerHint = decodeUntrustedJwsPayload(signedPayload);
-  const data = outerHint['data'];
-  const environment =
-    data &&
-    typeof data === 'object' &&
-    (data as Record<string, unknown>)['environment'] === Environment.SANDBOX
-      ? Environment.SANDBOX
-      : Environment.PRODUCTION;
-  const verifier = createAppleVerifier(environment);
+  const verifier = createAppleVerifier(configuredAppleEnvironment());
   try {
     const notification = await verifier.verifyAndDecodeNotification(signedPayload);
     const signedTransaction = notification.data?.signedTransactionInfo;
@@ -162,7 +144,7 @@ async function verifyApplePurchase(input: {
   purchaseToken: string;
   appAccountToken: string;
 }): Promise<VerifiedMobileIapPurchase> {
-  const environment = appleEnvironmentHint(input.purchaseToken);
+  const environment = configuredAppleEnvironment();
   const verifier = createAppleVerifier(environment);
 
   let transaction;

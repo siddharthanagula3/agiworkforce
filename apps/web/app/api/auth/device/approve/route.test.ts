@@ -16,6 +16,12 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+// Policy has its own suite (lib/server/__tests__/device-signin-policy.test.ts);
+// mocked here so this file keeps asserting the approval flow rather than
+// re-simulating a settings read.
+vi.mock('@/lib/server/device-signin-policy', () => ({
+  isDeviceCodeSignInEnabled: vi.fn(async () => true),
+}));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
 }));
@@ -35,6 +41,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { POST } from './route';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 describe('POST /api/auth/device/approve', () => {
   beforeEach(() => {
@@ -49,6 +56,24 @@ describe('POST /api/auth/device/approve', () => {
         },
       ])
       .mockResolvedValueOnce([{ status: 'approved' }]);
+  });
+
+  it('refuses to let a device credential approve another device', async () => {
+    vi.mocked(getClerkAuthUser).mockResolvedValueOnce({
+      userId: 'user_approved',
+      surfaceClass: 'developer',
+    });
+
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/auth/device/approve', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ user_code: 'ABCD-2345' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 
   it('logs only a derived device reference, never the poll secret', async () => {
