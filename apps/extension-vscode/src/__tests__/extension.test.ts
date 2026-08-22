@@ -1,40 +1,26 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
+import * as vscode from 'vscode';
 import * as path from 'path';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { MODEL_PICKER_OPTIONS } from '../features/model-picker/modelConstants';
 import { buildExtensionStatusBarText } from '../core/statusBar';
-
-function commandLabel(command: string): string {
-  const labels: Record<string, string> = {
-    explain: 'Explain Code',
-    fix: 'Fix Issues',
-    refactor: 'Refactor',
-    tests: 'Generate Tests',
-  };
-  return labels[command] ?? command;
-}
+import { commandLabel } from '../core/runInlineCommand';
+import { activate } from '../extension';
+import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 
 describe('commandLabel', () => {
-  it('maps "explain" to "Explain Code"', () => {
+  it('names every inline command the way the plan-mode prompt shows it', () => {
     expect(commandLabel('explain')).toBe('Explain Code');
-  });
-
-  it('maps "fix" to "Fix Issues"', () => {
     expect(commandLabel('fix')).toBe('Fix Issues');
-  });
-
-  it('maps "refactor" to "Refactor"', () => {
     expect(commandLabel('refactor')).toBe('Refactor');
-  });
-
-  it('maps "tests" to "Generate Tests"', () => {
     expect(commandLabel('tests')).toBe('Generate Tests');
+    expect(commandLabel('docs')).toBe('Generate Docs');
   });
 
-  it('returns the command itself for unknown commands', () => {
-    expect(commandLabel('custom')).toBe('custom');
+  it('falls back to the raw command id rather than showing nothing', () => {
+    expect(commandLabel('unmapped-command')).toBe('unmapped-command');
   });
 });
 
@@ -55,19 +41,6 @@ describe('buildStatusBarText', () => {
     expect(text).toContain('plan');
     expect(text).toContain(fixtureModelId);
     expect(text).not.toContain('bridge');
-  });
-});
-
-describe('isLocalPortReachable pattern', () => {
-  it('resolves to a boolean', async () => {
-    const mockReachable = (port: number, timeoutMs: number): Promise<boolean> => {
-      return new Promise((resolve) => {
-        resolve(port > 0 && timeoutMs > 0 ? false : false);
-      });
-    };
-
-    const result = await mockReachable(8787, 800);
-    expect(typeof result).toBe('boolean');
   });
 });
 
@@ -157,142 +130,119 @@ describe('model selection', () => {
   });
 });
 
-describe('API key validation', () => {
-  function validateApiKey(value: string): string | undefined {
-    if (value.trim() === '') return 'API key cannot be empty.';
-    return undefined;
-  }
+describe('inline completions first-run privacy notice', () => {
+  const NOTICE_KEY = 'inlineCompletions.firstRunNoticeShown';
 
-  it('rejects empty string', () => {
-    expect(validateApiKey('')).toBe('API key cannot be empty.');
-  });
-
-  it('rejects whitespace-only string', () => {
-    expect(validateApiKey('   ')).toBe('API key cannot be empty.');
-  });
-
-  it('accepts non-empty key', () => {
-    expect(validateApiKey('sk-agi-test-123')).toBeUndefined();
-  });
-});
-
-describe('feature flag validation', () => {
-  it('warns when inline completions enabled without API key', () => {
-    const inlineEnabled = true;
-    const hasApiKey = false;
-    const shouldWarn = inlineEnabled && !hasApiKey;
-    expect(shouldWarn).toBe(true);
-  });
-
-  it('does not warn when inline completions disabled', () => {
-    const inlineEnabled = false;
-    const hasApiKey = false;
-    const shouldWarn = inlineEnabled && !hasApiKey;
-    expect(shouldWarn).toBe(false);
-  });
-});
-
-describe('configuration change detection', () => {
-  const STATUS_BAR_CONFIGS = [
-    'agiWorkforce.model',
-    'agiWorkforce.agent.planMode',
-    'agiWorkforce.desktopBridge.enabled',
-    'agiWorkforce.desktopBridge.port',
-  ];
-
-  const INLINE_CONFIGS = ['agiWorkforce.inlineCompletions.enabled'];
-
-  it('detects model change as status bar update', () => {
-    const changed = 'agiWorkforce.model';
-    expect(STATUS_BAR_CONFIGS.includes(changed)).toBe(true);
-  });
-
-  it('detects inline completion change', () => {
-    const changed = 'agiWorkforce.inlineCompletions.enabled';
-    expect(INLINE_CONFIGS.includes(changed)).toBe(true);
-  });
-
-  it('does not trigger status bar for unrelated changes', () => {
-    const changed = 'editor.fontSize';
-    expect(STATUS_BAR_CONFIGS.includes(changed)).toBe(false);
-  });
-});
-
-function shouldShowInlineFirstRunNotice(
-  alreadyShown: boolean | undefined,
-  globalValueSet: boolean,
-): boolean {
-  if (globalValueSet) return false;
-  if (alreadyShown === true) return false;
-  return true;
-}
-
-describe('inline completions first-run notice', () => {
-
-  interface MockGlobalState {
-    store: Map<string, unknown>;
-    get<T>(key: string): T | undefined;
-    update(key: string, value: unknown): Promise<void>;
-  }
-
-  interface MockContext {
-    globalState: MockGlobalState;
-  }
-
-  function makeContext(initial?: Record<string, unknown>): MockContext {
-    const store = new Map<string, unknown>(Object.entries(initial ?? {}));
+  function activationContext(alreadyShown?: boolean): vscode.ExtensionContext {
+    const store = new Map<string, unknown>();
+    if (alreadyShown !== undefined) store.set(NOTICE_KEY, alreadyShown);
     return {
+      subscriptions: [],
+      secrets: {
+        get: vi.fn().mockResolvedValue(undefined),
+        store: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+        onDidChange: vi.fn(),
+      },
+      extensionUri: vscode.Uri.file('/mock/extension'),
+      extensionPath: '/mock/extension',
       globalState: {
-        store,
-        get<T>(key: string): T | undefined {
-          return store.get(key) as T | undefined;
-        },
-        async update(key: string, value: unknown): Promise<void> {
+        get: (key: string) => store.get(key),
+        update: async (key: string, value: unknown) => {
           store.set(key, value);
         },
+        keys: () => [...store.keys()],
+        setKeysForSync: vi.fn(),
       },
-    };
+      workspaceState: {
+        get: () => undefined,
+        update: vi.fn().mockResolvedValue(undefined),
+        keys: () => [],
+      },
+      asAbsolutePath: (p: string) => `/mock/extension/${p}`,
+      storageUri: vscode.Uri.file('/mock/storage'),
+      globalStorageUri: vscode.Uri.file('/mock/global-storage'),
+      logUri: vscode.Uri.file('/mock/log'),
+      extensionMode: 1,
+      environmentVariableCollection: {} as never,
+      extension: { packageJSON: { version: '0.3.0' } } as never,
+      languageModelAccessInformation: {} as never,
+    } as unknown as vscode.ExtensionContext;
+  }
+
+  function configureInlineCompletions(enabled: boolean, globalValue?: boolean): void {
+    vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
+      () =>
+        ({
+          get: vi.fn((key: string, fallback?: unknown) =>
+            key === 'inlineCompletions.enabled' ? enabled : fallback,
+          ),
+          update: vi.fn(),
+          has: vi.fn().mockReturnValue(true),
+          inspect: vi.fn((key: string) =>
+            key === 'agiWorkforce.inlineCompletions.enabled' || key === 'inlineCompletions.enabled'
+              ? { key, globalValue }
+              : undefined,
+          ),
+        }) as unknown as vscode.WorkspaceConfiguration,
+    );
+  }
+
+  function privacyNotices(): string[] {
+    return vi
+      .mocked(vscode.window.showInformationMessage)
+      .mock.calls.map(([message]) => String(message))
+      .filter((message) => message.includes('surrounding code are sent'));
   }
 
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetSubsystemHealthForTests();
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined as never);
   });
 
-  it('shows notice on first run when user has not set global preference', () => {
-    expect(shouldShowInlineFirstRunNotice(undefined, false)).toBe(true);
+  it('tells the user what inline completions send, the first time they are on', async () => {
+    configureInlineCompletions(true);
+    const context = activationContext();
+
+    activate(context);
+    await vi.waitFor(() => expect(privacyNotices()).toHaveLength(1));
+
+    const [notice] = privacyNotices();
+    expect(notice).toContain('sensitive-file denylist');
+    await vi.waitFor(() => expect(context.globalState.get(NOTICE_KEY)).toBe(true));
   });
 
-  it('suppresses notice when user has already set global preference (any value)', () => {
-    expect(shouldShowInlineFirstRunNotice(undefined, true)).toBe(false);
+  it('does not repeat the notice once it has been shown', async () => {
+    configureInlineCompletions(true);
+    const context = activationContext(true);
+
+    activate(context);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(privacyNotices()).toEqual([]);
   });
 
-  it('suppresses notice when first-run flag is already true', () => {
-    expect(shouldShowInlineFirstRunNotice(true, false)).toBe(false);
-  });
+  it('asks for a credential when inline completions are on without one', async () => {
+    configureInlineCompletions(true);
 
-  it('shows notice when flag is false and no global preference', () => {
-    expect(shouldShowInlineFirstRunNotice(false, false)).toBe(true);
-  });
-
-  it('sets firstRunNoticeShown flag after "Got it" click', async () => {
-    const ctx = makeContext();
-    if (
-      shouldShowInlineFirstRunNotice(
-        ctx.globalState.get('inlineCompletions.firstRunNoticeShown'),
-        false,
-      )
-    ) {
-      await ctx.globalState.update('inlineCompletions.firstRunNoticeShown', true);
-    }
-    expect(ctx.globalState.get('inlineCompletions.firstRunNoticeShown')).toBe(true);
-  });
-
-  it('does not re-show notice after flag is set', async () => {
-    const ctx = makeContext({ 'inlineCompletions.firstRunNoticeShown': true });
-    const shouldShow = shouldShowInlineFirstRunNotice(
-      ctx.globalState.get('inlineCompletions.firstRunNoticeShown'),
-      false,
+    activate(activationContext(true));
+    await vi.waitFor(() =>
+      expect(vi.mocked(vscode.window.showInformationMessage)).toHaveBeenCalledWith(
+        expect.stringContaining('need AGI Cloud sign-in or an AGI API key'),
+        expect.anything(),
+      ),
     );
-    expect(shouldShow).toBe(false);
+  });
+
+  it('stays silent while inline completions are off', async () => {
+    configureInlineCompletions(false);
+    const context = activationContext();
+
+    activate(context);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(privacyNotices()).toEqual([]);
+    expect(context.globalState.get(NOTICE_KEY)).toBeUndefined();
   });
 });

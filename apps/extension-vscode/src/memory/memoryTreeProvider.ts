@@ -1,6 +1,7 @@
 
 import * as vscode from 'vscode';
 import { type MemoryFact, loadFacts, onMemoryDidChange } from './memoryStore';
+import { Config } from '../platform/config';
 
 const MAX_LABEL_CHARS = 60;
 
@@ -28,17 +29,37 @@ export class MemoryFactItem extends vscode.TreeItem {
   }
 }
 
-export class MemoryTreeProvider implements vscode.TreeDataProvider<MemoryFactItem> {
+export class MemoryDisabledItem extends vscode.TreeItem {
+  constructor() {
+    super('Memory is off', vscode.TreeItemCollapsibleState.None);
+    this.description = 'Saved facts are not sent with your turns';
+    this.tooltip = 'Turn memory on to include these facts with chat turns.';
+    this.iconPath = new vscode.ThemeIcon('circle-slash');
+    this.contextValue = 'memoryDisabled';
+    this.command = {
+      command: 'agi-workforce.memory.toggle',
+      title: 'Turn memory on',
+    };
+  }
+}
+
+export class MemoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<
-    MemoryFactItem | undefined | null | void
+    vscode.TreeItem | undefined | null | void
   >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly _storeChangeDisposable: vscode.Disposable;
+  private readonly _configChangeDisposable: vscode.Disposable;
 
   constructor(private readonly workspaceState: vscode.ExtensionContext['workspaceState']) {
     this._storeChangeDisposable = onMemoryDidChange(() => {
       this._onDidChangeTreeData.fire();
+    });
+    this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('agiWorkforce.memory.enabled')) {
+        this._onDidChangeTreeData.fire();
+      }
     });
   }
 
@@ -46,16 +67,18 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<MemoryFactIte
     this._onDidChangeTreeData.fire();
   }
 
-  getTreeItem(element: MemoryFactItem): vscode.TreeItem {
+  getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
     return element;
   }
 
-  getChildren(_element?: MemoryFactItem): MemoryFactItem[] {
-    if (_element !== undefined) return [];
-    return loadFacts(this.workspaceState).map((f) => new MemoryFactItem(f));
+  getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
+    if (element !== undefined) return [];
+    const facts = loadFacts(this.workspaceState).map((f) => new MemoryFactItem(f));
+    return Config.memoryEnabled() ? facts : [new MemoryDisabledItem(), ...facts];
   }
 
   dispose(): void {
+    this._configChangeDisposable.dispose();
     this._storeChangeDisposable.dispose();
     this._onDidChangeTreeData.dispose();
   }

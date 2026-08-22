@@ -1,5 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as vscode from 'vscode';
 import {
   loadFacts,
   addFact,
@@ -253,5 +254,30 @@ describe('onMemoryDidChange', () => {
     const gs = makeGlobalState();
     await addFact(gs, 'should not fire');
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe('memory disable gate', () => {
+  function disableMemoryOnce(): void {
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValueOnce({
+      get: vi.fn((key: string, fallback?: unknown) =>
+        key === 'memory.enabled' ? false : fallback,
+      ),
+      update: vi.fn(),
+      has: vi.fn().mockReturnValue(true),
+      inspect: vi.fn().mockReturnValue(undefined),
+    } as unknown as vscode.WorkspaceConfiguration);
+  }
+
+  it('injects stored facts while memory is enabled', () => {
+    const gs = makeGlobalState([{ id: '1', text: 'Prefer Rust', createdAt: '2026-01-01' }]);
+    expect(buildMemoryContextInput(gs)?.text).toContain('Prefer Rust');
+  });
+
+  it('injects nothing while memory is disabled, without deleting the facts', () => {
+    const gs = makeGlobalState([{ id: '1', text: 'Prefer Rust', createdAt: '2026-01-01' }]);
+    disableMemoryOnce();
+    expect(buildMemoryContextInput(gs)).toBeUndefined();
+    expect(loadFacts(gs)).toHaveLength(1);
   });
 });
