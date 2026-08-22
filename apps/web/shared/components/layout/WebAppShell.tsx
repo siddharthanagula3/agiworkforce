@@ -61,6 +61,10 @@ import { useSettingsModal } from '@/features/settings/components/SettingsModalPr
 import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
 import { toUserMessage } from '@/lib/user-error-message';
 
+// A fresh [] each render changes the identity every time and defeats the
+// memoization below, which is what the exhaustive-deps warning was pointing at.
+const EMPTY_NAV_IDS: string[] = [];
+
 interface WebAppShellProps {
   children: React.ReactNode;
 }
@@ -249,7 +253,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
   // ONE rail definition, shared with WebChatPage — see `app-nav-items.ts` for
   // why (the two hand-maintained copies had drifted and this shell was the only
   // one exposing Tasks).
-  const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? [];
+  const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
