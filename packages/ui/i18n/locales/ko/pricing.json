@@ -77,7 +77,7 @@
   "seatTotal_one": "{{count}}석 · {{total}}/월",
   "seatTotal_other": "{{count}}석 · {{total}}/월",
   "perSeatPrice": "{{price}}/석/월",
-  "perSeatPriceAnnual": "{{price}}/석/년",
+  "perSeatPriceAnnual": "{{price}}/석/월",
   "seatTotalAnnual_one": "{{count}}석 · {{total}}/년",
   "seatTotalAnnual_other": "{{count}}석 · {{total}}/년",
   "seatCadenceMonthly_one": "{{count}}석 · 월별 청구",

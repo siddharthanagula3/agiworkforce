@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type CSSProperties,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../cn';
 
@@ -14,6 +22,11 @@ export interface MenuProps {
   portalled?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
+
+const VIEWPORT_MARGIN = 8;
+const TRIGGER_GAP = 4;
+
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 export function Menu({
   trigger,
@@ -45,22 +58,49 @@ export function Menu({
 
   const close = () => setOpen(false);
 
-  const computePosition = () => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const style: CSSProperties = {};
-    if (side === 'bottom') {
-      style.top = rect.bottom + 4;
-    } else {
-      style.bottom = window.innerHeight - rect.top + 4;
-    }
-    if (align === 'start') {
-      style.left = rect.left;
-    } else {
-      style.right = window.innerWidth - rect.right;
-    }
-    setMenuStyle(style);
-  };
+  // A sidebar row near the bottom of the window has no room below it, so a
+  // menu anchored to `rect.bottom` runs off-screen and its items become
+  // unreachable. Measure the panel, flip it above the trigger when that fits
+  // better, and cap its height to the space actually available.
+  const computePosition = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const panel = panelRef.current;
+    const panelHeight = panel?.offsetHeight ?? 0;
+    const panelWidth = panel?.offsetWidth ?? 0;
+
+    const spaceBelow = window.innerHeight - rect.bottom - TRIGGER_GAP - VIEWPORT_MARGIN;
+    const spaceAbove = rect.top - TRIGGER_GAP - VIEWPORT_MARGIN;
+    const preferAbove = side === 'top';
+    const fitsBelow = panelHeight <= spaceBelow;
+    const fitsAbove = panelHeight <= spaceAbove;
+    const placeAbove = preferAbove
+      ? fitsAbove || !fitsBelow
+      : !fitsBelow && (fitsAbove || spaceAbove > spaceBelow);
+
+    const style: CSSProperties = placeAbove
+      ? {
+          bottom: window.innerHeight - rect.top + TRIGGER_GAP,
+          maxHeight: Math.max(spaceAbove, 0),
+        }
+      : { top: rect.bottom + TRIGGER_GAP, maxHeight: Math.max(spaceBelow, 0) };
+
+    const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - panelWidth - VIEWPORT_MARGIN);
+    style.left = Math.min(
+      Math.max(align === 'end' ? rect.right - panelWidth : rect.left, VIEWPORT_MARGIN),
+      maxLeft,
+    );
+
+    setMenuStyle((current) =>
+      current.top === style.top &&
+      current.bottom === style.bottom &&
+      current.left === style.left &&
+      current.maxHeight === style.maxHeight
+        ? current
+        : style,
+    );
+  }, [align, side]);
 
   const toggle = () => {
     setOpen((v) => {
@@ -68,6 +108,13 @@ export function Menu({
       return !v;
     });
   };
+
+  // Runs after the panel is in the DOM but before paint, so the measured
+  // placement is the first one the user ever sees.
+  useIsomorphicLayoutEffect(() => {
+    if (!open || !portalled) return;
+    computePosition();
+  }, [open, portalled, computePosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -100,8 +147,7 @@ export function Menu({
       window.removeEventListener('scroll', onScrollOrResize, { capture: true });
       window.removeEventListener('resize', onScrollOrResize);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, computePosition]);
 
   const panel = open ? (
     <div
@@ -112,11 +158,11 @@ export function Menu({
         portalled
           ? 'fixed z-[9999]'
           : cn(
-              'absolute z-50 mt-1',
+              'absolute z-50 mt-1 max-h-[min(24rem,60vh)]',
               side === 'top' ? 'bottom-full mb-1 mt-0' : 'top-full',
               align === 'end' ? 'right-0' : 'left-0',
             ),
-        'min-w-[12rem] overflow-hidden rounded-md border p-1 shadow-lg',
+        'min-w-[12rem] overflow-y-auto overscroll-contain rounded-md border p-1 shadow-lg',
         'border-[hsl(var(--border))] bg-[hsl(var(--popover))] text-[hsl(var(--popover-foreground))]',
         menuClassName,
       )}

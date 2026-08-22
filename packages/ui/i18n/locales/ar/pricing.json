@@ -77,7 +77,7 @@
   "seatTotal_one": "مقعد واحد · {{total}}/شهر",
   "seatTotal_other": "{{count}} مقاعد · {{total}}/شهر",
   "perSeatPrice": "{{price}}/مقعد/شهر",
-  "perSeatPriceAnnual": "{{price}}/مقعد/سنة",
+  "perSeatPriceAnnual": "{{price}}/مقعد/شهر",
   "seatTotalAnnual_one": "مقعد واحد · {{total}}/سنة",
   "seatTotalAnnual_other": "{{count}} مقاعد · {{total}}/سنة",
   "seatCadenceMonthly_one": "مقعد واحد · فوترة شهرية",
