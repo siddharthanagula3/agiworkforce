@@ -106,6 +106,7 @@ import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { ResearchActivity, type ResearchPlanDecision } from '../research/ResearchActivity';
+import { stripTrailingSourceList } from '../../lib/researchReportSources';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { dedupeResearchSources } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
@@ -626,6 +627,7 @@ const MessageBubbleComponent = function MessageBubble({
   const activeConversationId = useChatStore((s) => s.activeConversationId);
 
   const [reportState, setReportState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [ratingState, setRatingState] = useState<'idle' | 'up' | 'down'>('idle');
 
   /**
    * File a trust-and-safety report for this answer.
@@ -661,6 +663,52 @@ const MessageBubbleComponent = function MessageBubble({
       toast.error('Could not send the report. Please try again.');
     }
   }, [activeConversationId, message.content, message.id, message.sessionId, reportState]);
+  /**
+   * Thumbs up / down on an assistant answer — the one signal every comparable
+   * product collects on every message and this app collected nowhere. The only
+   * routes out were a composer-level dialog and a refusal appeal, neither of
+   * which tells us an ordinary answer was good or bad.
+   *
+   * Stored through /api/feedback with feedback_context 'response_rating', so it
+   * lands in public.feedback and shows up in the operator dashboard's existing
+   * feedback counts with no new table.
+   */
+  const rateMessage = useCallback(
+    async (rating: 'up' | 'down') => {
+      if (ratingState !== 'idle') return;
+      const previous = ratingState;
+      setRatingState(rating);
+      try {
+        const response = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+          credentials: 'include',
+          body: JSON.stringify({
+            subject: `Response rated ${rating}`,
+            message: (message.content ?? '').slice(0, 500) || '(empty response)',
+            metadata: {
+              source: 'web',
+              platform: 'web',
+              version: 'web',
+              user_agent:
+                typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent.slice(0, 500),
+              feedback_context: 'response_rating',
+              rating,
+              message_id: message.id,
+              conversation_id: message.sessionId ?? activeConversationId ?? undefined,
+            },
+          }),
+        });
+        if (!response.ok) throw new Error(`Rating failed: ${response.status}`);
+      } catch {
+        // Leaving the button lit would claim a vote the server never took.
+        setRatingState(previous);
+        toast.error('Could not send that. Please try again.');
+      }
+    },
+    [activeConversationId, message.content, message.id, message.sessionId, ratingState],
+  );
+
   const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;
   const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
   const storedChoice = useComparisonStore((state) =>
@@ -713,8 +761,11 @@ const MessageBubbleComponent = function MessageBubble({
 
   // Fetched source text per generated-file id; 'error' → honest chip fallback.
   // The same authenticated byte route powers HTML/code/text artifacts and CSV.
+  // A failed load is a distinct shape, not a magic content string: `string |
+  // 'error'` collapses to `string`, so a generated file whose text happened to
+  // be "error" was silently dropped instead of rendered.
   const [generatedTextContent, setGeneratedTextContent] = useState<
-    Record<string, string | 'error'>
+    Record<string, string | { failed: true }>
   >({});
   useEffect(() => {
     const pending = generatedFiles.filter(
@@ -732,7 +783,8 @@ const MessageBubbleComponent = function MessageBubble({
           if (!cancelled) setGeneratedTextContent((prev) => ({ ...prev, [file.id]: text }));
         })
         .catch(() => {
-          if (!cancelled) setGeneratedTextContent((prev) => ({ ...prev, [file.id]: 'error' }));
+          if (!cancelled)
+            setGeneratedTextContent((prev) => ({ ...prev, [file.id]: { failed: true } }));
         });
     }
     return () => {
@@ -806,7 +858,7 @@ const MessageBubbleComponent = function MessageBubble({
         });
       } else if (isGeneratedTextArtifact(f)) {
         const source = generatedTextContent[f.id];
-        if (typeof source === 'string' && source !== 'error') {
+        if (typeof source === 'string') {
           const language = generatedFileLanguage(f);
           out.push({
             id: `genfile-${f.id}`,
@@ -968,10 +1020,13 @@ const MessageBubbleComponent = function MessageBubble({
       ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
       : message.content;
     const stripped = artifacts.length === 0 ? base : removeArtifactBlocks(base, artifacts);
+    const withoutDuplicateSources = message.metadata?.research
+      ? stripTrailingSourceList(stripped)
+      : stripped;
     // AUDIT-FIX BUG-31: non-artifact languages get the same "don't hand the
     // renderer a half-open fence" treatment the artifact path already gets.
-    return closeUnterminatedFence(stripped);
-  }, [message.content, artifacts, streamingBlock]);
+    return closeUnterminatedFence(withoutDuplicateSources);
+  }, [message.content, artifacts, streamingBlock, message.metadata?.research]);
 
   /**
    * Rich format cards (recipe / comparison / steps / calculation) for assistant
@@ -2110,6 +2165,48 @@ const MessageBubbleComponent = function MessageBubble({
                       <TooltipContent>Regenerate</TooltipContent>
                     </Tooltip>
                   )}
+
+                {/* Rate the answer — assistant messages only. */}
+                {!isUser && (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={ACTION_BUTTON_SIZE}
+                          onClick={() => void rateMessage('up')}
+                          aria-label="Good response"
+                          aria-pressed={ratingState === 'up'}
+                        >
+                          <ThumbsUp
+                            className={`h-3.5 w-3.5 ${ratingState === 'up' ? 'text-primary' : ''}`}
+                            aria-hidden="true"
+                          />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Good response</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={ACTION_BUTTON_SIZE}
+                          onClick={() => void rateMessage('down')}
+                          aria-label="Bad response"
+                          aria-pressed={ratingState === 'down'}
+                        >
+                          <ThumbsDown
+                            className={`h-3.5 w-3.5 ${ratingState === 'down' ? 'text-primary' : ''}`}
+                            aria-hidden="true"
+                          />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Bad response</TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
 
                 {/*
                   Branch / fork — a persistent icon in the action row, not a

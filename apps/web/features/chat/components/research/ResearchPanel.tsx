@@ -21,6 +21,7 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { ResearchReportView, type ReportArtifactInput } from './ResearchReportView';
 import { ResearchReportsGallery } from './ResearchReportsGallery';
+import { toUserMessage } from '@/lib/user-error-message';
 
 // ============================================================================
 // Source row
@@ -177,7 +178,7 @@ function ReportTab({
         setState('loaded');
       } catch (fetchError) {
         if (signal.aborted) return;
-        setError(fetchError instanceof Error ? fetchError.message : 'Could not load reports');
+        setError(toUserMessage(fetchError, 'Could not load reports'));
         setState('error');
       }
     },

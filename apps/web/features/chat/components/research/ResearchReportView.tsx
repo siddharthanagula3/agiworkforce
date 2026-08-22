@@ -33,6 +33,7 @@ import { MarkdownContent } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
 import type { DocumentFormat } from '../../types/message-metadata';
 import { documentExportService } from '../../services/document-export-service';
+import { toUserMessage } from '@/lib/user-error-message';
 
 // ============================================================================
 // Markdown assembly (export payload)
@@ -322,7 +323,7 @@ export function ResearchReportView({
         });
       } catch (error) {
         // Export runs in the browser; a failure must be visible, not swallowed.
-        setExportError(error instanceof Error ? error.message : 'Export failed');
+        setExportError(toUserMessage(error, 'Export failed'));
       } finally {
         setExportingFormat(null);
       }

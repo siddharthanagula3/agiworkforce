@@ -3,6 +3,8 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
+
 const CHAT_DIR = path.resolve(__dirname, '..');
 const read = (relative: string) => readFileSync(path.join(CHAT_DIR, relative), 'utf8');
 
@@ -18,7 +20,14 @@ function accountMenuShortcutHint(): string {
 
 describe('account menu keyboard shortcut hint', () => {
   it('advertises the binding the shortcut hook actually listens for', () => {
-    expect(SHORTCUTS_HOOK).toContain("modifierKey && key === '/'");
+    // The matcher is now driven by KEYBOARD_SHORTCUT_DOCS rather than a
+    // parallel hardcoded list, so the registry entry IS the binding. Asserting
+    // against it is stricter than the old string match on the matcher body:
+    // that string could be edited without the shown shortcut changing, and the
+    // registry cannot.
+    const doc = KEYBOARD_SHORTCUT_DOCS.find((entry) => entry.id === 'show-shortcuts');
+    expect(doc?.key).toBe('/');
+    expect(doc?.meta || doc?.ctrl).toBe(true);
     expect(SHORTCUTS_HOOK).not.toMatch(/key === '\?'/);
     expect(accountMenuShortcutHint()).toBe("shortcutLabel('/')");
   });

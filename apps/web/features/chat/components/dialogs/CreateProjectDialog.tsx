@@ -18,6 +18,7 @@ import { useProjectStore } from '@features/projects/stores/project-store';
 import type { Project } from '@features/projects/stores/project-store';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { PROJECT_TEMPLATES, getProjectTemplate } from '@/features/projects/data/project-templates';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface CreateProjectDialogProps {
   open: boolean;
@@ -75,7 +76,7 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
         router.push(`/chat/projects/${project.id}`);
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setErrorMsg(toUserMessage(err, 'Something went wrong. Please try again.'));
       setSubmitState('error');
     }
   }, [addProject, canSubmit, onCreated, onOpenChange, router, trimmedName, templateId]);

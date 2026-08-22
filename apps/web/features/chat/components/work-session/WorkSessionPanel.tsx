@@ -30,6 +30,7 @@ import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { downloadAllArtifacts, downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
 import { humanizeToolName } from '../messages/ToolTimeline';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type ProgressStatus =
   | AgentActivityRunStatus
@@ -487,7 +488,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
         ]);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not download this output');
+      toast.error(toUserMessage(error, 'Could not download this output'));
     }
   };
 
