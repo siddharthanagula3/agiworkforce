@@ -18,14 +18,14 @@ CAP-016,Provider batch tier,BatchTier,partial-unwired,M,Phase 1,Wire or cut,Open
 CAP-017,Compliance export API,ComplianceAPI,partial-unwired,M,Phase 3,Defer,Deferred,Enterprise,Needs cursor reads durable export jobs retention and signed downloads
 CAP-018,Synchronized connected files,ConnectedFiles,partial-unwired,M,Phase 1,Wire,Open,Platform,Persist remote identity revision sync state and project-knowledge ingestion
 CAP-019,Organization browse-domain policy,DomainPolicy,partial-unwired,M,Phase 1,Wire,Open,Security,Persist the declared setting and enforce it on every browse and fetch path
-CAP-020,Reasoning-effort access policy,EffortAccess,partial-unwired,M,Phase 2,Wire,Open,Platform,Clamp server-side entitlements and show unavailable effort levels honestly
+CAP-020,Reasoning-effort access policy,EffortAccess,partial-unwired,M,Phase 2,Wire,Done,Platform,"Web done 2026-08-21: server already clamped via resolveRequestEffort and clampEffortToEntitlement; the Settings picker now splits by entitlement like the composer already did, showing gated levels disabled instead of offering a level the server discards"
 CAP-021,Provider flex service tier,FlexTier,partial-unwired,M,Phase 2,Wire or cut,Open,Platform,Connect request contract provider option retry semantics and tier pricing
 CAP-022,Meeting transcription,MeetingTranscription,partial-unwired,L,Phase 1,Wire or cut,Open,Desktop,Delete misleading stubs unless meeting capture diarization and persistence are selected
 CAP-023,Messaging-platform bot presence,MessagingBot,partial-unwired,L,Deferred backlog,Defer,Deferred,Integrations,Inbound Slack Teams and WhatsApp apps remain outside the current phases
 CAP-024,Scored moderation thresholds,ModerationThresholds,partial-unwired,M,Phase 2,Wire,Open,Safety,Replace toggle-only regex behavior only with scored policy and logged enforcement
 CAP-025,Organization feature enablement,OrganizationEnablement,partial-unwired,M,Phase 3,Defer,Deferred,Enterprise,Requires an admin mutation contract and consumers on every affected surface
 CAP-026,Unprompted proactive suggestions,ProactiveSuggestions,partial-unwired,L,Product divergence,Decline,Not Planned,Product,Background connector scanning remains disallowed without separate consent
-CAP-027,Project-only memory,ProjectOnlyMemory,partial-unwired,M,Phase 1,Wire,Open,Memory,Add project scope and the ability to exclude global memory end to end
+CAP-027,Project-only memory,ProjectOnlyMemory,partial-unwired,M,Phase 1,Wire,Done,Memory,Web done 2026-08-21 in 0135_project_scoped_memory.sql: user_memories.project_id and user_projects.uses_global_memory; read path scopes by project and write path tags by project; per-project toggle in ProjectSettingsDialog replaces the decorative select that was removed pending exactly this. Verified on a branch: a project memory is invisible in a loose chat. Migration pending production apply.
 CAP-028,First-party SAML and SCIM,SAMLSSO,partial-unwired,L,Phase 3,Defer,Deferred,Enterprise,Configuration storage is not authentication or provisioning
 CAP-029,Mounted spreadsheet viewer,SpreadsheetViewer,partial-unwired,M,Phase 1,Wire,Open,Desktop,Mount a real workbook parser and multi-sheet view or remove the unreachable workspace
 CAP-030,Enforced tenant restrictions,TenantRestrictions,partial-unwired,M,Phase 2,Wire,Open,Enterprise,Consume the stored policies on sync compute provider and connector paths
@@ -38,7 +38,7 @@ CAP-036,Extension access enforcement,ExtensionAccess,implemented-unwired,S,Phase
 CAP-037,Authoritative extension directory,ExtensionDirectory,implemented-unwired,M,Phase 1,Wire or cut,Open,Extensibility,Replace static catalog claims or label the curated offline scope
 CAP-038,Docked inspector pane,InspectorPane,implemented-unwired,S,Phase 1,Wire,Open,Desktop,Mount the shared sidecar as a resizable rail instead of a full-area overlay
 CAP-039,Retrying job queue with dead-letter handling,JobQueue,implemented-unwired,S,Phase 2,Harden,Open,Platform,Durable agent-run work needs retries backoff leases and a dead-letter path
-CAP-040,Recoverable reauthentication prompt,LoginPrompt,implemented-unwired,S,Phase 1,Wire,Open,Multi-surface,Preserve and retry an interrupted turn after sign-in
+CAP-040,Recoverable reauthentication prompt,LoginPrompt,implemented-unwired,S,Phase 1,Wire,Done,Multi-surface,Web done 2026-08-21: a 401 mid-turn parks the typed content as the conversation draft so the composer repopulates after sign-in
 CAP-041,Shared mention menu,MentionMenu,implemented-unwired,S,Phase 1,Wire,Open,Multi-surface,Mount existing file and skill pickers and connect authoritative search
 CAP-042,Mounted navigation tree,NavigationTree,implemented-unwired,M,Phase 1,Wire or cut,Open,Desktop,Mount the file or project tree in a supported mode or delete the orphaned implementations
 CAP-043,Reachable PDF editing,PDFEditing,implemented-unwired,S,Phase 1,Wire or cut,Open,Desktop,Expose bounded native edit commands and UI or remove library-only editor claims

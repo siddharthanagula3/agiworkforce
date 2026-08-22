@@ -45,12 +45,15 @@
       "title": "Project deletion dialog is silent about knowledge files, which become permanently orphaned (soft-delete never triggers the files' ON DELETE CASCADE)",
       "claimId": "projects-11",
       "benchmark": "ChatGPT's deletion dialog enumerates every destroyed object type verbatim: 'permanently delete this project, including all its chats, tasks, and files ... To save chats, move them to your chat list or another project before deleting.' SINGLE_PRODUCT (ChatGPT), tableStakes=false. Source: 01-chatgpt/projects.md.",
-      "ourState": "PARTIAL",
+      "ourState": "FIXED",
       "ourEvidence": "apps/web/app/api/projects/[id]/route.ts:283-337: project deletion sets deleted_at (soft delete) and explicitly moves conversations out (update web_conversations set project_id = null ...) -- this part is disclosed truthfully in ProjectSettingsDialog.tsx:329-334 ('Conversations in this project will be moved to All Chats'). But apps/web/db/neon/0006_projects.sql:18 defines project_knowledge_files.project_id with 'on delete cascade' -- a constraint that can only fire on a hard DELETE, which never happens (the project row is only ever soft-deleted). Grepped apps/web/app/api/projects for any restore/undelete endpoint -- none exists. So knowledge files remain in Postgres and R2 indefinitely after 'deletion', with the dialog never mentioning files at all and no way for the user to get them back.",
       "severity": "P2",
       "effort": "M",
       "priorAudit": "NEW",
-      "recommendation": "Either (a) add explicit knowledge-file handling to the delete flow (soft-delete or hard-delete the files' rows and R2 objects on project deletion, with a real cleanup job), or (b) if files are meant to persist for potential recovery, add a project-restore endpoint and update the confirmation dialog to say so truthfully (e.g. 'Files will be retained but inaccessible until the project is restored'). The current silence is the actual defect, independent of which behavior is chosen."
+      "recommendation": "Either (a) add explicit knowledge-file handling to the delete flow (soft-delete or hard-delete the files' rows and R2 objects on project deletion, with a real cleanup job), or (b) if files are meant to persist for potential recovery, add a project-restore endpoint and update the confirmation dialog to say so truthfully (e.g. 'Files will be retained but inaccessible until the project is restored'). The current silence is the actual defect, independent of which behavior is chosen.",
+      "priorState": "PARTIAL",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "Project deletion now discloses knowledge-file destruction verbatim before confirming (ProjectSettingsDialog.tsx:304-309)."
     },
     {
       "id": "PROJ-WS-04",

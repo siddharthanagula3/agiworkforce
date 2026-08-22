@@ -152,7 +152,7 @@ omitted field reads as a fact withheld.
 > **Subject:** Personal data breach intimation — AGI Automation LLC — [initial | detailed] report
 >
 > **1. Reporting entity**
-> AGI Automation LLC, 1309 Coffeen Avenue STE 1200, Sheridan, Wyoming 82801, USA.
+> AGI Automation LLC, c/o registered agent, 5900 Balcones Drive STE 100, Austin, TX 78731, USA.
 > Grievance contact: contact@agiworkforce.com (subject line "DPDP grievance").
 > Report prepared by: [name, role, contact].
 >
