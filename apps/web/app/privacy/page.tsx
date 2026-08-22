@@ -727,9 +727,13 @@ export default function PrivacyPage() {
                 <td style={{ verticalAlign: 'top' }}>Security audit log</td>
                 <td style={{ verticalAlign: 'top' }}>90 days.</td>
                 <td>
-                  A database routine deletes entries older than 90 days.{' '}
-                  <strong>It is run by an administrator, not on a schedule</strong>, so treat 90
-                  days as the policy rather than an automatic guarantee.
+                  A database routine deletes entries older than 90 days, run by a{' '}
+                  <strong>scheduled job every night</strong> —{' '}
+                  <code>/api/cron/purge-security-audit-logs</code> at 02:30 UTC, registered in{' '}
+                  <code>vercel.json</code>. This entry previously said the routine was run by an
+                  administrator rather than on a schedule; that stopped being true when the cron was
+                  added, and the policy is corrected here rather than left understating what
+                  happens.
                 </td>
               </tr>
               <tr>
