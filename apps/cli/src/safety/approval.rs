@@ -5,8 +5,32 @@ use super::dangerous_commands::{
 use super::CommandSafety;
 
 /// Strip leading path from a command name (e.g. `/usr/bin/rm` -> `rm`).
-pub(super) fn strip_path(word: &str) -> &str {
-    word.rsplit('/').next().unwrap_or(word)
+/// Both separators are stripped: a Windows-style `C:\\Windows\\System32\\cmd.exe`
+/// must reduce to `cmd.exe` so path-spelled commands cannot dodge name matching.
+pub(crate) fn strip_path(word: &str) -> &str {
+    word.rsplit(['/', '\\']).next().unwrap_or(word)
+}
+
+/// Match an option token against a known option name, including the attached-value
+/// spellings (`--output=x`, `-ox`) that a bare equality check lets through.
+/// Bare prefix matching is confined to single-character short options, so a longer
+/// predicate that merely starts with a dangerous one (`find -executable` vs
+/// `-exec`) is not swept up.
+fn matches_option(arg: &str, option: &str) -> bool {
+    if arg == option {
+        return true;
+    }
+    let Some(rest) = arg.strip_prefix(option) else {
+        return false;
+    };
+    if rest.starts_with('=') {
+        return true;
+    }
+    !option.starts_with("--") && option.len() == 2 && !rest.is_empty()
+}
+
+fn any_option_matches(arg: &str, options: &[&str]) -> bool {
+    options.iter().any(|option| matches_option(arg, option))
 }
 
 /// Classify `rm` — force flags make it Dangerous, otherwise Unknown.
@@ -34,7 +58,7 @@ pub(super) fn classify_rm(command: &str) -> CommandSafety {
 pub(super) fn classify_find(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     for arg in &args[1..] {
-        if FIND_DANGEROUS_OPTIONS.contains(arg) {
+        if any_option_matches(arg, FIND_DANGEROUS_OPTIONS) {
             return CommandSafety::Dangerous;
         }
     }
@@ -45,30 +69,50 @@ pub(super) fn classify_find(command: &str) -> CommandSafety {
 pub(super) fn classify_rg(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     for arg in &args[1..] {
-        if RG_DANGEROUS_OPTIONS.contains(arg) {
+        if any_option_matches(arg, RG_DANGEROUS_OPTIONS) {
             return CommandSafety::Dangerous;
         }
     }
     CommandSafety::Safe
 }
 
-/// Classify `sed` — only safe if it matches the read-only print pattern `sed -n {N|M,N}p`.
+/// Classify `sed` — only safe if the *entire* argument list is the read-only print
+/// form `sed -n {N|M,N}p [file...]`.
+///
+/// Every trailing token is validated, not just the expression: `sed -n 1,999p
+/// secrets.yml > ci.yml` reads and writes arbitrary files, so an unaccounted-for
+/// flag, shell metacharacter, or second expression must fall through to Unknown
+/// (which prompts) instead of riding along on the safe-looking pattern.
 pub(super) fn classify_sed(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
-    // Safe pattern: `sed -n <range>p [file...]`
-    // where <range> is digits or digits,digits followed by 'p'
-    if args.len() >= 3 && args[1] == "-n" {
-        // Strip at most one *matched* surrounding quote pair from the expression.
-        // Asymmetric trimming (independent trim_start/trim_end of both quote
-        // chars) would normalize a mixed-quote expression like `'5p"` into a
-        // "safe" print pattern; require a matched pair so mismatched quotes fall
-        // through to the Unknown fallback (which prompts the user) instead.
-        let expr = strip_matched_quotes(args[2]);
-        if is_sed_readonly_print(expr) {
-            return CommandSafety::Safe;
-        }
+    if args.len() < 3 || args[1] != "-n" {
+        return CommandSafety::Unknown;
     }
-    CommandSafety::Unknown
+
+    // Strip at most one *matched* surrounding quote pair from the expression.
+    // Asymmetric trimming (independent trim_start/trim_end of both quote
+    // chars) would normalize a mixed-quote expression like `'5p"` into a
+    // "safe" print pattern; require a matched pair so mismatched quotes fall
+    // through to the Unknown fallback (which prompts the user) instead.
+    let expr = strip_matched_quotes(args[2]);
+    if !is_sed_readonly_print(expr) {
+        return CommandSafety::Unknown;
+    }
+
+    if args[3..].iter().any(|arg| !is_plain_file_operand(arg)) {
+        return CommandSafety::Unknown;
+    }
+
+    CommandSafety::Safe
+}
+
+/// A trailing token that can only name a file to read: no flags, no shell
+/// metacharacters (redirection, chaining, expansion).
+fn is_plain_file_operand(arg: &str) -> bool {
+    !arg.starts_with('-')
+        && !arg
+            .chars()
+            .any(|c| matches!(c, '>' | '<' | '|' | ';' | '&' | '$' | '`' | '(' | ')'))
 }
 
 /// Strip exactly one matched pair of surrounding quotes (`'...'` or `"..."`).
@@ -114,7 +158,7 @@ pub(super) fn is_sed_readonly_print(expr: &str) -> bool {
 pub(super) fn classify_base64(command: &str) -> CommandSafety {
     let args: Vec<&str> = command.split_whitespace().collect();
     for arg in &args[1..] {
-        if BASE64_DANGEROUS_OPTIONS.contains(arg) {
+        if any_option_matches(arg, BASE64_DANGEROUS_OPTIONS) {
             return CommandSafety::Dangerous;
         }
     }
@@ -257,6 +301,74 @@ mod tests {
         assert_eq!(classify_sed("sed -n '$p' file.txt"), CommandSafety::Safe);
         assert_eq!(classify_sed("sed -n \"5p\" file.txt"), CommandSafety::Safe);
         assert_eq!(classify_sed("sed -n 5p file.txt"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn classify_sed_rejects_unaccounted_trailing_arguments() {
+        // Redirection riding along on the safe print pattern is an arbitrary
+        // file write, not a read.
+        assert_eq!(
+            classify_sed("sed -n 1,999p secrets.yml > .github/workflows/ci.yml"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_sed("sed -n 5p file.txt >> /tmp/exfil"),
+            CommandSafety::Unknown
+        );
+        // Extra flags after the print expression can edit in place or write out.
+        assert_eq!(
+            classify_sed("sed -n 5p -i file.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_sed("sed -n 5p file.txt -e 1w /tmp/out"),
+            CommandSafety::Unknown
+        );
+        // Command substitution in an operand must prompt.
+        assert_eq!(
+            classify_sed("sed -n 5p $(cat target)"),
+            CommandSafety::Unknown
+        );
+        // Plain file operands stay safe.
+        assert_eq!(classify_sed("sed -n 5p a.txt b.txt"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn dangerous_options_match_attached_value_spellings() {
+        assert_eq!(
+            classify_rg("rg --pre=/bin/sh pattern"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_base64("base64 --output=/tmp/x file"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_base64("base64 -o/tmp/x file"),
+            CommandSafety::Dangerous
+        );
+        // `--pre-glob` is not `--pre`, and `-executable` is not `-exec`; neither
+        // may be swept up by prefix matching.
+        assert_eq!(
+            classify_rg("rg --pre-glob *.log pattern"),
+            CommandSafety::Safe
+        );
+        assert_eq!(classify_find("find . -executable"), CommandSafety::Safe);
+        assert_eq!(
+            classify_find("find . -exec rm {} ;"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_find("find . -fprintf /tmp/x %p"),
+            CommandSafety::Dangerous
+        );
+    }
+
+    #[test]
+    fn strip_path_strips_both_separators() {
+        assert_eq!(strip_path("/usr/bin/rm"), "rm");
+        assert_eq!(strip_path("C:\\Windows\\System32\\cmd.exe"), "cmd.exe");
+        assert_eq!(strip_path("rm"), "rm");
     }
 
     #[test]
