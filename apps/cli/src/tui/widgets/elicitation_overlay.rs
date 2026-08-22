@@ -13,11 +13,11 @@
 //! │                                                                               │
 //! │  Please provide your GitHub token                                             │
 //! │                                                                               │
-//! │  > token  [___________________________]                                       │
+//! │  > token  [***************]  hidden                                           │
 //! │    scope  [read / write / admin      ]  ← / → to cycle                       │
 //! │                                                                               │
-//! │  [Accept]  [Decline]  [Cancel]                                                │
-//! │  Tab/↑↓ field   Enter confirm   Esc = Cancel                                  │
+//! │   Accept   [Decline]   Cancel                                                 │
+//! │  Tab/↑↓ move   Enter activates   Esc = Cancel                                 │
 //! └───────────────────────────────────────────────────────────────────────────────┘
 //! ```
 //!
@@ -58,6 +58,8 @@ pub struct FormField {
     pub name: String,
     pub required: bool,
     pub kind: FieldKind,
+    /// Credential-shaped field: rendered masked, submitted verbatim.
+    pub sensitive: bool,
 }
 
 impl FormField {
@@ -88,6 +90,8 @@ impl FormField {
             FieldKind::Text { value } => {
                 if value.is_empty() {
                     "___________________________".to_string()
+                } else if self.sensitive {
+                    "*".repeat(value.chars().count())
                 } else {
                     value.clone()
                 }
@@ -192,6 +196,28 @@ fn selected_flags(options: &[String], prop: &serde_json::Value) -> Vec<bool> {
         .collect()
 }
 
+const SENSITIVE_NAME_MARKERS: [&str; 7] = [
+    "key",
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "passphrase",
+    "credential",
+];
+
+fn is_sensitive_property(name: &str, prop: &serde_json::Value) -> bool {
+    if prop.get("format").and_then(|f| f.as_str()) == Some("password")
+        || prop.get("writeOnly").and_then(|w| w.as_bool()) == Some(true)
+    {
+        return true;
+    }
+    let lowered = name.to_ascii_lowercase();
+    SENSITIVE_NAME_MARKERS
+        .iter()
+        .any(|marker| lowered.contains(marker))
+}
+
 fn parse_schema(schema: &serde_json::Value) -> Vec<FormField> {
     let mut fields = Vec::new();
 
@@ -244,10 +270,13 @@ fn parse_schema(schema: &serde_json::Value) -> Vec<FormField> {
             }
         };
 
+        let sensitive = matches!(kind, FieldKind::Text { .. }) && is_sensitive_property(name, prop);
+
         fields.push(FormField {
             name: name.clone(),
             required,
             kind,
+            sensitive,
         });
     }
 
@@ -309,8 +338,10 @@ impl ElicitationOverlayState {
         } else {
             parse_schema(&request.requested_schema)
         };
+        // A server-triggered overlay must never open with consent under the
+        // cursor: a stray Enter would return Accept the user never reviewed.
         self.focus = if self.fields.is_empty() {
-            Focus::Button(BUTTON_ACCEPT)
+            Focus::Button(BUTTON_DECLINE)
         } else {
             Focus::Field(0)
         };
@@ -446,6 +477,7 @@ impl ElicitationOverlayState {
                 FieldKind::Enum { .. } => "  ← / → to cycle",
                 FieldKind::MultiEnum { .. } => "  ← / → move, Space toggle",
                 FieldKind::Bool { .. } => "  Space to toggle",
+                FieldKind::Text { .. } if field.sensitive => "  hidden",
                 FieldKind::Text { .. } => "",
             };
             let val = field.render_value();
@@ -477,7 +509,7 @@ impl ElicitationOverlayState {
         out.push_str(&format!(
             "│{}│\n",
             pad_to_cols(
-                "  Tab/↑↓ field   ← → enum/bool   Enter confirm   Esc = Cancel",
+                "  Tab/↑↓ move   ← → enum/bool   Enter activates   Esc = Cancel",
                 inner
             )
         ));
@@ -499,7 +531,7 @@ impl Default for ElicitationOverlayState {
             url: None,
             elicitation_id: None,
             fields: Vec::new(),
-            focus: Focus::Button(BUTTON_ACCEPT),
+            focus: Focus::Button(BUTTON_DECLINE),
             result: None,
         }
     }
@@ -611,9 +643,14 @@ impl InteractiveView for ElicitationOverlayState {
             KeyAction::Enter => {
                 match self.focus {
                     Focus::Button(idx) => self.resolve_button(idx),
-                    Focus::Field(_) => {
-                        // Enter on a field advances focus to Accept button
-                        self.focus = Focus::Button(BUTTON_ACCEPT);
+                    Focus::Field(i) => {
+                        // Never let Enter alone walk onto Accept: reaching it must
+                        // cost a deliberate Tab/↑↓ navigation.
+                        self.focus = if i + 1 < self.field_count() {
+                            Focus::Field(i + 1)
+                        } else {
+                            Focus::Button(BUTTON_DECLINE)
+                        };
                         ViewAction::Continue
                     }
                 }
@@ -1059,12 +1096,29 @@ mod tests {
     }
 
     #[test]
-    fn enter_on_field_advances_to_accept_button() {
+    fn enter_walks_fields_and_stops_on_decline_never_accept() {
         let mut s = open_text_overlay();
         assert_eq!(s.focus, Focus::Field(0));
         let action = s.handle_key(KeyAction::Enter);
         assert_eq!(action, ViewAction::Continue);
-        assert_eq!(s.focus, Focus::Button(BUTTON_ACCEPT));
+        assert_eq!(s.focus, Focus::Field(1));
+        s.handle_key(KeyAction::Enter);
+        assert_eq!(s.focus, Focus::Button(BUTTON_DECLINE));
+    }
+
+    #[test]
+    fn repeated_enter_from_opening_focus_never_accepts() {
+        let mut s = open_text_overlay();
+        for _ in 0..2 {
+            assert!(s.result.is_none());
+            s.handle_key(KeyAction::Enter);
+        }
+        let action = s.handle_key(KeyAction::Enter);
+        assert_eq!(action, ViewAction::Close);
+        assert_eq!(
+            s.result.as_ref().unwrap().action,
+            ElicitationAction::Decline
+        );
     }
 
     #[test]
@@ -1077,7 +1131,7 @@ mod tests {
     }
 
     #[test]
-    fn no_fields_schema_focuses_buttons_first() {
+    fn no_fields_schema_focuses_decline_first() {
         let mut s = ElicitationOverlayState::default();
         s.open(
             "srv",
@@ -1089,6 +1143,116 @@ mod tests {
                 elicitation_id: None,
             },
         );
-        assert_eq!(s.focus, Focus::Button(BUTTON_ACCEPT));
+        assert_eq!(s.focus, Focus::Button(BUTTON_DECLINE));
+    }
+
+    #[test]
+    fn url_mode_opens_on_decline_so_a_stray_enter_does_not_consent() {
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            "oauth",
+            ElicitationRequest {
+                message: "Authorize the server".into(),
+                requested_schema: serde_json::json!({"type": "object", "properties": {}}),
+                mode: ElicitationMode::Url,
+                url: Some("https://evil.example/oauth".into()),
+                elicitation_id: Some("abc".into()),
+            },
+        );
+
+        assert_eq!(s.focus, Focus::Button(BUTTON_DECLINE));
+        let action = s.handle_key(KeyAction::Enter);
+        assert_eq!(action, ViewAction::Close);
+        let response = s.result.as_ref().unwrap();
+        assert_eq!(response.action, ElicitationAction::Decline);
+        assert!(response.content.is_none());
+    }
+
+    fn open_with_property(name: &str, prop: serde_json::Value) -> ElicitationOverlayState {
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            "srv",
+            ElicitationRequest {
+                message: "Provide input".into(),
+                requested_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": { name: prop }
+                }),
+                mode: ElicitationMode::Form,
+                url: None,
+                elicitation_id: None,
+            },
+        );
+        s
+    }
+
+    fn type_into_first_field(s: &mut ElicitationOverlayState, text: &str) {
+        s.focus = Focus::Field(0);
+        for c in text.chars() {
+            s.handle_key(KeyAction::Char(c));
+        }
+    }
+
+    #[test]
+    fn password_format_field_is_masked_on_screen_but_submitted_verbatim() {
+        let mut s = open_with_property(
+            "passphrase_hint",
+            serde_json::json!({"type": "string", "format": "password"}),
+        );
+        assert!(s.fields[0].sensitive);
+        type_into_first_field(&mut s, "hunter2");
+
+        let rendered = s.render_text();
+        assert!(
+            !rendered.contains("hunter2"),
+            "secret echoed on the terminal: {rendered}"
+        );
+        assert!(rendered.contains("*******"));
+
+        s.focus = Focus::Button(BUTTON_ACCEPT);
+        s.handle_key(KeyAction::Enter);
+        let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
+        assert_eq!(content["passphrase_hint"], "hunter2");
+    }
+
+    #[test]
+    fn credential_named_fields_are_masked_on_screen() {
+        for name in [
+            "api_key",
+            "githubToken",
+            "client_secret",
+            "password",
+            "db_credential",
+        ] {
+            let mut s = open_with_property(name, serde_json::json!({"type": "string"}));
+            assert!(
+                s.fields[0].sensitive,
+                "{name} should be treated as sensitive"
+            );
+            type_into_first_field(&mut s, "my-secret-token");
+            let rendered = s.render_text();
+            assert!(
+                !rendered.contains("my-secret-token"),
+                "{name} echoed its value: {rendered}"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_fields_still_render_their_value() {
+        let mut s = open_with_property("branch", serde_json::json!({"type": "string"}));
+        assert!(!s.fields[0].sensitive);
+        type_into_first_field(&mut s, "main");
+        assert!(s.render_text().contains("main"));
+    }
+
+    #[test]
+    fn enum_field_named_like_a_secret_stays_readable() {
+        let s = open_with_property(
+            "key_scope",
+            serde_json::json!({"type": "string", "enum": ["read", "write"]}),
+        );
+        assert!(!s.fields[0].sensitive);
+        assert!(s.render_text().contains("read"));
     }
 }
