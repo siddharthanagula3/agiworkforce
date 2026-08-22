@@ -171,3 +171,59 @@ describe('POST /api/feedback', () => {
     expect(storedMetadata).toContain('[redacted:bearer-token]');
   });
 });
+
+// A rating that cannot be traced back to an answer is a number nobody can act
+// on. Both fields are required or the vote is refused, not silently stored.
+describe('response ratings', () => {
+  it('refuses a rating with no message to attribute it to', async () => {
+    const res = await POST(
+      request({
+        subject: 'Response rated up',
+        message: 'answer text',
+        metadata: {
+          platform: 'web',
+          version: 'web',
+          user_agent: 'test',
+          feedback_context: 'response_rating',
+          rating: 'up',
+        },
+      }),
+    );
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('refuses a rating that does not say which way it went', async () => {
+    const res = await POST(
+      request({
+        subject: 'Response rated',
+        message: 'answer text',
+        metadata: {
+          platform: 'web',
+          version: 'web',
+          user_agent: 'test',
+          feedback_context: 'response_rating',
+          message_id: 'msg-1',
+        },
+      }),
+    );
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('rejects a verdict that is neither up nor down', async () => {
+    const res = await POST(
+      request({
+        subject: 'Response rated sideways',
+        message: 'answer text',
+        metadata: {
+          platform: 'web',
+          version: 'web',
+          user_agent: 'test',
+          feedback_context: 'response_rating',
+          rating: 'sideways',
+          message_id: 'msg-1',
+        },
+      }),
+    );
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+});

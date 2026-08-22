@@ -22,6 +22,7 @@ import {
 
 describe('managed Skill catalog service', () => {
   let root: string;
+  let bundledOverlay: string;
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'managed-skill-service-'));
@@ -39,7 +40,26 @@ describe('managed Skill catalog service', () => {
       ].join('\n'),
       'utf-8',
     );
-    process.env['SKILLS_LAYERS'] = JSON.stringify([{ rootDir: root, source: 'personal' }]);
+    bundledOverlay = await mkdtemp(join(tmpdir(), 'managed-skill-draft-'));
+    const draftDir = join(bundledOverlay, 'unreleased-fixture');
+    await mkdir(draftDir, { recursive: true });
+    await writeFile(
+      join(draftDir, 'SKILL.md'),
+      [
+        '---',
+        'name: unreleased-fixture',
+        'description: A draft catalog entry used to pin draft handling.',
+        'draft: true',
+        '---',
+        '',
+        'This entry is a draft and must never be offered for execution.',
+      ].join('\n'),
+      'utf-8',
+    );
+    process.env['SKILLS_LAYERS'] = JSON.stringify([
+      { rootDir: root, source: 'personal' },
+      { rootDir: bundledOverlay, source: 'bundled' },
+    ]);
     resetManagedSkillCatalogCacheForTests();
   });
 
@@ -47,6 +67,7 @@ describe('managed Skill catalog service', () => {
     delete process.env['SKILLS_LAYERS'];
     resetManagedSkillCatalogCacheForTests();
     await rm(root, { recursive: true, force: true });
+    await rm(bundledOverlay, { recursive: true, force: true });
   });
 
   it('parses only declared skill sources with non-empty roots', () => {
@@ -87,17 +108,33 @@ describe('managed Skill catalog service', () => {
         source: 'bundled',
       }),
       { rootDir: root, source: 'personal' },
+      { rootDir: bundledOverlay, source: 'bundled' },
     ]);
   });
 
   it('keeps draft entries visible in the directory but out of execution', async () => {
     await expect(getManagedSkillDirectory()).resolves.toContainEqual(
       expect.objectContaining({
-        name: 'skill-creator',
+        name: 'unreleased-fixture',
         frontmatter: expect.objectContaining({ draft: true }),
       }),
     );
-    await expect(findManagedSkillByName('skill-creator')).resolves.toBeNull();
+    await expect(findManagedSkillByName('unreleased-fixture')).resolves.toBeNull();
+  });
+
+  it('offers the promoted skill-creator for execution and download', async () => {
+    const skill = await findManagedSkillByName('skill-creator');
+    expect(skill).toMatchObject({ name: 'skill-creator' });
+    expect(skill?.frontmatter['draft']).not.toBe(true);
+    const download = await getBundledSkillDownload('skill-creator');
+    expect(download?.content.toString('utf-8')).toContain('name: skill-creator');
+
+    const loaded = await executeManagedSkillTool(
+      { action: 'load', name: 'skill-creator' },
+      { availableTools: new Set(['skill']) },
+    );
+    expect(loaded).toMatchObject({ isError: false, code: 'skill_loaded' });
+    expect(loaded.content).toContain('one narrow job');
   });
 
   it('performs exact-name lookup without accepting a host location', async () => {
@@ -131,7 +168,7 @@ describe('managed Skill catalog service', () => {
     const download = await getBundledSkillDownload('code-review');
     expect(download?.content.toString('utf-8')).toContain('name: code-review');
     await expect(getBundledSkillDownload('design-review')).resolves.toBeNull();
-    await expect(getBundledSkillDownload('skill-creator')).resolves.toBeNull();
+    await expect(getBundledSkillDownload('unreleased-fixture')).resolves.toBeNull();
   });
 
   it('downloads a plugin-owned bundle only when that plugin is enabled', async () => {

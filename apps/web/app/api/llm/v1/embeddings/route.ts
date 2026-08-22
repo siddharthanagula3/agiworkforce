@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import {
@@ -16,6 +15,7 @@ import {
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -163,6 +163,12 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
 
   const inputs = toEmbeddingInputs(parsed.data.input);
   const model = resolveEmbeddingModel(parsed.data.model);
+  const managedGateResponse = buildManagedComputeGateResponse(
+    request,
+    { provider: model.provider, model: model.id, feature: 'embeddings' },
+    { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  );
+  if (managedGateResponse) return managedGateResponse;
   const estimatedTokens = estimateTokens(inputs);
 
   let reservation: ManagedUsageRequestReservation;

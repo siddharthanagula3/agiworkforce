@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createHash } from 'crypto';
+import { pseudonymizeEmail } from '@/lib/server/email-pseudonym';
 
 export interface WaitlistEmailStorageKey {
   emailHash: string;
@@ -14,7 +14,7 @@ export function normalizeWaitlistEmail(email: string): string {
 
 export function hashEmailForWaitlistStorage(email: string): WaitlistEmailStorageKey {
   const normalizedEmail = normalizeWaitlistEmail(email);
-  const emailHash = createHash('sha256').update(normalizedEmail).digest('hex');
+  const emailHash = pseudonymizeEmail(normalizedEmail);
   const localPart = normalizedEmail.split('@')[0] ?? normalizedEmail;
   return {
     emailHash,

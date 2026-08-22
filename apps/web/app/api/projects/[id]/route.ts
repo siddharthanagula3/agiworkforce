@@ -151,6 +151,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (body.instructions !== undefined) addBase('instructions', body.instructions?.trim() ?? null);
   if (body.color !== undefined) addBase('color', body.color.trim());
   if (body.isArchived !== undefined) addBase('is_archived', body.isArchived);
+  if (body.usesGlobalMemory !== undefined) addBase('uses_global_memory', body.usesGlobalMemory);
   if (body.starred !== undefined) {
     baseParams.push(body.starred);
     baseSetClauses.push(

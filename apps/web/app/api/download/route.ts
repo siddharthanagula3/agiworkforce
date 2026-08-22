@@ -12,24 +12,12 @@ import {
   type DesktopDownloadPlatform,
   type StableDesktopRelease,
 } from '@/lib/releases/github-desktop-releases';
+import { isTrustedReleaseAssetUrl } from '@/lib/releases/trusted-release-asset-url';
 
 const REPO_OWNER = process.env['DESKTOP_GITHUB_OWNER'] || 'siddharthanagula3';
 const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-app';
 const CLOUD_REPO_OWNER = process.env['DESKTOP_CLOUD_GITHUB_OWNER'] || 'siddharthanagula3';
 const CLOUD_REPO_NAME = process.env['DESKTOP_CLOUD_GITHUB_REPO'] || 'agiworkforce';
-
-const EXTERNAL_URL_ALLOWED_HOSTS = new Set<string>([
-  'downloads.agiworkforce.com',
-  'cdn.agiworkforce.com',
-  'github.com',
-  'objects.githubusercontent.com',
-]);
-
-const TRUSTED_GITHUB_RELEASES: ReadonlyArray<{ owner: string; repo: string }> = [
-  { owner: 'siddharthanagula3', repo: 'agiworkforce' },
-  { owner: REPO_OWNER, repo: REPO_NAME },
-  { owner: CLOUD_REPO_OWNER, repo: CLOUD_REPO_NAME },
-];
 
 function selectCloudMacInstallerAsset(
   release: StableDesktopRelease,
@@ -51,31 +39,6 @@ function selectCloudMacInstallerAsset(
     release.assets.find((a) => a.name.endsWith('.dmg')) ??
     null
   );
-}
-
-function isExternalRedirectAllowed(rawUrl: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== 'https:') return false;
-  if (!EXTERNAL_URL_ALLOWED_HOSTS.has(parsed.hostname)) return false;
-
-  if (parsed.hostname === 'github.com') {
-    const segments = parsed.pathname.split('/').filter(Boolean);
-    if (segments.length < 4) return false;
-    const [owner, repo, kind] = segments;
-    if (kind !== 'releases') return false;
-    const ownerLower = owner?.toLowerCase() ?? '';
-    const repoLower = repo?.toLowerCase() ?? '';
-    return TRUSTED_GITHUB_RELEASES.some(
-      (pair) => pair.owner.toLowerCase() === ownerLower && pair.repo.toLowerCase() === repoLower,
-    );
-  }
-
-  return true;
 }
 
 async function handleDownload(request: NextRequest) {
@@ -150,7 +113,7 @@ async function handleDownload(request: NextRequest) {
     };
 
     const downloadUrl = asset.browserDownloadUrl;
-    if (!isExternalRedirectAllowed(downloadUrl)) {
+    if (!isTrustedReleaseAssetUrl(downloadUrl)) {
       throw createError.serviceUnavailable('Release asset URL is not trusted');
     }
     const filename = cleanFilenames[platform] || asset.name;
@@ -200,7 +163,7 @@ function fallbackToStatic(platform: string, request: Request, app: string | null
     return NextResponse.json({ error: 'Installer unavailable', platform }, { status: 503 });
   }
 
-  if (!url.startsWith('/') && !isExternalRedirectAllowed(url)) {
+  if (!url.startsWith('/') && !isTrustedReleaseAssetUrl(url)) {
     throw createError.validation(
       'Download redirect target is not on the allowlist. Set NEXT_PUBLIC_DOWNLOAD_URL_* to an https URL on our download host or trusted GitHub release.',
     );

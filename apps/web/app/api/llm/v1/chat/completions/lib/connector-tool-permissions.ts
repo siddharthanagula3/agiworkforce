@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -13,7 +12,14 @@ const DB_TO_WIRE: Readonly<Record<string, ConnectorToolPermissionLevel>> = Objec
   blocked: 'deny',
 });
 
+export interface ConnectorToolPermissionEntry {
+  connectorId: string;
+  toolName: string;
+  level: ConnectorToolPermissionLevel;
+}
+
 export interface ConnectorToolPermissions {
+  readonly entries: ReadonlyArray<ConnectorToolPermissionEntry>;
   levelFor(qualifiedName: string): ConnectorToolPermissionLevel | undefined;
   levelForConnectorTool(
     connectorId: string,
@@ -37,7 +43,16 @@ function buildPermissions(
     if (!parsed) return undefined;
     return levelForConnectorTool(parsed.serverId, parsed.toolName);
   };
+  const entries: ConnectorToolPermissionEntry[] = [...levels].map(([composite, level]) => {
+    const separator = composite.indexOf(' ');
+    return {
+      connectorId: composite.slice(0, separator),
+      toolName: composite.slice(separator + 1),
+      level,
+    };
+  });
   return {
+    entries,
     levelFor,
     levelForConnectorTool,
     isDenied: (qualifiedName) => levelFor(qualifiedName) === 'deny',
@@ -52,6 +67,14 @@ function buildPermissions(
 export const EMPTY_CONNECTOR_TOOL_PERMISSIONS: ConnectorToolPermissions = buildPermissions(
   new Map(),
 );
+
+export function connectorToolPermissionsFromEntries(
+  entries: ReadonlyArray<ConnectorToolPermissionEntry>,
+): ConnectorToolPermissions {
+  return buildPermissions(
+    new Map(entries.map((entry) => [entry.connectorId + ' ' + entry.toolName, entry.level])),
+  );
+}
 
 const PG_UNDEFINED_TABLE = '42P01';
 

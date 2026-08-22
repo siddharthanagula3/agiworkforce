@@ -90,6 +90,7 @@ import {
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
+  loadProjectMemoryScope,
   loadSuppressedMemorySources,
   type ManagedMemoryContextDb,
   type ManagedMemoryPolicy,
@@ -780,15 +781,21 @@ export async function enrichManagedMemoryContext(params: {
   userId: string;
   chatRequest: ChatCompletionRequest;
   isTemporary: boolean;
+  projectId?: string | null;
 }): Promise<void> {
   if (params.isTemporary) return;
 
-  const suppressedSources = await loadSuppressedMemorySources(params.db, {
-    userId: params.userId,
-  });
+  const [suppressedSources, scope] = await Promise.all([
+    loadSuppressedMemorySources(params.db, { userId: params.userId }),
+    loadProjectMemoryScope(params.db, {
+      userId: params.userId,
+      projectId: params.projectId ?? null,
+    }),
+  ]);
   const memories = await loadManagedMemoryContext(params.db, {
     userId: params.userId,
     suppressedSources,
+    scope,
   });
   const prompt = formatManagedMemorySystemPrompt(memories);
   if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
@@ -1584,11 +1591,22 @@ export async function processRequest(
   if (managedMemoryPolicy.enabled) {
     try {
       const scoped = await scopedDbPromise;
+      // A memory confined to a project must not appear in a loose chat, and a
+      // project set to exclude global memory must not see the account pool. The
+      // conversation's project is what decides both, so it is resolved here
+      // rather than defaulting to the global scope.
+      const [conversationRow] = chatRequest.conversation_id
+        ? await scoped.db.query<{ project_id: string | null }>(
+            `select project_id from web_conversations where id = $1::uuid and user_id = $2 limit 1`,
+            [chatRequest.conversation_id, userId],
+          )
+        : [];
       await enrichManagedMemoryContext({
         db: scoped.db,
         userId,
         chatRequest,
         isTemporary: false,
+        projectId: conversationRow?.project_id ?? null,
       });
     } catch (error) {
       logger.error(

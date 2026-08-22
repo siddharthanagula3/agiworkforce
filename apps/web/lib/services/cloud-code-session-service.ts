@@ -514,6 +514,22 @@ export async function createCloudCodeSession(
   }
 }
 
+export async function claimCloudCodeSessionForRun(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeSession | null> {
+  return transitionSessionState(db, owner, sessionId, ['ready'], 'running', null);
+}
+
+export async function releaseCloudCodeSessionAfterRun(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeSession | null> {
+  return transitionSessionState(db, owner, sessionId, ['running'], 'ready', null);
+}
+
 export async function runCloudCodeCommand(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { E2BExecutor } from '@/lib/e2b/types';
-import { routeExecutionTool } from '@/lib/e2b/execution-tools';
+import { CREATE_FOLDER_TOOL, WRITE_FILE_TOOL, routeExecutionTool } from '@/lib/e2b/execution-tools';
 import type { CloudCodeToolOutcome, CloudCodeToolRunner } from './cloud-code-agent-loop';
 
 const MAX_READ_BYTES = 200_000;
@@ -117,7 +117,19 @@ export function createCloudCodeToolRunner(
       name: string,
       args: Record<string, unknown>,
     ): Promise<CloudCodeToolOutcome> {
-      const result = await routeExecutionTool(executor, name, args);
+      let routedArgs = args;
+      if (name === WRITE_FILE_TOOL || name === CREATE_FOLDER_TOOL) {
+        const raw = typeof args['path'] === 'string' ? args['path'] : '';
+        const safe = normalizeWorkspacePath(raw);
+        if (!safe) {
+          return {
+            output: `Refused to write "${raw}": paths must be workspace-relative and may not traverse upward.`,
+            isError: true,
+          };
+        }
+        routedArgs = { ...args, path: inWorkspace(safe) };
+      }
+      const result = await routeExecutionTool(executor, name, routedArgs);
       return {
         output: result.ok ? result.output : (result.error ?? 'Tool failed.'),
         isError: !result.ok,

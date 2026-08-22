@@ -17,6 +17,7 @@ import {
   runCloudCodeCommand,
 } from '@/lib/services/cloud-code-session-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 
 export const runtime = 'nodejs';
 
@@ -58,6 +59,11 @@ async function handleRun(request: NextRequest, context: RouteContext) {
   if (csrfError) return csrfError as NextResponse;
   if (!e2bProvisioningReady()) {
     throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
+  }
+  if (!isManagedComputePrivateBetaEnabled()) {
+    throw createError.serviceUnavailable(
+      'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
+    );
   }
 
   const body = await requestObject(request);

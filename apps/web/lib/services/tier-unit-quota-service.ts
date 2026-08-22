@@ -59,7 +59,7 @@ const CONSUMPTION_QUERIES: Readonly<
             ), 0) as consumed
             from public.managed_usage_requests
            where user_id = $1
-             and status = 'completed'
+             and status in ('reserved', 'provider_started', 'completed')
              and usage->>'operation' = 'transcription'
              and created_at >= date_trunc('month', now())`,
     toUnits: (raw: number) => Math.ceil(raw / 60),
@@ -68,7 +68,7 @@ const CONSUMPTION_QUERIES: Readonly<
     sql: `select count(*)::double precision as consumed
             from public.managed_usage_requests
            where user_id = $1
-             and status = 'completed'
+             and status in ('reserved', 'provider_started', 'completed')
              and usage->>'quotaFeature' = 'computer_use'
              and created_at >= date_trunc('month', now())`,
     toUnits: (raw: number) => Math.ceil(raw),
