@@ -2,19 +2,19 @@
   "domain": "Legal, policy, trust & data-control surfaces",
   "summary": "AGI Workforce's legal surface is unusually mature for a product in public alpha: a centralized legal-constants single source of truth, a numeric 12-month/$100 liability cap and AAA arbitration clause with a 30-day dated opt-out window (matching a capability the benchmark flags as a ChatGPT-only differentiator), an incorporated-by-reference DPA reachable from three surfaces, a 19-document indexed legal hub, in-app Settings links to the legal index and privacy policy, and an explicit disclosure that AGI trains no models of its own and routes Managed Cloud prompts to third-party providers (matching and arguably exceeding Manus's orchestration-layer disclosure). No prior audit domain covers this area at all, so every finding here is NEW. The real gaps are narrower than a first read suggests: the EU-AI-Act-style prohibited-practices list exists but is confined to the mobile legal page and covers only 2 of 5 points; the automated-decision-making clause is missing \"medical\" from an otherwise solid 6-domain list; there is no published commercial/enterprise terms document (enterprise legal is bespoke-negotiated only, with no public template); a non-account-holder third-party privacy notice doesn't exist despite connectors pulling third-party PII into user workspaces today; and the sandbox retention window is disclosed vaguely (\"reclaimed once unreachable\") when the code actually enforces a concrete, discoverable 24-hour number. Two claimed competitor patterns (a dedicated MCP marketplace listing policy, ChatGPT's positive-value AUP framing) were checked and are deliberately, correctly not cloned given AGI's product shape.",
   "strengths": [
-    "Centralized legal-constants.ts (apps/web/lib/legal-constants.ts) is the single source of truth for entity name, address, governing law, arbitration forum, and every document's revision date \u2014 architecturally forecloses the exact 'stale affiliate claim in one document' bug the benchmark documents at Manus (legal-22). Verified no conflicting hardcoded entity-name literals exist outside the constant.",
-    "legal-01: apps/web/app/terms/page.tsx:384-387 states a 12-months-of-fees-or-$100-floor liability cap, whichever is greater \u2014 structurally matches ChatGPT's own cap pattern.",
-    "legal-02/legal-03: apps/web/app/terms/page.tsx:409-440 names a real arbitration forum (AAA Commercial Arbitration Rules, Travis County TX venue) plus a dated 30-day opt-out window from first acceptance \u2014 a capability the benchmark flags as a ChatGPT-only differentiator that AGI Workforce has independently matched.",
-    "legal-11: DPA is genuinely incorporated by reference and reachable, not orphaned \u2014 apps/web/app/terms/page.tsx:452, linked from apps/web/app/trust/page.tsx:481, apps/web/app/security/page.tsx:507-508/785, apps/web/app/enterprise/page.tsx:146.",
-    "legal-12: in-app Settings has direct legal links \u2014 apps/web/features/settings/sections/HelpSection.tsx:70-75 ('Legal' -> /legal) and PrivacySection.tsx:355-359 (-> /privacy) \u2014 exactly the discoverability gap the benchmark dings Manus for.",
-    "legal-13: apps/web/app/legal/page.tsx indexes 19 documents with per-document revision dates sourced from the same constant each document itself prints \u2014 a larger, more current footprint than the benchmark describes for Claude (~7 docs, no index) or Manus (4 docs, no index).",
-    "legal-17: apps/web/app/privacy/page.tsx:373-379 and features/settings/sections/PrivacySection.tsx:369-374 explicitly disclose AGI trains no models of its own and routes Managed Cloud prompts to third-party providers (naming OpenRouter as routed-model failover) \u2014 matches and is more specific than Manus's 'Third-Party AI Providers' disclosure.",
-    "legal-05: the settings training toggle (improveModelTraining) was deliberately removed rather than left as a dead control once it was found to gate nothing \u2014 apps/web/features/settings/sections/PrivacySection.tsx:390-394 and its training.test.tsx document this directly. This is the corrected form of the exact half-wired-control failure this repo's CLAUDE.md warns against.",
-    "legal-08: unconditional CSAM prohibition (acceptable-use/page.tsx:230-236) plus a real minors age-gating clause with jurisdiction-specific ages for EU/UK/India (terms/page.tsx:125-134) \u2014 a substantive parallel to ChatGPT's separate minors-safety category, stronger than Claude's bare CSAM line alone.",
-    "legal-16: confirmed no advertising business model anywhere in privacy/page.tsx \u2014 correctly matches Claude/Manus rather than needing ChatGPT's ad-terms stack."
+    "Centralized legal-constants.ts (apps/web/lib/legal-constants.ts) is the single source of truth for entity name, address, governing law, arbitration forum, and every document's revision date — architecturally forecloses the exact 'stale affiliate claim in one document' bug the benchmark documents at Manus (legal-22). Verified no conflicting hardcoded entity-name literals exist outside the constant.",
+    "legal-01: apps/web/app/terms/page.tsx:384-387 states a 12-months-of-fees-or-$100-floor liability cap, whichever is greater — structurally matches ChatGPT's own cap pattern.",
+    "legal-02/legal-03: apps/web/app/terms/page.tsx:409-440 names a real arbitration forum (AAA Commercial Arbitration Rules, Travis County TX venue) plus a dated 30-day opt-out window from first acceptance — a capability the benchmark flags as a ChatGPT-only differentiator that AGI Workforce has independently matched.",
+    "legal-11: DPA is genuinely incorporated by reference and reachable, not orphaned — apps/web/app/terms/page.tsx:452, linked from apps/web/app/trust/page.tsx:481, apps/web/app/security/page.tsx:507-508/785, apps/web/app/enterprise/page.tsx:146.",
+    "legal-12: in-app Settings has direct legal links — apps/web/features/settings/sections/HelpSection.tsx:70-75 ('Legal' -> /legal) and PrivacySection.tsx:355-359 (-> /privacy) — exactly the discoverability gap the benchmark dings Manus for.",
+    "legal-13: apps/web/app/legal/page.tsx indexes 19 documents with per-document revision dates sourced from the same constant each document itself prints — a larger, more current footprint than the benchmark describes for Claude (~7 docs, no index) or Manus (4 docs, no index).",
+    "legal-17: apps/web/app/privacy/page.tsx:373-379 and features/settings/sections/PrivacySection.tsx:369-374 explicitly disclose AGI trains no models of its own and routes Managed Cloud prompts to third-party providers (naming OpenRouter as routed-model failover) — matches and is more specific than Manus's 'Third-Party AI Providers' disclosure.",
+    "legal-05: the settings training toggle (improveModelTraining) was deliberately removed rather than left as a dead control once it was found to gate nothing — apps/web/features/settings/sections/PrivacySection.tsx:390-394 and its training.test.tsx document this directly. This is the corrected form of the exact half-wired-control failure this repo's CLAUDE.md warns against.",
+    "legal-08: unconditional CSAM prohibition (acceptable-use/page.tsx:230-236) plus a real minors age-gating clause with jurisdiction-specific ages for EU/UK/India (terms/page.tsx:125-134) — a substantive parallel to ChatGPT's separate minors-safety category, stronger than Claude's bare CSAM line alone.",
+    "legal-16: confirmed no advertising business model anywhere in privacy/page.tsx — correctly matches Claude/Manus rather than needing ChatGPT's ad-terms stack."
   ],
   "notWorthCopying": [
-    "legal-19 (dedicated MCP marketplace listing policy): AGI Workforce deliberately does not curate, vet, sign, or list third-party MCP servers (apps/web/app/connectors/mcp-directory/page.tsx:120-125: 'We do not mirror, curate, or sign any of them'). Building a curated marketplace just to justify writing a listing policy would be scope creep in the wrong direction \u2014 Claude's Directory Policy exists because Claude actually operates a curated directory; AGI's bring-your-own-endpoint model already has equivalent disclaimers in the AUP (acceptable-use/page.tsx:214-224).",
+    "legal-19 (dedicated MCP marketplace listing policy): AGI Workforce deliberately does not curate, vet, sign, or list third-party MCP servers (apps/web/app/connectors/mcp-directory/page.tsx:120-125: 'We do not mirror, curate, or sign any of them'). Building a curated marketplace just to justify writing a listing policy would be scope creep in the wrong direction — Claude's Directory Policy exists because Claude actually operates a curated directory; AGI's bring-your-own-endpoint model already has equivalent disclaimers in the AUP (acceptable-use/page.tsx:214-224).",
     "legal-20 (ChatGPT's positive-value-statement AUP framing vs a flat prohibited-use list): the claim's own howToVerify calls this presentation, not substance, and says to treat divergence as non-blocking. AGI's flat lettered-subsection AUP (matching Claude/Manus's style) should not be rewritten around ChatGPT's four-value-statement wrapper for its own sake."
   ],
   "gaps": [
@@ -23,24 +23,30 @@
       "title": "EU-AI-Act prohibited-practices list exists but covers only 2 of 5 points, and only on the mobile legal page",
       "claimId": "legal-06",
       "benchmark": "ChatGPT, Claude, and Manus each independently converge on a near-identical 5-point prohibited-practices list (biometric categorization for protected attributes, real-time public biometric ID, social scoring, workplace/education emotion inference, predictive policing from profiling alone) in their primary usage policy. Source: 04-cross-product-comparison/10-legal-terms-and-policies.md.",
-      "ourState": "PARTIAL",
-      "ourEvidence": "apps/web/app/acceptable-use/page.tsx (full file, prohibited-uses section lines 226-237) has none of the 5 points. apps/web/app/mobile/legal/page.tsx:261-263 has a partial version scoped to the mobile surface only, naming just 2 of 5 (subliminal manipulation, biometric categorisation, social scoring) \u2014 no real-time public biometric ID, no workplace/education emotion inference, no predictive policing.",
+      "ourState": "FIXED",
+      "ourEvidence": "apps/web/app/acceptable-use/page.tsx (full file, prohibited-uses section lines 226-237) has none of the 5 points. apps/web/app/mobile/legal/page.tsx:261-263 has a partial version scoped to the mobile surface only, naming just 2 of 5 (subliminal manipulation, biometric categorisation, social scoring) — no real-time public biometric ID, no workplace/education emotion inference, no predictive policing.",
       "severity": "P2",
       "effort": "S",
       "priorAudit": "NEW",
-      "recommendation": "Port and complete the mobile page's EU AI Act paragraph into the canonical /acceptable-use page's prohibited-uses section (add the 3 missing points). Low effort \u2014 the research and half the copy already exist in the repo."
+      "recommendation": "Port and complete the mobile page's EU AI Act paragraph into the canonical /acceptable-use page's prohibited-uses section (add the 3 missing points). Low effort — the research and half the copy already exist in the repo.",
+      "priorState": "PARTIAL",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "All five EU AI Act Art. 5 points now on acceptable-use/page.tsx:238-241."
     },
     {
       "id": "legal-trust-02",
       "title": "Automated high-stakes decision-making clause omits 'medical' from its enumerated domain list",
       "claimId": "legal-09",
       "benchmark": "ChatGPT enumerates 13 regulated domains including medical; Claude enumerates 6 including medical. Source: 01-chatgpt/legal-and-policies.md, 02-claude/legal-and-policies.md.",
-      "ourState": "PARTIAL",
-      "ourEvidence": "apps/web/app/acceptable-use/page.tsx:234-236 \u2014 'Do not use output to make automated decisions about a person \u2014 employment, credit, housing, insurance, education, or legal status \u2014 without meaningful human review.' No 'medical' in the list; the only 'medical' hit in the file set is an unrelated professional-advice disclaimer at apps/web/app/terms/page.tsx:238.",
+      "ourState": "FIXED",
+      "ourEvidence": "apps/web/app/acceptable-use/page.tsx:234-236 — 'Do not use output to make automated decisions about a person — employment, credit, housing, insurance, education, or legal status — without meaningful human review.' No 'medical' in the list; the only 'medical' hit in the file set is an unrelated professional-advice disclaimer at apps/web/app/terms/page.tsx:238.",
       "severity": "P2",
       "effort": "S",
       "priorAudit": "NEW",
-      "recommendation": "Add 'medical' to the enumerated domain list \u2014 one-word fix to an otherwise solid, comparably-sized clause."
+      "recommendation": "Add 'medical' to the enumerated domain list — one-word fix to an otherwise solid, comparably-sized clause.",
+      "priorState": "PARTIAL",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "\"medical\" added to the high-stakes enumeration at acceptable-use/page.tsx:236."
     },
     {
       "id": "legal-trust-03",
@@ -48,7 +54,7 @@
       "claimId": "legal-10",
       "benchmark": "All three benchmarked products publish a business-tier legal document reviewable before contact: Anthropic's Commercial Terms of Service, OpenAI's tier-sectioned Service Terms, Manus's MSA. Source: 01-chatgpt, 02-claude, 07-manus legal-and-policies files.",
       "ourState": "MISSING",
-      "ourEvidence": "apps/web/app/enterprise/page.tsx:109-112 ('MSA \u2014 We negotiate against your procurement. No forced click-through.') and apps/web/app/terms/page.tsx:450-453 confirm enterprise terms are bespoke-negotiated, not a published document. No file matching an enterprise/commercial-terms/MSA route pattern exists under apps/web/app.",
+      "ourEvidence": "apps/web/app/enterprise/page.tsx:109-112 ('MSA — We negotiate against your procurement. No forced click-through.') and apps/web/app/terms/page.tsx:450-453 confirm enterprise terms are bespoke-negotiated, not a published document. No file matching an enterprise/commercial-terms/MSA route pattern exists under apps/web/app.",
       "severity": "P2",
       "effort": "L",
       "priorAudit": "NEW",
@@ -60,7 +66,7 @@
       "claimId": "legal-04",
       "benchmark": "Anthropic's Commercial Terms deliberately reverse its consumer litigation-only stance into mandatory arbitration for business customers. Source: 02-claude/legal-and-policies.md.",
       "ourState": "MISSING",
-      "ourEvidence": "Depends on legal-trust-03 \u2014 no commercial terms document exists, so consumer /terms (arbitration + 30-day opt-out) applies by default to every tier absent a signed MSA overriding it (apps/web/app/terms/page.tsx:450-453).",
+      "ourEvidence": "Depends on legal-trust-03 — no commercial terms document exists, so consumer /terms (arbitration + 30-day opt-out) applies by default to every tier absent a signed MSA overriding it (apps/web/app/terms/page.tsx:450-453).",
       "severity": "P3",
       "effort": "S",
       "priorAudit": "NEW",
@@ -72,23 +78,26 @@
       "claimId": "legal-14",
       "benchmark": "Anthropic references a separate Non-User Privacy Policy covering people who are not Claude account holders but whose personal data appears in the product. Source: 02-claude/legal-and-policies.md.",
       "ourState": "MISSING",
-      "ourEvidence": "apps/web/app/privacy/page.tsx \u2014 grepped full file for 'non-user', 'third part(y|ies)', 'someone else', 'another person'; only hit is an organizational-data-retention note at line 709 that addresses retention scoping, not third-party personal-data disclosure.",
+      "ourEvidence": "apps/web/app/privacy/page.tsx — grepped full file for 'non-user', 'third part(y|ies)', 'someone else', 'another person'; only hit is an organizational-data-retention note at line 709 that addresses retention scoping, not third-party personal-data disclosure.",
       "severity": "P3",
       "effort": "M",
       "priorAudit": "NEW",
-      "recommendation": "Add a short dedicated paragraph to /privacy covering third-party personal data that enters the product via a user's connectors (e.g. a colleague's contact info pulled in via Gmail/calendar connectors) \u2014 this scenario is real for AGI's connector surface today, more so than it may have been in the original Claude research pass."
+      "recommendation": "Add a short dedicated paragraph to /privacy covering third-party personal data that enters the product via a user's connectors (e.g. a colleague's contact info pulled in via Gmail/calendar connectors) — this scenario is real for AGI's connector surface today, more so than it may have been in the original Claude research pass."
     },
     {
       "id": "legal-trust-06",
       "title": "Sandbox retention is disclosed vaguely ('reclaimed once unreachable') when the code enforces a concrete, undisclosed 24-hour number",
       "claimId": "legal-18",
       "benchmark": "Manus discloses an explicit numeric, tier-differentiated sandbox retention window (7 days free / 14 days paid). Source: 07-manus/04-manus-recheck-and-legal.md.",
-      "ourState": "PARTIAL",
-      "ourEvidence": "apps/web/app/privacy/page.tsx:628-634 says only 'Reclaimed once unreachable.' The actual enforced number is apps/web/lib/e2b/reclaim.ts:31-36, SANDBOX_MAX_AGE_MS = 24 * 60 * 60 * 1000 (24 hours, uniform across all tiers \u2014 code comment: 'Longest a sandbox may live before it is reclaimed regardless of mapping state'). Separately, packages/contracts/types/src/billing-catalog.ts:494-533 defines a per-tier sandboxTtlMs (10/20/30/60 min) but that is a live-execution idle timeout, a different concept from Manus's multi-day persisted-state retention, so tier-differentiation does not apply to the retention dimension as currently built.",
+      "ourState": "FIXED",
+      "ourEvidence": "apps/web/app/privacy/page.tsx:628-634 says only 'Reclaimed once unreachable.' The actual enforced number is apps/web/lib/e2b/reclaim.ts:31-36, SANDBOX_MAX_AGE_MS = 24 * 60 * 60 * 1000 (24 hours, uniform across all tiers — code comment: 'Longest a sandbox may live before it is reclaimed regardless of mapping state'). Separately, packages/contracts/types/src/billing-catalog.ts:494-533 defines a per-tier sandboxTtlMs (10/20/30/60 min) but that is a live-execution idle timeout, a different concept from Manus's multi-day persisted-state retention, so tier-differentiation does not apply to the retention dimension as currently built.",
       "severity": "P2",
       "effort": "S",
       "priorAudit": "NEW",
-      "recommendation": "Replace 'Reclaimed once unreachable' with the actual number ('within 24 hours of the last mapping to your conversation'). This is a copy fix, not a capability build \u2014 the number already exists in code. Tier-differentiated retention (to fully match Manus) would be separate, larger product work."
+      "recommendation": "Replace 'Reclaimed once unreachable' with the actual number ('within 24 hours of the last mapping to your conversation'). This is a copy fix, not a capability build — the number already exists in code. Tier-differentiated retention (to fully match Manus) would be separate, larger product work.",
+      "priorState": "PARTIAL",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "privacy/page.tsx:717-722 states the real 24-hour sandbox age cap, matching e2b/reclaim.ts."
     },
     {
       "id": "legal-trust-07",
@@ -100,19 +109,19 @@
       "severity": "P3",
       "effort": "XL",
       "priorAudit": "NEW",
-      "recommendation": "Low priority \u2014 single-product ChatGPT differentiator, not table stakes per the claim itself, and a regional ToS variant with no matching regional data-residency infrastructure would overstate a commitment AGI doesn't yet meet. Revisit only if/when EU/UK data residency becomes a real product commitment."
+      "recommendation": "Low priority — single-product ChatGPT differentiator, not table stakes per the claim itself, and a regional ToS variant with no matching regional data-residency infrastructure would overstate a commitment AGI doesn't yet meet. Revisit only if/when EU/UK data residency becomes a real product commitment."
     },
     {
       "id": "legal-trust-08",
-      "title": "No dedicated MCP marketplace listing policy \u2014 correctly not built, since no marketplace exists to govern",
+      "title": "No dedicated MCP marketplace listing policy — correctly not built, since no marketplace exists to govern",
       "claimId": "legal-19",
       "benchmark": "Claude's AUP references a separate Directory Policy governing third-party MCP server listings in Claude's own curated Directory. Source: 02-claude/legal-and-policies.md.",
       "ourState": "DIFFERENT_BY_DESIGN",
-      "ourEvidence": "apps/web/app/connectors/mcp-directory/page.tsx:120-125 states AGI does not mirror, curate, or sign any MCP servers \u2014 points to the official MCP registry and AGI's own custom-connector (bring-your-own-endpoint) flow instead. apps/web/app/acceptable-use/page.tsx:214-224 already disclaims vetting responsibility for custom MCP servers.",
+      "ourEvidence": "apps/web/app/connectors/mcp-directory/page.tsx:120-125 states AGI does not mirror, curate, or sign any MCP servers — points to the official MCP registry and AGI's own custom-connector (bring-your-own-endpoint) flow instead. apps/web/app/acceptable-use/page.tsx:214-224 already disclaims vetting responsibility for custom MCP servers.",
       "severity": "P3",
       "effort": "S",
       "priorAudit": "NEW",
-      "recommendation": "No action. A listing policy is only needed if AGI builds a curated marketplace it doesn't currently operate \u2014 building one just to justify the policy would be scope creep."
+      "recommendation": "No action. A listing policy is only needed if AGI builds a curated marketplace it doesn't currently operate — building one just to justify the policy would be scope creep."
     }
   ]
 }

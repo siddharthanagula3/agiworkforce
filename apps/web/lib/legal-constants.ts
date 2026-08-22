@@ -2,7 +2,23 @@ export const LEGAL_ENTITY = 'AGI Automation LLC';
 
 export const LEGAL_ENTITY_DESCRIPTOR = 'a United States limited liability company';
 
-export const NOTICE_ADDRESS = '1309 Coffeen Avenue STE 1200, Sheridan, Wyoming 82801, USA';
+export const REGISTERED_AGENT_ADDRESS = '5900 Balcones Drive STE 100, Austin, TX 78731, USA';
+
+// The company holds no US premises. This is the registered agent's address —
+// the address the state serves papers to — so it is the
+// right thing to print for legal notices and the wrong thing to print as an
+// office. The `c/o` is what keeps those two apart: without it, every page that
+// renders `${LEGAL_ENTITY}, ${NOTICE_ADDRESS}` claims a place of business that
+// does not exist.
+export const NOTICE_ADDRESS = `c/o registered agent, ${REGISTERED_AGENT_ADDRESS}`;
+
+export const FOUNDER_NAME = 'Siddhartha Nagula';
+
+// Held here rather than typed into each page so /about, /press and /founder
+// cannot drift into three different titles for one person.
+export const FOUNDER_ROLE = 'Founder & CEO';
+
+export const PRODUCT_NAME = 'AGI Workforce';
 
 export const GOVERNING_LAW = 'the State of Texas, USA';
 

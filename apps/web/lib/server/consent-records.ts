@@ -1,7 +1,5 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
-
 import { getNeonDb } from '@/lib/server/neon-db';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {
@@ -21,6 +19,7 @@ export {
   isConsentPurpose,
   isConsentSurface,
 } from '@/lib/consent-purposes';
+import { pseudonymizeEmail } from '@/lib/server/email-pseudonym';
 export type { ConsentDecision, ConsentPurpose, ConsentSurface } from '@/lib/consent-purposes';
 
 export const CURRENT_NOTICE_VERSION: string = POLICY_LAST_UPDATED.privacy;
@@ -57,7 +56,7 @@ function toRecord(row: ConsentRow): ConsentRecord {
 }
 
 export function hashConsentSubjectEmail(email: string): string {
-  return createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
+  return pseudonymizeEmail(email);
 }
 
 export type ConsentSubject =

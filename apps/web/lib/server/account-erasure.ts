@@ -73,6 +73,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'consent_records', column: 'user_id' },
   { table: 'data_rights_requests', column: 'user_id' },
   { table: 'beta_redemptions', column: 'user_id' },
+  { table: 'beta_applications', column: 'user_id' },
   { table: 'feature_flags', column: 'user_id' },
   { table: 'usage_events', column: 'user_id' },
   { table: 'mobile_iap_transactions', column: 'user_id' },
@@ -87,6 +88,26 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
 ];
 
 const PROFILE_TABLE = 'profiles';
+
+async function deleteBetaApplicationsByEmail(
+  db: { execute: (sql: string, params: unknown[]) => Promise<unknown> },
+  userId: string,
+): Promise<void> {
+  try {
+    await db.execute(
+      `delete from public.beta_applications
+        where lower(email) in (
+          select lower(email) from public.profiles where id = $1 and email is not null
+        )`,
+      [userId],
+    );
+  } catch (error) {
+    if (isSchemaAbsent(error)) return;
+    logger.error({ userId, error }, 'Account erasure failed to clear beta applications by email');
+    throw error;
+  }
+}
+
 
 export const ANONYMIZED_USER_COLUMNS: ReadonlyArray<{
   table: string;
@@ -498,6 +519,13 @@ export async function eraseUserAccountData(
     const cache = await deleteE2BSessionsForUser(userId);
     const tables: AccountErasureReport['tables'] = {};
     const anonymized: AccountErasureReport['anonymized'] = {};
+
+    // beta_applications is the one user-scoped table whose identity is usually
+    // the email, not user_id: applying does not require an account, so most
+    // rows have a null user_id and the generic delete below cannot see them.
+    // Without this sweep an erased user's name and email survive in the intake
+    // table indefinitely.
+    await deleteBetaApplicationsByEmail(db, userId);
 
     for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
       try {
