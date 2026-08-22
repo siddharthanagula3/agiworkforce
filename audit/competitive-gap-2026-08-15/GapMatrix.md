@@ -2,17 +2,18 @@
 
 **Generated** by `build_matrix.py` from `domains/*.json`. Do not hand-edit — change the JSON and re-run, so the matrix and the synthesis can never drift apart.
 
-**Benchmark:** `~/Downloads/competitive-product-research` — 68 files recording a live browser session against the real production apps of ChatGPT (GPT-5.6 Sol), Claude (Sonnet 5), Gemini (3.1 Pro) and Manus on 2026-08-15. Every benchmark claim carries that corpus's own evidence label (OBSERVED / STRONGLY INFERRED / UNVERIFIED).
+**Benchmark:** `~/Desktop/competitive-product-research` — 68 files recording a live browser session against the real production apps of ChatGPT (GPT-5.6 Sol), Claude (Sonnet 5), Gemini (3.1 Pro) and Manus on 2026-08-15. Every benchmark claim carries that corpus's own evidence label (OBSERVED / STRONGLY INFERRED / UNVERIFIED).
 
 **Totals:** 168 gaps across 14 domains.
 
-| Severity | Count |     | Our state           | Count |     | Vs prior audit   | Count |     | Effort | Count |
-| -------- | ----- | --- | ------------------- | ----- | --- | ---------------- | ----- | --- | ------ | ----- |
-| P1       | 14    |     | MISSING             | 82    |     | NEW              | 137   |     | S      | 52    |
-| P2       | 58    |     | PARTIAL             | 45    |     | CONFIRMS_PRIOR   | 28    |     | M      | 62    |
-| P3       | 96    |     | BUILT_NOT_WIRED     | 20    |     | SUPERSEDES_PRIOR | 3     |     | L      | 43    |
-|          |       |     | DIFFERENT_BY_DESIGN | 11    |     |                  |       |     | XL     | 11    |
-|          |       |     | PRESENT_WORSE       | 10    |     |                  |       |     |        |       |
+| Severity | Count | | Our state | Count | | Vs prior audit | Count | | Effort | Count |
+|---|---|---|---|---|---|---|---|---|---|---|
+| P1 | 14 | | MISSING | 79 | | NEW | 137 | | S | 52 |
+| P2 | 58 | | FIXED | 36 | | CONFIRMS_PRIOR | 28 | | M | 62 |
+| P3 | 96 | | PARTIAL | 27 | | SUPERSEDES_PRIOR | 3 | | L | 43 |
+|  |  | | DIFFERENT_BY_DESIGN | 11 | |  |  | | XL | 11 |
+|  |  | | PRESENT_WORSE | 9 | |  |  | |  |  |
+|  |  | | BUILT_NOT_WIRED | 6 | |  |  | |  |  |
 
 ## Reading the columns
 
@@ -28,186 +29,186 @@ _None._
 
 ## P1 — table-stakes capability the benchmark has and we lack or half-ship (14)
 
-| ID                     | Gap                                                                                                                                | Domain                             | State           | Effort | vs prior         |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | --------------- | ------ | ---------------- |
-| `CPS-08`               | Mobile Skills screen remains unreachable from any nav entry point                                                                  | Connectors, plugins, skills, MCP … | BUILT_NOT_WIRED | S      | CONFIRMS_PRIOR   |
-| `orch-gap-01`          | The artifacts gallery is complete and working but reachable from nowhere in the app, and renders in marketing-site chrome          | Orchestrator live verification (b… | BUILT_NOT_WIRED | S      | NEW              |
-| `settings-27-gap`      | Voice settings page is real and honest but has no nav entry - still unreachable                                                    | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED | S      | CONFIRMS_PRIOR   |
-| `CPS-01`               | Skill auto-invoke matcher exists but has zero call sites in any chat UI                                                            | Connectors, plugins, skills, MCP … | BUILT_NOT_WIRED | M      | CONFIRMS_PRIOR   |
-| `MEDIA-VIDEO-01`       | Staged attachments are silently discarded when sending in image- or video-generation mode                                          | Image, video & voice generation    | BUILT_NOT_WIRED | M      | CONFIRMS_PRIOR   |
-| `orch-gap-03`          | Deep Research on the DEFAULT model silently takes the single-turn path — no plan card, no process narration, no signal to the user | Orchestrator live verification (b… | PARTIAL         | M      | SUPERSEDES_PRIOR |
-| `sched-gap-01`         | No real-task/suggested-template divider on the web schedules list                                                                  | Scheduled tasks & automation       | MISSING         | M      | NEW              |
-| `settings-26-gap`      | Account deletion is not blocked by an active paid subscription, in either of two duplicate delete flows                            | Settings taxonomy & permission/ap… | MISSING         | M      | NEW              |
-| `G2`                   | Deep Research silently degrades to an unbranded single-turn fallback for Anthropic models and free-trial users                     | Web Search & Deep Research         | PRESENT_WORSE   | M      | CONFIRMS_PRIOR   |
-| `agentic-modes-gap-01` | Global Chat↔Agentic-mode toggle is composer-only and doesn't change placeholder/empty-state                                        | Agentic modes: Work / Cowork / Co… | PARTIAL         | L      | CONFIRMS_PRIOR   |
-| `CPS-02`               | Connectors and Plugins have no in-composer per-message attachment; only Skills do                                                  | Connectors, plugins, skills, MCP … | PARTIAL         | L      | NEW              |
-| `CPS-07`               | Plugin registry ships zero installable entries — the storefront and decomposition UI have nothing live behind them                 | Connectors, plugins, skills, MCP … | PARTIAL         | L      | NEW              |
-| `memory-13-gap`        | Project/workspace memory isolation is absent (Web) or actively broken (Desktop writes to the global store)                         | Memory & personalization           | BUILT_NOT_WIRED | L      | CONFIRMS_PRIOR   |
-| `PROJ-WS-01`           | No workspace-level memory scoping/isolation control (project memory is unconditionally account-wide)                               | Projects, workspaces, notebooks &… | MISSING         | L      | SUPERSEDES_PRIOR |
+| ID | Gap | Domain | State | Effort | vs prior |
+|---|---|---|---|---|---|
+| `CPS-08` | Mobile Skills screen remains unreachable from any nav entry point | Connectors, plugins, skills, MCP … | FIXED | S | CONFIRMS_PRIOR |
+| `orch-gap-01` | The artifacts gallery is complete and working but reachable from nowhere in the app, and renders in marketing-site chrome | Orchestrator live verification (b… | FIXED | S | NEW |
+| `settings-27-gap` | Voice settings page is real and honest but has no nav entry - still unreachable | Settings taxonomy & permission/ap… | FIXED | S | CONFIRMS_PRIOR |
+| `CPS-01` | Skill auto-invoke matcher exists but has zero call sites in any chat UI | Connectors, plugins, skills, MCP … | FIXED | M | CONFIRMS_PRIOR |
+| `MEDIA-VIDEO-01` | Staged attachments are silently discarded when sending in image- or video-generation mode | Image, video & voice generation | FIXED | M | CONFIRMS_PRIOR |
+| `orch-gap-03` | Deep Research on the DEFAULT model silently takes the single-turn path — no plan card, no process narration, no signal to the user | Orchestrator live verification (b… | FIXED | M | SUPERSEDES_PRIOR |
+| `sched-gap-01` | No real-task/suggested-template divider on the web schedules list | Scheduled tasks & automation | MISSING | M | NEW |
+| `settings-26-gap` | Account deletion is not blocked by an active paid subscription, in either of two duplicate delete flows | Settings taxonomy & permission/ap… | MISSING | M | NEW |
+| `G2` | Deep Research silently degrades to an unbranded single-turn fallback for Anthropic models and free-trial users | Web Search & Deep Research | FIXED | M | CONFIRMS_PRIOR |
+| `agentic-modes-gap-01` | Global Chat↔Agentic-mode toggle is composer-only and doesn't change placeholder/empty-state | Agentic modes: Work / Cowork / Co… | PARTIAL | L | CONFIRMS_PRIOR |
+| `CPS-02` | Connectors and Plugins have no in-composer per-message attachment; only Skills do | Connectors, plugins, skills, MCP … | PARTIAL | L | NEW |
+| `CPS-07` | Plugin registry ships zero installable entries — the storefront and decomposition UI have nothing live behind them | Connectors, plugins, skills, MCP … | PARTIAL | L | NEW |
+| `memory-13-gap` | Project/workspace memory isolation is absent (Web) or actively broken (Desktop writes to the global store) | Memory & personalization | BUILT_NOT_WIRED | L | CONFIRMS_PRIOR |
+| `PROJ-WS-01` | No workspace-level memory scoping/isolation control (project memory is unconditionally account-wide) | Projects, workspaces, notebooks &… | MISSING | L | SUPERSEDES_PRIOR |
 
 ## P2 — real gap against the majority of the benchmark (58)
 
-| ID                     | Gap                                                                                                                                | Domain                             | State               | Effort | vs prior         |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------- | ------ | ---------------- |
-| `agentic-modes-gap-03` | Task run status doesn't mirror into the main conversation sidebar                                                                  | Agentic modes: Work / Cowork / Co… | PARTIAL             | S      | NEW              |
-| `agentic-modes-gap-07` | Delete-conversation dialog doesn't name dependent objects                                                                          | Agentic modes: Work / Cowork / Co… | MISSING             | S      | NEW              |
-| `agentic-modes-gap-10` | No 'Beta' badge on AGI Work chrome despite it being rougher than a finished feature                                                | Agentic modes: Work / Cowork / Co… | MISSING             | S      | NEW              |
-| `CLR-03`               | No per-message timestamp rendered anywhere in web's response action row (though the weaker Chrome extension has one)               | Composer, chat lifecycle & messag… | MISSING             | S      | NEW              |
-| `CLR-04`               | Shared code-block copy button is hover-gated despite sitting inside an always-visible header bar, contradicting the persistent-ch… | Composer, chat lifecycle & messag… | PRESENT_WORSE       | S      | NEW              |
-| `CPS-03`               | Custom connector and Plugin removal bypass the confirmation dialog that catalog connectors correctly use                           | Connectors, plugins, skills, MCP … | PRESENT_WORSE       | S      | NEW              |
-| `CPS-06`               | No 'Connector search' or equivalent dedicated auto-invoke toggle                                                                   | Connectors, plugins, skills, MCP … | MISSING             | S      | NEW              |
-| `MEDIA-TITLE-03`       | Image/video-generation conversations are permanently stuck with a generic 'Image generation'/'Video generation' title and never g… | Image, video & voice generation    | PRESENT_WORSE       | S      | NEW              |
-| `legal-trust-01`       | EU-AI-Act prohibited-practices list exists but covers only 2 of 5 points, and only on the mobile legal page                        | Legal, policy, trust & data-contr… | PARTIAL             | S      | NEW              |
-| `legal-trust-02`       | Automated high-stakes decision-making clause omits 'medical' from its enumerated domain list                                       | Legal, policy, trust & data-contr… | PARTIAL             | S      | NEW              |
-| `legal-trust-06`       | Sandbox retention is disclosed vaguely ('reclaimed once unreachable') when the code enforces a concrete, undisclosed 24-hour numb… | Legal, policy, trust & data-contr… | PARTIAL             | S      | NEW              |
-| `G2`                   | deprecation_date is wired to silently filter models, never rendered as a visible countdown                                         | Models, reasoning controls, quota… | BUILT_NOT_WIRED     | S      | NEW              |
-| `G7`                   | Pricing comparison table has no training-data-use disclosure row                                                                   | Models, reasoning controls, quota… | PARTIAL             | S      | NEW              |
-| `G12`                  | Enterprise pricing copy calls a shipped capability 'roadmap'                                                                       | Models, reasoning controls, quota… | PRESENT_WORSE       | S      | NEW              |
-| `orch-gap-02`          | The primary nav rail is defined twice by hand and the two copies have drifted — Tasks is unreachable from the app's default screen | Orchestrator live verification (b… | PRESENT_WORSE       | S      | NEW              |
-| `sched-gap-11`         | No surface offers both a non-destructive 'Close' and a destructive 'Delete' for the same task object                               | Scheduled tasks & automation       | PARTIAL             | S      | NEW              |
-| `shell-nav-ia-gap-01`  | Destructive-action confirmation is inconsistently wired: styled red AlertDialog exists but the highest-frequency and highest-stak… | Shell, global nav, IA & design sy… | BUILT_NOT_WIRED     | S      | NEW              |
-| `agentic-modes-gap-02` | AGI Work usage is not disclosed as a separate pool from chat                                                                       | Agentic modes: Work / Cowork / Co… | MISSING             | M      | NEW              |
-| `agentic-modes-gap-04` | WorkSessionPanel has a static title and no options menu                                                                            | Agentic modes: Work / Cowork / Co… | PARTIAL             | M      | NEW              |
-| `ART-CANVAS-02`        | Gallery's 'New Artifact' never opens a blank, directly-editable artifact — always routes through a chat prompt                     | Artifacts, canvas & generative UI… | PARTIAL             | M      | CONFIRMS_PRIOR   |
-| `CLR-01`               | Model picker never surfaces an inline retirement/deprecation warning for a model with a future deprecation_date                    | Composer, chat lifecycle & messag… | BUILT_NOT_WIRED     | M      | NEW              |
-| `CLR-02`               | Conversation sidebar title is a permanent raw 50-char prompt truncation; no second-stage LLM-cleaned title ever replaces it        | Composer, chat lifecycle & messag… | MISSING             | M      | NEW              |
-| `CLR-05`               | 'Edit' on a sent user message prefills the bottom composer instead of turning the message bubble into an inline textarea; a fully… | Composer, chat lifecycle & messag… | BUILT_NOT_WIRED     | M      | NEW              |
-| `CPS-04`               | No AI-assisted or upload/GitHub-import skill authoring on web, BYOK, or managed-cloud surfaces                                     | Connectors, plugins, skills, MCP … | MISSING             | M      | NEW              |
-| `CPS-05`               | No raw skill file upload or GitHub-import path anywhere in the product                                                             | Connectors, plugins, skills, MCP … | MISSING             | M      | NEW              |
-| `MEDIA-IMG-02`         | Image-generation conversations get an editor that is a side panel on desktop, not the full-view takeover the claim describes, wit… | Image, video & voice generation    | DIFFERENT_BY_DESIGN | M      | NEW              |
-| `memory-12-gap`        | No cross-provider memory import on Web or Desktop (Mobile has a working one)                                                       | Memory & personalization           | MISSING             | M      | CONFIRMS_PRIOR   |
-| `memory-19-gap`        | Memory bundles 'generate summary from history' and 'search/reference raw past chats' into one dependent toggle instead of two ind… | Memory & personalization           | MISSING             | M      | CONFIRMS_PRIOR   |
-| `memory-14-gap`        | No project-creation-time memory-scope selector                                                                                     | Memory & personalization           | MISSING             | M      | CONFIRMS_PRIOR   |
-| `G1`                   | No per-model tier-access matrix on the marketing pricing page                                                                      | Models, reasoning controls, quota… | PARTIAL             | M      | NEW              |
-| `G4`                   | Credit balance and top-up exist; the per-task debit ledger a user can inspect does not                                             | Models, reasoning controls, quota… | PARTIAL             | M      | NEW              |
-| `PROJ-WS-03`           | Project deletion dialog is silent about knowledge files, which become permanently orphaned (soft-delete never triggers the files'… | Projects, workspaces, notebooks &… | PARTIAL             | M      | NEW              |
-| `sched-gap-02`         | No inline always-on composer on the web schedules list page                                                                        | Scheduled tasks & automation       | MISSING             | M      | NEW              |
-| `settings-03-gap`      | 4-tier approval picker exists but isn't reused across agentic surfaces                                                             | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED     | M      | SUPERSEDES_PRIOR |
-| `settings-11-gap`      | No storage-quota disclosure anywhere in settings                                                                                   | Settings taxonomy & permission/ap… | MISSING             | M      | NEW              |
-| `settings-12-gap`      | Per-task credit-debit ledger exists in Postgres, never reaches a settings screen                                                   | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED     | M      | NEW              |
-| `settings-21-gap`      | Tool-access-mode setting is fully dead - defined, never read or set                                                                | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED     | M      | CONFIRMS_PRIOR   |
-| `shell-nav-ia-gap-02`  | Suggested-prompt chips were deliberately removed from the empty-state composer (2026-08-06 founder decision), contradicting a 4/4… | Shell, global nav, IA & design sy… | DIFFERENT_BY_DESIGN | M      | NEW              |
-| `shell-nav-ia-gap-03`  | Composer-embedded Chat/AGI-Work mode toggle exists but its placeholder text never changes and it's invisible to free/basic-tier u… | Shell, global nav, IA & design sy… | PARTIAL             | M      | CONFIRMS_PRIOR   |
-| `shell-nav-ia-gap-04`  | No shared status indicator between the Tasks list and the ordinary chat-history sidebar row for the same running conversation      | Shell, global nav, IA & design sy… | MISSING             | M      | NEW              |
-| `shell-nav-ia-gap-06`  | Scheduled-task creation uses a conventional multi-field form, not the shared chat composer, and offers no suggested/template star… | Shell, global nav, IA & design sy… | MISSING             | M      | CONFIRMS_PRIOR   |
-| `G4`                   | No Reports gallery UI, though the backend already supports listing all of a user's reports                                         | Web Search & Deep Research         | BUILT_NOT_WIRED     | M      | NEW              |
-| `G5`                   | No nested Table of Contents in the completed report reader                                                                         | Web Search & Deep Research         | MISSING             | M      | NEW              |
-| `G12`                  | A reopened/standalone report view has no follow-up composer for grounded Q&A                                                       | Web Search & Deep Research         | PARTIAL             | M      | NEW              |
-| `agentic-modes-gap-08` | No approval-mode picker on Web; Desktop's is global/binary, not per-conversation or 3-tier                                         | Agentic modes: Work / Cowork / Co… | PARTIAL             | L      | CONFIRMS_PRIOR   |
-| `CLR-07`               | Inline citations render as a trailing numbered-badge pill row after the whole message, not claim-adjacent favicon+domain pills mi… | Composer, chat lifecycle & messag… | PARTIAL             | L      | CONFIRMS_PRIOR   |
-| `legal-trust-03`       | No published commercial/enterprise legal-terms document distinct from consumer Terms                                               | Legal, policy, trust & data-contr… | MISSING             | L      | NEW              |
-| `memory-02-gap`        | Memory is a flat/provenance-grouped fact list, never synthesized narrative prose                                                   | Memory & personalization           | PARTIAL             | L      | CONFIRMS_PRIOR   |
-| `memory-15-gap`        | No 'Scheduled' card and no editable 'Memory' card in the project settings rail (only Instructions and Files are real)              | Memory & personalization           | PARTIAL             | L      | NEW              |
-| `G9`                   | No dedicated education-institution plan                                                                                            | Models, reasoning controls, quota… | MISSING             | L      | NEW              |
-| `PROJ-WS-02`           | No project-scoped scheduled/recurring tasks -- schedules have no project association at all                                        | Projects, workspaces, notebooks &… | MISSING             | L      | NEW              |
-| `sched-gap-15`         | No follow-up composer for steering a task from the /tasks detail panel                                                             | Scheduled tasks & automation       | PARTIAL             | L      | CONFIRMS_PRIOR   |
-| `settings-05-gap`      | No network-egress warning or domain allowlist for agent-executed code                                                              | Settings taxonomy & permission/ap… | MISSING             | L      | CONFIRMS_PRIOR   |
-| `settings-07-gap`      | PR auto-monitoring capability does not exist on any reachable UI surface                                                           | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED     | L      | NEW              |
-| `settings-08-gap`      | PR auto-creation is dead exported code, not a configurable toggle                                                                  | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED     | L      | NEW              |
-| `settings-25-gap`      | MFA is TOTP-only; the majority-benchmark pattern is independently toggleable methods                                               | Settings taxonomy & permission/ap… | PARTIAL             | L      | CONFIRMS_PRIOR   |
-| `G1`                   | No pre-flight plan-approval gate before a research run spends budget                                                               | Web Search & Deep Research         | MISSING             | L      | NEW              |
-| `sched-gap-12`         | Scheduled tasks have no richer, tool-using tier — only the lightweight kind exists, and not by design                              | Scheduled tasks & automation       | MISSING             | XL     | CONFIRMS_PRIOR   |
+| ID | Gap | Domain | State | Effort | vs prior |
+|---|---|---|---|---|---|
+| `agentic-modes-gap-03` | Task run status doesn't mirror into the main conversation sidebar | Agentic modes: Work / Cowork / Co… | PARTIAL | S | NEW |
+| `agentic-modes-gap-07` | Delete-conversation dialog doesn't name dependent objects | Agentic modes: Work / Cowork / Co… | MISSING | S | NEW |
+| `agentic-modes-gap-10` | No 'Beta' badge on AGI Work chrome despite it being rougher than a finished feature | Agentic modes: Work / Cowork / Co… | MISSING | S | NEW |
+| `CLR-03` | No per-message timestamp rendered anywhere in web's response action row (though the weaker Chrome extension has one) | Composer, chat lifecycle & messag… | MISSING | S | NEW |
+| `CLR-04` | Shared code-block copy button is hover-gated despite sitting inside an always-visible header bar, contradicting the persistent-ch… | Composer, chat lifecycle & messag… | PRESENT_WORSE | S | NEW |
+| `CPS-03` | Custom connector and Plugin removal bypass the confirmation dialog that catalog connectors correctly use | Connectors, plugins, skills, MCP … | PRESENT_WORSE | S | NEW |
+| `CPS-06` | No 'Connector search' or equivalent dedicated auto-invoke toggle | Connectors, plugins, skills, MCP … | MISSING | S | NEW |
+| `MEDIA-TITLE-03` | Image/video-generation conversations are permanently stuck with a generic 'Image generation'/'Video generation' title and never g… | Image, video & voice generation | PRESENT_WORSE | S | NEW |
+| `legal-trust-01` | EU-AI-Act prohibited-practices list exists but covers only 2 of 5 points, and only on the mobile legal page | Legal, policy, trust & data-contr… | FIXED | S | NEW |
+| `legal-trust-02` | Automated high-stakes decision-making clause omits 'medical' from its enumerated domain list | Legal, policy, trust & data-contr… | FIXED | S | NEW |
+| `legal-trust-06` | Sandbox retention is disclosed vaguely ('reclaimed once unreachable') when the code enforces a concrete, undisclosed 24-hour numb… | Legal, policy, trust & data-contr… | FIXED | S | NEW |
+| `G2` | deprecation_date is wired to silently filter models, never rendered as a visible countdown | Models, reasoning controls, quota… | FIXED | S | NEW |
+| `G7` | Pricing comparison table has no training-data-use disclosure row | Models, reasoning controls, quota… | FIXED | S | NEW |
+| `G12` | Enterprise pricing copy calls a shipped capability 'roadmap' | Models, reasoning controls, quota… | PRESENT_WORSE | S | NEW |
+| `orch-gap-02` | The primary nav rail is defined twice by hand and the two copies have drifted — Tasks is unreachable from the app's default screen | Orchestrator live verification (b… | PRESENT_WORSE | S | NEW |
+| `sched-gap-11` | No surface offers both a non-destructive 'Close' and a destructive 'Delete' for the same task object | Scheduled tasks & automation | FIXED | S | NEW |
+| `shell-nav-ia-gap-01` | Destructive-action confirmation is inconsistently wired: styled red AlertDialog exists but the highest-frequency and highest-stak… | Shell, global nav, IA & design sy… | FIXED | S | NEW |
+| `agentic-modes-gap-02` | AGI Work usage is not disclosed as a separate pool from chat | Agentic modes: Work / Cowork / Co… | MISSING | M | NEW |
+| `agentic-modes-gap-04` | WorkSessionPanel has a static title and no options menu | Agentic modes: Work / Cowork / Co… | PARTIAL | M | NEW |
+| `ART-CANVAS-02` | Gallery's 'New Artifact' never opens a blank, directly-editable artifact — always routes through a chat prompt | Artifacts, canvas & generative UI… | PARTIAL | M | CONFIRMS_PRIOR |
+| `CLR-01` | Model picker never surfaces an inline retirement/deprecation warning for a model with a future deprecation_date | Composer, chat lifecycle & messag… | FIXED | M | NEW |
+| `CLR-02` | Conversation sidebar title is a permanent raw 50-char prompt truncation; no second-stage LLM-cleaned title ever replaces it | Composer, chat lifecycle & messag… | MISSING | M | NEW |
+| `CLR-05` | 'Edit' on a sent user message prefills the bottom composer instead of turning the message bubble into an inline textarea; a fully… | Composer, chat lifecycle & messag… | FIXED | M | NEW |
+| `CPS-04` | No AI-assisted or upload/GitHub-import skill authoring on web, BYOK, or managed-cloud surfaces | Connectors, plugins, skills, MCP … | MISSING | M | NEW |
+| `CPS-05` | No raw skill file upload or GitHub-import path anywhere in the product | Connectors, plugins, skills, MCP … | MISSING | M | NEW |
+| `MEDIA-IMG-02` | Image-generation conversations get an editor that is a side panel on desktop, not the full-view takeover the claim describes, wit… | Image, video & voice generation | DIFFERENT_BY_DESIGN | M | NEW |
+| `memory-12-gap` | No cross-provider memory import on Web or Desktop (Mobile has a working one) | Memory & personalization | MISSING | M | CONFIRMS_PRIOR |
+| `memory-19-gap` | Memory bundles 'generate summary from history' and 'search/reference raw past chats' into one dependent toggle instead of two ind… | Memory & personalization | MISSING | M | CONFIRMS_PRIOR |
+| `memory-14-gap` | No project-creation-time memory-scope selector | Memory & personalization | MISSING | M | CONFIRMS_PRIOR |
+| `G1` | No per-model tier-access matrix on the marketing pricing page | Models, reasoning controls, quota… | FIXED | M | NEW |
+| `G4` | Credit balance and top-up exist; the per-task debit ledger a user can inspect does not | Models, reasoning controls, quota… | FIXED | M | NEW |
+| `PROJ-WS-03` | Project deletion dialog is silent about knowledge files, which become permanently orphaned (soft-delete never triggers the files'… | Projects, workspaces, notebooks &… | FIXED | M | NEW |
+| `sched-gap-02` | No inline always-on composer on the web schedules list page | Scheduled tasks & automation | MISSING | M | NEW |
+| `settings-03-gap` | 4-tier approval picker exists but isn't reused across agentic surfaces | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED | M | SUPERSEDES_PRIOR |
+| `settings-11-gap` | No storage-quota disclosure anywhere in settings | Settings taxonomy & permission/ap… | MISSING | M | NEW |
+| `settings-12-gap` | Per-task credit-debit ledger exists in Postgres, never reaches a settings screen | Settings taxonomy & permission/ap… | FIXED | M | NEW |
+| `settings-21-gap` | Tool-access-mode setting is fully dead - defined, never read or set | Settings taxonomy & permission/ap… | FIXED | M | CONFIRMS_PRIOR |
+| `shell-nav-ia-gap-02` | Suggested-prompt chips were deliberately removed from the empty-state composer (2026-08-06 founder decision), contradicting a 4/4… | Shell, global nav, IA & design sy… | DIFFERENT_BY_DESIGN | M | NEW |
+| `shell-nav-ia-gap-03` | Composer-embedded Chat/AGI-Work mode toggle exists but its placeholder text never changes and it's invisible to free/basic-tier u… | Shell, global nav, IA & design sy… | PARTIAL | M | CONFIRMS_PRIOR |
+| `shell-nav-ia-gap-04` | No shared status indicator between the Tasks list and the ordinary chat-history sidebar row for the same running conversation | Shell, global nav, IA & design sy… | MISSING | M | NEW |
+| `shell-nav-ia-gap-06` | Scheduled-task creation uses a conventional multi-field form, not the shared chat composer, and offers no suggested/template star… | Shell, global nav, IA & design sy… | MISSING | M | CONFIRMS_PRIOR |
+| `G4` | No Reports gallery UI, though the backend already supports listing all of a user's reports | Web Search & Deep Research | FIXED | M | NEW |
+| `G5` | No nested Table of Contents in the completed report reader | Web Search & Deep Research | MISSING | M | NEW |
+| `G12` | A reopened/standalone report view has no follow-up composer for grounded Q&A | Web Search & Deep Research | FIXED | M | NEW |
+| `agentic-modes-gap-08` | No approval-mode picker on Web; Desktop's is global/binary, not per-conversation or 3-tier | Agentic modes: Work / Cowork / Co… | PARTIAL | L | CONFIRMS_PRIOR |
+| `CLR-07` | Inline citations render as a trailing numbered-badge pill row after the whole message, not claim-adjacent favicon+domain pills mi… | Composer, chat lifecycle & messag… | PARTIAL | L | CONFIRMS_PRIOR |
+| `legal-trust-03` | No published commercial/enterprise legal-terms document distinct from consumer Terms | Legal, policy, trust & data-contr… | MISSING | L | NEW |
+| `memory-02-gap` | Memory is a flat/provenance-grouped fact list, never synthesized narrative prose | Memory & personalization | PARTIAL | L | CONFIRMS_PRIOR |
+| `memory-15-gap` | No 'Scheduled' card and no editable 'Memory' card in the project settings rail (only Instructions and Files are real) | Memory & personalization | PARTIAL | L | NEW |
+| `G9` | No dedicated education-institution plan | Models, reasoning controls, quota… | MISSING | L | NEW |
+| `PROJ-WS-02` | No project-scoped scheduled/recurring tasks -- schedules have no project association at all | Projects, workspaces, notebooks &… | MISSING | L | NEW |
+| `sched-gap-15` | No follow-up composer for steering a task from the /tasks detail panel | Scheduled tasks & automation | PARTIAL | L | CONFIRMS_PRIOR |
+| `settings-05-gap` | No network-egress warning or domain allowlist for agent-executed code | Settings taxonomy & permission/ap… | MISSING | L | CONFIRMS_PRIOR |
+| `settings-07-gap` | PR auto-monitoring capability does not exist on any reachable UI surface | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED | L | NEW |
+| `settings-08-gap` | PR auto-creation is dead exported code, not a configurable toggle | Settings taxonomy & permission/ap… | BUILT_NOT_WIRED | L | NEW |
+| `settings-25-gap` | MFA is TOTP-only; the majority-benchmark pattern is independently toggleable methods | Settings taxonomy & permission/ap… | PARTIAL | L | CONFIRMS_PRIOR |
+| `G1` | No pre-flight plan-approval gate before a research run spends budget | Web Search & Deep Research | FIXED | L | NEW |
+| `sched-gap-12` | Scheduled tasks have no richer, tool-using tier — only the lightweight kind exists, and not by design | Scheduled tasks & automation | MISSING | XL | CONFIRMS_PRIOR |
 
 ## P3 — single-product differentiator or polish (96)
 
-| ID                     | Gap                                                                                                                                | Domain                             | State               | Effort | vs prior       |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------- | ------ | -------------- |
-| `agentic-modes-gap-05` | No self-disclosed task-complexity narration                                                                                        | Agentic modes: Work / Cowork / Co… | MISSING             | S      | NEW            |
-| `agentic-modes-gap-11` | Fork/'continue in new task' action is buried in a dropdown, not always visible                                                     | Agentic modes: Work / Cowork / Co… | PARTIAL             | S      | NEW            |
-| `agentic-modes-gap-14` | Custom MCP import supports URL-based add only, not raw-JSON-config import                                                          | Agentic modes: Work / Cowork / Co… | PARTIAL             | S      | NEW            |
-| `ART-CANVAS-04`        | Composer has no discrete, named Canvas/artifact-creation tool entry                                                                | Artifacts, canvas & generative UI… | MISSING             | S      | NEW            |
-| `ART-CANVAS-08`        | Image-generation entry points do not disclose the underlying model name in first-party UI copy                                     | Artifacts, canvas & generative UI… | MISSING             | S      | NEW            |
-| `CLR-10`               | No always-visible per-response fork/branch icon with reassurance copy; branching is menu-gated only                                | Composer, chat lifecycle & messag… | DIFFERENT_BY_DESIGN | S      | NEW            |
-| `CPS-10`               | No plugin-provenance data flows into the skill autocomplete, so no attribution or narration copy is possible                       | Connectors, plugins, skills, MCP … | MISSING             | S      | NEW            |
-| `CPS-11`               | No narration copy at all distinguishing how a skill was loaded                                                                     | Connectors, plugins, skills, MCP … | MISSING             | S      | NEW            |
-| `CPS-13`               | No example prompt shown on connector marketplace cards                                                                             | Connectors, plugins, skills, MCP … | MISSING             | S      | NEW            |
-| `MEDIA-VIDPLAYER-09`   | Finished video player has no explicit Share control                                                                                | Image, video & voice generation    | PARTIAL             | S      | NEW            |
-| `MEDIA-PLACEHOLDER-10` | Generation placeholders are not pre-sized to the requested aspect ratio                                                            | Image, video & voice generation    | PARTIAL             | S      | NEW            |
-| `MEDIA-DELETE-11`      | Delete-conversation confirmation does not name the specific data store or confirm generated media is included                      | Image, video & voice generation    | PARTIAL             | S      | NEW            |
-| `legal-trust-04`       | No commercial-tier dispute-resolution stance exists to review or set deliberately                                                  | Legal, policy, trust & data-contr… | MISSING             | S      | NEW            |
-| `legal-trust-08`       | No dedicated MCP marketplace listing policy — correctly not built, since no marketplace exists to govern                           | Legal, policy, trust & data-contr… | DIFFERENT_BY_DESIGN | S      | NEW            |
-| `memory-16-gap`        | No disclosed (or apparently existing) numeric source-count ceiling for project knowledge files                                     | Memory & personalization           | MISSING             | S      | NEW            |
-| `memory-05-gap`        | No disclosure of whether memory personalizes outbound tool/search queries                                                          | Memory & personalization           | MISSING             | S      | NEW            |
-| `memory-10-gap`        | No memory-scope disclosure for a voice/Live surface (and no clear equivalent surface exists to disclose about)                     | Memory & personalization           | MISSING             | S      | NEW            |
-| `G10`                  | No disclosed nonprofit discount                                                                                                    | Models, reasoning controls, quota… | MISSING             | S      | NEW            |
-| `G11`                  | In-app paywall shows the upgrade tier's name but never its price                                                                   | Models, reasoning controls, quota… | BUILT_NOT_WIRED     | S      | NEW            |
-| `PROJ-WS-05`           | Library media grid does not visually distinguish video thumbnails from image thumbnails                                            | Projects, workspaces, notebooks &… | MISSING             | S      | NEW            |
-| `PROJ-WS-07`           | No pre-built example/tutorial project shipped on new accounts                                                                      | Projects, workspaces, notebooks &… | MISSING             | S      | NEW            |
-| `sched-gap-04`         | No approval/autonomy-mode picker at schedule-creation time                                                                         | Scheduled tasks & automation       | MISSING             | S      | CONFIRMS_PRIOR |
-| `sched-gap-06`         | Suggested-template cards never show cadence text                                                                                   | Scheduled tasks & automation       | MISSING             | S      | NEW            |
-| `sched-gap-13`         | Status-filter control exists elsewhere in the codebase but not on the web schedules list                                           | Scheduled tasks & automation       | BUILT_NOT_WIRED     | S      | NEW            |
-| `sched-gap-14`         | Suggested-template icon differentiation exists on mobile, absent on web                                                            | Scheduled tasks & automation       | BUILT_NOT_WIRED     | S      | NEW            |
-| `sched-gap-16`         | No maturity/beta disclosure anywhere in the scheduling or task UI                                                                  | Scheduled tasks & automation       | MISSING             | S      | NEW            |
-| `sched-gap-17`         | Create-schedule form defaults to a recurring cadence, not on-demand/manual                                                         | Scheduled tasks & automation       | PRESENT_WORSE       | S      | NEW            |
-| `settings-15-gap`      | No in-settings ad-personalization opt-out toggle                                                                                   | Settings taxonomy & permission/ap… | MISSING             | S      | NEW            |
-| `shell-nav-ia-gap-07`  | Marketing-nav mobile breakpoint hides the primary sign-in/CTA behind the hamburger, unlike Claude's benchmark which keeps CTAs vi… | Shell, global nav, IA & design sy… | PARTIAL             | S      | NEW            |
-| `shell-nav-ia-gap-08`  | Per-response fork/branch action is gated behind the hover-only 'More actions' menu, not a persistent always-visible icon           | Shell, global nav, IA & design sy… | PARTIAL             | S      | NEW            |
-| `shell-nav-ia-gap-09`  | No 'promote to recurring schedule' action in a conversation's options menu                                                         | Shell, global nav, IA & design sy… | MISSING             | S      | NEW            |
-| `G10`                  | Report citation list is missing favicons that the sibling Sources-tab component already renders                                    | Web Search & Deep Research         | PRESENT_WORSE       | S      | NEW            |
-| `agentic-modes-gap-06` | Conversation titles are truncated, not semantically generated, and no auto-rename path exists                                      | Agentic modes: Work / Cowork / Co… | PRESENT_WORSE       | M      | NEW            |
-| `agentic-modes-gap-12` | No 'promote task to recurring schedule' menu action                                                                                | Agentic modes: Work / Cowork / Co… | MISSING             | M      | NEW            |
-| `ART-CANVAS-01`        | Artifact gallery has no search, no filter-by, and no Shared-with-you tab                                                           | Artifacts, canvas & generative UI… | PARTIAL             | M      | NEW            |
-| `CLR-09`               | Composer '+' menu 'Connectors' entry is a settings-modal link-out, not an in-composer custom-MCP-registration flow                 | Composer, chat lifecycle & messag… | DIFFERENT_BY_DESIGN | M      | NEW            |
-| `CPS-14`               | No first-party productivity-suite bundle toggle (no equivalent of Gemini's Google Workspace master switch)                         | Connectors, plugins, skills, MCP … | MISSING             | M      | NEW            |
-| `CPS-16`               | No category-tab browsing on the public plugin storefront, and the storefront's own catalog is not yet installable                  | Connectors, plugins, skills, MCP … | PARTIAL             | M      | NEW            |
-| `CPS-17`               | No context-load control (lazy vs. always-loaded) for installed tools                                                               | Connectors, plugins, skills, MCP … | MISSING             | M      | NEW            |
-| `MEDIA-MENU-06`        | No explicit template/freeform/iterative-refine on-ramp menu for image generation                                                   | Image, video & voice generation    | MISSING             | M      | NEW            |
-| `MEDIA-NAV-07`         | No dedicated top-level Images/Videos nav destinations                                                                              | Image, video & voice generation    | PARTIAL             | M      | NEW            |
-| `legal-trust-05`       | No privacy-notice coverage for non-account-holder third parties whose data appears via a user's connectors or conversation         | Legal, policy, trust & data-contr… | MISSING             | M      | NEW            |
-| `memory-03-gap`        | No conversational chat-style editing of memory (only discrete add/edit/delete rows)                                                | Memory & personalization           | MISSING             | M      | NEW            |
-| `memory-18-gap`        | No independent per-capability auto-invoke toggles (web search, canvas, voice, library, connector search)                           | Memory & personalization           | MISSING             | M      | NEW            |
-| `memory-17-gap`        | No visible memory-retrieval narration step in the reasoning/thinking trace                                                         | Memory & personalization           | MISSING             | M      | NEW            |
-| `G3`                   | Usage buckets are model-class-scoped, not per-named-model like Claude's Fable bar                                                  | Models, reasoning controls, quota… | PARTIAL             | M      | NEW            |
-| `G8`                   | No published per-model API pricing, cache-tier rates, named service tiers, or batch discount                                       | Models, reasoning controls, quota… | MISSING             | M      | NEW            |
-| `PROJ-WS-04`           | Project capabilities require dialog navigation instead of a single persistent rail; Memory and Scheduled are not represented as f… | Projects, workspaces, notebooks &… | PARTIAL             | M      | NEW            |
-| `sched-gap-05`         | No project/workspace scoping control at schedule-creation time                                                                     | Scheduled tasks & automation       | MISSING             | M      | NEW            |
-| `sched-gap-07`         | Schedule list rows have no way to show a run is currently in progress                                                              | Scheduled tasks & automation       | PARTIAL             | M      | NEW            |
-| `sched-gap-08`         | No auto-generated semantic task title on either scheduling surface                                                                 | Scheduled tasks & automation       | MISSING             | M      | NEW            |
-| `sched-gap-09`         | No tool-use icon differentiation in the live task log, only status-colored dots                                                    | Scheduled tasks & automation       | PARTIAL             | M      | NEW            |
-| `settings-28-gap`      | Scheduled task creation has no approval-mode picker, and scheduled runs have nothing yet to gate                                   | Settings taxonomy & permission/ap… | MISSING             | M      | NEW            |
-| `settings-06-gap`      | Extension site allowlist has no default-permission policy, only a static list                                                      | Settings taxonomy & permission/ap… | PARTIAL             | M      | CONFIRMS_PRIOR |
-| `settings-16-gap`      | Notification categories are grouped by channel, not offered as per-category channel selection                                      | Settings taxonomy & permission/ap… | DIFFERENT_BY_DESIGN | M      | CONFIRMS_PRIOR |
-| `settings-20-gap`      | No global default-approval policy for installed plugin/tool actions                                                                | Settings taxonomy & permission/ap… | MISSING             | M      | NEW            |
-| `settings-22-gap`      | No unified named settings destination for cloud + local compute access                                                             | Settings taxonomy & permission/ap… | MISSING             | M      | NEW            |
-| `settings-29-gap`      | No configurable safety fallback (switch model vs. pause) when a message is flagged                                                 | Settings taxonomy & permission/ap… | MISSING             | M      | NEW            |
-| `shell-nav-ia-gap-05`  | Chat titling is single-stage (raw truncated prompt, permanent) rather than ChatGPT's two-stage placeholder-then-LLM-cleanup patte… | Shell, global nav, IA & design sy… | MISSING             | M      | NEW            |
-| `G7`                   | No opt-in 'notify me when done' control during an active run                                                                       | Web Search & Deep Research         | MISSING             | M      | NEW            |
-| `G11`                  | No source-scoping or file-attachment controls specific to the Deep Research composer                                               | Web Search & Deep Research         | MISSING             | M      | CONFIRMS_PRIOR |
-| `agentic-modes-gap-15` | Usage ledger is bucket-based/aggregate, not an itemized per-task debit ledger                                                      | Agentic modes: Work / Cowork / Co… | PARTIAL             | L      | NEW            |
-| `ART-CANVAS-03`        | No product-level 'frontend design' skill is wired into artifact generation, so named-skill narration cannot occur even though the… | Artifacts, canvas & generative UI… | BUILT_NOT_WIRED     | L      | NEW            |
-| `ART-CANVAS-05`        | No one-click transform of a completed research report into derivative formats (web page/infographic/quiz/flashcards/audio)         | Artifacts, canvas & generative UI… | MISSING             | L      | NEW            |
-| `ART-CANVAS-06`        | Image editing is inline-in-chat only; no full-page editor and no pinned-annotation edit targeting                                  | Artifacts, canvas & generative UI… | PARTIAL             | L      | NEW            |
-| `CLR-06`               | No user-clickable 'Run' affordance on a plain Python (or any language) code block in chat — only Copy exists in the shared code-b… | Composer, chat lifecycle & messag… | MISSING             | L      | NEW            |
-| `CLR-08`               | No end-of-answer horizontal source-card carousel with OpenGraph-style hero images; the closest equivalent is a toggle-triggered s… | Composer, chat lifecycle & messag… | PARTIAL             | L      | CONFIRMS_PRIOR |
-| `CPS-09`               | No self-serve non-MCP 'Custom API' connector authoring path                                                                        | Connectors, plugins, skills, MCP … | MISSING             | L      | NEW            |
-| `CPS-12`               | No dedicated top-level 'data source' category distinct from action-taking connectors                                               | Connectors, plugins, skills, MCP … | MISSING             | L      | NEW            |
-| `CPS-15`               | No star-rating display and no underlying custom-assistant/GPT-equivalent object                                                    | Connectors, plugins, skills, MCP … | MISSING             | L      | NEW            |
-| `CPS-18`               | No user-configurable network-egress domain allowlist for sandboxed skill/code execution                                            | Connectors, plugins, skills, MCP … | MISSING             | L      | NEW            |
-| `MEDIA-IMG-04`         | No object/background-removal tool in the image editor                                                                              | Image, video & voice generation    | MISSING             | L      | CONFIRMS_PRIOR |
-| `MEDIA-COMMENT-05`     | No pinned-comment-to-edit annotation entry point in the image editor                                                               | Image, video & voice generation    | MISSING             | L      | NEW            |
-| `MEDIA-TMPL-08`        | No template-gallery landing page for video (or image) generation                                                                   | Image, video & voice generation    | MISSING             | L      | NEW            |
-| `memory-08-gap`        | No unified personalization hub — memory, capabilities, reflect, and instructions are five separate flat settings nav entries       | Memory & personalization           | MISSING             | L      | NEW            |
-| `memory-09-gap`        | No forward-looking 'Daily Brief' (Reflect is a retrospective usage recap, not a day-ahead schedule/tasks brief)                    | Memory & personalization           | DIFFERENT_BY_DESIGN | L      | NEW            |
-| `memory-11-gap`        | No 'Connected Apps' personalization layer distinct from chat memory                                                                | Memory & personalization           | MISSING             | L      | NEW            |
-| `G5`                   | No named higher-usage seat SKU within the Team plan                                                                                | Models, reasoning controls, quota… | MISSING             | L      | NEW            |
-| `G6`                   | No self-serve Enterprise checkout path                                                                                             | Models, reasoning controls, quota… | MISSING             | L      | NEW            |
-| `sched-gap-03`         | No dual conversational-vs-manual creation path anywhere                                                                            | Scheduled tasks & automation       | MISSING             | L      | NEW            |
-| `sched-gap-10`         | Citations render as a block of pills below the message, not inline hyperlinks woven into prose                                     | Scheduled tasks & automation       | PRESENT_WORSE       | L      | NEW            |
-| `settings-04-gap`      | No scoped, per-session authorization-token table; only dev API keys are scoped                                                     | Settings taxonomy & permission/ap… | PARTIAL             | L      | NEW            |
-| `settings-23-gap`      | Dev console inside the consumer modal covers API keys but not user-facing webhooks                                                 | Settings taxonomy & permission/ap… | PARTIAL             | L      | NEW            |
-| `settings-24-gap`      | No centralized Deployments/Domains surface; closest analog lacks custom-domain mapping                                             | Settings taxonomy & permission/ap… | PARTIAL             | L      | NEW            |
-| `G6`                   | No dedicated live narration panel with titled prose sub-sections ('Show thinking' style)                                           | Web Search & Deep Research         | DIFFERENT_BY_DESIGN | L      | NEW            |
-| `G9`                   | No direct export to a connected productivity suite (e.g. Google Docs)                                                              | Web Search & Deep Research         | MISSING             | L      | NEW            |
-| `agentic-modes-gap-09` | No execution-environment picker (local vs. cloud vs. remote-paired)                                                                | Agentic modes: Work / Cowork / Co… | DIFFERENT_BY_DESIGN | XL     | NEW            |
-| `agentic-modes-gap-13` | No agent deployment to external messaging platforms as a first-class tier                                                          | Agentic modes: Work / Cowork / Co… | MISSING             | XL     | NEW            |
-| `agentic-modes-gap-16` | No named settings destination for a cloud + local 'agent computer'                                                                 | Agentic modes: Work / Cowork / Co… | DIFFERENT_BY_DESIGN | XL     | NEW            |
-| `ART-CANVAS-07`        | No dedicated top-level video-generation surface (nav item, specialized composer, template gallery); video generation is chat-prom… | Artifacts, canvas & generative UI… | PARTIAL             | XL     | NEW            |
-| `legal-trust-07`       | Consumer Terms/Privacy are a single worldwide document with no EEA/UK/Switzerland variant                                          | Legal, policy, trust & data-contr… | MISSING             | XL     | NEW            |
-| `memory-06-gap`        | No recording/transcript memory corpus independent of chat memory                                                                   | Memory & personalization           | MISSING             | XL     | NEW            |
-| `PROJ-WS-06`           | Connector-backed project sources (Google Drive, Slack) are not actually bindable to a project -- buttons route to a generic accou… | Projects, workspaces, notebooks &… | MISSING             | XL     | NEW            |
-| `settings-10-gap`      | No trusted-contact crisis-notification feature - correctly declined by design                                                      | Settings taxonomy & permission/ap… | DIFFERENT_BY_DESIGN | XL     | CONFIRMS_PRIOR |
-| `G3`                   | No mid-flight steering of an active research run (no plan edit-in-place, no quick-answer redirect)                                 | Web Search & Deep Research         | MISSING             | XL     | NEW            |
-| `G8`                   | No one-click derivative-format ('Create') menu on a completed report                                                               | Web Search & Deep Research         | MISSING             | XL     | NEW            |
+| ID | Gap | Domain | State | Effort | vs prior |
+|---|---|---|---|---|---|
+| `agentic-modes-gap-05` | No self-disclosed task-complexity narration | Agentic modes: Work / Cowork / Co… | MISSING | S | NEW |
+| `agentic-modes-gap-11` | Fork/'continue in new task' action is buried in a dropdown, not always visible | Agentic modes: Work / Cowork / Co… | FIXED | S | NEW |
+| `agentic-modes-gap-14` | Custom MCP import supports URL-based add only, not raw-JSON-config import | Agentic modes: Work / Cowork / Co… | PARTIAL | S | NEW |
+| `ART-CANVAS-04` | Composer has no discrete, named Canvas/artifact-creation tool entry | Artifacts, canvas & generative UI… | MISSING | S | NEW |
+| `ART-CANVAS-08` | Image-generation entry points do not disclose the underlying model name in first-party UI copy | Artifacts, canvas & generative UI… | MISSING | S | NEW |
+| `CLR-10` | No always-visible per-response fork/branch icon with reassurance copy; branching is menu-gated only | Composer, chat lifecycle & messag… | DIFFERENT_BY_DESIGN | S | NEW |
+| `CPS-10` | No plugin-provenance data flows into the skill autocomplete, so no attribution or narration copy is possible | Connectors, plugins, skills, MCP … | MISSING | S | NEW |
+| `CPS-11` | No narration copy at all distinguishing how a skill was loaded | Connectors, plugins, skills, MCP … | MISSING | S | NEW |
+| `CPS-13` | No example prompt shown on connector marketplace cards | Connectors, plugins, skills, MCP … | MISSING | S | NEW |
+| `MEDIA-VIDPLAYER-09` | Finished video player has no explicit Share control | Image, video & voice generation | PARTIAL | S | NEW |
+| `MEDIA-PLACEHOLDER-10` | Generation placeholders are not pre-sized to the requested aspect ratio | Image, video & voice generation | FIXED | S | NEW |
+| `MEDIA-DELETE-11` | Delete-conversation confirmation does not name the specific data store or confirm generated media is included | Image, video & voice generation | FIXED | S | NEW |
+| `legal-trust-04` | No commercial-tier dispute-resolution stance exists to review or set deliberately | Legal, policy, trust & data-contr… | MISSING | S | NEW |
+| `legal-trust-08` | No dedicated MCP marketplace listing policy — correctly not built, since no marketplace exists to govern | Legal, policy, trust & data-contr… | DIFFERENT_BY_DESIGN | S | NEW |
+| `memory-16-gap` | No disclosed (or apparently existing) numeric source-count ceiling for project knowledge files | Memory & personalization | MISSING | S | NEW |
+| `memory-05-gap` | No disclosure of whether memory personalizes outbound tool/search queries | Memory & personalization | MISSING | S | NEW |
+| `memory-10-gap` | No memory-scope disclosure for a voice/Live surface (and no clear equivalent surface exists to disclose about) | Memory & personalization | MISSING | S | NEW |
+| `G10` | No disclosed nonprofit discount | Models, reasoning controls, quota… | MISSING | S | NEW |
+| `G11` | In-app paywall shows the upgrade tier's name but never its price | Models, reasoning controls, quota… | FIXED | S | NEW |
+| `PROJ-WS-05` | Library media grid does not visually distinguish video thumbnails from image thumbnails | Projects, workspaces, notebooks &… | MISSING | S | NEW |
+| `PROJ-WS-07` | No pre-built example/tutorial project shipped on new accounts | Projects, workspaces, notebooks &… | MISSING | S | NEW |
+| `sched-gap-04` | No approval/autonomy-mode picker at schedule-creation time | Scheduled tasks & automation | MISSING | S | CONFIRMS_PRIOR |
+| `sched-gap-06` | Suggested-template cards never show cadence text | Scheduled tasks & automation | MISSING | S | NEW |
+| `sched-gap-13` | Status-filter control exists elsewhere in the codebase but not on the web schedules list | Scheduled tasks & automation | FIXED | S | NEW |
+| `sched-gap-14` | Suggested-template icon differentiation exists on mobile, absent on web | Scheduled tasks & automation | BUILT_NOT_WIRED | S | NEW |
+| `sched-gap-16` | No maturity/beta disclosure anywhere in the scheduling or task UI | Scheduled tasks & automation | MISSING | S | NEW |
+| `sched-gap-17` | Create-schedule form defaults to a recurring cadence, not on-demand/manual | Scheduled tasks & automation | PRESENT_WORSE | S | NEW |
+| `settings-15-gap` | No in-settings ad-personalization opt-out toggle | Settings taxonomy & permission/ap… | MISSING | S | NEW |
+| `shell-nav-ia-gap-07` | Marketing-nav mobile breakpoint hides the primary sign-in/CTA behind the hamburger, unlike Claude's benchmark which keeps CTAs vi… | Shell, global nav, IA & design sy… | FIXED | S | NEW |
+| `shell-nav-ia-gap-08` | Per-response fork/branch action is gated behind the hover-only 'More actions' menu, not a persistent always-visible icon | Shell, global nav, IA & design sy… | FIXED | S | NEW |
+| `shell-nav-ia-gap-09` | No 'promote to recurring schedule' action in a conversation's options menu | Shell, global nav, IA & design sy… | MISSING | S | NEW |
+| `G10` | Report citation list is missing favicons that the sibling Sources-tab component already renders | Web Search & Deep Research | PRESENT_WORSE | S | NEW |
+| `agentic-modes-gap-06` | Conversation titles are truncated, not semantically generated, and no auto-rename path exists | Agentic modes: Work / Cowork / Co… | PRESENT_WORSE | M | NEW |
+| `agentic-modes-gap-12` | No 'promote task to recurring schedule' menu action | Agentic modes: Work / Cowork / Co… | MISSING | M | NEW |
+| `ART-CANVAS-01` | Artifact gallery has no search, no filter-by, and no Shared-with-you tab | Artifacts, canvas & generative UI… | PARTIAL | M | NEW |
+| `CLR-09` | Composer '+' menu 'Connectors' entry is a settings-modal link-out, not an in-composer custom-MCP-registration flow | Composer, chat lifecycle & messag… | DIFFERENT_BY_DESIGN | M | NEW |
+| `CPS-14` | No first-party productivity-suite bundle toggle (no equivalent of Gemini's Google Workspace master switch) | Connectors, plugins, skills, MCP … | MISSING | M | NEW |
+| `CPS-16` | No category-tab browsing on the public plugin storefront, and the storefront's own catalog is not yet installable | Connectors, plugins, skills, MCP … | PARTIAL | M | NEW |
+| `CPS-17` | No context-load control (lazy vs. always-loaded) for installed tools | Connectors, plugins, skills, MCP … | MISSING | M | NEW |
+| `MEDIA-MENU-06` | No explicit template/freeform/iterative-refine on-ramp menu for image generation | Image, video & voice generation | MISSING | M | NEW |
+| `MEDIA-NAV-07` | No dedicated top-level Images/Videos nav destinations | Image, video & voice generation | PARTIAL | M | NEW |
+| `legal-trust-05` | No privacy-notice coverage for non-account-holder third parties whose data appears via a user's connectors or conversation | Legal, policy, trust & data-contr… | MISSING | M | NEW |
+| `memory-03-gap` | No conversational chat-style editing of memory (only discrete add/edit/delete rows) | Memory & personalization | MISSING | M | NEW |
+| `memory-18-gap` | No independent per-capability auto-invoke toggles (web search, canvas, voice, library, connector search) | Memory & personalization | MISSING | M | NEW |
+| `memory-17-gap` | No visible memory-retrieval narration step in the reasoning/thinking trace | Memory & personalization | MISSING | M | NEW |
+| `G3` | Usage buckets are model-class-scoped, not per-named-model like Claude's Fable bar | Models, reasoning controls, quota… | PARTIAL | M | NEW |
+| `G8` | No published per-model API pricing, cache-tier rates, named service tiers, or batch discount | Models, reasoning controls, quota… | MISSING | M | NEW |
+| `PROJ-WS-04` | Project capabilities require dialog navigation instead of a single persistent rail; Memory and Scheduled are not represented as f… | Projects, workspaces, notebooks &… | PARTIAL | M | NEW |
+| `sched-gap-05` | No project/workspace scoping control at schedule-creation time | Scheduled tasks & automation | MISSING | M | NEW |
+| `sched-gap-07` | Schedule list rows have no way to show a run is currently in progress | Scheduled tasks & automation | FIXED | M | NEW |
+| `sched-gap-08` | No auto-generated semantic task title on either scheduling surface | Scheduled tasks & automation | MISSING | M | NEW |
+| `sched-gap-09` | No tool-use icon differentiation in the live task log, only status-colored dots | Scheduled tasks & automation | FIXED | M | NEW |
+| `settings-28-gap` | Scheduled task creation has no approval-mode picker, and scheduled runs have nothing yet to gate | Settings taxonomy & permission/ap… | MISSING | M | NEW |
+| `settings-06-gap` | Extension site allowlist has no default-permission policy, only a static list | Settings taxonomy & permission/ap… | FIXED | M | CONFIRMS_PRIOR |
+| `settings-16-gap` | Notification categories are grouped by channel, not offered as per-category channel selection | Settings taxonomy & permission/ap… | DIFFERENT_BY_DESIGN | M | CONFIRMS_PRIOR |
+| `settings-20-gap` | No global default-approval policy for installed plugin/tool actions | Settings taxonomy & permission/ap… | MISSING | M | NEW |
+| `settings-22-gap` | No unified named settings destination for cloud + local compute access | Settings taxonomy & permission/ap… | MISSING | M | NEW |
+| `settings-29-gap` | No configurable safety fallback (switch model vs. pause) when a message is flagged | Settings taxonomy & permission/ap… | MISSING | M | NEW |
+| `shell-nav-ia-gap-05` | Chat titling is single-stage (raw truncated prompt, permanent) rather than ChatGPT's two-stage placeholder-then-LLM-cleanup patte… | Shell, global nav, IA & design sy… | MISSING | M | NEW |
+| `G7` | No opt-in 'notify me when done' control during an active run | Web Search & Deep Research | FIXED | M | NEW |
+| `G11` | No source-scoping or file-attachment controls specific to the Deep Research composer | Web Search & Deep Research | FIXED | M | CONFIRMS_PRIOR |
+| `agentic-modes-gap-15` | Usage ledger is bucket-based/aggregate, not an itemized per-task debit ledger | Agentic modes: Work / Cowork / Co… | PARTIAL | L | NEW |
+| `ART-CANVAS-03` | No product-level 'frontend design' skill is wired into artifact generation, so named-skill narration cannot occur even though the… | Artifacts, canvas & generative UI… | BUILT_NOT_WIRED | L | NEW |
+| `ART-CANVAS-05` | No one-click transform of a completed research report into derivative formats (web page/infographic/quiz/flashcards/audio) | Artifacts, canvas & generative UI… | MISSING | L | NEW |
+| `ART-CANVAS-06` | Image editing is inline-in-chat only; no full-page editor and no pinned-annotation edit targeting | Artifacts, canvas & generative UI… | PARTIAL | L | NEW |
+| `CLR-06` | No user-clickable 'Run' affordance on a plain Python (or any language) code block in chat — only Copy exists in the shared code-b… | Composer, chat lifecycle & messag… | MISSING | L | NEW |
+| `CLR-08` | No end-of-answer horizontal source-card carousel with OpenGraph-style hero images; the closest equivalent is a toggle-triggered s… | Composer, chat lifecycle & messag… | PARTIAL | L | CONFIRMS_PRIOR |
+| `CPS-09` | No self-serve non-MCP 'Custom API' connector authoring path | Connectors, plugins, skills, MCP … | MISSING | L | NEW |
+| `CPS-12` | No dedicated top-level 'data source' category distinct from action-taking connectors | Connectors, plugins, skills, MCP … | MISSING | L | NEW |
+| `CPS-15` | No star-rating display and no underlying custom-assistant/GPT-equivalent object | Connectors, plugins, skills, MCP … | MISSING | L | NEW |
+| `CPS-18` | No user-configurable network-egress domain allowlist for sandboxed skill/code execution | Connectors, plugins, skills, MCP … | MISSING | L | NEW |
+| `MEDIA-IMG-04` | No object/background-removal tool in the image editor | Image, video & voice generation | MISSING | L | CONFIRMS_PRIOR |
+| `MEDIA-COMMENT-05` | No pinned-comment-to-edit annotation entry point in the image editor | Image, video & voice generation | MISSING | L | NEW |
+| `MEDIA-TMPL-08` | No template-gallery landing page for video (or image) generation | Image, video & voice generation | MISSING | L | NEW |
+| `memory-08-gap` | No unified personalization hub — memory, capabilities, reflect, and instructions are five separate flat settings nav entries | Memory & personalization | MISSING | L | NEW |
+| `memory-09-gap` | No forward-looking 'Daily Brief' (Reflect is a retrospective usage recap, not a day-ahead schedule/tasks brief) | Memory & personalization | DIFFERENT_BY_DESIGN | L | NEW |
+| `memory-11-gap` | No 'Connected Apps' personalization layer distinct from chat memory | Memory & personalization | MISSING | L | NEW |
+| `G5` | No named higher-usage seat SKU within the Team plan | Models, reasoning controls, quota… | MISSING | L | NEW |
+| `G6` | No self-serve Enterprise checkout path | Models, reasoning controls, quota… | MISSING | L | NEW |
+| `sched-gap-03` | No dual conversational-vs-manual creation path anywhere | Scheduled tasks & automation | MISSING | L | NEW |
+| `sched-gap-10` | Citations render as a block of pills below the message, not inline hyperlinks woven into prose | Scheduled tasks & automation | PRESENT_WORSE | L | NEW |
+| `settings-04-gap` | No scoped, per-session authorization-token table; only dev API keys are scoped | Settings taxonomy & permission/ap… | PARTIAL | L | NEW |
+| `settings-23-gap` | Dev console inside the consumer modal covers API keys but not user-facing webhooks | Settings taxonomy & permission/ap… | PARTIAL | L | NEW |
+| `settings-24-gap` | No centralized Deployments/Domains surface; closest analog lacks custom-domain mapping | Settings taxonomy & permission/ap… | PARTIAL | L | NEW |
+| `G6` | No dedicated live narration panel with titled prose sub-sections ('Show thinking' style) | Web Search & Deep Research | DIFFERENT_BY_DESIGN | L | NEW |
+| `G9` | No direct export to a connected productivity suite (e.g. Google Docs) | Web Search & Deep Research | MISSING | L | NEW |
+| `agentic-modes-gap-09` | No execution-environment picker (local vs. cloud vs. remote-paired) | Agentic modes: Work / Cowork / Co… | DIFFERENT_BY_DESIGN | XL | NEW |
+| `agentic-modes-gap-13` | No agent deployment to external messaging platforms as a first-class tier | Agentic modes: Work / Cowork / Co… | MISSING | XL | NEW |
+| `agentic-modes-gap-16` | No named settings destination for a cloud + local 'agent computer' | Agentic modes: Work / Cowork / Co… | DIFFERENT_BY_DESIGN | XL | NEW |
+| `ART-CANVAS-07` | No dedicated top-level video-generation surface (nav item, specialized composer, template gallery); video generation is chat-prom… | Artifacts, canvas & generative UI… | PARTIAL | XL | NEW |
+| `legal-trust-07` | Consumer Terms/Privacy are a single worldwide document with no EEA/UK/Switzerland variant | Legal, policy, trust & data-contr… | MISSING | XL | NEW |
+| `memory-06-gap` | No recording/transcript memory corpus independent of chat memory | Memory & personalization | MISSING | XL | NEW |
+| `PROJ-WS-06` | Connector-backed project sources (Google Drive, Slack) are not actually bindable to a project -- buttons route to a generic accou… | Projects, workspaces, notebooks &… | MISSING | XL | NEW |
+| `settings-10-gap` | No trusted-contact crisis-notification feature - correctly declined by design | Settings taxonomy & permission/ap… | DIFFERENT_BY_DESIGN | XL | CONFIRMS_PRIOR |
+| `G3` | No mid-flight steering of an active research run (no plan edit-in-place, no quick-answer redirect) | Web Search & Deep Research | MISSING | XL | NEW |
+| `G8` | No one-click derivative-format ('Create') menu on a completed report | Web Search & Deep Research | MISSING | XL | NEW |
 
 ---
 
@@ -215,7 +216,7 @@ _None._
 
 ### `CPS-08` — Mobile Skills screen remains unreachable from any nav entry point
 
-**P1** · BUILT*NOT_WIRED · effort S · CONFIRMS_PRIOR (`EXTENSIBILITY-001 / SHELL-NAV-IA-003`) · \_Connectors, plugins, skills, MCP & custom assistants*
+**P1** · FIXED · effort S · CONFIRMS_PRIOR (`EXTENSIBILITY-001 / SHELL-NAV-IA-003`) · _Connectors, plugins, skills, MCP & custom assistants_
 
 **Benchmark.** ChatGPT iOS has a first-class Skills tab reachable from the sidebar drawer (01-chatgpt/plugins-apps-skills.md via cross-product-comparison)
 
@@ -225,7 +226,7 @@ _None._
 
 ### `orch-gap-01` — The artifacts gallery is complete and working but reachable from nowhere in the app, and renders in marketing-site chrome
 
-**P1** · BUILT*NOT_WIRED · effort S · NEW · \_Orchestrator live verification (browser-observed)*
+**P1** · FIXED · effort S · NEW · _Orchestrator live verification (browser-observed)_
 
 **Benchmark.** Claude ships a dedicated /artifacts gallery as a first-class primary-rail nav item with All / Yours / Shared-with-you tabs, filter, search and a 'New artifact' button — the corpus calls this out as the core of Claude's 'an artifact is immediately a first-class, independently addressable object' philosophy, versus ChatGPT's generic Library where a generated app is one entry among files (04-cross-product-comparison/09-generative-artifacts-canvas-and-media.md; 11-artifacts-and-files/claude-artifacts-findings.md).
 
@@ -235,7 +236,7 @@ _None._
 
 ### `settings-27-gap` — Voice settings page is real and honest but has no nav entry - still unreachable
 
-**P1** · BUILT*NOT_WIRED · effort S · CONFIRMS_PRIOR (`SETTINGS-001 (domain-settings.md, filed P1 as a broken-workflow nav bug) - independently re-verified fresh this pass, still unfixed.`) · \_Settings taxonomy & permission/approval architecture*
+**P1** · FIXED · effort S · CONFIRMS_PRIOR (`SETTINGS-001 (domain-settings.md, filed P1 as a broken-workflow nav bug) - independently re-verified fresh this pass, still unfixed.`) · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** ChatGPT and Claude both give voice mode its own settings section, reachable from the main nav; majority convergence.
 
@@ -245,7 +246,7 @@ _None._
 
 ### `CPS-01` — Skill auto-invoke matcher exists but has zero call sites in any chat UI
 
-**P1** · BUILT*NOT_WIRED · effort M · CONFIRMS_PRIOR (`EXTENSIBILITY-004`) · \_Connectors, plugins, skills, MCP & custom assistants*
+**P1** · FIXED · effort M · CONFIRMS_PRIOR (`EXTENSIBILITY-004`) · _Connectors, plugins, skills, MCP & custom assistants_
 
 **Benchmark.** ChatGPT/Claude/Gemini all auto-select a relevant skill/connector without explicit per-message invocation (01-chatgpt/plugins-apps-skills.md; 02-claude/settings.md; 03-gemini/connected-apps-and-settings.md)
 
@@ -255,7 +256,7 @@ _None._
 
 ### `MEDIA-VIDEO-01` — Staged attachments are silently discarded when sending in image- or video-generation mode
 
-**P1** · BUILT*NOT_WIRED · effort M · CONFIRMS_PRIOR (`VOICE-MEDIA-010`) · \_Image, video & voice generation*
+**P1** · FIXED · effort M · CONFIRMS_PRIOR (`VOICE-MEDIA-010`) · _Image, video & voice generation_
 
 **Benchmark.** Gemini's video composer shows an image-attach ('+') icon next to the Videos pill implying image-to-video support (03-gemini/media-generation.md, media-13)
 
@@ -265,7 +266,7 @@ _None._
 
 ### `orch-gap-03` — Deep Research on the DEFAULT model silently takes the single-turn path — no plan card, no process narration, no signal to the user
 
-**P1** · PARTIAL · effort M · SUPERSEDES*PRIOR (`search-deep-research P1 (Deep Research silently degrades…)`) · \_Orchestrator live verification (browser-observed)*
+**P1** · FIXED · effort M · SUPERSEDES_PRIOR (`search-deep-research P1 (Deep Research silently degrades…)`) · _Orchestrator live verification (browser-observed)_
 
 **Benchmark.** ChatGPT and Gemini both gate Deep Research on a reviewable plan card before spending research budget, and all three products narrate live progress once a research mode is invoked — Gemini narrates through titled sub-sections with a consulted-site grid and a numeric 'Researching 10 websites…' count; ChatGPT shows a task-level progress bar and streaming status line with a stop control (04-cross-product-comparison/04-deep-research-comparison.md).
 
@@ -295,7 +296,7 @@ _None._
 
 ### `G2` — Deep Research silently degrades to an unbranded single-turn fallback for Anthropic models and free-trial users
 
-**P1** · PRESENT*WORSE · effort M · CONFIRMS_PRIOR (`SEARCH-RESEARCH-001 (audit/parity-2026-08-15/gaps/domain-search-research.json)`) · \_Web Search & Deep Research*
+**P1** · FIXED · effort M · CONFIRMS_PRIOR (`SEARCH-RESEARCH-001 (audit/parity-2026-08-15/gaps/domain-search-research.json)`) · _Web Search & Deep Research_
 
 **Benchmark.** ALL_PRODUCTS show visible process narration once a research mode is invoked (dr-27); the entry point's active-state indicator should reflect what will actually happen (dr-01)
 
@@ -305,7 +306,7 @@ _None._
 
 ### `agentic-modes-gap-01` — Global Chat↔Agentic-mode toggle is composer-only and doesn't change placeholder/empty-state
 
-**P1** · PARTIAL · effort L · CONFIRMS*PRIOR (`P2-001 / AGENTIC-WORK-006`) · \_Agentic modes: Work / Cowork / Codex / Spark / Manus Agent*
+**P1** · PARTIAL · effort L · CONFIRMS_PRIOR (`P2-001 / AGENTIC-WORK-006`) · _Agentic modes: Work / Cowork / Codex / Spark / Manus Agent_
 
 **Benchmark.** ChatGPT (Work), Claude (Cowork), and Gemini (Spark) ship a chrome-level Chat↔Agentic toggle that changes the empty-state headline, composer placeholder, and toolbar controls (not just a label), and is available everywhere in the product, not tied to one page.
 
@@ -335,7 +336,7 @@ _None._
 
 ### `memory-13-gap` — Project/workspace memory isolation is absent (Web) or actively broken (Desktop writes to the global store)
 
-**P1** · BUILT*NOT_WIRED · effort L · CONFIRMS_PRIOR (`MEMORY-001 (desktop broken workflow), MEMORY-004 (web architecture gap) — both re-verified as still current; git log since shows only unrelated billing commits.`) · \_Memory & personalization*
+**P1** · BUILT_NOT_WIRED · effort L · CONFIRMS_PRIOR (`MEMORY-001 (desktop broken workflow), MEMORY-004 (web architecture gap) — both re-verified as still current; git log since shows only unrelated billing commits.`) · _Memory & personalization_
 
 **Benchmark.** ChatGPT and Claude were both live-tested with a cross-chat isolation test (unique phrase inside a project, checked for leakage outside it) and both passed with no leakage (04-cross-product-comparison/02-memory-and-personalization.md).
 
@@ -345,7 +346,7 @@ _None._
 
 ### `PROJ-WS-01` — No workspace-level memory scoping/isolation control (project memory is unconditionally account-wide)
 
-**P1** · MISSING · effort L · SUPERSEDES*PRIOR (`MEMORY-004 (audit/parity-2026-08-15/gaps/domain-memory.json), filed P2 as 'architecture-gap' citing only ChatGPT+Claude. This pass's live cross-product research confirms Gemini also has this as tableStakes=true (ALL_PRODUCTS convergence), which changes the correct severity from P2 to P1 -- this is table-stakes across the full observed competitive set, not a two-competitor differentiator.`) · \_Projects, workspaces, notebooks & file knowledge*
+**P1** · MISSING · effort L · SUPERSEDES_PRIOR (`MEMORY-004 (audit/parity-2026-08-15/gaps/domain-memory.json), filed P2 as 'architecture-gap' citing only ChatGPT+Claude. This pass's live cross-product research confirms Gemini also has this as tableStakes=true (ALL_PRODUCTS convergence), which changes the correct severity from P2 to P1 -- this is table-stakes across the full observed competitive set, not a two-competitor differentiator.`) · _Projects, workspaces, notebooks & file knowledge_
 
 **Benchmark.** ChatGPT: 'Default memory' vs 'Project-only memory' selector at project creation. Claude: 'Search and reference chats' toggle + 'Only you' memory card per project. Gemini: 'Use notebook memory' toggle in per-notebook settings, layered on account-wide memory. All three (ALL_PRODUCTS, tableStakes=true). Source: 01-chatgpt/projects.md, 02-claude/projects.md, 03-gemini/notebooks.md.
 
@@ -395,7 +396,7 @@ _None._
 
 ### `CLR-04` — Shared code-block copy button is hover-gated despite sitting inside an always-visible header bar, contradicting the persistent-chrome pattern it otherwise implements
 
-**P2** · PRESENT*WORSE · effort S · NEW · \_Composer, chat lifecycle & message rendering*
+**P2** · PRESENT_WORSE · effort S · NEW · _Composer, chat lifecycle & message rendering_
 
 **Benchmark.** ChatGPT and Gemini show code-block header chrome (language label + copy icon) at all times, not hover-gated (01-chatgpt/chat-lifecycle.md, 03-gemini/composer-and-markdown-rendering.md)
 
@@ -405,7 +406,7 @@ _None._
 
 ### `CPS-03` — Custom connector and Plugin removal bypass the confirmation dialog that catalog connectors correctly use
 
-**P2** · PRESENT*WORSE · effort S · NEW · \_Connectors, plugins, skills, MCP & custom assistants*
+**P2** · PRESENT_WORSE · effort S · NEW · _Connectors, plugins, skills, MCP & custom assistants_
 
 **Benchmark.** Claude requires a consequence-explaining confirmation dialog before removing an installed plugin/connector (02-claude/settings.md)
 
@@ -425,7 +426,7 @@ _None._
 
 ### `MEDIA-TITLE-03` — Image/video-generation conversations are permanently stuck with a generic 'Image generation'/'Video generation' title and never get auto-titled from the prompt
 
-**P2** · PRESENT*WORSE · effort S · NEW · \_Image, video & voice generation*
+**P2** · PRESENT_WORSE · effort S · NEW · _Image, video & voice generation_
 
 **Benchmark.** Gemini auto-titles a video-generation conversation from the submitted prompt content (03-gemini/media-generation.md, media-21)
 
@@ -435,7 +436,7 @@ _None._
 
 ### `legal-trust-01` — EU-AI-Act prohibited-practices list exists but covers only 2 of 5 points, and only on the mobile legal page
 
-**P2** · PARTIAL · effort S · NEW · _Legal, policy, trust & data-control surfaces_
+**P2** · FIXED · effort S · NEW · _Legal, policy, trust & data-control surfaces_
 
 **Benchmark.** ChatGPT, Claude, and Manus each independently converge on a near-identical 5-point prohibited-practices list (biometric categorization for protected attributes, real-time public biometric ID, social scoring, workplace/education emotion inference, predictive policing from profiling alone) in their primary usage policy. Source: 04-cross-product-comparison/10-legal-terms-and-policies.md.
 
@@ -445,7 +446,7 @@ _None._
 
 ### `legal-trust-02` — Automated high-stakes decision-making clause omits 'medical' from its enumerated domain list
 
-**P2** · PARTIAL · effort S · NEW · _Legal, policy, trust & data-control surfaces_
+**P2** · FIXED · effort S · NEW · _Legal, policy, trust & data-control surfaces_
 
 **Benchmark.** ChatGPT enumerates 13 regulated domains including medical; Claude enumerates 6 including medical. Source: 01-chatgpt/legal-and-policies.md, 02-claude/legal-and-policies.md.
 
@@ -455,17 +456,17 @@ _None._
 
 ### `legal-trust-06` — Sandbox retention is disclosed vaguely ('reclaimed once unreachable') when the code enforces a concrete, undisclosed 24-hour number
 
-**P2** · PARTIAL · effort S · NEW · _Legal, policy, trust & data-control surfaces_
+**P2** · FIXED · effort S · NEW · _Legal, policy, trust & data-control surfaces_
 
 **Benchmark.** Manus discloses an explicit numeric, tier-differentiated sandbox retention window (7 days free / 14 days paid). Source: 07-manus/04-manus-recheck-and-legal.md.
 
-**Ours.** apps/web/app/privacy/page.tsx:628-634 says only 'Reclaimed once unreachable.' The actual enforced number is apps/web/lib/e2b/reclaim.ts:31-36, SANDBOX*MAX_AGE_MS = 24 * 60 \_ 60 \* 1000 (24 hours, uniform across all tiers — code comment: 'Longest a sandbox may live before it is reclaimed regardless of mapping state'). Separately, packages/contracts/types/src/billing-catalog.ts:494-533 defines a per-tier sandboxTtlMs (10/20/30/60 min) but that is a live-execution idle timeout, a different concept from Manus's multi-day persisted-state retention, so tier-differentiation does not apply to the retention dimension as currently built.
+**Ours.** apps/web/app/privacy/page.tsx:628-634 says only 'Reclaimed once unreachable.' The actual enforced number is apps/web/lib/e2b/reclaim.ts:31-36, SANDBOX_MAX_AGE_MS = 24 * 60 * 60 * 1000 (24 hours, uniform across all tiers — code comment: 'Longest a sandbox may live before it is reclaimed regardless of mapping state'). Separately, packages/contracts/types/src/billing-catalog.ts:494-533 defines a per-tier sandboxTtlMs (10/20/30/60 min) but that is a live-execution idle timeout, a different concept from Manus's multi-day persisted-state retention, so tier-differentiation does not apply to the retention dimension as currently built.
 
 **Recommendation.** Replace 'Reclaimed once unreachable' with the actual number ('within 24 hours of the last mapping to your conversation'). This is a copy fix, not a capability build — the number already exists in code. Tier-differentiated retention (to fully match Manus) would be separate, larger product work.
 
 ### `G2` — deprecation_date is wired to silently filter models, never rendered as a visible countdown
 
-**P2** · BUILT*NOT_WIRED · effort S · NEW · \_Models, reasoning controls, quotas, pricing &amp; entitlements*
+**P2** · FIXED · effort S · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
 
 **Benchmark.** ChatGPT's model picker shows 'o3 — Leaving on August 26' inline inside the dropdown.
 
@@ -475,7 +476,7 @@ _None._
 
 ### `G7` — Pricing comparison table has no training-data-use disclosure row
 
-**P2** · PARTIAL · effort S · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
+**P2** · FIXED · effort S · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
 
 **Benchmark.** Both ChatGPT and Claude's pricing tables include a training-data-use row: individual tiers show opt-out available, business/team tiers show a categorical No.
 
@@ -485,7 +486,7 @@ _None._
 
 ### `G12` — Enterprise pricing copy calls a shipped capability 'roadmap'
 
-**P2** · PRESENT*WORSE · effort S · NEW · \_Models, reasoning controls, quotas, pricing &amp; entitlements*
+**P2** · PRESENT_WORSE · effort S · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
 
 **Benchmark.** ChatGPT's pricing table accurately reserves an entire Security & Administration section for Business/Enterprise with explicit per-row disclosure of what's included.
 
@@ -495,7 +496,7 @@ _None._
 
 ### `orch-gap-02` — The primary nav rail is defined twice by hand and the two copies have drifted — Tasks is unreachable from the app's default screen
 
-**P2** · PRESENT*WORSE · effort S · NEW · \_Orchestrator live verification (browser-observed)*
+**P2** · PRESENT_WORSE · effort S · NEW · _Orchestrator live verification (browser-observed)_
 
 **Benchmark.** All four benchmarked products keep a stable primary rail whose destinations do not change as you move between them; ChatGPT deliberately manages rail size via a 'More' overflow rather than by dropping items per route (06-design-system/comparative-design-system.md).
 
@@ -505,7 +506,7 @@ _None._
 
 ### `sched-gap-11` — No surface offers both a non-destructive 'Close' and a destructive 'Delete' for the same task object
 
-**P2** · PARTIAL · effort S · NEW · _Scheduled tasks & automation_
+**P2** · FIXED · effort S · NEW · _Scheduled tasks & automation_
 
 **Benchmark.** Gemini's task overflow menu offers Rename/Pin/Delete/Close as four distinct actions, keeping the lightweight dismiss separate from the destructive delete (03-gemini/spark-task-lifecycle.md)
 
@@ -515,7 +516,7 @@ _None._
 
 ### `shell-nav-ia-gap-01` — Destructive-action confirmation is inconsistently wired: styled red AlertDialog exists but the highest-frequency and highest-stakes deletes use native window.confirm()
 
-**P2** · BUILT*NOT_WIRED · effort S · NEW · \_Shell, global nav, IA & design system*
+**P2** · FIXED · effort S · NEW · _Shell, global nav, IA & design system_
 
 **Benchmark.** ChatGPT, Claude, Gemini, Manus all require a two-step confirmation with a red-accented confirm control and specific consequence copy for every destructive action tested (delete chat/project/task, cancel subscription, remove plugin) — comparative-design-system.md.
 
@@ -545,7 +546,7 @@ _None._
 
 ### `ART-CANVAS-02` — Gallery's 'New Artifact' never opens a blank, directly-editable artifact — always routes through a chat prompt
 
-**P2** · PARTIAL · effort M · CONFIRMS*PRIOR (`audit/parity-2026-08-15/gaps/domain-artifacts.json ARTIFACTS-003 (same conclusion reached independently from the gallery entry point rather than the Code-tab side; corroborating, not new)`) · \_Artifacts, canvas & generative UI objects*
+**P2** · PARTIAL · effort M · CONFIRMS_PRIOR (`audit/parity-2026-08-15/gaps/domain-artifacts.json ARTIFACTS-003 (same conclusion reached independently from the gallery entry point rather than the Code-tab side; corroborating, not new)`) · _Artifacts, canvas & generative UI objects_
 
 **Benchmark.** Claude's gallery has a 'New artifact' button implied to open a real artifact creation surface, not just a chat redirect (claude-artifacts-findings.md).
 
@@ -555,7 +556,7 @@ _None._
 
 ### `CLR-01` — Model picker never surfaces an inline retirement/deprecation warning for a model with a future deprecation_date
 
-**P2** · BUILT*NOT_WIRED · effort M · NEW · \_Composer, chat lifecycle & message rendering*
+**P2** · FIXED · effort M · NEW · _Composer, chat lifecycle & message rendering_
 
 **Benchmark.** ChatGPT annotates a retiring model directly in the picker itself ('o3 — Leaving on August 26'), not only in release notes (01-chatgpt/composer.md)
 
@@ -575,7 +576,7 @@ _None._
 
 ### `CLR-05` — 'Edit' on a sent user message prefills the bottom composer instead of turning the message bubble into an inline textarea; a fully-built inline-edit component exists and is never imported anywhere
 
-**P2** · BUILT*NOT_WIRED · effort M · NEW · \_Composer, chat lifecycle & message rendering*
+**P2** · FIXED · effort M · NEW · _Composer, chat lifecycle & message rendering_
 
 **Benchmark.** ChatGPT: hovering a user message reveals Edit; clicking it turns the bubble into an inline pre-filled textarea with Cancel/Send, without navigating away (01-chatgpt/composer.md)
 
@@ -605,7 +606,7 @@ _None._
 
 ### `MEDIA-IMG-02` — Image-generation conversations get an editor that is a side panel on desktop, not the full-view takeover the claim describes, with a raw-prompt-truncation title instead of a generated one
 
-**P2** · DIFFERENT*BY_DESIGN · effort M · NEW · \_Image, video & voice generation*
+**P2** · DIFFERENT_BY_DESIGN · effort M · NEW · _Image, video & voice generation_
 
 **Benchmark.** ChatGPT's Edit affordance opens a full-page dedicated editing surface with its own back/close control and an auto-generated descriptive title (01-chatgpt/images-media.md, media-04)
 
@@ -615,7 +616,7 @@ _None._
 
 ### `memory-12-gap` — No cross-provider memory import on Web or Desktop (Mobile has a working one)
 
-**P2** · MISSING · effort M · CONFIRMS*PRIOR (`MEMORY-003`) · \_Memory & personalization*
+**P2** · MISSING · effort M · CONFIRMS_PRIOR (`MEMORY-003`) · _Memory & personalization_
 
 **Benchmark.** Claude ('Import memory from other AI providers' Start-import button) and Gemini ('Import memory to Gemini') both ship a first-party entry point to migrate memory from a rival assistant (04-cross-product-comparison/02-memory-and-personalization.md, 03-gemini/memory-and-personalization.md).
 
@@ -625,7 +626,7 @@ _None._
 
 ### `memory-19-gap` — Memory bundles 'generate summary from history' and 'search/reference raw past chats' into one dependent toggle instead of two independent ones
 
-**P2** · MISSING · effort M · CONFIRMS*PRIOR (`MEMORY-002`) · \_Memory & personalization*
+**P2** · MISSING · effort M · CONFIRMS_PRIOR (`MEMORY-002`) · _Memory & personalization_
 
 **Benchmark.** Claude ships two independently-defaulted toggles: 'Search and reference chats' (RAG-style retrieval) and 'Generate memory from chat history [Legacy]' (04-cross-product-comparison/02-memory-and-personalization.md).
 
@@ -635,7 +636,7 @@ _None._
 
 ### `memory-14-gap` — No project-creation-time memory-scope selector
 
-**P2** · MISSING · effort M · CONFIRMS*PRIOR (`MEMORY-004 (same root cause; this pass adds the creation-flow-specific angle the prior filing didn't cover)`) · \_Memory & personalization*
+**P2** · MISSING · effort M · CONFIRMS_PRIOR (`MEMORY-004 (same root cause; this pass adds the creation-flow-specific angle the prior filing didn't cover)`) · _Memory & personalization_
 
 **Benchmark.** ChatGPT's project-creation modal front-loads a project-only vs. shared memory-mode selector before the project exists (04-cross-product-comparison/02-memory-and-personalization.md).
 
@@ -645,7 +646,7 @@ _None._
 
 ### `G1` — No per-model tier-access matrix on the marketing pricing page
 
-**P2** · PARTIAL · effort M · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
+**P2** · FIXED · effort M · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
 
 **Benchmark.** ChatGPT's pricing page lists 5 named models with per-tier access badges (checkmark/Limited/Expanded/Unlimited/—) in a real comparison table — 01-chatgpt/pricing.md.
 
@@ -655,7 +656,7 @@ _None._
 
 ### `G4` — Credit balance and top-up exist; the per-task debit ledger a user can inspect does not
 
-**P2** · PARTIAL · effort M · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
+**P2** · FIXED · effort M · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
 
 **Benchmark.** Manus shows a 'Credits history' ledger listing each past task with its own credit debit, scaled by that task's real cost.
 
@@ -665,7 +666,7 @@ _None._
 
 ### `PROJ-WS-03` — Project deletion dialog is silent about knowledge files, which become permanently orphaned (soft-delete never triggers the files' ON DELETE CASCADE)
 
-**P2** · PARTIAL · effort M · NEW · _Projects, workspaces, notebooks & file knowledge_
+**P2** · FIXED · effort M · NEW · _Projects, workspaces, notebooks & file knowledge_
 
 **Benchmark.** ChatGPT's deletion dialog enumerates every destroyed object type verbatim: 'permanently delete this project, including all its chats, tasks, and files ... To save chats, move them to your chat list or another project before deleting.' SINGLE_PRODUCT (ChatGPT), tableStakes=false. Source: 01-chatgpt/projects.md.
 
@@ -685,7 +686,7 @@ _None._
 
 ### `settings-03-gap` — 4-tier approval picker exists but isn't reused across agentic surfaces
 
-**P2** · BUILT*NOT_WIRED · effort M · SUPERSEDES_PRIOR (`SETTINGS-011/GAP-006 (domain-settings.md) called Cowork '1 control vs Claude's 5'; this pass found the missing granularity already exists elsewhere in the product and needs reuse, not new build.`) · \_Settings taxonomy & permission/approval architecture*
+**P2** · BUILT_NOT_WIRED · effort M · SUPERSEDES_PRIOR (`SETTINGS-011/GAP-006 (domain-settings.md) called Cowork '1 control vs Claude's 5'; this pass found the missing granularity already exists elsewhere in the product and needs reuse, not new build.`) · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** Claude exposes named 3-tier approval pickers separately on Cowork, Scheduled Tasks, and Code mode (02-claude/settings.md); single-product convergence.
 
@@ -699,13 +700,13 @@ _None._
 
 **Benchmark.** ChatGPT's Storage tab shows an exact numeric quota with a per-category breakdown; single-product but flagged tableStakes by the benchmark curator.
 
-**Ours.** Grepped every apps/web/features/settings/sections/_.tsx and apps/web/app/settings/\*\*/_.tsx file for 'Storage' excluding localStorage/sessionStorage matches: zero UI results. No numeric quota, usage bar, or per-category breakdown exists on any surface checked.
+**Ours.** Grepped every apps/web/features/settings/sections/*.tsx and apps/web/app/settings/**/*.tsx file for 'Storage' excluding localStorage/sessionStorage matches: zero UI results. No numeric quota, usage bar, or per-category breakdown exists on any surface checked.
 
 **Recommendation.** If any per-account storage cap on uploads/artifacts is enforced server-side, surface exact usage-vs-cap numbers before a silent-failure upload becomes a support burden; if no cap exists, this claim may be moot and should be re-scoped rather than built decoratively.
 
 ### `settings-12-gap` — Per-task credit-debit ledger exists in Postgres, never reaches a settings screen
 
-**P2** · BUILT*NOT_WIRED · effort M · NEW · \_Settings taxonomy & permission/approval architecture*
+**P2** · FIXED · effort M · NEW · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** Manus shows a visible 'Credits history' ledger, debited per task, distinct from a message-count plan; single-product.
 
@@ -715,7 +716,7 @@ _None._
 
 ### `settings-21-gap` — Tool-access-mode setting is fully dead - defined, never read or set
 
-**P2** · BUILT*NOT_WIRED · effort M · CONFIRMS_PRIOR (`SETTINGS-005 (domain-settings.md) - one of 7 dead field/setter pairs already catalogued in this exact file; still dead.`) · \_Settings taxonomy & permission/approval architecture*
+**P2** · FIXED · effort M · CONFIRMS_PRIOR (`SETTINGS-005 (domain-settings.md) - one of 7 dead field/setter pairs already catalogued in this exact file; still dead.`) · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** Claude's 'Tool access mode' dropdown (Load tools when needed / eager) governs when connected tools enter the model's active context; single-product.
 
@@ -725,7 +726,7 @@ _None._
 
 ### `shell-nav-ia-gap-02` — Suggested-prompt chips were deliberately removed from the empty-state composer (2026-08-06 founder decision), contradicting a 4/4-product convergence
 
-**P2** · DIFFERENT*BY_DESIGN · effort M · NEW · \_Shell, global nav, IA & design system*
+**P2** · DIFFERENT_BY_DESIGN · effort M · NEW · _Shell, global nav, IA & design system_
 
 **Benchmark.** ChatGPT, Claude, Gemini, and Manus all show 3-5 clickable starter-prompt chips/cards below the empty-state composer — comparative-design-system.md; claude/gemini/manus frontend-overview.md.
 
@@ -735,7 +736,7 @@ _None._
 
 ### `shell-nav-ia-gap-03` — Composer-embedded Chat/AGI-Work mode toggle exists but its placeholder text never changes and it's invisible to free/basic-tier users
 
-**P2** · PARTIAL · effort M · CONFIRMS*PRIOR (`audit/parity-2026-08-15/gaps/domain-agentic-work.json AGENTIC-WORK-006 (re-confirms P2-001): 'AGI Work exists as a mode toggle on the ordinary chat composer... no independent, deep-linkable workspace object.' This finding adds the placeholder-non-reactivity and tier-gating angles that prior pass did not check.`) · \_Shell, global nav, IA & design system*
+**P2** · PARTIAL · effort M · CONFIRMS_PRIOR (`audit/parity-2026-08-15/gaps/domain-agentic-work.json AGENTIC-WORK-006 (re-confirms P2-001): 'AGI Work exists as a mode toggle on the ordinary chat composer... no independent, deep-linkable workspace object.' This finding adds the placeholder-non-reactivity and tier-gating angles that prior pass did not check.`) · _Shell, global nav, IA & design system_
 
 **Benchmark.** Claude's composer-embedded Chat/Cowork axis shifts placeholder copy ('Write a message...' -> 'Describe a task or ask a question') on toggle and is visible regardless of plan tier — frontend-overview.md, comparative-design-system.md.
 
@@ -755,17 +756,17 @@ _None._
 
 ### `shell-nav-ia-gap-06` — Scheduled-task creation uses a conventional multi-field form, not the shared chat composer, and offers no suggested/template starter schedules
 
-**P2** · MISSING · effort M · CONFIRMS*PRIOR (`audit/parity-2026-08-15/gaps/domain-composer.json COMPOSER-001 (P1): four independent composer implementations repo-wide. This finding narrows to a within-web-surface instance (schedule creation doesn't even attempt the composer visual language) plus the separate, previously-unfiled observation that no suggested-template content exists on this surface at all (shell-18).`) · \_Shell, global nav, IA & design system*
+**P2** · MISSING · effort M · CONFIRMS_PRIOR (`audit/parity-2026-08-15/gaps/domain-composer.json COMPOSER-001 (P1): four independent composer implementations repo-wide. This finding narrows to a within-web-surface instance (schedule creation doesn't even attempt the composer visual language) plus the separate, previously-unfiled observation that no suggested-template content exists on this surface at all (shell-18).`) · _Shell, global nav, IA & design system_
 
 **Benchmark.** All four products reuse the same visual composer across contexts including scheduled-task creation, just with different placeholder copy (design-system.md); separately, all three of ChatGPT/Claude/Gemini visually separate real schedules from suggested/template starters in the same list (design-system.md, frontend-overview.md) -- shell-18.
 
-**Ours.** apps/web/features/schedules/components/ScheduleForm.tsx -- labeled text inputs, a model <select>, numeric interval fields, a raw cron-string field (placeholder="0 9 \* \* 1-5…"), not the rounded chat composer. apps/web/features/schedules/components/SchedulesPage.tsx:432-443 -- empty state offers only a 'Create Your First Schedule' CTA; grepped the file for 'Suggested'/'template', zero hits -- no template gallery exists to separate from real items at all.
+**Ours.** apps/web/features/schedules/components/ScheduleForm.tsx -- labeled text inputs, a model <select>, numeric interval fields, a raw cron-string field (placeholder="0 9 * * 1-5…"), not the rounded chat composer. apps/web/features/schedules/components/SchedulesPage.tsx:432-443 -- empty state offers only a 'Create Your First Schedule' CTA; grepped the file for 'Suggested'/'template', zero hits -- no template gallery exists to separate from real items at all.
 
 **Recommendation.** Lower priority than COMPOSER-001's cross-surface consolidation; if that migration happens, fold schedule creation into the shared composer with a 'Schedule' mode rather than a bespoke form. Independently, add 2-3 suggested schedule templates to the empty state, consistent with how the composer's own suggested-chips decision (shell-20) should be revisited together.
 
 ### `G4` — No Reports gallery UI, though the backend already supports listing all of a user's reports
 
-**P2** · BUILT*NOT_WIRED · effort M · NEW · \_Web Search & Deep Research*
+**P2** · FIXED · effort M · NEW · _Web Search & Deep Research_
 
 **Benchmark.** ChatGPT tracks Deep Research outputs in a dedicated, persisted 'Reports' gallery separate from regular chat history, with a document-reader header (download/copy-link/delete)
 
@@ -785,7 +786,7 @@ _None._
 
 ### `G12` — A reopened/standalone report view has no follow-up composer for grounded Q&A
 
-**P2** · PARTIAL · effort M · NEW · _Web Search & Deep Research_
+**P2** · FIXED · effort M · NEW · _Web Search & Deep Research_
 
 **Benchmark.** ChatGPT and Gemini both explicitly invite continued interaction with a completed report as a live object ('Ask about this file' / 'feel free to ask follow-up questions')
 
@@ -795,7 +796,7 @@ _None._
 
 ### `agentic-modes-gap-08` — No approval-mode picker on Web; Desktop's is global/binary, not per-conversation or 3-tier
 
-**P2** · PARTIAL · effort L · CONFIRMS*PRIOR (`GAP-058 / GAP-059`) · \_Agentic modes: Work / Cowork / Codex / Spark / Manus Agent*
+**P2** · PARTIAL · effort L · CONFIRMS_PRIOR (`GAP-058 / GAP-059`) · _Agentic modes: Work / Cowork / Codex / Spark / Manus Agent_
 
 **Benchmark.** Claude shows a named, per-conversation, three-tier approval picker in composer chrome (Manually approve / Automatically approve / Skip all approvals).
 
@@ -805,7 +806,7 @@ _None._
 
 ### `CLR-07` — Inline citations render as a trailing numbered-badge pill row after the whole message, not claim-adjacent favicon+domain pills mid-sentence
 
-**P2** · PARTIAL · effort L · CONFIRMS*PRIOR (`audit/parity-2026-08-15/gaps/domain-rendering.json RENDERING-008`) · \_Composer, chat lifecycle & message rendering*
+**P2** · PARTIAL · effort L · CONFIRMS_PRIOR (`audit/parity-2026-08-15/gaps/domain-rendering.json RENDERING-008`) · _Composer, chat lifecycle & message rendering_
 
 **Benchmark.** ChatGPT embeds small favicon+domain pill badges directly after the sentence they support, not numbered footnote markers (01-chatgpt/composer.md)
 
@@ -825,7 +826,7 @@ _None._
 
 ### `memory-02-gap` — Memory is a flat/provenance-grouped fact list, never synthesized narrative prose
 
-**P2** · PARTIAL · effort L · CONFIRMS*PRIOR (`MEMORY-006 (flagged missing search/pin/summary on Web; this pass adds that even the mobile reference implementation it points to isn't prose-structured)`) · \_Memory & personalization*
+**P2** · PARTIAL · effort L · CONFIRMS_PRIOR (`MEMORY-006 (flagged missing search/pin/summary on Web; this pass adds that even the mobile reference implementation it points to isn't prose-structured)`) · _Memory & personalization_
 
 **Benchmark.** ChatGPT's Memory summary modal and Claude's memory view render multi-paragraph prose under topical headers ('Overview', 'Work context', 'Personal context') (01-chatgpt/memory.md, 04-cross-product-comparison/02-memory-and-personalization.md).
 
@@ -865,7 +866,7 @@ _None._
 
 ### `sched-gap-15` — No follow-up composer for steering a task from the /tasks detail panel
 
-**P2** · PARTIAL · effort L · CONFIRMS*PRIOR (`AGENTIC-WORK-005 (P1) — 'Mid-run steering of an active AGI Work / Cloud agent run': a running conversation hard-rejects any new message with a 409, and the only in-run interaction (ToolApprovalDecisionSchema) accepts approved|rejected only, no free text. Severity here kept at P2 to avoid re-counting the same defect above its existing P1.`) · \_Scheduled tasks & automation*
+**P2** · PARTIAL · effort L · CONFIRMS_PRIOR (`AGENTIC-WORK-005 (P1) — 'Mid-run steering of an active AGI Work / Cloud agent run': a running conversation hard-rejects any new message with a 409, and the only in-run interaction (ToolApprovalDecisionSchema) accepts approved|rejected only, no free text. Severity here kept at P2 to avoid re-counting the same defect above its existing P1.`) · _Scheduled tasks & automation_
 
 **Benchmark.** Gemini's task panel has a persistent bottom composer ('What can we do next?') for continued steering of the same task thread (03-gemini/spark-task-lifecycle.md)
 
@@ -875,7 +876,7 @@ _None._
 
 ### `settings-05-gap` — No network-egress warning or domain allowlist for agent-executed code
 
-**P2** · MISSING · effort L · CONFIRMS*PRIOR (`SETTINGS-006 (domain-settings.md) - still unfixed since the prior pass.`) · \_Settings taxonomy & permission/approval architecture*
+**P2** · MISSING · effort L · CONFIRMS_PRIOR (`SETTINGS-006 (domain-settings.md) - still unfixed since the prior pass.`) · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** Claude's Capabilities settings show an 'Allow network egress' toggle with a security warning plus a curated domain-allowlist dropdown; single-product.
 
@@ -885,7 +886,7 @@ _None._
 
 ### `settings-07-gap` — PR auto-monitoring capability does not exist on any reachable UI surface
 
-**P2** · BUILT*NOT_WIRED · effort L · NEW · \_Settings taxonomy & permission/approval architecture*
+**P2** · BUILT_NOT_WIRED · effort L · NEW · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** Claude Code's 'Autofix pull requests' toggle ships ON by default, auto-monitoring open PRs; single-product.
 
@@ -895,7 +896,7 @@ _None._
 
 ### `settings-08-gap` — PR auto-creation is dead exported code, not a configurable toggle
 
-**P2** · BUILT*NOT_WIRED · effort L · NEW · \_Settings taxonomy & permission/approval architecture*
+**P2** · BUILT_NOT_WIRED · effort L · NEW · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** Claude Code has a distinct, OFF-by-default 'Create pull requests automatically' toggle, separate from PR monitoring; single-product.
 
@@ -905,7 +906,7 @@ _None._
 
 ### `settings-25-gap` — MFA is TOTP-only; the majority-benchmark pattern is independently toggleable methods
 
-**P2** · PARTIAL · effort L · CONFIRMS*PRIOR (`SETTINGS-008/GAP-115 (domain-settings.md) - still TOTP-only, honestly disclosed rather than faked.`) · \_Settings taxonomy & permission/approval architecture*
+**P2** · PARTIAL · effort L · CONFIRMS_PRIOR (`SETTINGS-008/GAP-115 (domain-settings.md) - still TOTP-only, honestly disclosed rather than faked.`) · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** Both ChatGPT and Claude expose an active-sessions table plus independently toggleable MFA methods (e.g. Authenticator + SMS); majority convergence, tableStakes.
 
@@ -915,7 +916,7 @@ _None._
 
 ### `G1` — No pre-flight plan-approval gate before a research run spends budget
 
-**P2** · MISSING · effort L · NEW · _Web Search & Deep Research_
+**P2** · FIXED · effort L · NEW · _Web Search & Deep Research_
 
 **Benchmark.** ChatGPT: plan card with Edit/Cancel/Start(N) countdown; Gemini: plan card with Edit plan link, time estimate, and 'Try again without Deep Research' fallback -- both in search-and-research.md and deep-research.md
 
@@ -925,7 +926,7 @@ _None._
 
 ### `sched-gap-12` — Scheduled tasks have no richer, tool-using tier — only the lightweight kind exists, and not by design
 
-**P2** · MISSING · effort XL · CONFIRMS*PRIOR (`AGENTIC-WORK-007 (P1) — same root cause; severity here kept below the existing P1 to avoid double-counting.`) · \_Scheduled tasks & automation*
+**P2** · MISSING · effort XL · CONFIRMS_PRIOR (`AGENTIC-WORK-007 (P1) — same root cause; severity here kept below the existing P1 to avoid double-counting.`) · _Scheduled tasks & automation_
 
 **Benchmark.** Gemini deliberately offers two tiers: a rich Spark tool-using composer and a separate lightweight digest-delivery form (04-cross-product-comparison/03-scheduled-tasks-and-automation.md)
 
@@ -945,7 +946,7 @@ _None._
 
 ### `agentic-modes-gap-11` — Fork/'continue in new task' action is buried in a dropdown, not always visible
 
-**P3** · PARTIAL · effort S · NEW · _Agentic modes: Work / Cowork / Codex / Spark / Manus Agent_
+**P3** · FIXED · effort S · NEW · _Agentic modes: Work / Cowork / Codex / Spark / Manus Agent_
 
 **Benchmark.** Manus shows an always-visible copy-icon + fork-icon pair beneath every response, not a context-menu action.
 
@@ -985,7 +986,7 @@ _None._
 
 ### `CLR-10` — No always-visible per-response fork/branch icon with reassurance copy; branching is menu-gated only
 
-**P3** · DIFFERENT*BY_DESIGN · effort S · NEW · \_Composer, chat lifecycle & message rendering*
+**P3** · DIFFERENT_BY_DESIGN · effort S · NEW · _Composer, chat lifecycle & message rendering_
 
 **Benchmark.** Manus shows a persistent fork icon under every response labeled 'Continue in new task' with explicit copy: 'Your original task stays unchanged' (07-manus/01-overview-and-nav.md)
 
@@ -1035,7 +1036,7 @@ _None._
 
 ### `MEDIA-PLACEHOLDER-10` — Generation placeholders are not pre-sized to the requested aspect ratio
 
-**P3** · PARTIAL · effort S · NEW · _Image, video & voice generation_
+**P3** · FIXED · effort S · NEW · _Image, video & voice generation_
 
 **Benchmark.** ChatGPT's generation placeholder is pre-sized to the target image's eventual aspect ratio (01-chatgpt/images-media.md, media-01)
 
@@ -1045,7 +1046,7 @@ _None._
 
 ### `MEDIA-DELETE-11` — Delete-conversation confirmation does not name the specific data store or confirm generated media is included
 
-**P3** · PARTIAL · effort S · NEW · _Image, video & voice generation_
+**P3** · FIXED · effort S · NEW · _Image, video & voice generation_
 
 **Benchmark.** Gemini's delete-chat dialog names the specific backing data store and explicitly states generated content is included ('...from your Gemini Apps Activity, plus any content you created', 03-gemini/media-generation.md, media-20)
 
@@ -1065,7 +1066,7 @@ _None._
 
 ### `legal-trust-08` — No dedicated MCP marketplace listing policy — correctly not built, since no marketplace exists to govern
 
-**P3** · DIFFERENT*BY_DESIGN · effort S · NEW · \_Legal, policy, trust & data-control surfaces*
+**P3** · DIFFERENT_BY_DESIGN · effort S · NEW · _Legal, policy, trust & data-control surfaces_
 
 **Benchmark.** Claude's AUP references a separate Directory Policy governing third-party MCP server listings in Claude's own curated Directory. Source: 02-claude/legal-and-policies.md.
 
@@ -1079,7 +1080,7 @@ _None._
 
 **Benchmark.** Gemini's Notebook settings disclose 'up to 300 sources' per notebook with a default-on memory toggle (04-cross-product-comparison/02-memory-and-personalization.md).
 
-**Ours.** Grepped 'up to', 'maximum of', 'cap of', '300 sources' in apps/web/features/projects/components/KnowledgeFilesPanel.tsx — zero hits. apps/web/features/projects/**tests**/project-knowledge-upload-boundary.test.ts only asserts a per-file byte-size constant is not leaked into UI copy; no evidence of any file-count ceiling, disclosed or not.
+**Ours.** Grepped 'up to', 'maximum of', 'cap of', '300 sources' in apps/web/features/projects/components/KnowledgeFilesPanel.tsx — zero hits. apps/web/features/projects/__tests__/project-knowledge-upload-boundary.test.ts only asserts a per-file byte-size constant is not leaked into UI copy; no evidence of any file-count ceiling, disclosed or not.
 
 **Recommendation.** If a backend file-count ceiling exists, surface it in KnowledgeFilesPanel copy; if none exists, add one and disclose it — an unbounded per-project file count is itself worth checking independent of this claim.
 
@@ -1115,7 +1116,7 @@ _None._
 
 ### `G11` — In-app paywall shows the upgrade tier's name but never its price
 
-**P3** · BUILT*NOT_WIRED · effort S · NEW · \_Models, reasoning controls, quotas, pricing &amp; entitlements*
+**P3** · FIXED · effort S · NEW · _Models, reasoning controls, quotas, pricing &amp; entitlements_
 
 **Benchmark.** Gemini's in-app upsell banner discloses the exact price: 'Get 5x more usage with AI Ultra — $99.99/month.'
 
@@ -1145,7 +1146,7 @@ _None._
 
 ### `sched-gap-04` — No approval/autonomy-mode picker at schedule-creation time
 
-**P3** · MISSING · effort S · CONFIRMS*PRIOR (`AGENTIC-WORK-007 (apps/web/lib/services/scheduled-agent-executor.ts:88-135 has no tools field at all — there is nothing to gate approval on yet)`) · \_Scheduled tasks & automation*
+**P3** · MISSING · effort S · CONFIRMS_PRIOR (`AGENTIC-WORK-007 (apps/web/lib/services/scheduled-agent-executor.ts:88-135 has no tools field at all — there is nothing to gate approval on yet)`) · _Scheduled tasks & automation_
 
 **Benchmark.** Claude's manual task form has a 3-option approval-mode picker (Manually approve / Automatically approve / Skip all approvals) (02-claude/scheduled-tasks.md)
 
@@ -1165,7 +1166,7 @@ _None._
 
 ### `sched-gap-13` — Status-filter control exists elsewhere in the codebase but not on the web schedules list
 
-**P3** · BUILT*NOT_WIRED · effort S · NEW · \_Scheduled tasks & automation*
+**P3** · FIXED · effort S · NEW · _Scheduled tasks & automation_
 
 **Benchmark.** ChatGPT has a right-aligned 'Active' filter chip on its Scheduled page (01-chatgpt/tasks.md)
 
@@ -1175,7 +1176,7 @@ _None._
 
 ### `sched-gap-14` — Suggested-template icon differentiation exists on mobile, absent on web
 
-**P3** · BUILT*NOT_WIRED · effort S · NEW · \_Scheduled tasks & automation*
+**P3** · BUILT_NOT_WIRED · effort S · NEW · _Scheduled tasks & automation_
 
 **Benchmark.** ChatGPT uses a '+' circle icon on template rows distinct from the plain status icon on real task rows (01-chatgpt/tasks.md)
 
@@ -1195,7 +1196,7 @@ _None._
 
 ### `sched-gap-17` — Create-schedule form defaults to a recurring cadence, not on-demand/manual
 
-**P3** · PRESENT*WORSE · effort S · NEW · \_Scheduled tasks & automation*
+**P3** · PRESENT_WORSE · effort S · NEW · _Scheduled tasks & automation_
 
 **Benchmark.** Claude's Frequency dropdown defaults to 'Manual' (on-demand only) rather than a preset recurring schedule (02-claude/scheduled-tasks.md)
 
@@ -1215,7 +1216,7 @@ _None._
 
 ### `shell-nav-ia-gap-07` — Marketing-nav mobile breakpoint hides the primary sign-in/CTA behind the hamburger, unlike Claude's benchmark which keeps CTAs visible outside it
 
-**P3** · PARTIAL · effort S · NEW · _Shell, global nav, IA & design system_
+**P3** · FIXED · effort S · NEW · _Shell, global nav, IA & design system_
 
 **Benchmark.** Claude's marketing nav collapses to a hamburger at ~1299px (above typical mobile width) while 'Contact sales' and 'Try Claude' CTAs remain visible outside the hamburger -- marketing-site-nav.md.
 
@@ -1225,7 +1226,7 @@ _None._
 
 ### `shell-nav-ia-gap-08` — Per-response fork/branch action is gated behind the hover-only 'More actions' menu, not a persistent always-visible icon
 
-**P3** · PARTIAL · effort S · NEW · _Shell, global nav, IA & design system_
+**P3** · FIXED · effort S · NEW · _Shell, global nav, IA & design system_
 
 **Benchmark.** Manus shows a persistent, always-visible fork/branch icon directly under every completed response ('Continue in new task'), not gated behind a menu -- overview-and-nav.md.
 
@@ -1245,7 +1246,7 @@ _None._
 
 ### `G10` — Report citation list is missing favicons that the sibling Sources-tab component already renders
 
-**P3** · PRESENT*WORSE · effort S · NEW · \_Web Search & Deep Research*
+**P3** · PRESENT_WORSE · effort S · NEW · _Web Search & Deep Research_
 
 **Benchmark.** Gemini's end-of-report source list shows a real favicon, domain, and title per entry
 
@@ -1255,7 +1256,7 @@ _None._
 
 ### `agentic-modes-gap-06` — Conversation titles are truncated, not semantically generated, and no auto-rename path exists
 
-**P3** · PRESENT*WORSE · effort M · NEW · \_Agentic modes: Work / Cowork / Codex / Spark / Manus Agent*
+**P3** · PRESENT_WORSE · effort M · NEW · _Agentic modes: Work / Cowork / Codex / Spark / Manus Agent_
 
 **Benchmark.** Gemini generates a semantic task title via an LLM call (not truncation); Manus at least produces a truncation/rephrase-style title.
 
@@ -1285,7 +1286,7 @@ _None._
 
 ### `CLR-09` — Composer '+' menu 'Connectors' entry is a settings-modal link-out, not an in-composer custom-MCP-registration flow
 
-**P3** · DIFFERENT*BY_DESIGN · effort M · NEW · \_Composer, chat lifecycle & message rendering*
+**P3** · DIFFERENT_BY_DESIGN · effort M · NEW · _Composer, chat lifecycle & message rendering_
 
 **Benchmark.** Claude's composer '+' menu -> 'Add connector' submenu includes 'Add custom connector' directly, without leaving the chat (02-claude/composer-and-chat-lifecycle.md)
 
@@ -1369,7 +1370,7 @@ _None._
 
 **Benchmark.** ChatGPT's Personalization Advanced section has five independent auto-invoke toggles (Web search, Canvas, Voice, Library search, Connector search) (01-chatgpt/memory.md).
 
-**Ours.** apps/web/features/settings/sections/CapabilitiesSection.tsx (full file) has exactly three toggles, all under 'Memory' — no auto-invoke section exists. Grepped 'auto.*invoke', 'autoInvoke', 'auto.*web.\*search' across settings — zero hits.
+**Ours.** apps/web/features/settings/sections/CapabilitiesSection.tsx (full file) has exactly three toggles, all under 'Memory' — no auto-invoke section exists. Grepped 'auto.*invoke', 'autoInvoke', 'auto.*web.*search' across settings — zero hits.
 
 **Recommendation.** Add an 'Advanced' subsection to CapabilitiesSection with independent per-tool auto-invoke switches, mirroring the pattern already used for the memory sub-toggles.
 
@@ -1425,7 +1426,7 @@ _None._
 
 ### `sched-gap-07` — Schedule list rows have no way to show a run is currently in progress
 
-**P3** · PARTIAL · effort M · NEW · _Scheduled tasks & automation_
+**P3** · FIXED · effort M · NEW · _Scheduled tasks & automation_
 
 **Benchmark.** Claude and Gemini (MAJORITY) show a colored dot on an active task's row that clears the instant it completes (04-cross-product-comparison/03-scheduled-tasks-and-automation.md; 03-gemini/spark-task-lifecycle.md)
 
@@ -1445,7 +1446,7 @@ _None._
 
 ### `sched-gap-09` — No tool-use icon differentiation in the live task log, only status-colored dots
 
-**P3** · PARTIAL · effort M · NEW · _Scheduled tasks & automation_
+**P3** · FIXED · effort M · NEW · _Scheduled tasks & automation_
 
 **Benchmark.** Gemini's live log shows each tool invocation with a distinguishing icon and spelled-out tool name (03-gemini/spark-task-lifecycle.md)
 
@@ -1465,7 +1466,7 @@ _None._
 
 ### `settings-06-gap` — Extension site allowlist has no default-permission policy, only a static list
 
-**P3** · PARTIAL · effort M · CONFIRMS*PRIOR (`domain-settings.md:118-123 already characterizes this as a static allowlist, left untracked under any GAP id ('left to the extension domain's own tracking').`) · \_Settings taxonomy & permission/approval architecture*
+**P3** · FIXED · effort M · CONFIRMS_PRIOR (`domain-settings.md:118-123 already characterizes this as a static allowlist, left untracked under any GAP id ('left to the extension domain's own tracking').`) · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** ChatGPT's Cloud browser settings pair a 'Default permissions' dropdown with a per-domain override list; single-product.
 
@@ -1475,7 +1476,7 @@ _None._
 
 ### `settings-16-gap` — Notification categories are grouped by channel, not offered as per-category channel selection
 
-**P3** · DIFFERENT*BY_DESIGN · effort M · CONFIRMS_PRIOR (`SETTINGS-012/GAP-119 (domain-settings.md) - already tracked as a deliberately-narrow breadth gap.`) · \_Settings taxonomy & permission/approval architecture*
+**P3** · DIFFERENT_BY_DESIGN · effort M · CONFIRMS_PRIOR (`SETTINGS-012/GAP-119 (domain-settings.md) - already tracked as a deliberately-narrow breadth gap.`) · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** ChatGPT lets a user pick Push/Email/both independently per notification category; single-product.
 
@@ -1525,7 +1526,7 @@ _None._
 
 ### `G7` — No opt-in 'notify me when done' control during an active run
 
-**P3** · MISSING · effort M · NEW · _Web Search & Deep Research_
+**P3** · FIXED · effort M · NEW · _Web Search & Deep Research_
 
 **Benchmark.** Claude shows a 'Want to be notified when Claude responds? [Notify]' bar while Research is processing
 
@@ -1535,7 +1536,7 @@ _None._
 
 ### `G11` — No source-scoping or file-attachment controls specific to the Deep Research composer
 
-**P3** · MISSING · effort M · CONFIRMS*PRIOR (`SEARCH-RESEARCH-003 (supporting evidence only, not the same claim)`) · \_Web Search & Deep Research*
+**P3** · FIXED · effort M · CONFIRMS_PRIOR (`SEARCH-RESEARCH-003 (supporting evidence only, not the same claim)`) · _Web Search & Deep Research_
 
 **Benchmark.** Gemini's Deep-Research-active composer shows 'Sources' (scope restriction) and 'Files' (attach local files as research input) buttons -- though Gemini's own behavior here is itself UNVERIFIED in the source benchmark
 
@@ -1555,11 +1556,11 @@ _None._
 
 ### `ART-CANVAS-03` — No product-level 'frontend design' skill is wired into artifact generation, so named-skill narration cannot occur even though the display mechanism exists
 
-**P3** · BUILT*NOT_WIRED · effort L · NEW · \_Artifacts, canvas & generative UI objects*
+**P3** · BUILT_NOT_WIRED · effort L · NEW · _Artifacts, canvas & generative UI objects_
 
 **Benchmark.** Claude's transcript names the specific internal skill auto-invoked before building UI (e.g. '📋 Loaded frontend-design skill') (claude-artifacts-findings.md).
 
-**Ours.** Display link exists and is generic: apps/web/features/chat/components/messages/ToolTimeline.tsx humanizeToolName (lines 145-196) falls through to a tool's real name for anything unmapped, and getToolIcon (lines 61-104) has a dedicated BookOpen glyph for any tool name containing 'skill'/'learn' explicitly citing the Claude reference. Missing link: no product-shipped SKILL.md for design/UI work was found anywhere under the repo outside dev-tooling (.agents/skills/\*, which are Claude Code environment skills, not product skills) or IDE-extension test fixtures (apps/extension-vscode/.vscode-test/\*\*) — grep for SKILL.md excluding those turned up none for a design/frontend skill. The real product skill runtime exists (packages/tools/skills, apps/web/lib/services/skill-catalog-service.ts) but nothing evidences the artifact-generation code path auto-selecting a named UI-design skill to feed that display.
+**Ours.** Display link exists and is generic: apps/web/features/chat/components/messages/ToolTimeline.tsx humanizeToolName (lines 145-196) falls through to a tool's real name for anything unmapped, and getToolIcon (lines 61-104) has a dedicated BookOpen glyph for any tool name containing 'skill'/'learn' explicitly citing the Claude reference. Missing link: no product-shipped SKILL.md for design/UI work was found anywhere under the repo outside dev-tooling (.agents/skills/*, which are Claude Code environment skills, not product skills) or IDE-extension test fixtures (apps/extension-vscode/.vscode-test/**) — grep for SKILL.md excluding those turned up none for a design/frontend skill. The real product skill runtime exists (packages/tools/skills, apps/web/lib/services/skill-catalog-service.ts) but nothing evidences the artifact-generation code path auto-selecting a named UI-design skill to feed that display.
 
 **Recommendation.** If a bundled 'frontend design' (or similar) skill is wanted to match this Claude behavior, author it under the product skill catalog (not .agents/skills, which is Claude Code tooling) and have the system prompt/tool-selection logic for HTML/React artifact generation prefer it when available; the transcript display path already renders whatever name comes through, so this is purely a generation-flow + skill-catalog wiring task, not a UI task.
 
@@ -1595,11 +1596,11 @@ _None._
 
 ### `CLR-08` — No end-of-answer horizontal source-card carousel with OpenGraph-style hero images; the closest equivalent is a toggle-triggered side panel with small favicons
 
-**P3** · PARTIAL · effort L · CONFIRMS*PRIOR (`audit/parity-2026-08-15/gaps/domain-rendering.json RENDERING-008`) · \_Composer, chat lifecycle & message rendering*
+**P3** · PARTIAL · effort L · CONFIRMS_PRIOR (`audit/parity-2026-08-15/gaps/domain-rendering.json RENDERING-008`) · _Composer, chat lifecycle & message rendering_
 
 **Benchmark.** ChatGPT renders a horizontal row of rich source cards with full-bleed hero images, publisher favicon/name, headline, and timestamp at the end of a web-search answer; clicking opens a new tab (01-chatgpt/composer.md)
 
-**Ours.** apps/web/features/chat/components/research/ResearchPanel.tsx:27-98 (SourceRow) — favicon (16px) + title + hostname + snippet in a vertical list inside a toggle-triggered right-side panel, not an inline end-of-answer horizontal carousel, and no hero/OpenGraph imagery anywhere in the file. It does match the 'opens in a new tab' behavior (source.url target="\_blank", :52-55).
+**Ours.** apps/web/features/chat/components/research/ResearchPanel.tsx:27-98 (SourceRow) — favicon (16px) + title + hostname + snippet in a vertical list inside a toggle-triggered right-side panel, not an inline end-of-answer horizontal carousel, and no hero/OpenGraph imagery anywhere in the file. It does match the 'opens in a new tab' behavior (source.url target="_blank", :52-55).
 
 **Recommendation.** Single-product ChatGPT differentiator; low priority relative to CLR-07/RENDERING-008's richer-popover fix, which would deliver more value for the same investment. If pursued, add hero-image cards as a distinct end-of-message row rather than reworking ResearchPanel.
 
@@ -1619,7 +1620,7 @@ _None._
 
 **Benchmark.** Manus has a peer 'Data sources' category alongside Connectors and Skills (07-manus/02-plugins-connectors-skills.md)
 
-**Ours.** apps/web/features/connectors/data/connectors.ts categories (grep -o "category: '[^']\*'" | sort -u): AI, Cloud, Communication, CRM, Data, Design, Developer, Exclusive, Finance, Healthcare, Marketing, Productivity, Social, Storage — all sub-filters within one flat 'Connectors' bucket in DirectoryBrowse's category select, not a peer top-level taxonomy entry.
+**Ours.** apps/web/features/connectors/data/connectors.ts categories (grep -o "category: '[^']*'" | sort -u): AI, Cloud, Communication, CRM, Data, Design, Developer, Exclusive, Finance, Healthcare, Marketing, Productivity, Social, Storage — all sub-filters within one flat 'Connectors' bucket in DirectoryBrowse's category select, not a peer top-level taxonomy entry.
 
 **Recommendation.** Single-product Manus differentiator; only worth pursuing as part of a broader connector-taxonomy rework, not in isolation.
 
@@ -1645,7 +1646,7 @@ _None._
 
 ### `MEDIA-IMG-04` — No object/background-removal tool in the image editor
 
-**P3** · MISSING · effort L · CONFIRMS*PRIOR (`VOICE-MEDIA-008`) · \_Image, video & voice generation*
+**P3** · MISSING · effort L · CONFIRMS_PRIOR (`VOICE-MEDIA-008`) · _Image, video & voice generation_
 
 **Benchmark.** ChatGPT's image editor toolbar has an icon-only Remove tool, inferred (Low-Medium confidence, not tested) to remove an object or background (01-chatgpt/images-media.md, media-09)
 
@@ -1685,7 +1686,7 @@ _None._
 
 ### `memory-09-gap` — No forward-looking 'Daily Brief' (Reflect is a retrospective usage recap, not a day-ahead schedule/tasks brief)
 
-**P3** · DIFFERENT*BY_DESIGN · effort L · NEW · \_Memory & personalization*
+**P3** · DIFFERENT_BY_DESIGN · effort L · NEW · _Memory & personalization_
 
 **Benchmark.** Gemini's sidebar 'Daily Brief' is powered by a Personal Intelligence card with its own toggle, showing 'your schedule, tasks, and more' for the day ahead (03-gemini/memory-and-personalization.md).
 
@@ -1699,7 +1700,7 @@ _None._
 
 **Benchmark.** Gemini's Personal Intelligence hub has a 'Connected Apps' card letting users opt connector insights into personalization, separate from the Memory toggle (03-gemini/memory-and-personalization.md).
 
-**Ours.** Grepped 'personaliz' across every apps/web/features/settings/sections/\*.tsx file — zero hits outside an unrelated theme-search keyword comment. The 'connectors' settings section (settings-nav.ts:161) handles connection/auth only.
+**Ours.** Grepped 'personaliz' across every apps/web/features/settings/sections/*.tsx file — zero hits outside an unrelated theme-search keyword comment. The 'connectors' settings section (settings-nav.ts:161) handles connection/auth only.
 
 **Recommendation.** Add an opt-in toggle on the Connectors settings page letting connector data feed personalization/memory, separate from the chat-memory toggle.
 
@@ -1735,7 +1736,7 @@ _None._
 
 ### `sched-gap-10` — Citations render as a block of pills below the message, not inline hyperlinks woven into prose
 
-**P3** · PRESENT*WORSE · effort L · NEW · \_Scheduled tasks & automation*
+**P3** · PRESENT_WORSE · effort L · NEW · _Scheduled tasks & automation_
 
 **Benchmark.** Gemini embeds citations as underlined clickable source names directly inside sentences (03-gemini/spark-task-lifecycle.md; 04-cross-product-comparison/03-scheduled-tasks-and-automation.md)
 
@@ -1775,7 +1776,7 @@ _None._
 
 ### `G6` — No dedicated live narration panel with titled prose sub-sections ('Show thinking' style)
 
-**P3** · DIFFERENT*BY_DESIGN · effort L · NEW · \_Web Search & Deep Research*
+**P3** · DIFFERENT_BY_DESIGN · effort L · NEW · _Web Search & Deep Research_
 
 **Benchmark.** Gemini opens a separate side panel with a 'Show thinking' toggle showing titled, italicized, first-person prose sub-sections filling in in real time
 
@@ -1795,7 +1796,7 @@ _None._
 
 ### `agentic-modes-gap-09` — No execution-environment picker (local vs. cloud vs. remote-paired)
 
-**P3** · DIFFERENT*BY_DESIGN · effort XL · NEW · \_Agentic modes: Work / Cowork / Codex / Spark / Manus Agent*
+**P3** · DIFFERENT_BY_DESIGN · effort XL · NEW · _Agentic modes: Work / Cowork / Codex / Spark / Manus Agent_
 
 **Benchmark.** Claude unifies local machine, cloud sandbox, and remotely-paired local machine into one composer-level execution-environment picker.
 
@@ -1815,7 +1816,7 @@ _None._
 
 ### `agentic-modes-gap-16` — No named settings destination for a cloud + local 'agent computer'
 
-**P3** · DIFFERENT*BY_DESIGN · effort XL · NEW · \_Agentic modes: Work / Cowork / Codex / Spark / Manus Agent*
+**P3** · DIFFERENT_BY_DESIGN · effort XL · NEW · _Agentic modes: Work / Cowork / Codex / Spark / Manus Agent_
 
 **Benchmark.** Manus provides a single 'My Computer'-style settings page unifying local and cloud computer settings.
 
@@ -1849,7 +1850,7 @@ _None._
 
 **Benchmark.** ChatGPT has a distinct 'Record mode' section with a 'Reference record history' toggle gating a separate transcript-based memory corpus (01-chatgpt/memory.md, itself flagged UNVERIFIED by the source research for its capture entry point).
 
-**Ours.** Grepped 'record mode', 'recording transcript', 'audio.\*memory' across apps/web and apps/mobile — no hits beyond dictation (speech-to-text composer input) and TTS (read-aloud) code, neither of which stores or recalls transcripts as memory.
+**Ours.** Grepped 'record mode', 'recording transcript', 'audio.*memory' across apps/web and apps/mobile — no hits beyond dictation (speech-to-text composer input) and TTS (read-aloud) code, neither of which stores or recalls transcripts as memory.
 
 **Recommendation.** Not recommended as a near-term priority — see notWorthCopying; the competitor feature itself is unverified in the source research.
 
@@ -1865,7 +1866,7 @@ _None._
 
 ### `settings-10-gap` — No trusted-contact crisis-notification feature - correctly declined by design
 
-**P3** · DIFFERENT*BY_DESIGN · effort XL · CONFIRMS_PRIOR (`GAP-044 (mobile domain, cited in domain-settings.md) - already correctly declined.`) · \_Settings taxonomy & permission/approval architecture*
+**P3** · DIFFERENT_BY_DESIGN · effort XL · CONFIRMS_PRIOR (`GAP-044 (mobile domain, cited in domain-settings.md) - already correctly declined.`) · _Settings taxonomy & permission/approval architecture_
 
 **Benchmark.** ChatGPT can automatically notify a user-designated trusted contact on detected self-harm risk; single-product.
 
@@ -2019,7 +2020,7 @@ _None._
 - A genuine persistent artifact side panel with a real Preview/Code toggle, matching Claude's signature feature and adding versioning/sharing/download — apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx and ArtifactPreview.tsx:202,1130-1152.
 - Composer-level model + reasoning-effort picker combined in one control, matching Gemini's shape — packages/ui/unified-chat/src/components/ModelSelector.tsx:271-297,448-450.
 - Persistent account chip (avatar, name, plan tier) visible with zero clicks from the primary chat shell — apps/web/features/chat/pages/WebChatPage.tsx:3841-3875.
-- Seven structurally distinct overlay primitives (Dialog/AlertDialog/ConfirmDialog/PromptDialog/Sheet/Drawer/AccessibleDialog) plus a real persistent side panel, not one generic modal reused everywhere — packages/ui/ui/src/primitives/\*.
+- Seven structurally distinct overlay primitives (Dialog/AlertDialog/ConfirmDialog/PromptDialog/Sheet/Drawer/AccessibleDialog) plus a real persistent side panel, not one generic modal reused everywhere — packages/ui/ui/src/primitives/*.
 - A real, pinnable Projects sidebar section with its own create action, dedicated search entry point, and 'New chat' as the most prominent sidebar control — packages/ui/ui/src/sidebar/Sidebar.tsx:539-548,629-633,807-808 — independently re-confirmed on top of the prior same-day audit's own verification.
 - Wide markdown tables are wrapped in overflow-x-auto, so the one real bug the benchmark warns about (no truncate control AND no scroll container) does not occur here — packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx:197.
 
@@ -2036,7 +2037,7 @@ _None._
 
 ## Deliberately not copying
 
-The brief for this work said _"Do not blindly clone either product."_ These are benchmark behaviors we should decline on purpose, with the reason recorded so the decision does not get silently re-litigated as a gap later.
+The brief for this work said *"Do not blindly clone either product."* These are benchmark behaviors we should decline on purpose, with the reason recorded so the decision does not get silently re-litigated as a gap later.
 
 ### Agentic modes: Work / Cowork / Codex / Spark / Manus Agent
 
@@ -2123,3 +2124,4 @@ The brief for this work said _"Do not blindly clone either product."_ These are 
 - Gemini's direct 'Export to Docs' (dr-24): a structural advantage of owning Google Workspace, not a portable UI pattern. The honest analog if pursued is 'export to the user's connected storage' via the existing connector catalog, not chasing Docs specifically.
 - Claude's adaptive-effort research mode that can complete with zero citations and no sources panel (dr-17): our loop always performs a real planning turn and real search rounds by default (MIN_ITERATIONS_FOR_PLANNING_TURN=3, default maxIterations=6), so a user who enables Deep Research always gets genuine multi-round work rather than a possibly-parametric-only answer dressed up as research -- a deliberate, defensible difference, not a bug to fix.
 - ChatGPT's superscript footnote citation style (dr-15): our existing Claude-style block citation chips (InlineSourceTags.tsx) are an intentional, previously-audited choice; both patterns are live across the benchmark and neither is objectively superior.
+

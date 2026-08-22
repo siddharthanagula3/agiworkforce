@@ -66,7 +66,7 @@ def main():
     w("**Generated** by `build_matrix.py` from `domains/*.json`. Do not hand-edit — "
       "change the JSON and re-run, so the matrix and the synthesis can never drift apart.")
     w("")
-    w("**Benchmark:** `~/Downloads/competitive-product-research` — 68 files recording a "
+    w("**Benchmark:** `~/Desktop/competitive-product-research` — 68 files recording a "
       "live browser session against the real production apps of ChatGPT (GPT-5.6 Sol), "
       "Claude (Sonnet 5), Gemini (3.1 Pro) and Manus on 2026-08-15. Every benchmark claim "
       "carries that corpus's own evidence label (OBSERVED / STRONGLY INFERRED / UNVERIFIED).")

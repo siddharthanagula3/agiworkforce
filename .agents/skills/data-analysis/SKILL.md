@@ -1,6 +1,6 @@
 ---
 name: data-analysis
-description: Analyze structured data reproducibly and report validated findings with limitations.
+description: Analyze a spreadsheet, CSV, table, or metrics export and report validated findings with limitations. Use for questions about numbers, trends, conversion, revenue, signups, or which segment or channel performed best.
 version: 1.0.0
 ---
 

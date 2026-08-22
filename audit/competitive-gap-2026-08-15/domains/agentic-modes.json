@@ -151,13 +151,16 @@
       "title": "Fork/'continue in new task' action is buried in a dropdown, not always visible",
       "claimId": "agentic-17",
       "benchmark": "Manus shows an always-visible copy-icon + fork-icon pair beneath every response, not a context-menu action.",
-      "ourState": "PARTIAL",
+      "ourState": "FIXED",
       "ourEvidence": "apps/web/lib/services/conversation-branch-service.ts implements ForkConversationInput{sourceConversationId, messageId, requestId} with idempotent branch lookups (findIdempotentBranch) and caps (MAX_BRANCHES_PER_FORK = 50, MAX_FORK_POINTS_PER_CONVERSATION = 100); wired to the UI at MessageBubble.tsx:1977-1980 ('Branch conversation' with a GitFork icon), but it lives inside a DropdownMenuItem (an overflow/'more actions' menu), not an always-visible icon row beneath every response.",
       "severity": "P3",
       "effort": "S",
       "priorAudit": "NEW",
       "priorAuditRef": "",
-      "recommendation": "Promote the existing 'Branch conversation' action out of the overflow DropdownMenuItem at MessageBubble.tsx:1977-1980 into an always-visible icon beneath each response — the backend (conversation-branch-service.ts) already supports it; this is a UI-placement change only. [severity inferred by recovery pass]"
+      "recommendation": "Promote the existing 'Branch conversation' action out of the overflow DropdownMenuItem at MessageBubble.tsx:1977-1980 into an always-visible icon beneath each response — the backend (conversation-branch-service.ts) already supports it; this is a UI-placement change only. [severity inferred by recovery pass]",
+      "priorState": "PARTIAL",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "GitFork promoted into the always-visible assistant action row (MessageBubble.tsx:2118-2145)."
     },
     {
       "id": "agentic-modes-gap-12",

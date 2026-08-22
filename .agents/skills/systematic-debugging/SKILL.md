@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: Reproduce failures, isolate their cause, and verify the smallest safe correction.
+description: Reproduce a failure, isolate its cause, and verify the smallest safe correction. Use when something is broken, crashing, erroring, failing intermittently, or behaving differently in production than locally.
 version: 1.0.0
 ---
 
