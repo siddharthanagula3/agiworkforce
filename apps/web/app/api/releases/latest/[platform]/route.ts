@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { hashIpAddress } from '@/lib/server/ip-hash';
 import type { ReleaseRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -20,6 +21,7 @@ import {
 } from '@/lib/releases/github-desktop-releases';
 
 const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
+const RELEASE_DOWNLOAD_IP_DOMAIN = 'release-download';
 type Platform = DesktopReleasePlatform;
 
 interface TauriUpdateManifest {
@@ -108,19 +110,21 @@ async function recordDownload(releaseId: string, request: NextRequest): Promise<
     const db = getNeonDb();
 
     const ip =
-      request.headers.get('x-forwarded-for')?.split(',')[0] ||
-      request.headers.get('x-real-ip') ||
-      'unknown';
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip')?.trim() ||
+      null;
 
     const userAgent = request.headers.get('user-agent') || null;
     const country = request.headers.get('cf-ipcountry') || null;
+    const region = request.headers.get('x-vercel-ip-country-region') || null;
     const referrer = request.headers.get('referer') || null;
 
-    await db.execute('select record_release_download($1, $2, $3, $4, $5)', [
+    await db.execute('select record_release_download($1, $2, $3, $4, $5, $6)', [
       releaseId,
-      ip,
+      ip ? hashIpAddress(ip, RELEASE_DOWNLOAD_IP_DOMAIN) : null,
       userAgent,
       country,
+      region,
       referrer,
     ]);
   } catch (error) {
