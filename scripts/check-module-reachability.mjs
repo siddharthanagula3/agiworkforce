@@ -213,7 +213,6 @@ const tsTargets = [
       'apps/desktop/src/api/taskPersistence.ts',
       'apps/desktop/src/api/terminal.ts',
       'apps/desktop/src/api/tutorials.ts',
-      'apps/desktop/src/api/undo.ts',
       'apps/desktop/src/api/workflow.ts',
       'apps/desktop/src/constants/index.ts',
       'apps/desktop/src/core/index.ts',
