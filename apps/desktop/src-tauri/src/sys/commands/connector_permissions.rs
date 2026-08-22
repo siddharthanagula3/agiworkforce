@@ -29,6 +29,7 @@ use tauri::State;
 
 use crate::sys::commands::master_password::MasterPasswordState;
 use crate::sys::security::machine_key::{self, KeyPurpose};
+use crate::sys::security::machine_key_rewrap;
 use crate::sys::security::master_password_encryption::MasterPasswordEncryption;
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -101,10 +102,17 @@ fn encrypt_json(json: &str, enc: &MasterPasswordEncryption) -> Result<String, St
 }
 
 /// Decrypt a blob.  Try vault first, then machine-key.
-fn decrypt_json(ciphertext: &str, enc: &MasterPasswordEncryption) -> Result<String, String> {
+///
+/// The flag reports that the payload opened only under a legacy machine-only
+/// key, so the caller can write it back before the next save makes that
+/// ciphertext unreadable.
+fn decrypt_json(
+    ciphertext: &str,
+    enc: &MasterPasswordEncryption,
+) -> Result<(String, bool), String> {
     if enc.is_unlocked() {
         if let Ok(plain) = enc.decrypt(KeyPurpose::ConnectorPermissions, ciphertext) {
-            return Ok(plain);
+            return Ok((plain, false));
         }
     }
     // Try machine-key path (covers migration and vault-locked scenarios)
@@ -113,52 +121,36 @@ fn decrypt_json(ciphertext: &str, enc: &MasterPasswordEncryption) -> Result<Stri
 
 // ── Machine-key AES helpers (vault-locked fallback) ───────────────────────────
 
-fn machine_key_encrypt(plaintext: &str) -> Result<String, String> {
-    use aes_gcm::aead::rand_core::{OsRng, RngCore};
-    use aes_gcm::aead::{Aead, KeyInit};
-    use aes_gcm::{Aes256Gcm, Nonce};
-    use base64::engine::general_purpose;
-    use base64::Engine as _;
-
-    let key_bytes = machine_key::derive_key(KeyPurpose::ConnectorPermissions);
-    let cipher =
-        Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| format!("machine-key AES init: {e}"))?;
-
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
-
-    let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_bytes())
-        .map_err(|e| format!("machine-key encrypt: {e}"))?;
-
-    let mut combined = Vec::with_capacity(12 + ciphertext.len());
-    combined.extend_from_slice(&nonce_bytes);
-    combined.extend_from_slice(&ciphertext);
-    Ok(general_purpose::STANDARD.encode(combined))
+/// Label this store reports itself under while it still holds legacy ciphertext.
+fn machine_only_label() -> String {
+    match permissions_file_path() {
+        Ok(path) => format!("file:{}", path.display()),
+        Err(_) => "connector-permissions".to_string(),
+    }
 }
 
-fn machine_key_decrypt(ciphertext_b64: &str) -> Result<String, String> {
-    use aes_gcm::aead::{Aead, KeyInit};
-    use aes_gcm::{Aes256Gcm, Nonce};
-    use base64::engine::general_purpose;
-    use base64::Engine as _;
+fn machine_key_encrypt(plaintext: &str) -> Result<String, String> {
+    let key = machine_key::try_derive_key(KeyPurpose::ConnectorPermissions)
+        .map_err(|e| format!("machine-key unavailable: {e}"))?;
+    machine_key_rewrap::encrypt_combined(&key, plaintext)
+        .ok_or_else(|| "machine-key encrypt failed".to_string())
+}
 
-    let key_bytes = machine_key::derive_key(KeyPurpose::ConnectorPermissions);
-    let combined = general_purpose::STANDARD
-        .decode(ciphertext_b64)
-        .map_err(|e| format!("base64 decode: {e}"))?;
-    if combined.len() <= 12 {
-        return Err("ciphertext too short".to_string());
-    }
-    let (nonce_bytes, ct) = combined.split_at(12);
-    let nonce = Nonce::from_slice(nonce_bytes);
-    let cipher =
-        Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| format!("machine-key AES init: {e}"))?;
-    let plain = cipher
-        .decrypt(nonce, ct)
-        .map_err(|e| format!("machine-key decrypt: {e}"))?;
-    String::from_utf8(plain).map_err(|e| format!("utf-8: {e}"))
+/// Read the store under the current key, then under the keys a shipped build
+/// derived from machine identifiers alone.
+///
+/// Without the legacy attempt a failed read becomes an empty permission map,
+/// which the next save writes back over every grant the user ever gave.
+fn machine_key_decrypt(ciphertext_b64: &str) -> Result<(String, bool), String> {
+    let label = machine_only_label();
+    let opened =
+        machine_key::open_with_key_rotation(KeyPurpose::ConnectorPermissions, &label, |key| {
+            machine_key_rewrap::decrypt_combined(key, ciphertext_b64)
+        })
+        .map_err(|e| format!("machine-key unavailable: {e}"))?
+        .ok_or_else(|| "machine-key decrypt: no available key opens this store".to_string())?;
+
+    Ok((opened.value, opened.rewrap_required))
 }
 
 // ── File I/O ──────────────────────────────────────────────────────────────────
@@ -175,11 +167,33 @@ fn load_file(enc: &MasterPasswordEncryption) -> PermissionsFile {
         Ok(s) => s,
         Err(_) => return HashMap::new(),
     };
-    let json = match decrypt_json(ciphertext.trim(), enc) {
-        Ok(j) => j,
-        Err(_) => return HashMap::new(),
+    let (json, rewrap_required) = match decrypt_json(ciphertext.trim(), enc) {
+        Ok(decrypted) => decrypted,
+        Err(error) => {
+            tracing::warn!("Could not read connector permissions: {error}");
+            return HashMap::new();
+        }
     };
-    serde_json::from_str(&json).unwrap_or_default()
+    let data: PermissionsFile = match serde_json::from_str(&json) {
+        Ok(data) => data,
+        Err(error) => {
+            tracing::warn!("Connector permissions file is not readable JSON: {error}");
+            return HashMap::new();
+        }
+    };
+
+    // Only a store that parsed may be written back; serializing a failed parse
+    // would replace every grant with an empty map.
+    if rewrap_required {
+        match save_file(&data, enc) {
+            Ok(()) => machine_key::clear_machine_only_payload(&machine_only_label()),
+            Err(error) => tracing::warn!(
+                "Connector permissions still hold legacy machine-key ciphertext: {error}"
+            ),
+        }
+    }
+
+    data
 }
 
 fn save_file(data: &PermissionsFile, enc: &MasterPasswordEncryption) -> Result<(), String> {
@@ -281,4 +295,54 @@ pub fn resolve_permission(
                 PermissionLevel::NeedsApproval
             }
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn legacy_key() -> [u8; 32] {
+        machine_key::legacy_machine_only_keys(KeyPurpose::ConnectorPermissions)
+            .first()
+            .copied()
+            .expect("a legacy candidate always exists")
+    }
+
+    /// A shipped build wrote this store under the machine-only key. Without a
+    /// legacy read the decrypt fails, `load_file` returns an empty map, and the
+    /// next save replaces every grant the user ever gave with `{}`.
+    #[test]
+    fn legacy_machine_key_permissions_are_read_and_flagged_for_rewrap() {
+        let saved = r#"{"gmail":{"send":{"level":"always-allow","destructive":true}}}"#;
+        let stored =
+            machine_key_rewrap::encrypt_combined(&legacy_key(), saved).expect("legacy encrypt");
+
+        let (json, rewrap_required) =
+            machine_key_decrypt(&stored).expect("a legacy store must stay readable");
+        assert_eq!(json, saved);
+        assert!(rewrap_required);
+
+        let parsed: PermissionsFile =
+            serde_json::from_str(&json).expect("the recovered store must parse");
+        assert_eq!(
+            parsed["gmail"]["send"].level.as_str(),
+            PermissionLevel::AlwaysAllow.as_str()
+        );
+    }
+
+    #[test]
+    fn machine_key_roundtrip_needs_no_rewrap_and_rejects_the_legacy_key() {
+        let saved = r#"{"slack":{"post":{"level":"blocked","destructive":false}}}"#;
+        let stored = machine_key_encrypt(saved).expect("encrypt under the per-install key");
+
+        assert_eq!(
+            machine_key_decrypt(&stored).expect("read back"),
+            (saved.to_string(), false)
+        );
+        assert_eq!(
+            machine_key_rewrap::decrypt_combined(&legacy_key(), &stored),
+            None,
+            "a newly written store must not open under the recomputable legacy key"
+        );
+    }
 }
