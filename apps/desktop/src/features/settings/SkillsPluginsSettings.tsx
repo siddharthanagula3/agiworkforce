@@ -1,4 +1,3 @@
-
 import {
   AlertCircle,
   Bot,
@@ -18,6 +17,7 @@ import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { selectCurrentFolder, useProjectStore } from '../../stores/projectStore';
 import { Button } from '@/ui/Button';
+import { Switch } from '@/ui/Switch';
 
 interface InstalledPluginRecord {
   scope: 'user' | 'local';
@@ -47,6 +47,7 @@ interface ResolvedPlugin {
   skills: string[];
   agents: string[];
   installedAt: string;
+  enabled: boolean;
 }
 
 interface ProjectEntry {
@@ -112,6 +113,48 @@ function pluginCliCandidates(
   ];
 }
 
+type JsonObjectRead = { ok: true; value: Record<string, unknown> } | { ok: false };
+
+async function readJsonObject(path: string): Promise<JsonObjectRead> {
+  let raw: string;
+  try {
+    raw = await invoke<string>('file_read', { path });
+  } catch {
+    return { ok: true, value: {} };
+  }
+
+  if (raw.trim() === '') return { ok: true, value: {} };
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { ok: false };
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function readEnabledPlugins(settings: Record<string, unknown>): Record<string, boolean> {
+  const raw = settings['enabledPlugins'];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const result: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'boolean') result[key] = value;
+  }
+  return result;
+}
+
+// Lowest to highest precedence, matching how the plugin host resolves settings.
+function claudeSettingsPaths(homeDirPath: string | null, projectRoot: string | null): string[] {
+  const paths: string[] = [];
+  if (homeDirPath) paths.push(`${homeDirPath}/.claude/settings.json`);
+  if (projectRoot) {
+    paths.push(`${projectRoot}/.claude/settings.json`);
+    paths.push(`${projectRoot}/.claude/settings.local.json`);
+  }
+  return paths;
+}
+
 async function tryDirList(path: string): Promise<DirEntry[]> {
   try {
     return await invoke<DirEntry[]>('dir_list', { path });
@@ -161,18 +204,22 @@ function PluginRow({
   pluginCliAvailable,
   onUpdate,
   onRemove,
+  onToggleEnabled,
 }: {
   plugin: ResolvedPlugin;
   actionInProgress: string | null;
   pluginCliAvailable: boolean;
   onUpdate: (plugin: ResolvedPlugin) => void;
   onRemove: (plugin: ResolvedPlugin) => void;
+  onToggleEnabled: (plugin: ResolvedPlugin, enabled: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const updateKey = `update:${plugin.id}`;
   const removeKey = `remove:${plugin.id}`;
+  const toggleKey = `toggle:${plugin.id}`;
   const isUpdating = actionInProgress === updateKey;
   const isRemoving = actionInProgress === removeKey;
+  const isToggling = actionInProgress === toggleKey;
   const scopeBadge =
     plugin.scope === 'local' ? (
       <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
@@ -194,6 +241,11 @@ function PluginRow({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{plugin.displayName}</span>
             {scopeBadge}
+            {!plugin.enabled && (
+              <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                disabled
+              </span>
+            )}
             {plugin.skills.length > 0 && (
               <span className="text-xs text-muted-foreground">
                 {plugin.skills.length} skill{plugin.skills.length !== 1 ? 's' : ''}
@@ -221,6 +273,22 @@ function PluginRow({
 
       {expanded && (
         <div className="px-11 pb-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium">Enabled</p>
+              <p className="text-xs text-muted-foreground">
+                Disabled plugins stay installed but their skills, agents, and commands are not
+                loaded.
+              </p>
+            </div>
+            <Switch
+              checked={plugin.enabled}
+              disabled={isToggling || isRemoving}
+              onCheckedChange={(next) => onToggleEnabled(plugin, next)}
+              aria-label={`Enable ${plugin.displayName}`}
+            />
+          </div>
+
           <div className="flex items-center gap-2 flex-wrap">
             <Button
               size="sm"
@@ -335,6 +403,7 @@ export function SkillsPluginsSettings() {
   const [pluginCliAvailable, setPluginCliAvailable] = useState<boolean | null>(null);
   const [pluginActionInProgress, setPluginActionInProgress] = useState<string | null>(null);
   const [pluginActionMessage, setPluginActionMessage] = useState<string | null>(null);
+  const [homeDirPath, setHomeDirPath] = useState<string | null>(null);
 
   const [pluginsExpanded, setPluginsExpanded] = useState(true);
   const [commandsExpanded, setCommandsExpanded] = useState(true);
@@ -359,6 +428,13 @@ export function SkillsPluginsSettings() {
         homeDirPath = await getHomeDir();
       } catch {
         console.warn('[SkillsPluginsSettings] Could not determine home directory');
+      }
+      setHomeDirPath(homeDirPath);
+
+      const enabledPlugins: Record<string, boolean> = {};
+      for (const settingsPath of claudeSettingsPaths(homeDirPath, projectRoot)) {
+        const read = await readJsonObject(settingsPath);
+        if (read.ok) Object.assign(enabledPlugins, readEnabledPlugins(read.value));
       }
 
       const resolvedPlugins: ResolvedPlugin[] = [];
@@ -409,6 +485,7 @@ export function SkillsPluginsSettings() {
                 skills: manifest?.skills?.map((s) => s.name) ?? [],
                 agents: manifest?.agents?.map((a) => a.name) ?? [],
                 installedAt: latestRecord.installedAt,
+                enabled: enabledPlugins[key] !== false,
               };
             }),
           );
@@ -570,6 +647,78 @@ export function SkillsPluginsSettings() {
     [runPluginCliAction],
   );
 
+  const handleTogglePluginEnabled = useCallback(
+    (plugin: ResolvedPlugin, enabled: boolean) => {
+      void (async () => {
+        const candidatePaths = claudeSettingsPaths(homeDirPath, projectRoot);
+        const scopeDefault =
+          plugin.scope === 'local' && projectRoot
+            ? `${projectRoot}/.claude/settings.json`
+            : homeDirPath && `${homeDirPath}/.claude/settings.json`;
+
+        if (!scopeDefault) {
+          setPluginActionMessage(
+            `Could not locate a settings file to record the state of "${plugin.displayName}".`,
+          );
+          return;
+        }
+
+        setPluginActionInProgress(`toggle:${plugin.id}`);
+        setPluginActionMessage(null);
+
+        try {
+          const reads = await Promise.all(
+            candidatePaths.map(async (path) => ({ path, read: await readJsonObject(path) })),
+          );
+
+          const unreadable = reads.find((entry) => !entry.read.ok);
+          if (unreadable) {
+            setPluginActionMessage(
+              `Could not parse ${unreadable.path}. Fix that file before changing plugin state.`,
+            );
+            return;
+          }
+
+          // The highest-precedence file that already names this plugin wins at load
+          // time, so writing anywhere lower would be silently overridden.
+          const declaring = [...reads]
+            .reverse()
+            .find(
+              (entry) =>
+                entry.read.ok && Object.hasOwn(readEnabledPlugins(entry.read.value), plugin.id),
+            );
+          const targetPath = declaring?.path ?? scopeDefault;
+          const target = reads.find((entry) => entry.path === targetPath);
+          const settings = target?.read.ok ? target.read.value : {};
+
+          const nextSettings = {
+            ...settings,
+            enabledPlugins: { ...readEnabledPlugins(settings), [plugin.id]: enabled },
+          };
+
+          await invoke('file_write', {
+            path: targetPath,
+            content: `${JSON.stringify(nextSettings, null, 2)}\n`,
+          });
+
+          setPlugins((current) =>
+            current.map((entry) => (entry.id === plugin.id ? { ...entry, enabled } : entry)),
+          );
+          setPluginActionMessage(
+            `${plugin.displayName} ${enabled ? 'enabled' : 'disabled'} in ${targetPath}. Restart running agent sessions to pick it up.`,
+          );
+        } catch (err) {
+          setPluginActionMessage(
+            err instanceof Error ? err.message : 'Failed to change plugin state',
+          );
+        } finally {
+          setPluginActionInProgress(null);
+        }
+      })();
+    },
+    [homeDirPath, projectRoot],
+  );
+
   const totalProjectItems = commands.length + skills.length + agents.length;
   const pluginCliStatus =
     pluginCliAvailable === null
@@ -710,6 +859,7 @@ export function SkillsPluginsSettings() {
                       pluginCliAvailable={pluginCliAvailable === true}
                       onUpdate={handleUpdatePlugin}
                       onRemove={handleRemovePlugin}
+                      onToggleEnabled={handleTogglePluginEnabled}
                     />
                   ))
                 )}

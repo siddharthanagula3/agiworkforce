@@ -116,23 +116,37 @@ const DIR_ENTRIES_AGENTS = [
   },
 ];
 
+const USER_SETTINGS_PATH = '/home/.claude/settings.json';
+const PROJECT_SETTINGS_PATH = '/projects/myapp/.claude/settings.json';
+const PROJECT_LOCAL_SETTINGS_PATH = '/projects/myapp/.claude/settings.local.json';
+
 function setupSuccessfulLoad({
   commands = DIR_ENTRIES_COMMANDS,
   skills = DIR_ENTRIES_SKILLS,
   agents = DIR_ENTRIES_AGENTS,
   hookifyManifestFails = true,
   pluginsJson = PLUGINS_JSON,
+  userSettings = '{}',
+  projectSettings = '{}',
+  projectLocalSettings = '{}',
 }: {
   commands?: typeof DIR_ENTRIES_COMMANDS;
   skills?: typeof DIR_ENTRIES_SKILLS;
   agents?: typeof DIR_ENTRIES_AGENTS;
   hookifyManifestFails?: boolean;
   pluginsJson?: string;
+  userSettings?: string;
+  projectSettings?: string;
+  projectLocalSettings?: string;
 } = {}) {
   mockInvoke.mockImplementation((cmd: string, args?: Record<string, unknown>) => {
     if (cmd === 'get_home_directory') return Promise.resolve('/home');
+    if (cmd === 'file_write') return Promise.resolve(null);
     if (cmd === 'file_read') {
       const filePath = args?.['path'] as string;
+      if (filePath === USER_SETTINGS_PATH) return Promise.resolve(userSettings);
+      if (filePath === PROJECT_SETTINGS_PATH) return Promise.resolve(projectSettings);
+      if (filePath === PROJECT_LOCAL_SETTINGS_PATH) return Promise.resolve(projectLocalSettings);
       if (filePath.endsWith('installed_plugins.json')) return Promise.resolve(pluginsJson);
       if (filePath.includes('code-review') && filePath.endsWith('plugin.json'))
         return Promise.resolve(CODE_REVIEW_MANIFEST);
@@ -246,6 +260,116 @@ describe('SkillsPluginsSettings', () => {
       await waitFor(() => {
         expect(screen.getByText('frontend-engineer')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Enable / disable', () => {
+    const expandCodeReview = async () => {
+      await waitFor(() => {
+        expect(screen.getByText('Code Review')).toBeInTheDocument();
+      });
+      await userEvent.click(screen.getByText('Code Review').closest('button')!);
+      return screen.findByRole('switch', { name: 'Enable Code Review' });
+    };
+
+    const writtenSettings = (path: string) => {
+      const call = mockInvoke.mock.calls.find(
+        ([cmd, args]) =>
+          cmd === 'file_write' && (args as Record<string, unknown>)['path'] === path,
+      );
+      expect(call, `no file_write for ${path}`).toBeDefined();
+      return JSON.parse((call?.[1] as { content: string }).content) as {
+        enabledPlugins: Record<string, boolean>;
+      };
+    };
+
+    it('reports a plugin the host settings switch off as disabled', async () => {
+      setupSuccessfulLoad({
+        userSettings: JSON.stringify({
+          enabledPlugins: { 'hookify@claude-plugins-official': false },
+        }),
+      });
+      render(<SkillsPluginsSettings />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Hookify')).toBeInTheDocument();
+      });
+      expect(screen.getByText('disabled')).toBeInTheDocument();
+    });
+
+    it('treats a plugin the host settings never mention as enabled', async () => {
+      setupSuccessfulLoad();
+      render(<SkillsPluginsSettings />);
+
+      const toggle = await expandCodeReview();
+      expect(toggle).toBeChecked();
+      expect(screen.queryByText('disabled')).not.toBeInTheDocument();
+    });
+
+    it('records the off state in the settings file the plugin host reads', async () => {
+      setupSuccessfulLoad();
+      render(<SkillsPluginsSettings />);
+
+      await userEvent.click(await expandCodeReview());
+
+      await waitFor(() => {
+        expect(
+          writtenSettings(PROJECT_SETTINGS_PATH).enabledPlugins[
+            'code-review@claude-plugins-official'
+          ],
+        ).toBe(false);
+      });
+    });
+
+    it('writes into the highest-precedence file that already names the plugin', async () => {
+      setupSuccessfulLoad({
+        projectLocalSettings: JSON.stringify({
+          enabledPlugins: { 'code-review@claude-plugins-official': true },
+        }),
+      });
+      render(<SkillsPluginsSettings />);
+
+      await userEvent.click(await expandCodeReview());
+
+      await waitFor(() => {
+        expect(
+          writtenSettings(PROJECT_LOCAL_SETTINGS_PATH).enabledPlugins[
+            'code-review@claude-plugins-official'
+          ],
+        ).toBe(false);
+      });
+      expect(
+        mockInvoke.mock.calls.some(
+          ([cmd, args]) =>
+            cmd === 'file_write' &&
+            (args as Record<string, unknown>)['path'] === PROJECT_SETTINGS_PATH,
+        ),
+      ).toBe(false);
+    });
+
+    it('keeps unrelated settings keys when it rewrites the file', async () => {
+      setupSuccessfulLoad({
+        projectSettings: JSON.stringify({ model: 'inherit', enabledPlugins: {} }),
+      });
+      render(<SkillsPluginsSettings />);
+
+      await userEvent.click(await expandCodeReview());
+
+      await waitFor(() => {
+        expect(writtenSettings(PROJECT_SETTINGS_PATH)).toMatchObject({ model: 'inherit' });
+      });
+    });
+
+    it('refuses to rewrite a settings file it could not parse', async () => {
+      setupSuccessfulLoad({ projectSettings: 'not-json' });
+      render(<SkillsPluginsSettings />);
+
+      await userEvent.click(await expandCodeReview());
+
+      await waitFor(() => {
+        expect(screen.getByText(/Could not parse/i)).toBeInTheDocument();
+      });
+      expect(mockInvoke.mock.calls.some(([cmd]) => cmd === 'file_write')).toBe(false);
     });
   });
 
