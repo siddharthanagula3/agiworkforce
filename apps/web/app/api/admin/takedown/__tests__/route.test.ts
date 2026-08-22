@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -23,9 +23,9 @@ vi.mock('@/lib/security-audit', () => ({
   getClientIp: () => '203.0.113.9',
 }));
 
-const { authUser, role } = vi.hoisted(() => ({
+const { authUser, assertAccountActive } = vi.hoisted(() => ({
   authUser: { current: { userId: 'admin-1' } as { userId: string } | null },
-  role: { current: 'admin' as string | undefined },
+  assertAccountActive: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/api-auth', () => ({
@@ -33,12 +33,7 @@ vi.mock('@/lib/api-auth', () => ({
     if (!authUser.current) throw new Error('unauthenticated');
     return authUser.current;
   },
-}));
-
-vi.mock('@clerk/nextjs/server', () => ({
-  clerkClient: async () => ({
-    users: { getUser: async () => ({ publicMetadata: { role: role.current } }) },
-  }),
+  assertAccountActive: (...args: unknown[]) => assertAccountActive(...(args as [])),
 }));
 
 const { db } = vi.hoisted(() => ({ db: { current: null as unknown } }));
@@ -48,10 +43,23 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 import { NextRequest } from 'next/server';
+import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-access';
 import { GET, POST } from '../route';
 
 const SHARE_TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const ARTIFACT_TOKEN = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+const OPERATOR_ID = 'admin-1';
+const ORG_OWNER_ID = 'org-owner-1';
+
+const originalAllowlist = process.env[PLATFORM_ADMIN_ENV_VAR];
+
+afterEach(() => {
+  if (originalAllowlist === undefined) {
+    delete process.env[PLATFORM_ADMIN_ENV_VAR];
+  } else {
+    process.env[PLATFORM_ADMIN_ENV_VAR] = originalAllowlist;
+  }
+});
 
 type Row = Record<string, unknown>;
 
@@ -109,13 +117,16 @@ function getRequest(token: string) {
 
 describe('POST /api/admin/takedown', () => {
   let state: ReturnType<typeof seed>;
+  let store: ReturnType<typeof fakeDb>;
 
   beforeEach(() => {
     state = seed();
-    db.current = fakeDb(state);
-    authUser.current = { userId: 'admin-1' };
-    role.current = 'admin';
+    store = fakeDb(state);
+    db.current = store;
+    process.env[PLATFORM_ADMIN_ENV_VAR] = OPERATOR_ID;
+    authUser.current = { userId: OPERATOR_ID };
     mockLogSecurityEvent.mockClear();
+    assertAccountActive.mockClear();
   });
 
   it('unpublishes a reported conversation share the admin does not own', async () => {
@@ -159,13 +170,25 @@ describe('POST /api/admin/takedown', () => {
     );
   });
 
-  it('refuses a non-admin caller and leaves the content published', async () => {
-    role.current = 'user';
+  it('refuses an org admin who is not a platform operator and leaves the content published', async () => {
+    authUser.current = { userId: ORG_OWNER_ID };
 
     const response = await POST(postRequest({ token: SHARE_TOKEN, reason: 'nope' }));
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     expect(state.shares).toHaveLength(1);
+    expect(store.query).not.toHaveBeenCalled();
+    expect(mockLogSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses everyone when no operator allowlist is configured', async () => {
+    delete process.env[PLATFORM_ADMIN_ENV_VAR];
+
+    const response = await POST(postRequest({ token: SHARE_TOKEN, reason: 'nope' }));
+
+    expect(response.status).toBe(404);
+    expect(state.shares).toHaveLength(1);
+    expect(store.query).not.toHaveBeenCalled();
   });
 
   it('requires a reason', async () => {
@@ -185,10 +208,13 @@ describe('POST /api/admin/takedown', () => {
 });
 
 describe('GET /api/admin/takedown', () => {
+  let store: ReturnType<typeof fakeDb>;
+
   beforeEach(() => {
-    db.current = fakeDb(seed());
-    authUser.current = { userId: 'admin-1' };
-    role.current = 'owner';
+    store = fakeDb(seed());
+    db.current = store;
+    process.env[PLATFORM_ADMIN_ENV_VAR] = OPERATOR_ID;
+    authUser.current = { userId: OPERATOR_ID };
   });
 
   it('identifies what a reported token points at before the operator acts', async () => {
@@ -200,11 +226,12 @@ describe('GET /api/admin/takedown', () => {
     });
   });
 
-  it('refuses a non-admin caller', async () => {
-    role.current = undefined;
+  it('refuses an org admin who is not a platform operator', async () => {
+    authUser.current = { userId: ORG_OWNER_ID };
 
     const response = await GET(getRequest(SHARE_TOKEN));
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
+    expect(store.query).not.toHaveBeenCalled();
   });
 });

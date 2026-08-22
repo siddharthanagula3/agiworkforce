@@ -1,20 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
 const {
   mockAssertAccountActive,
+  mockGetClerkAuthUser,
   mockExecute,
   mockGetUser,
-  mockVerifyToken,
   mockGetDashboardSummary,
   mockLogSecurityEvent,
   mockBanUser,
 } = vi.hoisted(() => ({
   mockAssertAccountActive: vi.fn(),
+  mockGetClerkAuthUser: vi.fn(),
   mockExecute: vi.fn(),
   mockGetUser: vi.fn(),
-  mockVerifyToken: vi.fn(),
   mockGetDashboardSummary: vi.fn(),
   mockLogSecurityEvent: vi.fn(),
   mockBanUser: vi.fn(),
@@ -40,7 +40,6 @@ vi.mock('@/lib/services/security-monitoring-service', () => ({
   },
 }));
 vi.mock('@clerk/nextjs/server', () => ({
-  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
   clerkClient: async () => ({
     users: {
       getUser: (...args: unknown[]) => mockGetUser(...args),
@@ -51,11 +50,13 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
   assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
 }));
 
 import { GET, POST } from '../route';
 import { createError } from '@/lib/errors';
+import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-access';
 
 const ADMIN_ID = 'user_admin_1';
 const TARGET_ID = 'user_target_2';
@@ -71,15 +72,26 @@ function adminRequest(url: string, method: 'GET' | 'POST', body?: unknown) {
   }) as never;
 }
 
+const originalAllowlist = process.env[PLATFORM_ADMIN_ENV_VAR];
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mockVerifyToken.mockResolvedValue({ sub: ADMIN_ID });
+  process.env[PLATFORM_ADMIN_ENV_VAR] = ADMIN_ID;
+  mockGetClerkAuthUser.mockResolvedValue({ userId: ADMIN_ID });
   mockGetUser.mockResolvedValue({ publicMetadata: { role: 'admin' } });
   mockAssertAccountActive.mockResolvedValue(undefined);
   mockGetDashboardSummary.mockResolvedValue({ metrics: {}, alerts: [], top_ips: [] });
   mockExecute.mockResolvedValue(undefined);
   mockLogSecurityEvent.mockResolvedValue(undefined);
   mockBanUser.mockResolvedValue(undefined);
+});
+
+afterEach(() => {
+  if (originalAllowlist === undefined) {
+    delete process.env[PLATFORM_ADMIN_ENV_VAR];
+  } else {
+    process.env[PLATFORM_ADMIN_ENV_VAR] = originalAllowlist;
+  }
 });
 
 describe('GET /api/admin/security — suspended admin', () => {
@@ -149,17 +161,21 @@ describe('POST /api/admin/security — an active admin is unaffected', () => {
   });
 });
 
-describe('verifyAdminAccess still rejects non-admins before touching account status', () => {
-  it('returns 401 for a signed-in non-admin', async () => {
-    mockGetUser.mockResolvedValue({ publicMetadata: { role: 'member' } });
+describe('the guard rejects non-operators before touching account status', () => {
+  it('returns 404 for a signed-in org owner who is not on the allowlist', async () => {
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_org_owner_2' });
+    mockGetUser.mockResolvedValue({ publicMetadata: { role: 'owner' } });
 
     const response = await GET(adminRequest('https://app.test/api/admin/security', 'GET'));
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(404);
     expect(mockAssertAccountActive).not.toHaveBeenCalled();
+    expect(mockGetDashboardSummary).not.toHaveBeenCalled();
   });
 
-  it('returns 401 when no bearer token is presented', async () => {
+  it('propagates 401 when no credential is presented', async () => {
+    mockGetClerkAuthUser.mockRejectedValue(createError.unauthorized());
+
     const response = await GET(
       new Request('https://app.test/api/admin/security', { method: 'GET' }) as never,
     );

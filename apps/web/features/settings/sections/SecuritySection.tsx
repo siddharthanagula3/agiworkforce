@@ -17,7 +17,6 @@ import {
 import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor';
 import { TwoFactorEnrollmentPanel } from '@features/settings/components/Settings/TwoFactorEnrollment';
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
-import { AdminConsoleEntry } from '@/features/admin/components/AdminConsoleEntry';
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
 
 export function SecuritySection() {
@@ -127,8 +126,6 @@ export function SecuritySection() {
       )}
 
       <AuditLogPanel />
-
-      <AdminConsoleEntry />
 
       <section
         aria-label="Account security availability"
