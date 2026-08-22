@@ -1,4 +1,3 @@
-
 import {
   AlertTriangle,
   BarChart3,
@@ -20,7 +19,12 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
 import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandbox';
-import { parseTabular, toCsv, toMarkdownTable } from '../lib/tabular';
+import {
+  parseTabular,
+  spreadsheetExportDelimiter,
+  spreadsheetSafeExport,
+  toMarkdownTable,
+} from '../lib/tabular';
 import type { Artifact } from '../lib/types';
 import { EmailArtifact } from './artifact-components/EmailArtifact';
 import { PresentationArtifact } from './artifact-components/PresentationArtifact';
@@ -268,8 +272,7 @@ function SvgArtifact({ artifact }: { artifact: Artifact }) {
       <div
         className="w-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         dangerouslySetInnerHTML={{
-          __html:
-            sanitized,
+          __html: sanitized,
         }}
       />
     </div>
@@ -341,8 +344,7 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
         <div
           ref={containerRef}
           dangerouslySetInnerHTML={{
-            __html:
-              sanitized,
+            __html: sanitized,
           }}
           className="w-full h-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         />
@@ -466,22 +468,19 @@ export function ArtifactRenderer({
     }
   };
 
+  // neutralization keys off the extension we are about to write, not the artifact
+  // type: a `code` artifact with language `csv` also lands as a .csv file
+  const downloadExtension = getFileExtension(artifact);
+  const downloadsAsSpreadsheet = spreadsheetExportDelimiter(downloadExtension) !== null;
+
   const handleDownload = () => {
     if (!hasContent) return;
-    let body = artifact.content;
-    let mime = 'text/plain';
-    if (isTabularType(artifact.type)) {
-      const parsed = parseTabular(artifact.content);
-      if (parsed) {
-        body = toCsv(parsed);
-        mime = 'text/csv;charset=utf-8;';
-      }
-    }
-    const blob = new Blob([body], { type: mime });
+    const { body, mimeType } = spreadsheetSafeExport(artifact.content, downloadExtension);
+    const blob = new Blob([body], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${artifact.title || 'artifact'}.${getFileExtension(artifact)}`;
+    a.download = `${artifact.title || 'artifact'}.${downloadExtension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -588,7 +587,9 @@ export function ArtifactRenderer({
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
                   >
                     <Download className="h-4 w-4" />
-                    {isTabularType(artifact.type) ? 'Download as CSV' : 'Download as text'}
+                    {downloadsAsSpreadsheet
+                      ? `Download as ${downloadExtension.toUpperCase()}`
+                      : 'Download as text'}
                   </button>
 
                   {(supportsDocumentExport || supportsExcelExport) && (

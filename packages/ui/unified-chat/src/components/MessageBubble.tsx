@@ -26,6 +26,7 @@ import {
 import { ToolCallCard } from './ToolCallCard';
 import { AgentActivityTimeline, hasCanonicalToolActivity } from './AgentActivityTimeline';
 import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
+import { artifactDownloadFile } from '../lib/artifact-download';
 import { getStreamErrorMessage } from '../lib/continue-generation';
 import { useHostBridge } from '../lib/hostBridge';
 import type {
@@ -677,27 +678,11 @@ export function MessageBubble({
   }
 
   function handleDownloadArtifact(artifact: Artifact) {
-    const ext =
-      artifact.type === 'html'
-        ? 'html'
-        : artifact.type === 'react'
-          ? 'tsx'
-          : artifact.type === 'markdown'
-            ? 'md'
-            : artifact.type === 'json'
-              ? 'json'
-              : artifact.type === 'svg'
-                ? 'svg'
-                : artifact.type === 'document'
-                  ? 'md'
-                  : artifact.type === 'image'
-                    ? 'png'
-                    : (artifact.language ?? 'txt');
-    const blob = new Blob([artifact.content], { type: 'text/plain' });
+    const { blob, fileName } = artifactDownloadFile(artifact);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}.${ext}`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
   }

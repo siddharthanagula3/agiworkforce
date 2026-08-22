@@ -42,8 +42,7 @@ import {
   SpreadsheetArtifact,
   PresentationArtifact,
   EmailArtifact,
-  parseTabular,
-  toCsv,
+  spreadsheetSafeExport,
 } from '@agiworkforce/unified-chat';
 import { TypeIcon } from './InlineArtifactCards';
 import { cn } from '@shared/lib/utils';
@@ -769,9 +768,14 @@ if (__AgiApp) {
         filename = `${artifact.title || 'artifact'}.md`;
         break;
       }
-      default:
-        blob = new Blob([content], { type: 'text/plain' });
-        filename = `${artifact.title || 'artifact'}.${artifact.language || 'txt'}`;
+      default: {
+        // "Download source (.<language>)" writes the raw body, so a model-chosen
+        // language of csv/tsv lands a formula in a spreadsheet file just as the CSV item would
+        const extension = artifact.language || 'txt';
+        const source = spreadsheetSafeExport(content, extension);
+        blob = new Blob([source.body], { type: source.mimeType });
+        filename = `${artifact.title || 'artifact'}.${extension}`;
+      }
     }
 
     const url = URL.createObjectURL(blob);
@@ -961,13 +965,9 @@ if (__AgiApp) {
     [artifact.id, artifact.type, artifact.title, artifact.language, activeContent],
   );
 
-  // Tabular artifacts download as a real CSV (JSON array-of-objects content is
-  // serialized; unparseable content falls back to the raw text).
   const handleDownloadCsv = () => {
-    const parsed = parseTabular(activeContent);
-    const blob = new Blob([parsed ? toCsv(parsed) : activeContent], {
-      type: 'text/csv;charset=utf-8;',
-    });
+    const sheet = spreadsheetSafeExport(activeContent, 'csv');
+    const blob = new Blob([sheet.body], { type: sheet.mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
