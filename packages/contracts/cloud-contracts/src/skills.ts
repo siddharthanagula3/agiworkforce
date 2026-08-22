@@ -22,6 +22,12 @@ export const ManagedSkillSummarySchema = z
     source: ManagedSkillSourceSchema,
     lifecycle: ManagedSkillLifecycleSchema,
     downloadable: z.boolean(),
+    /**
+     * Version from the bundle's own SKILL.md frontmatter. Optional because a
+     * skill without one must render as unknown rather than as a number this
+     * layer invented.
+     */
+    version: z.string().trim().max(40).optional(),
   })
   .superRefine((skill, context) => {
     if (skill.downloadable && (skill.source !== 'bundled' || skill.lifecycle !== 'included')) {
