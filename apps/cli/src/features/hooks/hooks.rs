@@ -2150,18 +2150,24 @@ mod tests {
         );
     }
 
+    const FAKE_BEARER_TOKEN: &str = "EXAMPLE-NOT-A-REAL-BEARER-TOKEN";
+    const FAKE_ANTHROPIC_KEY: &str = "sk-ant-EXAMPLENOTAREALANTHROPICKEY00000";
+    const FAKE_GITHUB_TOKEN: &str = "ghp_EXAMPLENOTAREALGITHUBTOKEN000000000";
+    const FAKE_DATABASE_URL: &str =
+        "postgres://EXAMPLE_USER:EXAMPLE_FAKE_PASS@db.example.com:5432/app";
+
     #[test]
     fn updated_input_audit_redacts_secrets_and_restricts_permissions() {
         let temp = tempfile::tempdir().expect("tempdir");
         let path = temp.path().join("security-audit.log");
         let original = serde_json::json!({
-            "command": "curl -H 'Authorization: Bearer abc123def456ghi789' https://api.example.com"
+            "command": format!("curl -H 'Authorization: Bearer {FAKE_BEARER_TOKEN}' https://api.example.com")
         });
         let new = serde_json::json!({
-            "command": "export ANTHROPIC_API_KEY=sk-ant-abcdefghijklmnopqrstuvwxyz0123456789"
+            "command": format!("export ANTHROPIC_API_KEY={FAKE_ANTHROPIC_KEY}")
         });
         let rewrite = RedactedHookRewrite::new(
-            "lint.sh --token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
+            &format!("lint.sh --token {FAKE_GITHUB_TOKEN}"),
             &original,
             &new,
         );
@@ -2169,11 +2175,7 @@ mod tests {
         append_updated_input_audit(&path, &rewrite).expect("append audit entry");
 
         let contents = std::fs::read_to_string(&path).expect("read audit log");
-        for secret in [
-            "abc123def456ghi789",
-            "sk-ant-abcdefghijklmnopqrstuvwxyz0123456789",
-            "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
-        ] {
+        for secret in [FAKE_BEARER_TOKEN, FAKE_ANTHROPIC_KEY, FAKE_GITHUB_TOKEN] {
             assert!(
                 !contents.contains(secret),
                 "secret survived into audit log: {secret}\n{contents}"
@@ -2199,16 +2201,49 @@ mod tests {
     fn updated_input_audit_stderr_fields_are_redacted() {
         let rewrite = RedactedHookRewrite::new(
             "hook.sh",
-            &serde_json::json!({ "url": "postgres://alice:hunter2@db.example.com:5432/app" }),
+            &serde_json::json!({ "url": FAKE_DATABASE_URL }),
             &serde_json::json!({ "url": "postgres://db.example.com:5432/app" }),
         );
 
-        assert!(!rewrite.original_args.contains("hunter2"));
+        assert!(!rewrite.original_args.contains("EXAMPLE_FAKE_PASS"));
         assert!(rewrite.original_args.contains("[CREDENTIALS_REDACTED]"));
         assert_eq!(
             rewrite.new_args,
             serde_json::json!({ "url": "postgres://db.example.com:5432/app" }).to_string(),
             "non-secret args must pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn audit_fixtures_read_as_fake_yet_still_trip_the_redactor() {
+        for fixture in [
+            FAKE_BEARER_TOKEN,
+            FAKE_ANTHROPIC_KEY,
+            FAKE_GITHUB_TOKEN,
+            FAKE_DATABASE_URL,
+        ] {
+            assert!(
+                fixture.contains("EXAMPLE"),
+                "fixture must be unmistakably fake to a reader and to check:secrets: {fixture}"
+            );
+        }
+        for (fixture, marker) in [
+            (FAKE_ANTHROPIC_KEY, "[REDACTED_ANTHROPIC_KEY]"),
+            (FAKE_GITHUB_TOKEN, "[REDACTED_GITHUB_TOKEN]"),
+            (FAKE_DATABASE_URL, "[CREDENTIALS_REDACTED]"),
+        ] {
+            let redacted = crate::secret_redaction::redact_secrets(fixture);
+            assert!(
+                redacted.contains(marker),
+                "fixture stopped matching the redactor it exercises: {fixture} -> {redacted}"
+            );
+        }
+        let bearer = crate::secret_redaction::redact_secrets(&format!(
+            "Authorization: Bearer {FAKE_BEARER_TOKEN}"
+        ));
+        assert!(
+            !bearer.contains(FAKE_BEARER_TOKEN),
+            "bearer fixture stopped matching the redactor it exercises: {bearer}"
         );
     }
 }

@@ -188,10 +188,16 @@ mod tests {
     fn redacts_password_embedded_in_connection_string() {
         let body = render(&[(
             "DATABASE_URL",
-            "postgres://admin:S3cr3t@prod-db.internal:5432/app",
+            "postgres://EXAMPLE_USER:EXAMPLE_FAKE_PASS@db.example.invalid:5432/app",
         )]);
-        assert!(!body.contains("S3cr3t"), "body leaked password: {body}");
-        assert!(!body.contains("admin"), "body leaked username: {body}");
+        assert!(
+            !body.contains("EXAMPLE_FAKE_PASS"),
+            "body leaked password: {body}"
+        );
+        assert!(
+            !body.contains("EXAMPLE_USER"),
+            "body leaked username: {body}"
+        );
     }
 
     #[test]
