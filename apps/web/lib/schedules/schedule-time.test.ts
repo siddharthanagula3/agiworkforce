@@ -33,6 +33,24 @@ describe('schedule time calculation', () => {
     ).toBe('5 8 * * 1,5');
   });
 
+  it('finds a rare date such as leap day without walking every hour in between', () => {
+    const started = Date.now();
+    const next = getNextExecutionAt(
+      { scheduleType: 'cron', cronExpression: '0 0 29 2 *', timezone: 'UTC' },
+      new Date('2026-03-01T00:00:00.000Z'),
+    );
+    expect(next.toISOString()).toBe('2028-02-29T00:00:00.000Z');
+    expect(Date.now() - started).toBeLessThan(1_500);
+  });
+
+  it('still lands on the first allowed hour of the next matching day after a skipped day', () => {
+    const next = getNextExecutionAt(
+      { scheduleType: 'cron', cronExpression: '15 0 * * 1', timezone: 'America/New_York' },
+      new Date('2026-03-07T05:00:00.000Z'),
+    );
+    expect(next.toISOString()).toBe('2026-03-09T04:15:00.000Z');
+  });
+
   it('skips a nonexistent spring-forward wall time', () => {
     expect(
       getNextExecutionAt(

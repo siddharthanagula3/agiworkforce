@@ -37,6 +37,25 @@ async function persistPermissionToServer(
   }
 }
 
+/**
+ * Clearing the local map alone was a reset that revoked nothing: the server
+ * rows are what the tool loop enforces, and `hydrateFromServer` put every
+ * cleared verdict straight back on the next load. A user who reset an
+ * `allow` grant kept granting it.
+ */
+async function clearConnectorPermissionsOnServer(connectorId: string): Promise<void> {
+  try {
+    const csrf = await getCsrfToken();
+    await fetch(`/api/connectors/permissions?connectorId=${encodeURIComponent(connectorId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'x-csrf-token': csrf },
+    });
+  } catch (err) {
+    logger.warn('[ToolPermissions] server reset failed (local cleared):', err);
+  }
+}
+
 export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermissionsActions>()(
   persist(
     (set, get) => ({
@@ -69,6 +88,7 @@ export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermiss
           delete next[connectorId];
           return { permissions: next };
         });
+        void clearConnectorPermissionsOnServer(connectorId);
       },
 
       hydrateFromServer: async () => {

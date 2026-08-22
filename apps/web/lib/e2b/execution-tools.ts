@@ -12,8 +12,20 @@ import { MAX_EXECUTION_OUTPUT_BYTES } from './types';
 export const EXECUTE_CODE_TOOL = 'execute_code';
 export const WRITE_FILE_TOOL = 'write_file';
 export const CREATE_FOLDER_TOOL = 'create_folder';
+export const READ_FILE_TOOL = 'read_file';
+export const LIST_FILES_TOOL = 'list_files';
+export const EDIT_FILE_TOOL = 'edit_file';
 
-const EXECUTION_TOOLS = new Set<string>([EXECUTE_CODE_TOOL, WRITE_FILE_TOOL, CREATE_FOLDER_TOOL]);
+const EXECUTION_TOOLS = new Set<string>([
+  EXECUTE_CODE_TOOL,
+  WRITE_FILE_TOOL,
+  CREATE_FOLDER_TOOL,
+  READ_FILE_TOOL,
+  LIST_FILES_TOOL,
+  EDIT_FILE_TOOL,
+]);
+
+const MAX_READ_FILE_BYTES = 200_000;
 
 export function isExecutionTool(name: string): boolean {
   return EXECUTION_TOOLS.has(name);
@@ -71,7 +83,83 @@ export function e2bExecutionToolDefs(): Array<{
         },
       },
     },
+    {
+      type: 'function',
+      function: {
+        name: LIST_FILES_TOOL,
+        description:
+          'List the files already present in the sandbox workspace. Call this before ' +
+          'assuming a file exists or inventing a path.',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              description: 'Workspace-relative folder to list. Defaults to the workspace root.',
+            },
+          },
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: READ_FILE_TOOL,
+        description:
+          'Read a UTF-8 text file from the sandbox workspace. Read a file before editing ' +
+          'it so the replacement matches what is actually on disk.',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'Workspace-relative file path.' },
+          },
+          required: ['path'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: EDIT_FILE_TOOL,
+        description:
+          'Replace an exact substring in a sandbox workspace file, leaving the rest ' +
+          'untouched. Prefer this over rewriting a whole file. The edit fails if ' +
+          'old_text is absent or appears more than once, so include enough surrounding ' +
+          'context to make it unique.',
+        parameters: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'Workspace-relative file path.' },
+            old_text: { type: 'string', description: 'Exact text to replace.' },
+            new_text: { type: 'string', description: 'Replacement text.' },
+          },
+          required: ['path', 'old_text', 'new_text'],
+        },
+      },
+    },
   ];
+}
+
+function countLines(text: string): number {
+  return text.length === 0 ? 0 : text.split('\n').length;
+}
+
+async function readWorkspaceText(
+  executor: E2BExecutor,
+  path: string,
+): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  if (!executor.readFileBytes) {
+    return { ok: false, error: 'Reading files is unavailable in this sandbox.' };
+  }
+  const bytes = await executor.readFileBytes(path);
+  if (!bytes) return { ok: false, error: `No such file in the workspace: ${path}` };
+  if (bytes.byteLength > MAX_READ_FILE_BYTES) {
+    return {
+      ok: false,
+      error: `${path} is ${bytes.byteLength} bytes, over the ${MAX_READ_FILE_BYTES}-byte read limit.`,
+    };
+  }
+  return { ok: true, text: Buffer.from(bytes).toString('utf8') };
 }
 
 export function providerRoutesToE2B(provider: string): boolean {
@@ -186,6 +274,60 @@ export async function routeExecutionTool(
           path: typeof args['path'] === 'string' ? args['path'] : '',
         });
         break;
+      case LIST_FILES_TOOL: {
+        if (!executor.listFiles) {
+          return { ok: false, output: '', error: 'Listing files is unavailable in this sandbox.' };
+        }
+        const dir = typeof args['path'] === 'string' && args['path'] ? args['path'] : '.';
+        const entries = await executor.listFiles(dir);
+        if (!entries) {
+          return { ok: false, output: '', error: `No such folder in the workspace: ${dir}` };
+        }
+        result = {
+          ok: true,
+          output: entries.length
+            ? entries.map((e) => `${e.path} (${e.byteSize} bytes)`).join('\n')
+            : `${dir} is empty.`,
+        };
+        break;
+      }
+      case READ_FILE_TOOL: {
+        const path = typeof args['path'] === 'string' ? args['path'] : '';
+        const read = await readWorkspaceText(executor, path);
+        if (!read.ok) return { ok: false, output: '', error: read.error };
+        result = { ok: true, output: read.text };
+        break;
+      }
+      case EDIT_FILE_TOOL: {
+        const path = typeof args['path'] === 'string' ? args['path'] : '';
+        const oldText = typeof args['old_text'] === 'string' ? args['old_text'] : '';
+        const newText = typeof args['new_text'] === 'string' ? args['new_text'] : '';
+        if (!oldText) {
+          return { ok: false, output: '', error: 'old_text must not be empty.' };
+        }
+        const read = await readWorkspaceText(executor, path);
+        if (!read.ok) return { ok: false, output: '', error: read.error };
+        const first = read.text.indexOf(oldText);
+        if (first === -1) {
+          return { ok: false, output: '', error: `old_text was not found in ${path}.` };
+        }
+        if (read.text.indexOf(oldText, first + oldText.length) !== -1) {
+          return {
+            ok: false,
+            output: '',
+            error: `old_text appears more than once in ${path}. Include more surrounding context so it matches exactly one place.`,
+          };
+        }
+        const updated =
+          read.text.slice(0, first) + newText + read.text.slice(first + oldText.length);
+        const write = await executor.writeFile({ path, content: updated });
+        if (!write.ok) return write;
+        result = {
+          ok: true,
+          output: `Edited ${path}  +${countLines(newText)} -${countLines(oldText)}`,
+        };
+        break;
+      }
       default:
         return { ok: false, output: '', error: `Not an execution tool: ${name}` };
     }

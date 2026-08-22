@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -61,7 +60,9 @@ export async function getMcpOAuthClient(issuer: string): Promise<McpOAuthClientR
     return {
       issuer: row.issuer,
       clientId: row.client_id,
-      clientSecret: row.client_secret_enc ? decryptConnectorToken(row.client_secret_enc) : null,
+      clientSecret: row.client_secret_enc
+        ? decryptConnectorToken(row.client_secret_enc, 'oauth-client-secret')
+        : null,
       registrationMethod: row.registration_method as McpClientRegistrationMethod,
       clientMetadataUrl: row.client_metadata_url,
       clientSecretExpiresAt: expiresAt,
@@ -90,7 +91,9 @@ export async function saveMcpOAuthClient(record: McpOAuthClientRecord): Promise<
       [
         record.issuer,
         record.clientId,
-        record.clientSecret ? encryptConnectorToken(record.clientSecret) : null,
+        record.clientSecret
+          ? encryptConnectorToken(record.clientSecret, 'oauth-client-secret')
+          : null,
         record.registrationMethod,
         record.clientMetadataUrl,
         record.clientSecretExpiresAt?.toISOString() ?? null,

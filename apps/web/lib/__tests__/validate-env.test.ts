@@ -319,3 +319,61 @@ describe('validateEnvironment · generated media storage reaches the boot check'
     ).toEqual([]);
   });
 });
+
+import { validateEmailPseudonymPepper } from '../validate-env';
+
+describe('validateEmailPseudonymPepper · boot check', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    delete process.env['EMAIL_HASH_PEPPER'];
+    delete process.env['VERCEL_ENV'];
+    delete process.env['NEXT_PHASE'];
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  it('fails the boot check in production when the pepper is missing', () => {
+    process.env['VERCEL_ENV'] = 'production';
+
+    const result = validateEmailPseudonymPepper();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([expect.stringContaining('EMAIL_HASH_PEPPER is not set')]);
+  });
+
+  it('only warns outside production', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+
+    const result = validateEmailPseudonymPepper();
+
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toEqual([expect.stringContaining('EMAIL_HASH_PEPPER is not set')]);
+  });
+
+  it('is silent once the pepper is set', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['EMAIL_HASH_PEPPER'] = 'a'.repeat(64);
+
+    const result = validateEmailPseudonymPepper();
+
+    expect(result).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('reaches the boot aggregate', () => {
+    process.env['VERCEL_ENV'] = 'production';
+
+    const result = validateEnvironment();
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringContaining('EMAIL_HASH_PEPPER is not set')]),
+    );
+  });
+});

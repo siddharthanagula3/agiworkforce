@@ -1,4 +1,8 @@
-import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
+import {
+  assertResolvedPublicHostname,
+  EgressPolicyError,
+  pinnedPublicFetch,
+} from '@/lib/egress-policy';
 
 export const URL_FETCH_TOOL = 'url_fetch';
 
@@ -378,7 +382,7 @@ export async function executeUrlFetch(
   args: Record<string, unknown>,
   overrides: UrlFetchOverrides = {},
 ): Promise<UrlFetchOutcome> {
-  const fetchImpl = overrides.fetchImpl ?? fetch;
+  const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
   const timeoutMs = overrides.timeoutMs ?? URL_FETCH_TIMEOUT_MS;
   const maxResponseBytes = overrides.maxResponseBytes ?? URL_FETCH_MAX_RESPONSE_BYTES;
   const maxContentChars = overrides.maxContentChars ?? URL_FETCH_MAX_CONTENT_CHARS;

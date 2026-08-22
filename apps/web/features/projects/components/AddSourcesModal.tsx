@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, FileText, HardDrive, MessageSquare, X, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface Props {
   open: boolean;
@@ -83,7 +84,7 @@ export function AddSourcesModal({
       await onUploadFile(file);
       onClose();
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Could not add this source.');
+      setSubmitError(toUserMessage(error, 'Could not add this source.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -116,7 +117,7 @@ export function AddSourcesModal({
       await onUploadText(text, title);
       onClose();
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Could not add this source.');
+      setSubmitError(toUserMessage(error, 'Could not add this source.'));
     } finally {
       setIsSubmitting(false);
     }
