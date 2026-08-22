@@ -2,13 +2,14 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-16
+Last updated: 2026-08-22
 
 The open execution queue, ordered consequence-to-effort. Completed items are
 removed rather than annotated — `CHANGELOG.md` carries verified slices and
-`docs/agent-context/known-flaws.md` carries durable defects. 28 items remain:
-2 in progress, 8 blocked, 3 reverted, 1 partial, and the unstatused entries in
-the demo-readiness and Gold Goal cycles.
+`docs/agent-context/known-flaws.md` carries durable defects. 14 statused items
+remain: 2 in progress, 8 blocked, 3 reverted, 1 partial, plus the unstatused
+entries in the demo-readiness and Gold Goal cycles. Counts are verifiable with
+`grep -cE '^- Status:' ExecutionPlan.md`; keep them that way.
 
 ## How to work this file
 
@@ -1538,7 +1539,7 @@ later`, exposed authenticated SKILL.md downloads for every Included bundle,
 
 ### 29. Enterprise tier is `unlimited: true` at `monthlyPriceUsd: 0`; local-only/BYOK quotas contradict themselves
 
-- Status: REVERTED (2026-08-09) — REVERTED. The fix was inert: the fail-closed branch could not fire, and the numeric arm of `automationsPerDay` has no producer. Reverting exposed the real finding, which is larger than this item — `hasFeature`, `checkFeatureAccess`, `checkAutomationLimit`/`checkApiCallLimit`/`checkStorageLimit`, eight grace-period helpers and the whole `constants/pricing.ts` module have zero production callers. That is a dead subsystem, not a limit bug; it needs its own item rather than a patch to one constant. Revert verified byte-identical to HEAD by checksum.
+- Status: REVERTED (2026-08-09) — REVERTED. The fix was inert: the fail-closed branch could not fire, and the numeric arm of `automationsPerDay` has no producer. Reverting exposed the real finding, which is larger than this item — `hasFeature`, `checkFeatureAccess`, `checkAutomationLimit`/`checkApiCallLimit`/`checkStorageLimit`, eight grace-period helpers and the whole `constants/pricing.ts` module have zero production callers. That is a dead subsystem, not a limit bug; it needs its own item rather than a patch to one constant. Revert verified byte-identical to HEAD by checksum. **Update 2026-08-22:** the dead subsystem is gone — `apps/desktop/src/constants/pricing.ts` and `planFeatures.ts` no longer exist in the tree (the surviving pricing type is `apps/desktop/src/types/pricing.ts`), so the `Writes:` list below is historical. Re-derive the item against the current tree before working it.
 - Area: billing
 - Severity: critical
 - Writes: `packages/contracts/types/src/billing-catalog.ts`, `apps/desktop/src/constants/pricing.ts`, `apps/desktop/src/constants/planFeatures.ts`, apps/desktop/src/lib/featureGates.ts (as reported by the audit; no such file in this tree)
@@ -2025,6 +2026,7 @@ mutating-tools-serialize guarantee holds) and narrated in `tool-loop.ts` as
 Listing/Reading/Editing file under the `filesystem` category.
 
 TODO — skills still cannot ship executable content:
+
 - A skill is a single `SKILL.md`. `packages/tools/skills/src/loader.ts` reads
   one file per directory; there is no bundle format carrying `scripts/`,
   `references/`, or `assets/`, so nothing a skill author writes can be run.
@@ -2035,6 +2037,7 @@ TODO — skills still cannot ship executable content:
   unproven for any skill carrying scripts.
 
 TODO — user-authored skills (blocks "create and add skills"):
+
 - No `user_skills` table, no writable catalog layer, and the skills API is
   GET-only (`app/api/skills/**`). `skill-creator` therefore drafts a SKILL.md
   into the chat with nowhere to save it, and `/settings/skills/new` is a
@@ -2054,6 +2057,7 @@ claude.ai's connector detail carries a Tool permissions section: tools grouped
 dropdown, and a per-tool allow / ask / deny tri-state.
 
 Every layer of that exists here already:
+
 - `connector_tool_permissions` table with FORCE RLS (`0069_connector_tool_permissions_rls.sql`)
 - `GET/PUT/DELETE /api/connectors/permissions`, user-scoped via `getUserScopedDb()`
 - runtime enforcement in `tool-loop.ts:1307-1345,1930`, including the
@@ -2097,6 +2101,7 @@ per-account time. Reset times are therefore per-user, which is why the operator
 view needs the account's timezone to state them correctly.
 
 DONE:
+
 - `0132_operator_bonus_credits.sql` — `token_credits.bonus_granted_cents` plus
   an index on `credit_transactions (transaction_type, created_at desc)`, which
   the ledger-by-type reads need.
@@ -2117,6 +2122,7 @@ DONE:
   REAL platform-admin gate (env var set) rather than stubbing it.
 
 TODO — dashboard surface, not yet built:
+
 - Stripe panel (MRR, churn, trial conversion, failed payments) — needs a
   restricted Stripe key.
 - Vercel panel (deploys, runtime errors, p95) — read access exists via MCP.
@@ -2139,6 +2145,7 @@ ordering needs the deduction site located first.
 ### Operator dashboard — controls wired — 2026-08-20
 
 DONE:
+
 - `OperatorDashboardPage` now renders both goodwill levers. Per-user rows carry
   `Reset usage` and `Grant credit`; a separated, destructive-styled block above
   the tabs carries `Reset all usage`, which previews the blast radius, requires
@@ -2162,6 +2169,7 @@ runs card → seats → interval → confirm dialog → `upgradeToTeamPlan` → 
 webhook writes the seat count.
 
 DONE:
+
 - Annual seat price is now expressed PER MONTH ($20/seat/mo) instead of per year
   ($240/seat/yr), matching how ChatGPT and Claude frame annual billing, so the
   cadence toggle compares like with like against $25/seat/mo. The adjacent
@@ -2214,9 +2222,10 @@ auto-fires often enough to matter. Fixing the matcher wires the whole system
 rather than one skill.
 
 Measured before: 1 of 6 realistic prompts offered the right skill.
-Measured after:  6 of 6, with the negative case still correctly offering none.
+Measured after: 6 of 6, with the negative case still correctly offering none.
 
 Three changes, each forced by a measurement:
+
 1. `jaccardSimilarity` -> `skillCoverage`. Jaccard is symmetric, so every prompt
    word sat in the denominator and a longer, more specific request scored LOWER.
    Coverage asks the directional question — how much of the SKILL's vocabulary
@@ -2268,6 +2277,7 @@ own contract.
 deletion completes." Our own privacy policy says the opposite
 (`app/privacy/page.tsx:956`: "there is no self-serve way to cancel a scheduled
 deletion"), and the code agrees with the policy:
+
 - `app/api/user/delete-account/route.ts:112` sets `deletion_scheduled_for`
 - `app/api/cron/purge-deleted-accounts/route.ts:65-66` reads it to purge
 - `app/api/auth/device/refresh/route.ts:87` hard-blocks re-auth the moment it is
@@ -2887,7 +2897,7 @@ All three layers, because any one alone is theatre:
   global-only when a project cannot be read, never to the project's rows.
 - **Write** — `persistManagedAutoMemoryFacts` tags the fact with the
   conversation's project. Dedup is per scope (`project_id is not distinct
-  from`), and the deterministic id includes the project, or the same sentence
+from`), and the deterministic id includes the project, or the same sentence
   learned globally would permanently block it being recorded in a project.
 - **UI** — a real per-project toggle, wired through the update contract, the
   PATCH route, `mapProjectRow` and the `Project` type.
@@ -3946,9 +3956,9 @@ carry explicit aria-labels with tests asserting them.
 Following the localisation thread into how language is stored found a false
 promise on a user-facing page. `/settings/sync` told the user:
 
-  "Appearance, personalization, notifications, language, and chat preferences
-   sync automatically across Web and Mobile whenever you're signed in — no
-   request or opt-in step."
+"Appearance, personalization, notifications, language, and chat preferences
+sync automatically across Web and Mobile whenever you're signed in — no
+request or opt-in step."
 
 Only two of those five are true on web. Mobile does its half properly —
 `cloudSettingsMapping.ts` projects appearance, personalization and language into
@@ -3986,9 +3996,9 @@ Local mode, the Secure Enclave and BYOK.
 
 Following those found a scoping problem on the WEB privacy screen. It said:
 
-  "All Local Mode conversations stay on your device and are never transmitted
-   to AGI servers. BYOK conversations go directly to your chosen provider using
-   your own API key."
+"All Local Mode conversations stay on your device and are never transmitted
+to AGI servers. BYOK conversations go directly to your chosen provider using
+your own API key."
 
 Both sentences are true of the product — and neither is true of the surface the
 user is reading them on. `app/settings/byok/page.tsx` states it outright:
@@ -4019,9 +4029,9 @@ there.
 
 One entry was wrong in the OTHER direction. The security-audit-log row said:
 
-  "A database routine deletes entries older than 90 days. It is run by an
-   administrator, not on a schedule, so treat 90 days as the policy rather than
-   an automatic guarantee."
+"A database routine deletes entries older than 90 days. It is run by an
+administrator, not on a schedule, so treat 90 days as the policy rather than
+an automatic guarantee."
 
 `/api/cron/purge-security-audit-logs` exists and runs nightly at 02:30 UTC,
 registered in vercel.json, with a test already asserting every cron route is
@@ -4047,9 +4057,9 @@ Fixing that one sentence would leave the same failure available to every other
 citation, so the guard is now general.
 
 Verified the rest of the policy's citations first, all sound:
-`/api/cron/enforce-billing-retention` registered at 0 1 * * *,
-`/api/cron/purge-security-audit-logs` at 30 2 * * *,
-`/api/cron/purge-deleted-accounts` at 30 4 * * * behind the "daily scheduled
+`/api/cron/enforce-billing-retention` registered at 0 1 \* \* _,
+`/api/cron/purge-security-audit-logs` at 30 2 _ \* _,
+`/api/cron/purge-deleted-accounts` at 30 4 _ \* \* behind the "daily scheduled
 job" the deletion paragraph describes, `/api/files/{mediaAssetId}` present, and
 `authenticatedMediaUrl()` defined.
 
@@ -4173,102 +4183,6 @@ passes and WebAppShell does not, only `hiddenIds` was a defect. `activeSessionId
 search falls back to the sidebar's own overlay. Recorded so the next sweep does
 not re-open it.
 
-## Collapsed sidebar lost every destination (2026-08-21)
-
-DONE: the collapsed rail rendered New chat, Search, a mode dot — and never
-looked at `navItems`. Collapsing the sidebar therefore removed Projects,
-Artifacts, Library, Tasks, Schedules, Code, Skills and Admin outright; the user
-had to expand again to navigate anywhere. ChatGPT and Claude both keep an icon
-rail when collapsed. The rail now renders every destination, `RailButton` marks
-the active one with `aria-current="page"`, and three tests cover render, routing
-and active state — all three verified failing against the old component with
-`Unable to find an accessible element with the role "button" and name
-"Projects"`.
-
-This also explains the dead `onOpenProjects`/`onOpenSkills`: they were a partial
-attempt at exactly this, hardcoding two destinations into the collapsed rail via
-handlers no caller ever passed. Deleted along with `onModeClick`, since the real
-`navItems` path subsumes them. The shared Sidebar has exactly two consumers —
-both web shells, both passing `navItems` — because desktop and unified-chat each
-have their own local Sidebar, so nothing depended on the fallback.
-
-Note the mode badge in the expanded footer was gated on `onModeClick` and so had
-never rendered. Deleting it changed nothing visually. DECISION NEEDED: the repo
-treats Local/BYOK/Managed Cloud as separate trust boundaries and requires a
-visible provider label — the sidebar footer is a reasonable place for it, but
-adding a permanent CLOUD badge to web is a design call, not a bug fix.
-
-Detector caveat, recorded so the count is not mistaken for a defect list: it
-flags handlers declared on context/option interfaces, not just component props.
-`ClarifyCard.onRespond` is supplied through `ctx` and is genuinely wired. Treat
-the 40 as candidates.
-
-Two orphan components surfaced and are NOT yet resolved: `ProjectsView.tsx`
-(packages/ui) and `features/chat/v3/WebSidebar.tsx` are rendered nowhere in any
-app. TODO: delete or wire. `ProjectsView` is the one that would have given the
-projects gallery a Rename action.
-
-## Orphan components resolved (2026-08-21)
-
-DONE: deleted `apps/web/features/chat/v3/` (WebShellV3, WebSidebar and their
-tests) and `packages/ui/ui/src/sidebar/ProjectsView.tsx`, plus the ProjectsView
-re-exports from both package barrels.
-
-The delete-or-adopt question the v3 header comment left open is now answered
-with evidence rather than preference. v3's WebSidebar is not a better design
-being wasted: its temporal grouping is coarser than the live sidebar's, which
-already buckets Today / Yesterday / This Week / Last 7 Days / Last 30 Days /
-Older, and it carries a `Dispatch` nav item marked `beta: true` with no route
-behind it — a fake availability badge of exactly the kind the critical rules
-forbid. Nothing outside `v3/` imported it.
-
-ProjectsView was superseded by unified-chat's `ProjectGallery`, which the live
-`/chat/projects` route renders. The Rename action ProjectsView would have
-provided already exists there: `onEditProject` opens `ProjectSettingsDialog`
-from both the gallery and the card view. So the earlier "gallery cannot rename"
-worry was wrong — recorded so it is not re-raised.
-
-`check-surface-reachability` proved the point: both v3 files were already
-carried in `surface-reachability-allowlist.json` as unreachable debt, and the
-guard failed on the stale entries until they were removed, ratcheting the list
-down by two. The repo knew this was debt; nothing had collected it.
-
-Verification: web typecheck clean, 1147 web tests and 17 ui tests green,
-module- and surface-reachability checks both pass.
-
-## Reasoning-effort toggle reached no user (2026-08-21)
-
-DONE: `ModelSelector` ships a per-model thinking toggle — catalog effort
-options, a default-effort effect for models that mandate reasoning, and tests
-covering both — but its single production call site, `unified-chat`'s
-`ChatInput`, passed neither `effort` nor `onEffortChange`. `showThinkingToggle`
-is gated on `Boolean(onEffortChange)`, so it was permanently false: complete,
-tested behaviour that no user could reach. This is the surface desktop runs
-(`App.tsx` -> `DesktopShellV3` -> `ChatInterface` -> `ChatInput`).
-
-Wired to the SAME `agentControlStore` the composer's `EffortChip` already reads
-and writes, so this is a second entry point to one source of truth, not the
-duplicated thinking state AUDIT-FIX CMP-24 had to unpick. `Effort` includes
-`'none'`, so the picker's `null`-means-off convention maps onto the store
-without widening its shape: `none` out, `null` in.
-
-Verified end to end rather than by typecheck: a new ChatInput test opens the
-picker, asserts the toggle renders, then drives it off and on and reads the
-store back — `medium` (store default) -> `none` -> `high` (catalog default).
-Both cases fail without the two props with `Unable to find ... "Disable
-thinking mode"`.
-
-Checked before wiring, so the record is honest: `AttachmentMenu`'s Drive/GitHub
-connectors are properly guarded and render nothing when unwired, so there is no
-fake availability there — offering those connectors is a product gap versus
-ChatGPT, not a broken wire. `ChatInputToolbar` and `TokenCounter` are rendered
-nowhere; their dead toggles are moot and the orphan components are the finding.
-
-Also worth recording as process: a `cd` had left the shell in the wrong
-directory and a repo-wide grep returned nothing, which read as "ModelSelector is
-an orphan". That would have closed this thread as a false negative. Verify a
-surprising absence from a known-good working directory before believing it.
-
 ## The debt was already catalogued (2026-08-21)
 
 `scripts/config/surface-reachability-allowlist.json` carries 475 modules as
@@ -4312,12 +4226,12 @@ capabilities the product had lost. Probed the six that map to visible
 ChatGPT/Claude features. Every one is live, by a different implementation than
 the orphan:
 
-- data export      -> `PrivacySection` downloads JSON from `/api/user/data`
-                      (GET exists as `export const GET = exportUserDataGet`)
-- drag-and-drop    -> `Composer/DragDropOverlay`, mounted by `ChatComposerNew`
-- voice input      -> `Composer/VoiceInputButton`, mounted by `ChatComposerNew`
-- tool progress    -> `ToolTimeline`
-- read aloud       -> `ChatMessageList` owns `useTTS()` and `speakingMessageId`
+- data export -> `PrivacySection` downloads JSON from `/api/user/data`
+  (GET exists as `export const GET = exportUserDataGet`)
+- drag-and-drop -> `Composer/DragDropOverlay`, mounted by `ChatComposerNew`
+- voice input -> `Composer/VoiceInputButton`, mounted by `ChatComposerNew`
+- tool progress -> `ToolTimeline`
+- read aloud -> `ChatMessageList` owns `useTTS()` and `speakingMessageId`
 - mermaid diagrams -> `ArtifactPreview`'s strict-mode sandboxed iframe
 
 So the honest answer for future sweeps: do NOT mine this list for missing
@@ -4372,62 +4286,6 @@ the viewer offers Copy and a raw Download, `onExportNative` is built and gated,
 and the app already ships a working PDF/docx service — it only lacks a handler
 passed into unified-chat's `LibraryView`. That maps to WEB-RND-001 "Downloads".
 
-## Native artifact export wired (2026-08-21)
-
-DONE: the artifact viewer's Export as PDF / Export as Word options were built,
-gated behind `onExportNative`, and offered to nobody — no caller passed the
-handler, so `supportsDocumentExport && onExportNative` never rendered. The
-Library was the live consumer. Users had Copy and a raw Download only.
-
-Wired through the seam the Library already uses rather than inventing a new
-one: `LibraryTransport` carries the platform's capabilities, so `exportNative`
-and `nativeExportFormats` join `listPage`/`deleteItem`/`openPreview` there. Web
-implements it with `exportDocument` from `document-export-service` — the same
-service `ResearchReportView` and `EnhancedExportDialog` already ship.
-
-The honest part is what is NOT offered. `exportDocument` writes PDF and DOCX;
-web has no xlsx writer, and adding one means a lockfile change the hooks block.
-So `nativeExportFormats` is `['pdf', 'word']` and `ArtifactRenderer` filters
-every option through it, including the per-format gating on the PDF and Word
-rows. A tabular artifact no longer shows an Excel option that would fail after
-the user picked it. Offering a format we cannot produce would have been the
-same fake-availability defect this session has been removing.
-
-Verified: four ArtifactRenderer tests (nothing offered with no handler; the
-declared formats offered and the artifact handed back; a withheld format never
-shown; no Excel for a table), plus two call-site guards on the web transport —
-because the component tests keep passing if web silently drops the field, which
-is exactly how `hiddenIds` was lost. Breaking the wire fails the guard with
-`nativeExportFormats not declared`.
-
-632 unified-chat tests and the web library suite green; typecheck clean.
-
-## Offline and network errors read as browser internals (2026-08-21)
-
-DONE: `getVisibleErrorMessage` in `useChatStream` returned the raw error text
-straight into the transcript, so a dropped connection rendered as
-`Error: Failed to fetch` — Chrome's internal wording, or `Load failed` on
-Safari, or `NetworkError when attempting to fetch resource` on Firefox. Someone
-whose wifi died read a string that names no condition and suggests no action.
-ChatGPT names the state; we leaked an implementation detail.
-
-That function is the single funnel for every user-visible stream error (four
-call sites), so the fix lands once and covers the terminal-error, callback-error
-and partial-content paths together. Network-level failures are now detected by
-`TypeError` plus the three browsers' message patterns, and `navigator.onLine`
-picks the wording: "You appear to be offline. Check your connection." when the
-browser knows the machine is offline, "Could not reach the server." otherwise.
-The existing "Try again, or start a new chat…" suffix still follows.
-
-Verified against the real hook rather than by exporting the helper: the test
-rejects the completions call with `new TypeError('Failed to fetch')` and asserts
-the visible text contains "Could not reach the server." and NOT "Failed to
-fetch". It fails without the fix. 43 useChatStream tests green.
-
-This came from WEB-CON-001 in the July ledger, the one row whose Partial label
-survived re-verification. The rest of that row — rate-limited, interrupted,
-cancelled, awaiting-approval states — is not audited yet.
-
 ## Browser internals leaked across the whole settings surface (2026-08-21)
 
 The offline fix in `useChatStream` was one instance of a repo-wide pattern.
@@ -4458,32 +4316,6 @@ statement's closing `} from '...';`. Thirteen files were syntactically broken
 until repaired by tracking brace depth. A mechanical edit across many files
 needs the typecheck run before anything else, and needs to understand statement
 boundaries rather than line prefixes.
-
-## Raw error leak closed across the web surface (2026-08-21)
-
-DONE: extended the `toUserMessage` sweep past settings. 58 more sites across 30
-user-facing components — artifacts, research, projects, admin, composer, work
-sessions, device sign-in, pricing — plus the last 7 that used a different shape
-(`String(err)` or an i18n `t()` fallback, which the first regex missed because
-it required the same identifier on both sides). `grep -rn 'instanceof Error ?'`
-over `features app shared` `*.tsx` now returns 0.
-
-DONE: a guard at `shared/__tests__/no-raw-error-in-ui.test.ts` fails if the
-pattern reappears in rendered code, naming the offending file and line, with a
-non-vacuity assertion that `toUserMessage` is still used in 20+ components so
-the check cannot pass by the helper being deleted.
-
-Totals for the class: 102 call sites, 44 files, one definition of what a network
-failure reads like. A real server message is still preserved verbatim — only
-browser-level wording is replaced.
-
-Verified: web typecheck clean, 1969 tests under `features/`, 6201 under
-`app/ lib/ shared/`, all green.
-
-Method note: the second codemod run inserted imports correctly because it
-tracked brace depth to find the END of the import block rather than the last
-line starting with `import`. Same script shape, correct boundary. Worth reusing
-if another cross-cutting sweep comes up.
 
 ## Parity sweep: enumerable surfaces are covered (2026-08-21)
 
@@ -4641,13 +4473,13 @@ health and the wave-queue blockers.
 
 Test health, all verified by execution:
 
-| surface          | tests                     |
-|------------------|---------------------------|
-| web              | 8170 pass                 |
-| desktop          | 2753 pass (319 files)     |
-| cli              | 1908 pass, 0 failed       |
-| chrome extension | 1625 pass                 |
-| vscode extension |  878 pass                 |
+| surface          | tests                       |
+| ---------------- | --------------------------- |
+| web              | 8170 pass                   |
+| desktop          | 2753 pass (319 files)       |
+| cli              | 1908 pass, 0 failed         |
+| chrome extension | 1625 pass                   |
+| vscode extension | 878 pass                    |
 | mobile           | 0 execute — 350 suites fail |
 
 `pnpm typecheck:all` — 0 errors across all six. CI runs cargo test for desktop
@@ -4733,54 +4565,6 @@ FLAKE RECORDED, not fixed: `apps/mobile/__tests__/streaming-timeout.test.ts`
 uses jest's 5s default while its sibling in the same file takes `10_000`. It
 timed out under `--runInBand` while a cargo release build saturated the machine,
 and passes in CI. A test whose result depends on machine load is a defect.
-
-## Desktop: four controls wired, one UI that lied fixed (2026-08-21)
-
-DONE GAP-242 — undo/redo was reachable by nothing. `undoLast`/`undoCanUndo` in
-`api/undo.ts` (Tauri commands registered at `src-tauri/src/lib.rs:2308,2310`)
-had ZERO callers outside the re-export barrel. Now bound to Cmd/Ctrl+Alt+Z as
-`edit.undoLast` in `RENDERER_SHORTCUTS`, handled at `App.tsx:1346`, consumer
-`src/features/undo/undoLastChange.ts` which calls `undo_can_undo` before
-`undo_last`. Deliberately NOT Cmd+Z: the keydown handler calls
-`preventDefault()`, so plain Cmd+Z would hijack native undo in every text field
-and let a stray keystroke revert agent file changes. A test asserts Cmd+Z does
-not match. The guard is at invocation time, not binding time — the shortcut list
-does not show live emptiness, and that limitation is stated rather than implied.
-
-DONE GAP-238 — overlay visibility, two real consumers:
-`VisualizationLayer.tsx:136` (returns null AND never subscribes when off) and
-`ExecutionSidecarScreenView.tsx:103`. The Rust `ExecutionPreferences` struct has
-no such field, so serde silently drops it; a naive spread would have reset the
-user's choice on every backend hydration. Handled in the v4 migrate block and
-the hydration merge.
-
-DONE GAP-235 — plugin enable/disable writes the plugin host's own
-`enabledPlugins` map, into the highest-precedence settings file that already
-names the plugin, refusing to write if any candidate fails to parse. The loader
-is the external `claude` CLI, so it applies to the next session, and the UI says
-exactly that.
-
-DONE GAP-208 — a UI that lied. `AgiWorkProjects.tsx` nested "Showing the last
-loaded project list." INSIDE the error banner under `projects.length > 0`, then
-returned from the error branch without reaching the grid. It tested that it had
-cached projects, printed the promise, and rendered nothing. Fixed by behaviour,
-not copy — the banner now renders independently and the content chain leads with
-the cache check, which makes the existing words true. Verified break-then-fix:
-before, only the list assertion failed (the two banner assertions passed, so it
-was the missing list and not a setup fault); after, 4/4.
-
-NEW DEAD CONTROL FOUND, not fixed: `hideAppsOnTask` — the toggle I told the
-agent to copy the persistence pattern from — has no reader anywhere in `src/`
-or `src-tauri/`, and `computerUseStore` has no `persist` middleware, so it does
-not survive a restart. It toggles nothing and forgets it did nothing.
-
-BASELINE CORRECTION: this tree does not produce "319 files / 2753 tests, zero
-failures" under a full parallel run. Real pre-change state was 3 failed / 2750
-passed (`DesktopShellV3.test.tsx`, `terminal-workspace` testid, passes 30/30 in
-isolation). Post-change: 322 files / 2773 tests, zero failures. Two separate
-agents independently hit transient failures caused by the other's edits landing
-mid-run — worth knowing before trusting any single full-suite number taken while
-concurrent work is in flight.
 
 ## The gap registry is now verified — and two rules for auditing it (2026-08-21)
 
@@ -4933,6 +4717,7 @@ asserting on logic DEFINED INSIDE THE TEST FILE. They are green regardless of
 what the extension does. Count now 79.
 
 THE METHOD MATTERS, because the first two attempts were wrong:
+
 - A stricter static scanner flagged 298, including ten sanitizer tests already
   proven wired by break runs. Regex dataflow cannot follow a side-effect import
   into `window.agiRender`. Discarded rather than quoted.
@@ -4997,6 +4782,7 @@ Final: 145 vacuous tests -> ~30, and the 30 that remain are frozen behind the
 founder's decision on whether `workspaceIndexer` survives at all.
 
 Verified independently at close, not taken from a report:
+
 - `pnpm --filter agi-workforce test` EXIT=0, 79 files, 871 tests, zero Errors
   lines. The exit code matters: earlier in this audit a run printed "878 passed"
   while exiting 1 on unhandled rejections, which is the same defect class the
@@ -5018,6 +4804,7 @@ That ratio is the finding. The extension's code was substantially correct; the
 evidence about it was not.
 
 STILL OPEN, recorded rather than fixed:
+
 - `workspaceIndexer` runs `executeDocumentSymbolProvider` on every file save and
   writes up to 500 files of symbols into `workspaceState` that nothing reads.
   Founder decision: delete, or wire `getRelevantContext` into chat context.

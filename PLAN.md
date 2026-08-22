@@ -3,7 +3,10 @@
 Status: Active
 Owner: Founder + platform lead
 Last updated: 2026-08-01
-Detailed plan: `docs/plans/monorepo-restructure-2026-07-08.md`
+Detailed plan: retired. `docs/plans/monorepo-restructure-2026-07-08.md` was
+deleted once its phases landed; the mechanical restructure it described is
+complete (see the phase note below) and `docs/current/technical-architecture.md`
+now carries the package/crate ownership it defined.
 
 > **Phase note (2026-07-26).** The mechanical restructure below is complete —
 > every wave is landed and the repository is structurally coherent (baseline:
@@ -183,7 +186,9 @@ Four non-overlapping lanes are active in parallel:
    while keeping authentication, metering, transport, and deployment policy in
    their owning deployables.
 3. Execute the remaining mechanical waves M6-M8 in order (M0-M5 completed
-   2026-07-15 per `docs/plans/monorepo-restructure-2026-07-08.md` Appendix B).
+   2026-07-15; the Appendix B that recorded them lived in the since-retired
+   `docs/plans/monorepo-restructure-2026-07-08.md`, so `CHANGELOG.md` is now the
+   record of what those waves landed).
 4. Finish the canonical Auto-router migration across Chrome and remaining
    stateful consumer paths, then wire Managed-gateway fallback execution.
 

@@ -274,9 +274,12 @@ Web:
   dispatch to the existing managed media flow. The generic text-chat API rejects
   media harnesses before billing/provider execution instead of sending an image
   model through a text adapter.
-- `/chat` still mounts `WebChatPage`; `UnifiedChatPage`/`WebShellV3` are internal
-  convergence code and are not a second public Web chat route. Their existence
-  must not be mistaken for production adoption of the shared chat shell.
+- `/chat` mounts `WebChatRoot` (`apps/web/app/chat/page.tsx:1`), which renders
+  `features/chat/pages/WebChatPage.tsx`. The former convergence copies
+  `UnifiedChatPage.tsx` and `v3/WebShellV3.tsx` were deleted on 2026-08-22; the
+  shared shell now arrives through the `@agiworkforce/unified-chat` components
+  rather than through a parallel Web-only shell. There is still exactly one
+  public Web chat route.
 - Remaining Web gaps include settings parity, connector/app directory parity, global search, and complete projects/files/memory parity. Cloud Managed is public alpha and should be presented as available (no longer waitlist-gated).
 
 Desktop:
