@@ -17,8 +17,10 @@ import { withSeatAccountingErrors } from '@/lib/services/organization-seat-servi
 import { expirePendingInvitations } from '@/lib/services/organization-invitation-service';
 import { requireTeamAdminAccess } from './team-admin-access';
 
+const OrganizationIdSchema = z.string().uuid('organizationId must be a UUID');
+
 const AddMemberSchema = z.object({
-  organizationId: z.string().uuid('organizationId must be a UUID'),
+  organizationId: OrganizationIdSchema,
   email: z.string().email('Invalid email address'),
   role: z.enum(['admin', 'member', 'viewer']).default('member'),
 });
@@ -53,11 +55,17 @@ async function handleList(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const { searchParams } = new URL(request.url);
-  const organizationId = searchParams.get('organizationId');
+  const rawOrganizationId = searchParams.get('organizationId');
 
-  if (!organizationId) {
+  if (!rawOrganizationId) {
     throw createError.validation('organizationId query parameter is required');
   }
+
+  const parsed = OrganizationIdSchema.safeParse(rawOrganizationId);
+  if (!parsed.success) {
+    throw createError.validation('organizationId must be a UUID', parsed.error.issues);
+  }
+  const organizationId = parsed.data;
 
   const db = getNeonDb();
 

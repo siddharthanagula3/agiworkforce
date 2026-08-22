@@ -14,6 +14,7 @@ import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface StatusMessage {
   text: string;
@@ -65,7 +66,7 @@ export function TimeFocusSection() {
       .catch((error) => {
         if (!cancelled) {
           setMessage({
-            text: error instanceof Error ? error.message : 'Failed to load time and focus',
+            text: toUserMessage(error, 'Failed to load time and focus'),
             prefix: 'Load failed',
           });
         }
@@ -111,7 +112,7 @@ export function TimeFocusSection() {
       setDirty(false);
     } catch (error) {
       setMessage({
-        text: error instanceof Error ? error.message : 'Failed to save time and focus',
+        text: toUserMessage(error, 'Failed to save time and focus'),
         prefix: 'Save failed',
       });
     } finally {

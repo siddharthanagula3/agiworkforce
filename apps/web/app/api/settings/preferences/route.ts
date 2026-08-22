@@ -7,8 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const SettingsPatchSchema = z.object({
   namespace: z
@@ -34,8 +33,9 @@ function isUndefinedTable(error: unknown): boolean {
   );
 }
 
-async function readSettings(userId: string): Promise<Record<string, unknown>> {
-  const db = getNeonDb();
+type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+
+async function readSettings(db: ScopedDb, userId: string): Promise<Record<string, unknown>> {
   try {
     const [row] = await db.query<UserSettingsRow>(
       'select settings from public.user_settings where user_id = $1 limit 1',
@@ -55,9 +55,13 @@ async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-activity');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  // Scoped, not getNeonDb(): 0134 puts a FORCE'd policy on user_settings, so
+  // the BYPASSRLS client would sail straight past it and the policy would be
+  // decorative. The `where user_id = $1` below stays as the first line of
+  // defence — the policy is the second, for the day someone forgets it.
+  const { db, userId } = await getUserScopedDb(request);
   const namespace = new URL(request.url).searchParams.get('namespace');
-  const settings = await readSettings(userId);
+  const settings = await readSettings(db, userId);
 
   if (namespace) {
     return NextResponse.json({ settings: settings[namespace] ?? {} });
@@ -73,7 +77,7 @@ async function handlePut(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   let parsed: z.infer<typeof SettingsPatchSchema>;
   try {
@@ -90,13 +94,12 @@ async function handlePut(request: NextRequest) {
     ? { [parsed.namespace]: parsed.value ?? parsed.settings ?? {} }
     : (parsed.settings ?? {});
 
-  const current = await readSettings(userId);
+  const current = await readSettings(db, userId);
   const estimated = { ...current, ...delta };
   if (JSON.stringify(estimated).length > 100_000) {
     throw createError.validation('Settings payload is too large');
   }
 
-  const db = getNeonDb();
   let merged: Record<string, unknown> = estimated;
   try {
     const [row] = await db.query<UserSettingsRow>(

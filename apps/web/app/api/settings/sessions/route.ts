@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSessionsPrincipal } from './session-principal';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 const PAGE_SIZE = 100;
 const MAX_SESSION_PAGES = 20;
@@ -128,6 +129,13 @@ async function handleRevokeAll(request: NextRequest) {
     : undefined;
   const otherSessions = sessions.filter((session) => session.id !== currentSession?.id);
   const result = await revokeInBatches(client, otherSessions);
+  await getNeonDb().execute(
+    `update device_refresh_tokens
+        set revoked_at = coalesce(revoked_at, now())
+      where user_id = $1
+        and revoked_at is null`,
+    [userId],
+  );
 
   if (result.failed.length > 0) {
     logger.error(

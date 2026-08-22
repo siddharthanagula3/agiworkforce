@@ -124,8 +124,20 @@ describe('team administration billing capability', () => {
     expect(access.seatSource).toBe('unknown');
   });
 
+  it('refuses a non-member before the organization entitlement is even consulted', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    await expect(requireTeamAdminAccess(db, 'outsider', ORG_A)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      statusCode: 403,
+    });
+    expect(mockQuery.mock.calls[0]?.[1]).toEqual([ORG_A, 'outsider']);
+    expect(resolveOrganizationEntitlementPlan).not.toHaveBeenCalled();
+  });
+
   it('still fails closed on the capability before any seat number is trusted', async () => {
     resolveOrganizationEntitlementPlan.mockResolvedValue('free');
+    mockQuery.mockResolvedValueOnce([{ user_id: 'user-1' }]);
     mockQuery.mockResolvedValueOnce([
       {
         licensed_seats: 100,
@@ -166,6 +178,7 @@ describe('team administration billing capability', () => {
   it('rejects a personally entitled admin when the organization entitlement is inactive', async () => {
     getSubscription.mockResolvedValue({ plan_tier: 'team', status: 'active' });
     resolveOrganizationEntitlementPlan.mockResolvedValue('free');
+    mockQuery.mockResolvedValueOnce([{ user_id: 'user-1' }]);
     mockQuery.mockResolvedValueOnce([
       {
         licensed_seats: 12,

@@ -7,6 +7,7 @@ import {
   fetchStoredPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const PREF_NAMESPACE = 'memory';
 
@@ -70,7 +71,7 @@ export function MemoryExclusions() {
       })
       .catch((cause) => {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Could not load exclusions');
+          setError(toUserMessage(cause, 'Could not load exclusions'));
         }
       })
       .finally(() => {
@@ -90,7 +91,7 @@ export function MemoryExclusions() {
         setSuppressedSources(next.suppressedSources);
         setError(null);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Could not save exclusions');
+        setError(toUserMessage(cause, 'Could not save exclusions'));
       } finally {
         setSaving(false);
       }

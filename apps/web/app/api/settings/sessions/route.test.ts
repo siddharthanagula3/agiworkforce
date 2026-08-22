@@ -2,14 +2,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockGetSessionList, mockRevokeSession, mockGetClerkAuthUser, mockVerifyToken } =
-  vi.hoisted(() => ({
-    mockAuth: vi.fn(),
-    mockGetSessionList: vi.fn(),
-    mockRevokeSession: vi.fn(),
-    mockGetClerkAuthUser: vi.fn(),
-    mockVerifyToken: vi.fn(),
-  }));
+const {
+  mockAuth,
+  mockGetSessionList,
+  mockRevokeSession,
+  mockGetClerkAuthUser,
+  mockVerifyToken,
+  mockNeonExecute,
+} = vi.hoisted(() => ({
+  mockAuth: vi.fn(),
+  mockGetSessionList: vi.fn(),
+  mockRevokeSession: vi.fn(),
+  mockGetClerkAuthUser: vi.fn(),
+  mockVerifyToken: vi.fn(),
+  mockNeonExecute: vi.fn(async () => 1),
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({ execute: mockNeonExecute }),
+}));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
@@ -156,6 +167,10 @@ describe('/api/settings/sessions', () => {
         'sess_current',
       ]);
       expect(await response.json()).toMatchObject({ currentSessionRevoked: true, revokedCount: 2 });
+      expect(mockNeonExecute).toHaveBeenCalledWith(
+        expect.stringContaining('device_refresh_tokens'),
+        ['user-1'],
+      );
     });
 
     it('keeps the current session active when another device cannot be revoked', async () => {
