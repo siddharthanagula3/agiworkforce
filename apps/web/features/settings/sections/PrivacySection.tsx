@@ -652,7 +652,7 @@ export function PrivacySection() {
               padding: '6px 14px',
               fontSize: 12,
               fontWeight: 600,
-              color: 'var(--chat-accent-primary, #c8892a)',
+              color: 'var(--chat-accent-primary)',
               background: 'transparent',
               border: '1px solid rgba(218,119,86,0.5)',
               borderRadius: 'var(--radius-md)',
@@ -673,7 +673,7 @@ export function PrivacySection() {
               padding: '10px 20px',
               borderBottom: '1px solid var(--settings-border)',
               color: conversationActionError
-                ? 'var(--chat-accent-primary, #c8892a)'
+                ? 'var(--chat-accent-primary)'
                 : 'var(--text-2)',
               fontSize: 12,
             }}
@@ -726,7 +726,7 @@ export function PrivacySection() {
               border: 'none',
               cursor: 'pointer',
               background: newChatsTemporary
-                ? 'var(--chat-accent-primary, #c8892a)'
+                ? 'var(--chat-accent-primary)'
                 : 'var(--settings-border)',
               transition: 'background 0.15s',
             }}
@@ -873,7 +873,7 @@ export function PrivacySection() {
               {exporting ? 'Preparing...' : 'Export data'}
             </button>
             {exportError && (
-              <span style={{ fontSize: 12, color: 'var(--chat-accent-primary, #c8892a)' }}>
+              <span style={{ fontSize: 12, color: 'var(--chat-accent-primary)' }}>
                 {exportError}
               </span>
             )}
@@ -931,7 +931,7 @@ export function PrivacySection() {
             borderBottom: '1px solid rgba(218,119,86,0.25)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--chat-accent-primary, #c8892a)',
+            color: 'var(--chat-accent-primary)',
           }}
         >
           Danger zone
