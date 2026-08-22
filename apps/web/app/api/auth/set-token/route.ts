@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -43,17 +44,23 @@ export async function POST(request: NextRequest) {
   let verifiedUserId: string | null = null;
 
   if (parsed.token) {
+    const secretKey = process.env['CLERK_SECRET_KEY'];
+    if (!secretKey) {
+      logger.error({}, 'CLERK_SECRET_KEY not configured');
+      return NextResponse.json({ ok: false, error: 'Server configuration error' }, { status: 500 });
+    }
+
+    let authorizedParties: string[];
+    try {
+      authorizedParties = getClerkAuthorizedParties();
+    } catch (error) {
+      logger.error({ error }, 'Clerk authorized parties are not configured');
+      return NextResponse.json({ ok: false, error: 'Server configuration error' }, { status: 500 });
+    }
+
     try {
       const { verifyToken } = await import('@clerk/backend');
-      const secretKey = process.env['CLERK_SECRET_KEY'];
-      if (!secretKey) {
-        logger.error({}, 'CLERK_SECRET_KEY not configured');
-        return NextResponse.json(
-          { ok: false, error: 'Server configuration error' },
-          { status: 500 },
-        );
-      }
-      const claims = await verifyToken(parsed.token, { secretKey });
+      const claims = await verifyToken(parsed.token, { secretKey, authorizedParties });
       if (!claims.sub) {
         return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 401 });
       }

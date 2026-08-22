@@ -12,6 +12,7 @@ import {
 } from '@/lib/server/developer-token';
 import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
 export interface AuthResult {
   userId: string;
@@ -62,13 +63,6 @@ export async function assertAccountActive(userId: string): Promise<void> {
   );
 }
 
-function getClerkAuthorizedParties(): string[] {
-  return (process.env['CLERK_AUTHORIZED_PARTIES'] ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 async function verifyBearerToken(token: string): Promise<AuthResult | null> {
   const developerToken = verifyDeveloperTokenSignature(token);
   if (developerToken) {
@@ -90,22 +84,29 @@ async function verifyBearerToken(token: string): Promise<AuthResult | null> {
     };
   }
 
+  const secretKey = process.env['CLERK_SECRET_KEY'];
+  if (!secretKey) return null;
+
+  let authorizedParties: string[];
+  try {
+    authorizedParties = getClerkAuthorizedParties();
+  } catch (error) {
+    logger.error(
+      { error },
+      'Clerk authorized parties are not configured; rejecting bearer token unverified for origin',
+    );
+    return null;
+  }
+
   try {
     const { verifyToken } = await import('@clerk/backend');
-    const secretKey = process.env['CLERK_SECRET_KEY'];
-    if (secretKey) {
-      const authorizedParties = getClerkAuthorizedParties();
-      const claims = await verifyToken(token, {
-        secretKey,
-        ...(authorizedParties.length > 0 ? { authorizedParties } : {}),
-      });
-      const sub = claims.sub;
-      if (typeof sub === 'string' && sub.length > 0) {
-        return {
-          userId: sub,
-          email: (claims as Record<string, unknown>)['email'] as string | undefined,
-        };
-      }
+    const claims = await verifyToken(token, { secretKey, authorizedParties });
+    const sub = claims.sub;
+    if (typeof sub === 'string' && sub.length > 0) {
+      return {
+        userId: sub,
+        email: (claims as Record<string, unknown>)['email'] as string | undefined,
+      };
     }
   } catch {
     // Not a valid Clerk token

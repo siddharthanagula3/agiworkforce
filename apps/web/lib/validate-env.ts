@@ -47,6 +47,7 @@ export function validateRequiredEnvVars(): ValidationResult {
     // APIs) answers 404 to everyone. That fail-closed default is deliberate, so
     // this is a warning rather than a critical variable.
     'AGI_PLATFORM_ADMIN_USER_IDS',
+    'IP_HASH_PEPPER',
   ];
 
   const priceIdVars = [

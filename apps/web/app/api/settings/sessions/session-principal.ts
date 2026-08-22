@@ -4,18 +4,12 @@ import { auth } from '@clerk/nextjs/server';
 import type { NextRequest } from 'next/server';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 import { createError } from '@/lib/errors';
 
 export interface SessionsPrincipal {
   userId: string;
   currentSessionId: string | null;
-}
-
-function clerkAuthorizedParties(): string[] {
-  return (process.env['CLERK_AUTHORIZED_PARTIES'] ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean);
 }
 
 async function clerkSessionIdFromBearer(token: string, userId: string): Promise<string | null> {
@@ -26,10 +20,9 @@ async function clerkSessionIdFromBearer(token: string, userId: string): Promise<
 
   try {
     const { verifyToken } = await import('@clerk/backend');
-    const authorizedParties = clerkAuthorizedParties();
     const claims = await verifyToken(token, {
       secretKey,
-      ...(authorizedParties.length > 0 ? { authorizedParties } : {}),
+      authorizedParties: getClerkAuthorizedParties(),
     });
     if (claims.sub !== userId) return null;
     const sid = (claims as Record<string, unknown>)['sid'];

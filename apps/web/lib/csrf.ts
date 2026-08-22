@@ -217,13 +217,15 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     return true;
   }
 
+  const secretKey = process.env['CLERK_SECRET_KEY'];
+  if (!secretKey) return false;
+
   try {
+    const { getClerkAuthorizedParties } = await import('@/lib/clerk-authorized-parties');
+    const authorizedParties = getClerkAuthorizedParties();
     const { verifyToken } = await import('@clerk/backend');
-    const secretKey = process.env['CLERK_SECRET_KEY'];
-    if (secretKey) {
-      const claims = await verifyToken(token, { secretKey });
-      if (claims.sub) return true;
-    }
+    const claims = await verifyToken(token, { secretKey, authorizedParties });
+    if (claims.sub) return true;
   } catch {
     // Not a valid Clerk token
   }

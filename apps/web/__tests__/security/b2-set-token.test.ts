@@ -1,5 +1,4 @@
-
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -26,6 +25,8 @@ vi.mock('@clerk/backend', () => ({
 }));
 
 process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
+process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+delete process.env['CLERK_AUTHORIZED_PARTIES'];
 
 import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/auth/set-token/route';
@@ -125,6 +126,43 @@ describe('set-token route (Clerk)', () => {
     expect(mockVerifyToken).toHaveBeenCalledTimes(1);
     expect(mockVerifyToken).toHaveBeenCalledWith('access-token-1234567890abcdef', {
       secretKey: 'test-clerk-secret-key',
+      authorizedParties: ['https://app.agiworkforce.test'],
+    });
+  });
+
+  describe('authorized-party (azp) binding', () => {
+    afterEach(() => {
+      delete process.env['CLERK_AUTHORIZED_PARTIES'];
+      process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+    });
+
+    it('binds verification to the deployment origin when CLERK_AUTHORIZED_PARTIES is unset', async () => {
+      mockVerifyToken.mockResolvedValue({ sub: 'user_abc123' });
+      await POST(makeRequest({ token: 'access-token-1234567890abcdef' }));
+      expect(mockVerifyToken).toHaveBeenCalledWith('access-token-1234567890abcdef', {
+        secretKey: 'test-clerk-secret-key',
+        authorizedParties: ['https://app.agiworkforce.test'],
+      });
+    });
+
+    it('uses the configured allowlist when CLERK_AUTHORIZED_PARTIES is set', async () => {
+      process.env['CLERK_AUTHORIZED_PARTIES'] =
+        'https://app.example.com, https://admin.example.com';
+      mockVerifyToken.mockResolvedValue({ sub: 'user_abc123' });
+      await POST(makeRequest({ token: 'access-token-1234567890abcdef' }));
+      expect(mockVerifyToken).toHaveBeenCalledWith('access-token-1234567890abcdef', {
+        secretKey: 'test-clerk-secret-key',
+        authorizedParties: ['https://app.example.com', 'https://admin.example.com'],
+      });
+    });
+
+    it('refuses to verify a token when no authorized party can be resolved', async () => {
+      delete process.env['NEXT_PUBLIC_APP_URL'];
+      mockVerifyToken.mockResolvedValue({ sub: 'user_abc123' });
+      const res = await POST(makeRequest({ token: 'access-token-1234567890abcdef' }));
+      expect(res.status).toBe(500);
+      expect(mockVerifyToken).not.toHaveBeenCalled();
+      expect(cookieWrites).toEqual([]);
     });
   });
 });
