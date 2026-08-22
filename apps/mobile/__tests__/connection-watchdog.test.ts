@@ -10,9 +10,13 @@ const mockSignalingClient = jest.fn().mockImplementation((options: unknown) => {
   return { sendSignal: jest.fn(), close: mockClose };
 });
 
+jest.mock('@/services/secureFetch', () => ({ secureFetch: jest.fn() }));
+
 jest.mock('@/services/manualPairing', () => ({
+  ...jest.requireActual('@/services/manualPairing'),
   claimManualPairingToken: (...args: unknown[]) => mockClaimManualPairingToken(...args),
-  normalizePairingInput: (raw: string) => raw.trim().replace(/[ -]/g, ''),
+  PAIRING_UPDATE_REQUIRED_MESSAGE: 'update-required',
+  PAIRING_SECRET_REQUIRED_MESSAGE: 'secret-required',
 }));
 
 jest.mock('@agiworkforce/utils/signaling', () => ({
@@ -64,7 +68,9 @@ import { useConnectionStore } from '../stores/connectionStore';
 
 const PAST_WATCHDOG_MS = 30_000;
 
-async function connectAndAwaitSignaling(code = 'ABCD EFGH IJKL') {
+const PAIRING_SECRET = '9f'.repeat(32);
+
+async function connectAndAwaitSignaling(code = `agiw3:ABCD EFGH IJKL:${PAIRING_SECRET}`) {
   useConnectionStore.getState().connect(code);
   await waitFor(() => {
     expect(mockSignalingClient).toHaveBeenCalled();
@@ -146,7 +152,7 @@ describe('Connection store connect watchdog', () => {
       new Error('That pairing code is invalid or expired. Generate a new code on Desktop.'),
     );
 
-    useConnectionStore.getState().connect('ABCD-EFGH-IJKL');
+    useConnectionStore.getState().connect(`agiw3:ABCD-EFGH-IJKL:${PAIRING_SECRET}`);
     await waitFor(() => {
       expect(useConnectionStore.getState().status).toBe('error');
     });
