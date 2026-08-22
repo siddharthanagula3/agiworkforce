@@ -278,6 +278,20 @@ export function MemoryEditor({
                       >
                         {fact.text}
                       </button>
+                      {/*
+                        A fact confined to a project reads as applying
+                        everywhere unless it says otherwise. The badge is the
+                        only thing distinguishing it from a global memory in
+                        this list.
+                      */}
+                      {fact.projectId ? (
+                        <span
+                          className="self-start rounded px-1.5 py-0.5 text-[10px] text-[var(--chat-text-secondary)]"
+                          style={{ background: 'var(--chat-surface-hover)' }}
+                        >
+                          Only in {fact.projectName ?? 'a project'}
+                        </span>
+                      ) : null}
                       <div className="flex items-center justify-between text-[10px] text-[var(--chat-text-muted)]">
                         <span>
                           {fact.pending ? (

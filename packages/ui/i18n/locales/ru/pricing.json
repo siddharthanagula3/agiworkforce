@@ -77,7 +77,7 @@
   "seatTotal_one": "{{count}} место · {{total}}/мес.",
   "seatTotal_other": "{{count}} мест · {{total}}/мес.",
   "perSeatPrice": "{{price}}/место/мес.",
-  "perSeatPriceAnnual": "{{price}}/место/год",
+  "perSeatPriceAnnual": "{{price}}/место/мес.",
   "seatTotalAnnual_one": "{{count}} место · {{total}}/год",
   "seatTotalAnnual_other": "{{count}} мест · {{total}}/год",
   "seatCadenceMonthly_one": "{{count}} место · ежемесячная оплата",

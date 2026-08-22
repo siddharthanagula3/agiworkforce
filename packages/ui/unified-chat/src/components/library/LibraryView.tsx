@@ -36,7 +36,7 @@ import {
   type SourceSurface,
 } from '@agiworkforce/types';
 import { GeneratedFileCard } from '../GeneratedFileCard';
-import { ArtifactRenderer } from '../ArtifactRenderer';
+import { ArtifactRenderer, type NativeExportFormat } from '../ArtifactRenderer';
 import { Button } from '@agiworkforce/ui';
 
 type OriginFilter = 'all' | 'generated' | 'uploaded';
@@ -156,6 +156,15 @@ export interface LibraryTransport {
   openPreview(uri: string): void;
   inlinePreviewUri?: (uri: string) => string;
   startChat?: () => void;
+  /** Native document export. Hosts that cannot produce a format must leave it
+   *  out of `nativeExportFormats` so the option is never offered. */
+  exportNative?: (
+    format: NativeExportFormat,
+    artifactId: string,
+    content: string,
+    title: string,
+  ) => Promise<void>;
+  nativeExportFormats?: readonly NativeExportFormat[];
 }
 
 interface PageState {
@@ -606,6 +615,10 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
                   item={item}
                   source={artifactSources[item.id]}
                   onRetry={() => void loadArtifactSource(item)}
+                  {...(transport.exportNative ? { exportNative: transport.exportNative } : {})}
+                  {...(transport.nativeExportFormats
+                    ? { nativeExportFormats: transport.nativeExportFormats }
+                    : {})}
                 />
               ) : null}
               <div className="flex flex-col gap-2 border-t border-[var(--chat-border)] px-3 py-2">
@@ -769,10 +782,14 @@ function ArtifactSection({
   item,
   source,
   onRetry,
+  exportNative,
+  nativeExportFormats,
 }: {
   item: LibraryItem;
   source: ArtifactSource | undefined;
   onRetry: () => void;
+  exportNative?: LibraryTransport['exportNative'];
+  nativeExportFormats?: readonly NativeExportFormat[];
 }) {
   if (!source || source.status === 'loading') {
     return (
@@ -814,6 +831,8 @@ function ArtifactSection({
           content: source.content,
           createdAt: item.created_at,
         }}
+        {...(exportNative ? { onExportNative: exportNative } : {})}
+        {...(nativeExportFormats ? { nativeExportFormats } : {})}
       />
     </div>
   );

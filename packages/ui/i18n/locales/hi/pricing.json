@@ -77,7 +77,7 @@
   "seatTotal_one": "{{count}} सीट · {{total}}/माह",
   "seatTotal_other": "{{count}} सीटें · {{total}}/माह",
   "perSeatPrice": "{{price}}/सीट/माह",
-  "perSeatPriceAnnual": "{{price}}/सीट/वर्ष",
+  "perSeatPriceAnnual": "{{price}}/सीट/माह",
   "seatTotalAnnual_one": "{{count}} सीट · {{total}}/वर्ष",
   "seatTotalAnnual_other": "{{count}} सीटें · {{total}}/वर्ष",
   "seatCadenceMonthly_one": "{{count}} सीट · मासिक बिलिंग",
