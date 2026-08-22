@@ -258,7 +258,7 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
 
   const handleDownload = useCallback(
     () => void downloadImage(imageUrl, `ai-${mediaKind}-${Date.now()}`),
-    [imageUrl],
+    [imageUrl, mediaKind],
   );
 
   // Close on Escape

@@ -2,6 +2,10 @@ import { useEffect, useCallback } from 'react';
 import { safePlatform } from '@shared/utils/browser-utils';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 
+// A fresh [] each render changes the identity every time and defeats the
+// memoization below, which is what the exhaustive-deps warning was pointing at.
+const EMPTY_SHORTCUT_IDS: string[] = [];
+
 export interface KeyboardShortcut {
   id: string;
   key: string;
@@ -73,7 +77,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     enabled = true,
   } = options;
 
-  const disabledIds = useSettingsStore((state) => state.disabledShortcutIds) ?? [];
+  const disabledIds = useSettingsStore((state) => state.disabledShortcutIds) ?? EMPTY_SHORTCUT_IDS;
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {

@@ -3,7 +3,7 @@
   "registeredWithoutFrontendCaller": [
     {
       "command": "document_edit_excel",
-      "reason": "Agent-selected tool, not a renderer command. The LLM tool executor calls the Rust function directly (core/llm/tool_executor/document_tools.rs) after tool_guard approval; there is deliberately no invoke() call site because no UI drives spreadsheet editing. Registered so the same entry point is reachable if a UI is added. No document_edit_word counterpart exists on purpose — see docs/adr/wire-or-cut.md."
+      "reason": "Agent-selected tool, not a renderer command. The LLM tool executor calls the Rust function directly (core/llm/tool_executor/document_tools.rs) after tool_guard approval; there is deliberately no invoke() call site because no UI drives spreadsheet editing. Registered so the same entry point is reachable if a UI is added. No document_edit_word counterpart exists on purpose \u2014 see docs/adr/wire-or-cut.md."
     },
     {
       "command": "llm_list_llamacpp_models",
@@ -97,7 +97,7 @@
     },
     {
       "command": "chat_detect_intent",
-      "reason": "DELETE: Regex intent classifier over the user’s message. sys/commands/chat/intent.rs is self-contained - detect_user_intent and matches_stop_intent have no Rust caller - and the only client is the unreachable apps/desktop/src/api/chat.ts. The mounted composer stops generation with chat_stop_generation (apps/desktop/src/runtime/TauriRuntime.ts) rather than pre-classifying the text. Delete the wrapper and its lib.rs registration."
+      "reason": "DELETE: Regex intent classifier over the user\u2019s message. sys/commands/chat/intent.rs is self-contained - detect_user_intent and matches_stop_intent have no Rust caller - and the only client is the unreachable apps/desktop/src/api/chat.ts. The mounted composer stops generation with chat_stop_generation (apps/desktop/src/runtime/TauriRuntime.ts) rather than pre-classifying the text. Delete the wrapper and its lib.rs registration."
     },
     {
       "command": "chat_is_stop_command",
@@ -105,7 +105,7 @@
     },
     {
       "command": "clear_project_memories",
-      "reason": "WIRE: Clears a project folder’s memories - the user-facing half of a memory store that can currently only be written to. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
+      "reason": "WIRE: Clears a project folder\u2019s memories - the user-facing half of a memory store that can currently only be written to. The mounted apps/desktop/src/stores/projectMemoryStore.ts already invokes save_project_context, get_project_memories and search_project_memories against the same core/agi/project_memory.rs store; this command is the half that was left behind in the unreachable apps/desktop/src/api/projectMemory.ts. Wire it from projectMemoryStore.ts."
     },
     {
       "command": "coord_get_pending_approvals",
@@ -126,42 +126,6 @@
     {
       "command": "execute_code",
       "reason": "WIRE: Sandboxed multi-language runner, already gated - sys/commands/code_execution.rs:59-75 calls request_confirmation_simple before running anything. Its only client is canvasRunCodeViaTauri in apps/desktop/src/stores/editingStore.ts, and the whole canvas tree (features/canvas, features/dynamic-canvas) is unmounted, so this decision rides on the canvas wire-or-cut call in docs/adr/wire-or-cut.md. Separately: it is absent from apps/desktop/.hitl-required-tools.yaml, so nothing in CI guards that confirmation gate."
-    },
-    {
-      "command": "form_undo_attempt",
-      "reason": "DELETE: Attempts to reverse a recorded submission. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
-    },
-    {
-      "command": "form_undo_can_undo",
-      "reason": "DELETE: Predicate over the empty store. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
-    },
-    {
-      "command": "form_undo_clear",
-      "reason": "DELETE: Empties the store. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
-    },
-    {
-      "command": "form_undo_clear_old",
-      "reason": "DELETE: Evicts aged entries from the store. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
-    },
-    {
-      "command": "form_undo_get",
-      "reason": "DELETE: Reads one recorded submission. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
-    },
-    {
-      "command": "form_undo_list",
-      "reason": "DELETE: Lists recorded submissions. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
-    },
-    {
-      "command": "form_undo_list_undoable",
-      "reason": "DELETE: Lists reversible submissions. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
-    },
-    {
-      "command": "form_undo_record",
-      "reason": "DELETE: The only writer into FormUndoManager. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
-    },
-    {
-      "command": "form_undo_stats",
-      "reason": "DELETE: Reports counts over the store. core/agent/form_undo.rs stores submissions in a RwLock<Vec<_>> capped at 100 (sys/commands/undo.rs:31) with no persistence, and nothing in Rust calls get_form_undo_manager except these commands - the store has no producer, so every reader can only return an empty list. A form-undo safety net with no recorder and no survival across restart is product scope, not a wiring job. Delete the nine wrappers, their lib.rs registrations, and the form half of apps/desktop/src/api/undo.ts."
     },
     {
       "command": "get_architectural_decisions",
@@ -242,30 +206,6 @@
     {
       "command": "task_update_progress",
       "reason": "DELETE: Updates progress in the duplicate store. sys/commands/task_persistence.rs holds a second TaskManager - an in-memory HashMap with no persistence and no producer - that collides by name with the shipped features/tasks::TaskManager started at lib.rs:1135 and driven from the mounted apps/desktop/src/stores/backgroundTaskStore.ts and stores/chat/agentStore.ts through bg_*/background_task_*. Wiring it would give the user a second, permanently empty task list. Delete the wrapper, its lib.rs registration, and apps/desktop/src/api/taskPersistence.ts."
-    },
-    {
-      "command": "undo_can_undo",
-      "reason": "DELETE: Returns get_undo_summary(...).revertible_changes > 0 (sys/commands/undo.rs:119-127). It is a pure derivation of undo_get_summary, which core/llm/tool_executor/mod.rs already exposes as an agent tool, and it has no client of its own. Delete the wrapper and its lib.rs registration."
-    },
-    {
-      "command": "undo_change",
-      "reason": "KEEP: Reverts one identified agent change. Users reach this through the LLM tool executor, not the renderer: core/llm/tool_executor/mod.rs dispatches it to core/llm/tool_executor/undo_tools.rs behind sys/security/tool_guard.rs, which is exactly what sys/commands/undo.rs documents (\"reverse AGI actions through natural language\"). The renderer door is deliberately absent, same class as document_edit_excel. The SIX-32 claim that no user path can trigger it was wrong. apps/desktop/src/api/undo.ts is a dead duplicate client and goes with the rest of that file."
-    },
-    {
-      "command": "undo_get_changes",
-      "reason": "KEEP: Lists revertible agent changes. Users reach this through the LLM tool executor, not the renderer: core/llm/tool_executor/mod.rs dispatches it to core/llm/tool_executor/undo_tools.rs behind sys/security/tool_guard.rs, which is exactly what sys/commands/undo.rs documents (\"reverse AGI actions through natural language\"). The renderer door is deliberately absent, same class as document_edit_excel. The SIX-32 claim that no user path can trigger it was wrong. apps/desktop/src/api/undo.ts is a dead duplicate client and goes with the rest of that file."
-    },
-    {
-      "command": "undo_get_summary",
-      "reason": "KEEP: Summarises revertible agent changes. Users reach this through the LLM tool executor, not the renderer: core/llm/tool_executor/mod.rs dispatches it to core/llm/tool_executor/undo_tools.rs behind sys/security/tool_guard.rs, which is exactly what sys/commands/undo.rs documents (\"reverse AGI actions through natural language\"). The renderer door is deliberately absent, same class as document_edit_excel. The SIX-32 claim that no user path can trigger it was wrong. apps/desktop/src/api/undo.ts is a dead duplicate client and goes with the rest of that file."
-    },
-    {
-      "command": "undo_last",
-      "reason": "KEEP: Reverts the most recent agent change. Users reach this through the LLM tool executor, not the renderer: core/llm/tool_executor/mod.rs dispatches it to core/llm/tool_executor/undo_tools.rs behind sys/security/tool_guard.rs, which is exactly what sys/commands/undo.rs documents (\"reverse AGI actions through natural language\"). The renderer door is deliberately absent, same class as document_edit_excel. The SIX-32 claim that no user path can trigger it was wrong. apps/desktop/src/api/undo.ts is a dead duplicate client and goes with the rest of that file."
-    },
-    {
-      "command": "undo_task",
-      "reason": "WIRE: Reverts every change belonging to one task, which undo_last(task_id) only partly covers. Its siblings reach users as agent tools rather than through the renderer, so wire it the same way: dispatch in core/llm/tool_executor/mod.rs, handler beside the others in core/llm/tool_executor/undo_tools.rs, risk entry in sys/security/tool_guard.rs. Do not revive apps/desktop/src/api/undo.ts for it."
     },
     {
       "command": "update_memory_importance",

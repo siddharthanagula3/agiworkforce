@@ -211,6 +211,10 @@ import {
 } from '../stores/image-transcript-recovery-store';
 import { toUserMessage } from '@/lib/user-error-message';
 
+// A fresh [] each render changes the identity every time and defeats the
+// memoization below, which is what the exhaustive-deps warning was pointing at.
+const EMPTY_NAV_IDS: string[] = [];
+
 type SendMeta = {
   /** Composer work mode at send time ('chat' | 'agiwork'). */
   workMode?: CloudWorkMode;
@@ -4194,7 +4198,7 @@ export default function WebChatPage() {
   // WebAppShell. This file used to keep its own copy, which drifted (it was
   // missing Tasks entirely, and hardcoded `isActive: true` for Chat so the
   // selection was wrong on /chat/[sessionId]). Add or reorder destinations there.
-  const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? [];
+  const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
 
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
