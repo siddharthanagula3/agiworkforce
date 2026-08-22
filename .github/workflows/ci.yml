@@ -319,6 +319,18 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm exec turbo run typecheck --affected
 
+      - name: VS Code extension project-reference DAG check
+        # `turbo run typecheck --affected` runs each package's own
+        # `tsc --noEmit`, which resolves @agiworkforce/types and
+        # @agiworkforce/client-runtime against their already-built dist/ —
+        # it does not rebuild the composite project-reference graph from
+        # source. check:refs (`tsc -b tsconfig.build.json`) is the only thing
+        # that does, and is the only thing that would catch a broken
+        # `references` path, a dependency missing `composite: true`, or (as
+        # found while wiring this in) a consumer left out of sync with an
+        # in-flight change to @agiworkforce/types' exports.
+        run: pnpm --filter agi-workforce check:refs
+
       - name: Test
         # Vitest/Jest packages already own internal worker pools. Bounding the
         # outer Turbo graph prevents scheduler starvation from turning fast,
@@ -330,6 +342,20 @@ jobs:
         # in jsdom and fails if any contain syntax errors. Catches the class
         # of bug where TypeScript syntax leaks into a JS template literal.
         run: pnpm --filter agi-workforce test:webview
+
+      - name: Test CLI npm wrapper
+        # apps/cli/npm is intentionally outside pnpm-workspace.yaml (it's the
+        # npm-publish staging package, not a workspace member) and has zero
+        # dependencies, so this needs no install — it guards bin/agi.js, the
+        # actual entrypoint every `npx agi`/`npm i -g` install resolves to.
+        # Lives in js-verify (unconditional), not rust-desktop-cli, on
+        # purpose: apps/cli/npm/** DOES set rust-desktop-cli's
+        # native_changed gate too (production-deploy-scope.mjs's `isWithin`
+        # prefix-matches all of apps/cli, Rust crate and npm folder alike),
+        # but a check for a JS file should not depend on a Rust-named job's
+        # scope classifier to be the one thing keeping it alive.
+        working-directory: apps/cli/npm
+        run: node --test test/agi.test.mjs
 
       # CRIT-018. This step scanned NOTHING for an unknown but long period, and
       # reported success while doing it.

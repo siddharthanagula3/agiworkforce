@@ -1,7 +1,7 @@
 # Competitive Gap Analysis — AGI Workforce vs ChatGPT · Claude · Gemini · Manus
 
-**Date:** 2026-08-15 · **Branch:** `compliance/dpdp` · **Commit:** `e15df56e3`
-**Benchmark:** `~/Downloads/competitive-product-research` (68 files, 4 products, live browser session, same date)
+**Filed:** 2026-08-15 · **Re-verified:** 2026-08-20 · **Branch:** `compliance/dpdp`
+**Benchmark:** `~/Desktop/competitive-product-research` (68 files, 4 products, live browser session, same date)
 
 ---
 
@@ -69,21 +69,38 @@ and re-run.
 pass shows a user hitting a broken or incorrect experience against these four
 benchmarks. The product works. What follows is parity and polish.
 
-By state:
+By state, as re-verified on **2026-08-20**:
 
-| State               | Count  | What it means                                    |
-| ------------------- | ------ | ------------------------------------------------ |
-| MISSING             | 82     | Doesn't exist                                    |
-| PARTIAL             | 45     | Reachable but thinner than the benchmark         |
-| **BUILT_NOT_WIRED** | **20** | **Works, but no user can reach it**              |
-| DIFFERENT_BY_DESIGN | 11     | Deliberate divergence, filed so it stays visible |
-| PRESENT_WORSE       | 10     | We ship it; ours is weaker                       |
+| State               | Count | 15 Aug | What it means                                    |
+| ------------------- | ----- | ------ | ------------------------------------------------ |
+| MISSING             | 79    | 82     | Doesn't exist                                    |
+| **FIXED**           | **36**| 0      | **Shipped since this audit was filed**           |
+| PARTIAL             | 27    | 45     | Reachable but thinner than the benchmark         |
+| **BUILT_NOT_WIRED** | **6** | 20     | **Works, but no user can reach it**              |
+| DIFFERENT_BY_DESIGN | 11    | 11     | Deliberate divergence, filed so it stays visible |
+| PRESENT_WORSE       | 9     | 10     | We ship it; ours is weaker                       |
 
-### The single most important number is 20
+### Read the 15 Aug column as history, not status
 
-Twenty capabilities are **finished and unreachable** — and 8 of them are S-effort.
-This is the cheapest quality the product will ever buy. The pattern repeats across
-domains: someone built the destination and nobody built the door.
+Thirty-six rows were shipped between 15 and 20 August. A row here is a **claim to
+re-check, not a fact** — every `FIXED` entry carries `verifiedOn` and
+`verifiedEvidence` naming the implementation that closed it, and the rows that
+survived carry their original evidence unchanged.
+
+Two rows were scored wrong rather than stale, and both were caught by re-reading
+the code rather than trusting the row: `G4` (the reports gallery IS reachable, via
+the ResearchPanel `library` tab, which passes no `conversationId`) and
+`settings-21-gap` (`toolAccessMode` sits in `REMOVED_PERSISTED_SETTINGS_KEYS` — it
+is deliberate migration cleanup, never dead code).
+
+### BUILT_NOT_WIRED is down from 20 to 6
+
+The pattern the original audit named — someone built the destination and nobody
+built the door — was real, and most of it has been closed. What remains is
+`settings-03-gap`, `settings-07-gap`, `settings-08-gap` (desktop PR automation,
+still only a barrel re-export), plus `ART-CANVAS-03`, `memory-13-gap` and
+`sched-gap-14`, the last of which is blocked on `sched-gap-01` and not actionable
+on its own.
 
 The eight small ones, in full: the artifacts gallery (P1), the mobile Skills screen
 (P1), the voice settings page (P1), destructive-action confirmation falling back to

@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: f495ef48ac098d39e6f5dfe1a1f1c99a9221cf35aceba4aec5f0cf50efaac861 -->
+<!-- ui-gaps-csv-sha256: cb53bec47c3eb3117863112b9d72d10829af9b94ecff850632e72fd89121a06e -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,24 +21,24 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 0 P1, 154 P2, 43 P3.
+- Unresolved: 0 P0, 0 P1, 136 P2, 40 P3.
 
-| Surface          | Gaps |
-| ---------------- | ---: |
-| mobile           |  114 |
-| desktop          |  142 |
-| web              |   43 |
-| extension        |    5 |
-| extension-vscode |   37 |
+| Surface | Gaps |
+| --- | ---: |
+| mobile | 114 |
+| desktop | 142 |
+| web | 43 |
+| extension | 5 |
+| extension-vscode | 37 |
 
-| Status      | Gaps |
-| ----------- | ---: |
-| Open        |  197 |
-| In Progress |    0 |
-| Blocked     |    0 |
-| Deferred    |    0 |
-| Done        |   71 |
-| Not Planned |   73 |
+| Status | Gaps |
+| --- | ---: |
+| Open | 176 |
+| In Progress | 0 |
+| Blocked | 0 |
+| Deferred | 0 |
+| Done | 82 |
+| Not Planned | 83 |
 
 ## P0
 
@@ -799,7 +799,7 @@ Mobile now boots the shared i18next runtime before the navigator appears and exp
 
 **Evidence**
 
-apps/mobile/src/i18n/index.ts owns device-language detection, preference validation, encrypted-MMKV read/write, the shared @agiworkforce/i18n corpus, and safe restoration. app/\_layout.tsx awaits restoration after MMKV initialization so the first navigable frame uses the chosen language. settings/general/index.tsx renders the translated General, Language, and Storage labels plus active native language; settings/app-language/index.tsx renders the searchable Match device and 12-locale radio list. The authenticated drawer registers the hidden route and navigation types include it. app-language-settings.test.tsx verifies General navigation, default selection, explicit choice, and native-name search; mobile-i18n.test.ts verifies corpus translation, persistence, device fallback, and invalid-value handling.
+apps/mobile/src/i18n/index.ts owns device-language detection, preference validation, encrypted-MMKV read/write, the shared @agiworkforce/i18n corpus, and safe restoration. app/_layout.tsx awaits restoration after MMKV initialization so the first navigable frame uses the chosen language. settings/general/index.tsx renders the translated General, Language, and Storage labels plus active native language; settings/app-language/index.tsx renders the searchable Match device and 12-locale radio list. The authenticated drawer registers the hidden route and navigation types include it. app-language-settings.test.tsx verifies General navigation, default selection, explicit choice, and native-name search; mobile-i18n.test.ts verifies corpus translation, persistence, device fallback, and invalid-value handling.
 
 **Suggested fix**
 
@@ -4132,15 +4132,15 @@ Add an 'Automatically use → Web search' switch in General (or make the Capabil
 
 **Gap**
 
-The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '**default**' project key with no UI), so users must re-set it repeatedly.
+The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '__default__' project key with no UI), so users must re-set it repeatedly.
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('**default**')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('__default__')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
 
 **Suggested fix**
 
-Add an 'Intelligence' row in General bound to the existing agentControlStore '**default**' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
+Add an 'Intelligence' row in General bound to the existing agentControlStore '__default__' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
 
 **Reference screenshot(s)**
 
@@ -4205,7 +4205,7 @@ The reference lets users make voice the default launch surface ('Start ChatGPT w
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx; apps/mobile/app/(app)/(tabs)/chat.tsx (voice overlay opened only via handleOpenVoiceMode); grep 'start with voice|launch.\*voice' — no match
+apps/mobile/src/features/settings/voice/index.tsx; apps/mobile/app/(app)/(tabs)/chat.tsx (voice overlay opened only via handleOpenVoiceMode); grep 'start with voice|launch.*voice' — no match
 
 **Suggested fix**
 
@@ -4895,7 +4895,7 @@ The reference prints each tool's accelerator on its launcher row (Review ^⇧G, 
 
 **Evidence**
 
-apps/desktop/src/constants/shortcuts.ts (ids: new-chat, clear, copy-last, voice-input, settings, search, navigate-_, model-select, toggle-sidebar, minimize, fullscreen, zoom-_; no panel tools)
+apps/desktop/src/constants/shortcuts.ts (ids: new-chat, clear, copy-last, voice-input, settings, search, navigate-*, model-select, toggle-sidebar, minimize, fullscreen, zoom-*; no panel tools)
 
 **Suggested fix**
 
@@ -4987,7 +4987,7 @@ Reference models browsing permission as a default ('Always ask') plus per-site o
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines 336-346; apps/desktop/src/features/browser/\* (BrowserViewer, BrowserActionLog) has no permission UI; grep -i 'always ask|per-site|cookies' across those dirs — no match
+apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines 336-346; apps/desktop/src/features/browser/* (BrowserViewer, BrowserActionLog) has no permission UI; grep -i 'always ask|per-site|cookies' across those dirs — no match
 
 **Suggested fix**
 
@@ -5056,7 +5056,7 @@ The reference shows a device card with a manual refresh icon and a proper empty 
 
 **Evidence**
 
-apps/desktop/src/stores/connectionStore.ts (single MobileCompanionState session, no device roster); apps/desktop/src/features/mobile-companion/\* contains no device list component
+apps/desktop/src/stores/connectionStore.ts (single MobileCompanionState session, no device roster); apps/desktop/src/features/mobile-companion/* contains no device list component
 
 **Suggested fix**
 
@@ -5079,7 +5079,7 @@ Reference offers 'Keep this Mac awake — Prevent sleep when computer is plugged
 
 **Evidence**
 
-grep -i 'keep.\*awake|prevent sleep|while locked' across apps/desktop/src — no match
+grep -i 'keep.*awake|prevent sleep|while locked' across apps/desktop/src — no match
 
 **Suggested fix**
 
@@ -5493,7 +5493,7 @@ Reference has a 'Picture in picture' group with 'Always hide picture in picture 
 
 **Evidence**
 
-apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.\*overlay' across apps/desktop/src — no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
+apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.*overlay' across apps/desktop/src — no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
 
 **Suggested fix**
 
@@ -5539,7 +5539,7 @@ Reference offers 'Keep this Mac awake — prevent sleep when the computer is plu
 
 **Evidence**
 
-searched 'keep.\*awake', 'prevent sleep' and 'power' across apps/desktop/src — no match; apps/desktop/src/features/settings/GeneralSettings.tsx only covers window preferences and system resources
+searched 'keep.*awake', 'prevent sleep' and 'power' across apps/desktop/src — no match; apps/desktop/src/features/settings/GeneralSettings.tsx only covers window preferences and system resources
 
 **Suggested fix**
 
@@ -5896,14 +5896,14 @@ Completed. Keep starters attached to executable Desktop owners, preserve the use
 
 ### GAP-256 — Payment methods and plan cancellation are Stripe-portal redirects, not inline controls
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Billing — Payment methods + Cancel plan
 
 **Gap**
 
-Reference shows an inline payment-methods list (card brand icon, last4, Default badge, per-card overflow menu, Add new) and an inline 'Cancel plan' row with reassurance copy ('you'll keep full access until the end of your billing period') and a Cancel button. agiworkforce's BillingSection shows only a single default-card summary and routes every payment/cancel action through an external 'Manage billing' Stripe portal link.
+Closed 2026-08-21 as a deliberate architecture choice, with the real half shipped. Inline card management means handling card entry in our own UI; the Stripe Customer Portal keeps card data out of this application entirely. The genuinely missing half — no cancel path at all — shipped today: Billing has a Cancel plan button deep-linking into the portal cancellation flow scoped to the stored subscription, answering 409 with the routes that still work when a portal has cancellation disabled.
 
 **Evidence**
 
@@ -5919,14 +5919,14 @@ Either build inline payment-method list + cancel-plan UI using Stripe's Payment 
 
 ### GAP-257 — Connector catalog has no New/Community/Trending badges, popularity ranking, or verified indicator
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-copy
 - **Reference:** Claude · web · Connector directory (New/Community/Trending badges, #N popular ranking, verified checkmark)
 
 **Gap**
 
-Reference connector cards show status badges (New, Community, Trending), a popularity rank ('#2 popular'), and a verified checkmark next to official connectors. agiworkforce's static connector catalog (connectors.ts) has no such fields.
+Closed 2026-08-21 on the rule the connectors panel already states in its own header: no download counts or popularity numbers anywhere, because there are no real metrics. A ranking invented from nothing is the fake-availability defect this goal exists to remove. The genuine discovery need was met by the role-based Suggested-for row shipped today (GAP-269).
 
 **Evidence**
 
@@ -5942,14 +5942,14 @@ Add badge/rank/verified fields to the Connector type and data, and render them o
 
 ### GAP-258 — Sidebar nav items cannot be shown/hidden by the user
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** Claude · web · Customize sidebar modal (toggle which nav items show)
 
 **Gap**
 
-Claude lets users open a 'Customize sidebar' modal from the 'More' menu with checkboxes to show/hide Artifacts, Routines, Dispatch, and Customize in the left rail. agiworkforce's WebSidebar.tsx has a fixed, non-configurable item list ('customize' nav item instead routes to a persona/instructions page, not a visibility-toggle modal).
+Closed 2026-08-21. The rail carries nine destinations, so this matters more here than in the reference. Settings > General gains a Sidebar items row of per-destination switches; buildAppNavItems filters on the persisted hidden list. Chat is marked non-hideable at the source, so no stored or hand-edited value can leave a rail with no route back to conversations.
 
 **Evidence**
 
@@ -5965,14 +5965,14 @@ Add a 'Customize sidebar' modal (checkbox list of optional nav items: Artifacts,
 
 ### GAP-259 — 'Improve the model for everyone' and 'Location' toggles intentionally removed as dead controls
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Data controls — Improve the model / Location
 
 **Gap**
 
-Reference has toggles for opting into model-training data sharing and for location-aware responses. agiworkforce's PrivacySection.tsx has an explicit code comment explaining both were removed because they persisted but had zero consumers (no training pipeline to gate, no location collection to gate) — a switch that saves but changes nothing was judged worse than no switch.
+Already resolved correctly; re-adding would reverse it. PrivacySection states in place that locationMetadata and improveModelTraining "persisted correctly but had zero consumers anywhere — a switch that saves but changes nothing is a dead control", and to restore them only once a consumer ships. Verified 2026-08-21.
 
 **Evidence**
 
@@ -5995,7 +5995,7 @@ Build the underlying location-context and training-opt-in pipelines, then re-add
 
 **Gap**
 
-Reference seeds every account's Projects list with an 'Example project' card ('How to use Claude') that doubles as an interactive onboarding guide the user can chat with. agiworkforce's Projects page has no onboarding/example project seeding logic — new accounts start with an empty Projects list.
+Needs a founder decision, 2026-08-21. Buildable — projects, instructions and knowledge files all exist — but it means creating a row in a real account at signup the user did not ask for, and writes to production per signup. Recorded in FoundersAssistance.md rather than shipped unilaterally.
 
 **Evidence**
 
@@ -6011,14 +6011,14 @@ On first account creation, seed a 'How to use AGI' example project (with a proje
 
 ### GAP-261 — Web Personalization lacks style/tone + characteristics controls that mobile already has
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Personalization — Base style/tone + Characteristics
 
 **Gap**
 
-Reference shows a 'Base style and tone' dropdown plus four 'Characteristics' dropdowns (Warm, Enthusiastic, Headers & Lists, Emoji). agiworkforce's mobile app already implements this (StylePresetSelector + 4 response-style sliders), but apps/web/features/settings/sections/GeneralSection.tsx only exposes a single free-text 'Instructions for AGI' box — the structured style controls were never ported to web.
+INVERTED then closed 2026-08-21. Chasing this found the real defect: mobile ships the style preset and four sliders, they sync under the "personalization" namespace, and NOTHING on the server read that namespace — every slider a mobile user moved was stored and discarded. Read path wired first (buildCustomInstructionsPreamble now emits a <response_style> block); web then gained the same controls, writing the SAME namespace, so the surfaces cannot diverge.
 
 **Evidence**
 
@@ -6034,14 +6034,14 @@ Port the mobile StylePresetSelector and the four characteristic sliders (or equi
 
 ### GAP-262 — No 'Fast answers' or 'Suggested prompts' toggles on any surface
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Personalization — Fast answers / Suggested prompts
 
 **Gap**
 
-Reference has two behavior toggles below Characteristics: 'Fast answers' (allow general-knowledge fast responses that skip memory/personalization) and 'Suggested prompts' (generate suggestions based on searching connected plugins). Neither concept exists anywhere in agiworkforce.
+Resolved 2026-08-21 against an existing founder decision. Suggestion chips were REMOVED from every surface on 2026-08-06 by founder direction — GreetingBanner records it — so re-adding them would reverse a deliberate product call. "Fast answers" has no server-side counterpart either. One real find while checking: GreetingBanner still declared an onSendMessage prop it stopped reading, and TWO callers threaded a handler into it; prop and both pass-throughs removed.
 
 **Evidence**
 
@@ -6080,14 +6080,14 @@ If/when a recording feature ships, add a 'Record mode' subsection under Memory w
 
 ### GAP-264 — Scheduled tasks empty state has no suggested-template gallery to drive adoption
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-copy
 - **Reference:** Claude · web · Scheduled tasks empty state with suggested templates
 
 **Gap**
 
-Claude's empty Scheduled Tasks page shows six ready-to-use template cards (Weekly review, Meeting prep, Inbox triage, Content ideas, Daily briefing, Monitor a topic) each with a description and default cadence, letting first-time users create a schedule in one click. agiworkforce's SchedulesPage.tsx shows only a generic dashed-border empty state with an icon, 'No schedules yet' heading, one sentence of copy, and a single 'Create Your First Schedule' button — no templates.
+Closed 2026-08-21. The empty Schedules page now offers six template cards, each with a description and a plain-English cadence. A card opens the SAME create dialog with the draft pre-filled — it seeds the form, it does not create a schedule. Tests pin that every template sets only keys the draft has, never inherits the one-shot default, and that the one placeholder prompt is visibly marked.
 
 **Evidence**
 
@@ -6126,14 +6126,14 @@ Add an Advanced Security subsection to Settings > Security with: an enrollment f
 
 ### GAP-266 — No public @username/handle field anywhere in account settings
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings > Account
 
 **Gap**
 
-ChatGPT's Account panel has an editable 'Username' row (@agiautomationllc) alongside Name and Email, used to identify the user publicly (e.g. on shared GPTs). AGIW's AccountSection.tsx exposes Name/Email editing via GeneralSection/Profile but has no username/handle concept at all in the data model or UI.
+Closed 2026-08-21: the surface these identify a user ON does not exist. Skills and plugins are not user-publishable here, and shared sessions and published artifacts render no author on the public page. A public handle would collect identity data with nowhere to display it. If user-published skills ever ship, the identity question belongs to that work.
 
 **Evidence**
 
@@ -6149,14 +6149,14 @@ Add a Username field to AccountSection (or GeneralSection/Profile) with availabi
 
 ### GAP-267 — No public creator/builder profile screen for shared Skills/Plugins
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Settings > Account > GPT builder profile
 
 **Gap**
 
-ChatGPT lets a user configure a public 'GPT builder profile' shown to users of their published GPTs: a name-visibility toggle, Links section (website domain, LinkedIn, GitHub each with Add), and a feedback-email opt-in. AGIW has a Skills/Plugins marketplace (features/skills, features/plugins, /settings/skills) but no equivalent author-facing public profile screen.
+Closed 2026-08-21: same as GAP-266 — no public creator surface exists. Building a creator profile would stand up a public-exposure surface ahead of any need for one.
 
 **Evidence**
 
@@ -6179,11 +6179,11 @@ Add a 'Creator profile' section under Settings > Skills (or a new top-level sect
 
 **Gap**
 
-Claude surfaces a 'Claude in Chrome' settings page inside the main web Settings modal with a master enable toggle and a 'Site permissions' section (default policy for all sites, applying to both the extension and desktop in-app browser). agiworkforce has a separate Chrome extension app (apps/extension) but no corresponding page inside apps/web Settings to centrally manage its enablement or default site-access policy.
+Blocked on a sync channel, verified 2026-08-21. The extension already has working site permissions (site-allowlist.ts, site-permission-policy.ts) but they live in chrome.storage, and cloud-bridge syncs conversations only. A web page written today would set values the extension never reads — a page that claims to block a site and does not is worse than no page.
 
 **Evidence**
 
-Searched apps/web for 'Enable Claude in Chrome', 'site permission', 'default policy' style copy — no matches; settings nav list has no 'Chrome'/extension entry (see apps/web/app/settings/\* directory listing).
+Searched apps/web for 'Enable Claude in Chrome', 'site permission', 'default policy' style copy — no matches; settings nav list has no 'Chrome'/extension entry (see apps/web/app/settings/* directory listing).
 
 **Suggested fix**
 
@@ -6195,14 +6195,14 @@ Add a Settings > Browser Extension page in apps/web that surfaces an enable/disa
 
 ### GAP-269 — Connectors settings lacks a 'Popular' quick-connect row and a Type (Desktop/Web) column
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · visual-polish
 - **Reference:** Claude · web · Settings > Connectors (Popular cards + Type/Status table)
 
 **Gap**
 
-Reference tops the Connectors list with three large 'Popular' quick-connect cards (Gmail, Google Drive, Slack) above a table that includes a Type column (Desktop vs Web) alongside Status (checkmark / dash / Connect button). agiworkforce's ConnectorsPage.tsx uses a master-detail list with status filters (All/Connected/Ready/Coming soon) but no Popular hero row and no Type column.
+Partly stale, now closed 2026-08-21. The Connector | Type | Status table and the filter already existed, and custom MCP servers already surface as Type "Custom". The missing quick-connect row now sits above the directory, sourced from the work description General settings collects. Labelled "Suggested", never "Popular" — there are no install counts and an invented ranking would be a fake metric.
 
 **Evidence**
 
@@ -6229,7 +6229,7 @@ The reference screenshot is captured on claude.ai (web) yet shows the exact list
 
 **Evidence**
 
-grep -i 'installed on your computer|desktop.\*extension' under apps/web — no relevant settings-page match (only marketing copy pages)
+grep -i 'installed on your computer|desktop.*extension' under apps/web — no relevant settings-page match (only marketing copy pages)
 
 **Suggested fix**
 
@@ -6241,14 +6241,14 @@ Sync installed-extension state from desktop to the account backend and render a 
 
 ### GAP-271 — Keyboard shortcuts are read-only — no per-shortcut toggle, remap, or Restore defaults
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings > Keyboard
 
 **Gap**
 
-ChatGPT has a full 'Keyboard' item in the Settings nav where every shortcut can be individually enabled/disabled via a toggle switch, remapped by clicking the key combo and typing new keys, and reset via a 'Restore defaults' button. AGIW's KeyboardShortcutsDialog.tsx is a static, non-interactive reference list opened via Cmd+/, not reachable from the Settings modal nav (WebSettingsModal.tsx section list has no 'keyboard' entry).
+Partly closed 2026-08-21. Per-shortcut enable/disable and Restore defaults ship, and they are real: the matcher in use-keyboard-shortcuts was a hardcoded list PARALLEL to KEYBOARD_SHORTCUT_DOCS, so a switch over the documented list would have been decorative. It is now driven by the registry and skips disabled ids. Remapping is NOT shipped and is tracked rather than half-built.
 
 **Evidence**
 
@@ -6264,14 +6264,14 @@ Add a Keyboard section to the settings modal nav that reuses the shortcut regist
 
 ### GAP-272 — Skills settings data model lacks 'last updated' and 'author' metadata, and no Browse/Add actions
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** Claude · web · Settings > Skills (table: Skill / Last updated / Author)
 
 **Gap**
 
-Reference's Skills settings list shows a table with Skill name, Last updated date, and Author (e.g., Anthropic) columns, plus a top-right Browse button and an Add dropdown for creating/installing new skills. agiworkforce's /api/skills-backed state in WebSettingsModal.tsx maps each skill to only {id, name, description, source, tab} — no lastUpdated or author field — and wires no Browse or Add handler for the skills section.
+Closed 2026-08-21 with one deliberate substitution. Browse already existed and an Author column already rendered. The reference third column is "Last updated" — the skills source exposes no modified time and a date from load time would be fiction. Every bundled SKILL.md carries a real frontmatter version (all 9 do), so a Version column ships instead, optional the whole way, rendering an em dash when a bundle declares none.
 
 **Evidence**
 
@@ -6287,14 +6287,14 @@ Extend the /api/skills response and the SettingsSkill mapping to include lastUpd
 
 ### GAP-273 — Web settings nav is missing Storage, Safety and Parental controls that mobile ships
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-ia
 - **Reference:** ChatGPT · web · Settings modal navigation
 
 **Gap**
 
-Reference nav runs General, Notifications, Personalization, Plugins, Voice, Billing, Usage, Data controls, Cloud browser, Storage, Safety, Security and login, Parental controls, Trusted contact, Account. agiworkforce web has no storage, safety or parental-controls destination even though the mobile app implements all three, so the same account exposes different safety controls per surface.
+Resolved 2026-08-21 by checking all three claims. SAFETY is stale — SafetySection ships and is in the nav. STORAGE: the only quota-enforced storage is project knowledge and its meter shipped today. PARENTAL CONTROLS should not be ported: mobile’s screen is informational and reports device-local isMinorMode()/ageGate state that exists nowhere in apps/web; a web screen describing that mechanism would be a claim about a protection the web surface does not have.
 
 **Evidence**
 
@@ -6310,14 +6310,14 @@ Add web settings sections for Storage (per-type usage + clear), Safety and Paren
 
 ### GAP-274 — Plugin catalogue is a 4-entry preview that installs nothing
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
 - **Reference:** Codex · VS Code extension · Settings — Plugins list, framework/template entries
 
 **Gap**
 
-Reference's list runs to 22 installable plugins spanning capabilities (Documents, PDF, Sites), connectors (GitHub, Google Drive, Vercel) and framework/template packs (Build iOS/macOS/MCP/Web Apps, Expo, Default templates, Codex Browser Recorder), each enabled in place. agiworkforce's marketplace is honest about its state but is four demo entries on a page that says installation is not open and 'Nothing here installs yet', so there is no path from browsing to using a plugin on any surface.
+CODE CLAIM IS STALE — verified against production 2026-08-21. Installing works and matters: installWebPlugin runs and listEnabledPluginIdsForUser gates real skill availability in the request-processor, tool-loop and /api/skills; production holds 1 real installation. What is true is that plugin_registry_entries has only 4 rows, so the catalogue LOOKS like a dead preview. Content gap, not engineering — recorded in FoundersAssistance.md.
 
 **Evidence**
 
@@ -6333,14 +6333,14 @@ Prioritise an installable first-party set (documents/PDF/spreadsheets/presentati
 
 ### GAP-275 — Web General lacks contrast and accent-color controls that mobile already ships
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings › General
 
 **Gap**
 
-Reference General offers Appearance, Contrast and Accent color alongside Language. agiworkforce web offers only a theme switch and display language; a high-contrast component exists in the codebase but is mounted nowhere, and accent colour is mobile-only — so accessibility and personalisation regress when a user moves from phone to web.
+STALE — verified 2026-08-21: GeneralSection renders both AccentColorRow and HighContrastRow, and AppearancePreferences stamps data-accent and data-contrast. Web has had these controls; the record predates them.
 
 **Evidence**
 
@@ -6356,18 +6356,18 @@ Add Contrast (System / More contrast) and Accent color rows to GeneralSection, w
 
 ### GAP-276 — No account-level intelligence/effort defaults with usage-cost warning copy
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings › General
 
 **Gap**
 
-Reference exposes 'Higher intelligence' (auto-escalate on complex questions) and 'Enable Ultra effort' with the warning that it runs multiple agents in parallel and consumes usage limits faster, plus 'Enable Dictation'. agiworkforce only lets a user pick reasoning effort per message in the composer flyout; there is no persisted default and no cost warning.
+Closed 2026-08-21 for the parts that are real. An account-level default effort already persists and now splits by entitlement. The missing half was cost copy: effort raises ANTHROPIC_THINKING_BUDGET from 4096 to 65536, a real 16x ceiling, and nothing said so. The row now states it as a CEILING — "think up to 16x longer" — not a spend. Auto-escalation and parallel-agent mode are NOT built: neither exists server-side.
 
 **Evidence**
 
-apps/web/features/chat/components/Composer/**tests**/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings — no match
+apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings — no match
 
 **Suggested fix**
 
@@ -6379,14 +6379,14 @@ Add General rows for default reasoning effort / auto-escalation and an optional 
 
 ### GAP-277 — Notification preferences are grouped by channel instead of by event with a channel picker
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-ia
 - **Reference:** ChatGPT · web · Settings › Notifications
 
 **Gap**
 
-Reference uses one row per event with a right-aligned channel dropdown, which scales as channels are added. agiworkforce groups by channel first ('Browser notifications' heading) with boolean switches, so the same event would need duplicate switches once email and push land.
+STALE — verified 2026-08-21. NotificationsSection is already event-first: an EVENTS array of one entry per event, each with its own channels array rendered as per-channel switches. Every key also has a real consumer, so no switch is decorative.
 
 **Evidence**
 
@@ -6409,7 +6409,7 @@ Restructure the section as event-first rows with a multi-select channel control 
 
 **Gap**
 
-Reference ends with a Tasks row carrying an inline 'Manage tasks' link into the tasks surface, and a Usage row promising notification when limits reset. agiworkforce has tasks, schedules and usage limits but no notification category for either and no cross-link from settings into the managing surface.
+Blocked on a delivery path, verified 2026-08-21. Every notification key that ships has a real consumer; a usage-limit-reset category would have none — nothing watches the rolling windows and fires on reset. Shipping the switch first would be a preference nothing reads.
 
 **Evidence**
 
@@ -6425,14 +6425,14 @@ Add 'Tasks & schedules' and 'Usage limits' notification rows, each with an inlin
 
 ### GAP-279 — No account-level cloud storage quota screen (Files/Images breakdown)
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Storage — account quota by Files/Images
 
 **Gap**
 
-Reference shows total storage used vs. a plan quota (e.g. '161 MB of 100 GB used') with drill-in rows for Files (size + count) and Images (size + count) to help users free up space. agiworkforce has a mobile Storage Manager, but it manages on-device downloaded model weights and app cache — a different scope — with no equivalent for cloud-account file/image storage on web or desktop.
+Closed 2026-08-21 for the storage that is actually capped. Project knowledge has an account-wide byte limit (Free 100 MB, Pro 1 GB) enforced on upload and previously invisible until it refused you. The GET now returns account usedBytes/limitBytes and the panel shows "X of Y storage used", ambering past 90%. The meter query is scoped identically to the cap query so it cannot show headroom the upload will refuse. A per-type Files/Images breakdown is NOT shipped: media_assets has no enforced quota.
 
 **Evidence**
 
@@ -6455,7 +6455,7 @@ Add a Settings > Storage page (web) showing total uploaded-attachment storage vs
 
 **Gap**
 
-Reference shows a Credits balance with a 'Buy credits' button and an 'Automatic recharge' toggle to top up usage beyond the plan allowance. agiworkforce's CreditAlertModal explicitly documents a 'locked product rule: no credit top-ups, ever' and only nudges users to upgrade tier, even though Stripe top-up webhook handling exists server-side (handleCreditTopUp).
+Premise is STALE, verified 2026-08-21. The CreditAlertModal this cites, and its "no credit top-ups, ever" text, no longer exist. Self-serve purchase SHIPS via startTopUpCheckout. What remains is AUTOMATIC RECHARGE, which has no server-side counterpart — recorded in FoundersAssistance.md as needing a decision, because it is a standing authorisation to charge a saved card while the user is absent.
 
 **Evidence**
 
@@ -6758,7 +6758,7 @@ Reference exposes 'Follow-up behavior: Queue | Steer' with copy explaining that 
 
 **Evidence**
 
-apps/extension-vscode/src/data/sendQueue.ts:1-45 (workspaceState-backed 'next'/'later' lanes via createMessageQueue) with no corresponding UI; searched webviewContent.ts for queue/steer controls — none. Interrupt path exists at ChatStateManager.ts (\_interruptActiveTurn).
+apps/extension-vscode/src/data/sendQueue.ts:1-45 (workspaceState-backed 'next'/'later' lanes via createMessageQueue) with no corresponding UI; searched webviewContent.ts for queue/steer controls — none. Interrupt path exists at ChatStateManager.ts (_interruptActiveTurn).
 
 **Suggested fix**
 
@@ -6892,7 +6892,7 @@ Extend the tier/usage payload to a per-model limit array and render one labelled
 
 **Gap**
 
-Reference converts a '// TODO: IMPLEMENT SCHEMA' comment into an agent task with one click from the editor. agiworkforce's CodeLens provider only attaches to function/class declaration lines and explicitly returns false for any line starting with //, #, _ or /_, so TODO comments carry no affordance at all.
+Reference converts a '// TODO: IMPLEMENT SCHEMA' comment into an agent task with one click from the editor. agiworkforce's CodeLens provider only attaches to function/class declaration lines and explicitly returns false for any line starting with //, #, * or /*, so TODO comments carry no affordance at all.
 
 **Evidence**
 
@@ -7738,18 +7738,18 @@ Maintain a panel/conversation history stack in the shell and add back/forward bu
 
 ### GAP-336 — No virtual 'Pet' companion personalization feature
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Personalization — Pet companion
 
 **Gap**
 
-Reference shows a 'Pet' section at the top of Personalization letting the user 'Choose a companion that works alongside you' via a 'Select pet' picker. This is a novelty/engagement feature with no equivalent anywhere in agiworkforce (the existing 'companion' code is an unrelated desktop-mobile pairing feature, not a virtual character).
+Closed 2026-08-21. A virtual pet companion is a novelty with nothing load-bearing behind it. Declined deliberately rather than left as an implied backlog item.
 
 **Evidence**
 
-apps/mobile/src/features/companion/\* is a desktop-mobile device-pairing feature, not a virtual pet; searched '\bpet\b', 'Select pet', 'virtual pet' across apps/web, apps/mobile, apps/desktop — zero relevant matches
+apps/mobile/src/features/companion/* is a desktop-mobile device-pairing feature, not a virtual pet; searched '\bpet\b', 'Select pet', 'virtual pet' across apps/web, apps/mobile, apps/desktop — zero relevant matches
 
 **Suggested fix**
 
@@ -7761,14 +7761,14 @@ Low priority novelty feature — consider only if competitive engagement metrics
 
 ### GAP-337 — No connected-CLI device management or device-code auth (CLI itself is 'coming soon')
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-feature
 - **Reference:** ChatGPT · web · Security and login — Secure sign in with ChatGPT (CLI connection)
 
 **Gap**
 
-Reference shows a 'Secure sign in with ChatGPT' section listing connected apps like Codex CLI with a Disconnect action, plus an 'Enable device code authorization for Codex' toggle for headless/remote sign-in with phishing-risk warning copy. agiworkforce's CLI is marked 'coming soon' in-app, so there is no connected-device list or device-code flow yet.
+Closed 2026-08-21. Device-code auth already worked end to end and connected-device management shipped today as Linked devices. The remaining security TOGGLE now ships in Settings > Security, enforced in api/auth/device/approve — approval is the enforceable point because starting the flow is unauthenticated, and no approval means no token.
 
 **Evidence**
 
@@ -7784,14 +7784,14 @@ Once the AGI CLI ships, add a 'Secure sign in with AGI' section to Settings > Se
 
 ### GAP-338 — Active sessions / log-out-all-devices lives under Account, not Security and login
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-ia
 - **Reference:** ChatGPT · web · Security and login — Sessions IA placement
 
 **Gap**
 
-Reference groups 'Active sessions' (device count, review/remove trusted devices, Log out all) under the Security and login page. agiworkforce implements an equivalent Active Sessions table with device/created/last-active columns and a 'Log out of all devices' action, but it is placed in AccountSection.tsx rather than SecuritySection.tsx, which is where a user familiar with the reference IA would look first.
+Reference conflict, resolved 2026-08-21 in favour of the other reference. ChatGPT groups Active sessions under "Security and login"; claude.ai puts Trusted devices and Active sessions under ACCOUNT, where ours already lives — confirmed from a live capture. Moving it would trade parity with one reference for parity with the other and churn a working surface.
 
 **Evidence**
 

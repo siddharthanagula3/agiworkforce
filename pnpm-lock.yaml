@@ -1341,6 +1341,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@4.2.2)
+      undici:
+        specifier: '>=8.9.0 <9'
+        version: 8.10.0
       unified:
         specifier: ^11.0.5
         version: 11.0.5

@@ -1,4 +1,29 @@
 /* eslint-disable */
+const RN_PACKAGE_SEGMENT = '/node_modules/react-native/';
+
+const reactNativePackageRoot = (specifier) => {
+  const resolved = require.resolve(specifier);
+  const end = resolved.lastIndexOf(RN_PACKAGE_SEGMENT);
+  return end === -1 ? resolved : resolved.slice(0, end + RN_PACKAGE_SEGMENT.length);
+};
+
+// Must stay above the require below. jest-expo resolves the bare specifier and
+// `react-native/Libraries/*` separately, so a workspace whose install is stale can
+// point them at two pnpm copies; @react-native/jest-preset then mocks NativeModules
+// on a package nothing loads and the require dies on an __fbBatchedBridgeConfig
+// invariant that names neither the stale install nor react-native.
+const bareReactNative = reactNativePackageRoot('react-native');
+const nestedReactNative = reactNativePackageRoot(
+  'react-native/Libraries/BatchedBridge/NativeModules',
+);
+if (bareReactNative !== nestedReactNative) {
+  throw new Error(
+    "react-native resolves to two different pnpm copies, so jest-expo's NativeModules mocks never reach the package under test. Run `pnpm install --frozen-lockfile` from the repo root.\n" +
+      `  react-native:      ${bareReactNative}\n` +
+      `  Libraries subpath: ${nestedReactNative}`,
+  );
+}
+
 const { Animated, NativeModules } = require('react-native');
 
 if (!NativeModules.UIManager) {
