@@ -10,6 +10,13 @@ import { isLocalProvider } from '../types/provider';
 
 type OpaExecutionMode = 'local_only' | 'byok' | 'cloud_managed';
 
+/**
+ * Mirrors CONSENT_SETTINGS_KEY in src-tauri/src/automation/computer_use/consent.rs,
+ * which owns it. Deleting the row can only withdraw desktop control, never grant
+ * it: the record it holds is sealed with a secret no renderer can reach.
+ */
+export const DESKTOP_CONSENT_SETTINGS_KEY = 'computer_use.consent';
+
 const opaExecutionMode = (): OpaExecutionMode =>
   selectPrivacyMode(useAppModeStore.getState()) === 'managed' ? 'cloud_managed' : 'local_only';
 
@@ -184,6 +191,7 @@ interface ComputerUseState {
 
   setComputerUseEnabled: (enabled: boolean) => void;
   setConsentAccepted: (accepted: boolean) => void;
+  revokeDesktopConsent: () => Promise<void>;
   addAllowedApp: (app: string) => void;
   removeAllowedApp: (app: string) => void;
   addDeniedApp: (app: string) => void;
@@ -244,10 +252,31 @@ export const useComputerUseStore = create<ComputerUseState>()(
       hideAppsOnTask: true,
 
       setComputerUseEnabled: (enabled: boolean) => {
-        if (!enabled) void get().cancelOpaTask();
-        set({ computerUseEnabled: enabled });
+        if (!enabled) {
+          void get().cancelOpaTask();
+          void get().revokeDesktopConsent();
+        }
+        set(
+          enabled
+            ? { computerUseEnabled: true }
+            : { computerUseEnabled: false, consentAccepted: false },
+        );
       },
       setConsentAccepted: (accepted: boolean) => set({ consentAccepted: accepted }),
+
+      revokeDesktopConsent: async () => {
+        try {
+          await invoke('settings_v2_delete', { key: DESKTOP_CONSENT_SETTINGS_KEY });
+        } catch (error) {
+          set(
+            (state) => {
+              state.error = `Failed to withdraw desktop control: ${String(error)}`;
+            },
+            undefined,
+            'computerUse/revokeDesktopConsent/error',
+          );
+        }
+      },
       addAllowedApp: (app: string) =>
         set((state) => {
           state.allowedApps.push(app);
