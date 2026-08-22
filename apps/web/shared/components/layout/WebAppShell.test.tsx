@@ -249,6 +249,26 @@ describe('WebAppShell responsive navigation', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('narrow: takes the page behind the open drawer out of the tab order', () => {
+    mediaState.matches = true;
+    render(
+      <WebAppShell>
+        <main>
+          <button type="button">behind the drawer</button>
+        </main>
+      </WebAppShell>,
+    );
+    const behind = screen.getByRole('button', { name: 'behind the drawer' });
+    const content = behind.closest('[inert]');
+    expect(content, 'background content is focusable while the drawer is open').toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+    expect(behind.closest('[inert]')).not.toBeNull();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(behind.closest('[inert]')).toBeNull();
+  });
+
   it('narrow: closes the drawer when the backdrop is clicked', () => {
     mediaState.matches = true;
     render(

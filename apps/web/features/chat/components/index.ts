@@ -24,4 +24,3 @@ export { VoiceInputButton } from './VoiceInputButton';
 
 export { ThinkingBlock } from './ThinkingBlock';
 
-export { ArtifactBlock } from './ArtifactBlock';

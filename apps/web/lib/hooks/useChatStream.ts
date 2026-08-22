@@ -78,6 +78,7 @@ import {
 } from '@/features/chat/lib/continue-generation';
 import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
+import { networkErrorMessage, toUserMessage } from '@/lib/user-error-message';
 import {
   buildApiMessageContent,
   durableAttachmentDescriptors,
@@ -197,6 +198,16 @@ function readServerQuotaRecovery(value: unknown): ServerQuotaRecovery | undefine
   return action && href ? { action, href } : undefined;
 }
 
+/**
+ * True only for an expired or missing session. A 403 is a permission answer and
+ * a 429 is a quota answer — neither means "sign in and try that again", so
+ * neither should repopulate the composer.
+ */
+function isSessionExpiredError(error: unknown): boolean {
+  if (error instanceof ChatApiError) return error.status === 401;
+  return false;
+}
+
 function readChatApiErrorPayload(
   payload: unknown,
   fallbackMessage: string,
@@ -230,13 +241,10 @@ function readChatApiErrorPayload(
 }
 
 function getVisibleErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message.trim();
-  }
   if (typeof error === 'string' && error.trim()) {
-    return error.trim();
+    return networkErrorMessage(error) ?? error.trim();
   }
-  return 'An unknown error occurred';
+  return toUserMessage(error, 'An unknown error occurred');
 }
 
 function buildAssistantErrorContent(message: string): string {
@@ -566,8 +574,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     updateMessage(assistantMessageId, { metadata: { ...current, ...patch } }, conversationId);
   };
 
-  const completeLocalStartingActivity = () => {
-    if (!currentAgentActivity || currentAgentActivity.lastSequence !== -1) return;
+  // The stream ending is itself the terminal signal: a run that never emitted a
+  // stop envelope (deep research, server tools) would otherwise keep rendering
+  // "Working…" under a finished answer.
+  const settleAgentActivity = () => {
+    if (!currentAgentActivity) return;
+    if (currentAgentActivity.status !== 'running') return;
+    if (suspended) return;
     currentAgentActivity = {
       ...currentAgentActivity,
       entries: currentAgentActivity.entries.map((entry) =>
@@ -1012,7 +1025,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     setSearching(assistantMessageId, false, conversationId);
     setExecutingCode(assistantMessageId, false, conversationId);
     if (finishReason) patchMessageMeta({ finishReason });
-    completeLocalStartingActivity();
+    if (followed.run.state !== 'awaiting_input' && followed.run.state !== 'paused') {
+      settleAgentActivity();
+    }
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
@@ -1076,7 +1091,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (streamErrorInfo) {
             patchMessageMeta({ streamError: streamErrorInfo });
           }
-          completeLocalStartingActivity();
+          settleAgentActivity();
           persistAssistant(fullAssistantContent);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
@@ -1447,7 +1462,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (streamErrorInfo) {
       patchMessageMeta({ streamError: streamErrorInfo });
     }
-    completeLocalStartingActivity();
+    settleAgentActivity();
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
@@ -1838,6 +1853,20 @@ export function useChatStream(): UseChatStreamReturn {
           );
         }
       } catch (error) {
+        // CAP-040: a turn interrupted by an expired session was unrecoverable.
+        // The composer clears on send, so by the time the 401 came back the
+        // user's text survived only as a failed turn in the transcript — sign
+        // back in and you retype it. Parking it as this conversation's draft
+        // repopulates the composer with exactly what they wrote. An existing
+        // draft wins: whatever they have typed since is newer than this.
+        if (isSessionExpiredError(error) && content.trim()) {
+          const store = useChatStore.getState();
+          // The store keys drafts by conversation id (web-chat-store.ts
+          // conversationKey), so a non-null id indexes directly.
+          if (!store.draftsByConversation?.[conversationId]) {
+            store.setDraftContent(content, conversationId);
+          }
+        }
         await handleStreamError(error, {
           assistantMessageId,
           model,
@@ -1999,6 +2028,7 @@ export function useChatStream(): UseChatStreamReturn {
 
         const errorMessage = getVisibleErrorMessage(error);
         const errorCode = error instanceof ChatApiError ? error.code : undefined;
+
         if (isFreeTrialErrorCode(errorCode)) {
           if (errorCode === 'free_trial_token_budget_reached') {
             useFreeTrialStore.getState().markLimitReached();

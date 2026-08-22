@@ -11,6 +11,7 @@ import {
   Label,
 } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type FeedbackKind = 'bug' | 'feature' | 'general';
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
@@ -105,7 +106,7 @@ export function ComposerFeedbackDialog({
     } catch (error) {
       setSubmitState('error');
       setErrorMessage(
-        error instanceof Error ? error.message : 'Could not send feedback. Please try again.',
+        toUserMessage(error, 'Could not send feedback. Please try again.'),
       );
     }
   };
