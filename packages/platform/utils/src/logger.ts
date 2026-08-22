@@ -1,4 +1,3 @@
-
 import type { SecretScanFinding } from '@agiworkforce/types';
 
 interface SecretRedactionPattern {
@@ -130,6 +129,18 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     pattern:
       /(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token|\bsecret\b|\btoken\b)["']?\s*[=:]\s*["']?(?!\[REDACTED)[^\s,'"}]{8,}["']?/gi,
     replacement: '$1=[REDACTED]',
+  },
+  {
+    id: 'compound-named-secret',
+    label: 'Named secret with a compound field name',
+    severity: 'high',
+    // `_` is a word character, so the named-secret rule's \bsecret\b never fires on
+    // snake_case field names such as `session_secret`. The leading boundary is consumed
+    // rather than asserted so the benign-`*_key` exclusion cannot be sidestepped by
+    // restarting the match one character into the field name.
+    pattern:
+      /(^|[^A-Za-z0-9_-])((?!(?:public|idempotency|partition|primary|foreign|composite|sort|row|object|cache|shard|group|index|locale|translation|column|query|search|route|storage|bucket|blob|map|dedupe?)[_-]keys?[^A-Za-z0-9])[A-Za-z0-9]+(?:[_-][A-Za-z0-9]+)*?[_-](?:secrets?|tokens?|passphrases?|credentials?|keys?))["']?\s*[=:]\s*["']?(?!\[REDACTED)[^\s,'"}]{8,}["']?/gi,
+    replacement: '$1$2=[REDACTED]',
   },
   {
     id: 'database-url-credentials',

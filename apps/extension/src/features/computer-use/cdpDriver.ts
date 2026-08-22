@@ -1,5 +1,8 @@
-
 import { SITE_ALLOWLIST_STORAGE_KEY, sanitizePageText } from '../../background/policy';
+import {
+  browserControlConsentRequiredMessage,
+  hasBrowserControlConsent,
+} from './browserControlConsent';
 
 export const REDACTED_FIELD_PLACEHOLDER = '[redacted password]';
 
@@ -594,9 +597,48 @@ export async function assertDestinationAllowlisted(url: string): Promise<void> {
   }
 }
 
+async function readTabOrigin(tabId: number): Promise<string | null> {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    return typeof tab?.url === 'string' && tab.url ? new URL(tab.url).origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Asserts a CDP-driven navigation may carry the debugged tab to `url`'s origin.
+ *
+ * The site allowlist authorizes ordinary page automation; attaching the DevTools
+ * Protocol is a separate, higher-bar per-origin grant. Crossing into another
+ * origin mid-run would otherwise exercise that grant somewhere the user never
+ * gave it, so the destination must carry the grant itself. A navigation that
+ * stays on the origin the tab is already on crosses no consent boundary and is
+ * already covered by the run's ownership re-check, which requires the grant for
+ * the tab's live origin before and after every operation.
+ *
+ * @throws {Error} when the destination origin lacks the grant. Like the
+ *   allowlist rejection this reaches the model as a tool error rather than
+ *   aborting the loop.
+ */
+export async function assertNavigationOriginConsented(tabId: number, url: string): Promise<void> {
+  const destination = new URL(url).origin;
+  if (destination === (await readTabOrigin(tabId))) return;
+  let browserControlGranted = false;
+  try {
+    browserControlGranted = await hasBrowserControlConsent(destination);
+  } catch {
+    browserControlGranted = false;
+  }
+  if (!browserControlGranted) {
+    throw new Error(`navigate: ${browserControlConsentRequiredMessage(destination)}`);
+  }
+}
+
 export async function navigate(tabId: number, url: string, signal?: AbortSignal): Promise<void> {
   throwIfCdpCancelled(signal);
   await assertDestinationAllowlisted(url);
+  await assertNavigationOriginConsented(tabId, url);
   throwIfCdpCancelled(signal);
   return withDebugger(
     tabId,

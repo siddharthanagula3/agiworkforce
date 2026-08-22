@@ -83,8 +83,10 @@ import {
   type ComputerUseRunLease,
 } from './features/computer-use/runOwnership';
 import {
+  BROWSER_CONTROL_CONSENT_STORAGE_KEY,
   browserControlConsentRequiredMessage,
   hasBrowserControlConsent,
+  sanitizeBrowserControlConsent,
 } from './features/computer-use/browserControlConsent';
 import {
   DISCOVERY_MESSAGE_TYPES,
@@ -1027,7 +1029,12 @@ function invalidateWebMCPToolsForNavigation(tabId: number): number {
 }
 
 function handleNativeMessage(message: NativeMessageEnvelope): void {
-  logger.debug('Received native message', message);
+  // The connect handshake carries session_secret (the raw HMAC key); never log the envelope.
+  logger.debug('Received native message', {
+    id: message?.id,
+    type: message?.type,
+    success: message?.success,
+  });
 
   const maybeSecret = (message as unknown as Record<string, unknown>)['session_secret'];
   if (typeof maybeSecret === 'string' && !nativeSessionSecret) {
@@ -2421,19 +2428,30 @@ chrome.storage.local
     }
   })
   .catch(() => {});
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY]) return;
-  const next = changes[SITE_ALLOWLIST_STORAGE_KEY].newValue;
-  siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
+function cancelActiveRunUnlessOriginStillApproved(approvedOrigins: ReadonlySet<string>): void {
   const lease = computerUseRuns.getActive();
   if (!lease) return;
   try {
-    if (siteAllowlistCache.has(new URL(lease.tabIntentUrl).origin)) return;
+    if (approvedOrigins.has(new URL(lease.tabIntentUrl).origin)) return;
   } catch {
     // Invalid stored intent is handled by the same fail-closed cancellation.
   }
   computerUseStartGeneration += 1;
   cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY]) return;
+  const next = changes[SITE_ALLOWLIST_STORAGE_KEY].newValue;
+  siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
+  cancelActiveRunUnlessOriginStillApproved(siteAllowlistCache);
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes[BROWSER_CONTROL_CONSENT_STORAGE_KEY]) return;
+  cancelActiveRunUnlessOriginStillApproved(
+    new Set(sanitizeBrowserControlConsent(changes[BROWSER_CONTROL_CONSENT_STORAGE_KEY].newValue)),
+  );
 });
 
 let quickModeCache = false;
@@ -2490,6 +2508,19 @@ async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<s
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
   if (!siteAllowlistCache.has(origin)) {
+    rejectComputerUseOwnership(lease, 'tab_intent_changed');
+  }
+
+  // The site allowlist only authorizes ordinary page automation. Full CDP control is a
+  // separate, higher-bar consent that must hold for whatever origin the tab is on *now*.
+  let browserControlGranted = false;
+  try {
+    browserControlGranted = await hasBrowserControlConsent(origin);
+  } catch {
+    browserControlGranted = false;
+  }
+  computerUseRuns.assertCurrent(lease);
+  if (!browserControlGranted) {
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
 
@@ -2580,7 +2611,11 @@ function handleMessage(
   const msg = message as ExtensionMessage;
 
   if (!isValidMessage(msg)) {
-    logger.warn('Invalid message received', message);
+    const rejectedType = (message as { type?: unknown } | null)?.type;
+    logger.warn('Invalid message received', {
+      type: typeof rejectedType === 'string' ? rejectedType : typeof message,
+      origin: sender.origin,
+    });
     sendResponse({ success: false, error: 'Invalid message format' } as ExtensionResponse);
     return false;
   }
