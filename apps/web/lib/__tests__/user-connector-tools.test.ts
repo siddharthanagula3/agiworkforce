@@ -48,6 +48,7 @@ import {
   __resetConnectorMcpMapCacheForTests,
 } from '../user-connector-tools';
 import { EgressPolicyError } from '@/lib/egress-policy';
+import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -240,6 +241,57 @@ describe('loadUserConnectorToolDefs — custom remote MCP plan limit', () => {
     expect(defs.map((definition) => definition.qualifiedName)).toEqual([
       'mcp__custom-aaaaaaaaaa__search',
     ]);
+  });
+});
+
+describe('catalog discovery carries the SSRF egress policy', () => {
+  const emptyCatalog = {
+    catalog: { version: 1, generatedAt: 0, servers: {}, tools: [] },
+    handles: [],
+  };
+
+  it('passes MCP_EGRESS_POLICY when discovering a custom connector', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('user_custom_connectors')) {
+        return Promise.resolve([
+          {
+            id: 'row-egress',
+            short_id: 'ffffffffff',
+            name: 'Egress',
+            url: 'https://egress-custom.mcp.example/mcp',
+            transport: 'streamable-http',
+            auth_header_enc: null,
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    mockBuildMcpToolCatalog.mockResolvedValue(emptyCatalog);
+
+    await loadUserConnectorToolDefs('user-egress-custom');
+
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalled();
+    for (const call of mockBuildMcpToolCatalog.mock.calls) {
+      expect(call[1]).toBe(MCP_EGRESS_POLICY);
+    }
+  });
+
+  it('passes MCP_EGRESS_POLICY when discovering an operator remote connector', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
+      connectors: [{ connectorId: 'egressremote', url: 'https://egress-remote.example/mcp' }],
+    });
+    __resetConnectorMcpMapCacheForTests();
+    stubDb({ activeConnectors: ['egressremote'] });
+    mockBuildMcpToolCatalog.mockResolvedValue(emptyCatalog);
+
+    await loadUserConnectorToolDefs('user-egress-remote');
+
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalled();
+    for (const call of mockBuildMcpToolCatalog.mock.calls) {
+      expect(call[1]).toBe(MCP_EGRESS_POLICY);
+    }
   });
 });
 

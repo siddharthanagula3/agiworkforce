@@ -407,9 +407,12 @@ async function buildRemoteConnectorCatalog(
   }
 
   try {
-    const { catalog, handles } = await buildMcpToolCatalog({
-      [entry.connectorId]: entryToMcpConfig(entry),
-    });
+    const { catalog, handles } = await buildMcpToolCatalog(
+      {
+        [entry.connectorId]: entryToMcpConfig(entry),
+      },
+      MCP_EGRESS_POLICY,
+    );
     for (const h of handles) {
       const old = _remoteHandles.get(h.serverName);
       _remoteHandles.set(h.serverName, h);
@@ -685,9 +688,12 @@ async function buildCustomConnectorCatalog(
 
   const serverId = customServerId(row.short_id);
   try {
-    const { catalog, handles } = await buildMcpToolCatalog({
-      [serverId]: customRowToMcpConfig(row),
-    });
+    const { catalog, handles } = await buildMcpToolCatalog(
+      {
+        [serverId]: customRowToMcpConfig(row),
+      },
+      MCP_EGRESS_POLICY,
+    );
     for (const h of handles) {
       const old = _customHandles.get(cacheKey);
       _customHandles.set(cacheKey, h);
@@ -918,9 +924,12 @@ async function buildOAuthConnectorCatalog(
   }
 
   try {
-    const { catalog, handles } = await buildMcpToolCatalog({
-      [target.connectorId]: oauthConnectorMcpConfig(target, accessToken, tokenType),
-    });
+    const { catalog, handles } = await buildMcpToolCatalog(
+      {
+        [target.connectorId]: oauthConnectorMcpConfig(target, accessToken, tokenType),
+      },
+      MCP_EGRESS_POLICY,
+    );
     for (const h of handles) {
       const old = _oauthHandles.get(cacheKey);
       _oauthHandles.set(cacheKey, h);
@@ -1181,9 +1190,12 @@ async function buildOrgSharedConnectorCatalog(
 
   const serverId = orgSharedServerId(row.org_short_id);
   try {
-    const { catalog, handles } = await buildMcpToolCatalog({
-      [serverId]: customRowToMcpConfig(row),
-    });
+    const { catalog, handles } = await buildMcpToolCatalog(
+      {
+        [serverId]: customRowToMcpConfig(row),
+      },
+      MCP_EGRESS_POLICY,
+    );
     for (const h of handles) {
       const old = _orgSharedHandles.get(cacheKey);
       _orgSharedHandles.set(cacheKey, h);

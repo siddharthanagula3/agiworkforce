@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 beforeEach(() => {
   vi.resetModules();
@@ -185,10 +185,13 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
 
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { buildMcpToolCatalog } = await import('../connect');
-    const result = await buildMcpToolCatalog({
-      good: { command: '/bin/echo' },
-      bad: { command: '/bin/false' },
-    });
+    const result = await buildMcpToolCatalog(
+      {
+        good: { command: '/bin/echo' },
+        bad: { command: '/bin/false' },
+      },
+      {},
+    );
 
     expect(result.catalog.tools).toHaveLength(1);
     expect(result.catalog.tools[0]?.toolName).toBe('t1');
@@ -221,14 +224,109 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
     });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { buildMcpToolCatalog } = await import('../connect');
-    const result = await buildMcpToolCatalog({
-      a: { command: '/bin/false' },
-      b: { command: '/bin/false' },
-    });
+    const result = await buildMcpToolCatalog(
+      {
+        a: { command: '/bin/false' },
+        b: { command: '/bin/false' },
+      },
+      {},
+    );
     expect(result.catalog.tools).toHaveLength(0);
     expect(Object.keys(result.catalog.servers)).toHaveLength(0);
     expect(result.handles).toHaveLength(0);
     expect(errSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('forwards the caller egress policy to every server transport', async () => {
+    vi.doMock('@modelcontextprotocol/client', () => {
+      class FakeClient {
+        constructor(public info: unknown) {}
+        async connect(): Promise<void> {}
+        getDiscoverResult(): undefined {
+          return undefined;
+        }
+        async close(): Promise<void> {}
+        async listTools(): Promise<{ tools: ToolListItem[] }> {
+          return { tools: [{ name: 't1' }] };
+        }
+        async callTool(): Promise<{ content: unknown[] }> {
+          return { content: [] };
+        }
+      }
+      return { Client: FakeClient, isInputRequiredResult: () => false };
+    });
+
+    const assertAllowedUrl = vi.fn();
+    const policy = { assertAllowedUrl, maxRedirects: 1 };
+    const { buildMcpToolCatalog } = await import('../connect');
+    const { resolveMcpTransport } = await import('../transport');
+
+    const result = await buildMcpToolCatalog(
+      {
+        one: { url: 'https://one.example/mcp' },
+        two: { url: 'https://two.example/mcp' },
+      },
+      policy,
+    );
+
+    expect(Object.keys(result.catalog.servers)).toEqual(['one', 'two']);
+    const calls = (resolveMcpTransport as unknown as Mock).mock.calls;
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      const forwarded = call[1] as { assertAllowedUrl?: unknown; maxRedirects?: number };
+      expect(forwarded.assertAllowedUrl).toBe(assertAllowedUrl);
+      expect(forwarded.maxRedirects).toBe(1);
+    }
+    await Promise.all(result.handles.map((h) => h.close()));
+  });
+
+  it('gives every transport a DNS-pinned fetch, so no catalog connection uses global fetch', async () => {
+    installClientMock(freshState());
+
+    const { buildMcpToolCatalog } = await import('../connect');
+    const { resolveMcpTransport } = await import('../transport');
+    const { createPinnedFetch } = await import('../pinned-fetch');
+
+    const result = await buildMcpToolCatalog(
+      { one: { url: 'https://one.example/mcp' } },
+      { assertAllowedUrl: vi.fn() },
+    );
+
+    const calls = (resolveMcpTransport as unknown as Mock).mock.calls;
+    expect(calls).toHaveLength(1);
+    const forwarded = calls[0]?.[1] as { fetch?: unknown };
+    expect(typeof forwarded.fetch).toBe('function');
+    expect(forwarded.fetch).not.toBe(globalThis.fetch);
+    expect(forwarded.fetch).not.toBe(createPinnedFetch);
+    await Promise.all(result.handles.map((h) => h.close()));
+  });
+});
+
+describe('resolveEgressPolicy — no connection is left without an address-pinned fetch', () => {
+  it('pins a caller that supplied no policy at all', async () => {
+    const { resolveEgressPolicy } = await import('../connect');
+    expect(typeof resolveEgressPolicy(undefined).fetch).toBe('function');
+    expect(typeof resolveEgressPolicy({}).fetch).toBe('function');
+  });
+
+  it('keeps a caller-supplied fetch instead of overriding it', async () => {
+    const { resolveEgressPolicy } = await import('../connect');
+    const callerFetch = vi.fn();
+    expect(resolveEgressPolicy({ fetch: callerFetch }).fetch).toBe(callerFetch);
+  });
+
+  it('separates the local trust context from the public one', async () => {
+    const { resolveEgressPolicy } = await import('../connect');
+    expect(resolveEgressPolicy({ allowPrivateNetwork: true }).fetch).not.toBe(
+      resolveEgressPolicy({}).fetch,
+    );
+  });
+
+  it('does not leak the trust-context flag into the transport policy', async () => {
+    const { resolveEgressPolicy } = await import('../connect');
+    expect(resolveEgressPolicy({ allowPrivateNetwork: true })).not.toHaveProperty(
+      'allowPrivateNetwork',
+    );
   });
 });
 

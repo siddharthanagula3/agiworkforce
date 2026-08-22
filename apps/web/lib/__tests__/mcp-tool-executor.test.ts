@@ -55,16 +55,21 @@ describe('Web MCP configuration', () => {
     process.env['WEB_MCP_SERVERS_JSON'] = remoteServerConfig();
     const { getWebMcpCatalog } = await import('../mcp-tool-executor');
 
+    const { MCP_EGRESS_POLICY } = await import('../mcp-egress-policy');
+
     await getWebMcpCatalog();
 
     expect(assertPublicHostnameMock).toHaveBeenCalledWith('https://mcp.example.com/mcp');
-    expect(buildMcpToolCatalogMock).toHaveBeenCalledWith({
-      search: {
-        url: 'https://mcp.example.com/mcp',
-        transport: 'streamable-http',
-        headers: { Authorization: 'Bearer secret' },
+    expect(buildMcpToolCatalogMock).toHaveBeenCalledWith(
+      {
+        search: {
+          url: 'https://mcp.example.com/mcp',
+          transport: 'streamable-http',
+          headers: { Authorization: 'Bearer secret' },
+        },
       },
-    });
+      MCP_EGRESS_POLICY,
+    );
   });
 
   it('rejects stdio servers in the managed Web runtime', async () => {

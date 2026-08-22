@@ -1,5 +1,6 @@
 import { Client, isInputRequiredResult } from '@modelcontextprotocol/client';
 
+import { createPinnedFetch } from './pinned-fetch';
 import { resolveMcpTransport, type McpEgressPolicy } from './transport';
 import type {
   McpCallToolResult,
@@ -172,17 +173,36 @@ export interface McpServerHandle {
   close(): Promise<void>;
 }
 
+export interface McpEgressOptions extends McpEgressPolicy {
+  allowPrivateNetwork?: boolean;
+}
+
 export interface ConnectMcpServerParams {
   serverName: string;
   config: McpServerConfig;
-  egressPolicy?: McpEgressPolicy;
+  egressPolicy?: McpEgressOptions;
+}
+
+const publicPinnedFetch = createPinnedFetch();
+const localPinnedFetch = createPinnedFetch({ allowPrivateAddresses: true });
+
+/**
+ * Every HTTP(S) transport gets a DNS-pinned fetch unless the caller supplied its own. An
+ * `assertAllowedUrl` check resolves the hostname and throws the addresses away, so leaving the
+ * connection on global fetch would re-resolve and let a rebind land the socket on an address
+ * nobody vetted.
+ */
+export function resolveEgressPolicy(policy: McpEgressOptions | undefined): McpEgressPolicy {
+  const { allowPrivateNetwork, ...rest } = policy ?? {};
+  if (rest.fetch) return rest;
+  return { ...rest, fetch: allowPrivateNetwork === true ? localPinnedFetch : publicPinnedFetch };
 }
 
 export async function connectMcpServer(params: ConnectMcpServerParams): Promise<McpServerHandle> {
   const { serverName, config } = params;
   const safeServerName = toSafeServerName(serverName);
 
-  const transport = resolveMcpTransport(config, params.egressPolicy ?? {});
+  const transport = resolveMcpTransport(config, resolveEgressPolicy(params.egressPolicy));
   const client = new Client(
     { name: CLIENT_NAME, version: CLIENT_VERSION },
     { versionNegotiation: VERSION_NEGOTIATION },
@@ -300,6 +320,7 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
 
 export async function buildMcpToolCatalog(
   servers: Record<string, McpServerConfig>,
+  egressPolicy: McpEgressOptions,
 ): Promise<{ catalog: McpToolCatalog; handles: McpServerHandle[] }> {
   const handles: McpServerHandle[] = [];
   const serverEntries: Record<string, McpServerCatalog> = {};
@@ -307,7 +328,7 @@ export async function buildMcpToolCatalog(
 
   for (const [serverName, config] of Object.entries(servers)) {
     try {
-      const handle = await connectMcpServer({ serverName, config });
+      const handle = await connectMcpServer({ serverName, config, egressPolicy });
       handles.push(handle);
       serverEntries[serverName] = handle.catalog;
       flatTools.push(...handle.catalog.tools);
