@@ -8,7 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { isDbUnavailableError } from '@/lib/db-error';
 import { createError, isAppError, type AppError } from '@/lib/errors';
-import { assertAccountActive } from '@/lib/api-auth';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { readJsonBody } from '@/lib/read-json-body';
 
 function errorResponse(err: AppError, headers?: Record<string, string>): NextResponse {
@@ -35,74 +35,17 @@ function errorResponse(err: AppError, headers?: Record<string, string>): NextRes
  * GET /api/admin/security?action=ips - Get top IP addresses
  * POST /api/admin/security?action=cleanup - Trigger log cleanup
  *
- * Requires admin authentication via service role or admin user.
+ * This surface reads and writes across every tenant, so it requires a platform
+ * operator on the AGI_PLATFORM_ADMIN_USER_IDS allowlist — not the self-service
+ * organisation admin/owner role.
  */
-
-type AdminAccess =
-  | { isAdmin: true; userId: string }
-  | { isAdmin: false; reason: string; appError: AppError };
-
-function adminDenied(reason: string, appError: AppError): AdminAccess {
-  return { isAdmin: false, reason, appError };
-}
-
-async function verifyAdminAccess(request: NextRequest): Promise<AdminAccess> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return adminDenied('Missing authorization header', createError.unauthorized());
-  }
-
-  let adminUserId: string;
-  try {
-    const { clerkClient, verifyToken } = await import('@clerk/nextjs/server');
-    const client = await clerkClient();
-
-    const payload = await verifyToken(authHeader.slice(7), {
-      secretKey: process.env['CLERK_SECRET_KEY'],
-    });
-    const userId = payload.sub;
-
-    if (!userId) {
-      return adminDenied('Invalid or expired token', createError.unauthorized());
-    }
-
-    const user = await client.users.getUser(userId);
-
-    const meta = user.publicMetadata as Record<string, unknown> | null | undefined;
-    const role = meta?.['role'];
-
-    if (role !== 'admin' && role !== 'owner') {
-      return adminDenied('User does not have admin privileges', createError.unauthorized());
-    }
-
-    adminUserId = userId;
-  } catch {
-    return adminDenied('Invalid or expired token', createError.unauthorized());
-  }
-
-  try {
-    await assertAccountActive(adminUserId);
-  } catch (error) {
-    return adminDenied(
-      'Admin account is suspended, banned, or unverifiable',
-      isAppError(error) ? error : createError.serviceUnavailable('Unable to verify account status'),
-    );
-  }
-
-  return { isAdmin: true, userId: adminUserId };
-}
 
 export async function GET(request: NextRequest) {
   try {
     const rateLimitResponse = await withRateLimit(request, 'admin-security');
     if (rateLimitResponse) return rateLimitResponse;
 
-    const access = await verifyAdminAccess(request);
-
-    if (!access.isAdmin) {
-      logger.warn({ error: access.reason }, 'Unauthorized security dashboard access attempt');
-      return errorResponse(access.appError);
-    }
+    await requirePlatformAdmin(request);
 
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'dashboard';
@@ -174,6 +117,10 @@ export async function GET(request: NextRequest) {
         );
     }
   } catch (error) {
+    if (isAppError(error)) {
+      logger.warn({ code: error.code }, 'Security dashboard request denied');
+      return errorResponse(error);
+    }
     logger.error({ error }, 'Error in security monitoring API');
     if (isDbUnavailableError(error)) {
       return errorResponse(createError.serviceUnavailable('Database temporarily unavailable'), {
@@ -192,14 +139,7 @@ export async function POST(request: NextRequest) {
     const csrfError = await requireCsrfToken(request);
     if (csrfError) return csrfError;
 
-    const access = await verifyAdminAccess(request);
-
-    if (!access.isAdmin) {
-      logger.warn({ error: access.reason }, 'Unauthorized security admin action attempt');
-      return errorResponse(access.appError);
-    }
-
-    const adminUserId = access.userId;
+    const { userId: adminUserId } = await requirePlatformAdmin(request);
 
     const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
     if (contentLength > 8192) {
@@ -399,6 +339,10 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
+    if (isAppError(error)) {
+      logger.warn({ code: error.code }, 'Security admin action denied');
+      return errorResponse(error);
+    }
     logger.error({ error }, 'Error in security admin action');
     if (isDbUnavailableError(error)) {
       return errorResponse(createError.serviceUnavailable('Database temporarily unavailable'), {
