@@ -430,7 +430,7 @@ const tsTargets = [
       'apps/desktop/src/utils/tokenCount.ts',
       'apps/desktop/src/utils/validation.ts',
     ],
-    maxKnownUnreachable: 241,
+    maxKnownUnreachable: 240,
   },
 ];
 
