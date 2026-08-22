@@ -1772,10 +1772,10 @@ The parked attempt (option-2 shape) is at
 
 ---
 
-## 38. Mobile TLS pinning: the mechanism now exists, but ops must choose the pinned keys and register the native plugin (security sweep 2026-08-21, `apps/mobile` F6)
+## 38. Mobile TLS pinning: the mechanism is built and wired, but ops must choose the pinned keys (security sweep 2026-08-21, `apps/mobile` F6)
 
-**Status:** `BLOCKED_BY_HUMAN` — needs a key/rotation decision and one line in a
-build config, not more application code.
+**Status:** `BLOCKED_BY_HUMAN` — needs a key/rotation decision and two reviewed
+commits (paste the pins, then flip the rollout), not more application code.
 
 **Blocks:** fully closing CLAUDE-SECURITY-20260821-170634 F6 (CWE-295, MEDIUM):
 `apps/mobile` ships placeholder SPKI pins, so every Clerk bearer token and every
@@ -1786,11 +1786,38 @@ terminate TLS to `api.agiworkforce.com` and harvest the Authorization header.
 **What this sweep changed**
 
 - `apps/mobile/lib/pinning.ts` no longer carries a hand-flipped
-  `PINNING_ENFORCED` literal. Enforcement is now derived:
-  `pinningEnforcedFor({ isDevOrTest })` is true only in a release runtime where
-  every required host carries a well-formed, non-placeholder SPKI hash. There is
-  no flag to flip and no state where the app claims to pin placeholders.
-- `apps/mobile/lib/runtimeMode.ts` classifies the build fail-closed: a runtime
+  `PINNING_ENFORCED` literal. Enforcement is derived:
+  `pinningStageFor({ isDevOrTest })` reaches `'enforced'` only in a release
+  runtime where every required host carries a well-formed, non-placeholder SPKI
+  hash. There is no state where the app claims to pin placeholders.
+- Provisioning and enforcement are deliberately **two** reviewed changes.
+  `PINNING_ROLLOUT` in the same file is `'report-only'`, and the derived stage is
+  never further along than it: pasting six real hashes changes no request and no
+  build output. It only makes a release build log, once per host,
+  `[pinning] rollout is report-only: "<host>" would be refused (<reason>) once
+PINNING_ROLLOUT … is 'enforced'`. That warning is the point of the stage:
+  enforcement turns `PINS_BY_HOST` into the app's entire allowlist, so every
+  localhost, LAN dispatch target and user-supplied BYOK base URL with no entry
+  would be cut off, and this is how they are found from a shipped build before
+  the flip rather than after it. `apps/mobile/native/withAGITlsPinning.cjs` reads
+  the same constant and emits nothing until it says `'enforced'`, so a wrong hash
+  cannot reach an installed binary on the paste alone.
+- `clerk.agiworkforce.com` is now one of `REQUIRED_PINNED_HOSTS` and has an entry
+  in `PINS_BY_HOST`. Clerk's SDK does its own networking and never reaches
+  `secureFetch`, so without it a build could satisfy every listed host, derive
+  `PINNING_ENFORCED = true`, and still hand the auth handshake — the exchange
+  that issues the bearer token this finding's exploit harvests — to whatever
+  certificate the OS trust store accepted. Only the native pin config can cover
+  that host, which is why it is required rather than optional.
+- A pinned host reached in absolute form (`https://api.agiworkforce.com./…`, and
+  the `%2e` spelling that normalizes to it) is refused with `reason:
+'ambiguous-host'`. The table now keys on the destination — trailing dots
+  stripped, as `packages/contracts/trust-boundaries` already does for the egress
+  guard — so the spelling no longer slips past the pin lookup, and the spelling
+  itself is rejected rather than treated as pinned because iOS `NSPinnedDomains`
+  and the Android pin-set match the name as written and would not apply their
+  pin-set to that form.
+- `apps/mobile/src/lib/runtimeMode.ts` classifies the build fail-closed: a runtime
   counts as dev/test only on an explicit signal (`__DEV__`, `NODE_ENV=test`,
   `EXPO_PUBLIC_APP_ENV=development`). A release build whose `NODE_ENV` was never
   set — which is every EAS profile in `apps/mobile/eas.json` — is treated as a
@@ -1802,16 +1829,106 @@ terminate TLS to `api.agiworkforce.com` and harvest the Authorization header.
   Android `network_security_config.xml` pin-set, wire the manifest attribute,
   and record the hosts they covered in `extra.tlsPinning`.
 - `apps/mobile/services/secureFetch.ts` reads that build-stamped host list back
-  through `expo-constants`. With enforcement on, a release build refuses a
-  pinned host (`PinningError`, `reason: 'no-native-enforcement'`) unless the
-  build really shipped the native config for that exact hostname. React
-  Native's `fetch` cannot inspect the peer certificate, so this is the only
-  honest signal the JS layer has.
+  through `expo-constants` and decides every request in one exported pure
+  function, `pinTransportVerdict`. React Native's `fetch` cannot inspect the peer
+  certificate, so the stamp is the only honest signal the JS layer has, and the
+  gate no longer hangs off `PINNING_ENFORCED` alone: **a release build that
+  compiled a native pin config and left a pinned host out of it refuses that host
+  at every rollout stage**, because the two halves disagree and that is a
+  shipping mistake rather than a rollout step (`reason:
+'no-native-enforcement'` when the table declares real pins, `reason:
+'unprovisioned-pins'` when it left a credential-bearing host on placeholders).
+  Only today's state — nothing declared, nothing compiled in — passes through,
+  which is what keeps this entry open.
+- Every outcome is now a named verdict, including the two that let a request
+  through (`natively-verified`, `no-pins-required`) and the one that is this
+  entry (`unverified-accepted`). Nothing reaches the network by falling off the
+  end of the decision. `unverified-accepted` is not silent: the first request a
+  release build sends to each pinned host it cannot verify logs one warning
+  naming the host, this finding and this entry, so the accepted gap shows up in
+  device logs and crash breadcrumbs instead of looking like normal traffic. Only
+  the host is logged — the paths and queries carry tokens.
+- A request that was really pinned may no longer be redirected off its host: once
+  the first hop is `natively-verified`, a response that came back from a host the
+  same build did not pin is refused with `reason: 'redirected-off-pinned-host'`
+  rather than returned. The one-shot gate only ever saw the first URL, and a
+  redirect is a second connection. This cannot fire on today's build (no hop is
+  verified), so no current request changes.
+- That check no longer treats silence as a same-host answer. A response whose URL
+  the transport never reported used to return early — React Native does not
+  always populate `Response.url` — which made the redirect defense fail open
+  exactly where it was needed. It now refuses with
+  `reason: 'unverifiable-final-url'`: a verified first hop says nothing about a
+  second connection, and a build that cannot see where the answer came from
+  cannot claim the pinned host sent it. Because that path only runs once a hop is
+  verified, the `'report-only'` stage cannot rehearse it, so a **provisioned**
+  report-only build logs `[pinning] responses from "<host>" do not report the URL
+they came from …` once per host instead. If that line appears at step 9.3, the
+  flip in 9.4 would refuse those responses and the transport has to be settled
+  first. Today's build cannot emit it (its table is placeholders), so nothing in
+  the shipped app changes.
+- The generated Android config is scoped to pinned hosts only, with no app-wide
+  `<base-config>`: a rule written there would apply to every endpoint the app can
+  reach, and this file has no opinion about LAN dispatch targets or BYOK base
+  URLs. (It buys no cleartext protection either way — `app.config.js` sets no
+  `android:usesCleartextTraffic`, so the platform default already blocks cleartext
+  at targetSdk 28+.) The security value is per host: `<trust-anchors>` with
+  `system` only, plus the `<pin-set>`. The `<trust-anchors>` restate the platform
+  default rather than add to it (apps targeting API 24+ already exclude user-added
+  CAs, and this app overrides no `targetSdkVersion`), so on Android it is the
+  `<pin-set>` that defeats this finding's attacker.
+- The prebuild now fails on a half-provisioned table. `withAGITlsPinning` reads
+  `REQUIRED_PINNED_HOSTS` from the same file it reads `PINS_BY_HOST` from and
+  throws if any required host is still a placeholder while others are real,
+  because that combination produces an installed app that refuses those hosts at
+  runtime with no over-the-air remedy. Provision all six in one change.
+- It also fails on `PINNING_ROLLOUT = 'enforced'` over a table that provisions
+  nothing at all — the one combination `apps/mobile/scripts/check-tls-pins.mjs`
+  used to catch and, per item 6 below, no longer can. Putting it in the plugin
+  makes it a property of every prebuild rather than of one release script, so no
+  artifact can be produced from a config that asks for enforcement with nothing
+  to enforce.
+- The refusal text for `no-native-enforcement` no longer tells the reader to add
+  the plugin to `app.config.js`; it is registered, and the remaining cause is an
+  artifact built before the rollout flip, which only a native build fixes.
+- `apps/mobile/app.config.js` now registers `'./native/withAGITlsPinning.cjs'`
+  in its `plugins` array, next to `'./native/android/withAGIShareIntent.cjs'`.
+  This was the wiring step the previous round left open, and without it the pin
+  table was inert no matter what it contained. Registering it also puts the
+  pinning state inside the fingerprint `runtimeVersion`: the plugin only changes
+  the evaluated Expo config once the rollout says `'enforced'`, so the flip
+  changes the fingerprint and cannot be delivered over the air to a binary that
+  compiled no pins — which would otherwise refuse every pinned host on a device
+  with no remedy but a store release.
 - `scripts/compute-spki-pins.mjs` captures the live chain for every host in the
   table and prints the paste-ready `PINS_BY_HOST` block plus both native blocks.
   `--clerk-key pk_live_…` adds the Clerk FAPI host.
-- Coverage: `apps/mobile/__tests__/pinning.test.ts` (71 tests). Eleven of them
-  fail against the pre-sweep `secureFetch.ts`.
+- Coverage: `apps/mobile/__tests__/pinning.test.ts` (149 tests), and the
+  enforcement assertions run the shipped `lib/pinning.ts` and
+  `services/secureFetch.ts` against the shipped pin table — only the build's own
+  `extra.tlsPinning` stamp is substituted, and one case stamps exactly what the
+  plugin itself emitted for a provisioned table, so the two halves are checked
+  against each other rather than against a hand-written expectation. The gate is
+  composed from an exported fact-gatherer (`pinTransportFacts`), so what the
+  shipped module actually reads — including the derived `PINNING_ENFORCED` — is
+  asserted directly instead of inferred, and the single fact standing between
+  today's build and a verified request (`pinsProvisioned`) is named by a test.
+  Reinstating the pre-sweep decision (`if (!enforced) return undefined; if
+(!pinsProvisioned) return 'unprovisioned-pins';`) turns 23 of them red. No test
+  asserts that the exploit path works: the shipped build's outcome is asserted as
+  the named verdict `{ allow: 'unverified-accepted' }` with no network call, and
+  the test that names it reads this file and fails if this entry stops naming
+  `BLOCKED_BY_HUMAN` and the plugin registration. A separate test asserts the
+  warning that state emits, so the accepted gap has to be announced to stay
+  accepted.
+- Two of those tests are the ones that would have caught this round's gap.
+  "is registered in app.config.js, so a provisioned table reaches a real build"
+  loads `app.config.js` and asserts the plugin entry unconditionally — its
+  predecessor returned early while the table was placeholders, which is exactly
+  why an unregistered plugin shipped as if it were a fix. "never changes a
+  request when the rollout only stages it, so the paste is safe" replays all 128
+  fact combinations at `'report-only'` and at `'off'` and requires identical
+  verdicts, so the staging step can never be the thing that breaks a build.
 
 **What is needed and from whom**
 
@@ -1822,6 +1939,7 @@ terminate TLS to `api.agiworkforce.com` and harvest the Authorization header.
    | ---------------------------------------------------- | ------------ | ---------------------- | -------------------------------------------------- |
    | `agiworkforce.com`                                   | 2026-11-06   | `YR1` (exp 2028-09-02) | `Root YR` (2032) / `ISRG Root X1` (2035)           |
    | `api.agiworkforce.com`, `signaling.agiworkforce.com` | 2026-11-04   | `YR2` (exp 2028-09-02) | `Root YR` (2032) / `ISRG Root X1` (2035)           |
+   | `clerk.agiworkforce.com`                             | 2026-10-25   | `WE1` (exp 2029-02-20) | `GTS Root R4` (2028) / `GlobalSign Root CA` (2028) |
    | `api.openai.com`                                     | 2026-10-06   | `WE1` (exp 2029-02-20) | `GTS Root R4` (2028) / `GlobalSign Root CA` (2028) |
    | `api.anthropic.com`                                  | 2026-10-22   | `WE1` (exp 2029-02-20) | `GTS Root R4` (2028) / `GlobalSign Root CA` (2028) |
 
@@ -1830,40 +1948,183 @@ terminate TLS to `api.agiworkforce.com` and harvest the Authorization header.
    hard-fails every installed app at the next rotation and no over-the-air
    update can repair it.
 
+   There is no pin-free way around this decision, which is why the entry is
+   blocked on it rather than on engineering. Android already refuses user- and
+   MDM-installed CAs by default at this target SDK, so the exposure that matters
+   is iOS, and iOS apps do trust those roots. Certificate Transparency does not
+   substitute: Apple deliberately exempts certificates issued by a locally
+   installed CA from CT so debugging proxies keep working, and
+   `NSRequiresCertificateTransparency` has been obsolete since iOS 16. Real
+   hashes in `NSPinnedDomains` are the only mechanism that refuses that
+   certificate.
+
 2. Same owner — decide whether `api.openai.com` and `api.anthropic.com` should
    be pinned at all. We do not control their rotation; both currently chain
    through Google's `WE1`, and a CA change on their side is a client-side outage
    with no remedy. Dropping them from `REQUIRED_PINNED_HOSTS` is a supported
-   answer.
-3. Same owner — before provisioning, inventory every host the app must reach.
-   Once enforcement is on, `secureFetch` refuses any host with no entry in
-   `PINS_BY_HOST` (this is pre-existing behaviour, asserted by
-   `apps/mobile/__tests__/secure-fetch.test.ts`), so local/LAN dispatch targets
-   and any model-download CDN need entries or a documented exemption.
-4. Mobile/native owner — add `'./native/withAGITlsPinning.cjs'` to the `plugins`
-   array in `apps/mobile/app.config.js` (outside this sweep's ownership, so it
-   was not touched) and rebuild. Without it the pins are inert: nothing compares
-   a certificate to them. `apps/mobile/__tests__/pinning.test.ts` fails the
-   build if a real pin ever lands without that registration. Note that
-   `EXPO_ENABLE_DETOX` builds cannot carry pins: `withAGIDetox` writes its own
-   `network_security_config.xml`, and Android has room for exactly one, so the
-   pinning plugin now throws instead of producing an artifact that claims to pin
-   while Android trusts whatever certificate it is handed.
+   answer. `clerk.agiworkforce.com` carries the same third-party rotation risk
+   (also `WE1`), but dropping it is not equivalent: it is the host that issues
+   the token the exploit steals, so unpinning it leaves the finding open by
+   design. If Clerk's rotation cadence is unacceptable, pin the two roots above
+   `WE1` rather than removing the host.
+3. Same owner — before flipping the rollout, inventory every host the app must
+   reach. Once enforcement is on, `secureFetch` refuses any host with no entry in
+   `PINS_BY_HOST`, so local/LAN dispatch targets and any model-download CDN need
+   entries or a documented exemption. This is pre-existing behaviour and it was
+   deliberately left alone: `apps/mobile/__tests__/secure-fetch.test.ts` asserts
+   it as the contract ("refuses requests to hosts with no provisioned pins
+   (fail-closed)") and that file is outside this sweep's ownership, so narrowing
+   the allowlist to the pin table's own hosts is a separate, owned change. You no
+   longer have to do the inventory from memory: step 9.3 ships a build that logs
+   every host enforcement would refuse, which is what the `'report-only'` rollout
+   stage exists for. The equivalent hazard on the native side is gone — the
+   generated Android config ships only per-pinned-host rules.
+4. **Done in this sweep — no action, listed so nobody redoes it.**
+   `'./native/withAGITlsPinning.cjs'` is registered in the `plugins` array of
+   `apps/mobile/app.config.js`, next to
+   `'./native/android/withAGIShareIntent.cjs'`. Applying the plugin to the
+   shipped config returns it byte-for-byte unchanged — no `mods`, no
+   `extra.tlsPinning`, no Info.plist key, no `network_security_config.xml`
+   (verified 2026-08-22, asserted by "is a no-op on the shipped table" and "emits
+   nothing while the rollout only stages a fully provisioned table"). One
+   constraint it carries: `EXPO_ENABLE_DETOX` builds cannot ship pins.
+   `withAGIDetox` writes its own `network_security_config.xml`, Android has room
+   for exactly one, so the pinning plugin throws at prebuild rather than produce
+   an artifact that claims to pin while Android trusts whatever certificate it is
+   handed. Unset `EXPO_ENABLE_DETOX` for any artifact that ships pins.
 5. Clerk — `@clerk/expo` does its own networking and never reaches
    `secureFetch`, so only the native config can cover the auth handshake. The
-   FAPI host is `clerk.agiworkforce.com` (decoded from the publishable key, TLS
-   chain confirmed 2026-08-22); it is not in `PINS_BY_HOST` today and needs an
-   entry alongside step 1.
-6. Optional follow-up — `apps/mobile/scripts/check-tls-pins.mjs` still greps for
-   the literal `PINNING_ENFORCED = true`, which no longer exists. It cannot fire
-   a false failure, but it also no longer catches anything; the useful release
-   gate now is "pins provisioned ⇒ plugin registered".
+   FAPI host is `clerk.agiworkforce.com` (decoded from the publishable key,
+   `pk_live_Y2xlcmsuYWdpd29ya2ZvcmNlLmNvbSQ`, TLS chain captured 2026-08-22). It
+   now has a placeholder entry in `PINS_BY_HOST` and is in
+   `REQUIRED_PINNED_HOSTS`, so step 1 must capture its pins with the others —
+   there is no longer a state where the app reports itself pinned while the auth
+   handshake is not. If the production Clerk instance ever changes, re-derive the
+   host with `node scripts/compute-spki-pins.mjs --clerk-key pk_live_…`.
+6. Release-tooling owner — `apps/mobile/scripts/check-tls-pins.mjs:31` greps for
+   the literal `PINNING_ENFORCED = true`, which has not existed since
+   enforcement became derived, so its FAIL branch at line 39 can never fire and
+   its PASS message at line 56 still tells the reader to "flip
+   `PINNING_ENFORCED=true`". That script gates production/beta/preview at
+   `apps/mobile/scripts/release/preflight.sh:141` and
+   `.github/workflows/release-mobile.yml:101`. It is outside this sweep's
+   ownership. Replace the regex check with the condition that now matters — fail
+   when `apps/mobile/lib/pinning.ts` contains
+   `PINNING_ROLLOUT: PinningStage = 'enforced'` **and** any placeholder pin line
+   — and drop the "flip `PINNING_ENFORCED=true`" advice for "flip
+   `PINNING_ROLLOUT` to `'enforced'`". The hazard it was written to catch is no
+   longer riding on it: `native/withAGITlsPinning.cjs` now throws at prebuild on
+   exactly that combination (see the bullet above), so no artifact can be built
+   from it, and two tests in `apps/mobile/__tests__/pinning.test.ts` ("fails the
+   prebuild when the rollout says enforced and the table provisions nothing",
+   "keeps the shipped rollout behind the pin table, which is what CI would gate
+   on") fail the release build at
+   `.github/workflows/release-mobile.yml:96` (`pnpm --filter @agiworkforce/mobile
+test`), five lines before it reaches the stale check. Rewriting the script is
+   still owed — a dead gate that prints PASS reads like cover it is not
+   providing — but it is now stale tooling rather than an open door.
+7. Dispatch/mobile owner — **the pairing socket is not covered on iOS, and steps
+   1-6 will not cover it.** `SignalingClient` opens
+   `new WebSocket(this.options.wsUrl)`
+   (`packages/platform/utils/src/signaling.ts:113`, fed from
+   `apps/mobile/stores/connectionStore.ts:1000`) and carries the pairing token
+   and dispatch salt. It never goes through `secureFetch`, and on iOS ATS
+   `NSPinnedDomains` governs `NSURLSession` only — React Native's iOS WebSocket
+   builds its own CFStream TLS session and does not consult it. Android is fine
+   (RN's WebSocket there is OkHttp, which honours the generated
+   `network_security_config`). So after steps 1 and 4 the mobile→signaling
+   handshake is pinned on Android and unpinned on iOS. Closing it needs either a
+   native WebSocket transport that pins (an `NSURLSessionWebSocketTask`-based
+   module, which is NSURLSession and therefore does run under ATS) or moving the
+   pairing exchange onto
+   `secureFetch`. Both are outside this sweep's ownership
+   (`packages/platform/utils`, `apps/mobile/stores`), and the second is a
+   protocol change, not a patch.
+
+   The same gap applies to every file transfer. `apps/mobile/services/api.ts:533`
+   (chat attachments) and `apps/mobile/src/features/projects/store.ts:172`
+   (project files) upload through `createUploadTask` from `expo-file-system`,
+   carrying the presign's `uploadHeaders`, and
+   `apps/mobile/services/modelDownload.ts:240` pulls model weights through
+   `createDownloadResumable`. None of the three passes through `secureFetch`, so
+   none of them gets the scheme refusal, the absolute-form refusal or the
+   allowlist, and the presigned storage host they actually talk to has no
+   `PINS_BY_HOST` entry — so it stays unpinned after step 9 as well. Owner's
+   call, and it is a real decision rather than an oversight: route them through
+   `secureFetch`, or give the storage host an entry, or record the exemption. All
+   three files are outside this sweep's ownership.
+
+8. Same owner — `wsUrl` is server-supplied and only shape-checked.
+   `apps/mobile/services/manualPairing.ts:145` accepts any string matching
+   `/^wss?:\/\//`, so a claim response can steer the credential-bearing socket
+   to an arbitrary host and to cleartext `ws://`. That is the post-MITM pivot
+   this finding's exploit scenario describes, and it is downstream of the one
+   call the pin gate does cover (`claimManualPairingToken`). The fix is a host
+   check at that parse site, not more pinning: require `wss:` and require the
+   host to be the configured signaling host (`requiresPin()` from
+   `apps/mobile/lib/pinning.ts` already answers "is this one of the hosts we
+   must pin"). That file is outside this sweep's ownership.
+
+9. **The actual provisioning sequence**, once steps 1-3 are decided. Each numbered
+   item is its own commit and its own review; do not compress them.
+   1. `node scripts/compute-spki-pins.mjs` — probes all six
+      `REQUIRED_PINNED_HOSTS` (`agiworkforce.com`, `signaling.agiworkforce.com`,
+      `api.agiworkforce.com`, `clerk.agiworkforce.com`, `api.openai.com`,
+      `api.anthropic.com`) and prints the paste-ready block. For a different
+      Clerk instance: `node scripts/compute-spki-pins.mjs --clerk-key pk_live_…`.
+   2. Paste the printed `PINS_BY_HOST` block over every placeholder in
+      `apps/mobile/lib/pinning.ts`, **all six hosts in one commit** — a
+      half-provisioned table fails the prebuild by design. This commit changes no
+      request and no build output; `PINNING_ROLLOUT` stays `'report-only'`.
+   3. Ship that build (a release channel — the report-only warnings are
+      release-runtime only) and read its logs. Every
+      `[pinning] rollout is report-only: "<host>" would be refused` line names a
+      host enforcement would cut off. Give each one a `PINS_BY_HOST` entry or
+      accept losing it. Do not skip this: this is the step that finds the LAN,
+      localhost and BYOK endpoints step 3 asks you to inventory.
+   4. Only then, in a separate commit, set `PINNING_ROLLOUT = 'enforced'` in
+      `apps/mobile/lib/pinning.ts` and cut a **native** build (`expo prebuild`,
+      then EAS). That commit is the whole security decision, reviewable on its
+      own: it is what makes the plugin emit `NSPinnedDomains` and the Android
+      pin-set, and what makes `secureFetch` apply the allowlist. It must not ship
+      as an over-the-air update — the fingerprint `runtimeVersion` prevents that
+      structurally, since the flip changes the evaluated Expo config.
+
+**Residuals that survive step 9**, worth knowing before the flip is reviewed:
+
+- The redirect check is post-hoc. React Native follows redirects in the platform
+  layer, so on a hop that left the pinned host the credential it replayed is
+  already on the wire by the time `secureFetch` sees the response and throws.
+  Refusing still denies the attacker the answer and surfaces the hop in logs, but
+  the token has to be treated as burned and rotated. Preventing the replay needs
+  a transport that can stop at the redirect, which React Native's `fetch` cannot.
+- `nativelyPinned` is read from `extra.tlsPinning`, a stamp the build writes about
+  itself, not a certificate check. It is trustworthy only because
+  `runtimeVersion` is `{ policy: 'fingerprint' }` and `@expo/fingerprint` keeps
+  `extra` in the fingerprint unless the `ExpoConfigExtraSection` source-skip is
+  configured. Nothing in the repo configures one, and a test now fails if a
+  `fingerprint.config.js`/`.cjs` or a `sourceSkips` entry appears. Do not add one
+  without re-reading this.
+- The transports in item 7 are not covered by any of it.
 
 **Costs to leave it:** unchanged from today — no pinning, so a device-trusted
-rogue CA can read and replay mobile session tokens. This sweep removed the
-silent-failure modes (enforcement can no longer be on while nothing verifies
-anything, and a release build can no longer skip the gate because an env var was
-never set) and built the mechanism; it did not turn pinning on.
+rogue CA can read and replay mobile session tokens, and (per steps 7-8) the
+pairing socket stays unpinned on iOS and reachable at a server-chosen host even
+after step 9 lands. **F6 is open, not closed:** the mechanism is now wired end to
+end and would pin as soon as it is given keys, but the shipped app still has
+none, so nothing in it compares a certificate to anything. Step 9 is the whole
+remaining path and every part of it needs a human: which keys, then the paste,
+then the flip. This sweep removed the silent-failure modes
+(enforcement can no longer be on while nothing verifies anything, a release build
+can no longer skip the gate because an env var was never set, a build whose pin
+table and native config disagree now refuses the affected host instead of
+shipping it unverified, a half-provisioned table fails the prebuild, and the
+remaining unverified path announces itself once per host instead of passing
+through in silence), built the mechanism and registered it in the build; it did
+not turn pinning on, and deliberately cannot without a second reviewed commit.
+`apps/mobile/lib/pinning.ts` no longer exports `assertPinningReadyIfEnforced`: it
+promised a bootstrap invariant nothing ever called, and the state it guarded
+against is now unreachable by construction.
 
 ---
 

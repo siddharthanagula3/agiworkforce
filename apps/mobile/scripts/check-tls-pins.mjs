@@ -28,7 +28,18 @@ if (!fs.existsSync(pinningPath)) {
 
 const pinningSource = fs.readFileSync(pinningPath, 'utf8');
 
-const pinningEnforced = /export\s+const\s+PINNING_ENFORCED\s*=\s*true\b/.test(pinningSource);
+// PINNING_ENFORCED is derived from PINNING_ROLLOUT, so matching a `= true`
+// literal here would never fire and this gate would print PASS unconditionally.
+const rolloutMatch = pinningSource.match(
+  /export\s+const\s+PINNING_ROLLOUT\s*:\s*PinningStage\s*=\s*'([a-z-]+)'/,
+);
+if (!rolloutMatch) {
+  console.error(
+    '[check-tls-pins] ERROR: could not read PINNING_ROLLOUT from lib/pinning.ts. This gate cannot verify the release; fix the check rather than shipping past it.',
+  );
+  process.exit(1);
+}
+const pinningEnforced = rolloutMatch[1] === 'enforced';
 
 const PIN_VALUE_RE = /['"]sha256\//;
 const placeholderLines = pinningSource
