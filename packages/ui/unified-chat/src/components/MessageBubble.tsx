@@ -94,10 +94,22 @@ export function StreamingThinkingStatus() {
   );
 }
 
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 export function safeHref(url: string): string | null {
   const trimmed = url.trim();
+  // browsers strip embedded control characters, so '/<TAB>/evil.com' resolves cross-origin
+  if (hasControlCharacter(trimmed)) return null;
   if (/^(https?:|mailto:|tel:)/i.test(trimmed)) return trimmed;
-  if (/^[/#]/.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('#')) return trimmed;
+  // a same-app path is exactly one leading '/'; '//host' and '/\host' are cross-origin
+  if (/^\/(?![/\\])/.test(trimmed)) return trimmed;
   return null;
 }
 
