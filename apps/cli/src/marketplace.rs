@@ -337,7 +337,11 @@ impl Marketplace {
         );
         reg.save(&plugins_dir)?;
 
-        eprintln!("Installed '{}' to {}", name, install_path.display());
+        eprintln!(
+            "Installed '{}' to {}",
+            crate::terminal_text::sanitize_terminal_text(&name),
+            install_path.display()
+        );
         Ok(())
     }
 
@@ -451,7 +455,10 @@ impl Marketplace {
         registry.plugins.remove(name);
         registry.save(&plugins_dir)?;
 
-        eprintln!("Uninstalled plugin '{}'", name);
+        eprintln!(
+            "Uninstalled plugin '{}'",
+            crate::terminal_text::sanitize_terminal_text(name)
+        );
         Ok(())
     }
 
@@ -512,9 +519,15 @@ impl Marketplace {
                 Ok(o) if o.status.success() => {
                     let stdout = String::from_utf8_lossy(&o.stdout);
                     if stdout.contains("Already up to date") {
-                        eprintln!("  {} — already up to date", name);
+                        eprintln!(
+                            "  {} — already up to date",
+                            crate::terminal_text::sanitize_terminal_text(name)
+                        );
                     } else {
-                        eprintln!("  {} — updated", name);
+                        eprintln!(
+                            "  {} — updated",
+                            crate::terminal_text::sanitize_terminal_text(name)
+                        );
                     }
                     // Re-read the manifest version after the pull so update
                     // decisions trust the real installed version.
@@ -526,10 +539,18 @@ impl Marketplace {
                 }
                 Ok(o) => {
                     let stderr = String::from_utf8_lossy(&o.stderr);
-                    eprintln!("  {} — update failed: {}", name, stderr.trim());
+                    eprintln!(
+                        "  {} — update failed: {}",
+                        crate::terminal_text::sanitize_terminal_text(name),
+                        crate::terminal_text::sanitize_terminal_text(stderr.trim())
+                    );
                 }
                 Err(e) => {
-                    eprintln!("  {} — git error: {}", name, e);
+                    eprintln!(
+                        "  {} — git error: {}",
+                        crate::terminal_text::sanitize_terminal_text(name),
+                        crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                    );
                 }
             }
         }

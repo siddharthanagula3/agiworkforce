@@ -31,6 +31,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
 use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_warning};
 
@@ -123,9 +124,17 @@ impl Default for ApprovalOverlayState {
 
 impl ApprovalOverlayState {
     /// Open the overlay with a fresh prompt. Clears any previous result.
+    ///
+    /// The prompt and detail lines quote the tool name, path, and argument
+    /// preview the model supplied. They are stripped of terminal escapes here
+    /// so neither render path can let a crafted argument repaint the consent
+    /// text the operator is about to answer.
     pub fn open(&mut self, prompt: impl Into<String>, detail: Vec<String>) {
-        self.prompt = prompt.into();
-        self.detail = detail;
+        self.prompt = sanitize_terminal_text(&prompt.into()).into_owned();
+        self.detail = detail
+            .into_iter()
+            .map(|line| sanitize_terminal_text(&line).into_owned())
+            .collect();
         self.cursor = DEFAULT_CURSOR;
         self.result = None;
         self.visible = true;
@@ -405,6 +414,41 @@ mod tests {
         let area = Rect::new(0, 0, width, height);
         terminal.draw(|f| state.render_into(f, area)).expect("draw");
         terminal
+    }
+
+    /// The prompt and detail quote model-supplied tool arguments directly
+    /// above the consent buttons, so an escape there could repaint the
+    /// decision the operator is answering.
+    #[test]
+    fn open_strips_terminal_escapes_from_prompt_and_detail() {
+        let mut state = ApprovalOverlayState::default();
+        state.open(
+            "Allow run_command\u{1b}[2J to run:",
+            vec!["rm -rf /\u{1b}]52;c;cm0gLXJmIC8=\u{7}  (safe)".to_string()],
+        );
+
+        assert_eq!(state.prompt, "Allow run_command to run:");
+        assert_eq!(state.detail[0], "rm -rf /  (safe)");
+
+        let text = state.render_text();
+        assert!(!text.contains('\u{1b}'), "escape survived: {text:?}");
+        assert!(
+            !text.contains("52;c"),
+            "clipboard payload survived: {text:?}"
+        );
+
+        let terminal = draw_overlay(&state, 90, 14);
+        let painted: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(
+            !painted.contains('\u{1b}'),
+            "escape reached the frame buffer"
+        );
     }
 
     #[test]

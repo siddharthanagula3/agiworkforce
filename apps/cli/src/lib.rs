@@ -1381,7 +1381,12 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             );
             for (i, msg) in messages.iter().enumerate() {
                 let preview: String = msg.text_content().chars().take(120).collect();
-                println!("  [{:>3}] {:<10}  {}", i, msg.role, preview);
+                println!(
+                    "  [{:>3}] {:<10}  {}",
+                    i,
+                    msg.role,
+                    terminal_text::sanitize_terminal_text(&preview)
+                );
             }
             Ok(())
         }
@@ -2299,7 +2304,12 @@ pub async fn run_main() -> Result<()> {
                         );
                         for s in &servers {
                             let transport = if s.url.is_some() { "HTTP/SSE" } else { "stdio" };
-                            println!("  {} ({}) [{}]", s.name, s.source, transport);
+                            println!(
+                                "  {} ({}) [{}]",
+                                terminal_text::sanitize_terminal_text(&s.name),
+                                terminal_text::sanitize_terminal_text(&s.source),
+                                transport
+                            );
                         }
                         if !report.skipped_existing.is_empty() {
                             println!(
@@ -2338,7 +2348,11 @@ pub async fn run_main() -> Result<()> {
                                 .as_deref()
                                 .or(s.url.as_deref())
                                 .unwrap_or("(unknown)");
-                            println!("  {} — {}", s.name, cmd_display);
+                            println!(
+                                "  {} — {}",
+                                terminal_text::sanitize_terminal_text(&s.name),
+                                terminal_text::sanitize_terminal_text(cmd_display)
+                            );
                         }
                     }
                     Ok(())
@@ -2477,7 +2491,12 @@ pub async fn run_main() -> Result<()> {
                 match action {
                     MarketplaceSubcommand::Search { query } => {
                         let results = mp.search(query).await?;
-                        println!("{}", marketplace::format_search_results(&results));
+                        println!(
+                            "{}",
+                            terminal_text::sanitize_terminal_text(
+                                &marketplace::format_search_results(&results)
+                            )
+                        );
                         Ok(())
                     }
                     MarketplaceSubcommand::Install { source, scope } => {

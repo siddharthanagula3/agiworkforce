@@ -789,9 +789,11 @@ fn merge_plugin_hooks(config: &mut HooksConfig) {
                 Err(e) => {
                     eprintln!(
                         "[plugins] failed to load hook for event {}: {} (raw: {})",
-                        event_name,
-                        e,
-                        crate::secret_redaction::redact_secrets(&value.to_string())
+                        crate::terminal_text::sanitize_terminal_text(&event_name),
+                        crate::terminal_text::sanitize_terminal_text(&e.to_string()),
+                        crate::terminal_text::sanitize_terminal_text(
+                            &crate::secret_redaction::redact_secrets(&value.to_string())
+                        )
                     );
                 }
             }
@@ -983,7 +985,9 @@ pub fn audit_log_updated_input(
     // Emit at WARN level to stderr so interactive users always see it.
     eprintln!(
         "[security] hook rewrote tool args:\n  hook:     {}\n  original: {}\n  new:      {}",
-        rewrite.hook_command, rewrite.original_args, rewrite.new_args
+        crate::terminal_text::sanitize_terminal_text(&rewrite.hook_command),
+        crate::terminal_text::sanitize_terminal_text(&rewrite.original_args),
+        crate::terminal_text::sanitize_terminal_text(&rewrite.new_args)
     );
 
     // Append to the security audit log (best-effort).

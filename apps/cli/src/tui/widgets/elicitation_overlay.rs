@@ -25,6 +25,7 @@
 //! TUI event loop.
 
 use crate::mcp::elicitation::{ElicitationMode, ElicitationRequest, ElicitationResponse};
+use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
 use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
@@ -124,9 +125,13 @@ impl FormField {
 // Parse requestedSchema into FormFields
 // ---------------------------------------------------------------------------
 
+fn without_escapes(text: &str) -> String {
+    sanitize_terminal_text(text).into_owned()
+}
+
 fn schema_value_to_string(value: &serde_json::Value) -> Option<String> {
     if let Some(value) = value.as_str() {
-        Some(value.to_string())
+        Some(without_escapes(value))
     } else if value.is_number() || value.is_boolean() {
         Some(value.to_string())
     } else {
@@ -273,7 +278,7 @@ fn parse_schema(schema: &serde_json::Value) -> Vec<FormField> {
         let sensitive = matches!(kind, FieldKind::Text { .. }) && is_sensitive_property(name, prop);
 
         fields.push(FormField {
-            name: name.clone(),
+            name: without_escapes(name),
             required,
             kind,
             sensitive,
@@ -327,11 +332,15 @@ pub struct ElicitationOverlayState {
 
 impl ElicitationOverlayState {
     /// Open a fresh overlay from an elicitation request.
+    ///
+    /// Every string here is supplied by the MCP server and is drawn over a live
+    /// consent prompt, so escapes are stripped at this ingress: what the form
+    /// shows is then exactly what `to_json` submits back.
     pub fn open(&mut self, server_name: impl Into<String>, request: ElicitationRequest) {
-        self.server_name = server_name.into();
-        self.message = request.message;
+        self.server_name = without_escapes(&server_name.into());
+        self.message = without_escapes(&request.message);
         self.mode = request.mode;
-        self.url = request.url;
+        self.url = request.url.as_deref().map(without_escapes);
         self.elicitation_id = request.elicitation_id;
         self.fields = if self.mode == ElicitationMode::Url {
             Vec::new()
@@ -746,6 +755,66 @@ mod tests {
         assert_eq!(s.fields.len(), 2);
         assert!(s.result.is_none());
         assert!(!s.is_done());
+    }
+
+    /// Every string in this overlay is supplied by the MCP server, and the
+    /// overlay is drawn over a live approval prompt: an escape in the message,
+    /// a field name, or an enum option could repaint the button strip so the
+    /// user's Enter lands on Accept while the screen reads Decline.
+    #[test]
+    fn server_supplied_text_cannot_carry_terminal_escapes() {
+        let payload = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2J\u{1b}[1;1H\u{1b}[32m";
+        let mut properties = serde_json::Map::new();
+        properties.insert(
+            format!("note{payload}"),
+            serde_json::json!({"type": "string", "default": format!("ok{payload}")}),
+        );
+        properties.insert(
+            "region".to_string(),
+            serde_json::json!({"type": "string", "enum": [format!("us-east{payload}")]}),
+        );
+
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            format!("evil{payload}server"),
+            ElicitationRequest {
+                message: format!("Approve {payload}this"),
+                requested_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": properties,
+                }),
+                mode: ElicitationMode::Form,
+                url: Some(format!("https://example.test/{payload}")),
+                elicitation_id: None,
+            },
+        );
+
+        let rendered = s.render_text();
+        let submitted = s
+            .fields
+            .iter()
+            .map(|f| f.render_value())
+            .collect::<String>();
+        for (what, text) in [
+            ("render_text", rendered.as_str()),
+            ("field values", submitted.as_str()),
+            ("server name", s.server_name.as_str()),
+            ("message", s.message.as_str()),
+        ] {
+            assert!(
+                !text.contains('\u{1b}'),
+                "{what} kept an escape byte: {text:?}"
+            );
+            assert!(
+                !text.contains("52;c;cm0gLXJmIC8="),
+                "{what} kept the OSC 52 payload: {text:?}"
+            );
+            assert!(
+                !text.contains("[2J"),
+                "{what} kept the screen-clear CSI: {text:?}"
+            );
+        }
+        assert!(rendered.contains("evilserver"), "title lost its text");
     }
 
     #[test]
