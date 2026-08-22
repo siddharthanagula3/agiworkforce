@@ -1726,3 +1726,45 @@ guard that is always empty.
   and what a device does when it has none — fail open on product defaults, or
   refuse BYOK entirely for managed orgs.
 - Only after that is the enforcement itself mechanical.
+
+---
+
+## 37. Managed Cloud plan-tier gate needs a verifiable client surface (security sweep 2026-08-21, `apps/web` F4)
+
+**Status:** `BLOCKED_BY_HUMAN` — a product/protocol decision, not a code gap.
+
+**Blocks:** closing CLAUDE-SECURITY-20260821-144214 F4 (CWE-863, MEDIUM):
+`apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts` decides which paid
+capability applies (`managed_chat` on free tiers vs the Pro-only
+`developer_surfaces`/`managed_api`) from the caller-declared
+`x-agi-surface`/`x-client`/`origin` headers whenever the credential is a bare
+Clerk session JWT. A free-tier user scripting against the API with their own
+session token and `x-agi-surface: web` gets programmatic access the plan does
+not include.
+
+Two remediation rounds were adversarially reviewed and rejected: a bare Clerk
+session token carries no surface at all (`AuthResult.surfaceClass` is
+`'developer'`-only, `apps/web/lib/api-auth.ts:19`), and every first-party
+client — web (`lib/hooks/useChatStream.ts`), mobile
+(`apps/mobile/services/streaming.ts`), the Chrome extension
+(`apps/extension/src/features/cloud-bridge/clerkAuth.ts`) and desktop
+(`cloudApi.ts`) — sends exactly that kind of token with a self-declared
+`X-AGI-Surface`. Swapping the header for the CSRF token was rejected because a
+non-browser client can obtain that too.
+
+**Costs to leave it:** paywall bypass of the developer/API capability for any
+account that can mint a Clerk session (every account). No data exposure.
+
+**Decide one of:**
+1. Bind the surface into the credential: a Clerk custom session claim
+   (`surface`) set per application/JWT template, or an `azp` allow-list per
+   surface, verified server-side; first-party clients keep working, scripts get
+   the strictest tier.
+2. Require a surface-bearing credential for non-browser callers (API key or the
+   existing developer/device token) and treat a bare Clerk token as `web` only
+   when the request also passes the browser-only checks (Origin + Sec-Fetch-Site
+   + CSRF cookie pair) — closes the scripting case without client changes.
+3. Accept the residual and gate the API capability on billing audit instead.
+
+The parked attempt (option-2 shape) is at
+`agiworkforce-security-run/blocked/w1-W1-E-surface-header-trust.patch`.
