@@ -180,4 +180,20 @@ describe('renderer shortcut matching', () => {
     expect(matchesBinding(event, bindingFor('search'))).toBe(true);
     expect(matchesBinding(event, bindingFor('command-palette'))).toBe(false);
   });
+
+  it('leaves Cmd+Z to the focused text field rather than reverting agent work', () => {
+    const event = press('z', { metaKey: true });
+    expect(matchesBinding(event, bindingFor('undo-last'))).toBe(false);
+  });
+});
+
+describe('undo shortcut discoverability', () => {
+  it('lists the undo binding as an editable row', () => {
+    render(<KeybindingsSettings />);
+
+    expect(screen.getByText('Undo last agent change')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Edit shortcut for Undo last agent change' }),
+    ).toBeInTheDocument();
+  });
 });
