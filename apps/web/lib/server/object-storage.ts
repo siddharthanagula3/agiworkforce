@@ -331,16 +331,20 @@ async function presignUploadForBucket(
   if (!Number.isSafeInteger(params.contentLength) || params.contentLength <= 0) {
     throw new Error('A presigned upload must bind a positive content length.');
   }
+  const contentType = params.contentType.trim();
+  if (!contentType) {
+    throw new Error('A presigned upload must bind a content type.');
+  }
   const client = getR2Client();
   const command = new PutObjectCommand({
     Bucket: bucket,
     Key: params.key,
-    ContentType: params.contentType,
+    ContentType: contentType,
     ContentLength: params.contentLength,
   });
   return getSignedUrl(client, command, {
     expiresIn: params.expiresInSeconds ?? 300,
-    signableHeaders: new Set(['content-length']),
+    signableHeaders: new Set(['content-length', 'content-type']),
   });
 }
 
