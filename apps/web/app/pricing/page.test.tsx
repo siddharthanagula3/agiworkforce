@@ -62,7 +62,7 @@ vi.mock('react-i18next', () => ({
         return `${String(values?.['count'])} seats · billed annually`;
       }
       if (key === 'perSeatPrice') return `${String(values?.['price'])}/seat/mo`;
-      if (key === 'perSeatPriceAnnual') return `${String(values?.['price'])}/seat/yr`;
+      if (key === 'perSeatPriceAnnual') return `${String(values?.['price'])}/seat/mo`;
       return key;
     },
   }),
@@ -314,7 +314,10 @@ describe('PricingPage', () => {
 
     expect(screen.getByText('$480')).toBeVisible();
     expect(screen.getByText('2 seats · billed annually')).toBeVisible();
-    expect(screen.getByText('$240/seat/yr')).toBeVisible();
+    // The annual seat price is shown per month so the cadence toggle compares
+    // like with like against $25/seat/mo; the charge is still $240 a year,
+    // which the cadence line states.
+    expect(screen.getByText('$20/seat/mo')).toBeVisible();
 
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());

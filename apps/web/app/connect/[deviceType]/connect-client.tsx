@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 import { useState } from 'react';
 import { Button } from '@agiworkforce/ui';
+import { toUserMessage } from '@/lib/user-error-message';
 
 export const KNOWN_DEVICE_TYPES = [
   'vscode',
@@ -114,7 +115,7 @@ export function ConnectDeviceClient({
 
       setMessage({ type: 'success', text: `Approved. Return to ${name} to finish signing in.` });
     } catch (e) {
-      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Unexpected error' });
+      setMessage({ type: 'error', text: toUserMessage(e, 'Unexpected error') });
     } finally {
       setLoading(null);
     }
@@ -165,6 +166,11 @@ export function ConnectDeviceClient({
           {message.text}
         </div>
       ) : null}
+
+      <p role="note" style={{ fontSize: 13, color: 'var(--agi-muted, inherit)' }}>
+        Approve only if you started this sign-in on {name} moments ago. Approving signs that device
+        into your account; if you did not start it, choose Deny.
+      </p>
 
       <div className="grid grid-cols-2 gap-3">
         <Button onClick={deny} disabled={!isLoaded || loading !== null} variant="outline">

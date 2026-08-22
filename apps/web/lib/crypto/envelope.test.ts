@@ -134,12 +134,38 @@ describe('legacy layouts', () => {
       await import('../custom-connector-crypto');
     const loaded = ring({ TEST_KEY: KEY_ONE });
 
-    expect(openEnvelope(loaded, encryptConnectorToken('mcp-bearer'), 'hex-triple').plaintext).toBe(
-      'mcp-bearer',
-    );
-    expect(decryptConnectorToken(sealEnvelope(loaded, 'mcp-bearer', 'hex-triple'))).toBe(
-      'mcp-bearer',
-    );
+    const sealed = encryptConnectorToken('mcp-bearer', 'custom-connector-auth-header');
+    expect(
+      openEnvelope(loaded, sealed, 'hex-triple', 'custom-connector-auth-header').plaintext,
+    ).toBe('mcp-bearer');
+    expect(
+      decryptConnectorToken(
+        sealEnvelope(loaded, 'mcp-bearer', 'hex-triple'),
+        'custom-connector-auth-header',
+      ),
+    ).toBe('mcp-bearer');
+  });
+
+  it('refuses to open a secret under a different purpose than it was sealed for', () => {
+    const loaded = ring({ TEST_KEY: KEY_ONE });
+    const sealed = sealEnvelope(loaded, 'refresh-me', 'versioned', 'oauth-refresh-token');
+
+    expect(openEnvelope(loaded, sealed, 'hex-triple', 'oauth-refresh-token')).toMatchObject({
+      plaintext: 'refresh-me',
+      contextBound: true,
+    });
+    expect(() => openEnvelope(loaded, sealed, 'hex-triple', 'oauth-access-token')).toThrow();
+    expect(() => openEnvelope(loaded, sealed, 'hex-triple')).toThrow();
+  });
+
+  it('still opens a pre-context ciphertext and says so, so callers can re-seal it', () => {
+    const loaded = ring({ TEST_KEY: KEY_ONE });
+    const legacy = sealEnvelope(loaded, 'old-token', 'hex-triple');
+
+    expect(openEnvelope(loaded, legacy, 'hex-triple', 'oauth-access-token')).toMatchObject({
+      plaintext: 'old-token',
+      contextBound: false,
+    });
   });
 
   it('interoperates with lib/device-token-crypto (b64-iv-ct-tag)', async () => {
@@ -193,11 +219,17 @@ describe('production readers survive a rotation', () => {
 
     const { decryptConnectorToken, encryptConnectorToken } =
       await import('../custom-connector-crypto');
-    expect(decryptConnectorToken(stored)).toBe('mcp-bearer');
-    expect(envelopeKeyId(encryptConnectorToken('fresh'))).toBeNull();
+    expect(decryptConnectorToken(stored, 'custom-connector-auth-header')).toBe('mcp-bearer');
     expect(
-      openEnvelope(ring({ TEST_KEY: KEY_TWO }), encryptConnectorToken('fresh'), 'hex-triple')
-        .plaintext,
+      envelopeKeyId(encryptConnectorToken('fresh', 'custom-connector-auth-header')),
+    ).toBeNull();
+    expect(
+      openEnvelope(
+        ring({ TEST_KEY: KEY_TWO }),
+        encryptConnectorToken('fresh', 'custom-connector-auth-header'),
+        'hex-triple',
+        'custom-connector-auth-header',
+      ).plaintext,
     ).toBe('fresh');
   });
 
@@ -209,7 +241,7 @@ describe('production readers survive a rotation', () => {
     vi.resetModules();
 
     const { decryptConnectorToken } = await import('../custom-connector-crypto');
-    expect(() => decryptConnectorToken(stored)).toThrow(
+    expect(() => decryptConnectorToken(stored, 'custom-connector-auth-header')).toThrow(
       /could not be opened by any ring key \[k2\]/,
     );
   });
@@ -225,7 +257,7 @@ describe('production readers survive a rotation', () => {
     vi.resetModules();
 
     const { decryptConnectorToken } = await import('../custom-connector-crypto');
-    expect(decryptConnectorToken(swept)).toBe('mcp-bearer');
+    expect(decryptConnectorToken(swept, 'custom-connector-auth-header')).toBe('mcp-bearer');
   });
 
   async function stubGitHubApp(extra: Record<string, string>) {
@@ -425,7 +457,9 @@ describe('scripts/reencrypt.mjs', () => {
     vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_ID', 'k2');
     vi.resetModules();
     const { decryptConnectorToken } = await import('../custom-connector-crypto');
-    expect(decryptConnectorToken(rows[0]?.['auth_header_enc'] as string)).toBe('token-a');
+    expect(
+      decryptConnectorToken(rows[0]?.['auth_header_enc'] as string, 'custom-connector-auth-header'),
+    ).toBe('token-a');
   });
 
   it('refuses --format=versioned for a column whose reader cannot parse it', async () => {

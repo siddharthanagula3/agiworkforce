@@ -9,6 +9,7 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const INVITATION_TOKEN_STORAGE_KEY = 'agi.team.invitation-token';
 
@@ -81,7 +82,7 @@ export function TeamInvitationAcceptance() {
       setToken(null);
       setCompletion({ action, role: parsedBody.data.membership?.role });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The invitation could not be updated.');
+      setError(toUserMessage(caught, 'The invitation could not be updated.'));
     } finally {
       setPendingAction(null);
     }

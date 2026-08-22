@@ -3,10 +3,12 @@
 import { useClerk, useUser } from '@clerk/nextjs';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { Header } from '@shared/components/layout/Header';
+import { SuccessState } from '@shared/components/SuccessState';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface DeviceAuthorizationDetails {
   user_code: string;
@@ -111,6 +113,8 @@ function DeviceForm() {
   const [loading, setLoading] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
+  const [approved, setApproved] = useState(false);
+  const router = useRouter();
   const [termsReviewHref, setTermsReviewHref] = useState<string | null>(null);
   const redirectParams = new URLSearchParams();
   if (code) redirectParams.set('user_code', code);
@@ -162,7 +166,7 @@ function DeviceForm() {
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        setLookupError(error instanceof Error ? error.message : i18n.t('auth:device.lookupFailed'));
+        setLookupError(toUserMessage(error, i18n.t('auth:device.lookupFailed')));
         setLookupState('error');
       });
 
@@ -211,13 +215,10 @@ function DeviceForm() {
         setTermsReviewHref(getTermsAcceptanceUrl(body));
         throw new Error(getErrorMessage(body, t('auth:device.approvalFailed')));
       }
-      setMessage({
-        text: t('auth:device.approved'),
-        type: 'info',
-      });
+      setApproved(true);
     } catch (err) {
       setMessage({
-        text: err instanceof Error ? err.message : t('auth:device.approvalFailed'),
+        text: toUserMessage(err, t('auth:device.approvalFailed')),
         type: 'error',
       });
     } finally {
@@ -232,6 +233,26 @@ function DeviceForm() {
     } finally {
       setSwitchingAccount(false);
     }
+  }
+
+  if (approved) {
+    return (
+      <section className="agi-device-auth-card" aria-labelledby="device-auth-title">
+        <h1 id="device-auth-title" className="sr-only">
+          {t('auth:device.approvedTitle')}
+        </h1>
+        <SuccessState
+          title={t('auth:device.approvedTitle')}
+          description={t('auth:device.approvedDetail')}
+          action={{
+            label: t('auth:device.approvedManage'),
+            onClick: () => {
+              router.push('/settings#account');
+            },
+          }}
+        />
+      </section>
+    );
   }
 
   return (

@@ -3,6 +3,9 @@ import {
   EXECUTE_CODE_TOOL,
   WRITE_FILE_TOOL,
   CREATE_FOLDER_TOOL,
+  READ_FILE_TOOL,
+  LIST_FILES_TOOL,
+  EDIT_FILE_TOOL,
   isExecutionTool,
   e2bExecutionToolDefs,
   resolveCodeExecutionTools,
@@ -33,11 +36,20 @@ describe('isExecutionTool', () => {
 });
 
 describe('e2bExecutionToolDefs', () => {
-  it('exposes exactly the three execution tools as function tools', () => {
+  it('exposes exactly the six execution tools as function tools', () => {
     const names = e2bExecutionToolDefs()
       .map((t) => t.function.name)
       .sort();
-    expect(names).toEqual([CREATE_FOLDER_TOOL, EXECUTE_CODE_TOOL, WRITE_FILE_TOOL].sort());
+    expect(names).toEqual(
+      [
+        CREATE_FOLDER_TOOL,
+        EXECUTE_CODE_TOOL,
+        WRITE_FILE_TOOL,
+        READ_FILE_TOOL,
+        LIST_FILES_TOOL,
+        EDIT_FILE_TOOL,
+      ].sort(),
+    );
     for (const def of e2bExecutionToolDefs()) {
       expect(def.type).toBe('function');
       expect(def.function.parameters).toHaveProperty('type', 'object');
@@ -183,6 +195,9 @@ describe('resolveTurnCodeExecutionTools — reports a dropped "Run code" turn', 
       EXECUTE_CODE_TOOL,
       WRITE_FILE_TOOL,
       CREATE_FOLDER_TOOL,
+      LIST_FILES_TOOL,
+      READ_FILE_TOOL,
+      EDIT_FILE_TOOL,
     ]);
     expect(resolved.unavailable).toBe(false);
   });
@@ -235,5 +250,98 @@ describe('resolveTurnCodeExecutionTools — reports a dropped "Run code" turn', 
     });
     expect(resolved.tools).toEqual([]);
     expect(resolved.unavailable).toBe(true);
+  });
+});
+
+
+describe('workspace inspection and editing', () => {
+  function fsExecutor(files: Record<string, string>) {
+    const writeFile = vi.fn(async ({ path, content }: { path: string; content: string }) => {
+      files[path] = content;
+      return { ok: true as const, output: 'wrote' };
+    });
+    return {
+      executor: mockExecutor({
+        writeFile,
+        readFileBytes: vi.fn(async (path: string) =>
+          path in files ? new TextEncoder().encode(files[path]) : null,
+        ),
+        listFiles: vi.fn(async () =>
+          Object.entries(files).map(([path, body]) => ({
+            path,
+            name: path.split('/').pop() ?? path,
+            isDir: false,
+            byteSize: body.length,
+          })),
+        ),
+      }),
+      writeFile,
+    };
+  }
+
+  it('lists the workspace so the model does not invent paths', async () => {
+    const { executor } = fsExecutor({ 'index.html': '<html></html>' });
+    const res = await routeExecutionTool(executor, LIST_FILES_TOOL, {});
+    expect(res.ok).toBe(true);
+    expect(res.output).toContain('index.html');
+  });
+
+  it('reads a file back as text', async () => {
+    const { executor } = fsExecutor({ 'App.tsx': 'export default function App() {}' });
+    const res = await routeExecutionTool(executor, READ_FILE_TOOL, { path: 'App.tsx' });
+    expect(res).toMatchObject({ ok: true, output: 'export default function App() {}' });
+  });
+
+  it('reports a missing file instead of returning empty content', async () => {
+    const { executor } = fsExecutor({});
+    const res = await routeExecutionTool(executor, READ_FILE_TOOL, { path: 'nope.txt' });
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('No such file');
+  });
+
+  it('edits one occurrence in place and reports the diff', async () => {
+    const files = { 'index.html': '<link href="/favicon.ico">\n<div>app</div>' };
+    const { executor, writeFile } = fsExecutor(files);
+    const res = await routeExecutionTool(executor, EDIT_FILE_TOOL, {
+      path: 'index.html',
+      old_text: '/favicon.ico',
+      new_text: './favicon.ico',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.output).toBe('Edited index.html  +1 -1');
+    expect(writeFile).toHaveBeenCalledWith({
+      path: 'index.html',
+      content: '<link href="./favicon.ico">\n<div>app</div>',
+    });
+  });
+
+  it('refuses an ambiguous edit rather than changing the wrong line', async () => {
+    const { executor, writeFile } = fsExecutor({ 'a.ts': 'const x = 1;\nconst x = 1;' });
+    const res = await routeExecutionTool(executor, EDIT_FILE_TOOL, {
+      path: 'a.ts',
+      old_text: 'const x = 1;',
+      new_text: 'const x = 2;',
+    });
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('more than once');
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('refuses an edit whose anchor is absent', async () => {
+    const { executor, writeFile } = fsExecutor({ 'a.ts': 'hello' });
+    const res = await routeExecutionTool(executor, EDIT_FILE_TOOL, {
+      path: 'a.ts',
+      old_text: 'goodbye',
+      new_text: 'hi',
+    });
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('was not found');
+    expect(writeFile).not.toHaveBeenCalled();
+  });
+
+  it('degrades honestly when the sandbox cannot read files', async () => {
+    const res = await routeExecutionTool(mockExecutor(), READ_FILE_TOOL, { path: 'a.ts' });
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('unavailable');
   });
 });

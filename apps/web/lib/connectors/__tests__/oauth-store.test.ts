@@ -84,7 +84,7 @@ describe('pending authorizations', () => {
       {
         user_id: 'user-1',
         connector_id: 'linear',
-        code_verifier_enc: encryptConnectorToken('verifier-value'),
+        code_verifier_enc: encryptConnectorToken('verifier-value', 'oauth-code-verifier'),
         redirect_uri: 'https://app.example.com/api/connectors/oauth/callback',
         requested_scopes: ['read'],
         return_path: '/connectors',
@@ -165,8 +165,8 @@ describe('grants', () => {
     mockQuery.mockResolvedValue([
       {
         connector_id: 'linear',
-        access_token_enc: encryptConnectorToken('access-value'),
-        refresh_token_enc: encryptConnectorToken('refresh-value'),
+        access_token_enc: encryptConnectorToken('access-value', 'oauth-access-token'),
+        refresh_token_enc: encryptConnectorToken('refresh-value', 'oauth-refresh-token'),
         token_type: 'Bearer',
         granted_scopes: ['read'],
         access_token_expires_at: '2026-08-05T00:00:00.000Z',

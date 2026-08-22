@@ -1103,6 +1103,25 @@
     font-size: 17px;
   }
 
+  /*
+   * Chat font. Mirrors the data-chat-text-size scoping directly above, and
+   * offers only families layout.tsx actually loads — the previous control
+   * pointed at a CDN font the CSP blocked, so it fell back silently and looked
+   * like it did nothing.
+   *
+   * Code is pinned back to monospace explicitly: prose and code share the
+   * .prose subtree, and a serif `const` is not a preference anyone asked for.
+   */
+  html[data-chat-font='serif'] .prose {
+    font-family: var(--font-newsreader), Georgia, 'Times New Roman', serif;
+  }
+  html[data-chat-font='sans'] .prose {
+    font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  }
+  html[data-chat-font] .prose :is(code, pre, kbd, samp) {
+    font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+  }
+
   html[data-chat-text-size='small'] .code-block-body,
   html[data-chat-text-size='small'] .code-block-body pre,
   html[data-chat-text-size='small'] .code-block-body code {
@@ -1930,14 +1949,20 @@ html[data-contrast='more'] *:focus-visible {
   background: linear-gradient(135deg, hsl(200, 98%, 39%) 0%, hsl(240, 6%, 12%) 100%);
 }
 
-/* Font family utilities for chat */
-[data-chat-font='system'] {
-  --font-chat: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-
-[data-chat-font='dyslexic'] {
-  --font-chat: 'OpenDyslexic', system-ui, sans-serif;
-}
+/*
+ * The [data-chat-font] rules that sat here were removed on 2026-08-21.
+ *
+ * They were residue from the Dyslexic Friendly setting: the @font-face for
+ * OpenDyslexic went when the CSP blocked its CDN, and the setting went with it,
+ * but these two rules stayed. Nothing set data-chat-font and nothing read
+ * --font-chat, so the pair could only mislead the next reader into thinking a
+ * chat font control existed.
+ *
+ * A real chat-font picker (claude.ai ships one) needs --font-chat consumed by
+ * message rendering first, and the dyslexic option needs the OFL binaries
+ * self-hosted under public/fonts/. Both are recorded in the UI gap tracker
+ * rather than implied by dead CSS.
+ */
 
 /* ──────────────────────────────────────────────────────────────────────
  * AGI marketing theme — applied to elements with [data-design="agi"].
@@ -8799,4 +8824,24 @@ html[data-contrast='more'] *:focus-visible {
     font-size: 0.85em;
     word-break: break-all;
   }
+}
+
+/*
+ * In-app reduced motion.
+ *
+ * The eleven `prefers-reduced-motion` blocks above answer the OS setting. This
+ * answers the Motion control in General settings, for someone who wants calm
+ * here without changing their whole machine. It is one blanket rule rather than
+ * eleven duplicated blocks so a new animation cannot be added and silently
+ * escape the toggle — the failure mode that makes a motion switch decorative.
+ *
+ * `scroll-behavior` is included because a smooth-scrolled jump is motion too.
+ */
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }

@@ -12,6 +12,7 @@ import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { OfflineIndicator } from '@shared/components/OfflineIndicator';
 import { AppearancePreferences } from '@shared/components/AppearancePreferences';
+import { TelemetryConsentSync } from '@shared/components/TelemetryConsentSync';
 import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
 import { seoService } from '@/lib/seo/seo-optimizer';
@@ -36,6 +37,7 @@ export default function Providers({
           <I18nextProvider i18n={i18n}>
             <WaitlistModalProvider>
               <AppearancePreferences />
+              <TelemetryConsentSync />
               <SettingsModalProvider>{children}</SettingsModalProvider>
               <CommandPaletteProvider />
               <OfflineIndicator position="bottom" />

@@ -19,6 +19,8 @@ import { ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
 
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import type { LookupFunction } from 'node:net';
+import { Agent, type Dispatcher } from 'undici';
 
 const RETIRED_PROVIDER_HOSTS: ReadonlySet<string> = new Set(['api.mulerouter.ai']);
 
@@ -110,6 +112,73 @@ export function assertNonInternalHostname(urlString: string): void {
   }
 }
 
+interface PinnedAddress {
+  address: string;
+  family: number;
+}
+
+const PIN_TTL_MS = 60_000;
+const pinnedAddresses = new Map<string, { entries: PinnedAddress[]; expiresAt: number }>();
+
+// The connection must reuse the addresses the policy vetted: a second, independent DNS
+// resolution inside fetch() is what a rebinding attacker controls.
+function rememberPinnedAddresses(hostname: string, entries: PinnedAddress[]): void {
+  if (pinnedAddresses.size > 5_000) {
+    const now = Date.now();
+    for (const [host, pin] of pinnedAddresses) {
+      if (pin.expiresAt < now) pinnedAddresses.delete(host);
+    }
+  }
+  pinnedAddresses.set(hostname.toLowerCase(), { entries, expiresAt: Date.now() + PIN_TTL_MS });
+}
+
+export function pinnedAddressesFor(hostname: string): PinnedAddress[] | null {
+  const pin = pinnedAddresses.get(hostname.toLowerCase());
+  if (!pin || pin.expiresAt < Date.now()) return null;
+  return pin.entries;
+}
+
+type PinnedLookupCallback = (
+  error: Error | null,
+  address?: string | Array<{ address: string; family: number }>,
+  family?: number,
+) => void;
+
+export function pinnedLookup(
+  hostname: string,
+  options: { all?: boolean } | number | undefined,
+  callback: PinnedLookupCallback,
+): void {
+  const entries = pinnedAddressesFor(hostname);
+  if (!entries || entries.length === 0) {
+    callback(new Error(`Refusing to connect to ${hostname}: no vetted address is pinned`));
+    return;
+  }
+  if (typeof options === 'object' && options?.all) {
+    callback(null, entries);
+    return;
+  }
+  callback(null, entries[0]!.address, entries[0]!.family);
+}
+
+let pinnedAgent: Dispatcher | null = null;
+
+export function getPinnedPublicDispatcher(): Dispatcher {
+  if (!pinnedAgent) {
+    pinnedAgent = new Agent({
+      connect: { lookup: pinnedLookup as unknown as LookupFunction },
+    });
+  }
+  return pinnedAgent;
+}
+
+export function pinnedPublicFetch(
+  input: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response> {
+  return fetch(input, { ...init, dispatcher: getPinnedPublicDispatcher() } as RequestInit);
+}
+
 export async function assertResolvedPublicHostname(urlString: string): Promise<void> {
   let url: URL;
   try {
@@ -120,9 +189,13 @@ export async function assertResolvedPublicHostname(urlString: string): Promise<v
 
   assertNonInternalHostname(urlString);
 
-  if (isIP(url.hostname) !== 0) return;
+  const literalFamily = isIP(url.hostname);
+  if (literalFamily !== 0) {
+    rememberPinnedAddresses(url.hostname, [{ address: url.hostname, family: literalFamily }]);
+    return;
+  }
 
-  let addresses: Array<{ address: string }>;
+  let addresses: Array<{ address: string; family?: number }>;
   try {
     addresses = await lookup(url.hostname, { all: true, verbatim: true });
   } catch {
@@ -138,6 +211,14 @@ export async function assertResolvedPublicHostname(urlString: string): Promise<v
       throw new EgressPolicyError(urlString);
     }
   }
+
+  rememberPinnedAddresses(
+    url.hostname,
+    addresses.map((entry) => ({
+      address: entry.address,
+      family: entry.family ?? isIP(entry.address),
+    })),
+  );
 }
 
 export function validateEgressUrl(urlString: string): void {

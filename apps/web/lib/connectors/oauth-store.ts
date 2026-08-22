@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -77,7 +76,7 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
         input.userId,
         input.connectorId,
         hashOAuthState(input.state),
-        encryptConnectorToken(input.codeVerifier),
+        encryptConnectorToken(input.codeVerifier, 'oauth-code-verifier'),
         input.codeChallengeMethod,
         input.redirectUri,
         input.requestedScopes,
@@ -141,7 +140,7 @@ export async function consumePendingAuthorization(
 
   let codeVerifier: string;
   try {
-    codeVerifier = decryptConnectorToken(row.code_verifier_enc);
+    codeVerifier = decryptConnectorToken(row.code_verifier_enc, 'oauth-code-verifier');
   } catch (error) {
     logger.warn(
       { connectorId: row.connector_id, error: error instanceof Error ? error.message : 'unknown' },
@@ -212,8 +211,10 @@ export async function upsertConnectorOAuthGrant(
       [
         userId,
         connectorId,
-        encryptConnectorToken(tokens.accessToken),
-        tokens.refreshToken ? encryptConnectorToken(tokens.refreshToken) : null,
+        encryptConnectorToken(tokens.accessToken, 'oauth-access-token'),
+        tokens.refreshToken
+          ? encryptConnectorToken(tokens.refreshToken, 'oauth-refresh-token')
+          : null,
         tokens.tokenType,
         tokens.grantedScopes,
         tokens.accessTokenExpiresAt?.toISOString() ?? null,
@@ -249,8 +250,10 @@ export async function updateConnectorOAuthGrantTokens(
       [
         userId,
         connectorId,
-        encryptConnectorToken(tokens.accessToken),
-        tokens.refreshToken ? encryptConnectorToken(tokens.refreshToken) : null,
+        encryptConnectorToken(tokens.accessToken, 'oauth-access-token'),
+        tokens.refreshToken
+          ? encryptConnectorToken(tokens.refreshToken, 'oauth-refresh-token')
+          : null,
         tokens.tokenType,
         tokens.grantedScopes,
         tokens.accessTokenExpiresAt?.toISOString() ?? null,
@@ -329,8 +332,10 @@ function decodeGrantRow(row: GrantRow): ConnectorOAuthGrant {
   try {
     return {
       connectorId: row.connector_id,
-      accessToken: decryptConnectorToken(row.access_token_enc as string),
-      refreshToken: row.refresh_token_enc ? decryptConnectorToken(row.refresh_token_enc) : null,
+      accessToken: decryptConnectorToken(row.access_token_enc as string, 'oauth-access-token'),
+      refreshToken: row.refresh_token_enc
+        ? decryptConnectorToken(row.refresh_token_enc, 'oauth-refresh-token')
+        : null,
       tokenType: row.token_type,
       grantedScopes: row.granted_scopes ?? [],
       accessTokenExpiresAt: row.access_token_expires_at
