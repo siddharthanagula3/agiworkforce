@@ -1,5 +1,4 @@
-
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   generateTOTPSecret,
   generateOTPAuthURL,
@@ -98,7 +97,6 @@ describe('TOTP 2FA Implementation', () => {
     });
 
     it('should generate correct code for RFC 6238 test vector', async () => {
-
       const secret = 'GEZDGNBVGY3TQOJQ';
       const timestamp = 59000;
 
@@ -216,6 +214,22 @@ describe('TOTP 2FA Implementation', () => {
   });
 
   describe('hashBackupCode', () => {
+    it('keys the digest under the TOTP key and still verifies legacy unkeyed digests', async () => {
+      const { createHash } = await import('node:crypto');
+      vi.stubEnv('TOTP_ENCRYPTION_KEY', 'a'.repeat(32) + 'b'.repeat(32));
+      try {
+        const keyed = await hashBackupCode('ABCD-EFGH');
+        expect(keyed.startsWith('h1.')).toBe(true);
+        expect(keyed).not.toContain(createHash('sha256').update('ABCDEFGH').digest('hex'));
+        const legacy = createHash('sha256').update('ABCDEFGH').digest('hex');
+        expect(await verifyBackupCode('ABCD-EFGH', ['nope', legacy])).toBe(1);
+        expect(await verifyBackupCode('ABCD-EFGH', ['nope', keyed])).toBe(1);
+        expect(await verifyBackupCode('ABCD-EFGI', [legacy, keyed])).toBe(-1);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
     it('should generate a consistent hash for the same code', async () => {
       const code = 'ABCD-EFGH';
 
@@ -251,7 +265,7 @@ describe('TOTP 2FA Implementation', () => {
     it('should generate a 64-character hex hash (SHA-256)', async () => {
       const hash = await hashBackupCode('ABCD-EFGH');
 
-      expect(hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(hash).toMatch(/^(h1\.)?[0-9a-f]{64}$/);
     });
   });
 
