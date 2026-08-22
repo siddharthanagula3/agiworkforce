@@ -6,6 +6,7 @@ import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const NAMESPACE = 'safety';
 
@@ -34,7 +35,7 @@ export function SafetySection() {
       })
       .catch((caught) => {
         if (!cancelled) {
-          setError(caught instanceof Error ? caught.message : 'Failed to load safety settings');
+          setError(toUserMessage(caught, 'Failed to load safety settings'));
         }
       })
       .finally(() => {
@@ -56,7 +57,7 @@ export function SafetySection() {
           ...current,
           reduceSensitiveContent: !enabled,
         }));
-        setError(caught instanceof Error ? caught.message : 'Failed to save safety settings');
+        setError(toUserMessage(caught, 'Failed to save safety settings'));
       })
       .finally(() => setSaving(false));
   };

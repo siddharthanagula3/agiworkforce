@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
-import { Copy, Check, LogOut, RefreshCw, Trash2 } from 'lucide-react';
+import { LogOut, RefreshCw, Trash2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +18,11 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
+import { LinkedDevicesPanel } from '../components/LinkedDevicesPanel';
+import { CopyableIdField } from '../components/CopyableIdField';
+import { useOrganizationOverview } from '../hooks/use-settings-queries';
 import { useDeleteAccount } from '../hooks/use-settings-queries';
+import { toUserMessage } from '@/lib/user-error-message';
 
 function formatDateTime(value: Date | null | undefined): string {
   if (!value) return '—';
@@ -71,18 +75,8 @@ export function AccountSection() {
   const router = useRouter();
 
   const userId = user?.id ?? null;
-  const [copied, setCopied] = useState(false);
+  const organizationId = useOrganizationOverview().data?.organization?.id ?? null;
 
-  const handleCopyUserId = useCallback(async () => {
-    if (!userId) return;
-    try {
-      await navigator.clipboard.writeText(userId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API may be unavailable in some contexts; fail silently.
-    }
-  }, [userId]);
 
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -149,7 +143,7 @@ export function AccountSection() {
         router.replace('/login');
         return;
       }
-      setLogoutError(err instanceof Error ? err.message : 'Sign out failed.');
+      setLogoutError(toUserMessage(err, 'Sign out failed.'));
       setLoggingOut(false);
     }
   }, [logout, clerkSignOut, router]);
@@ -182,7 +176,7 @@ export function AccountSection() {
           return;
         }
         setSessionActionError(
-          error instanceof Error ? error.message : 'Unable to revoke this session.',
+          toUserMessage(error, 'Unable to revoke this session.'),
         );
       } finally {
         setRevokingSessionId(null);
@@ -391,70 +385,35 @@ export function AccountSection() {
           Account identifier
         </div>
         <div style={{ padding: '20px' }}>
-          <label
-            htmlFor="user-id-field"
-            style={{
-              display: 'block',
-              fontSize: 13,
-              fontWeight: 500,
-              color: 'var(--text-2)',
-              marginBottom: 8,
-            }}
-          >
-            User ID
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              id="user-id-field"
-              type="text"
-              readOnly
-              value={userId ?? 'Not available'}
-              style={{
-                flex: 1,
-                fontSize: 13,
-                fontFamily: 'var(--mono)',
-                padding: '8px 12px',
-                background: 'var(--bg-base, #09090b)',
-                color: 'var(--text-3)',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius-md)',
-                minWidth: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => void handleCopyUserId()}
-              disabled={!userId}
-              aria-label="Copy user ID"
-              title="Copy"
-              style={{
-                flexShrink: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 34,
-                height: 34,
-                padding: 0,
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius-md)',
-                color: copied ? 'var(--teal, #21808d)' : 'var(--text-3)',
-                cursor: userId ? 'pointer' : 'not-allowed',
-                opacity: userId ? 1 : 0.4,
-                transition: 'color 0.15s',
-              }}
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-            </button>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '8px 0 0' }}>
-            Your account identifier. Share with support when reporting issues.
-          </p>
+          <CopyableIdField
+            id="user-id-field"
+            label="User ID"
+            value={userId}
+            copyLabel="Copy user ID"
+            hint="Your account identifier. Share with support when reporting issues."
+          />
+
+          {/*
+            Organization ID, matching what claude.ai shows beside the user id.
+            Rendered only when the account is actually in an organization —
+            "Not available" for a solo account would imply something failed to
+            load rather than that there is nothing to show.
+          */}
+          {organizationId ? (
+            <div style={{ marginTop: 20 }}>
+              <CopyableIdField
+                id="organization-id-field"
+                label="Organization ID"
+                value={organizationId}
+                copyLabel="Copy organization ID"
+                hint="Identifies your workspace. Support will ask for this before anything workspace-wide."
+              />
+            </div>
+          ) : null}
         </div>
       </section>
+
+      <LinkedDevicesPanel />
 
       {/* Active sessions table */}
       <section
@@ -697,9 +656,10 @@ export function AccountSection() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete your account and all associated data. There is a
-                  24-hour grace window before deletion completes. After that, this action cannot be
-                  reversed.
+                  This permanently deletes your account and all associated data. You are signed
+                  out immediately and cannot sign back in. Erasure runs 24 hours after you
+                  confirm, and there is no self-serve way to cancel it — contact support inside
+                  that window if you change your mind.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-1">

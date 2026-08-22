@@ -58,11 +58,33 @@ export async function getTeamAdminAccess(
   };
 }
 
+async function assertOrganizationMember(
+  db: DatabaseAdapter,
+  userId: string,
+  organizationId: string,
+): Promise<void> {
+  const rows = await db.query<{ user_id: string }>(
+    `select user_id
+       from public.organization_members
+      where organization_id = $1 and user_id = $2
+      limit 1`,
+    [organizationId, userId],
+  );
+  if (rows.length === 0) {
+    throw new AppError(
+      'FORBIDDEN' as ErrorCodeValue,
+      'You are not a member of this organization',
+      403,
+    );
+  }
+}
+
 export async function requireTeamAdminAccess(
   db: DatabaseAdapter,
   userId: string,
   organizationId?: string | null,
 ): Promise<TeamAdminAccess> {
+  if (organizationId) await assertOrganizationMember(db, userId, organizationId);
   const access = await getTeamAdminAccess(db, userId, organizationId);
 
   if (!access.canManageTeam) {

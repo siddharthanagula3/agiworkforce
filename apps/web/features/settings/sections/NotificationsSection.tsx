@@ -6,6 +6,7 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { Switch } from '@agiworkforce/ui';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const NAMESPACE = 'notifications';
 
@@ -84,7 +85,7 @@ export function NotificationsSection() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setSaveError(error instanceof Error ? error.message : 'Failed to load notifications');
+          setSaveError(toUserMessage(error, 'Failed to load notifications'));
         }
       })
       .finally(() => {
@@ -102,7 +103,7 @@ export function NotificationsSection() {
       setSaveError(null);
       savePreferenceNamespace(NAMESPACE, next)
         .catch((error) => {
-          setSaveError(error instanceof Error ? error.message : 'Failed to save notifications');
+          setSaveError(toUserMessage(error, 'Failed to save notifications'));
         })
         .finally(() => setSaving(false));
       return next;
