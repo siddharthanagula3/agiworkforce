@@ -3,6 +3,15 @@ import type { Skill } from './types';
 export const DEFAULT_SKILL_RELEVANCE_MINIMUM_SCORE = 0.15;
 export const DEFAULT_SKILL_RELEVANCE_LIMIT = 3;
 const SKILL_NAME_MENTION_BOOST = 0.3;
+/**
+ * One shared word is coincidence, not topicality: "…for this release" overlaps
+ * a changelog skill on `release` alone and means nothing by it. Requiring two
+ * distinct matched tokens keeps coverage permissive about prompt length while
+ * still refusing a single-word accident. Skills whose whole vocabulary is one
+ * token can still match on it.
+ */
+const MIN_MATCHED_TOKENS = 2;
+const COVERAGE_DENOMINATOR_CAP = 12;
 const MAX_MATCHED_KEYWORDS = 5;
 
 const STOPWORDS = new Set([
@@ -101,13 +110,30 @@ function tokenize(text: string): Set<string> {
   return tokens;
 }
 
-function jaccardSimilarity(left: ReadonlySet<string>, right: ReadonlySet<string>): number {
-  let intersection = 0;
-  for (const token of left) {
-    if (right.has(token)) intersection += 1;
+/**
+ * How much of the SKILL's vocabulary the prompt covers.
+ *
+ * This replaced Jaccard, which is symmetric and therefore put every prompt word
+ * in the denominator: a longer, more specific request scored LOWER than a terse
+ * one, and real questions landed under the threshold almost every time
+ * ("which channel converted best?" against data-analysis scored 0.000).
+ *
+ * Relevance here is directional — the question is whether the prompt is about
+ * what the skill covers, not whether the two texts are the same size. Dividing
+ * by the skill's own token count answers that and leaves prompt length alone.
+ */
+function skillCoverage(promptTokens: ReadonlySet<string>, skillTokens: ReadonlySet<string>): number {
+  if (skillTokens.size === 0) return 0;
+  let matched = 0;
+  for (const token of skillTokens) {
+    if (promptTokens.has(token)) matched += 1;
   }
-  const union = left.size + right.size - intersection;
-  return union === 0 ? 0 : intersection / union;
+  // Cap the denominator, or a thorough description scores WORSE than a terse
+  // one: an author who lists the words users actually type ("crashing",
+  // "erroring", "intermittently") would dilute their own score with every term
+  // added, which punishes exactly the behaviour the skill-authoring guidance
+  // asks for. Past the cap, relevance grows with matched evidence instead.
+  return matched / Math.min(skillTokens.size, COVERAGE_DENOMINATOR_CAP);
 }
 
 export function matchSkillsForPrompt(
@@ -133,14 +159,17 @@ export function matchSkillsForPrompt(
     const skillTokens = tokenize(`${skill.name} ${skill.description}`);
     if (skillTokens.size === 0) continue;
 
-    let score = jaccardSimilarity(promptTokens, skillTokens);
-    if (promptLower.includes(skill.name.toLowerCase())) score += SKILL_NAME_MENTION_BOOST;
+    const matched = [...promptTokens].filter((token) => skillTokens.has(token)).sort();
+    const namedExplicitly = promptLower.includes(skill.name.toLowerCase());
+    if (!namedExplicitly && matched.length < Math.min(MIN_MATCHED_TOKENS, skillTokens.size)) {
+      continue;
+    }
+
+    let score = skillCoverage(promptTokens, skillTokens);
+    if (namedExplicitly) score += SKILL_NAME_MENTION_BOOST;
     if (score <= minimumScore) continue;
 
-    const matchedKeywords = [...promptTokens]
-      .filter((token) => skillTokens.has(token))
-      .sort()
-      .slice(0, MAX_MATCHED_KEYWORDS);
+    const matchedKeywords = matched.slice(0, MAX_MATCHED_KEYWORDS);
 
     matches.push({ skill, score, matchedKeywords });
   }
