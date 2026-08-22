@@ -104,7 +104,7 @@ export function DeviceSignInToggle() {
             border: 'none',
             cursor: !loaded || saving ? 'default' : 'pointer',
             opacity: loaded ? 1 : 0.5,
-            background: enabled ? 'var(--chat-accent-primary, #c8892a)' : 'var(--settings-border)',
+            background: enabled ? 'var(--chat-accent-primary)' : 'var(--settings-border)',
             transition: 'background 0.15s',
           }}
         >
