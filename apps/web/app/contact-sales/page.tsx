@@ -38,9 +38,14 @@ export default function ContactSalesPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Your security review</h3>
               <p className="agi-reason-p">
-                Which controls matter first, such as SSO, SCIM, audit logs, BYOK policy, or
-                retention windows? None of those are self-serve today — naming them tells us what to
-                scope.
+                Which controls matter first? SSO and SCIM provisioning are implemented and
+                configured by your org owner; audit capture is in place but extracts are supplied
+                under contract; neither per-organization retention windows
+                nor org-wide BYOK enforcement is shipped, and both are handled under contract. The{' '}
+                <Link className="agi-link" href="/enterprise">
+                  Enterprise page
+                </Link>{' '}
+                states which is which, row by row.
               </p>
             </li>
             <li className="agi-reason">

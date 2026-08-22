@@ -20,6 +20,7 @@ import {
   formatCatalogPrice,
   type SelectablePaidPlan,
 } from '../lib/plan-display';
+import { toUserMessage } from '@/lib/user-error-message';
 
 export interface UpgradeOrderPanelProps {
   plan: SelectablePaidPlan;
@@ -129,7 +130,7 @@ export function UpgradeOrderPanel({
             setError('Could not verify the full checkout price. Please refresh and try again.');
           }
         } else {
-          setError(e instanceof Error ? e.message : 'Could not calculate the upgrade cost.');
+          setError(toUserMessage(e, 'Could not calculate the upgrade cost.'));
         }
       })
       .finally(() => {
@@ -160,7 +161,7 @@ export function UpgradeOrderPanel({
     try {
       await openBillingPortal(returnPath);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not open the billing portal.');
+      setError(toUserMessage(e, 'Could not open the billing portal.'));
     }
   }, [returnPath]);
 
@@ -185,7 +186,7 @@ export function UpgradeOrderPanel({
       });
       onUpgraded?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upgrade failed. Your current plan is unchanged.');
+      setError(toUserMessage(e, 'Upgrade failed. Your current plan is unchanged.'));
       setConfirming(false);
     }
   }

@@ -4,7 +4,6 @@ export {
   useSubscription,
   useInvoices,
   usePaymentMethods,
-  useCancelSubscription,
   useUpdatePaymentMethod,
   useInvalidateBillingQueries,
   type BillingPlan,

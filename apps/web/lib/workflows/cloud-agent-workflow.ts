@@ -32,6 +32,7 @@ import {
   settleWorkflowInvocation,
   type WorkflowTerminalOutcome,
 } from './steps/settle-workflow-invocation';
+import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 
 const ProviderCallObservationSchema = z
   .object({
@@ -178,6 +179,9 @@ export async function executeCloudAgentWorkflowInvocation(
     mcpTools: input.mcpTools,
     approvalMode: input.approvalMode,
     toolApprovalPolicy: input.toolApprovalPolicy,
+    ...(input.connectorPermissions
+      ? { connectorPermissions: connectorToolPermissionsFromEntries(input.connectorPermissions) }
+      : {}),
     userId: input.userId,
     connectorExecutor,
     resume: input.continuation?.resume,

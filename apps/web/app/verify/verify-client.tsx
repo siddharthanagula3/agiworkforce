@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 import { useState } from 'react';
 import { Button } from '@agiworkforce/ui';
+import { toUserMessage } from '@/lib/user-error-message';
 
 function getErrorMessage(data: { error?: unknown } | null): string {
   const error = data?.error;
@@ -72,7 +73,7 @@ export function VerifyDeviceClient({ code }: { code: string }) {
     } catch (e) {
       setMessage({
         type: 'error',
-        text: e instanceof Error ? e.message : 'Unexpected error',
+        text: toUserMessage(e, 'Unexpected error'),
       });
     } finally {
       setLoading(null);

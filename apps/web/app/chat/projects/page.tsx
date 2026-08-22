@@ -10,6 +10,7 @@ import { useManagedCloudProjects, useProjectStore } from '@features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toast } from 'sonner';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type SortMode = 'updated' | 'created' | 'name' | 'starred';
 
@@ -81,7 +82,7 @@ export default function ProjectsPage() {
         await webManagedCloudProjects.updateProject(project.id, { isArchived: true });
       } catch (error) {
         updateProject(project.id, { isArchived: false });
-        toast.error(error instanceof Error ? error.message : 'Failed to archive project');
+        toast.error(toUserMessage(error, 'Failed to archive project'));
       }
     },
     [updateProject],
@@ -94,7 +95,7 @@ export default function ProjectsPage() {
         await webManagedCloudProjects.updateProject(project.id, { isArchived: false });
       } catch (error) {
         updateProject(project.id, { isArchived: true });
-        toast.error(error instanceof Error ? error.message : 'Failed to restore project');
+        toast.error(toUserMessage(error, 'Failed to restore project'));
       }
     },
     [updateProject],
@@ -106,7 +107,7 @@ export default function ProjectsPage() {
         await webManagedCloudProjects.updateProject(projectId, { starred });
       } catch (error) {
         updateProject(projectId, { starred: !starred });
-        toast.error(error instanceof Error ? error.message : 'Failed to update star');
+        toast.error(toUserMessage(error, 'Failed to update star'));
       }
     },
     [updateProject],
@@ -124,7 +125,7 @@ export default function ProjectsPage() {
         ) {
           addProject(project);
         }
-        toast.error(error instanceof Error ? error.message : 'Failed to delete project');
+        toast.error(toUserMessage(error, 'Failed to delete project'));
       }
     },
     [addProject, removeProject],

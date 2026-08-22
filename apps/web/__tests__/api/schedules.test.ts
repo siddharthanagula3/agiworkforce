@@ -31,7 +31,8 @@ import {
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { GET, POST } from '@/app/api/schedules/route';
 
-const db = { query: vi.fn() };
+const tx = { query: vi.fn(), execute: vi.fn(async () => 0) };
+const db = { query: vi.fn(), transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
 const quotaDb = { query: vi.fn() };
 const schedule = { id: 'task-1', userId: 'user-1', scheduleType: 'cron' };
 
@@ -79,8 +80,11 @@ describe('/api/schedules', () => {
       }),
     );
     expect(response.status).toBe(201);
-    expect(assertScheduleQuota).toHaveBeenCalledWith(quotaDb, 'user-1', 'pro');
-    expect(createSchedule).toHaveBeenCalledWith(db, 'user-1', body);
+    expect(tx.execute).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_xact_lock'), [
+      'scheduled_tasks:user-1',
+    ]);
+    expect(assertScheduleQuota).toHaveBeenCalledWith(tx, 'user-1', 'pro');
+    expect(createSchedule).toHaveBeenCalledWith(tx, 'user-1', body);
   });
 
   it('refuses to arm another unattended run past the plan ceiling', async () => {

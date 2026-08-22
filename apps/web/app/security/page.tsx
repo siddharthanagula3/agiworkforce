@@ -246,7 +246,7 @@ const LOGGING: { k: string; v: string }[] = [
 const DELETION: { title: string; body: string }[] = [
   {
     title: 'The list is enumerated, not implied',
-    body: 'Erasure walks a hardcoded, foreign-key-ordered list of 67 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, consent records, data-rights requests, email preferences, device registrations, sync data, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
+    body: 'Erasure walks a hardcoded, foreign-key-ordered list of 68 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, sync data, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
   },
   {
     title: 'Bytes before rows',

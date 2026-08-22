@@ -457,65 +457,6 @@ export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
     },
   });
 }
-
-/**
- * Cancel subscription mutation.
- *
- * Redirects the user to the Stripe Customer Portal where they can cancel
- * their subscription. This replaces a direct API call to a non-existent
- * /payments/cancel-subscription route; all subscription self-service
- * (cancel, resume, download invoices) is handled by the portal.
- *
- * @returns UseMutationResult for cancelling subscription
- */
-export function useCancelSubscription(): UseMutationResult<void, Error, { atPeriodEnd?: boolean }> {
-  const { user } = useAuthStore();
-
-  return useMutation<void, Error, { atPeriodEnd?: boolean }>({
-    mutationFn: async () => {
-      if (!user?.id) {
-        throw new Error('You must be logged in');
-      }
-
-      const token = await getAuthToken();
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
-      const response = await fetch('/api/portal', {
-        method: 'POST',
-        headers: await addCsrfHeaders({
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        }),
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error || 'Failed to open billing portal');
-      }
-
-      const { url } = (await response.json()) as { url: string };
-      window.location.href = url;
-    },
-    onError: (error: Error) => {
-      logger.error('Failed to open billing portal for cancellation:', error);
-      toast.error(error.message || 'Failed to open billing portal');
-    },
-  });
-}
-
-/**
- * Update payment method mutation.
- *
- * Redirects the user to the Stripe Customer Portal where they can update
- * their default payment method. This replaces a direct API call to a
- * non-existent /payments/set-default-payment-method route; all payment
- * method management is handled by the portal.
- *
- * @returns UseMutationResult for updating payment method
- */
 export function useUpdatePaymentMethod(): UseMutationResult<
   void,
   Error,

@@ -7,6 +7,7 @@ import {
   type LibraryTransport,
 } from '@agiworkforce/unified-chat';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { exportDocument } from '@features/chat/services/document-export-service';
 
 export { iconKindFor, generatedFileFromLibraryItem } from '@agiworkforce/unified-chat';
 
@@ -48,6 +49,14 @@ export function LibraryView() {
       openPreview: (uri) => {
         window.open(uri, '_blank', 'noopener,noreferrer');
       },
+      // 'excel' is deliberately absent: the export service builds PDF and DOCX
+      // and there is no xlsx writer on web, so offering it would be a control
+      // that fails after the user picks it.
+      nativeExportFormats: ['pdf', 'word'] as const,
+      exportNative: (format, _artifactId, content, title) =>
+        exportDocument(content, format === 'word' ? 'docx' : 'pdf', title || 'artifact', {
+          title: title || 'Artifact',
+        }),
     }),
     [isLoaded, isSignedIn],
   );

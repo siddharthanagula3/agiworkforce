@@ -31,6 +31,7 @@ export interface MappedProject {
   instructions: string | null;
   color: string | null;
   isArchived: boolean;
+  usesGlobalMemory: boolean;
   metadata: Record<string, unknown> | null;
   defaultPrivacyMode: PrivacyMode;
   defaultProviderMode: ProviderMode;
@@ -118,6 +119,9 @@ export function mapProjectRow(row: Record<string, unknown>): MappedProject {
     instructions: asString(row['instructions']),
     color: asString(row['color']),
     isArchived: asBool(row['is_archived'], false),
+    // Absent before 0135 and for any row the select does not carry it on:
+    // default true, which is the pre-0135 behaviour.
+    usesGlobalMemory: asBool(row['uses_global_memory'], true),
     metadata: asMetadata(row['metadata']),
     defaultPrivacyMode: asPrivacyMode(row['default_privacy_mode']),
     defaultProviderMode: asProviderMode(row['default_provider_mode']),
