@@ -561,6 +561,7 @@ async function dispatchChatCompletions(
             mcpTools,
             approvalMode: loopInputs.approvalMode,
             toolApprovalPolicy,
+            connectorPermissions,
           });
           const durableHeaders = baseAgentHeaders();
           durableHeaders['X-AGI-Tool-Loop'] = 'durable';

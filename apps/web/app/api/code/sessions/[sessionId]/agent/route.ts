@@ -21,6 +21,7 @@ import {
   parseManagedUsageIdempotencyKey,
 } from '@/lib/services/managed-usage-request-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 
 export const runtime = 'nodejs';
 
@@ -57,6 +58,11 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
 
   if (!e2bProvisioningReady()) {
     throw createError.serviceUnavailable('Managed Code is not enabled for this deployment');
+  }
+  if (!isManagedComputePrivateBetaEnabled()) {
+    throw createError.serviceUnavailable(
+      'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
+    );
   }
 
   let idempotencyKey: string;

@@ -197,7 +197,9 @@ async function handlePost(request: NextRequest) {
   }
 
   const now = new Date().toISOString();
-  const authHeaderEnc = authToken ? encryptConnectorToken(authToken) : null;
+  const authHeaderEnc = authToken
+    ? encryptConnectorToken(authToken, 'custom-connector-auth-header')
+    : null;
 
   let saved: CustomConnectorRow | undefined;
   try {

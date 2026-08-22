@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 const {
   mockGetClerkAuthUser,
   mockGetBoundedPrivateObject,
+  mockCopyPrivateObjectIfUnchanged,
   mockDeletePrivateObject,
   mockInsertMediaAsset,
   mockGetMediaAssetByStoragePathname,
@@ -25,6 +26,7 @@ const {
   return {
     mockGetClerkAuthUser: vi.fn(),
     mockGetBoundedPrivateObject: vi.fn(),
+    mockCopyPrivateObjectIfUnchanged: vi.fn(),
     mockDeletePrivateObject: vi.fn(),
     mockInsertMediaAsset: vi.fn(),
     mockGetMediaAssetByStoragePathname: vi.fn(),
@@ -45,6 +47,7 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/server/object-storage', () => ({
   isPrivateObjectStorageConfigured: vi.fn(() => true),
   getBoundedPrivateObject: mockGetBoundedPrivateObject,
+  copyPrivateObjectIfUnchanged: mockCopyPrivateObjectIfUnchanged,
   deletePrivateObject: mockDeletePrivateObject,
   StoredObjectTooLargeError,
 }));
@@ -85,7 +88,12 @@ beforeEach(() => {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockResolveActiveOrganizationId.mockResolvedValue(ORGANIZATION_ID);
   mockGetMediaAssetByStoragePathname.mockResolvedValue(null);
-  mockGetBoundedPrivateObject.mockResolvedValue({ data: PNG_BYTES, contentType: 'image/png' });
+  mockGetBoundedPrivateObject.mockResolvedValue({
+    data: PNG_BYTES,
+    contentType: 'image/png',
+    etag: '"etag-1"',
+  });
+  mockCopyPrivateObjectIfUnchanged.mockResolvedValue(true);
   mockInsertMediaAsset.mockResolvedValue('asset-1');
   mockDeletePrivateObject.mockResolvedValue(undefined);
   loggerMock.error.mockClear();
@@ -112,10 +120,38 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
     expect(mockInsertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: ORGANIZATION_ID }),
     );
-    expect(mockDeletePrivateObject).not.toHaveBeenCalled();
     expect(mockInsertMediaAsset).toHaveBeenCalledWith(
-      expect.objectContaining({ storageUrl: STORAGE_KEY, storagePathname: STORAGE_KEY }),
+      expect.objectContaining({
+        storageUrl: `${STORAGE_KEY}.scanned`,
+        storagePathname: `${STORAGE_KEY}.scanned`,
+      }),
     );
+    expect(mockCopyPrivateObjectIfUnchanged).toHaveBeenCalledWith({
+      sourceKey: STORAGE_KEY,
+      destinationKey: `${STORAGE_KEY}.scanned`,
+      etag: '"etag-1"',
+    });
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
+  });
+
+  it('rejects an upload whose bytes changed between the scan and the seal', async () => {
+    mockCopyPrivateObjectIfUnchanged.mockResolvedValue(false);
+
+    const response = await POST(completeRequest());
+
+    expect(response.status).toBe(400);
+    expect(mockInsertMediaAsset).not.toHaveBeenCalled();
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
+  });
+
+  it('never registers an object it could not pin to an ETag', async () => {
+    mockGetBoundedPrivateObject.mockResolvedValue({ data: PNG_BYTES, contentType: 'image/png' });
+
+    const response = await POST(completeRequest());
+
+    expect(response.status).toBe(400);
+    expect(mockCopyPrivateObjectIfUnchanged).not.toHaveBeenCalled();
+    expect(mockInsertMediaAsset).not.toHaveBeenCalled();
   });
 
   it('rejects, deletes, and reports an attachment whose digest is on the list', async () => {

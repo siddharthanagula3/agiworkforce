@@ -66,9 +66,6 @@ const READ_ONLY_COMMANDS = new Set([
   'date',
   'env',
   'printenv',
-  'node',
-  'python',
-  'python3',
 ]);
 
 const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
@@ -108,6 +105,10 @@ const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   {
     pattern: /\brm\b|\bmv\b|\btruncate\b|\bshred\b/,
     reason: 'Deletes or moves files in the workspace.',
+  },
+  {
+    pattern: /\bfind\b.*\s-(?:delete|exec|execdir|ok|okdir|fprint0?|fprintf|fls)\b/,
+    reason: 'find with an action flag deletes files or executes commands.',
   },
   {
     pattern: /\b(npm|pnpm|yarn|pip|pip3|cargo|go|gem|apt|apt-get|brew)\b/,
@@ -161,6 +162,43 @@ export function classifyCommandRisk(rawCommand: string): CommandClassification {
     risk: 'requires_approval',
     reason: `"${firstToken}" is not a recognized read-only command, so it needs your approval.`,
   };
+}
+
+const EXECUTE_CODE_INTERPRETERS: Readonly<Record<string, string>> = Object.freeze({
+  python: 'python3 -',
+  python3: 'python3 -',
+  node: 'node -',
+  javascript: 'node -',
+  bash: 'bash -s',
+  sh: 'sh -s',
+  shell: 'sh -s',
+});
+const MAX_EXECUTE_CODE_CHARS = 20_000;
+
+// execute_code is expressed as the shell command it amounts to, so it crosses the same
+// classification and approval boundary as run_command instead of bypassing it.
+export function executeCodeAsShellCommand(
+  input: Record<string, unknown>,
+): { command: string } | { refused: string } {
+  const language =
+    typeof input['language'] === 'string' ? input['language'].trim().toLowerCase() : '';
+  const code = typeof input['code'] === 'string' ? input['code'] : '';
+  const interpreter = EXECUTE_CODE_INTERPRETERS[language];
+  if (!interpreter) {
+    return {
+      refused: `execute_code does not support "${language || '<missing>'}" in Code sessions; use run_command instead.`,
+    };
+  }
+  if (!code.trim()) return { refused: 'execute_code requires non-empty "code".' };
+  if (code.length > MAX_EXECUTE_CODE_CHARS) {
+    return {
+      refused: `execute_code accepts at most ${MAX_EXECUTE_CODE_CHARS} characters of code.`,
+    };
+  }
+  const lines = code.split('\n').map((line) => line.trim());
+  let delimiter = 'AGI_CODE_EOF';
+  for (let suffix = 1; lines.includes(delimiter); suffix += 1) delimiter = `AGI_CODE_EOF_${suffix}`;
+  return { command: `${interpreter} <<'${delimiter}'\n${code}\n${delimiter}` };
 }
 
 export const CLOUD_CODE_READ_FILE_TOOL = 'read_file';

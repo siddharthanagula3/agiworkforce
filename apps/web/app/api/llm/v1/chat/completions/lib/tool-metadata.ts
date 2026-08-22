@@ -97,6 +97,27 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: false,
     declared: true,
   },
+  list_files: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  read_file: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: true,
+    createsEgressPath: false,
+    declared: true,
+  },
+  edit_file: {
+    actionClass: 'write',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
   create_office_file: {
     actionClass: 'write',
     reversible: true,

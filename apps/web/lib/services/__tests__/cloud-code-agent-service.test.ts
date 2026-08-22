@@ -22,7 +22,12 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 }));
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
-  return { ...actual, getCloudCodeSession: vi.fn() };
+  return {
+    ...actual,
+    getCloudCodeSession: vi.fn(),
+    claimCloudCodeSessionForRun: vi.fn(async () => ({ state: 'running' })),
+    releaseCloudCodeSessionAfterRun: vi.fn(async () => ({ state: 'ready' })),
+  };
 });
 
 import { SLOT_REGISTRY, listCanonicalModels } from '@agiworkforce/types';

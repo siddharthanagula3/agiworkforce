@@ -24,9 +24,11 @@ import {
 } from './cloud-code-agent-loop';
 import {
   CloudCodeConflictError,
-  CloudCodeUnavailableError,
-  getCloudCodeSession,
   type CloudCodeOwner,
+  CloudCodeUnavailableError,
+  claimCloudCodeSessionForRun,
+  getCloudCodeSession,
+  releaseCloudCodeSessionAfterRun,
 } from './cloud-code-session-service';
 
 const ESTIMATED_TURN_COST_CENTS = 25;
@@ -107,6 +109,20 @@ export interface PersistedAgentTurnExecution {
 export async function executePersistedAgentTurn(
   input: PersistedAgentTurnExecution,
 ): Promise<CloudCodeAgentTurnRecord> {
+  const claimed = await claimCloudCodeSessionForRun(input.db, input.owner, input.sessionId);
+  if (!claimed) {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  try {
+    return await runClaimedAgentTurn(input);
+  } finally {
+    await releaseCloudCodeSessionAfterRun(input.db, input.owner, input.sessionId);
+  }
+}
+
+async function runClaimedAgentTurn(
+  input: PersistedAgentTurnExecution,
+): Promise<CloudCodeAgentTurnRecord> {
   const { db, owner, session, sessionId, turnId, goal, model, provider, planTier, idempotencyKey } =
     input;
   const isFlagship = isFlagshipModel(model);
@@ -128,8 +144,12 @@ export async function executePersistedAgentTurn(
   } catch (error) {
     await db.query(
       `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
-        where id = $1`,
-      [turnId, error instanceof Error ? error.message.slice(0, 2000) : 'Usage reservation failed'],
+        where id = $1 and user_id = $3`,
+      [
+        turnId,
+        error instanceof Error ? error.message.slice(0, 2000) : 'Usage reservation failed',
+        owner.userId,
+      ],
     );
     throw error;
   }
@@ -145,8 +165,8 @@ export async function executePersistedAgentTurn(
     await finalizeManagedUsageRequest({ ...reservation, outcome: 'failed', actualCostCents: 0 });
     await db.query(
       `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
-        where id = $1`,
-      [turnId, 'Managed Code environment could not be attached'],
+        where id = $1 and user_id = $3`,
+      [turnId, 'Managed Code environment could not be attached', owner.userId],
     );
     throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
   }
@@ -197,8 +217,12 @@ export async function executePersistedAgentTurn(
     await finalizeManagedUsageRequest({ ...reservation, outcome: 'failed', actualCostCents: 0 });
     await db.query(
       `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
-        where id = $1`,
-      [turnId, error instanceof Error ? error.message.slice(0, 2000) : 'Agent turn failed'],
+        where id = $1 and user_id = $3`,
+      [
+        turnId,
+        error instanceof Error ? error.message.slice(0, 2000) : 'Agent turn failed',
+        owner.userId,
+      ],
     );
     throw error;
   } finally {
@@ -213,7 +237,7 @@ export async function executePersistedAgentTurn(
     `update cloud_code_agent_turns
         set state = $2, steps_used = greatest(steps_used, $3), stop_reason = $4,
             final_message = $5, error_message = $6, updated_at = now()
-      where id = $1`,
+      where id = $1 and user_id = $7`,
     [
       turnId,
       state,
@@ -221,6 +245,7 @@ export async function executePersistedAgentTurn(
       result.stopReason === 'awaiting_approval' ? null : result.stopReason,
       result.finalMessage.slice(0, 100_000) || null,
       result.errorMessage?.slice(0, 2000) ?? null,
+      owner.userId,
     ],
   );
 
@@ -240,8 +265,8 @@ export async function executePersistedAgentTurn(
       await db.query(
         `update cloud_code_agent_turns
             set state = 'failed', stop_reason = 'error', error_message = $2, updated_at = now()
-          where id = $1`,
-        [turnId, 'Approval request could not be recorded'],
+          where id = $1 and user_id = $3`,
+        [turnId, 'Approval request could not be recorded', owner.userId],
       );
       await finalizeManagedUsageRequest({
         ...reservation,

@@ -134,18 +134,53 @@ export function isMemoryExcluded(content: string, exclusions: readonly string[])
   return exclusions.some((term) => haystack.includes(term));
 }
 
+export interface MemoryScope {
+  /** Project the conversation belongs to, or null for a loose chat. */
+  projectId: string | null;
+  /** False when the project is set to draw only on its own memories. */
+  usesGlobalMemory: boolean;
+}
+
+export const GLOBAL_MEMORY_SCOPE: MemoryScope = { projectId: null, usesGlobalMemory: true };
+
+/**
+ * Which memories a conversation may see.
+ *
+ * Outside a project only global rows (`project_id is null`) are visible — a
+ * memory confined to a project must never surface anywhere else, or the
+ * confinement means nothing. Inside a project the project's own rows are always
+ * visible, and global rows join them unless the project opted out.
+ */
+function scopePredicate(scope: MemoryScope, projectParamIndex: number): string {
+  if (!scope.projectId) return 'and project_id is null';
+  if (!scope.usesGlobalMemory) return `and project_id = $${projectParamIndex}::uuid`;
+  return `and (project_id is null or project_id = $${projectParamIndex}::uuid)`;
+}
+
 export async function loadManagedMemoryContext(
   db: ManagedMemoryContextDb,
-  params: { userId: string; suppressedSources?: readonly MemorySource[] },
+  params: {
+    userId: string;
+    suppressedSources?: readonly MemorySource[];
+    scope?: MemoryScope;
+  },
 ): Promise<ManagedMemoryContextItem[]> {
   return withSpan(
     'memory.context.load',
     { domain: 'retrieval', attributes: { 'retrieval.source': 'user_memories' } },
     async (span) => {
+      const scope = params.scope ?? GLOBAL_MEMORY_SCOPE;
       const suppressed = normalizeSuppressedMemorySources(params.suppressedSources ?? []);
+
+      const values: unknown[] = [params.userId];
       const sourceFilter = suppressed.length
-        ? "and coalesce(source, 'web') <> all($2::text[])"
+        ? `and coalesce(source, 'web') <> all($${values.push(suppressed)}::text[])`
         : '';
+      const projectFilter = scopePredicate(
+        scope,
+        scope.projectId ? values.push(scope.projectId) : 0,
+      );
+
       const rows = await db.query<{
         content: string;
         category: string | null;
@@ -155,16 +190,45 @@ export async function loadManagedMemoryContext(
             category,
             coalesce((to_jsonb(user_memories)->>'pinned')::boolean, false) as pinned
        from user_memories
-      where user_id = $1 and is_deleted = false ${sourceFilter}
+      where user_id = $1 and is_deleted = false ${sourceFilter} ${projectFilter}
       order by pinned desc, updated_at desc
       limit ${MAX_MEMORIES}`,
-        suppressed.length ? [params.userId, suppressed] : [params.userId],
+        values,
       );
 
-      span.setAttributes({ 'retrieval.result_count': rows.length });
+      span.setAttributes({
+        'retrieval.result_count': rows.length,
+        'retrieval.scope': scope.projectId
+          ? scope.usesGlobalMemory
+            ? 'project+global'
+            : 'project-only'
+          : 'global',
+      });
       return rows;
     },
   );
+}
+
+/**
+ * Reads a project's memory posture. A project that cannot be read falls back to
+ * global-only rather than to the project's memories: guessing "this project
+ * exists" would surface rows the caller may not be entitled to.
+ */
+export async function loadProjectMemoryScope(
+  db: ManagedMemoryContextDb,
+  params: { userId: string; projectId: string | null },
+): Promise<MemoryScope> {
+  if (!params.projectId) return GLOBAL_MEMORY_SCOPE;
+  const [row] = await db.query<{ uses_global_memory: boolean }>(
+    `select coalesce((to_jsonb(user_projects)->>'uses_global_memory')::boolean, true)
+              as uses_global_memory
+       from user_projects
+      where id = $1::uuid and user_id = $2
+      limit 1`,
+    [params.projectId, params.userId],
+  );
+  if (!row) return GLOBAL_MEMORY_SCOPE;
+  return { projectId: params.projectId, usesGlobalMemory: row.uses_global_memory !== false };
 }
 
 export function formatManagedMemorySystemPrompt(
@@ -220,7 +284,7 @@ export interface ManagedAutoMemoryResult {
 
 export async function persistManagedAutoMemoryFacts(
   db: ManagedMemoryContextDb,
-  params: { userId: string; candidates: readonly string[] },
+  params: { userId: string; candidates: readonly string[]; projectId?: string | null },
 ): Promise<ManagedAutoMemoryResult> {
   const extracted = params.candidates.length;
   if (extracted === 0) return { extracted: 0, inserted: 0, excluded: 0 };
@@ -263,7 +327,7 @@ export async function persistManagedAutoMemoryFacts(
       continue;
     }
     batch.push({
-      id: deterministicAutoMemoryId(params.userId, normalizedKey),
+      id: deterministicAutoMemoryId(params.userId, `${params.projectId ?? ''}::${normalizedKey}`),
       content,
       category: classifyMemoryCategory(content),
       normalizedKey,
@@ -280,20 +344,21 @@ export async function persistManagedAutoMemoryFacts(
               item ->> 'normalizedKey' as normalized_key
          from jsonb_array_elements($2::jsonb) as source(item)
      )
-     insert into user_memories (id, user_id, content, category, source)
-     select incoming.id::uuid, $1, incoming.content, incoming.category, 'auto'
+     insert into user_memories (id, user_id, content, category, source, project_id)
+     select incoming.id::uuid, $1, incoming.content, incoming.category, 'auto', $3::uuid
        from incoming
       where not exists (
         select 1
           from user_memories as existing
          where existing.user_id = $1
            and existing.is_deleted = false
+           and existing.project_id is not distinct from $3::uuid
            and lower(regexp_replace(btrim(existing.content), '\\s+', ' ', 'g')) =
                incoming.normalized_key
       )
      on conflict (id) do nothing
      returning id::text`,
-    [params.userId, JSON.stringify(batch)],
+    [params.userId, JSON.stringify(batch), params.projectId ?? null],
   );
 
   return { extracted, inserted: inserted.length, excluded };

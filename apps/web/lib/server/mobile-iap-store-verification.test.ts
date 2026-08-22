@@ -1,7 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
-import { verifyGooglePlayLifecyclePurchase } from './mobile-iap-store-verification';
+
+const apple = vi.hoisted(() => ({
+  environments: [] as string[],
+  verifyAndDecodeTransaction: vi.fn(),
+}));
+
+vi.mock('@apple/app-store-server-library', () => ({
+  Environment: { SANDBOX: 'Sandbox', PRODUCTION: 'Production' },
+  SignedDataVerifier: class {
+    constructor(_roots: unknown, _online: boolean, environment: string) {
+      apple.environments.push(environment);
+    }
+    verifyAndDecodeTransaction = apple.verifyAndDecodeTransaction;
+  },
+}));
+
+import {
+  verifyGooglePlayLifecyclePurchase,
+  verifyMobileIapPurchase,
+} from './mobile-iap-store-verification';
 
 const topUp = {
   ...MOBILE_IAP_PRODUCT_DEFINITIONS.find((item) => item.kind === 'top_up')!,
@@ -119,5 +138,67 @@ describe('Google Play server verification', () => {
         appAccountToken: accountToken,
       }),
     ).rejects.toThrow(/not grantable/i);
+  });
+});
+
+describe('Apple App Store server verification', () => {
+  const sandboxHintedJws = [
+    Buffer.from(JSON.stringify({ alg: 'ES256' })).toString('base64url'),
+    Buffer.from(JSON.stringify({ environment: 'Sandbox', productId: topUp.productId })).toString(
+      'base64url',
+    ),
+    'sig',
+  ].join('.');
+
+  beforeEach(() => {
+    apple.environments.length = 0;
+    apple.verifyAndDecodeTransaction.mockReset();
+    apple.verifyAndDecodeTransaction.mockRejectedValue(new Error('not signed by Apple'));
+    vi.stubEnv('APPLE_APP_STORE_BUNDLE_ID', 'com.fixture.app');
+    vi.stubEnv('APPLE_APP_STORE_APP_ID', '123456');
+    vi.stubEnv(
+      'APPLE_APP_STORE_ROOT_CA_CERTS_BASE64_JSON',
+      JSON.stringify([Buffer.from('fixture-root').toString('base64')]),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('verifies against production no matter what environment the unverified payload claims', async () => {
+    await expect(
+      verifyMobileIapPurchase({
+        platform: 'ios',
+        product: topUp,
+        purchaseToken: sandboxHintedJws,
+        appAccountToken: accountToken,
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(apple.environments).toEqual(['Production']);
+  });
+
+  it('uses the sandbox verifier only when the deployment opts in', async () => {
+    vi.stubEnv('APPLE_APP_STORE_ENVIRONMENT', 'sandbox');
+    await verifyMobileIapPurchase({
+      platform: 'ios',
+      product: topUp,
+      purchaseToken: sandboxHintedJws,
+      appAccountToken: accountToken,
+    }).catch(() => undefined);
+    expect(apple.environments).toEqual(['Sandbox']);
+  });
+
+  it('refuses to run with an unrecognised environment setting', async () => {
+    vi.stubEnv('APPLE_APP_STORE_ENVIRONMENT', 'staging');
+    await expect(
+      verifyMobileIapPurchase({
+        platform: 'ios',
+        product: topUp,
+        purchaseToken: sandboxHintedJws,
+        appAccountToken: accountToken,
+      }),
+    ).rejects.toMatchObject({ statusCode: 503 });
+    expect(apple.environments).toEqual([]);
   });
 });

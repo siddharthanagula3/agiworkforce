@@ -38,6 +38,12 @@ async function handleListSkills(request: NextRequest) {
         source: s.source,
         lifecycle: s.frontmatter['draft'] === true ? 'draft' : 'included',
         downloadable: s.source === 'bundled' && s.frontmatter['draft'] !== true,
+        // Straight from the bundle's frontmatter. Omitted when the skill has
+        // none, so the column can say "unknown" instead of showing a version
+        // this route made up.
+        ...(typeof s.frontmatter['version'] === 'string' && s.frontmatter['version'].trim()
+          ? { version: s.frontmatter['version'].trim() }
+          : {}),
       })),
     }),
   );
