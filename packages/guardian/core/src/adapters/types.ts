@@ -26,20 +26,40 @@ export interface AdapterOutcome {
   error?: string;
 }
 
+const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
+  [
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+    '[REDACTED PRIVATE KEY]',
+  ],
+  [/((?:proxy-)?authorization["']?\s*[:=]\s*)[^\r\n]+/gi, '$1[REDACTED]'],
+  [/\b(bearer|basic|digest)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [REDACTED]'],
+  [/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}/g, '[REDACTED]'],
+  [/(?:github_pat|gh[pousr])_[A-Za-z0-9_]{20,}/g, '[REDACTED]'],
+  [/sk-[A-Za-z0-9_-]{16,}/g, '[REDACTED]'],
+  [/(?:sk|rk|whsec)_[A-Za-z0-9_-]{16,}/g, '[REDACTED]'],
+  [/AIza[A-Za-z0-9_-]{20,}/g, '[REDACTED]'],
+  [/AKIA[0-9A-Z]{16}/g, '[REDACTED]'],
+  [/xox[baprs]-[A-Za-z0-9-]{10,}/g, '[REDACTED]'],
+  [
+    /((?:password|passwd|secret|token|api[_-]?key|apikey|credential)[A-Za-z0-9_-]*["']?\s*[:=]\s*)(["']?)[^\s"',;)\]}]{6,}\2/gi,
+    '$1$2[REDACTED]$2',
+  ],
+];
+
+const OPAQUE_TOKEN = /[A-Za-z0-9+/]{40,}={0,2}|[A-Za-z0-9_+=-]{32,}/g;
+
+function hasMixedCharacterClasses(token: string): boolean {
+  return /[a-z]/.test(token) && /[A-Z]/.test(token) && /[0-9]/.test(token);
+}
+
 export function redactSecrets(text: string): string {
-  return text
-    .replace(/(gh[pousr]_[A-Za-z0-9]{20,})/g, '[REDACTED]')
-    .replace(/(sk-[A-Za-z0-9_-]{16,})/g, '[REDACTED]')
-    .replace(/(AKIA[0-9A-Z]{16})/g, '[REDACTED]')
-    .replace(/(xox[baprs]-[A-Za-z0-9-]{10,})/g, '[REDACTED]')
-    .replace(
-      /(-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----)/g,
-      '[REDACTED PRIVATE KEY]',
-    )
-    .replace(
-      /((?:password|passwd|secret|token|api[_-]?key|authorization)\s*[=:]\s*)(["']?)[^\s"']{6,}\2/gi,
-      '$1$2[REDACTED]$2',
-    );
+  const withKnownShapes = SECRET_PATTERNS.reduce(
+    (acc, [pattern, replacement]) => acc.replace(pattern, replacement),
+    text,
+  );
+  return withKnownShapes.replace(OPAQUE_TOKEN, (token) =>
+    hasMixedCharacterClasses(token) ? '[REDACTED]' : token,
+  );
 }
 
 export function toEvidence(text: string, maxLength = 500): string {
