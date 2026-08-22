@@ -1,4 +1,3 @@
-
 import React, { useEffect, useCallback } from 'react';
 import { Keyboard, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -31,11 +30,6 @@ interface InlineSection {
 
 const INLINE_SECTIONS: InlineSection[] = [
   {
-    category: 'editing-inline',
-    label: 'Editing',
-    shortcuts: [{ description: 'Copy code block', keys: ['Click copy'] }],
-  },
-  {
     category: 'agent-inline',
     label: 'Agent',
     shortcuts: [
@@ -59,6 +53,7 @@ export function chatInlineSection(sendShortcut: ComposerSendShortcut): InlineSec
           { description: 'New line', keys: ['Shift', 'Enter'] },
         ];
   shortcuts.push({ description: 'Stop generation', keys: ['Click stop'] });
+  shortcuts.push({ description: 'Copy code block', keys: ['Click copy'] });
   return { category: 'chat-inline', label: 'Chat', shortcuts };
 }
 

@@ -53,7 +53,9 @@ describe('AgiWorkProjects settings wiring', () => {
     updateProject.mockClear();
     useProjectStore.setState({
       projects: [makeProject('p1', 'Alpha'), makeProject('p2', 'Beta')],
+      activeProjectId: null,
       isLoading: false,
+      error: null,
       loadProjects: vi.fn(async () => undefined),
       createProject: vi.fn(async () => undefined),
       updateProject,
@@ -94,5 +96,28 @@ describe('AgiWorkProjects settings wiring', () => {
     });
     expect(screen.getByRole('button', { name: 'Unstar Beta' })).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'Sort projects' })).toBeTruthy();
+  });
+
+  it('keeps the cached project list on screen alongside the stale-data banner', () => {
+    useProjectStore.setState({ error: 'The project list could not be refreshed.' });
+
+    render(<AgiWorkProjects />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('The project list could not be refreshed.');
+    expect(alert).toHaveTextContent('Showing the last loaded project list.');
+    expect(screen.getByRole('button', { name: 'Open Alpha project' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Beta project' })).toBeTruthy();
+  });
+
+  it('shows the error on its own when there is no cached project list', () => {
+    useProjectStore.setState({ projects: [], error: 'The project list could not be loaded.' });
+
+    render(<AgiWorkProjects />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('The project list could not be loaded.');
+    expect(alert).not.toHaveTextContent('Showing the last loaded project list.');
+    expect(screen.queryByText('No projects yet')).toBeNull();
   });
 });
