@@ -25,9 +25,85 @@ use tokio::net::TcpListener;
 use super::pkce::{generate_pkce, generate_random_string};
 use crate::config::OAuthConfig;
 use crate::hooks::{BrowserAuthorizer, OAuthToken};
+use crate::security::{self, ValidatedEndpoint};
 
 /// Hard cap on the loopback wait so headless invocations fail fast.
 const OAUTH_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Every URL this module fetches is named by the remote MCP server (the
+/// `WWW-Authenticate` challenge, protected-resource metadata, AS metadata) or
+/// by a cached record derived from it. Each one is validated and DNS-pinned
+/// before the request, and redirects are refused so a 302 cannot walk the
+/// pinned connection over to an internal host.
+fn pinned_client(endpoint: &ValidatedEndpoint, purpose: &str) -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve_to_addrs(&endpoint.host, &endpoint.addrs)
+        .build()
+        .with_context(|| format!("build reqwest client for {purpose}"))
+}
+
+/// `anchor` is the URL the user configured for this server: every endpoint the
+/// remote party names is checked against it, so discovery can never reach
+/// further into this machine than the server itself does.
+async fn checked_endpoint(url: &str, what: &str, anchor: &str) -> Result<ValidatedEndpoint> {
+    security::resolve_validated_endpoint(url, anchor)
+        .await
+        .with_context(|| format!("{what} {url}"))
+}
+
+/// A failing endpoint's body is echoed back only when it is a structured OAuth
+/// error (RFC 6749 §5.2). Anything else is the content of whatever the URL
+/// actually pointed at, and reflecting that into an error the host logs is the
+/// read channel of a blind SSRF.
+async fn failure_detail(resp: reqwest::Response, what: &str) -> String {
+    let body = security::read_body_capped(resp, what)
+        .await
+        .unwrap_or_default();
+    oauth_error_detail(&body).unwrap_or_else(|| "response body withheld".to_string())
+}
+
+fn oauth_error_detail(body: &[u8]) -> Option<String> {
+    let parsed: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let code = parsed.get("error")?.as_str()?;
+    let mut detail = clamp(code, 80);
+    if let Some(description) = parsed.get("error_description").and_then(|d| d.as_str()) {
+        detail.push_str(": ");
+        detail.push_str(&clamp(description, 200));
+    }
+    Some(detail)
+}
+
+fn clamp(text: &str, max_chars: usize) -> String {
+    let cleaned: String = text.chars().filter(|c| !c.is_control()).collect();
+    match cleaned.char_indices().nth(max_chars) {
+        Some((idx, _)) => format!("{}…", &cleaned[..idx]),
+        None => cleaned,
+    }
+}
+
+/// A configured `client_secret` is a credential the user holds, not one the
+/// server issued: it may only be sent to an origin the user named in config.
+/// Without `[auth.token_url]` the endpoint comes from discovery, i.e. from
+/// whatever the remote server advertised, so the secret stays home.
+fn confidential_client_secret<'a>(
+    oauth_cfg: &'a OAuthConfig,
+    token_url: &str,
+) -> Result<Option<&'a str>> {
+    let Some(secret) = oauth_cfg.client_secret.as_deref() else {
+        return Ok(None);
+    };
+    let pinned = oauth_cfg.token_url.as_deref().ok_or_else(|| {
+        anyhow!(
+            "refusing to send the configured client_secret to the discovered token endpoint \
+             {token_url} — set [auth.token_url] so the secret only ever reaches an endpoint you named"
+        )
+    })?;
+    security::enforce_same_origin(pinned, token_url, "token endpoint")
+        .context("refusing to send the configured client_secret to another origin")?;
+    Ok(Some(secret))
+}
 
 // ---------------------------------------------------------------------------
 // Discovery types
@@ -125,16 +201,29 @@ pub async fn discover_protected_resource(
     server_url: &str,
     www_authenticate: Option<&str>,
 ) -> Result<(String, ProtectedResourceMetadata)> {
-    let metadata_url = parse_resource_metadata_url(www_authenticate)
-        .unwrap_or_else(|| well_known(server_url, "oauth-protected-resource"));
+    // RFC 9728 §5.1: the challenge may only point at the resource server's own
+    // metadata. Without this the server chooses any URL it likes and this
+    // process fetches it — the SSRF primitive, loopback services included.
+    let metadata_url = match parse_resource_metadata_url(www_authenticate) {
+        Some(advertised) => {
+            security::enforce_same_origin(server_url, &advertised, "protected-resource metadata")
+                .with_context(|| {
+                format!(
+                    "SSRF protection: the WWW-Authenticate challenge from {server_url} named \
+                         protected-resource metadata on another origin"
+                )
+            })?;
+            advertised
+        }
+        None => well_known(server_url, "oauth-protected-resource"),
+    };
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .context("build reqwest client for resource-metadata discovery")?;
+    let endpoint =
+        checked_endpoint(&metadata_url, "protected-resource metadata URL", server_url).await?;
+    let client = pinned_client(&endpoint, "resource-metadata discovery")?;
 
     let resp = client
-        .get(&metadata_url)
+        .get(endpoint.url.clone())
         .header("Accept", "application/json")
         .send()
         .await
@@ -142,13 +231,12 @@ pub async fn discover_protected_resource(
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+        let body = failure_detail(resp, "protected-resource metadata").await;
         bail!("protected-resource metadata at {metadata_url} returned {status} — {body}");
     }
 
-    let meta: ProtectedResourceMetadata = resp
-        .json()
-        .await
+    let body = security::read_body_capped(resp, "protected-resource metadata").await?;
+    let meta: ProtectedResourceMetadata = serde_json::from_slice(&body)
         .with_context(|| format!("parse protected-resource metadata at {metadata_url}"))?;
 
     if meta.authorization_servers.is_empty() {
@@ -158,17 +246,22 @@ pub async fn discover_protected_resource(
     Ok((metadata_url, meta))
 }
 
-/// Discover the authorization server's endpoints (RFC 8414).
-pub async fn discover_authorization_server(as_url: &str) -> Result<AsMetadata> {
+/// Discover the authorization server's endpoints (RFC 8414). `server_url` is
+/// the MCP server the user configured; the AS it names may live on another
+/// origin but not on a network the MCP server itself cannot reach.
+pub async fn discover_authorization_server(as_url: &str, server_url: &str) -> Result<AsMetadata> {
     let metadata_url = well_known(as_url, "oauth-authorization-server");
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .context("build reqwest client for AS discovery")?;
+    let endpoint = checked_endpoint(
+        &metadata_url,
+        "authorization-server metadata URL",
+        server_url,
+    )
+    .await?;
+    let client = pinned_client(&endpoint, "AS discovery")?;
 
     let resp = client
-        .get(&metadata_url)
+        .get(endpoint.url.clone())
         .header("Accept", "application/json")
         .send()
         .await
@@ -176,12 +269,12 @@ pub async fn discover_authorization_server(as_url: &str) -> Result<AsMetadata> {
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+        let body = failure_detail(resp, "AS metadata").await;
         bail!("AS metadata at {metadata_url} returned {status} — {body}");
     }
 
-    resp.json::<AsMetadata>()
-        .await
+    let body = security::read_body_capped(resp, "AS metadata").await?;
+    serde_json::from_slice::<AsMetadata>(&body)
         .with_context(|| format!("parse AS metadata at {metadata_url}"))
 }
 
@@ -211,11 +304,13 @@ struct RegistrationRequest<'a> {
     token_endpoint_auth_method: &'a str,
 }
 
-pub async fn dynamic_register(reg_endpoint: &str, redirect_uri: &str) -> Result<RegisteredClient> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .context("build reqwest client for dynamic registration")?;
+pub async fn dynamic_register(
+    reg_endpoint: &str,
+    redirect_uri: &str,
+    server_url: &str,
+) -> Result<RegisteredClient> {
+    let endpoint = checked_endpoint(reg_endpoint, "registration endpoint", server_url).await?;
+    let client = pinned_client(&endpoint, "dynamic registration")?;
 
     let body = RegistrationRequest {
         client_name: "AGI CLI",
@@ -226,7 +321,7 @@ pub async fn dynamic_register(reg_endpoint: &str, redirect_uri: &str) -> Result<
     };
 
     let resp = client
-        .post(reg_endpoint)
+        .post(endpoint.url.clone())
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
         .json(&body)
@@ -236,12 +331,12 @@ pub async fn dynamic_register(reg_endpoint: &str, redirect_uri: &str) -> Result<
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+        let body = failure_detail(resp, "dynamic registration").await;
         bail!("dynamic registration at {reg_endpoint} returned {status} — {body}");
     }
 
-    resp.json::<RegisteredClient>()
-        .await
+    let body = security::read_body_capped(resp, "dynamic registration").await?;
+    serde_json::from_slice::<RegisteredClient>(&body)
         .with_context(|| format!("parse registration response from {reg_endpoint}"))
 }
 
@@ -325,11 +420,23 @@ pub async fn start_pkce_flow(
         .or_else(|| oauth_cfg.scope.clone())
         .unwrap_or_default();
 
+    let authorize_endpoint = oauth_cfg
+        .authorize_url
+        .as_deref()
+        .unwrap_or(&as_meta.authorization_endpoint);
+    security::validate_browser_endpoint(authorize_endpoint, server_url)
+        .with_context(|| format!("authorization endpoint {authorize_endpoint}"))?;
+
+    // Both are settled before the browser opens so an unusable token endpoint
+    // fails here instead of after the user has already authorized.
+    let token_url = oauth_cfg
+        .token_url
+        .as_deref()
+        .unwrap_or(&as_meta.token_endpoint);
+    let client_secret = confidential_client_secret(oauth_cfg, token_url)?;
+
     let authorize_url = build_authorize_url(
-        oauth_cfg
-            .authorize_url
-            .as_deref()
-            .unwrap_or(&as_meta.authorization_endpoint),
+        authorize_endpoint,
         client_id,
         &redirect_uri,
         &scope,
@@ -365,19 +472,14 @@ pub async fn start_pkce_flow(
         bail!("oauth state mismatch — possible CSRF, refusing to continue");
     }
 
-    // Exchange the code at the token endpoint.
-    let token_url = oauth_cfg
-        .token_url
-        .as_deref()
-        .unwrap_or(&as_meta.token_endpoint);
-
     let token_resp = exchange_code_form(
         token_url,
         client_id,
-        oauth_cfg.client_secret.as_deref(),
+        client_secret,
         &code,
         &pkce.verifier,
         &redirect_uri,
+        server_url,
     )
     .await?;
 
@@ -411,22 +513,38 @@ pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Resul
         .or(oauth_cfg.client_id.as_deref())
         .ok_or_else(|| anyhow!("no client_id cached and none in config"))?;
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .context("build reqwest client for refresh")?;
+    // The cached token_url came from AS metadata the remote server pointed us
+    // at. When the config declares a token endpoint, that is the user's stated
+    // authority: a cached value from another origin means the cache (or the
+    // discovery that filled it) was poisoned, and this request would hand a
+    // refresh_token and client_secret to whoever owns that origin.
+    if let Some(configured) = oauth_cfg.token_url.as_deref() {
+        security::enforce_same_origin(configured, token_url, "token endpoint")
+            .context("refusing to send the cached refresh token to another origin")?;
+    }
+    let client_secret = confidential_client_secret(oauth_cfg, token_url)?;
+
+    // Refresh runs with no server URL in hand, so the resource metadata URL
+    // recorded when this token was issued is the anchor: a record whose token
+    // endpoint sits on loopback is only honoured for a loopback deployment.
+    let anchor = token
+        .auth_server_metadata_url
+        .as_deref()
+        .unwrap_or_default();
+    let endpoint = checked_endpoint(token_url, "token endpoint", anchor).await?;
+    let client = pinned_client(&endpoint, "refresh")?;
 
     let mut form: Vec<(&str, &str)> = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", refresh),
         ("client_id", client_id),
     ];
-    if let Some(secret) = oauth_cfg.client_secret.as_deref() {
+    if let Some(secret) = client_secret {
         form.push(("client_secret", secret));
     }
 
     let resp = client
-        .post(token_url)
+        .post(endpoint.url.clone())
         .header("Accept", "application/json")
         .form(&form)
         .send()
@@ -435,21 +553,22 @@ pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Resul
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+        let body = failure_detail(resp, "token refresh").await;
         bail!("token refresh at {token_url} returned {status} — {body}");
     }
 
-    let parsed: TokenResponseRaw = resp
-        .json()
-        .await
+    let body = security::read_body_capped(resp, "token refresh").await?;
+    let parsed: TokenResponseRaw = serde_json::from_slice(&body)
         .with_context(|| format!("parse refresh response from {token_url}"))?;
 
-    Ok(token_response_to_record(
+    let mut refreshed = token_response_to_record(
         parsed,
         Some(token_url.to_string()),
         Some(client_id.to_string()),
         token.scope.clone(),
-    ))
+    );
+    refreshed.auth_server_metadata_url = token.auth_server_metadata_url.clone();
+    Ok(refreshed)
 }
 
 // ---------------------------------------------------------------------------
@@ -492,6 +611,7 @@ fn token_response_to_record(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn exchange_code_form(
     token_url: &str,
     client_id: &str,
@@ -499,11 +619,10 @@ async fn exchange_code_form(
     code: &str,
     code_verifier: &str,
     redirect_uri: &str,
+    server_url: &str,
 ) -> Result<TokenResponseRaw> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .context("build reqwest client for code exchange")?;
+    let endpoint = checked_endpoint(token_url, "token endpoint", server_url).await?;
+    let client = pinned_client(&endpoint, "code exchange")?;
 
     let mut form: Vec<(&str, &str)> = vec![
         ("grant_type", "authorization_code"),
@@ -517,7 +636,7 @@ async fn exchange_code_form(
     }
 
     let resp = client
-        .post(token_url)
+        .post(endpoint.url.clone())
         .header("Accept", "application/json")
         .form(&form)
         .send()
@@ -526,12 +645,12 @@ async fn exchange_code_form(
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+        let body = failure_detail(resp, "code exchange").await;
         bail!("code exchange at {token_url} returned {status} — {body}");
     }
 
-    resp.json::<TokenResponseRaw>()
-        .await
+    let body = security::read_body_capped(resp, "code exchange").await?;
+    serde_json::from_slice::<TokenResponseRaw>(&body)
         .with_context(|| format!("parse code-exchange response from {token_url}"))
 }
 
@@ -734,7 +853,7 @@ pub async fn perform_full_oauth(
         .authorization_servers
         .first()
         .ok_or_else(|| anyhow!("no authorization_servers in protected-resource metadata"))?;
-    let as_meta = discover_authorization_server(as_url).await?;
+    let as_meta = discover_authorization_server(as_url, server_url).await?;
 
     // 3. Bind the loopback callback BEFORE registration so the AS is given the
     //    exact redirect_uri (with the real port) we'll be listening on.
@@ -744,7 +863,7 @@ pub async fn perform_full_oauth(
     let client_id = if let Some(cid) = oauth_cfg.client_id.clone() {
         cid
     } else if let Some(reg_url) = as_meta.registration_endpoint.as_deref() {
-        let reg = dynamic_register(reg_url, &redirect_uri).await?;
+        let reg = dynamic_register(reg_url, &redirect_uri, server_url).await?;
         reg.client_id
     } else {
         bail!(
@@ -921,6 +1040,307 @@ mod tests {
         assert!(u.contains("foo=bar&response_type=code"));
         assert!(u.contains("scope=read%20write"));
         assert!(u.contains("code_challenge_method=S256"));
+    }
+
+    const REMOTE_SERVER: &str = "https://mcp.example.com/mcp";
+
+    fn token_from(server_url: &str, token_url: &str) -> OAuthToken {
+        OAuthToken {
+            access_token: "stale-access".into(),
+            refresh_token: Some("real-refresh-token".into()),
+            token_type: Some("Bearer".into()),
+            expires_at: None,
+            scope: None,
+            auth_server_metadata_url: Some(well_known(server_url, "oauth-protected-resource")),
+            token_url: Some(token_url.into()),
+            client_id: Some("cid".into()),
+        }
+    }
+
+    fn token_with(token_url: &str) -> OAuthToken {
+        token_from(REMOTE_SERVER, token_url)
+    }
+
+    fn as_meta_with(authorization_endpoint: &str, token_endpoint: &str) -> AsMetadata {
+        AsMetadata {
+            authorization_endpoint: authorization_endpoint.into(),
+            token_endpoint: token_endpoint.into(),
+            registration_endpoint: None,
+            revocation_endpoint: None,
+            scopes_supported: Vec::new(),
+        }
+    }
+
+    #[derive(Default)]
+    struct SpyBrowser {
+        opened: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl BrowserAuthorizer for SpyBrowser {
+        fn is_interactive(&self) -> bool {
+            true
+        }
+        fn open_url(&self, url: &str) -> bool {
+            self.opened.lock().unwrap().push(url.to_string());
+            true
+        }
+    }
+
+    async fn pkce_refusal(oauth_cfg: OAuthConfig, as_meta: AsMetadata) -> (String, usize) {
+        let spy = SpyBrowser::default();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let err = start_pkce_flow(
+            REMOTE_SERVER,
+            &oauth_cfg,
+            &as_meta,
+            "cid",
+            None,
+            listener,
+            "http://127.0.0.1:1234/callback".to_string(),
+            &spy,
+        )
+        .await
+        .expect_err("the flow must refuse before any browser opens");
+        let opened = spy.opened.lock().unwrap().len();
+        (format!("{err:#}"), opened)
+    }
+
+    async fn spawn(app: axum::Router) -> std::net::SocketAddr {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        addr
+    }
+
+    #[tokio::test]
+    async fn discovery_refuses_a_metadata_url_the_challenge_puts_on_another_origin() {
+        for target in [
+            "http://127.0.0.1:9200/_cat/indices?v",
+            "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+            "https://exfil.example.net/collect",
+        ] {
+            let header = format!(r#"Bearer realm="mcp", resource_metadata="{target}""#);
+            let err = discover_protected_resource(REMOTE_SERVER, Some(&header))
+                .await
+                .expect_err("a challenge may only name the server's own metadata");
+            let msg = format!("{err:#}");
+            assert!(msg.contains("SSRF protection"), "{target}: {msg}");
+            assert!(msg.contains("another origin"), "{target}: {msg}");
+        }
+    }
+
+    #[tokio::test]
+    async fn discovery_refuses_a_cleartext_remote_server() {
+        let err = discover_protected_resource("http://mcp.example.com/mcp", None)
+            .await
+            .expect_err("cleartext remote discovery must be refused");
+        assert!(format!("{err:#}").contains("must use HTTPS"));
+    }
+
+    #[tokio::test]
+    async fn discovery_refuses_a_loopback_authorization_server_named_by_a_remote_server() {
+        let err = discover_authorization_server("http://127.0.0.1:9200/", REMOTE_SERVER)
+            .await
+            .expect_err("a public MCP server must not point discovery at this machine");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("SSRF protection"), "unexpected error: {msg}");
+        assert!(msg.contains("loopback"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn discovery_honours_a_same_origin_challenge_url() {
+        let app = axum::Router::new().route(
+            "/oauth/resource",
+            axum::routing::get(|| async {
+                axum::Json(serde_json::json!({
+                    "authorization_servers": ["http://127.0.0.1"]
+                }))
+            }),
+        );
+        let addr = spawn(app).await;
+        let header = format!(r#"Bearer resource_metadata="http://{addr}/oauth/resource""#);
+        let (url, prm) = discover_protected_resource(&format!("http://{addr}/mcp"), Some(&header))
+            .await
+            .expect("a same-origin challenge URL is the RFC 9728 happy path");
+        assert_eq!(url, format!("http://{addr}/oauth/resource"));
+        assert_eq!(prm.authorization_servers, vec!["http://127.0.0.1"]);
+    }
+
+    #[tokio::test]
+    async fn discovery_still_works_against_a_loopback_server() {
+        let app = axum::Router::new().route(
+            "/.well-known/oauth-protected-resource",
+            axum::routing::get(|| async {
+                axum::Json(serde_json::json!({
+                    "resource": "http://127.0.0.1/",
+                    "authorization_servers": ["http://127.0.0.1"]
+                }))
+            }),
+        );
+        let addr = spawn(app).await;
+        let (url, prm) = discover_protected_resource(&format!("http://{addr}/"), None)
+            .await
+            .expect("loopback discovery must keep working");
+        assert!(url.ends_with("/.well-known/oauth-protected-resource"));
+        assert_eq!(prm.authorization_servers, vec!["http://127.0.0.1"]);
+    }
+
+    #[tokio::test]
+    async fn discovery_refuses_an_oversized_metadata_body() {
+        let app = axum::Router::new().route(
+            "/.well-known/oauth-protected-resource",
+            axum::routing::get(|| async {
+                let filler = "a".repeat(crate::security::MAX_METADATA_BODY_BYTES + 1024);
+                axum::Json(serde_json::json!({
+                    "resource": filler,
+                    "authorization_servers": ["https://as.example.com"]
+                }))
+            }),
+        );
+        let addr = spawn(app).await;
+        let err = discover_protected_resource(&format!("http://{addr}/"), None)
+            .await
+            .expect_err("an oversized metadata body must not be buffered");
+        assert!(format!("{err:#}").contains("exceeds"));
+    }
+
+    #[tokio::test]
+    async fn refresh_refuses_a_private_token_url() {
+        let token = token_with("http://10.0.0.5/token");
+        let err = refresh_token(&token, &OAuthConfig::default())
+            .await
+            .expect_err("a private-network token endpoint must not receive the refresh token");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("SSRF protection"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn refresh_refuses_a_cleartext_remote_token_url() {
+        let token = token_with("http://as.example.com/token");
+        let err = refresh_token(&token, &OAuthConfig::default())
+            .await
+            .expect_err("credentials must not cross the network in cleartext");
+        assert!(format!("{err:#}").contains("must use HTTPS"));
+    }
+
+    #[tokio::test]
+    async fn refresh_refuses_a_cached_token_url_from_another_origin() {
+        let token = token_with("https://evil.example.com/token");
+        let cfg = OAuthConfig {
+            token_url: Some("https://as.example.com/token".into()),
+            client_secret: Some("s3cret".into()),
+            ..Default::default()
+        };
+        let err = refresh_token(&token, &cfg)
+            .await
+            .expect_err("a poisoned cached token endpoint must not override the configured one");
+        assert!(format!("{err:#}").contains("does not match the pinned origin"));
+    }
+
+    #[tokio::test]
+    async fn refresh_refuses_a_loopback_token_url_when_the_server_is_remote() {
+        let token = token_with("http://127.0.0.1:9200/token");
+        let err = refresh_token(&token, &OAuthConfig::default())
+            .await
+            .expect_err("a remote server's token must never be refreshed against this machine");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("SSRF protection"), "unexpected error: {msg}");
+        assert!(msg.contains("loopback"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn refresh_keeps_a_configured_secret_from_a_discovered_endpoint() {
+        let token = token_with("https://as.example.com/token");
+        let cfg = OAuthConfig {
+            client_secret: Some("configured-secret".into()),
+            ..Default::default()
+        };
+        let err = refresh_token(&token, &cfg)
+            .await
+            .expect_err("a user-held secret must not go to a discovered endpoint");
+        assert!(format!("{err:#}").contains("set [auth.token_url]"));
+    }
+
+    #[tokio::test]
+    async fn refresh_against_loopback_keeps_the_cached_discovery_url() {
+        let app = axum::Router::new().route(
+            "/token",
+            axum::routing::post(|| async {
+                axum::Json(serde_json::json!({
+                    "access_token": "fresh-access",
+                    "token_type": "Bearer",
+                    "expires_in": 3600
+                }))
+            }),
+        );
+        let addr = spawn(app).await;
+        let local_server = format!("http://{addr}/mcp");
+        let token = token_from(&local_server, &format!("http://{addr}/token"));
+        let refreshed = refresh_token(&token, &OAuthConfig::default())
+            .await
+            .expect("loopback refresh must keep working");
+        assert_eq!(refreshed.access_token, "fresh-access");
+        assert_eq!(
+            refreshed.auth_server_metadata_url,
+            token.auth_server_metadata_url
+        );
+    }
+
+    #[tokio::test]
+    async fn authorize_endpoints_that_leave_the_web_never_reach_the_browser() {
+        for endpoint in ["javascript:alert(1)", "file:///etc/passwd"] {
+            let (msg, opened) = pkce_refusal(
+                OAuthConfig::default(),
+                as_meta_with(endpoint, "https://as.example.com/token"),
+            )
+            .await;
+            assert!(msg.contains("is not allowed"), "{endpoint}: {msg}");
+            assert_eq!(opened, 0, "{endpoint} must never be opened");
+        }
+    }
+
+    #[tokio::test]
+    async fn authorize_endpoint_on_this_machine_never_reaches_the_browser() {
+        let (msg, opened) = pkce_refusal(
+            OAuthConfig::default(),
+            as_meta_with(
+                "http://127.0.0.1:9200/authorize",
+                "https://as.example.com/token",
+            ),
+        )
+        .await;
+        assert!(msg.contains("names this machine"), "{msg}");
+        assert_eq!(opened, 0);
+    }
+
+    #[tokio::test]
+    async fn a_configured_secret_stops_the_flow_before_the_browser_opens() {
+        let cfg = OAuthConfig {
+            client_secret: Some("configured-secret".into()),
+            ..Default::default()
+        };
+        let (msg, opened) = pkce_refusal(
+            cfg,
+            as_meta_with(
+                "https://as.example.com/authorize",
+                "https://as.example.com/token",
+            ),
+        )
+        .await;
+        assert!(msg.contains("set [auth.token_url]"), "{msg}");
+        assert_eq!(opened, 0);
+    }
+
+    #[test]
+    fn failure_detail_only_echoes_structured_oauth_errors() {
+        assert_eq!(
+            oauth_error_detail(br#"{"error":"invalid_grant","error_description":"expired"}"#)
+                .as_deref(),
+            Some("invalid_grant: expired")
+        );
+        assert!(oauth_error_detail(b"green master 1 0 42 0 12.5kb").is_none());
+        assert!(oauth_error_detail(br#"{"error":{"reason":"index_not_found"}}"#).is_none());
+        assert!(oauth_error_detail(br#"{"took":3,"hits":{"total":9}}"#).is_none());
     }
 
     #[test]
