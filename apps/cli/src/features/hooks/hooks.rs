@@ -789,7 +789,9 @@ fn merge_plugin_hooks(config: &mut HooksConfig) {
                 Err(e) => {
                     eprintln!(
                         "[plugins] failed to load hook for event {}: {} (raw: {})",
-                        event_name, e, value
+                        event_name,
+                        e,
+                        crate::secret_redaction::redact_secrets(&value.to_string())
                     );
                 }
             }
@@ -976,28 +978,65 @@ pub fn audit_log_updated_input(
     original_args: &serde_json::Value,
     new_args: &serde_json::Value,
 ) {
-    let entry = format!(
-        "[{}] updated_input rewrite by hook {:?}\n  original: {}\n  new:      {}\n",
-        chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%z"),
-        hook_command,
-        original_args,
-        new_args,
-    );
+    let rewrite = RedactedHookRewrite::new(hook_command, original_args, new_args);
+
     // Emit at WARN level to stderr so interactive users always see it.
-    eprintln!("[security] hook rewrote tool args:\n  hook:     {hook_command}\n  original: {original_args}\n  new:      {new_args}");
+    eprintln!(
+        "[security] hook rewrote tool args:\n  hook:     {}\n  original: {}\n  new:      {}",
+        rewrite.hook_command, rewrite.original_args, rewrite.new_args
+    );
 
     // Append to the security audit log (best-effort).
     if let Ok(dir) = crate::config::CliConfig::config_dir() {
-        let log_path = dir.join("security-audit.log");
-        use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-        {
-            let _ = f.write_all(entry.as_bytes());
+        let _ = append_updated_input_audit(&dir.join("security-audit.log"), &rewrite);
+    }
+}
+
+/// Tool arguments and hook commands routinely carry credentials, so every copy
+/// that leaves memory (stderr, audit log) is scrubbed first.
+struct RedactedHookRewrite {
+    hook_command: String,
+    original_args: String,
+    new_args: String,
+}
+
+impl RedactedHookRewrite {
+    fn new(
+        hook_command: &str,
+        original_args: &serde_json::Value,
+        new_args: &serde_json::Value,
+    ) -> Self {
+        use crate::secret_redaction::redact_secrets;
+        Self {
+            hook_command: redact_secrets(hook_command),
+            original_args: redact_secrets(&original_args.to_string()),
+            new_args: redact_secrets(&new_args.to_string()),
         }
     }
+}
+
+fn append_updated_input_audit(
+    path: &std::path::Path,
+    rewrite: &RedactedHookRewrite,
+) -> std::io::Result<()> {
+    use std::io::Write;
+    let entry = format!(
+        "[{}] updated_input rewrite by hook {:?}\n  original: {}\n  new:      {}\n",
+        chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%z"),
+        rewrite.hook_command,
+        rewrite.original_args,
+        rewrite.new_args,
+    );
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+    }
+    file.write_all(entry.as_bytes())
 }
 
 /// Aggregate transformer fields across hook results. Caller decides how to
@@ -2108,6 +2147,68 @@ mod tests {
         assert!(
             transformers.updated_input.is_none(),
             "no updated_input → nothing to log or aggregate"
+        );
+    }
+
+    #[test]
+    fn updated_input_audit_redacts_secrets_and_restricts_permissions() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("security-audit.log");
+        let original = serde_json::json!({
+            "command": "curl -H 'Authorization: Bearer abc123def456ghi789' https://api.example.com"
+        });
+        let new = serde_json::json!({
+            "command": "export ANTHROPIC_API_KEY=sk-ant-abcdefghijklmnopqrstuvwxyz0123456789"
+        });
+        let rewrite = RedactedHookRewrite::new(
+            "lint.sh --token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
+            &original,
+            &new,
+        );
+
+        append_updated_input_audit(&path, &rewrite).expect("append audit entry");
+
+        let contents = std::fs::read_to_string(&path).expect("read audit log");
+        for secret in [
+            "abc123def456ghi789",
+            "sk-ant-abcdefghijklmnopqrstuvwxyz0123456789",
+            "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
+        ] {
+            assert!(
+                !contents.contains(secret),
+                "secret survived into audit log: {secret}\n{contents}"
+            );
+        }
+        assert!(contents.contains("[REDACTED_ANTHROPIC_KEY]"));
+        assert!(contents.contains("[REDACTED_GITHUB_TOKEN]"));
+        assert!(contents.contains("updated_input rewrite by hook"));
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path)
+                .expect("metadata")
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600, "audit log must be owner-only");
+        }
+    }
+
+    #[test]
+    fn updated_input_audit_stderr_fields_are_redacted() {
+        let rewrite = RedactedHookRewrite::new(
+            "hook.sh",
+            &serde_json::json!({ "url": "postgres://alice:hunter2@db.example.com:5432/app" }),
+            &serde_json::json!({ "url": "postgres://db.example.com:5432/app" }),
+        );
+
+        assert!(!rewrite.original_args.contains("hunter2"));
+        assert!(rewrite.original_args.contains("[CREDENTIALS_REDACTED]"));
+        assert_eq!(
+            rewrite.new_args,
+            serde_json::json!({ "url": "postgres://db.example.com:5432/app" }).to_string(),
+            "non-secret args must pass through unchanged"
         );
     }
 }
