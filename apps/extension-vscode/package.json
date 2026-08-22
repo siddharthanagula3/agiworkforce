@@ -808,7 +808,8 @@
             "Skip approval prompts for workspace/additional-directory, terminal, network-capable command, and configured MCP tool access. Selecting this requires a modal risk confirmation."
           ],
           "default": "auto",
-          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' runs safe, read-only operations automatically while writes and commands still require approval, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation."
+          "scope": "machine",
+          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' runs safe, read-only operations automatically while writes and commands still require approval, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is machine-scoped, and Bypass Permissions is confirmed per workspace."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",
@@ -819,7 +820,8 @@
             "max"
           ],
           "default": "medium",
-          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis."
+          "scope": "machine",
+          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis. Machine-scoped so a repository cannot raise it."
         },
         "agiWorkforce.agent.thinking": {
           "type": "boolean",
