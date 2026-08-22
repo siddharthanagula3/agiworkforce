@@ -1,18 +1,13 @@
 
 import * as vscode from 'vscode';
-import {
-  MODEL_CONTEXT_LIMITS,
-  DEFAULT_CONTEXT_LIMIT,
-  MODEL_COST_RATES,
-  DEFAULT_BLENDED_RATE,
-  normalizeConfiguredModelId,
-} from '../features/model-picker/modelConstants';
-import { Config } from '../platform/config';
+import { MODEL_COST_RATES } from '../features/model-picker/modelConstants';
+import { isAutoRoutingModel } from '../integrations/routingTask';
 
 export class TokenCounter implements vscode.Disposable {
   private _promptTokens = 0;
   private _completionTokens = 0;
   private _requestCount = 0;
+  private _unpricedRequestCount = 0;
   private _estimatedCostUsd = 0;
   private readonly _statusBarItem: vscode.StatusBarItem;
 
@@ -20,7 +15,6 @@ export class TokenCounter implements vscode.Disposable {
     this._statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 80);
     this._statusBarItem.command = 'agi-workforce.showTokenBreakdown';
     this._updateDisplay();
-    this._statusBarItem.show();
   }
 
   get totalTokens(): number {
@@ -39,31 +33,25 @@ export class TokenCounter implements vscode.Disposable {
     return this._requestCount;
   }
 
+  get unpricedRequestCount(): number {
+    return this._unpricedRequestCount;
+  }
+
   get estimatedCostUsd(): number {
     return this._estimatedCostUsd;
   }
 
-  addUsage(
-    promptTokens?: number,
-    completionTokens?: number,
-    promptChars?: number,
-    completionChars?: number,
-  ): void {
-    const promptDelta = promptTokens ?? Math.ceil((promptChars ?? 0) / 4);
-    const completionDelta = completionTokens ?? Math.ceil((completionChars ?? 0) / 4);
-
-    this._promptTokens += promptDelta;
-    this._completionTokens += completionDelta;
+  addMeasuredUsage(model: string, promptTokens: number, completionTokens: number): void {
+    this._promptTokens += promptTokens;
+    this._completionTokens += completionTokens;
     this._requestCount += 1;
 
-    const model = this._getCurrentModel();
-    const rates = MODEL_COST_RATES[model];
-    if (rates !== undefined) {
-      this._estimatedCostUsd +=
-        (promptDelta / 1_000_000) * rates.input + (completionDelta / 1_000_000) * rates.output;
+    const rates = isAutoRoutingModel(model) ? undefined : MODEL_COST_RATES[model];
+    if (rates === undefined) {
+      this._unpricedRequestCount += 1;
     } else {
       this._estimatedCostUsd +=
-        ((promptDelta + completionDelta) / 1_000_000) * DEFAULT_BLENDED_RATE;
+        (promptTokens / 1_000_000) * rates.input + (completionTokens / 1_000_000) * rates.output;
     }
 
     this._updateDisplay();
@@ -73,55 +61,28 @@ export class TokenCounter implements vscode.Disposable {
     this._promptTokens = 0;
     this._completionTokens = 0;
     this._requestCount = 0;
+    this._unpricedRequestCount = 0;
     this._estimatedCostUsd = 0;
     this._updateDisplay();
   }
 
-  refreshDisplay(): void {
-    this._updateDisplay();
-  }
-
-  private _getCurrentModel(): string {
-    return normalizeConfiguredModelId(Config.model());
-  }
-
-  private _getContextLimit(): number {
-    const model = this._getCurrentModel();
-    return MODEL_CONTEXT_LIMITS[model] ?? DEFAULT_CONTEXT_LIMIT;
-  }
-
-  private _getUsagePercent(): number {
-    const limit = this._getContextLimit();
-    if (limit === 0) return 0;
-    return (this.totalTokens / limit) * 100;
-  }
-
   private _updateDisplay(): void {
-    const total = this.totalTokens;
-    const limit = this._getContextLimit();
-    const pct = this._getUsagePercent();
-
-    this._statusBarItem.text = `$(pulse) Tokens: ${formatTokenCount(total)}/${formatTokenCount(limit)}`;
-
-    if (pct >= 80) {
-      this._statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-    } else if (pct >= 50) {
-      this._statusBarItem.backgroundColor = new vscode.ThemeColor(
-        'statusBarItem.warningBackground',
-      );
-    } else {
-      this._statusBarItem.backgroundColor = undefined;
+    if (this._requestCount === 0) {
+      this._statusBarItem.hide();
+      return;
     }
 
+    this._statusBarItem.text = `$(pulse) Tokens: ${formatTokenCount(this.totalTokens)}`;
     this._statusBarItem.tooltip =
       `AGI Workforce -- Session Token Usage\n` +
-      `Model: ${this._getCurrentModel()}\n` +
-      `Usage: ${formatTokenCount(total)} / ${formatTokenCount(limit)} (${pct.toFixed(1)}%)\n` +
-      `Prompt: ${formatTokenCount(this._promptTokens)}\n` +
-      `Completion: ${formatTokenCount(this._completionTokens)}\n` +
-      `Requests: ${this._requestCount}\n` +
-      `Est. Cost: $${this._estimatedCostUsd.toFixed(4)}\n\n` +
+      `Measured this session, across every model used.\n\n` +
+      `Input: ${formatTokenCount(this._promptTokens)}\n` +
+      `Output: ${formatTokenCount(this._completionTokens)}\n` +
+      `Total: ${formatTokenCount(this.totalTokens)}\n` +
+      `Turns: ${this._requestCount}\n` +
+      `Est. cost: ${costLabel(this)}\n\n` +
       `Click for detailed breakdown`;
+    this._statusBarItem.show();
   }
 
   dispose(): void {
@@ -157,6 +118,13 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.showTokenBreakdown', async () => {
+      if (counter.requestCount === 0) {
+        vscode.window.showInformationMessage(
+          'AGI Workforce: No measured token usage yet this session.',
+        );
+        return;
+      }
+
       const items: vscode.QuickPickItem[] = [
         {
           label: `$(arrow-up) Input Tokens`,
@@ -171,17 +139,17 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
         {
           label: `$(graph) Total Tokens`,
           description: formatTokenCount(counter.totalTokens),
-          detail: 'Combined input + output token usage this session',
+          detail: 'Combined input + output usage this session, across every model used',
         },
         {
           label: `$(credit-card) Estimated Cost`,
-          description: `$${counter.estimatedCostUsd.toFixed(4)}`,
-          detail: 'Approximate cost based on model pricing',
+          description: costLabel(counter),
+          detail: 'Published rates applied to measured tokens — not an invoice or provider bill',
         },
         {
-          label: `$(request-changes) Requests`,
+          label: `$(request-changes) Turns`,
           description: `${counter.requestCount}`,
-          detail: 'Number of API calls made this session',
+          detail: 'Completed turns that reported measured token usage',
         },
         { label: '', kind: vscode.QuickPickItemKind.Separator },
         {
@@ -201,12 +169,12 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
       }
     }),
   );
+}
 
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('agiWorkforce.model')) {
-        counter.refreshDisplay();
-      }
-    }),
-  );
+function costLabel(counter: TokenCounter): string {
+  if (counter.unpricedRequestCount === counter.requestCount) return 'no published rate';
+  const amount = `$${counter.estimatedCostUsd.toFixed(4)}`;
+  return counter.unpricedRequestCount === 0
+    ? amount
+    : `${amount} (excludes ${counter.unpricedRequestCount} turn(s) with no published rate)`;
 }

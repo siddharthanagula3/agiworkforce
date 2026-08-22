@@ -5,7 +5,6 @@ import * as https from 'https';
 import { URL } from 'url';
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
-import { getTokenCounter } from '../data/tokenCounter';
 import { TierInfoSchema, type TierInfoResponse } from '../protocol/apiResponses';
 import {
   effectivePlanTier,
@@ -202,8 +201,9 @@ export function validateEndpointUrl(raw: string): string | undefined {
   }
 
   const isHttps = parsed.protocol === 'https:';
+  // URL.hostname keeps the brackets on IPv6 literals, so '::1' would never match.
   const isLocalhost =
-    parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+    parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]';
 
   if (!isHttps && !isLocalhost) {
     return undefined;
@@ -478,7 +478,6 @@ export async function streamChatCompletion(
   if (cancellationToken.isCancellationRequested) {
     throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
   }
-  let responseChars = 0;
   try {
     await withRetry(() =>
       httpsPostStream(
@@ -488,7 +487,6 @@ export async function streamChatCompletion(
         (chunk) => {
           const content = chunk.choices[0]?.delta?.content;
           if (content !== undefined && content !== '') {
-            responseChars += content.length;
             callbacks.onToken(content);
           }
         },
@@ -516,7 +514,6 @@ export async function streamChatCompletion(
   if (!cancellationToken.isCancellationRequested) {
     callbacks.onDone();
     getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
-    getTokenCounter().addUsage(undefined, undefined, bodyStr.length, responseChars);
   }
 }
 

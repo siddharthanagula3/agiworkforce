@@ -698,6 +698,82 @@ describe('chat participant approval lifecycle', () => {
     await response;
   });
 
+  it('sends no memory context when memory is turned off, keeping the stored facts', async () => {
+    vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
+      () =>
+        ({
+          get: vi.fn((key: string, defaultValue?: unknown) => {
+            if (key === 'model') return 'auto';
+            if (key === 'memory.enabled') return false;
+            return defaultValue;
+          }),
+          update: vi.fn().mockResolvedValue(undefined),
+          has: vi.fn().mockReturnValue(false),
+          inspect: vi.fn((key: string) =>
+            key === 'model' ? { key, globalValue: 'auto' } : undefined,
+          ),
+        }) as unknown as vscode.WorkspaceConfiguration,
+    );
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const runtime = {
+      startThread: vi.fn().mockResolvedValue(threadSummary()),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const context = new vscode.ExtensionContext();
+    await context.workspaceState.update(MEMORY_STORE_KEY, [
+      {
+        id: 'memory-1',
+        text: 'Prefer Rust for command-line tools',
+        createdAt: '2026-07-25T00:00:00.000Z',
+      },
+    ]);
+    const handler = createChatHandler(
+      context.secrets,
+      undefined,
+      context.globalState,
+      pool,
+      context.workspaceState,
+    );
+    const response = handler(
+      request(undefined, 'Implement the CLI command'),
+      { history: [] } as vscode.ChatContext,
+      {
+        progress: vi.fn(),
+        markdown: vi.fn(),
+        button: vi.fn(),
+      } as unknown as vscode.ChatResponseStream,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as vscode.CancellationToken,
+    );
+
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    const turn = runtime.startTurn.mock.calls[0]![0] as { input: Array<{ text?: string }> };
+    expect(turn.input.some((part) => part.text?.includes('untrusted_memory_context'))).toBe(false);
+    expect(context.workspaceState.get(MEMORY_STORE_KEY)).toHaveLength(1);
+    for (const listener of listeners) {
+      listener({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+    }
+    await response;
+  });
+
   it('interrupts and settles when the runtime rejects an approval response', async () => {
     const listeners = new Set<(event: LocalRuntimeEvent) => void>();
     const runtime = {

@@ -76,6 +76,19 @@ function requireWorkspaceMemoryScope(): boolean {
   return false;
 }
 
+const MEMORY_TURN_ON_ACTION = 'Turn memory on';
+
+async function requireMemoryEnabledForCapture(context: vscode.ExtensionContext): Promise<boolean> {
+  if (Config.memoryEnabled()) return true;
+  const choice = await vscode.window.showWarningMessage(
+    'Memory is off, so saved facts are not sent with any turn.',
+    { modal: true },
+    MEMORY_TURN_ON_ACTION,
+  );
+  if (choice !== MEMORY_TURN_ON_ACTION) return false;
+  return Config.update(context, { key: 'memory.enabled', value: true });
+}
+
 function contextCommandTarget(
   target: vscode.Uri | ContextItem | undefined,
 ): vscode.Uri | undefined {
@@ -1099,15 +1112,30 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.memory', async () => {
       if (!requireWorkspaceMemoryScope()) return;
+      const enabled = Config.memoryEnabled();
       const action = await vscode.window.showQuickPick(
         [
+          {
+            label: enabled ? '$(circle-slash) Turn memory off' : '$(check) Turn memory on',
+            detail: 'toggle',
+          },
           { label: '$(add) Add a memory fact', detail: 'add' },
           { label: '$(list-unordered) List & remove facts', detail: 'list' },
           { label: '$(trash) Forget everything', detail: 'clear' },
         ],
-        { title: 'AGI Workforce — Memory', placeHolder: 'Choose an action' },
+        {
+          title: `AGI Workforce — Memory (${enabled ? 'on' : 'off'})`,
+          placeHolder: enabled
+            ? 'Choose an action'
+            : 'Saved facts are kept but not sent with your turns',
+        },
       );
       if (!action) return;
+
+      if (action.detail === 'toggle') {
+        await vscode.commands.executeCommand('agi-workforce.memory.toggle');
+        return;
+      }
 
       if (action.detail === 'add') {
         await vscode.commands.executeCommand('agi-workforce.memory.create');
@@ -1155,12 +1183,24 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
+    register('agi-workforce.memory.toggle', async () => {
+      const next = !Config.memoryEnabled();
+      await Config.update(context, { key: 'memory.enabled', value: next });
+      memoryTreeProvider.refresh();
+      vscode.window.showInformationMessage(
+        next
+          ? 'Memory on — saved facts are included with your turns.'
+          : 'Memory off — saved facts stay stored but are not sent.',
+      );
+    }),
+
     register('agi-workforce.memory.refresh', () => {
       memoryTreeProvider.refresh();
     }),
 
     register('agi-workforce.memory.create', async () => {
       if (!requireWorkspaceMemoryScope()) return;
+      if (!(await requireMemoryEnabledForCapture(context))) return;
       const text = await vscode.window.showInputBox({
         title: 'AGI Workforce — Add Memory Fact',
         prompt:

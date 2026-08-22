@@ -36,7 +36,7 @@ md.renderer.rules.code_block = (tokens, index) => {
   return token ? renderCodeBlock(token.content) : '';
 };
 
-const PURIFY_CONFIG: DOMPurify.Config = {
+export const PURIFY_CONFIG: DOMPurify.Config = {
   FORBID_TAGS: [
     'svg',
     'math',

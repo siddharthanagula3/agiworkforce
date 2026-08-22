@@ -772,6 +772,20 @@ export function getWebviewContent(
     #stopBtn::before { content: '■'; font-size: 9px; }
     #stopBtn:hover { border-color: var(--vscode-focusBorder); }
 
+    .context-usage {
+      display: none;
+      min-width: 0;
+      overflow: hidden;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .context-usage.visible { display: inline; }
+    .context-usage.is-high { color: var(--warning); }
+    .context-usage.is-critical { color: var(--error); }
+
     .follow-up-status {
       display: none;
       min-width: 0;
@@ -1565,6 +1579,7 @@ export function getWebviewContent(
     }
 
     @media (max-width: 340px) {
+      .context-usage.visible { display: none; }
       .header { padding-inline: 8px; }
       .header-left { gap: 4px; max-width: calc(100% - 64px); overflow: hidden; }
       .header-actions { gap: 0; }
@@ -1977,6 +1992,7 @@ export function getWebviewContent(
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="menu" aria-expanded="false">+</button>
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Model · Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
+        <span class="context-usage" id="contextUsage"></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
@@ -2015,6 +2031,7 @@ export function getWebviewContent(
     const sessionIdentitySeparator = document.getElementById('sessionIdentitySeparator');
     const sessionProviderLabel = document.getElementById('sessionProviderLabel');
     const controlsSummary = document.getElementById('controlsSummary');
+    const contextUsageEl = document.getElementById('contextUsage');
     const runtimeStatusEl = document.getElementById('runtimeStatus');
     const runtimeStatusTitleEl = document.getElementById('runtimeStatusTitle');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
@@ -2708,6 +2725,41 @@ export function getWebviewContent(
         (activeSupportsEffort ? ', ' + effort + ' effort' : ', effort unavailable for this model');
       controlsSummary.title = fullLabel;
       controlsSummary.setAttribute('aria-label', fullLabel);
+    }
+
+    function formatContextTokens(count) {
+      if (count < 1000) return String(count);
+      if (count < 1000000) return (count / 1000).toFixed(count < 10000 ? 1 : 0) + 'k';
+      return (count / 1000000).toFixed(1) + 'M';
+    }
+
+    function clearContextUsage() {
+      if (!contextUsageEl) return;
+      contextUsageEl.textContent = '';
+      contextUsageEl.className = 'context-usage';
+      contextUsageEl.removeAttribute('title');
+    }
+
+    function renderContextUsage(usedTokens, contextWindow) {
+      if (!contextUsageEl) return;
+      if (typeof usedTokens !== 'number' || !isFinite(usedTokens) || usedTokens <= 0) {
+        clearContextUsage();
+        return;
+      }
+      var used = formatContextTokens(usedTokens);
+      if (typeof contextWindow !== 'number' || !isFinite(contextWindow) || contextWindow <= 0) {
+        contextUsageEl.textContent = used + ' tok';
+        contextUsageEl.className = 'context-usage visible';
+        contextUsageEl.title = 'Last turn used ' + usedTokens.toLocaleString() +
+          ' tokens. The context window for this model is not known here.';
+        return;
+      }
+      var pct = Math.min(100, Math.round((usedTokens / contextWindow) * 100));
+      contextUsageEl.textContent = used + ' / ' + formatContextTokens(contextWindow);
+      contextUsageEl.className = 'context-usage visible' +
+        (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
+      contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
+        ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
     }
 
     function addMessage(role, text) {
@@ -3589,6 +3641,10 @@ export function getWebviewContent(
         accumulatedContent = '';
       }
 
+      else if (msg.type === 'contextUsage') {
+        renderContextUsage(msg.payload.usedTokens, msg.payload.contextWindow);
+      }
+
       else if (msg.type === 'progressUpdate') {
         removeTyping();
         upsertProgressEl(
@@ -3762,6 +3818,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationLoaded') {
+        clearContextUsage();
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
         invalidateAttachmentBatches();
         messagesEl.innerHTML = '';
@@ -3808,6 +3865,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationCleared') {
+        clearContextUsage();
         resetAuthoritativeSessionBoundary();
         invalidateAttachmentBatches();
         messagesEl.innerHTML = '';

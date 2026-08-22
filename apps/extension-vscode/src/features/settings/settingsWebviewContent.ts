@@ -1424,6 +1424,33 @@ export function getSettingsWebviewContent(
 
           <div class="card">
             <div class="card-heading">
+              <h3>Memory</h3>
+              <p>Facts you save stay in this workspace. Turning memory off keeps them listed in the Memory view but stops sending them.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-memory">Use saved memory facts</label>
+                <span class="setting-description">Include saved facts with chat turns.</span>
+              </div>
+              <label class="toggle" title="Use saved memory facts">
+                <input
+                  id="setting-memory"
+                  data-setting="memory.enabled"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="action-row">
+              <button class="secondary-button" type="button" data-command="openMemory">
+                Review saved facts
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
               <h3>Editor surfaces</h3>
               <p>All editor decorations are opt-in so AGI does not crowd native VS Code controls.</p>
             </div>
@@ -1813,6 +1840,7 @@ ${capabilityAvailabilityRows}
           'composer.followUpBehavior': 'Active-turn send',
           contextLines: 'Context lines',
           telemetryEnabled: 'Telemetry',
+          'memory.enabled': 'Memory',
           hoverEnabled: 'Hover actions',
           codeLensEnabled: 'Code lenses',
           autoApplyFixes: 'Auto-apply fixes',

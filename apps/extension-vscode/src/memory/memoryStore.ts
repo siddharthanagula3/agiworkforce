@@ -5,6 +5,7 @@ import {
   normalizeMemoryKey,
   type MemoryCategory,
 } from '@agiworkforce/agent-core';
+import { Config } from '../platform/config';
 
 export const MEMORY_STORE_KEY = 'agiWorkforce.memoryFacts';
 
@@ -62,6 +63,7 @@ export function loadFacts(workspaceState: MemoryState): MemoryFact[] {
 export function buildMemoryContextInput(
   workspaceState: MemoryState,
 ): MemoryContextInput | undefined {
+  if (!Config.memoryEnabled()) return undefined;
   const facts = loadFacts(workspaceState).slice(0, MAX_MEMORY_FACTS_PER_TURN);
   if (facts.length === 0) return undefined;
 
