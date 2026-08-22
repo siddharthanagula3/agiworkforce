@@ -77,7 +77,7 @@
   "seatTotal_one": "{{count}} 个席位 · {{total}}/月",
   "seatTotal_other": "{{count}} 个席位 · {{total}}/月",
   "perSeatPrice": "{{price}}/席位/月",
-  "perSeatPriceAnnual": "{{price}}/席位/年",
+  "perSeatPriceAnnual": "{{price}}/席位/月",
   "seatTotalAnnual_one": "{{count}} 个席位 · {{total}}/年",
   "seatTotalAnnual_other": "{{count}} 个席位 · {{total}}/年",
   "seatCadenceMonthly_one": "{{count}} 个席位 · 按月计费",

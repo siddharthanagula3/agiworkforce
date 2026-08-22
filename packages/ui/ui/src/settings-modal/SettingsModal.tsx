@@ -227,6 +227,7 @@ function ConnectorDetail({
   onBack,
   error,
   disclosure,
+  toolPermissions,
 }: {
   connector: SettingsConnector;
   connection: ConnectedConnector | undefined;
@@ -242,6 +243,12 @@ function ConnectorDetail({
    * routes or web-specific policy copy into a shell that Desktop also renders.
    */
   disclosure?: React.ReactNode;
+  /**
+   * Surface-supplied per-tool permission controls, shown only once the
+   * connector is connected. Surface-owned for the same reason as `disclosure`:
+   * the permission store and its API are web/mobile concerns, not this shell's.
+   */
+  toolPermissions?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -333,6 +340,10 @@ function ConnectorDetail({
           revoke). Rendered before the Details block so it is above the fold at
           the moment the user is deciding. */}
       {disclosure}
+
+      {/* Per-tool permissions are only meaningful once tools exist to govern,
+          so they follow the connection rather than the catalog entry. */}
+      {connection && toolPermissions}
 
       {/* Details — real catalog metadata only (no invented author/URL/docs). */}
       <div className="rounded-lg border border-border/80">
@@ -1398,12 +1409,51 @@ function AddCustomConnectorForm({
   );
 }
 
+/**
+ * Connectors worth trying first, keyed by the work description the user gave in
+ * General settings.
+ *
+ * These are CURATED SUGGESTIONS, not popularity: this product has no install
+ * counts and inventing a "Popular" ranking from nothing is exactly the fake
+ * metric the panel's honesty rules forbid. The heading says "Suggested for"
+ * for that reason. A role with no entry gets no row rather than a generic one.
+ */
+const CONNECTOR_SUGGESTIONS_BY_ROLE: Readonly<Record<string, readonly string[]>> = {
+  'software engineering': ['github', 'linear', 'sentry', 'gitlab'],
+  'data science / ml': ['google-drive', 'notion', 'databricks', 'snowflake'],
+  'product management': ['linear', 'notion', 'slack', 'jira'],
+  'design / ux': ['figma', 'notion', 'slack'],
+  marketing: ['hubspot', 'google-drive', 'slack', 'canva'],
+  'sales / business development': ['salesforce', 'hubspot', 'slack', 'gmail'],
+  'legal / compliance': ['google-drive', 'notion', 'box'],
+  'finance / accounting': ['google-drive', 'stripe', 'quickbooks'],
+  operations: ['slack', 'notion', 'google-drive', 'asana'],
+  'research / academia': ['google-drive', 'notion', 'zotero'],
+  'writing / content': ['notion', 'google-drive', 'wordpress'],
+  healthcare: ['google-drive', 'box'],
+  education: ['google-drive', 'notion', 'canvas'],
+};
+
+function suggestedConnectorIdsFor(role: string | null | undefined): readonly string[] {
+  if (!role) return [];
+  return CONNECTOR_SUGGESTIONS_BY_ROLE[role.trim().toLowerCase()] ?? [];
+}
+
 function ConnectorsPanel({
   adapter,
   connectorDisclosure,
+  renderConnectorToolPermissions,
+  workRole,
 }: {
   adapter?: SettingsDataAdapter;
   connectorDisclosure?: React.ReactNode;
+  /** Work description from General settings, used only to order suggestions. */
+  workRole?: string | null;
+  /**
+   * Renders per-tool permission controls for a connected connector. Supplied by
+   * the surface because the permission store and its API live there.
+   */
+  renderConnectorToolPermissions?: (connectorId: string) => React.ReactNode;
 }) {
   const { t } = useUiTranslation('settings');
   const [search, setSearch] = useState('');
@@ -1453,6 +1503,19 @@ function ConnectorsPanel({
       'not-connected': connectors.length - connected,
     } as Record<ConnectorTab, number>;
   }, [connectors, connectionById]);
+
+  // Suggestions are drawn from what is actually in this deployment's catalogue
+  // and not already connected: proposing a connector the user cannot add, or
+  // one they already have, is noise dressed as help.
+  const suggested = useMemo(() => {
+    const ids = suggestedConnectorIdsFor(workRole);
+    if (ids.length === 0) return [];
+    const byId = new Map(connectors.map((c) => [c.id, c]));
+    return ids
+      .map((id) => byId.get(id))
+      .filter((c): c is SettingsConnector => Boolean(c) && !connectionById.has(c!.id))
+      .slice(0, 4);
+  }, [connectors, connectionById, workRole]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1513,6 +1576,7 @@ function ConnectorsPanel({
           onBack={() => setDetailId(null)}
           error={rowErrors[detailConnector.id]}
           disclosure={connectorDisclosure}
+          toolPermissions={renderConnectorToolPermissions?.(detailConnector.id)}
         />
         {confirmDialog}
       </>
@@ -1556,6 +1620,36 @@ function ConnectorsPanel({
         </div>
       ) : (
         <>
+          {suggested.length > 0 ? (
+            <section aria-labelledby="connector-suggestions" className="flex flex-col gap-2">
+              <h3
+                id="connector-suggestions"
+                className="text-[11px] uppercase tracking-wider text-muted-foreground"
+              >
+                Suggested for {workRole}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {suggested.map((connector) => (
+                  <button
+                    key={connector.id}
+                    type="button"
+                    onClick={() => setDetailId(connector.id)}
+                    className="flex items-center gap-2 rounded-lg border border-border/80 px-3 py-2 text-xs text-foreground transition-colors hover:bg-muted/40"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold"
+                      style={{ background: connector.iconBg, color: connector.iconText }}
+                    >
+                      {connector.name.slice(0, 1).toUpperCase()}
+                    </span>
+                    {connector.name}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {/* Toolbar: filter tabs (left) + search + Add (right) */}
           <div
             className={cn(
@@ -1860,11 +1954,21 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
           <table className="w-full table-fixed border-collapse text-left">
             <thead>
               <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th scope="col" className="w-[64%] px-3 py-2 font-semibold sm:w-[66%]">
+                <th scope="col" className="w-[64%] px-3 py-2 font-semibold sm:w-[54%]">
                   Skill
                 </th>
                 <th scope="col" className="hidden w-[14%] px-3 py-2 font-semibold sm:table-cell">
                   Author
+                </th>
+                {/*
+                  Version, not "Last updated". The reference shows a date; the
+                  skills source exposes no modified time, and a date derived
+                  from load time would be fiction. The bundle's own frontmatter
+                  version is real, and answers the same question — which
+                  iteration of this skill am I running.
+                */}
+                <th scope="col" className="hidden w-[12%] px-3 py-2 font-semibold sm:table-cell">
+                  Version
                 </th>
                 <th scope="col" className="w-[36%] px-3 py-2 font-semibold sm:w-[20%]">
                   Status
@@ -1889,6 +1993,9 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                   </td>
                   <td className="hidden px-3 py-2.5 text-xs text-muted-foreground sm:table-cell">
                     {skillAuthorLabel(skill.source)}
+                  </td>
+                  <td className="hidden px-3 py-2.5 text-xs tabular-nums text-muted-foreground sm:table-cell">
+                    {skill.version ?? '—'}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -2289,6 +2396,15 @@ export interface SettingsModalProps {
    * Omit and the detail view simply shows no disclosure block.
    */
   connectorDisclosure?: React.ReactNode;
+  /** Work description from General settings; orders connector suggestions. */
+  workRole?: string | null;
+  /**
+   * Renders per-tool permission controls inside the built-in connector detail
+   * view, for a connector the user has actually connected. Surface-owned for
+   * the same reason as `connectorDisclosure`: the permission store and its API
+   * belong to the surface, not to this shell.
+   */
+  renderConnectorToolPermissions?: (connectorId: string) => React.ReactNode;
   /**
    * Per-section attention badges, keyed by nav key. A section with no entry —
    * or a zero count — renders exactly as before.
@@ -2308,6 +2424,8 @@ export function SettingsModal({
   navGroups,
   adapter,
   connectorDisclosure,
+  workRole,
+  renderConnectorToolPermissions,
   navBadges,
   title,
 }: SettingsModalProps) {
@@ -2342,7 +2460,12 @@ export function SettingsModal({
     if (activeSection === 'connectors') {
       return (
         sectionContent['connectors'] ?? (
-          <ConnectorsPanel adapter={adapter} connectorDisclosure={connectorDisclosure} />
+          <ConnectorsPanel
+            adapter={adapter}
+            connectorDisclosure={connectorDisclosure}
+            renderConnectorToolPermissions={renderConnectorToolPermissions}
+            workRole={workRole}
+          />
         )
       );
     }
