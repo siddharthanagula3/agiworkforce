@@ -660,6 +660,17 @@ function mobileNavigationFocusable(root: HTMLElement): HTMLElement[] {
   );
 }
 
+// `highlightMessage` arrives verbatim from the URL, so matching on the dataset
+// value keeps a crafted id (quotes, brackets) out of a selector string it could
+// otherwise break, which would throw a DOMException out of the effect below.
+function findHighlightableMessageElement(messageId: string): HTMLElement | null {
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]')).find(
+      (element) => element.dataset['messageId'] === messageId,
+    ) ?? null
+  );
+}
+
 export default function WebChatPage() {
   useArtifactCloudSync();
 
@@ -3322,7 +3333,7 @@ export default function WebChatPage() {
   // We wait for messages to load before scrolling, then clear the param from the URL.
   useEffect(() => {
     if (!highlightMessageId || displayedMessages.length === 0) return;
-    const el = document.querySelector<HTMLElement>(`[data-message-id="${highlightMessageId}"]`);
+    const el = findHighlightableMessageElement(highlightMessageId);
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.style.transition = 'outline 0s, outline-color 0.3s';
