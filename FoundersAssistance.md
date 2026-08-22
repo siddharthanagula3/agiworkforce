@@ -1756,6 +1756,7 @@ non-browser client can obtain that too.
 account that can mint a Clerk session (every account). No data exposure.
 
 **Decide one of:**
+
 1. Bind the surface into the credential: a Clerk custom session claim
    (`surface`) set per application/JWT template, or an `azp` allow-list per
    surface, verified server-side; first-party clients keep working, scripts get
@@ -1763,8 +1764,163 @@ account that can mint a Clerk session (every account). No data exposure.
 2. Require a surface-bearing credential for non-browser callers (API key or the
    existing developer/device token) and treat a bare Clerk token as `web` only
    when the request also passes the browser-only checks (Origin + Sec-Fetch-Site
-   + CSRF cookie pair) — closes the scripting case without client changes.
+   - CSRF cookie pair) — closes the scripting case without client changes.
 3. Accept the residual and gate the API capability on billing audit instead.
 
 The parked attempt (option-2 shape) is at
 `agiworkforce-security-run/blocked/w1-W1-E-surface-header-trust.patch`.
+
+---
+
+## 38. Mobile TLS pinning: the mechanism now exists, but ops must choose the pinned keys and register the native plugin (security sweep 2026-08-21, `apps/mobile` F6)
+
+**Status:** `BLOCKED_BY_HUMAN` — needs a key/rotation decision and one line in a
+build config, not more application code.
+
+**Blocks:** fully closing CLAUDE-SECURITY-20260821-170634 F6 (CWE-295, MEDIUM):
+`apps/mobile` ships placeholder SPKI pins, so every Clerk bearer token and every
+dispatch pairing exchange still rides on the OS trust store alone — a
+device-trusted rogue CA (MDM profile, compelled or mis-issued intermediate) can
+terminate TLS to `api.agiworkforce.com` and harvest the Authorization header.
+
+**What this sweep changed**
+
+- `apps/mobile/lib/pinning.ts` no longer carries a hand-flipped
+  `PINNING_ENFORCED` literal. Enforcement is now derived:
+  `pinningEnforcedFor({ isDevOrTest })` is true only in a release runtime where
+  every required host carries a well-formed, non-placeholder SPKI hash. There is
+  no flag to flip and no state where the app claims to pin placeholders.
+- `apps/mobile/lib/runtimeMode.ts` classifies the build fail-closed: a runtime
+  counts as dev/test only on an explicit signal (`__DEV__`, `NODE_ENV=test`,
+  `EXPO_PUBLIC_APP_ENV=development`). A release build whose `NODE_ENV` was never
+  set — which is every EAS profile in `apps/mobile/eas.json` — is treated as a
+  release runtime instead of silently skipping the release-only gate.
+- `apps/mobile/native/withAGITlsPinning.cjs` + `native/tlsPinConfig.cjs` are a
+  real Expo config plugin: from the same `PINS_BY_HOST` table they generate the
+  iOS `NSAppTransportSecurity.NSPinnedDomains` dictionary (as
+  `NSPinnedCAIdentities` — iOS matches only certificates above the leaf) and the
+  Android `network_security_config.xml` pin-set, wire the manifest attribute,
+  and record the hosts they covered in `extra.tlsPinning`.
+- `apps/mobile/services/secureFetch.ts` reads that build-stamped host list back
+  through `expo-constants`. With enforcement on, a release build refuses a
+  pinned host (`PinningError`, `reason: 'no-native-enforcement'`) unless the
+  build really shipped the native config for that exact hostname. React
+  Native's `fetch` cannot inspect the peer certificate, so this is the only
+  honest signal the JS layer has.
+- `scripts/compute-spki-pins.mjs` captures the live chain for every host in the
+  table and prints the paste-ready `PINS_BY_HOST` block plus both native blocks.
+  `--clerk-key pk_live_…` adds the Clerk FAPI host.
+- Coverage: `apps/mobile/__tests__/pinning.test.ts` (71 tests). Eleven of them
+  fail against the pre-sweep `secureFetch.ts`.
+
+**What is needed and from whom**
+
+1. Security owner — decide which key each host is pinned to and who holds the
+   backup. Captured 2026-08-22 with `node scripts/compute-spki-pins.mjs`:
+
+   | host                                                 | leaf expires | issuing CA             | root                                               |
+   | ---------------------------------------------------- | ------------ | ---------------------- | -------------------------------------------------- |
+   | `agiworkforce.com`                                   | 2026-11-06   | `YR1` (exp 2028-09-02) | `Root YR` (2032) / `ISRG Root X1` (2035)           |
+   | `api.agiworkforce.com`, `signaling.agiworkforce.com` | 2026-11-04   | `YR2` (exp 2028-09-02) | `Root YR` (2032) / `ISRG Root X1` (2035)           |
+   | `api.openai.com`                                     | 2026-10-06   | `WE1` (exp 2029-02-20) | `GTS Root R4` (2028) / `GlobalSign Root CA` (2028) |
+   | `api.anthropic.com`                                  | 2026-10-22   | `WE1` (exp 2029-02-20) | `GTS Root R4` (2028) / `GlobalSign Root CA` (2028) |
+
+   Leaves rotate inside ~10 weeks, so pin CA keys, and pin at least two per host
+   (issuing CA plus the root above it). A pin-set with no reachable key
+   hard-fails every installed app at the next rotation and no over-the-air
+   update can repair it.
+
+2. Same owner — decide whether `api.openai.com` and `api.anthropic.com` should
+   be pinned at all. We do not control their rotation; both currently chain
+   through Google's `WE1`, and a CA change on their side is a client-side outage
+   with no remedy. Dropping them from `REQUIRED_PINNED_HOSTS` is a supported
+   answer.
+3. Same owner — before provisioning, inventory every host the app must reach.
+   Once enforcement is on, `secureFetch` refuses any host with no entry in
+   `PINS_BY_HOST` (this is pre-existing behaviour, asserted by
+   `apps/mobile/__tests__/secure-fetch.test.ts`), so local/LAN dispatch targets
+   and any model-download CDN need entries or a documented exemption.
+4. Mobile/native owner — add `'./native/withAGITlsPinning.cjs'` to the `plugins`
+   array in `apps/mobile/app.config.js` (outside this sweep's ownership, so it
+   was not touched) and rebuild. Without it the pins are inert: nothing compares
+   a certificate to them. `apps/mobile/__tests__/pinning.test.ts` fails the
+   build if a real pin ever lands without that registration. Note that
+   `EXPO_ENABLE_DETOX` builds cannot carry pins: `withAGIDetox` writes its own
+   `network_security_config.xml`, and Android has room for exactly one, so the
+   pinning plugin now throws instead of producing an artifact that claims to pin
+   while Android trusts whatever certificate it is handed.
+5. Clerk — `@clerk/expo` does its own networking and never reaches
+   `secureFetch`, so only the native config can cover the auth handshake. The
+   FAPI host is `clerk.agiworkforce.com` (decoded from the publishable key, TLS
+   chain confirmed 2026-08-22); it is not in `PINS_BY_HOST` today and needs an
+   entry alongside step 1.
+6. Optional follow-up — `apps/mobile/scripts/check-tls-pins.mjs` still greps for
+   the literal `PINNING_ENFORCED = true`, which no longer exists. It cannot fire
+   a false failure, but it also no longer catches anything; the useful release
+   gate now is "pins provisioned ⇒ plugin registered".
+
+**Costs to leave it:** unchanged from today — no pinning, so a device-trusted
+rogue CA can read and replay mobile session tokens. This sweep removed the
+silent-failure modes (enforcement can no longer be on while nothing verifies
+anything, and a release build can no longer skip the gate because an env var was
+never set) and built the mechanism; it did not turn pinning on.
+
+---
+
+## 39. Set `ALLOWED_ORIGINS` on the signaling deploy before the next release (security sweep 2026-08-21, `services/signaling-server` F4/F10)
+
+**Status:** `BLOCKED_BY_HUMAN` — needs a value only ops can supply (the real client
+origins) plus a Fly/Railway dashboard action.
+
+**Blocks:** every WebSocket pairing on any production signaling deploy that ships
+without `ALLOWED_ORIGINS`.
+
+**What changed.** `services/signaling-server/src/index.ts` used to run the whole
+Origin allow-list and `x-signaling-internal-secret` gate inside
+`if (allowedOrigins.length > 0)`. In production with `ALLOWED_ORIGINS` unset the
+allow-list resolves to `[]`, so the gate was skipped entirely and any page on any
+origin could open a WebSocket to the signaling server (CWE-346). The gate is now
+unconditional: an Origin that is not on the allow-list is closed with `1008
+forbidden_origin`, an empty allow-list closes with `1008 origin_not_configured`,
+and a connection with no Origin is admitted only when it presents a valid
+`x-signaling-internal-secret` — now compared with the file's existing
+`constantTimeCompare` helper, after the blacklist and connection rate limiter
+rather than before them (CWE-208).
+
+Fail-closed was the founder decision, so the consequence is real: a deploy that
+omits `ALLOWED_ORIGINS` now refuses connections instead of accepting all of them.
+
+**Do, before the next signaling deploy:**
+
+1. Enumerate the exact `Origin` header each client sends to
+   `wss://signaling.agiworkforce.com/ws` — the Tauri desktop webview and the React
+   Native mobile client both send one, and the strings are build-specific
+   (`tauri://localhost`, the dev-server origin, the packaged app origin). These
+   must be observed, not guessed; a missing entry is a silent pairing outage for
+   that client.
+2. Set the list on each deploy target:
+   `fly secrets set ALLOWED_ORIGINS="…"` (`services/signaling-server/fly.toml` now
+   documents this in `[env]`) and the same key in the Railway dashboard
+   (`services/signaling-server/railway.toml` marks it REQUIRED).
+3. Confirm `SIGNALING_INTERNAL_SECRET` is set on the same deploys. It is the only
+   way a no-Origin client (and the `/pairings` bearer endpoints) can authenticate;
+   without it every no-Origin handshake is closed with `origin_required`.
+4. Decide whether any non-browser client should use the internal-secret path at
+   all. Nothing in the repo sends `x-signaling-internal-secret` today, so if the
+   answer is "no client", that path is dead weight and can be removed in a later
+   slice.
+5. Outside this sweep's ownership: `services/signaling-server/docker-compose.yml:29`
+   still defaults `ALLOWED_ORIGINS` to the empty string for the production compose
+   profile. That profile will now refuse browser connections until the operator
+   supplies a value; someone who owns that file should either give it a default or
+   make the omission loud.
+
+**Cost to leave it:** signaling pairing does not work at all on a deploy that skips
+step 2 — every client handshake closes with `1008 origin_not_configured`. Reverting
+to the old behaviour is not an option: that is the cross-site WebSocket hijacking
+hole the sweep closed.
+
+**Verified by:** `services/signaling-server/__tests__/websocket/origin-policy.test.ts`,
+which boots the real server as a child process with and without `ALLOWED_ORIGINS`
+and asserts the close codes. Five of its nine assertions fail against the pre-fix
+handler.
