@@ -60,6 +60,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
 import {
   getModelMetadataById,
+  providerModeToPrivacyMode,
   type ArtifactManifest,
   type ComputeSession,
   type GeneratedFile,
@@ -84,7 +85,12 @@ const MarkdownContent = dynamic(
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
-import { extractTrailingUnclosedBlock, isRenderableArtifact } from '@agiworkforce/artifacts';
+import {
+  extractTrailingUnclosedBlock,
+  isRenderableArtifact,
+  resolveOriginPrivacyMode,
+} from '@agiworkforce/artifacts';
+import { getProviderModeForModel } from '../../lib/localByokHandoff';
 import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import {
@@ -262,6 +268,51 @@ function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
   );
 }
 
+const PROVIDER_MODE_BY_PRIVACY_MODE = {
+  local: 'Local',
+  byok: 'DirectByok',
+  managed: 'ManagedGateway',
+} as const satisfies Record<
+  NonNullable<StoreMessageMetadata['privacyMode']>,
+  GeneratedFile['providerMode']
+>;
+
+/**
+ * SECURITY-FIX F3 (CWE-863): generated-file descriptors used to be stamped
+ * `managed`/`ManagedGateway` unconditionally, so a file produced in a Local or
+ * BYOK turn rendered a "Managed" privacy chip — the label the user relies on to
+ * know where the bytes went — and the Artifacts panel then read that fabricated
+ * label back as the artifact's origin. Only the Local→BYOK handoff writes
+ * `metadata.privacyMode`, so the boundary is derived from every signal the turn
+ * really carries: its declared labels, then the model that served it. `managed`
+ * survives only as the display fallback for a turn with no signal at all;
+ * `resolveArtifactOriginPrivacyMode` refuses to treat it as origin evidence.
+ */
+function messageTrustBoundary(
+  metadata: Message['metadata'],
+  model: string | undefined,
+  conversationModel: string | null | undefined,
+): {
+  privacyMode: GeneratedFile['privacyMode'];
+  providerMode: GeneratedFile['providerMode'];
+} {
+  const privacyMode =
+    resolveOriginPrivacyMode([
+      metadata?.privacyMode,
+      metadata?.providerMode,
+      getProviderModeForModel(model ?? metadata?.model),
+      getProviderModeForModel(conversationModel),
+    ]) ?? 'managed';
+  const declared = metadata?.providerMode;
+  return {
+    privacyMode,
+    providerMode:
+      declared && providerModeToPrivacyMode(declared) === privacyMode
+        ? declared
+        : PROVIDER_MODE_BY_PRIVACY_MODE[privacyMode],
+  };
+}
+
 interface Message {
   id: string;
   sessionId?: string;
@@ -278,6 +329,9 @@ interface Message {
   reactions?: Array<{ type: string; userId: string }>;
   attachments?: Attachment[];
   metadata?: {
+    /** Trust-boundary labels persisted with the turn (Local/BYOK handoff evidence). */
+    privacyMode?: StoreMessageMetadata['privacyMode'];
+    providerMode?: StoreMessageMetadata['providerMode'];
     isDocument?: boolean;
     documentTitle?: string;
     hasWorkStream?: boolean;
@@ -624,6 +678,9 @@ const MessageBubbleComponent = function MessageBubble({
   // on it left artifacts with conversationId=undefined → filtered out of every
   // panel. Falls back to message.sessionId when there's no active conversation.
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const activeConversationModel = useChatStore(
+    (s) => s.conversations.find((c) => c.id === s.activeConversationId)?.model ?? null,
+  );
 
   const [reportState, setReportState] = useState<'idle' | 'sending' | 'sent'>('idle');
 
@@ -740,14 +797,19 @@ const MessageBubbleComponent = function MessageBubble({
     };
   }, [generatedFiles, generatedTextContent]);
 
+  const trustBoundary = useMemo(
+    () => messageTrustBoundary(message.metadata, message.model, activeConversationModel),
+    [message.metadata, message.model, activeConversationModel],
+  );
+
   const toGeneratedFile = useCallback(
     (f: GeneratedFileMetadataEntry): GeneratedFile => ({
       id: f.id,
       computeSessionId: `generated-${message.id}`,
       ownerUserId: '',
       sourceSurface: 'web',
-      privacyMode: 'managed',
-      providerMode: 'ManagedGateway',
+      privacyMode: trustBoundary.privacyMode,
+      providerMode: trustBoundary.providerMode,
       kind: (f.kind || 'other') as GeneratedFile['kind'],
       fileName: f.fileName,
       mimeType: f.mimeType,
@@ -757,7 +819,7 @@ const MessageBubbleComponent = function MessageBubble({
       previewDerivatives: [],
       createdAt: message.timestamp.toISOString(),
     }),
-    [message.id, message.timestamp],
+    [message.id, message.timestamp, trustBoundary],
   );
 
   const generatedFileArtifacts = useMemo<ArtifactData[]>(() => {

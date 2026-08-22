@@ -1,10 +1,17 @@
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Download, FileQuestion, Loader2, RotateCcw } from 'lucide-react';
 import {
+  PRIVACY_MODES,
+  PROVIDER_MODES,
+  detectProviderFromModelId,
+  getProviderSurface,
+  providerModeToPrivacyMode,
+  providerSurfaceToProviderMode,
   summarizeGeneratedFileBundle,
   type GeneratedFile,
   type GeneratedFileKind,
+  type PrivacyMode,
+  type ProviderMode,
 } from '@agiworkforce/types';
 import {
   Button,
@@ -79,8 +86,97 @@ const EXECUTION_TOOL_LABELS: Readonly<Record<string, string>> = {
 
 export type MessageGeneratedFilesMessage = Pick<
   ChatMessage,
-  'generatedFiles' | 'createdAt' | 'timestamp' | 'toolCalls' | 'isStreaming'
+  'generatedFiles' | 'createdAt' | 'timestamp' | 'toolCalls' | 'isStreaming' | 'metadata' | 'model'
 >;
+
+export interface GeneratedFileTrustBoundary {
+  privacyMode: PrivacyMode;
+  providerMode: ProviderMode;
+}
+
+const PROVIDER_MODE_BY_PRIVACY_MODE = {
+  local: 'Local',
+  byok: 'DirectByok',
+  managed: 'ManagedGateway',
+} as const satisfies Record<PrivacyMode, ProviderMode>;
+
+const PRIVACY_MODE_PRECEDENCE = [
+  'local',
+  'byok',
+  'managed',
+] as const satisfies readonly PrivacyMode[];
+
+function privacyModeForProvider(provider: string | null | undefined): PrivacyMode | undefined {
+  if (!provider) return undefined;
+  const providerMode = providerSurfaceToProviderMode(getProviderSurface(provider));
+  return providerMode ? providerModeToPrivacyMode(providerMode) : undefined;
+}
+
+function privacyModeForModel(model: string | null | undefined): PrivacyMode | undefined {
+  if (!model) return undefined;
+  // A model id the catalog does not carry still names its provider in the
+  // prefix (`ollama/…`, `open_router/…`), which for an unlabeled local or BYOK
+  // turn is the only boundary signal there is.
+  return privacyModeForProvider(detectProviderFromModelId(model) ?? model.split('/')[0]);
+}
+
+export interface GeneratedFileOriginSignals {
+  privacyMode?: unknown;
+  providerMode?: unknown;
+  provider?: string | null;
+  model?: string | null;
+}
+
+/**
+ * SECURITY-FIX F3 (CWE-863): every generated-file descriptor used to claim
+ * `managed`/`ManagedGateway`, so a file produced on a Local or BYOK turn showed
+ * a "Managed" privacy chip — the label a user reads to know where the bytes
+ * went. Only a cross-boundary handoff writes `privacyMode`, so an ordinary
+ * Local or BYOK turn carries none and has to be classified from the labels and
+ * the provider/model it does carry. The most restrictive observed signal wins,
+ * so an unlabeled turn served by a local model can never read as managed, and
+ * the returned pair stays internally consistent so a stale providerMode cannot
+ * contradict the privacy mode.
+ */
+export function generatedFileTrustBoundary(
+  signals: GeneratedFileOriginSignals,
+): GeneratedFileTrustBoundary {
+  const providerMode = (PROVIDER_MODES as readonly string[]).includes(
+    signals.providerMode as string,
+  )
+    ? (signals.providerMode as ProviderMode)
+    : undefined;
+
+  const observed: readonly (PrivacyMode | undefined)[] = [
+    (PRIVACY_MODES as readonly string[]).includes(signals.privacyMode as string)
+      ? (signals.privacyMode as PrivacyMode)
+      : undefined,
+    providerMode ? providerModeToPrivacyMode(providerMode) : undefined,
+    privacyModeForProvider(signals.provider),
+    privacyModeForModel(signals.model),
+  ];
+  const privacyMode = PRIVACY_MODE_PRECEDENCE.find((mode) => observed.includes(mode)) ?? 'managed';
+
+  return {
+    privacyMode,
+    providerMode:
+      providerMode && providerModeToPrivacyMode(providerMode) === privacyMode
+        ? providerMode
+        : PROVIDER_MODE_BY_PRIVACY_MODE[privacyMode],
+  };
+}
+
+export function messageTrustBoundary(
+  metadata: ChatMessage['metadata'],
+  model?: string,
+): GeneratedFileTrustBoundary {
+  const metadataModel = metadata?.['model'];
+  return generatedFileTrustBoundary({
+    privacyMode: metadata?.['privacyMode'],
+    providerMode: metadata?.['providerMode'],
+    model: model ?? (typeof metadataModel === 'string' ? metadataModel : null),
+  });
+}
 
 export function hasRunningExecutionTool(message: MessageGeneratedFilesMessage): boolean {
   if (!message.isStreaming) return false;
@@ -102,6 +198,7 @@ function runningExecutionLabel(message: MessageGeneratedFilesMessage): string {
 export function generatedFileFromEntry(
   entry: GeneratedFileEntry,
   createdAt: string,
+  trustBoundary: GeneratedFileTrustBoundary = messageTrustBoundary(undefined),
 ): GeneratedFile {
   const kind: GeneratedFileKind = GENERATED_FILE_KINDS.has(entry.kind)
     ? (entry.kind as GeneratedFileKind)
@@ -111,8 +208,8 @@ export function generatedFileFromEntry(
     computeSessionId: '',
     ownerUserId: '',
     sourceSurface: 'web',
-    privacyMode: 'managed',
-    providerMode: 'ManagedGateway',
+    privacyMode: trustBoundary.privacyMode,
+    providerMode: trustBoundary.providerMode,
     kind,
     fileName: entry.fileName,
     mimeType: entry.mimeType,
@@ -153,12 +250,16 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
     [message.createdAt, message.timestamp],
   );
   const executionRunning = hasRunningExecutionTool(message);
+  const trustBoundary = useMemo(
+    () => messageTrustBoundary(message.metadata, message.model),
+    [message.metadata, message.model],
+  );
 
   const presentations = useMemo(
     () =>
       files.map((entry) => {
         const presentation = summarizeGeneratedFileBundle({
-          generatedFile: generatedFileFromEntry(entry, createdAt),
+          generatedFile: generatedFileFromEntry(entry, createdAt, trustBoundary),
           fallbackStatus: 'completed',
         });
         return {
@@ -166,7 +267,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
           presentation: { ...presentation, canPreview: entry.previewable === true },
         };
       }),
-    [files, createdAt],
+    [files, createdAt, trustBoundary],
   );
 
   const closePreview = useCallback(() => {

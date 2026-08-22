@@ -5,15 +5,17 @@ import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button, EmptyState } from '@agiworkforce/ui';
 import { useChatUIStore } from '@agiworkforce/unified-chat';
-import type { SharedArtifact } from '@agiworkforce/types';
+import type { PrivacyMode, SharedArtifact } from '@agiworkforce/types';
 import {
   publishArtifact as publishArtifactService,
+  resolveOriginPrivacyMode,
   type PublishResult,
 } from '@agiworkforce/artifacts';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { useKeyboardShortcuts } from '../../hooks/use-keyboard-shortcuts';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { getProviderModeForModel } from '../../lib/localByokHandoff';
+import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 import { ArtifactPreview } from './ArtifactPreview';
 import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
@@ -82,6 +84,55 @@ function ArtifactViewer({
   );
 }
 
+type ArtifactOriginSource = Pick<
+  Artifact,
+  'messageId' | 'computeSession' | 'generatedFile' | 'artifactManifest'
+>;
+
+export type ArtifactOriginMessage = Pick<Message, 'id' | 'model' | 'metadata'>;
+
+/**
+ * SECURITY-FIX F3 (CWE-863): the publish button used to declare
+ * `privacyMode: 'managed'` for every artifact, which made the managed-cloud
+ * upload unconditional.
+ *
+ * The boundary is derived from every signal the conversation actually carries,
+ * reduced most-restrictive-first, and is `undefined` when the conversation
+ * carries none — which `publishArtifact` refuses rather than guessing at. Only
+ * the Local→BYOK handoff writes `metadata.privacyMode`, so an ordinary Local
+ * (Ollama/LM Studio) conversation is unlabeled and must be classified from the
+ * model that served it — the same model-derived boundary the regenerate guards
+ * use — plus any `providerMode` a turn declares.
+ *
+ * A `managed` label on the artifact's own descriptors is deliberately NOT
+ * evidence: those descriptors are synthesised client-side from this very turn,
+ * so `managed` there is a display default rather than an observation. Their
+ * non-managed labels still count, because those only ever narrow the boundary.
+ */
+export function resolveArtifactOriginPrivacyMode(
+  artifact: ArtifactOriginSource,
+  messages: readonly ArtifactOriginMessage[],
+  conversation?: Pick<Conversation, 'model'> | null,
+): PrivacyMode | undefined {
+  const restrictiveArtifactLabels = [
+    artifact.generatedFile?.privacyMode,
+    artifact.artifactManifest?.privacyMode,
+    artifact.computeSession?.privacyMode,
+  ].filter((mode) => mode !== undefined && mode !== 'managed');
+
+  const transcriptSignals = messages.flatMap((message) => [
+    message.metadata?.privacyMode,
+    message.metadata?.providerMode,
+    getProviderModeForModel(message.model ?? message.metadata?.model),
+  ]);
+
+  return resolveOriginPrivacyMode([
+    ...restrictiveArtifactLabels,
+    ...transcriptSignals,
+    getProviderModeForModel(conversation?.model),
+  ]);
+}
+
 const MOBILE_OVERLAY_QUERY = '(max-width: 639px)';
 
 const MIN_PANEL_WIDTH = 280;
@@ -144,6 +195,15 @@ export function ArtifactsPanel() {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
+  const conversationMessages = useChatStore((s) =>
+    activeConversationId
+      ? (s.messagesByConversation[activeConversationId] ?? s.messages)
+      : s.messages,
+  );
+  const activeConversation = useChatStore(
+    (s) =>
+      s.conversations.find((conversation) => conversation.id === s.activeConversationId) ?? null,
+  );
   const cloudPublisher = useMemo(
     () => createWebCloudPublisher({ conversationId: activeConversationId ?? null }),
     [activeConversationId],
@@ -158,11 +218,19 @@ export function ArtifactsPanel() {
           type: artifact.type,
           ...(artifact.language ? { language: artifact.language } : {}),
         },
+        // The requested sink is always the managed cloud (web injects no local
+        // file writer); `originPrivacyMode` decides whether this artifact is
+        // allowed to reach it, and an unknown origin is refused there.
         privacyMode: 'managed',
+        originPrivacyMode: resolveArtifactOriginPrivacyMode(
+          artifact,
+          conversationMessages,
+          activeConversation,
+        ),
         surface: 'web',
         cloudPublisher,
       }),
-    [cloudPublisher],
+    [cloudPublisher, conversationMessages, activeConversation],
   );
 
   const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
