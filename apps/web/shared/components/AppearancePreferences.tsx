@@ -9,6 +9,8 @@ export function AppearancePreferences() {
   const codeBlockWrap = useSettingsStore((state) => state.codeBlockWrap);
   const accentColor = useSettingsStore((state) => state.accentColor);
   const highContrast = useSettingsStore((state) => state.highContrast);
+  const motion = useSettingsStore((state) => state.motion);
+  const chatFont = useSettingsStore((state) => state.chatFont) ?? 'default';
 
   useEffect(() => {
     const root = document.documentElement;
@@ -33,6 +35,22 @@ export function AppearancePreferences() {
     if (highContrast) root.setAttribute('data-contrast', 'more');
     else root.removeAttribute('data-contrast');
   }, [highContrast]);
+
+  // 'system' leaves the OS preference in charge; 'reduced' is an in-app
+  // override for someone who wants calm here without changing their whole
+  // machine. There is deliberately no "full motion" option: overriding a user
+  // who asked their OS for reduced motion is the one direction that harms.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (motion === 'reduced') root.setAttribute('data-motion', 'reduced');
+    else root.removeAttribute('data-motion');
+  }, [motion]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (chatFont === 'default') root.removeAttribute('data-chat-font');
+    else root.setAttribute('data-chat-font', chatFont);
+  }, [chatFont]);
 
   return null;
 }

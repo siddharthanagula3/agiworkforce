@@ -24,6 +24,7 @@ import { ChevronLeft, Telescope, TriangleAlert } from 'lucide-react';
 import type { ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { ResearchReportView } from './ResearchReportView';
+import { toUserMessage } from '@/lib/user-error-message';
 
 /** How many reports the gallery asks for (endpoint caps the query at 100). */
 const GALLERY_LIMIT = 50;
@@ -112,7 +113,7 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
       setState('loaded');
     } catch (fetchError) {
       if (signal.aborted) return;
-      setError(fetchError instanceof Error ? fetchError.message : 'Could not load reports');
+      setError(toUserMessage(fetchError, 'Could not load reports'));
       setState('error');
     }
   }, []);
