@@ -293,6 +293,14 @@ impl Marketplace {
         std::fs::create_dir_all(&plugins_dir).context("failed to create plugins directory")?;
 
         let name = derive_plugin_name(source);
+        // `name` is joined onto `plugins_dir` and the cache dir below; a
+        // segment like ".." would resolve those joins onto the CLI config root
+        // and hand `remove_dir_all` the user's credentials directory.
+        if let Err(error) = crate::plugins::validate_plugin_name(&name) {
+            bail!(
+                "refusing to install '{source}': derived plugin name '{name}' is unsafe: {error}"
+            );
+        }
 
         // Check if already installed
         let registry = InstalledPlugins::load(&plugins_dir);
@@ -346,6 +354,7 @@ impl Marketplace {
         std::fs::create_dir_all(&cache_dir)?;
 
         let cache_target = cache_dir.join(name);
+        ensure_within(&cache_dir, &cache_target)?;
 
         // Clean up any stale cache entry
         if cache_target.exists() {
@@ -371,6 +380,7 @@ impl Marketplace {
 
         // Copy from cache to plugins root
         let final_target = plugins_dir.join(name);
+        ensure_within(plugins_dir, &final_target)?;
         if final_target.exists() {
             std::fs::remove_dir_all(&final_target)?;
         }
@@ -390,6 +400,7 @@ impl Marketplace {
         }
 
         let target = plugins_dir.join(name);
+        ensure_within(plugins_dir, &target)?;
         if target.exists() {
             bail!(
                 "target directory already exists: {} — remove it first",
@@ -420,6 +431,7 @@ impl Marketplace {
         // Remove the plugin directory
         let entry = &registry.plugins[name];
         let install_path = PathBuf::from(&entry.install_path);
+        ensure_within(&plugins_dir, &install_path)?;
         if install_path.exists() {
             std::fs::remove_dir_all(&install_path).context(format!(
                 "failed to remove plugin directory: {}",
@@ -428,7 +440,9 @@ impl Marketplace {
         }
 
         // Remove cache entry if it exists
-        let cache_path = plugins_dir.join(CACHE_DIR).join(name);
+        let cache_dir = plugins_dir.join(CACHE_DIR);
+        let cache_path = cache_dir.join(name);
+        ensure_within(&cache_dir, &cache_path)?;
         if cache_path.exists() {
             let _ = std::fs::remove_dir_all(&cache_path);
         }
@@ -608,11 +622,17 @@ fn read_manifest_version(install_path: &Path) -> String {
 
 /// Derive a plugin name from a source string (path or URL).
 fn derive_plugin_name(source: &str) -> String {
-    // Strip trailing slashes and .git suffix
-    let cleaned = source.trim_end_matches('/').trim_end_matches(".git");
+    // Strip trailing separators and .git suffix
+    let cleaned = source
+        .trim_end_matches(['/', '\\'])
+        .trim_end_matches(".git");
 
     // Take the last path component
-    cleaned.rsplit('/').next().unwrap_or("plugin").to_string()
+    cleaned
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("plugin")
+        .to_string()
 }
 
 /// Check if a source string looks like a git URL.
@@ -624,27 +644,73 @@ fn is_git_url(source: &str) -> bool {
         || source.ends_with(".git")
 }
 
+/// Reject a plugin path that does not stay strictly inside `root`.
+///
+/// `Path::starts_with` is purely lexical, so `root/..` still "starts with"
+/// `root`; the relative components are what has to be checked.
+fn ensure_within(root: &Path, target: &Path) -> Result<()> {
+    let contained = target.strip_prefix(root).is_ok_and(|rel| {
+        rel.components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)))
+    });
+    if !contained {
+        bail!(
+            "refusing plugin path outside {}: {}",
+            root.display(),
+            target.display()
+        );
+    }
+    Ok(())
+}
+
 /// Validate a clone source before it is handed to `git clone`.
 ///
-/// Rejects argument-injection (`-`-prefixed sources git would treat as an
-/// option) and confines the source to an allowlist of safe transports
-/// (`https://`, `http://`, `git://`, and `git@host:path` SSH shorthand).
+/// Rejects argument-injection (`-`-prefixed sources or hosts git would treat as
+/// an option), confines the source to an allowlist of safe transports
+/// (`https://`, `http://`, `git://`, `ssh://`, and `git@host:path` SSH
+/// shorthand), and rejects credentials embedded in the authority, which would
+/// otherwise be readable in the process table for the length of the clone.
 /// Local-path transports git understands implicitly — `file://`, plain
 /// filesystem paths, and the `ext::`/`fd::` helper transports that can run
 /// arbitrary commands — are not accepted here; local plugins install via
 /// [`install_from_path`](Marketplace::install_from_path) instead.
-fn validate_git_clone_url(url: &str) -> Result<()> {
+pub(crate) fn validate_git_clone_url(url: &str) -> Result<()> {
+    const ALLOWED: &str = "only https://, http://, git://, ssh://, and git@host:path are allowed";
     if url.starts_with('-') {
         bail!("refusing git source that begins with '-' (argument injection): {url}");
     }
-    let allowed = url.starts_with("https://")
-        || url.starts_with("http://")
-        || url.starts_with("git://")
-        || (url.starts_with("git@") && url.contains(':'));
-    if !allowed {
-        bail!(
-            "unsupported git source '{url}': only https://, http://, git://, and git@host:path are allowed"
-        );
+    let (scheme, authority) = match url.split_once("://") {
+        Some((scheme, rest)) => (
+            scheme.to_ascii_lowercase(),
+            rest.split(['/', '?', '#']).next().unwrap_or_default(),
+        ),
+        None => {
+            if !url.starts_with("git@") || !url.contains(':') {
+                bail!("unsupported git source '{url}': {ALLOWED}");
+            }
+            ("ssh".to_string(), url.split(':').next().unwrap_or_default())
+        }
+    };
+    if !matches!(scheme.as_str(), "https" | "http" | "git" | "ssh") {
+        bail!("unsupported git source '{url}': {ALLOWED}");
+    }
+    let host = match authority.rsplit_once('@') {
+        Some((userinfo, host)) => {
+            // An ssh userinfo is a login name, but a password there — or any
+            // userinfo on an http(s)/git:// URL — is a secret that would land
+            // in `ps` output and shell history.
+            if scheme != "ssh" || userinfo.contains([':', '@']) {
+                bail!("refusing git source with credentials embedded in the URL; use a git credential helper or ssh key instead");
+            }
+            host
+        }
+        None => authority,
+    };
+    if host.is_empty() {
+        bail!("unsupported git source '{url}': no host");
+    }
+    if host.starts_with('-') {
+        bail!("refusing git source whose host begins with '-' (argument injection): {url}");
     }
     Ok(())
 }
@@ -932,6 +998,67 @@ mod tests {
         // Should not crash even with a nonexistent home dir
         let reg = Marketplace::list_installed(Path::new("/tmp/nonexistent-agiworkforce-test"));
         assert!(reg.plugins.is_empty());
+    }
+
+    #[test]
+    fn validate_git_clone_url_rejects_injection_credentials_and_bad_transports() {
+        assert!(validate_git_clone_url("https://github.com/acme/plugin.git").is_ok());
+        assert!(validate_git_clone_url("git@github.com:acme/plugin.git").is_ok());
+        assert!(validate_git_clone_url("ssh://git@github.com/acme/plugin.git").is_ok());
+
+        for url in [
+            "https://user:token@github.com/acme/plugin.git",
+            "https://ghp_token@github.com/acme/plugin.git",
+            "git://oauth2:token@example.com/acme/plugin.git",
+            "ssh://user:password@example.com/acme/plugin.git",
+            "ssh://a@b@example.com/acme/plugin.git",
+        ] {
+            let err = validate_git_clone_url(url).unwrap_err().to_string();
+            assert!(err.contains("credentials"), "{url}: {err}");
+            assert!(
+                !err.contains("token") && !err.contains("password"),
+                "{url}: {err}"
+            );
+        }
+
+        for url in [
+            "--upload-pack=/tmp/evil.git",
+            "ext::sh -c evil",
+            "file:///etc/passwd",
+            "https://-oProxyCommand=evil/acme/plugin.git",
+            "https:///acme/plugin.git",
+        ] {
+            assert!(
+                validate_git_clone_url(url).is_err(),
+                "{url} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn ensure_within_rejects_parent_escape() {
+        let root = Path::new("/home/u/.agiworkforce/plugins");
+        assert!(ensure_within(root, &root.join("ok")).is_ok());
+        assert!(ensure_within(root, &root.join("..")).is_err());
+        assert!(ensure_within(root, Path::new("/home/u/.agiworkforce")).is_err());
+    }
+
+    #[tokio::test]
+    async fn install_refuses_traversal_name_without_touching_config_dir() {
+        let home = tempfile::tempdir().unwrap();
+        let keep = home.path().join("plugins").join("keep");
+        std::fs::create_dir_all(&keep).unwrap();
+        std::fs::write(keep.join("marker.txt"), "keep").unwrap();
+
+        let mp = Marketplace::with_url("http://127.0.0.1:1");
+        let err = mp
+            .install("https://example.invalid/..", home.path(), "user")
+            .await
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("plugin name"), "{err}");
+        assert!(keep.join("marker.txt").exists(), "config dir was wiped");
     }
 
     #[tokio::test]

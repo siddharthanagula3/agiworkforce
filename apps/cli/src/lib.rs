@@ -91,6 +91,7 @@ pub mod sandbox;
 pub mod shell_snapshot;
 pub mod sync;
 pub mod terminal_style;
+pub mod terminal_text;
 pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
@@ -1550,6 +1551,11 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
 /// only classified as git when they look like an actual git remote (a
 /// scheme URL, scp-like `user@host:path` shorthand, or a `.git` suffix).
 fn is_git_plugin_source(source: &str) -> bool {
+    // `--upload-pack=...git` matches the heuristics below; never hand a
+    // `-`-prefixed source to git as a remote.
+    if source.starts_with('-') {
+        return false;
+    }
     // An existing local path wins over any name-based heuristic.
     if std::path::Path::new(source).exists() {
         return false;
