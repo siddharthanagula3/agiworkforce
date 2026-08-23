@@ -102,7 +102,6 @@ export default function AgiWorkPage() {
             { href: '/tasks', label: 'See task history' },
             { href: '/pricing', label: 'Compare plans' },
           ]}
-          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

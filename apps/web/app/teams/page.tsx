@@ -103,7 +103,6 @@ export default function TeamsPage() {
             { href: '/settings/team', label: 'Manage Team' },
             { href: '/contact-sales', label: 'Enterprise sales' },
           ]}
-          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

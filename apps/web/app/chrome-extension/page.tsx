@@ -222,7 +222,6 @@ export default function ChromeExtensionPage() {
             { href: '/desktop', label: 'See AGI Desktop' },
             { href: '/get-started', label: 'Get Started' },
           ]}
-          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />
