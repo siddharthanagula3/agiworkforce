@@ -21,7 +21,9 @@ import {
   CLOUD_CODE_RUN_COMMAND_TOOL,
   classifyCommandRisk,
   cloudCodeAgentToolDefs,
+  executeCodeAsShellCommand,
 } from './cloud-code-agent-tools';
+import { EXECUTE_CODE_TOOL, isExecutionTool } from '@/lib/e2b/execution-tools';
 import {
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
@@ -334,8 +336,17 @@ export async function runCloudCodeAgentTurn(
 
       let outcome: CloudCodeToolOutcome;
 
-      if (call.name === CLOUD_CODE_RUN_COMMAND_TOOL) {
-        const command = typeof call.input['command'] === 'string' ? call.input['command'] : '';
+      const shellCommand =
+        call.name === CLOUD_CODE_RUN_COMMAND_TOOL
+          ? { command: typeof call.input['command'] === 'string' ? call.input['command'] : '' }
+          : call.name === EXECUTE_CODE_TOOL
+            ? executeCodeAsShellCommand(call.input)
+            : null;
+
+      if (shellCommand && 'refused' in shellCommand) {
+        outcome = { output: `Refused: ${shellCommand.refused}`, isError: true };
+      } else if (shellCommand) {
+        const { command } = shellCommand;
         const verdict = classifyCommandRisk(command);
 
         if (verdict.risk === 'denied') {
@@ -366,8 +377,13 @@ export async function runCloudCodeAgentTurn(
       } else if (call.name === CLOUD_CODE_LIST_FILES_TOOL) {
         const path = typeof call.input['path'] === 'string' ? call.input['path'] : undefined;
         outcome = await input.runner.listFiles(path);
-      } else {
+      } else if (isExecutionTool(call.name)) {
         outcome = await input.runner.runSharedExecutionTool(call.name, call.input);
+      } else {
+        outcome = {
+          output: `Tool "${call.name}" is not available in Code sessions.`,
+          isError: true,
+        };
       }
 
       results.push(toolResultBlock(call.id, outcome));

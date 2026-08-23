@@ -42,6 +42,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { resolveSelectableModelId, useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
 import { useUIStore } from '@shared/stores/layout-store';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { getBestAutoModeForTier } from '@shared/config/llm';
@@ -208,6 +209,11 @@ import {
   type ImagePromptTranscriptRecovery,
   type ImageTranscriptRecovery,
 } from '../stores/image-transcript-recovery-store';
+import { toUserMessage } from '@/lib/user-error-message';
+
+// A fresh [] each render changes the identity every time and defeats the
+// memoization below, which is what the exhaustive-deps warning was pointing at.
+const EMPTY_NAV_IDS: string[] = [];
 
 type SendMeta = {
   /** Composer work mode at send time ('chat' | 'agiwork'). */
@@ -1151,7 +1157,7 @@ export default function WebChatPage() {
         toast.dismiss(toastId);
       } catch (err) {
         toast.dismiss(toastId);
-        toast.error(err instanceof Error ? err.message : 'Failed to start checkout.');
+        toast.error(toUserMessage(err, 'Failed to start checkout.'));
       }
     },
     [billingPolicyReady, openSettings, subscription, user],
@@ -1582,7 +1588,7 @@ export default function WebChatPage() {
         }
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : 'Could not attach the selected files.';
+          toUserMessage(error, 'Could not attach the selected files.');
         setChatError(message, targetConversationId ?? undefined);
         toast.error(message);
       } finally {
@@ -1692,7 +1698,7 @@ export default function WebChatPage() {
       conversationId: string,
     ): { content: string; metadata: MessageMetadata } => {
       const apiError = error instanceof MediaGenerationApiError ? error : null;
-      const raw = error instanceof Error ? error.message : String(error);
+      const raw = toUserMessage(error, String(error));
       const paywall = apiError
         ? resolveMediaPaywallSlot({
             feature: 'image',
@@ -2604,7 +2610,7 @@ export default function WebChatPage() {
                     usage: managedUsageSummary,
                   })
                 : null;
-            const publicError = err instanceof Error ? err.message : String(err);
+            const publicError = toUserMessage(err, String(err));
 
             // A MediaGenerationApiError proves that an HTTP response arrived.
             // Persist that definite rejection only through the server CAS: if
@@ -2870,7 +2876,7 @@ export default function WebChatPage() {
       .catch((error) => {
         if (!cancelled) {
           setHandoffPreview(null);
-          setHandoffError(error instanceof Error ? error.message : 'Could not build BYOK preview');
+          setHandoffError(toUserMessage(error, 'Could not build BYOK preview'));
         }
       })
       .finally(() => {
@@ -2994,7 +3000,7 @@ export default function WebChatPage() {
       });
     } catch (error) {
       setHandoffError(
-        error instanceof Error ? error.message : 'Could not create BYOK fork conversation.',
+        toUserMessage(error, 'Could not create BYOK fork conversation.'),
       );
     } finally {
       setIsConfirmingHandoff(false);
@@ -3158,7 +3164,7 @@ export default function WebChatPage() {
       updateProjectInStore(projectId, { starred: next }); // optimistic
       void webManagedCloudProjects.updateProject(projectId, { starred: next }).catch((error) => {
         updateProjectInStore(projectId, { starred: project.starred ?? false }); // rollback
-        toast.error(error instanceof Error ? error.message : 'Failed to update pin');
+        toast.error(toUserMessage(error, 'Failed to update pin'));
       });
     },
     [storeProjects, updateProjectInStore],
@@ -3211,7 +3217,7 @@ export default function WebChatPage() {
         if (project) {
           setStoreProjects([...useProjectStore.getState().projects, project]);
         }
-        toast.error(err instanceof Error ? err.message : 'Failed to delete project');
+        toast.error(toUserMessage(err, 'Failed to delete project'));
       }
     },
     [confirmDestructive, storeProjects, removeProjectFromStore, setStoreProjects],
@@ -3389,7 +3395,7 @@ export default function WebChatPage() {
         return true;
       } catch (error) {
         setChatError(
-          error instanceof Error ? error.message : 'Failed to delete message',
+          toUserMessage(error, 'Failed to delete message'),
           conversationId,
         );
         return false;
@@ -4045,7 +4051,7 @@ export default function WebChatPage() {
         );
       } catch (error) {
         setChatError(
-          error instanceof Error ? error.message : 'Failed to update reaction',
+          toUserMessage(error, 'Failed to update reaction'),
           conversationId,
         );
       }
@@ -4088,7 +4094,7 @@ export default function WebChatPage() {
         );
       } catch (error) {
         setChatError(
-          error instanceof Error ? error.message : 'Failed to pin message',
+          toUserMessage(error, 'Failed to pin message'),
           conversationId,
         );
       }
@@ -4192,6 +4198,8 @@ export default function WebChatPage() {
   // WebAppShell. This file used to keep its own copy, which drifted (it was
   // missing Tasks entirely, and hardcoded `isActive: true` for Chat so the
   // selection was wrong on /chat/[sessionId]). Add or reorder destinations there.
+  const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
+
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
       buildAppNavItems({
@@ -4199,8 +4207,9 @@ export default function WebChatPage() {
         navigate: (href) => router.push(href),
         onOpenCustomize: () => openSettings('general'),
         isAdmin: isWorkspaceAdmin,
+        hiddenIds: hiddenNavIds,
       }),
-    [isWorkspaceAdmin, openSettings, pathname, router],
+    [hiddenNavIds, isWorkspaceAdmin, openSettings, pathname, router],
   );
 
   const handleLogout = useCallback(async () => {
@@ -4368,7 +4377,6 @@ export default function WebChatPage() {
           projects={sidebarProjects}
           activeSessionId={displayedConversationId ?? undefined}
           collapsed={isNarrowViewport ? false : effectiveSidebarCollapsed}
-          isMobile={isNarrowViewport}
           isLoading={isConversationSidebarPending}
           error={conversations.length === 0 ? chatError : null}
           mode="cloud"
@@ -4585,7 +4593,7 @@ export default function WebChatPage() {
             <div className="min-h-0 flex-1 overflow-hidden">
               {/* Empty state: greeting banner + centered composer. */}
               <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center gap-6 px-6">
-                <GreetingBanner onSendMessage={setComposerPrefill} />
+                <GreetingBanner />
                 <div className="w-full max-w-[940px]">
                   {usageBanner}
                   {unavailableModelNotice}

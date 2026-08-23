@@ -32,6 +32,8 @@ export interface SettingsSkill {
   tab: 'prompts' | 'agents';
   statusLabel?: string;
   downloadHref?: string;
+  /** From the skill's own SKILL.md frontmatter; absent renders as a dash. */
+  version?: string;
 }
 
 export interface SettingsPlugin {

@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -10,9 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
-function hashEmail(email: string): string {
-  return createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
-}
+import { pseudonymizeEmail as hashEmail } from '@/lib/server/email-pseudonym';
 
 type WaitlistPlan = 'pro' | 'max';
 type BillingInterval = 'monthly' | 'yearly';

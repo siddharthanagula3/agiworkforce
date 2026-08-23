@@ -5,6 +5,13 @@ export interface MemoryFact {
   id: string;
   text: string;
   sourceConversationId?: string;
+  /**
+   * Project this fact is confined to, if any (migration 0135). Absent means
+   * global — used in every conversation. Shown in the editor so a confined
+   * fact is not mistaken for one that applies everywhere.
+   */
+  projectId?: string | null;
+  projectName?: string | null;
   createdAt: string;
   updatedAt: string;
   serverId?: string;
@@ -65,6 +72,8 @@ interface ServerMemoryRow {
   content: string;
   category: string | null;
   source: string;
+  projectId?: string | null;
+  projectName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -251,6 +260,8 @@ export const useMemoryStore = create<MemoryState>()(
               merged.push({
                 ...existing,
                 text: row.content,
+                projectId: row.projectId ?? null,
+                projectName: row.projectName ?? null,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
               });
@@ -263,13 +274,21 @@ export const useMemoryStore = create<MemoryState>()(
             if (matchIdx !== -1) {
               const [match] = unsynced.splice(matchIdx, 1);
               if (match) {
-                merged.push({ ...match, serverId: row.id, updatedAt: row.updatedAt });
+                merged.push({
+                  ...match,
+                  serverId: row.id,
+                  projectId: row.projectId ?? null,
+                  projectName: row.projectName ?? null,
+                  updatedAt: row.updatedAt,
+                });
                 continue;
               }
             }
             merged.push({
               id: randomId(),
               text: row.content,
+              projectId: row.projectId ?? null,
+              projectName: row.projectName ?? null,
               createdAt: row.createdAt,
               updatedAt: row.updatedAt,
               serverId: row.id,

@@ -19,6 +19,7 @@ import { StreamingArtifactView } from './StreamingArtifactView';
 import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import { createWebCloudPublisher } from './publishArtifactClient';
 import { toast } from 'sonner';
+import { toUserMessage } from '@/lib/user-error-message';
 
 function ArtifactTab({
   artifact,
@@ -384,7 +385,7 @@ export function ArtifactsPanel() {
                     loading: 'Preparing artifact download…',
                     success: 'Artifact download ready',
                     error: (error) =>
-                      error instanceof Error ? error.message : 'Could not download artifacts',
+                      toUserMessage(error, 'Could not download artifacts'),
                   });
                 }}
                 className="h-7 px-2 text-xs"

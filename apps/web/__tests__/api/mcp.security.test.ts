@@ -115,7 +115,7 @@ describe('POST /api/mcp security gate', () => {
         transport: 'streamable-http',
         connectionTimeoutMs: 30_000,
       },
-      egressPolicy: { assertAllowedUrl: expect.any(Function) },
+      egressPolicy: { assertAllowedUrl: expect.any(Function), fetch: expect.any(Function) },
     });
 
     const [connectArgs] = mcpMocks.connectMcpServer.mock.calls[0] as [

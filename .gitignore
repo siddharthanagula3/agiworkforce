@@ -271,3 +271,11 @@ _archive/
 # the model-id guard walks the working tree and cannot decode a .pyc.
 __pycache__/
 *.pyc
+
+# Security-scan output directories (claude-security plugin). Each run drops a
+# CLAUDE-SECURITY-<timestamp>/ at the root holding findings, SARIF, and an
+# UNVERIFIED-CANDIDATES list. They are local scan artifacts, and the contents
+# describe unpatched weaknesses, so they must never reach a commit. Ignoring
+# them also keeps them out of the closed root allowlist in
+# scripts/check-repo-organization.mjs, which skips gitignored entries.
+/CLAUDE-SECURITY-*/

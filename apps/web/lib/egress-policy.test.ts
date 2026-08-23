@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 const dnsMocks = vi.hoisted(() => ({
@@ -12,6 +11,8 @@ vi.mock('node:dns/promises', () => ({
 
 import {
   assertResolvedPublicHostname,
+  pinnedAddressesFor,
+  pinnedLookup,
   validateEgressUrl,
   validateUserImageUrl,
   isInternalHostname,
@@ -235,6 +236,38 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
     expect(() => validateEgressUrl('http://api.anthropic.com/v1/messages')).toThrow(
       EgressPolicyError,
     );
+  });
+});
+
+describe('pinned public lookup', () => {
+  it('pins the addresses the policy vetted and hands exactly those to the connector', async () => {
+    dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    await assertResolvedPublicHostname('https://pinned.example.com/x');
+
+    expect(pinnedAddressesFor('pinned.example.com')).toEqual([
+      { address: '93.184.216.34', family: 4 },
+    ]);
+    const single = vi.fn();
+    pinnedLookup('pinned.example.com', { all: false }, single);
+    expect(single).toHaveBeenCalledWith(null, '93.184.216.34', 4);
+    const all = vi.fn();
+    pinnedLookup('PINNED.example.com', { all: true }, all);
+    expect(all).toHaveBeenCalledWith(null, [{ address: '93.184.216.34', family: 4 }]);
+  });
+
+  it('refuses to connect to a host the policy never vetted, so a rebinding answer is never used', () => {
+    const callback = vi.fn();
+    pinnedLookup('never-checked.example.com', { all: false }, callback);
+    expect(callback.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+  });
+
+  it('does not pin a host whose answers included an internal address', async () => {
+    dnsMocks.lookup.mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+      { address: '10.0.0.5', family: 4 },
+    ]);
+    await expect(assertResolvedPublicHostname('https://mixed.example.com/')).rejects.toThrow();
+    expect(pinnedAddressesFor('mixed.example.com')).toBeNull();
   });
 });
 

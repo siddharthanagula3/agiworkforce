@@ -24,11 +24,32 @@ const FeedbackSchema = z.object({
       user_agent: z.string().trim().max(500),
       page_path: z.string().trim().max(2_000).optional(),
       conversation_id: z.string().trim().max(200).optional(),
-      feedback_context: z.enum(['safety_refusal']).optional(),
+      feedback_context: z.enum(['safety_refusal', 'response_rating']).optional(),
       message_id: z.string().trim().max(200).optional(),
       finish_reason: z.enum(['refusal', 'content_filter']).optional(),
+      rating: z.enum(['up', 'down']).optional(),
     })
     .superRefine((metadata, context) => {
+      // A rating with no message_id is an unattributable vote: it counts
+      // towards a total nobody can trace back to an answer, which is worse
+      // than not collecting it.
+      if (metadata.feedback_context === 'response_rating') {
+        if (!metadata.rating) {
+          context.addIssue({
+            code: 'custom',
+            path: ['rating'],
+            message: 'rating is required for a response rating',
+          });
+        }
+        if (!metadata.message_id) {
+          context.addIssue({
+            code: 'custom',
+            path: ['message_id'],
+            message: 'message_id is required for a response rating',
+          });
+        }
+        return;
+      }
       if (metadata.feedback_context !== 'safety_refusal') return;
       if (!metadata.message_id) {
         context.addIssue({

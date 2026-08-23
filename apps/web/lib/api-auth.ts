@@ -12,6 +12,9 @@ import {
 } from '@/lib/server/developer-token';
 import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
+
+export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
 export interface AuthResult {
   userId: string;
@@ -60,13 +63,6 @@ export async function assertAccountActive(userId: string): Promise<void> {
   throw createError.serviceUnavailable(
     'Unable to verify account status. Please try again shortly.',
   );
-}
-
-function getClerkAuthorizedParties(): string[] {
-  return (process.env['CLERK_AUTHORIZED_PARTIES'] ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
 }
 
 async function verifyBearerToken(token: string): Promise<AuthResult | null> {

@@ -51,6 +51,7 @@ import {
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Reveal } from '@/features/marketing/components/Reveal';
+import { toUserMessage } from '@/lib/user-error-message';
 
 // Paid-plan checkout (2026-07-04): open by default, matching the
 // managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
@@ -419,9 +420,14 @@ export default function PricingPage() {
   const teamYearlyAvailable = localizedPlans?.team.yearly?.checkoutReady === true;
   const teamInterval: BillingInterval = teamAnnual && teamYearlyAvailable ? 'yearly' : 'monthly';
   const teamSavingsPct = annualSavingsPct(team);
-  const teamYearlySeatPrice = formatLocalizedAmount(
+  // The annual seat price normalised to a month, so the cadence toggle compares
+  // like with like ($25/seat/mo against $20/seat/mo) instead of asking the
+  // reader to divide $240 by twelve. What is charged is still the yearly amount,
+  // which the cadence line above states.
+  const teamYearlySeatPricePerMonth = formatLocalizedAmount(
     localizedPlans?.team.yearly,
     team.yearlyPriceUsd,
+    12,
   );
   const teamYearlyTotalPrice = formatLocalizedAmount(
     localizedPlans?.team.yearly,
@@ -496,7 +502,7 @@ export default function PricingPage() {
     try {
       await openBillingPortal();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not open the billing portal.');
+      toast.error(toUserMessage(error, 'Could not open the billing portal.'));
       setPortalPending(false);
     }
   }
@@ -630,7 +636,7 @@ export default function PricingPage() {
       toast.dismiss(toastId);
     } catch (err) {
       toast.dismiss(toastId);
-      toast.error(err instanceof Error ? err.message : t('checkoutFailed'));
+      toast.error(toUserMessage(err, t('checkoutFailed')));
     } finally {
       setPendingPlan(null);
     }
@@ -915,7 +921,7 @@ export default function PricingPage() {
               </p>
               <p className="agi-tier-seats-total" style={{ marginTop: -8, marginBottom: 16 }}>
                 {teamInterval === 'yearly'
-                  ? t('perSeatPriceAnnual', { price: teamYearlySeatPrice })
+                  ? t('perSeatPriceAnnual', { price: teamYearlySeatPricePerMonth })
                   : t('perSeatPrice', { price: teamSeatPrice })}
               </p>
               <p className="agi-tier-body">{t('teamTierBody')}</p>

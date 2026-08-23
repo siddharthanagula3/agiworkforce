@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useRouter } from 'next/navigation';
 import { Switch, useConfirm } from '@agiworkforce/ui';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -15,6 +16,7 @@ import {
   type BulkConversationAction,
 } from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const NAMESPACE = 'privacy';
 
@@ -117,6 +119,9 @@ function ExpandableSection({ title, children }: { title: string; children: React
 }
 
 export function PrivacySection() {
+  const newChatsTemporary = useSettingsStore((state) => state.newChatsTemporary) ?? false;
+  const setNewChatsTemporary = useSettingsStore((state) => state.setNewChatsTemporary);
+
   const router = useRouter();
   /**
    * Destructive-action confirmation (shell-nav-ia-gap-01 remainder).
@@ -167,7 +172,7 @@ export function PrivacySection() {
       .catch((error) => {
         if (!cancelled) {
           setPreferenceError(
-            error instanceof Error ? error.message : 'Failed to load privacy settings',
+            toUserMessage(error, 'Failed to load privacy settings'),
           );
         }
       })
@@ -193,7 +198,7 @@ export function PrivacySection() {
       savePreferenceNamespace(NAMESPACE, next)
         .catch((error) => {
           setPreferenceError(
-            error instanceof Error ? error.message : 'Failed to save privacy settings',
+            toUserMessage(error, 'Failed to save privacy settings'),
           );
         })
         .finally(() => setSavingPreferences(false));
@@ -217,7 +222,7 @@ export function PrivacySection() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Export failed. Please try again.');
+      setExportError(toUserMessage(err, 'Export failed. Please try again.'));
     } finally {
       setExporting(false);
     }
@@ -248,7 +253,7 @@ export function PrivacySection() {
       );
     } catch (caught) {
       setConversationActionError(
-        caught instanceof Error ? caught.message : 'Failed to archive chats',
+        toUserMessage(caught, 'Failed to archive chats'),
       );
     } finally {
       setBulkAction(null);
@@ -287,7 +292,7 @@ export function PrivacySection() {
       );
     } catch (caught) {
       setConversationActionError(
-        caught instanceof Error ? caught.message : 'Failed to delete chats',
+        toUserMessage(caught, 'Failed to delete chats'),
       );
     } finally {
       setBulkAction(null);
@@ -355,8 +360,17 @@ export function PrivacySection() {
 
         <ExpandableSection title="How we protect your data">
           <p style={{ margin: '0 0 8px' }}>
-            All Local Mode conversations stay on your device and are never transmitted to AGI
-            servers. BYOK conversations go directly to your chosen provider using your own API key.
+            {/*
+              Named by surface deliberately. Read on a WEB settings screen, the
+              unqualified version implied this browser could keep a conversation
+              on-device or route it with your own key. Hosted Web offers
+              neither — app/settings/byok says so in as many words — and the
+              three trust boundaries are the one thing that must not blur.
+            */}
+            On Desktop, CLI and VS Code, Local Mode conversations stay on your device and are never
+            transmitted to AGI servers, and BYOK conversations go directly to your chosen provider
+            using your own API key. Hosted Web has neither mode: it stores no provider keys of
+            yours, so everything you send here is a Managed Cloud request.
           </p>
           <p style={{ margin: 0 }}>
             Managed Cloud conversations are encrypted in transit and at rest. We do not sell your
@@ -638,7 +652,7 @@ export function PrivacySection() {
               padding: '6px 14px',
               fontSize: 12,
               fontWeight: 600,
-              color: 'var(--chat-accent-primary, #c8892a)',
+              color: 'var(--chat-accent-primary)',
               background: 'transparent',
               border: '1px solid rgba(218,119,86,0.5)',
               borderRadius: 'var(--radius-md)',
@@ -659,7 +673,7 @@ export function PrivacySection() {
               padding: '10px 20px',
               borderBottom: '1px solid var(--settings-border)',
               color: conversationActionError
-                ? 'var(--chat-accent-primary, #c8892a)'
+                ? 'var(--chat-accent-primary)'
                 : 'var(--text-2)',
               fontSize: 12,
             }}
@@ -667,6 +681,158 @@ export function PrivacySection() {
             {conversationActionError ?? conversationActionNotice}
           </div>
         ) : null}
+
+        {/*
+          Start new chats temporary.
+
+          Distinct from the 'rememberChats' switch noted at the top of this
+          file, which was removed for lying: nothing read it. This one is
+          honoured by machinery that already works — useConversations sends
+          isTemporary AT CREATION and the save path already skips a temporary
+          conversation, so the first message is never persisted either. It
+          changes the default for NEW chats only; existing ones keep whatever
+          they were, and the composer's per-chat toggle still overrides it.
+        */}
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+              Start new chats as temporary
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              New conversations are not saved to your account or history. You can still turn a
+              single chat back on from the composer.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={newChatsTemporary}
+            aria-label="Start new chats as temporary"
+            onClick={() => setNewChatsTemporary(!newChatsTemporary)}
+            style={{
+              flexShrink: 0,
+              width: 44,
+              height: 24,
+              borderRadius: 999,
+              border: 'none',
+              cursor: 'pointer',
+              background: newChatsTemporary
+                ? 'var(--chat-accent-primary)'
+                : 'var(--settings-border)',
+              transition: 'background 0.15s',
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'block',
+                width: 18,
+                height: 18,
+                borderRadius: '50%',
+                background: 'var(--bg-elev)',
+                transform: `translateX(${newChatsTemporary ? 23 : 3}px)`,
+                transition: 'transform 0.15s',
+              }}
+            />
+          </button>
+        </div>
+
+        {/*
+          The rights surface at /privacy/requests — consent ledger and a
+          rights-request form — was built and reachable only by typing the URL.
+          A DPDP/GDPR rights path the data subject cannot find from their own
+          privacy settings is not a rights path.
+        */}
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+              Privacy requests
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              Review your consent record, or ask us to access, correct, or erase your data.
+            </div>
+          </div>
+          <a
+            href="/privacy/requests"
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--text-1)',
+              background: 'transparent',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Open
+          </a>
+        </div>
+
+        {/*
+          Uploaded files.
+
+          The Library at /chat/library has always listed these — uploads and
+          generated media, with soft delete and permanent delete — but Privacy
+          never pointed at it, so the one screen a privacy-minded user opens did
+          not mention the files they had uploaded. claude.ai lists exactly this
+          beside its other Manage entries.
+        */}
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+              Uploaded files
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              Files you uploaded and media generated for you. Review them, or delete individual
+              items, in your Library.
+            </div>
+          </div>
+          <a
+            href="/chat/library"
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--text-1)',
+              background: 'transparent',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Manage
+          </a>
+        </div>
 
         {/* Export data row */}
         <div
@@ -707,7 +873,7 @@ export function PrivacySection() {
               {exporting ? 'Preparing...' : 'Export data'}
             </button>
             {exportError && (
-              <span style={{ fontSize: 12, color: 'var(--chat-accent-primary, #c8892a)' }}>
+              <span style={{ fontSize: 12, color: 'var(--chat-accent-primary)' }}>
                 {exportError}
               </span>
             )}
@@ -765,7 +931,7 @@ export function PrivacySection() {
             borderBottom: '1px solid rgba(218,119,86,0.25)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--chat-accent-primary, #c8892a)',
+            color: 'var(--chat-accent-primary)',
           }}
         >
           Danger zone

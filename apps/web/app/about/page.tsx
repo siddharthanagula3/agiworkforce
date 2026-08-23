@@ -6,7 +6,13 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { CATALOG_AS_OF, MARKETING, POSITIONING } from '../../lib/marketing-constants';
-import { LEGAL_ENTITY, LEGAL_ENTITY_DESCRIPTOR, NOTICE_ADDRESS } from '../../lib/legal-constants';
+import {
+  FOUNDER_NAME,
+  FOUNDER_ROLE,
+  LEGAL_ENTITY,
+  LEGAL_ENTITY_DESCRIPTOR,
+  REGISTERED_AGENT_ADDRESS,
+} from '../../lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'About: Multi-provider by design',
@@ -32,7 +38,7 @@ const PRINCIPLES: { title: string; body: string }[] = [
 
 const COLOPHON: { key: string; val: ReactNode }[] = [
   { key: 'Company', val: `${LEGAL_ENTITY}, ${LEGAL_ENTITY_DESCRIPTOR}` },
-  { key: 'Notice address', val: NOTICE_ADDRESS },
+  { key: 'Registered agent', val: REGISTERED_AGENT_ADDRESS },
   { key: 'Ownership', val: 'Independent and privately held. No outside funding announced.' },
   { key: 'License', val: 'Proprietary' },
   {
@@ -128,8 +134,10 @@ export default function AboutPage() {
                 machine.
               </p>
               <p className="agi-about-founder-name">
-                <span>Siddhartha Nagula</span>
-                <span className="agi-about-founder-role">Founder, AGI Automation LLC</span>
+                <span>{FOUNDER_NAME}</span>
+                <span className="agi-about-founder-role">
+                  {FOUNDER_ROLE}, {LEGAL_ENTITY}
+                </span>
               </p>
             </div>
           </div>

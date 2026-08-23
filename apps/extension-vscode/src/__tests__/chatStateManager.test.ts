@@ -6,6 +6,7 @@ import {
   type ExtToWebviewMessage,
 } from '../features/sidebar-webview/ChatStateManager';
 import {
+  MODEL_CONTEXT_LIMITS,
   MODEL_PICKER_OPTIONS,
   buildGroupedQuickPickItems,
   getModelProviderInfo,
@@ -28,6 +29,7 @@ import {
   WORKSPACE_CUSTOM_INSTRUCTIONS_KEY,
 } from '../features/instructions';
 import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
+import { getTokenCounter } from '../data/tokenCounter';
 import * as api from '../utils/api';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
@@ -2897,5 +2899,100 @@ describe('ChatStateManager local turn lifecycle', () => {
       payload: { message: 'AGI local runtime exited' },
     });
     await send;
+  });
+});
+
+describe('ChatStateManager context usage reporting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscode.workspace.isTrusted = true;
+    vscode.window.activeTextEditor = undefined;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+    setContextPanelInstance({
+      getContextFiles: () => ['/workspace/src/context.ts'],
+    } as ContextPanelProvider);
+  });
+
+  it('reports the runtime-measured turn tokens against the catalog context window', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'max');
+    const model = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto').find(
+      (option) => MODEL_CONTEXT_LIMITS[option.id] !== undefined,
+    );
+    expect(model).toBeDefined();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project', model: model!.id },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 41_200,
+      outputTokens: 1_800,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'contextUsage',
+      payload: { usedTokens: 43_000, contextWindow: MODEL_CONTEXT_LIMITS[model!.id] },
+    });
+  });
+
+  it('feeds the session token counter the runtime-measured counts, not a char estimate', async () => {
+    const harness = makeHarness();
+    const counter = getTokenCounter();
+    counter.reset();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 41_200,
+      outputTokens: 1_800,
+    });
+    await send;
+
+    expect(counter.promptTokens).toBe(41_200);
+    expect(counter.completionTokens).toBe(1_800);
+    expect(counter.requestCount).toBe(1);
+  });
+
+  it('omits the window for Auto routing rather than claiming a model that may not have run', async () => {
+    const harness = makeHarness();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 900,
+      outputTokens: 100,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'contextUsage',
+      payload: { usedTokens: 1_000 },
+    });
   });
 });

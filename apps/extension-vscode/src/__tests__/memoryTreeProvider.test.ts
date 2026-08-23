@@ -1,124 +1,132 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as vscode from 'vscode';
+import { MemoryFactItem, MemoryTreeProvider } from '../memory/memoryTreeProvider';
+import { MEMORY_STORE_KEY, addFact, type MemoryFact } from '../memory/memoryStore';
 
-import { describe, it, expect, vi } from 'vitest';
-import type { MemoryFact } from '../memory/memoryStore';
-
-const MAX_LABEL = 60;
-
-function buildLabel(text: string): string {
-  return text.length > MAX_LABEL ? `${text.slice(0, MAX_LABEL)}…` : text;
+function makeWorkspaceState(initial?: MemoryFact[]) {
+  const store = new Map<string, unknown>();
+  if (initial !== undefined) store.set(MEMORY_STORE_KEY, initial);
+  return {
+    get: <T>(key: string): T | undefined => store.get(key) as T | undefined,
+    update: vi.fn(async (key: string, value: unknown) => {
+      store.set(key, value);
+    }),
+    keys: () => [...store.keys()] as readonly string[],
+  };
 }
 
-describe('MemoryFactItem label truncation', () => {
-  it('returns full text when ≤60 chars', () => {
-    const text = 'I prefer TypeScript over JavaScript';
-    expect(buildLabel(text)).toBe(text);
+function mockMemoryEnabled(enabled: boolean): void {
+  vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
+    () =>
+      ({
+        get: vi.fn((key: string, fallback?: unknown) =>
+          key === 'memory.enabled' ? enabled : fallback,
+        ),
+        update: vi.fn(),
+        has: vi.fn().mockReturnValue(true),
+        inspect: vi.fn().mockReturnValue(undefined),
+      }) as unknown as vscode.WorkspaceConfiguration,
+  );
+}
+
+const fact = (overrides: Partial<MemoryFact> = {}): MemoryFact => ({
+  id: 'id-1',
+  text: 'I prefer TypeScript over JavaScript',
+  createdAt: '2026-01-15T12:00:00.000Z',
+  ...overrides,
+});
+
+describe('MemoryFactItem', () => {
+  it('shows short text in full and truncates past 60 characters', () => {
+    expect(new MemoryFactItem(fact()).label).toBe('I prefer TypeScript over JavaScript');
+    expect(new MemoryFactItem(fact({ text: 'B'.repeat(60) })).label).toBe('B'.repeat(60));
+
+    const truncated = new MemoryFactItem(fact({ text: 'A'.repeat(61) })).label as string;
+    expect(truncated).toBe(`${'A'.repeat(60)}…`);
   });
 
-  it('truncates to 60 chars + ellipsis when longer', () => {
-    const text = 'A'.repeat(61);
-    const label = buildLabel(text);
-    expect(label.length).toBe(MAX_LABEL + 1);
-    expect(label.endsWith('…')).toBe(true);
+  it('keeps the full text and timestamps in an untrusted tooltip', () => {
+    const item = new MemoryFactItem(fact({ text: 'C'.repeat(200) }));
+    const tooltip = item.tooltip as vscode.MarkdownString;
+
+    expect(tooltip.value).toContain('C'.repeat(200));
+    expect(tooltip.value).toContain('Created:');
+    expect(tooltip.value).not.toContain('Updated:');
+    expect(tooltip.isTrusted).toBe(false);
   });
 
-  it('does not truncate exactly 60-char text', () => {
-    const text = 'B'.repeat(60);
-    expect(buildLabel(text)).toBe(text);
-    expect(buildLabel(text).includes('…')).toBe(false);
+  it('shows the updated timestamp only when it differs from creation', () => {
+    const updated = new MemoryFactItem(
+      fact({ updatedAt: '2026-01-16T12:00:00.000Z' }),
+    ).tooltip as vscode.MarkdownString;
+    expect(updated.value).toContain('Updated:');
+
+    const untouched = new MemoryFactItem(fact({ updatedAt: fact().createdAt }))
+      .tooltip as vscode.MarkdownString;
+    expect(untouched.value).not.toContain('Updated:');
+  });
+
+  it('binds the inline edit and delete menu through contextValue', () => {
+    expect(new MemoryFactItem(fact()).contextValue).toBe('memoryFact');
   });
 });
 
-function buildTooltipText(fact: MemoryFact): string {
-  const createdLabel = `Created: ${new Date(fact.createdAt).toLocaleString()}`;
-  const updatedLabel =
-    fact.updatedAt !== undefined && fact.updatedAt !== fact.createdAt
-      ? `\nUpdated: ${new Date(fact.updatedAt).toLocaleString()}`
-      : '';
-  return `**Memory fact**\n\n${fact.text}\n\n---\n${createdLabel}${updatedLabel}`;
-}
-
-describe('MemoryFactItem tooltip', () => {
-  it('includes full text in tooltip', () => {
-    const longText = 'C'.repeat(200);
-    const fact: MemoryFact = { id: 'id-1', text: longText, createdAt: '2026-01-01T00:00:00.000Z' };
-    expect(buildTooltipText(fact)).toContain(longText);
+describe('MemoryTreeProvider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMemoryEnabled(true);
   });
 
-  it('shows created timestamp', () => {
-    const fact: MemoryFact = { id: 'id-2', text: 'hello', createdAt: '2026-01-15T12:00:00.000Z' };
-    const tip = buildTooltipText(fact);
-    expect(tip).toContain('Created:');
+  it('lists stored facts at the root and nothing beneath them', () => {
+    const provider = new MemoryTreeProvider(makeWorkspaceState([fact()]));
+    const children = provider.getChildren();
+
+    expect(children.map((child) => child.label)).toEqual(['I prefer TypeScript over JavaScript']);
+    expect(provider.getChildren(children[0])).toEqual([]);
+    provider.dispose();
   });
 
-  it('shows updated timestamp when updatedAt differs from createdAt', () => {
-    const fact: MemoryFact = {
-      id: 'id-3',
-      text: 'test',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-02T00:00:00.000Z',
-    };
-    expect(buildTooltipText(fact)).toContain('Updated:');
+  it('heads the view with an off notice that still lists what is stored', () => {
+    mockMemoryEnabled(false);
+    const provider = new MemoryTreeProvider(makeWorkspaceState([fact()]));
+    const children = provider.getChildren();
+
+    expect(children.map((child) => child.label)).toEqual([
+      'Memory is off',
+      'I prefer TypeScript over JavaScript',
+    ]);
+    expect(children[0]?.command?.command).toBe('agi-workforce.memory.toggle');
+    expect(children[0]?.contextValue).toBe('memoryDisabled');
+    provider.dispose();
   });
 
-  it('omits updated timestamp when updatedAt equals createdAt', () => {
-    const ts = '2026-01-01T00:00:00.000Z';
-    const fact: MemoryFact = { id: 'id-4', text: 'same', createdAt: ts, updatedAt: ts };
-    expect(buildTooltipText(fact)).not.toContain('Updated:');
-  });
+  it('refreshes on explicit refresh, on store writes, and on the memory setting changing', async () => {
+    const workspaceState = makeWorkspaceState();
+    const configListeners: Array<(event: vscode.ConfigurationChangeEvent) => void> = [];
+    vi.mocked(vscode.workspace.onDidChangeConfiguration).mockImplementation(((
+      listener: (event: vscode.ConfigurationChangeEvent) => void,
+    ) => {
+      configListeners.push(listener);
+      return new vscode.Disposable(() => undefined);
+    }) as never);
 
-  it('omits updated timestamp for legacy facts without updatedAt', () => {
-    const fact: MemoryFact = { id: 'id-5', text: 'legacy', createdAt: '2025-06-01T00:00:00.000Z' };
-    expect(buildTooltipText(fact)).not.toContain('Updated:');
-  });
-});
+    const provider = new MemoryTreeProvider(workspaceState);
+    const changed = vi.fn();
+    const subscription = provider.onDidChangeTreeData(changed);
 
-describe('MemoryTreeProvider refresh', () => {
-  it('fires onDidChangeTreeData on explicit refresh()', () => {
-    const fire = vi.fn();
-    const provider = {
-      _onDidChangeTreeData: { fire },
-      refresh(): void {
-        this._onDidChangeTreeData.fire();
-      },
-    };
     provider.refresh();
-    expect(fire).toHaveBeenCalledTimes(1);
-  });
+    expect(changed).toHaveBeenCalledTimes(1);
 
-  it('fires onDidChangeTreeData when store change event fires', () => {
-    const fire = vi.fn();
-    let externalListener: (() => void) | undefined;
+    await addFact(workspaceState, 'Prefer Rust');
+    expect(changed).toHaveBeenCalledTimes(2);
 
-    const mockOnChange = (cb: () => void) => {
-      externalListener = cb;
-      return { dispose: vi.fn() };
-    };
+    for (const listener of configListeners) {
+      listener({ affectsConfiguration: () => true } as vscode.ConfigurationChangeEvent);
+      listener({ affectsConfiguration: () => false } as vscode.ConfigurationChangeEvent);
+    }
+    expect(changed).toHaveBeenCalledTimes(3);
 
-    const provider = {
-      _onDidChangeTreeData: { fire },
-      _disposable: mockOnChange(() => {
-        provider._onDidChangeTreeData.fire();
-      }),
-    };
-
-    externalListener?.();
-    expect(fire).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns empty children for non-root elements', () => {
-    const getChildren = (element?: object) => {
-      if (element !== undefined) return [];
-      return [{ fact: { id: '1', text: 'test', createdAt: '' } }];
-    };
-    const leaf = { fact: { id: '1', text: 'test', createdAt: '' } };
-    expect(getChildren(leaf)).toEqual([]);
-    expect(getChildren()).toHaveLength(1);
-  });
-});
-
-describe('MemoryFactItem contextValue', () => {
-  it('is "memoryFact" for inline menu binding', () => {
-    const contextValue = 'memoryFact';
-    expect(contextValue).toBe('memoryFact');
+    subscription.dispose();
+    provider.dispose();
   });
 });

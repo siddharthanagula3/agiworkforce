@@ -104,7 +104,10 @@ export async function fetchSavedPaymentMethods(): Promise<SavedPaymentMethod[]> 
   });
 }
 
-export async function openBillingPortal(returnPath?: string): Promise<void> {
+export async function openBillingPortal(
+  returnPath?: string,
+  flow?: 'cancel',
+): Promise<void> {
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to access billing.');
@@ -117,7 +120,7 @@ export async function openBillingPortal(returnPath?: string): Promise<void> {
       Authorization: `Bearer ${authToken}`,
       'Idempotency-Key': `agi.checkout.web.${crypto.randomUUID()}`,
     }),
-    body: JSON.stringify(returnPath ? { returnPath } : {}),
+    body: JSON.stringify({ ...(returnPath ? { returnPath } : {}), ...(flow ? { flow } : {}) }),
   });
 
   if (!response.ok) {

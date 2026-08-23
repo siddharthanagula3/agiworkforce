@@ -176,7 +176,7 @@ find them and CI has never seen them. This is the index for them.
 | Competitive gap audit, 2026-08-15                  | `audit/competitive-gap-2026-08-15/`          | no                                    |
 | Manual QA pass, 2026-08-15                         | `audit/manual-qa-2026-08-15.md`              | no                                    |
 | Claude Security scan, 2026-08-16                   | `docs/remediation/security-scan-2026-08-16/` | no, held out by a nested `.gitignore` |
-| Live-observed ChatGPT/Claude/Gemini/Manus research | `~/Downloads/competitive-product-research`   | no, outside the repo entirely         |
+| Live-observed ChatGPT/Claude/Gemini/Manus research | `~/Desktop/competitive-product-research`   | no, outside the repo entirely         |
 
 Committing the three `audit/` entries as they stand converts two local-only
 guard failures into CI failures:

@@ -128,7 +128,10 @@ function makeStreamResponse(
   return {
     ok: status >= 200 && status < 300,
     status,
-    headers: new Headers(headers),
+    // Production always answers a stream with this content type
+    // (stream-transform.ts). The client now refuses anything else, because a
+    // 200 HTML sign-in page used to be parsed as SSE.
+    headers: new Headers({ 'content-type': 'text/event-stream', ...headers }),
     body: makeSseStream(dataLines),
     text: vi.fn().mockResolvedValue(''),
   } as unknown as Response;
@@ -139,7 +142,7 @@ function makeRawStreamResponse(payload: string, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    headers: new Headers(),
+    headers: new Headers({ 'content-type': 'text/event-stream' }),
     body: new ReadableStream({
       start(controller) {
         controller.enqueue(encoder.encode(payload));
@@ -1048,7 +1051,7 @@ describe('streamFreeChat — abort signal', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      headers: new Headers(),
+      headers: new Headers({ 'content-type': 'text/event-stream' }),
       body: new ReadableStream<Uint8Array>({
         start(controller) {
           frames.forEach((frame, index) => {

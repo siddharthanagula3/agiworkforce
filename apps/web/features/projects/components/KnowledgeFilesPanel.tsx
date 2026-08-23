@@ -3,10 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
+import {
+  ALLOWED_ATTACHMENT_ACCEPT,
+  MAX_PROJECT_KNOWLEDGE_FILES,
+  type ProjectKnowledgeFile,
+} from '@agiworkforce/types';
 import { FilePreviewModal } from './FilePreviewModal';
 import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface Props {
   projectId: string;
@@ -27,8 +32,20 @@ function fileIcon(mimeType: string): string {
   return '📁';
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
 export function KnowledgeFilesPanel({ projectId }: Props) {
   const [files, setFiles] = useState<ProjectKnowledgeFile[]>([]);
+  // Account-wide, not this project's total: the upload cap is account-wide, so
+  // a per-project number would promise headroom the server will refuse.
+  const [storage, setStorage] = useState<{
+    usedBytes: number | null;
+    limitBytes: number | null;
+  } | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' });
   const [isDragging, setIsDragging] = useState(false);
@@ -42,8 +59,12 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       .then((r) => r.json())
       .then((data: unknown) => {
         if (cancelled) return;
-        const body = data as { files?: ProjectKnowledgeFile[] };
+        const body = data as {
+          files?: ProjectKnowledgeFile[];
+          storage?: { usedBytes: number | null; limitBytes: number | null };
+        };
         setFiles(body.files ?? []);
+        setStorage(body.storage ?? null);
         setLoadState('loaded');
       })
       .catch(() => {
@@ -85,7 +106,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
     } catch (err) {
       setUploadState({
         status: 'error',
-        message: err instanceof Error ? err.message : 'Upload failed.',
+        message: toUserMessage(err, 'Upload failed.'),
       });
     }
   }
@@ -124,7 +145,34 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             <span
               style={{ fontSize: 11, fontWeight: 400, color: 'var(--agi-ink-2)', marginLeft: 6 }}
             >
-              {files.length} {files.length === 1 ? 'file' : 'files'} &middot; {totalKb} KB
+              {/*
+                The cap was invisible until the upload route refused the 21st
+                file. A project holding 20 files is at its limit and the only
+                way to learn that was to be told no.
+              */}
+              {files.length} of {MAX_PROJECT_KNOWLEDGE_FILES} files &middot; {totalKb} KB
+              {storage && storage.usedBytes !== null && storage.limitBytes !== null ? (
+                <>
+                  {' '}
+                  &middot;{' '}
+                  <span
+                    style={{
+                      color:
+                        storage.usedBytes / storage.limitBytes >= 0.9
+                          ? 'var(--agi-amber)'
+                          : undefined,
+                    }}
+                  >
+                    {formatBytes(storage.usedBytes)} of {formatBytes(storage.limitBytes)} storage
+                    used
+                  </span>
+                </>
+              ) : null}
+              {files.length >= MAX_PROJECT_KNOWLEDGE_FILES && (
+                <span style={{ color: 'var(--agi-amber)', marginLeft: 6 }}>
+                  &middot; full — remove one to add another
+                </span>
+              )}
             </span>
           )}
         </p>

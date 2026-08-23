@@ -1,9 +1,9 @@
-
 import { describe, expect, it } from 'vitest';
 
 import {
   MAX_TRANSCRIPT_CHARS,
   MAX_TRANSCRIPT_TURNS,
+  MAX_TURN_CHARS,
   normalizeAttemptedActions,
   normalizeCitations,
   normalizeTranscript,
@@ -79,6 +79,17 @@ describe('normalizeTranscript', () => {
     const total = turns.reduce((sum, turn) => sum + turn.content.length, 0);
     expect(total).toBeLessThanOrEqual(MAX_TRANSCRIPT_CHARS);
     expect(droppedTurns).toBeGreaterThan(0);
+  });
+
+  it('bounds the text the secret scanner sees while still redacting a secret at the cap', () => {
+    const secret = `sk-${'a'.repeat(48)}`;
+    const content = `${'x'.repeat(MAX_TURN_CHARS - 20)}${secret}${'eyJ'.repeat(400_000)}`;
+    const started = Date.now();
+    const { turns } = normalizeTranscript([{ role: 'user', content, at: 'x' }]);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(turns[0]!.content).not.toContain(secret);
+    expect(turns[0]!.content).toContain('[redacted:api-key]');
+    expect(turns[0]!.content.length).toBeLessThanOrEqual(MAX_TURN_CHARS + 32);
   });
 
   it('caps a single enormous turn rather than letting it blow the budget', () => {

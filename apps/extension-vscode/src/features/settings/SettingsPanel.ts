@@ -251,6 +251,9 @@ export class SettingsPanel {
           await vscode.commands.executeCommand('agi-workforce.signOut');
           await this.refresh();
           break;
+        case 'openMemory':
+          await vscode.commands.executeCommand('agi-workforce.memory');
+          break;
         case 'openAgentConfig':
           await vscode.commands.executeCommand('agi-workforce.openAgentConfig');
           break;

@@ -12,6 +12,7 @@ import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
 import { safePlatform } from '@shared/utils/browser-utils';
 import type { KeyboardShortcutDoc } from '../../hooks/use-keyboard-shortcuts';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 
 interface KeyboardShortcutsDialogProps {
   open: boolean;
@@ -25,6 +26,11 @@ export function KeyboardShortcutsDialog({
   shortcuts,
 }: KeyboardShortcutsDialogProps) {
   const isMac = safePlatform.isMac();
+
+  // Same coalescing as the nav list: an older persisted store has no such key.
+  const disabledIds = useSettingsStore((state) => state.disabledShortcutIds) ?? [];
+  const setShortcutEnabled = useSettingsStore((state) => state.setShortcutEnabled);
+  const restoreShortcutDefaults = useSettingsStore((state) => state.restoreShortcutDefaults);
 
   const formatShortcut = (shortcut: KeyboardShortcutDoc) => {
     const keys: string[] = [];
@@ -89,7 +95,8 @@ export function KeyboardShortcutsDialog({
                   >
                     <span className="text-sm text-foreground">{shortcut.description}</span>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
                       {formatShortcut(shortcut).map((key, keyIndex) => (
                         <React.Fragment key={keyIndex}>
                           <Badge
@@ -103,6 +110,35 @@ export function KeyboardShortcutsDialog({
                           )}
                         </React.Fragment>
                       ))}
+                      </div>
+                      {/*
+                        A shortcut the user switched off must stop firing, not
+                        just look off. use-keyboard-shortcuts reads the same
+                        disabledShortcutIds this writes, and the matcher is
+                        driven by KEYBOARD_SHORTCUT_DOCS, so the two cannot
+                        disagree.
+                      */}
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={!disabledIds.includes(shortcut.id)}
+                        aria-label={shortcut.description}
+                        onClick={() =>
+                          setShortcutEnabled(shortcut.id, disabledIds.includes(shortcut.id))
+                        }
+                        className={`h-5 w-9 shrink-0 rounded-full transition-colors ${
+                          disabledIds.includes(shortcut.id) ? 'bg-muted' : 'bg-primary'
+                        }`}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`block h-4 w-4 rounded-full bg-background transition-transform ${
+                            disabledIds.includes(shortcut.id)
+                              ? 'translate-x-0.5'
+                              : 'translate-x-[18px]'
+                          }`}
+                        />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -113,6 +149,21 @@ export function KeyboardShortcutsDialog({
             </div>
           ))}
         </div>
+
+        {disabledIds.length > 0 ? (
+          <div className="mt-4 flex items-center justify-between rounded-lg border border-border p-3 text-xs">
+            <span className="text-muted-foreground">
+              {disabledIds.length} shortcut{disabledIds.length === 1 ? '' : 's'} turned off
+            </span>
+            <button
+              type="button"
+              onClick={restoreShortcutDefaults}
+              className="rounded-md border border-border px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              Restore defaults
+            </button>
+          </div>
+        ) : null}
 
         <div className="mt-4 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
           <p>

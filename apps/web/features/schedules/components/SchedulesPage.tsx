@@ -21,6 +21,7 @@ import {
 import { CalendarClock, Loader2, Plus, RotateCcw } from 'lucide-react';
 import { ScheduleCard, type ScheduleOperation } from './ScheduleCard';
 import { ScheduleForm } from './ScheduleForm';
+import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
 import type { ScheduleHistoryState } from './ScheduleRunHistory';
 import {
   createInitialScheduleDraft,
@@ -252,6 +253,18 @@ export function SchedulesPage({
     setSchedules((current) =>
       current.map((schedule) => (schedule.id === next.id ? next : schedule)),
     );
+  };
+
+  const openCreateFromTemplate = (template: ScheduleTemplate) => {
+    // Templates seed the draft and nothing else: no schedule exists until the
+    // user submits the dialog, so a mis-tapped card costs a dismissal.
+    const nextDraft = { ...createInitialScheduleDraft(), ...template.draft };
+    setEditing(null);
+    setDraft(nextDraft);
+    initialDraftRef.current = JSON.stringify(nextDraft);
+    setFormErrors({});
+    setSubmitError(null);
+    setDialogOpen(true);
   };
 
   const openCreate = () => {
@@ -560,6 +573,35 @@ export function SchedulesPage({
             <Button type="button" className="mt-5" onClick={openCreate}>
               Create Your First Schedule
             </Button>
+
+            {/*
+              Starting from a blank prompt is the reason most people never make
+              a second schedule. Each card opens the SAME create dialog with the
+              draft pre-filled, so it is a starting point the user still reviews
+              and edits — never a schedule created behind their back.
+            */}
+            <div className="mt-10 text-left">
+              <h3 className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Or start from one of these
+              </h3>
+              <ul className="mx-auto mt-4 grid max-w-3xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {SCHEDULE_TEMPLATES.map((template) => (
+                  <li key={template.id}>
+                    <button
+                      type="button"
+                      onClick={() => openCreateFromTemplate(template)}
+                      className="flex h-full w-full flex-col gap-1 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
+                    >
+                      <span className="text-sm font-medium text-foreground">{template.name}</span>
+                      <span className="text-xs text-muted-foreground">{template.description}</span>
+                      <span className="mt-1 text-[11px] text-muted-foreground/80">
+                        {template.cadenceLabel}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         )}
 

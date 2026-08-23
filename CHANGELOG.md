@@ -2,9 +2,87 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-14
+Last updated: 2026-08-22
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — DPDP compliance, operator console, shared settings] — 2026-08-22
+
+### Added
+
+- **A platform operator console that a leaked device token cannot reach.**
+  `apps/web/app/api/operator/route.ts` gates every action on
+  `isPlatformAdmin(userId, process.env[PLATFORM_ADMIN_ENV_VAR])` rather than on
+  the org-scoped admin role, so membership comes from the deploy-time
+  `AGI_PLATFORM_ADMIN_USER_IDS` allowlist and nothing else. The route carries
+  CSRF, rate limiting, and `logSecurityEvent` on each mutation, and backs the
+  `/operator` page with an overview, recent users and feedback, per-user and
+  bulk usage resets (with a preview step before the bulk path), and bonus
+  credit grants. The allowlist is unset by default, so an operator surface on a
+  deploy that never configured it answers 404 to everyone rather than falling
+  back to a broader role.
+- **DPDP data-principal surfaces: consent, retention, export, and erasure.**
+  `apps/web/lib/server/consent-records.ts` records consent,
+  `lib/server/account-erasure.ts` and `lib/server/anonymous-erasure.ts` carry
+  the erasure paths for identified and anonymous principals, and
+  `app/api/user/export/route.ts` serves the export. Two of the tests are the
+  point rather than coverage: `app/privacy/__tests__/retention-claims-match-crons.test.ts`
+  reads `app/privacy/page.tsx` against the `crons` array in `vercel.json`, so a
+  retention period the policy promises must be backed by a schedule that
+  actually exists; and `app/api/user/export/__tests__/export-covers-personal-data.test.ts`
+  holds the export to the personal-data set rather than to whatever it happens
+  to serialize.
+- **Device management for signed-in sessions.** `app/api/settings/devices`
+  lists and revokes linked devices, with `schema-state.ts` keeping the route
+  answerable while a migration is still pending instead of failing the page.
+- **Public pages for the states a product actually reaches.** `/403`,
+  `/beta` with a `POST /api/beta/apply` intake, `/disclaimer`, `/founder`,
+  `/maintenance`, `/offline`, and `/session-expired` — the last of which
+  validates its return path before bouncing a recovered session to it.
+
+### Changed
+
+- **Settings navigation is one shared model instead of three.**
+  `packages/ui/ui/src/settings-nav.ts` now defines the section list that web,
+  desktop, and the settings modal all read, and the sidebar menu was split out
+  of `Sidebar.tsx` into its own `Menu.tsx`. The web V3 chat shell
+  (`features/chat/v3/WebShellV3.tsx`, `WebSidebar.tsx`) was deleted in favour
+  of the shared `@agiworkforce/unified-chat` components, which is what makes
+  the artifact, memory, and library surfaces behave the same on every surface.
+- **The VS Code extension's context budgeting was reworked.**
+  `src/data/contextBudget.ts` and its suite were removed in favour of the
+  agent-mode consent surface, so the extension no longer carries a second,
+  divergent budgeting model.
+
+### Fixed
+
+- **`audit/ui-gaps.md` and the desktop reachability baseline had drifted.** The
+  UI gap tracker was regenerated (341 records), `apps/desktop/src/api/undo.ts`
+  came out of the known-unreachable baseline now that it is wired, and the
+  desktop ceiling was ratcheted 241 → 240 so the win cannot silently regress.
+
+## [Unreleased — dead-control sweep] — 2026-08-21
+
+Seven queue items completed and removed from `ExecutionPlan.md` per that file's
+own convention. Two findings from them are recorded here because they correct a
+wrong belief, and re-deriving them would waste a future investigation:
+
+- **The "projects gallery cannot rename" worry was wrong.** `ProjectsView.tsx`
+  was deleted as an orphan, and the Rename action it would have provided already
+  exists in unified-chat's `ProjectGallery`, which `/chat/projects` renders:
+  `onEditProject` opens `ProjectSettingsDialog` from both the gallery and the
+  card view. Do not re-raise it as a gap.
+- **The unwired-handler detector over-reports.** It flags handlers declared on
+  context/option interfaces, not only on component props, so its count is a
+  candidate list rather than a defect list — `ClarifyCard.onRespond` is supplied
+  through `ctx` and is genuinely wired.
+
+### Fixed
+
+- Collapsed sidebar destinations, the reasoning-effort toggle that reached no
+  user, native artifact export, offline/network error copy, raw error leakage on
+  the web surface, and four unwired desktop controls including one UI that
+  reported a state it did not have.
 
 ## [Unreleased — MCP connectors] — 2026-08-14
 

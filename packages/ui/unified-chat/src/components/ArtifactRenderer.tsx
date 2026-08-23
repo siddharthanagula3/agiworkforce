@@ -33,12 +33,19 @@ export interface ArtifactRendererProps {
   isDark?: boolean;
   onApplyCode?: (artifactId: string, content: string) => Promise<void>;
   onExportNative?: (
-    format: 'pdf' | 'word' | 'excel',
+    format: NativeExportFormat,
     artifactId: string,
     content: string,
     title: string,
   ) => Promise<void>;
+  /** Formats the host can actually produce. An option absent here is never
+   *  offered, so a host that cannot build .xlsx does not advertise it. */
+  nativeExportFormats?: readonly NativeExportFormat[];
 }
+
+export type NativeExportFormat = 'pdf' | 'word' | 'excel';
+
+const ALL_NATIVE_EXPORT_FORMATS: readonly NativeExportFormat[] = ['pdf', 'word', 'excel'];
 
 const SVG_ALLOWED_TAGS = new Set([
   'svg',
@@ -434,6 +441,7 @@ export function ArtifactRenderer({
   isDark = false,
   onApplyCode,
   onExportNative,
+  nativeExportFormats = ALL_NATIVE_EXPORT_FORMATS,
 }: ArtifactRendererProps) {
   const [copied, setCopied] = useState(false);
   const isMountedRef = useRef(true);
@@ -488,14 +496,11 @@ export function ArtifactRenderer({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const supportsDocumentExport = [
-    'code',
-    'presentation',
-    'mermaid',
-    'markdown',
-    'document',
-  ].includes(artifact.type);
-  const supportsExcelExport = isTabularType(artifact.type);
+  const supportsDocumentExport =
+    ['code', 'presentation', 'mermaid', 'markdown', 'document'].includes(artifact.type) &&
+    (nativeExportFormats.includes('pdf') || nativeExportFormats.includes('word'));
+  const supportsExcelExport =
+    isTabularType(artifact.type) && nativeExportFormats.includes('excel');
   const supportsMarkdownExport = isTabularType(artifact.type);
 
   const handleCopyMarkdown = async () => {
@@ -597,38 +602,42 @@ export function ArtifactRenderer({
 
                   {supportsDocumentExport && onExportNative && (
                     <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onExportNative(
-                            'pdf',
-                            artifact.id,
-                            artifact.content,
-                            artifact.title || 'document',
-                          );
-                          setExportMenuOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
-                      >
-                        <FileText className="h-4 w-4 text-red-500" />
-                        Export as PDF
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onExportNative(
-                            'word',
-                            artifact.id,
-                            artifact.content,
-                            artifact.title || 'document',
-                          );
-                          setExportMenuOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
-                      >
-                        <FileText className="h-4 w-4 text-blue-500" />
-                        Export as Word
-                      </button>
+                      {nativeExportFormats.includes('pdf') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onExportNative(
+                              'pdf',
+                              artifact.id,
+                              artifact.content,
+                              artifact.title || 'document',
+                            );
+                            setExportMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
+                        >
+                          <FileText className="h-4 w-4 text-red-500" />
+                          Export as PDF
+                        </button>
+                      )}
+                      {nativeExportFormats.includes('word') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onExportNative(
+                              'word',
+                              artifact.id,
+                              artifact.content,
+                              artifact.title || 'document',
+                            );
+                            setExportMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
+                        >
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          Export as Word
+                        </button>
+                      )}
                     </>
                   )}
 

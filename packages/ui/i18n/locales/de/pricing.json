@@ -77,7 +77,7 @@
   "seatTotal_one": "{{count}} Platz · {{total}}/Mon.",
   "seatTotal_other": "{{count}} Plätze · {{total}}/Mon.",
   "perSeatPrice": "{{price}}/Platz/Mon.",
-  "perSeatPriceAnnual": "{{price}}/Platz/Jahr",
+  "perSeatPriceAnnual": "{{price}}/Platz/Mon.",
   "seatTotalAnnual_one": "{{count}} Platz · {{total}}/Jahr",
   "seatTotalAnnual_other": "{{count}} Plätze · {{total}}/Jahr",
   "seatCadenceMonthly_one": "{{count}} Platz · monatliche Abrechnung",

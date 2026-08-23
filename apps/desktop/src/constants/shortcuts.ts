@@ -1,4 +1,3 @@
-
 export interface ShortcutModifiers {
   ctrl?: boolean;
   alt?: boolean;
@@ -10,6 +9,7 @@ export type RendererShortcutAction =
   | 'app.search'
   | 'app.commandPalette'
   | 'model.select'
+  | 'edit.undoLast'
   | 'window.toggleSidebar'
   | 'window.minimize';
 
@@ -18,7 +18,7 @@ interface ShortcutBase {
   key: string;
   modifiers: ShortcutModifiers;
   description: string;
-  category: 'navigation' | 'model' | 'window';
+  category: 'navigation' | 'model' | 'editing' | 'window';
 }
 
 export interface RendererShortcutDefinition extends ShortcutBase {
@@ -58,6 +58,15 @@ export const RENDERER_SHORTCUTS: RendererShortcutDefinition[] = [
     description: 'Model selector',
     category: 'model',
     action: 'model.select',
+  },
+
+  {
+    id: 'undo-last',
+    key: 'z',
+    modifiers: { meta: true, alt: true },
+    description: 'Undo last agent change',
+    category: 'editing',
+    action: 'edit.undoLast',
   },
 
   {
@@ -119,6 +128,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [...RENDERER_SHORTCUTS, .
 export const SHORTCUT_CATEGORY_LABELS: Record<ShortcutDefinition['category'], string> = {
   navigation: 'Navigation',
   model: 'Model',
+  editing: 'Editing',
   window: 'Window',
 };
 
