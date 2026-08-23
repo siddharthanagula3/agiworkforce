@@ -43,6 +43,48 @@ a one-field patch can never materialize a row that silently disables the rest.
   all three as obligations today so the consumers have something to read. The
   settings panel labels the retention field as recording intent.
 
+## 2026-08-23 Branch audit: what the ahead/behind counters hide
+
+Audited all 11 remote branches. Two counting methods both give wrong answers on
+this repo, and the wrong answer is always "this branch still has unmerged work":
+
+- **Commit ancestry** (`git rev-list origin/main..BRANCH`) is blind to squash
+  merges. `security/2026-08-21-findings` read 70 ahead while its tree hash was
+  byte-identical to main's (`a6c0e6ddc5ef...`), because PR #416 squashed 70
+  commits into `2f6901e3b`.
+- **Patch-id** (`git cherry`) is blind to them too, and for the same reason: a
+  squash produces one commit whose patch-id matches none of its inputs.
+  `fix/process-tree-reap-race` showed all 4 commits "not in main" while its
+  merge commit `fc7184ceb` was a plain ancestor.
+
+The authoritative tests, in order: compare tree hashes (`git rev-parse
+BRANCH^{tree}`) for whole-branch equality, then check whether the PR's
+`mergeCommit` is an ancestor of main. Do not delete or keep a branch on the
+GitHub "Ahead" column alone.
+
+Superseded-by-reimplementation is a third case ancestry cannot see at all. Two
+branches were closed for it: the argon2 outage fix (`hotfix/argon2-web-only`)
+was re-landed as `d4cc8e8e5` with a different mechanism, and the Team seat
+reconciliation (`fix/team-seat-reconciliation`) exists in main as
+`resolvePurchasedSeatsForOwner` at `app/api/stripe-webhook/lib/seats.ts` rather
+than the branch's `lib/server/purchased-seats.ts`.
+
+- **NATIVE-TRACING-GUARD-01 — OPEN, deliberate non-adoption.** Main has NO guard
+  against the class of failure that took 143 of 196 API routes to HTTP 500 on
+  2026-08-07 (a native addon whose `.node` binary the Next tracer cannot infer).
+  A good one exists on `hotfix/argon2-native-module-tracing`
+  (`scripts/check-native-module-tracing.mjs`, 192 lines, five self-tests). It was
+  NOT adopted, because it asserts that BOTH `serverExternalPackages` and
+  `outputFileTracingIncludes` are required, and main satisfies only the second —
+  yet production is healthy (`/api/me` returns 401, not 500, verified
+  2026-08-23). Main's fix `d4cc8e8e5` ships EVERY prebuild via a glob, which
+  removes the build-host/runtime arch mismatch that caused the outage without
+  needing the package marked external. Adopting the guard therefore requires a
+  decision, not a cleanup: either add `argon2` to `serverExternalPackages` (a
+  config change to a healthy production app) or relax the guard to accept a
+  traced-binaries-only configuration. Do not adopt it unchanged — it fails on
+  main as committed.
+
 ## 2026-08-21 `apps/extension-vscode` test suite: vacuous tests
 
 An audit of all 95 files under `apps/extension-vscode/src/__tests__` found 141
