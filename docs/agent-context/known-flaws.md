@@ -88,6 +88,23 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 Seeding a stale conversation: messages bump the parent
+
+`update_conversation_on_message` sets `web_conversations.updated_at` when a
+message is inserted. That is correct — a conversation someone just posted to is
+not dormant, and retention runs from last activity — but it silently defeats the
+obvious fixture. Seeding three backdated conversations and then adding a message
+to each un-stales all three, the sweep finds nothing, and it reads as retention
+being broken.
+
+Backdate AFTER seeding messages, not before. The harness at
+`apps/web/db/neon/verify/retention-sweep-against-real-rows.ts.txt` does this and
+says why.
+
+The same harness is self-seeding on purpose: the sweep consumes what it deletes,
+so a test relying on rows seeded elsewhere passes once and reports `nothing_due`
+on every run after.
+
 ## 2026-08-23 Three denials observed on live requests
 
 Against the seeded Enterprise workspace, with the app talking to a real database:
@@ -462,13 +479,14 @@ deletes customer conversations. Three properties are deliberate and must not be
 record it can edit is not evidence. Writes go through the privileged connection
 in a route that has already checked the owner/admin role.
 
-**RETENTION-01 — PARTIALLY CLOSED 2026-08-23.** The sweep now runs against a
-REAL Postgres carrying the full migration chain, on a seeded Enterprise
-workspace: it returns `held` under an organization-wide hold and deletes
-nothing, then proceeds once the hold is released, and every run writes its
-evidence row. What is still unproven is deletion of actual conversation rows and
-the cascade to `web_messages` — the seeded workspace has no conversations. Seed
-some and re-run before enabling enforcement for a customer.
+**RETENTION-01 — CLOSED 2026-08-23.** Observed against real rows on a seeded
+Enterprise workspace: three conversations, two dormant past a 30-day window and
+one touched today. The sweep deleted exactly the two, their messages went with
+them through the FK cascade, the active one survived, a second sweep reported
+`nothing_due`, and the evidence row recorded `deleted` with a count of 2. Under
+an organization-wide hold it returns `held` and deletes nothing, then proceeds
+once released. Harness kept at
+`apps/web/db/neon/verify/retention-sweep-against-real-rows.ts.txt`.
 
 ## 2026-08-23 Branch audit: what the ahead/behind counters hide
 
