@@ -610,6 +610,10 @@ export async function replaceScimUser(
     return { row: replaced, outcome: await reconcileMembership(tx, ctx, replaced) };
   });
 
+  const revocationWarnings = outcome.membershipRevoked
+    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, row.linked_user_id)
+    : [];
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: row.active ? 'user.updated' : 'user.deactivated',
@@ -618,6 +622,8 @@ export async function replaceScimUser(
       scimUserId: row.id,
       membershipGranted: outcome.membershipGranted,
       membershipRevoked: outcome.membershipRevoked,
+      credentialsRevoked: outcome.membershipRevoked && revocationWarnings.length === 0,
+      revocationWarnings,
     },
   });
 
@@ -742,6 +748,39 @@ export function applyUserPatchOperations(
   return state;
 }
 
+/**
+ * Cuts off the live credentials of a member the IdP just removed.
+ *
+ * Never throws. An IdP treats a non-2xx as a failed deprovision and retries,
+ * which would mean re-running a revoke that already succeeded and, worse, would
+ * report the whole operation as failed when the membership WAS revoked. What
+ * could not be reached is recorded on the sync event instead, where an
+ * administrator reviewing the directory log will see it.
+ */
+async function revokeCredentialsAfterScimRemoval(
+  db: DatabaseAdapter,
+  organizationId: string,
+  linkedUserId: string | null,
+): Promise<string[]> {
+  if (!linkedUserId) return [];
+
+  try {
+    const { clerkClient } = await import('@clerk/nextjs/server');
+    const { deprovisionMember } = await import('@/lib/services/deprovision-service');
+    const result = await deprovisionMember(db, await clerkClient(), {
+      userId: linkedUserId,
+      organizationId,
+    });
+    return result.errors;
+  } catch (error) {
+    return [
+      `Credential revocation did not run: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    ];
+  }
+}
+
 export async function patchScimUser(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -833,11 +872,20 @@ export async function deleteScimUser(
     [userId, ctx.connectionId, ctx.organizationId],
   );
 
+  const revocationWarnings = membershipRevoked
+    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, existing.linked_user_id)
+    : [];
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'user.deprovisioned',
     userEmail: existing.email,
-    payload: { scimUserId: userId, membershipRevoked },
+    payload: {
+      scimUserId: userId,
+      membershipRevoked,
+      credentialsRevoked: membershipRevoked && revocationWarnings.length === 0,
+      revocationWarnings,
+    },
   });
 }
 
