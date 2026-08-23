@@ -74,12 +74,35 @@ fail in CI, where no such database exists.
 To use it, seed a workspace, copy it to
 `apps/web/lib/services/__tests__/`, run it, and delete it again.
 
-## What this cannot do
+## Running the app itself against this database
 
-It cannot run the app. The data layer uses `@neondatabase/serverless`'s
-WebSocket `Pool`, which cannot reach a plain Postgres over TCP, and the adapter
-exposes no `neonConfig.wsProxy` hook. Pointing `AGI_DATABASE_URL` at a local
-Postgres reaches "account_status lookup failed after retry; denying request
+The data layer speaks to Postgres over a WebSocket, so it cannot reach a plain
+Postgres on TCP. Without the hook below, pointing `AGI_DATABASE_URL` at a local
+database reaches "account_status lookup failed after retry; denying request
 (fail-closed)" — the guard behaving correctly over a transport that cannot
-connect. Observing a live policy denial end to end needs a Neon branch, or a
-wsproxy hook added to the adapter.
+connect.
+
+`AGI_DATABASE_WS_PROXY` bridges that gap. It is loopback-only and refuses any
+other host, because a deployment that picked the variable up from a stray export
+would send database traffic and credentials over an unencrypted socket to
+another machine.
+
+```sh
+docker run -d --name agi-wsproxy -p 5480:80   --add-host=host.docker.internal:host-gateway   -e APPEND_PORT=55433 -e ALLOW_ADDR_REGEX='.*'   ghcr.io/neondatabase/wsproxy:latest
+
+# The app must be REBUILT after changing the data layer — `next start` serves
+# the bundle, and a stale one silently ignores the hook.
+NEXT_PUBLIC_APP_URL=http://localhost:3000 pnpm build
+
+AGI_ALLOW_INVALID_ENV=1 AGI_DATABASE_WS_PROXY=localhost:5480 AGI_DATABASE_URL=postgresql://postgres:test@host.docker.internal/agitest CLERK_AUTHORIZED_PARTIES=http://localhost:3000 NEXT_PUBLIC_APP_URL=http://localhost:3000 EMAIL_HASH_PEPPER=$(openssl rand -hex 32)   npx next start
+```
+
+Two env guards will otherwise refuse to boot, and both are correct:
+`EMAIL_HASH_PEPPER` must be set, and `APP_URL must use HTTPS in production`
+unless `AGI_ALLOW_INVALID_ENV=1` says otherwise.
+
+To seed a workspace worth testing against, insert an organization with
+`billing_plan_tier = 'enterprise'`, an `organization_members` row with role
+`owner` (a trigger refuses an organization with no owner), and set
+`user_settings.settings->workspace->activeOrganizationId` to that organization —
+that last one is how the app resolves scope.

@@ -99,11 +99,51 @@ type NeonModule = typeof import('@neondatabase/serverless');
 
 let _neonModule: NeonModule | null = null;
 
+/**
+ * Points the driver at a local WebSocket proxy instead of Neon.
+ *
+ * The driver reaches Postgres over a WebSocket, so it cannot talk to a plain
+ * Postgres on TCP. That makes the whole stack unverifiable against a throwaway
+ * database: migrations can be applied with psql and services can be driven with
+ * `pg`, but the APP cannot be pointed anywhere except a real Neon branch, and
+ * "policy denies a live turn" stays unobserved.
+ *
+ * Set `AGI_DATABASE_WS_PROXY` to a `host:port` running neondatabase/wsproxy to
+ * close that gap. Absent — which is every deployed environment — this function
+ * does nothing at all and the driver behaves exactly as before.
+ *
+ * DEVELOPMENT ONLY, and it refuses to be anything else: a proxy host outside
+ * localhost is rejected rather than honoured, because a production deployment
+ * that picked this variable up from a stray export would send its database
+ * traffic, credentials included, over an unencrypted socket to somebody else's
+ * machine.
+ */
+function applyLocalWebSocketProxy(neon: NeonModule): void {
+  const proxy = process.env['AGI_DATABASE_WS_PROXY']?.trim();
+  if (!proxy) return;
+
+  const host = proxy.split(':')[0] ?? '';
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  if (!isLoopback) {
+    throw new DataLayerConfigError(
+      `AGI_DATABASE_WS_PROXY must point at a loopback address; got "${proxy}". ` +
+        'It exists so a local Postgres can be reached through neondatabase/wsproxy ' +
+        'during development, and honouring a remote host would route database ' +
+        'traffic and credentials to another machine over an unencrypted socket.',
+    );
+  }
+
+  neon.neonConfig.wsProxy = () => proxy;
+  neon.neonConfig.useSecureWebSocket = false;
+  neon.neonConfig.pipelineTLS = false;
+  neon.neonConfig.pipelineConnect = false;
+}
+
 async function loadNeon(): Promise<NeonModule> {
   if (_neonModule) return _neonModule;
+  let loaded: NeonModule;
   try {
-    _neonModule = (await import('@neondatabase/serverless')) as NeonModule;
-    return _neonModule;
+    loaded = (await import('@neondatabase/serverless')) as NeonModule;
   } catch (e) {
     throw new DataLayerConfigError(
       'Tried to use the Neon adapter but @neondatabase/serverless is not installed. ' +
@@ -112,6 +152,13 @@ async function loadNeon(): Promise<NeonModule> {
         `Underlying error: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
+
+  // Applied BEFORE the cache is populated. Caching first would mean a refused
+  // proxy config throws once and is then silently skipped on every later call,
+  // leaving the driver pointed at the real host with nobody told.
+  applyLocalWebSocketProxy(loaded);
+  _neonModule = loaded;
+  return _neonModule;
 }
 
 /**
