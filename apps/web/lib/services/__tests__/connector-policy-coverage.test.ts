@@ -1,6 +1,23 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+
+/**
+ * Resolves the app root by looking for a marker, not from `process.cwd()`.
+ *
+ * A coverage guard that resolves from the working directory fails with a wall
+ * of unreadable-file errors the moment vitest is invoked from the repo root
+ * instead of the app — noise that says nothing about the thing being guarded.
+ */
+function appRoot(): string {
+  const direct = process.cwd();
+  if (existsSync(join(direct, 'db/neon'))) return direct;
+  const nested = join(direct, 'apps/web');
+  if (existsSync(join(nested, 'db/neon'))) return nested;
+  throw new Error(`Could not locate apps/web from ${direct}`);
+}
+
+const APP_ROOT = appRoot();
 
 /**
  * Connector governance is enforced where the tool catalog is assembled, which
@@ -14,7 +31,7 @@ import { describe, expect, it } from 'vitest';
 const LOADER = 'lib/user-connector-tools.ts';
 
 function source(): string {
-  return readFileSync(join(process.cwd(), LOADER), 'utf8');
+  return readFileSync(join(APP_ROOT, LOADER), 'utf8');
 }
 
 describe('connector policy covers the shared tool catalog', () => {
