@@ -52,15 +52,21 @@ a one-field patch can never materialize a row that silently disables the rest.
 Wave 2 of `docs/plans/teams-enterprise-2026-08-22.md`. The customer-facing
 console lives at `/workspace`; `/admin` remains the platform operator console.
 
-- **CONSOLE-01 — OPEN, never rendered as an actual workspace owner.** All seven
-  routes, the anonymous gate, the 403 on the posture API, and axe cleanliness
-  are verified in a real browser against a live Clerk session
-  (`apps/web/e2e/workspace-console.spec.ts`). What is NOT verified is the
-  posture dashboard itself: the QA account is on `max_15x`, and workspace
-  creation correctly refuses with `SUBSCRIPTION_REQUIRED`, so the console has
-  only ever been observed in its "No workspace selected" state. Needs a seeded
-  Team or Enterprise workspace. Same blocker as ORGPOLICY-01 — one seeded
-  organization closes both.
+- **CONSOLE-01 — CLOSED 2026-08-23.** Rendered as a real owner of a seeded
+  Enterprise workspace against a live database, with the posture reading its own
+  configuration. All nine admin APIs answered 200. See
+  `apps/web/db/neon/verify/README.md` for the setup. Superseded text follows:
+
+**Formerly: never rendered as an actual workspace owner.** All seven
+routes, the anonymous gate, the 403 on the posture API, and axe cleanliness
+are verified in a real browser against a live Clerk session
+(`apps/web/e2e/workspace-console.spec.ts`). What is NOT verified is the
+posture dashboard itself: the QA account is on `max_15x`, and workspace
+creation correctly refuses with `SUBSCRIPTION_REQUIRED`, so the console has
+only ever been observed in its "No workspace selected" state. Needs a seeded
+Team or Enterprise workspace. Same blocker as ORGPOLICY-01 — one seeded
+organization closes both.
+
 - **CONSOLE-02 — RESOLVED 2026-08-23, but the trap will catch the next agent.**
   Server-side `auth()` verifies the session's authorized party against
   `CLERK_AUTHORIZED_PARTIES`, which falls back to `NEXT_PUBLIC_APP_URL`'s origin
@@ -75,6 +81,39 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 `unconfigured`) is load-bearing, not decoration. It is what keeps `retentionDays`
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
+
+## 2026-08-23 The console, verified as a real enterprise owner
+
+Seeded workspace, live database through a wsproxy, signed in as the owner. The
+console rendered its own configuration and every badge came from a real row:
+
+- Managed cloud compute — Blocked — ENFORCED
+- Approved models — 2 rules in force — ENFORCED
+- Approved connectors — 2 rules in force — ENFORCED
+- Retention — 1 days, enforced — ENFORCED
+- Spend limit — $0.01 a month, enforced — ENFORCED
+- SIEM streaming — Delivering — ENFORCED
+- Deprovision revokes credentials — ENFORCED
+- Chat sync surfaces — STATED POSITION (correct: it reads a client hint)
+- SSO required — Not available — NOT CONFIGURED (correct: not built)
+
+All nine admin APIs answered 200 as owner. The recommendations panel offered
+only actions the workspace could actually take.
+
+**FOUR GATES FIRED CORRECTLY BEFORE IT WOULD RENDER**, and each is worth knowing
+because each looks like a bug until you read it:
+
+1. `organizations.billing_plan_tier` does NOT gate entitlement. The plan comes
+   from the OWNER'S `subscriptions` row via `resolveOrganizationEntitlementPlan`.
+   Setting the org column alone leaves `plan: "free"` and every admin API 403s.
+2. A trigger refuses an organization with no `owner` member.
+3. `organizations_seats_within_license` refuses more members than
+   `licensed_seats`, which defaults to 1.
+4. `requireCurrentTermsAcceptance` redirects to the terms page until
+   `profiles.terms_version` equals `POLICY_LAST_UPDATED.terms`.
+
+The first is the one that will cost someone a day: provisioning an enterprise
+customer by setting the org column looks right and does nothing.
 
 ## 2026-08-23 How to actually verify this stack: Docker Postgres, not mocks
 

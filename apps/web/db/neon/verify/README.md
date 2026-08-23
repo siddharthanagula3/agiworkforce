@@ -111,3 +111,39 @@ To seed a workspace worth testing against, insert an organization with
 `owner` (a trigger refuses an organization with no owner), and set
 `user_settings.settings->workspace->activeOrganizationId` to that organization —
 that last one is how the app resolves scope.
+
+## Seeding a workspace the console will actually accept
+
+Four gates stand between a seeded row and a rendered console. Each is correct;
+each looks like a bug until you know it.
+
+```sql
+-- 1. The profile, and its terms acceptance. The console layout redirects to the
+--    terms page until terms_version equals POLICY_LAST_UPDATED.terms.
+INSERT INTO public.profiles (id, email, terms_version, terms_accepted_at, terms_accepted_surface)
+  VALUES ('<clerk-user-id>', 'qa@example.test', '<POLICY_LAST_UPDATED.terms>', now(), 'web')
+  ON CONFLICT (id) DO UPDATE SET terms_version = excluded.terms_version,
+                                 terms_accepted_at = excluded.terms_accepted_at;
+
+-- 2. The organization. licensed_seats defaults to 1 and a CHECK refuses more
+--    members than that, so set it before adding anyone.
+INSERT INTO public.organizations (name, slug, licensed_seats, owner_user_id)
+  VALUES ('Verified Co', 'verified-co', 25, '<clerk-user-id>');
+
+-- 3. An OWNER member. A trigger refuses an organization left without one.
+INSERT INTO public.organization_members (organization_id, user_id, role)
+  VALUES ('<org-id>', '<clerk-user-id>', 'owner');
+
+-- 4. THE ONE THAT COSTS A DAY: entitlement comes from the OWNER'S subscription,
+--    not organizations.billing_plan_tier. Setting the org column alone leaves
+--    plan: "free" and every admin API answers 403.
+INSERT INTO public.subscriptions (user_id, plan_tier, status)
+  VALUES ('<clerk-user-id>', 'enterprise', 'active')
+  ON CONFLICT (user_id) DO UPDATE SET plan_tier = 'enterprise', status = 'active';
+
+-- 5. Active scope. This is how the app resolves which workspace you are in.
+UPDATE public.user_settings
+   SET settings = jsonb_set(coalesce(settings, '{}'::jsonb),
+                            '{workspace,activeOrganizationId}', to_jsonb('<org-id>'::text), true)
+ WHERE user_id = '<clerk-user-id>';
+```
