@@ -10,6 +10,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { RefreshCw } from 'lucide-react';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const RANGE_OPTIONS: ReadonlyArray<{ value: ManagedCloudReflectRange; label: string }> = [
   { value: '30d', label: 'Past 30 days' },
@@ -78,7 +79,7 @@ export function ReflectSection() {
       } catch (loadError) {
         if (signal.aborted) return;
         setRecap(null);
-        setError(loadError instanceof Error ? loadError.message : 'Reflect could not load.');
+        setError(toUserMessage(loadError, 'Reflect could not load.'));
       } finally {
         if (!signal.aborted) setLoading(false);
       }

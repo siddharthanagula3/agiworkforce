@@ -1,190 +1,337 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
+import { AgiWorkforcePaywallError, chatCompletion } from '../utils/api';
+import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
+import { AgiInlineCompletionProvider } from '../features/inline-completions/inlineCompletionProvider';
 
-import { describe, it, expect, vi } from 'vitest';
-import { AgiWorkforcePaywallError } from '../utils/api';
+vi.mock('../core/cloudUtilityErrorActions', () => ({
+  showCloudUtilityErrorActions: vi.fn().mockResolvedValue(undefined),
+}));
 
-function extractCompletionText(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed === '') {
-    return '';
-  }
+vi.mock('../utils/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../utils/api')>()),
+  chatCompletion: vi.fn(),
+}));
 
-  const fenced = /```(?:\w+)?\s*\n([\s\S]*?)```/.exec(trimmed);
-  const fromFence = fenced?.[1]?.trimEnd();
-  if (fromFence !== undefined && fromFence !== '') {
-    return fromFence;
-  }
+const SETTINGS: Record<string, unknown> = {};
 
-  const firstLine = trimmed.split('\n').find((line) => line.trim() !== '');
-  return firstLine?.trim() ?? '';
+function configure(values: Record<string, unknown>): void {
+  for (const key of Object.keys(SETTINGS)) delete SETTINGS[key];
+  Object.assign(SETTINGS, {
+    'inlineCompletions.enabled': true,
+    'inlineCompletions.debounceMs': 0,
+    'inlineCompletions.maxLength': 500,
+    ...values,
+  });
 }
 
-describe('extractCompletionText', () => {
-  it('returns empty string for empty input', () => {
-    expect(extractCompletionText('')).toBe('');
-    expect(extractCompletionText('   ')).toBe('');
+function documentAt(lineText: string, following: string[] = []): vscode.TextDocument {
+  const lines = [lineText, ...following];
+  return {
+    uri: vscode.Uri.file('/workspace/src/app.ts'),
+    languageId: 'typescript',
+    lineCount: lines.length,
+    lineAt: (line: number) => ({ text: lines[line] ?? '' }),
+    getText: () => lines.join('\n'),
+  } as unknown as vscode.TextDocument;
+}
+
+const token = {
+  isCancellationRequested: false,
+  onCancellationRequested: () => new vscode.Disposable(() => undefined),
+} as unknown as vscode.CancellationToken;
+
+async function complete(
+  modelResponse: string,
+  options: { lineText?: string; maxLength?: number } = {},
+): Promise<string | undefined> {
+  configure(options.maxLength === undefined ? {} : { 'inlineCompletions.maxLength': options.maxLength });
+  vi.mocked(chatCompletion).mockResolvedValue(modelResponse);
+
+  const items = await new AgiInlineCompletionProvider({} as vscode.SecretStorage).provideInlineCompletionItems(
+    documentAt(options.lineText ?? 'const value = '),
+    new vscode.Position(0, (options.lineText ?? 'const value = ').length),
+    {} as vscode.InlineCompletionContext,
+    token,
+  );
+
+  const list = items as vscode.InlineCompletionItem[];
+  return list.length === 0 ? undefined : (list[0]!.insertText as string);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  configure({});
+  vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
+    () =>
+      ({
+        get: vi.fn((key: string, fallback?: unknown) => SETTINGS[key] ?? fallback),
+        update: vi.fn(),
+        has: vi.fn().mockReturnValue(true),
+        inspect: vi.fn((key: string) => ({ key, globalValue: SETTINGS[key] })),
+      }) as unknown as vscode.WorkspaceConfiguration,
+  );
+});
+
+afterEach(() => {
+  vi.mocked(chatCompletion).mockReset();
+});
+
+describe('inline completions — real provider extraction', () => {
+  it('suggests nothing when the model returns blank text', async () => {
+    expect(await complete('')).toBeUndefined();
+    expect(await complete('   \n  ')).toBeUndefined();
   });
 
-  it('extracts code from fenced block', () => {
-    const raw = '```typescript\nconst x = 42;\n```';
-    expect(extractCompletionText(raw)).toBe('const x = 42;');
+  it('unwraps a fenced block, with or without a language tag', async () => {
+    expect(await complete('```typescript\nconst x = 42;\n```')).toBe('const x = 42;');
+    expect(await complete('```\nconst x = 42;\n```')).toBe('const x = 42;');
   });
 
-  it('extracts code from fenced block without language', () => {
-    const raw = '```\nconst x = 42;\n```';
-    expect(extractCompletionText(raw)).toBe('const x = 42;');
+  it('falls back to the first meaningful line when the model returns prose', async () => {
+    expect(await complete('\n\n  42;  \nand then some prose')).toBe('42;');
   });
 
-  it('falls back to first meaningful line when no code block', () => {
-    const raw = 'return a + b;';
-    expect(extractCompletionText(raw)).toBe('return a + b;');
+  it('truncates a fenced completion at the configured maxLength', async () => {
+    const long = 'x'.repeat(900);
+
+    expect(await complete(`\`\`\`typescript\n${long}\n\`\`\``, { maxLength: 120 })).toHaveLength(120);
   });
 
-  it('skips empty lines when falling back', () => {
-    const raw = '\n\n  return a + b;\nmore code';
-    expect(extractCompletionText(raw)).toBe('return a + b;');
+  it('truncates a bare first-line completion at the configured maxLength', async () => {
+    const long = 'y'.repeat(900);
+
+    expect(await complete(long, { maxLength: 80 })).toHaveLength(80);
   });
 
-  it('handles multiline code in fenced blocks', () => {
-    const raw = '```js\nconst a = 1;\nconst b = 2;\n```';
-    const result = extractCompletionText(raw);
-    expect(result).toContain('const a = 1;');
-    expect(result).toContain('const b = 2;');
+  it('sends the whole completion when it fits inside maxLength', async () => {
+    expect(await complete('const x = 42;', { maxLength: 500 })).toBe('const x = 42;');
   });
 
-  it('trims trailing whitespace from fenced block content', () => {
-    const raw = '```\ncode   \n   \n```';
-    const result = extractCompletionText(raw);
-    expect(result).not.toMatch(/\s+$/);
+});
+
+describe('inline completions — real cursor filtering', () => {
+  function askAt(lineText: string, character: number): Promise<unknown[]> {
+    return new AgiInlineCompletionProvider({} as vscode.SecretStorage).provideInlineCompletionItems(
+      documentAt(lineText),
+      new vscode.Position(0, character),
+      {} as vscode.InlineCompletionContext,
+      token,
+    ) as Promise<unknown[]>;
+  }
+
+  beforeEach(() => {
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+  });
+
+  it('stays quiet until three non-blank characters precede the cursor', async () => {
+    expect(await askAt('  ', 2)).toEqual([]);
+    expect(await askAt('ab', 2)).toEqual([]);
+    expect(await askAt('   ab', 5)).toEqual([]);
+    expect(chatCompletion).not.toHaveBeenCalled();
+
+    expect(await askAt('abc', 3)).toHaveLength(1);
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays quiet when the cursor sits in the middle of code', async () => {
+    expect(await askAt('const total = sum()', 18)).toEqual([]);
+    expect(await askAt('const total = sum', 13)).toEqual([]);
+    expect(chatCompletion).not.toHaveBeenCalled();
+  });
+
+  it('still completes when only whitespace follows the cursor', async () => {
+    expect(await askAt('const total =    ', 13)).toHaveLength(1);
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to read a file whose name marks it as secret-bearing', async () => {
+    const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+    const secretDoc = {
+      uri: vscode.Uri.file('/workspace/src/apiKey.ts'),
+      languageId: 'typescript',
+      lineCount: 1,
+      lineAt: () => ({ text: 'const value = ' }),
+      getText: () => 'const value = ',
+    } as unknown as vscode.TextDocument;
+
+    const items = await provider.provideInlineCompletionItems(
+      secretDoc,
+      new vscode.Position(0, 'const value = '.length),
+      {} as vscode.InlineCompletionContext,
+      token,
+    );
+
+    expect(items).toEqual([]);
+    expect(chatCompletion).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet while the feature is switched off', async () => {
+    configure({ 'inlineCompletions.enabled': false });
+
+    expect(await askAt('const value = ', 14)).toEqual([]);
+    expect(chatCompletion).not.toHaveBeenCalled();
   });
 });
 
-describe('inline completion filtering logic', () => {
-  const MIN_PREFIX_CHARS = 3;
+describe('inline completions — real completion cache', () => {
+  let now = 1_000_000;
 
-  it('requires minimum prefix characters', () => {
-    const shouldSkip = (prefix: string) => prefix.trim().length < MIN_PREFIX_CHARS;
+  function askAt(
+    provider: AgiInlineCompletionProvider,
+    lineText: string,
+    character = lineText.length,
+  ): Promise<vscode.InlineCompletionItem[]> {
+    return provider.provideInlineCompletionItems(
+      documentAt(lineText),
+      new vscode.Position(0, character),
+      {} as vscode.InlineCompletionContext,
+      token,
+    ) as Promise<vscode.InlineCompletionItem[]>;
+  }
 
-    expect(shouldSkip('')).toBe(true);
-    expect(shouldSkip('ab')).toBe(true);
-    expect(shouldSkip('abc')).toBe(false);
-    expect(shouldSkip('const x')).toBe(false);
+  beforeEach(() => {
+    now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
   });
 
-  it('skips when cursor is in the middle of non-whitespace text', () => {
-    const shouldSkip = (suffix: string) => suffix.trim() !== '';
+  afterEach(() => {
+    vi.mocked(Date.now).mockRestore();
+  });
 
-    expect(shouldSkip(')')).toBe(true);
-    expect(shouldSkip(' more code')).toBe(true);
-    expect(shouldSkip('')).toBe(false);
-    expect(shouldSkip('   ')).toBe(false);
+  it('serves a repeated request from cache instead of asking the model again', async () => {
+    const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+
+    expect((await askAt(provider, 'const value = '))[0]?.insertText).toBe('const x = 1;');
+    now += 5_000;
+    expect((await askAt(provider, 'const value = '))[0]?.insertText).toBe('const x = 1;');
+
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again once the cached entry has outlived its 15s window', async () => {
+    const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+
+    await askAt(provider, 'const value = ');
+    now += 15_001;
+    await askAt(provider, 'const value = ');
+
+    expect(chatCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  it('keys the cache on cursor position, not just the document', async () => {
+    const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+
+    await askAt(provider, 'const value = ');
+    await askAt(provider, 'const value = ', 'const value ='.length);
+
+    expect(chatCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  it('keys the cache on the code before the cursor', async () => {
+    const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+
+    await askAt(provider, 'const alpha = ');
+    await askAt(provider, 'const gamma = ');
+
+    expect(chatCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  it('forgets the oldest entry once sixteen completions are cached', async () => {
+    const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+    const prefix = (n: number) => `const value${n} = `;
+
+    for (let n = 0; n < 16; n += 1) {
+      await askAt(provider, prefix(n));
+    }
+    expect(chatCompletion).toHaveBeenCalledTimes(16);
+
+    await askAt(provider, prefix(15));
+    expect(chatCompletion).toHaveBeenCalledTimes(16);
+
+    await askAt(provider, prefix(16));
+    await askAt(provider, prefix(0));
+    expect(chatCompletion).toHaveBeenCalledTimes(18);
+  });
+
+  it('drops everything it cached when the provider is disposed', async () => {
+    const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+
+    await askAt(provider, 'const value = ');
+    provider.dispose();
+    await askAt(provider, 'const value = ');
+
+    expect(chatCompletion).toHaveBeenCalledTimes(2);
   });
 });
 
-describe('inline completion cache logic', () => {
-  const CACHE_TTL_MS = 15_000;
+describe('inline completions — real paywall suppression', () => {
+  function provider(): AgiInlineCompletionProvider {
+    return new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+  }
 
-  it('considers cache valid within TTL', () => {
-    const createdAt = Date.now() - 5_000;
-    const isValid = Date.now() - createdAt <= CACHE_TTL_MS;
-    expect(isValid).toBe(true);
+  async function ask(instance: AgiInlineCompletionProvider): Promise<unknown[]> {
+    const items = await instance.provideInlineCompletionItems(
+      documentAt('const value = '),
+      new vscode.Position(0, 'const value = '.length),
+      {} as vscode.InlineCompletionContext,
+      token,
+    );
+    return items as unknown[];
+  }
+
+  it('stops asking the model after the first paywall error and warns once', async () => {
+    const instance = provider();
+    vi.mocked(chatCompletion).mockRejectedValue(
+      new AgiWorkforcePaywallError('chat', 'pro', 'Token cap exceeded'),
+    );
+
+    expect(await ask(instance)).toEqual([]);
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[1]).toEqual({
+      title: 'AGI Workforce: Inline completions paused',
+    });
+
+    expect(await ask(instance)).toEqual([]);
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
   });
 
-  it('considers cache stale after TTL', () => {
-    const createdAt = Date.now() - 20_000;
-    const isValid = Date.now() - createdAt <= CACHE_TTL_MS;
-    expect(isValid).toBe(false);
+  it('suppresses only the instance that hit the paywall', async () => {
+    const suppressed = provider();
+    vi.mocked(chatCompletion).mockRejectedValueOnce(
+      new AgiWorkforcePaywallError('chat', 'pro', 'Token cap exceeded'),
+    );
+    await ask(suppressed);
+
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+    expect(await ask(suppressed)).toEqual([]);
+    expect(await ask(provider())).toHaveLength(1);
   });
 
-  it('builds a deterministic cache key from context', () => {
-    const uri = 'file:///src/app.ts';
-    const line = 10;
-    const char = 15;
-    const context = 'const x = 1;\nconst y = ';
+  it('keeps completing after an ordinary failure', async () => {
+    const instance = provider();
+    vi.mocked(chatCompletion).mockRejectedValueOnce(new Error('Network error'));
 
-    const key = `${uri}::${line}:${char}::${context.slice(-1200)}`;
-    const key2 = `${uri}::${line}:${char}::${context.slice(-1200)}`;
-    expect(key).toBe(key2);
-  });
-});
+    expect(await ask(instance)).toEqual([]);
+    expect(vi.mocked(showCloudUtilityErrorActions)).not.toHaveBeenCalled();
 
-describe('inline completion paywall suppression', () => {
-  it('AgiWorkforcePaywallError is an Error subclass', () => {
-    const err = new AgiWorkforcePaywallError('chat', 'hobby', 'reason');
-    expect(err).toBeInstanceOf(Error);
-    expect(err).toBeInstanceOf(AgiWorkforcePaywallError);
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+    const items = await ask(instance);
+    expect(items).toHaveLength(1);
+    expect((items[0] as vscode.InlineCompletionItem).insertText).toBe('const x = 1;');
   });
 
-  it('paywall flag prevents further completion attempts', () => {
-    let paywallSuppressed = false;
+  it('surfaces the paywall through the shared cloud-utility action sheet, not a bespoke prompt', async () => {
+    const instance = provider();
+    const paywall = new AgiWorkforcePaywallError('chat', 'pro', 'Token cap exceeded');
+    vi.mocked(chatCompletion).mockRejectedValue(paywall);
 
-    function shouldAttemptCompletion(): boolean {
-      return !paywallSuppressed;
-    }
+    await ask(instance);
 
-    function handleError(error: unknown): void {
-      if (error instanceof AgiWorkforcePaywallError && !paywallSuppressed) {
-        paywallSuppressed = true;
-      }
-    }
-
-    expect(shouldAttemptCompletion()).toBe(true);
-
-    handleError(new AgiWorkforcePaywallError('chat', 'hobby', 'Token cap exceeded'));
-    expect(paywallSuppressed).toBe(true);
-    expect(shouldAttemptCompletion()).toBe(false);
-
-    handleError(new AgiWorkforcePaywallError('chat', 'hobby', 'Token cap exceeded'));
-    expect(paywallSuppressed).toBe(true);
-    expect(shouldAttemptCompletion()).toBe(false);
-  });
-
-  it('non-paywall errors do not set the suppression flag', () => {
-    let paywallSuppressed = false;
-
-    function handleError(error: unknown): void {
-      if (error instanceof AgiWorkforcePaywallError && !paywallSuppressed) {
-        paywallSuppressed = true;
-      }
-    }
-
-    handleError(new Error('Network error'));
-    expect(paywallSuppressed).toBe(false);
-  });
-
-  it('returns empty completions on paywall (simulated)', async () => {
-    async function simulateProvide(shouldThrowPaywall: boolean): Promise<unknown[]> {
-      try {
-        if (shouldThrowPaywall) {
-          throw new AgiWorkforcePaywallError('chat', 'hobby', 'Cap exceeded');
-        }
-        return [{ insertText: 'const x = 1;' }];
-      } catch (error) {
-        if (error instanceof AgiWorkforcePaywallError) {
-          return [];
-        }
-        return [];
-      }
-    }
-
-    const onPaywall = await simulateProvide(true);
-    expect(onPaywall).toEqual([]);
-
-    const onSuccess = await simulateProvide(false);
-    expect(onSuccess).toHaveLength(1);
-  });
-
-  it('does not throw on paywall — returns empty array', async () => {
-    async function simulateProvide(): Promise<unknown[]> {
-      try {
-        throw new AgiWorkforcePaywallError('chat', 'hobby', 'Cap exceeded');
-      } catch (error) {
-        if (error instanceof AgiWorkforcePaywallError) {
-          return [];
-        }
-        throw error;
-      }
-    }
-
-    await expect(simulateProvide()).resolves.toEqual([]);
+    expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[0]).toBe(paywall);
+    expect(vi.mocked(vscode.window.showWarningMessage)).not.toHaveBeenCalled();
   });
 });

@@ -35,6 +35,7 @@ vi.mock('../components/Settings/ApiKeys', () => ({
 // including a QueryClientProvider). Stub the hook here so mounting
 // AccountSection doesn't require a QueryClient just to render session rows.
 vi.mock('../hooks/use-settings-queries', () => ({
+  useOrganizationOverview: () => ({ data: undefined }),
   useDeleteAccount: () => ({
     mutate: vi.fn(),
     reset: vi.fn(),

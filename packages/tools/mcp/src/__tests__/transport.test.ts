@@ -126,6 +126,7 @@ describe('env var filtering', () => {
 describe('http transport egress guard', () => {
   const SERVER_URL = 'https://mcp.example.com/mcp';
   const INTERNAL_URL = 'http://169.254.169.254/latest/meta-data/';
+  const INTERNAL_HTTPS_URL = 'https://169.254.169.254/latest/meta-data/';
 
   function redirectTo(location: string, status = 302): Response {
     return { status, headers: new Headers({ location }), body: null } as unknown as Response;
@@ -182,7 +183,7 @@ describe('http transport egress guard', () => {
     const baseFetch = vi.fn(async (input: string | URL) => {
       const href = typeof input === 'string' ? input : input.toString();
       if (href === SERVER_URL) return redirectTo('https://redirector.example.com/next');
-      if (href === 'https://redirector.example.com/next') return redirectTo(INTERNAL_URL);
+      if (href === 'https://redirector.example.com/next') return redirectTo(INTERNAL_HTTPS_URL);
       return okResponse();
     });
 
@@ -190,8 +191,49 @@ describe('http transport egress guard', () => {
     const guarded = guardedFetchFrom(mockStreamableTransport);
 
     await expect(guarded(SERVER_URL)).rejects.toThrow('blocked by egress policy');
-    expect(hops).toEqual([SERVER_URL, 'https://redirector.example.com/next', INTERNAL_URL]);
+    expect(hops).toEqual([SERVER_URL, 'https://redirector.example.com/next', INTERNAL_HTTPS_URL]);
     expect(baseFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops the bearer credential when a policy-approved redirect leaves the origin', async () => {
+    const seen: Array<Headers | undefined> = [];
+    const baseFetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      seen.push(init?.headers ? new Headers(init.headers) : undefined);
+      const href = typeof input === 'string' ? input : input.toString();
+      if (href === SERVER_URL) return redirectTo('https://cdn.example.net/mcp');
+      return okResponse();
+    });
+
+    resolveMcpTransport(
+      { url: SERVER_URL },
+      { fetch: baseFetch, assertAllowedUrl: async () => undefined },
+    );
+    const guarded = guardedFetchFrom(mockStreamableTransport);
+
+    await guarded(SERVER_URL, {
+      headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' },
+    });
+
+    expect(seen[0]?.get('authorization')).toBe('Bearer secret');
+    expect(seen[1]?.get('authorization')).toBeNull();
+    expect(seen[1]?.get('content-type')).toBe('application/json');
+  });
+
+  it('refuses a redirect that downgrades https to http even when the policy allows the host', async () => {
+    const baseFetch = vi.fn(async (input: string | URL) => {
+      const href = typeof input === 'string' ? input : input.toString();
+      if (href === SERVER_URL) return redirectTo('http://mcp.example.com/mcp');
+      return okResponse();
+    });
+
+    resolveMcpTransport(
+      { url: SERVER_URL },
+      { fetch: baseFetch, assertAllowedUrl: async () => undefined },
+    );
+    const guarded = guardedFetchFrom(mockStreamableTransport);
+
+    await expect(guarded(SERVER_URL)).rejects.toThrow('refusing the downgrade');
+    expect(baseFetch).toHaveBeenCalledTimes(1);
   });
 
   it('follows a same-origin redirect', async () => {

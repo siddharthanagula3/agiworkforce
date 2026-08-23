@@ -5,6 +5,7 @@ import { useAuth } from '@clerk/nextjs';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
 import {
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
@@ -239,6 +240,11 @@ export function useConversations(): UseConversationsReturn {
             title: title || 'New conversation',
             model,
             ...(projectId ? { projectId } : {}),
+            // Sent AT CREATION, not applied afterwards. Marking a conversation
+            // temporary in a follow-up write races the first message's save,
+            // and a "never save my chats" preference that saves the first
+            // message is worse than no preference at all.
+            ...(useSettingsStore.getState().newChatsTemporary ? { isTemporary: true } : {}),
           }),
         });
 

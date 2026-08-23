@@ -43,8 +43,8 @@ describe('useSkillsList', () => {
                 downloadable: true,
               },
               {
-                name: 'skill-creator',
-                description: 'Draft skills.',
+                name: 'unreleased-fixture',
+                description: 'A draft catalog entry.',
                 source: 'bundled',
                 lifecycle: 'draft',
                 downloadable: false,

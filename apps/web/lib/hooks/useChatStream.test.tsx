@@ -151,6 +151,35 @@ describe('useChatStream', () => {
     });
   });
 
+  // A dropped connection used to reach the transcript as the browser's own
+  // wording, so someone whose wifi died read "Error: Failed to fetch" and had
+  // nothing to act on. The funnel now names the condition instead.
+  describe('network failure wording', () => {
+    it('says the connection failed rather than leaking "Failed to fetch"', async () => {
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        if (String(input).includes('/api/llm/v1/chat/completions')) {
+          throw new TypeError('Failed to fetch');
+        }
+        return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('does the wifi matter', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const visible = [
+        useChatStore.getState().error ?? '',
+        ...useChatStore.getState().messages.map((m) => m.content ?? ''),
+      ].join('\n');
+
+      expect(visible).not.toContain('Failed to fetch');
+      expect(visible).toContain('Could not reach the server.');
+    });
+  });
+
   describe('durable user-turn admission', () => {
     const persistedConversation = {
       ...TEMP_CONVERSATION,
@@ -293,6 +322,60 @@ describe('useChatStream', () => {
         .messages.find((message) => message.role === 'assistant');
       expect(assistant?.content).toBe('Verified once.');
       expect(assistant?.metadata?.agentActivity?.lastSequence).toBe(1);
+    });
+
+    it('settles activity the stream never stopped, so a finished turn stops saying "Working"', async () => {
+      const base = {
+        schemaVersion: 3,
+        sessionId: TEMP_CONVERSATION.id,
+        turnId: 'turn-activity-unstopped',
+      };
+      mockSseStream([
+        {
+          choices: [
+            {
+              delta: {
+                x_agent_event: {
+                  ...base,
+                  sequence: 0,
+                  emittedAtMs: 1_000,
+                  event: { type: 'lifecycle', phase: 'started' },
+                },
+              },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              delta: {
+                content: 'Research complete.',
+                x_agent_event: {
+                  ...base,
+                  sequence: 1,
+                  emittedAtMs: 1_500,
+                  event: { type: 'text-delta', delta: 'Research complete.' },
+                },
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('research this', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistant?.metadata?.agentActivity).toMatchObject({
+        turnId: 'turn-activity-unstopped',
+        status: 'completed',
+        stopReason: 'end-turn',
+      });
     });
 
     it('validates, reduces, and keeps canonical activity on the assistant message', async () => {

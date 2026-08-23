@@ -42,6 +42,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   codeLensEnabled: 'agiWorkforce.codeLensEnabled',
   hoverEnabled: 'agiWorkforce.hoverEnabled',
   autoApplyFixes: 'agiWorkforce.autoApplyFixes',
+  memoryEnabled: 'agiWorkforce.memory.enabled',
   inlineCompletionsEnabled: 'agiWorkforce.inlineCompletions.enabled',
   inlineCompletionsDebounceMs: 'agiWorkforce.inlineCompletions.debounceMs',
   inlineCompletionsMaxLength: 'agiWorkforce.inlineCompletions.maxLength',

@@ -19,6 +19,7 @@ import {
 } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
+import { toUserMessage } from '@/lib/user-error-message';
 
 // Real Stripe-backed shapes returned by the web billing routes.
 interface PaymentMethod {
@@ -294,22 +295,24 @@ export function BillingSection() {
       setOverageAvailableCents(Number(body?.available_cents ?? 0));
     } catch (error) {
       setOverageEnabled(previous);
-      setOverageError(error instanceof Error ? error.message : 'Could not update the setting.');
+      setOverageError(toUserMessage(error, 'Could not update the setting.'));
     } finally {
       setOveragePending(false);
     }
   }
 
-  async function openPortal() {
+  async function openPortal(flow?: 'cancel') {
     if (portalPending) return;
     setPortalPending(true);
     setPortalError(null);
     try {
-      await openBillingPortal();
+      await openBillingPortal(undefined, flow);
     } catch (error) {
       // openBillingPortal navigates away on success, so reaching here means it
-      // failed. Silence would look like a dead button all over again.
-      setPortalError(error instanceof Error ? error.message : 'Could not open billing portal.');
+      // failed. Silence would look like a dead button all over again. A cancel
+      // deep-link additionally fails when the portal has cancellation switched
+      // off, and that message names the route that still works.
+      setPortalError(toUserMessage(error, 'Could not open billing portal.'));
       setPortalPending(false);
     }
   }
@@ -376,7 +379,7 @@ export function BillingSection() {
     try {
       await startTopUpCheckout(topUpAmountUsd);
     } catch (error) {
-      setTopUpError(error instanceof Error ? error.message : 'Could not start top-up checkout.');
+      setTopUpError(toUserMessage(error, 'Could not start top-up checkout.'));
       setTopUpPending(false);
     }
   }
@@ -497,7 +500,7 @@ export function BillingSection() {
         setCreditHistory({
           status: 'error',
           items: [],
-          message: error instanceof Error ? error.message : 'Credit history could not be loaded.',
+          message: toUserMessage(error, 'Credit history could not be loaded.'),
         });
       });
     return () => {
@@ -784,7 +787,7 @@ export function BillingSection() {
           {hasStripeBilling && (
             <button
               type="button"
-              onClick={openPortal}
+              onClick={() => void openPortal()}
               disabled={portalPending}
               style={{
                 padding: '7px 14px',
@@ -797,6 +800,24 @@ export function BillingSection() {
               }}
             >
               {portalPending ? 'Opening…' : 'Manage billing'}
+            </button>
+          )}
+          {hasStripeBilling && isManagedPaid && (
+            <button
+              type="button"
+              onClick={() => void openPortal('cancel')}
+              disabled={portalPending}
+              style={{
+                padding: '7px 14px',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--settings-destructive)',
+                fontSize: 13,
+                cursor: portalPending ? 'progress' : 'pointer',
+              }}
+            >
+              Cancel plan
             </button>
           )}
         </div>
@@ -870,7 +891,7 @@ export function BillingSection() {
             </div>
             <button
               type="button"
-              onClick={openPortal}
+              onClick={() => void openPortal()}
               disabled={portalPending}
               style={{
                 padding: '6px 14px',

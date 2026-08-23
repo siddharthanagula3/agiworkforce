@@ -616,7 +616,8 @@ function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
   const headers: Record<string, string> = {};
   if (row.auth_header_enc) {
     try {
-      headers['Authorization'] = `Bearer ${decryptConnectorToken(row.auth_header_enc)}`;
+      headers['Authorization'] =
+        `Bearer ${decryptConnectorToken(row.auth_header_enc, 'custom-connector-auth-header')}`;
     } catch (err) {
       logger.warn(
         { rowId: row.id, error: err instanceof Error ? err.message : err },

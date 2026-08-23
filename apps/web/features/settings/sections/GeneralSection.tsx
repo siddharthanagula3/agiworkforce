@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -9,6 +9,8 @@ import { LanguageSelector } from '@/features/settings/components/LanguageSelecto
 import { useTTS } from '@/lib/hooks/useTTS';
 import { useModelStore } from '@shared/stores/model-store';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
+import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
+import { getModelReasoning, splitEffortsByEntitlement } from '@shared/config/llm';
 import {
   ACCENT_COLORS,
   useSettingsStore,
@@ -23,6 +25,9 @@ import {
   saveDisplayName,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
+import { settingsService } from '@/features/settings/services/user-preferences';
+import { IMAGE_ATTACHMENT_MIME_TYPES, MAX_AVATAR_BYTES } from '@agiworkforce/types';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const THEME_OPTIONS = [
   { value: 'system' as const, icon: Monitor, label: 'System' },
@@ -50,6 +55,54 @@ const WORK_DESCRIPTIONS = [
 type WorkDescription = (typeof WORK_DESCRIPTIONS)[number] | '';
 
 const PREF_NAMESPACE = 'general';
+
+// Mobile's personalization panel writes here and the server reads it
+// (user-identity.ts). Web writing anywhere else would give the two surfaces
+// separate, silently diverging copies of the same preference.
+const PERSONALIZATION_NAMESPACE = 'personalization';
+
+const RESPONSE_STYLES = [
+  { value: 'default', label: 'Default' },
+  { value: 'concise', label: 'Concise' },
+  { value: 'explanatory', label: 'Explanatory' },
+  { value: 'formal', label: 'Formal' },
+] as const;
+
+type ResponseStyle = (typeof RESPONSE_STYLES)[number]['value'];
+
+// The four traits mobile ships, on the same 0-100 scale with 50 neutral. The
+// server only acts on a value 20 or more away from neutral, so the labels name
+// the ends rather than implying fine-grained control that does not exist.
+const STYLE_TRAITS = [
+  { key: 'warmth', label: 'Warmth', low: 'Neutral', high: 'Warm' },
+  { key: 'enthusiasm', label: 'Enthusiasm', low: 'Measured', high: 'Energetic' },
+  { key: 'headersLists', label: 'Headers and lists', low: 'Prose', high: 'Structured' },
+  { key: 'emoji', label: 'Emoji', low: 'None', high: 'Welcome' },
+] as const;
+
+interface PersonalizationSettings {
+  style: ResponseStyle;
+  warmth: number;
+  enthusiasm: number;
+  headersLists: number;
+  emoji: number;
+}
+
+const DEFAULT_PERSONALIZATION: PersonalizationSettings = {
+  style: 'default',
+  warmth: 50,
+  enthusiasm: 50,
+  headersLists: 50,
+  emoji: 50,
+};
+
+function storedTrait(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+const AVATAR_MAX_MB = MAX_AVATAR_BYTES / (1024 * 1024);
+const AVATAR_ACCEPT = IMAGE_ATTACHMENT_MIME_TYPES.join(',');
 
 interface GeneralSettings {
   preferredName: string;
@@ -79,14 +132,20 @@ export function GeneralSection() {
   const [preferredName, setPreferredName] = useState('');
   const [workDescription, setWorkDescription] = useState<WorkDescription>('');
   const [instructions, setInstructions] = useState<string>('');
+  const [personalization, setPersonalization] =
+    useState<PersonalizationSettings>(DEFAULT_PERSONALIZATION);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
   const hydratedRef = useRef(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   function markDirty() {
     dirtyRef.current = true;
@@ -121,8 +180,22 @@ export function GeneralSection() {
           '',
       );
       setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
+
+      const storedStyle =
+        await fetchStoredPreferenceNamespace<Partial<PersonalizationSettings>>(
+          PERSONALIZATION_NAMESPACE,
+        ).catch(() => ({}) as Partial<PersonalizationSettings>);
+      setPersonalization({
+        style: RESPONSE_STYLES.some((entry) => entry.value === storedStyle.style)
+          ? (storedStyle.style as ResponseStyle)
+          : 'default',
+        warmth: storedTrait(storedStyle.warmth) ?? 50,
+        enthusiasm: storedTrait(storedStyle.enthusiasm) ?? 50,
+        headersLists: storedTrait(storedStyle.headersLists) ?? 50,
+        emoji: storedTrait(storedStyle.emoji) ?? 50,
+      });
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Failed to load settings');
+      setLoadError(toUserMessage(error, 'Failed to load settings'));
     } finally {
       setPreferencesLoaded(true);
     }
@@ -146,19 +219,30 @@ export function GeneralSection() {
         workDescription,
         instructions,
       };
-      void savePreferenceNamespace(PREF_NAMESPACE, next)
+      void Promise.all([
+        savePreferenceNamespace(PREF_NAMESPACE, next),
+        savePreferenceNamespace(PERSONALIZATION_NAMESPACE, personalization),
+      ])
         .then(() => {
           setSaveError(null);
           return refreshProfileConsumers();
         })
         .catch((error) => {
-          setSaveError(error instanceof Error ? error.message : 'Failed to save preferences');
+          setSaveError(toUserMessage(error, 'Failed to save preferences'));
         });
     }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [instructions, loadError, mounted, preferencesLoaded, preferredName, workDescription]);
+  }, [
+    instructions,
+    loadError,
+    mounted,
+    personalization,
+    preferencesLoaded,
+    preferredName,
+    workDescription,
+  ]);
 
   const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
@@ -170,6 +254,51 @@ export function GeneralSection() {
     }
     return (parts[0]?.[0] ?? 'A').toUpperCase();
   })();
+
+  const avatarUrl = typeof user?.avatar_url === 'string' ? user.avatar_url : null;
+
+  async function handleAvatarFile(file: File) {
+    setAvatarError(null);
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError(`Pick an image under ${AVATAR_MAX_MB} MB.`);
+      return;
+    }
+    const mime = file.type.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+    if (!IMAGE_ATTACHMENT_MIME_TYPES.includes(mime)) {
+      setAvatarError('Pick a PNG, JPEG, GIF, WebP, or HEIC image.');
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const { error } = await settingsService.uploadAvatar(file);
+      if (error) {
+        setAvatarError(error);
+        return;
+      }
+      await refreshProfileConsumers();
+    } catch (err) {
+      setAvatarError(toUserMessage(err, 'Upload failed.'));
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function handleAvatarRemove() {
+    setAvatarError(null);
+    setAvatarBusy(true);
+    try {
+      const { error } = await settingsService.updateProfile({ avatar_url: null });
+      if (error) {
+        setAvatarError(error);
+        return;
+      }
+      await refreshProfileConsumers();
+    } catch (err) {
+      setAvatarError(toUserMessage(err, 'Could not remove the photo.'));
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function handleSave() {
     if (!profilePreferencesReady) return;
@@ -190,7 +319,7 @@ export function GeneralSection() {
       await refreshProfileConsumers();
       setSavedAt(Date.now());
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save profile.');
+      setSaveError(toUserMessage(err, 'Failed to save profile.'));
     } finally {
       setSaving(false);
     }
@@ -204,30 +333,69 @@ export function GeneralSection() {
 
         <div className="flex flex-col gap-5">
           {/* Avatar row */}
-          <div className="flex items-center gap-4">
-            <div
-              aria-hidden="true"
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-xl font-semibold uppercase tracking-wide text-white"
-              style={{
-                background:
-                  'linear-gradient(135deg, var(--chat-accent-primary, #c8892a) 0%, var(--chat-accent-secondary, #21808d) 100%)',
-              }}
-            >
-              {avatarInitials}
-            </div>
-            <div className="flex flex-col gap-1">
+          <div className="flex items-start gap-4">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Your profile photo"
+                className="h-14 w-14 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-xl font-semibold uppercase tracking-wide text-white"
+                style={{
+                  background:
+                    'linear-gradient(135deg, var(--chat-accent-primary, #c8892a) 0%, var(--chat-accent-secondary, #21808d) 100%)',
+                }}
+              >
+                {avatarInitials}
+              </div>
+            )}
+            <div className="flex flex-col items-start gap-2">
               <span className="text-sm font-medium text-foreground">
                 {accountEmail || 'Account email unavailable'}
               </span>
-              {/* No "Upgrade for photo upload" chip here.
-                  It was rendered unconditionally — no tier check — so it
-                  survived every upgrade, including Max 15x, and told a paying
-                  customer on the top plan to upgrade. Worse, upgrading does
-                  not unlock it: avatar upload is not implemented on any tier,
-                  so the link sent people to /pricing to buy a feature that
-                  does not exist. Removed rather than tier-gated, because
-                  gating it would still promise something nothing delivers.
-                  Restore it when there is a real upload path to point at. */}
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept={AVATAR_ACCEPT}
+                className="sr-only"
+                aria-label="Profile photo"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void handleAvatarFile(file);
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarBusy}
+                  className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  {avatarBusy ? 'Working…' : avatarUrl ? 'Change photo' : 'Upload photo'}
+                </button>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => void handleAvatarRemove()}
+                    disabled={avatarBusy}
+                    className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                PNG, JPEG, GIF, WebP, or HEIC. Up to {AVATAR_MAX_MB} MB.
+              </span>
+              {avatarError && (
+                <span role="alert" className="text-xs text-destructive">
+                  {avatarError}
+                </span>
+              )}
             </div>
           </div>
 
@@ -290,6 +458,70 @@ export function GeneralSection() {
               ))}
             </select>
           </FieldRow>
+
+          {/*
+            Response style. Mobile has shipped these for a while; web had
+            nothing, and until 2026-08-21 neither surface's values reached the
+            model. Both now write the same `personalization` namespace that
+            user-identity.ts reads, so the two surfaces cannot diverge.
+          */}
+          <FieldRow label="Response style" htmlFor="general-response-style">
+            <select
+              id="general-response-style"
+              value={personalization.style}
+              onChange={(e) => {
+                markDirty();
+                setPersonalization((current) => ({
+                  ...current,
+                  style: e.target.value as ResponseStyle,
+                }));
+              }}
+              disabled={!profilePreferencesReady || saving}
+              className={SELECT_CLASS}
+            >
+              {RESPONSE_STYLES.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
+          {STYLE_TRAITS.map((trait) => (
+            <FieldRow key={trait.key} label={trait.label} htmlFor={`general-trait-${trait.key}`}>
+              <span className="flex items-center gap-2">
+                <span className="w-16 shrink-0 text-right text-[11px] text-muted-foreground">
+                  {trait.low}
+                </span>
+                <input
+                  id={`general-trait-${trait.key}`}
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={10}
+                  value={personalization[trait.key]}
+                  onChange={(e) => {
+                    markDirty();
+                    const next = storedTrait(Number(e.target.value)) ?? 50;
+                    setPersonalization((current) => ({ ...current, [trait.key]: next }));
+                  }}
+                  disabled={!profilePreferencesReady || saving}
+                  aria-label={trait.label}
+                  aria-valuetext={
+                    personalization[trait.key] <= 30
+                      ? trait.low
+                      : personalization[trait.key] >= 70
+                        ? trait.high
+                        : 'Balanced'
+                  }
+                  className="w-full"
+                />
+                <span className="w-16 shrink-0 text-[11px] text-muted-foreground">
+                  {trait.high}
+                </span>
+              </span>
+            </FieldRow>
+          ))}
 
           {/* Instructions for AGI — full-width textarea (matches reference) */}
           <label className="flex flex-col gap-1.5 pt-1">
@@ -382,6 +614,8 @@ export function GeneralSection() {
           <AccentColorRow />
 
           <HighContrastRow />
+          <MotionRow />
+          <SidebarItemsRow />
 
           <Row
             label="Display Language"
@@ -397,6 +631,7 @@ export function GeneralSection() {
           <ReasoningEffortRow />
 
           {/* Chat text size */}
+          <ChatFontRow />
           <ChatTextSizeRow />
 
           {/* Code block wrapping */}
@@ -404,6 +639,7 @@ export function GeneralSection() {
 
           {/* Read-aloud voice */}
           <ReadAloudVoiceRow />
+          <VoiceSpeedRow />
 
           {/* Keyboard shortcuts */}
           <KeyboardShortcutsRow />
@@ -454,30 +690,72 @@ function DefaultModelRow() {
 
 const EFFORT_LEVELS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
+function effortLabel(level: EffortLevel): string {
+  return level === 'xhigh' ? 'Extra high' : level.charAt(0).toUpperCase() + level.slice(1);
+}
+
+/**
+ * CAP-020. The composer's effort picker has always split levels by entitlement
+ * (ComposerFooter, via splitEffortsByEntitlement) and this one offered all five
+ * unconditionally — the same setting, two pickers, one of them lying. The
+ * server clamps anything above the plan's cap in resolveRequestEffort, so
+ * picking "Max" on a tier without manual model selection silently produced the
+ * default while Settings kept displaying Max.
+ *
+ * Gated levels stay VISIBLE and disabled rather than being hidden: a level that
+ * vanishes reads as unsupported by the product, which is a different and wrong
+ * message from "your plan does not include this".
+ */
 function ReasoningEffortRow() {
   const enabled = useThinkingStore((state) => state.enabled);
   const effort = useThinkingStore((state) => state.effort);
   const setEnabled = useThinkingStore((state) => state.setEnabled);
   const setEffort = useThinkingStore((state) => state.setEffort);
+  const tier = useBillingStore((state) => state.subscription?.tier ?? null);
+  const billingReady = useBillingStore((state) => state.initialized);
+  const selectedModelId = useModelStore((state) => state.selectedModelId);
+
+  // Until billing has loaded we do not know the tier, and guessing would either
+  // gate a paying customer or promise a level the server will clamp. Offer
+  // everything and let the composer's own gate speak once it knows.
+  const gatedEfforts = useMemo(() => {
+    if (!billingReady || tier === null) return new Set<string>();
+    const { gated } = splitEffortsByEntitlement(getModelReasoning(selectedModelId), tier);
+    return new Set<string>(gated);
+  }, [billingReady, selectedModelId, tier]);
 
   return (
-    <Row label="Reasoning effort">
+    <Row
+      label="Reasoning effort"
+      hint={
+        // ANTHROPIC_THINKING_BUDGET runs 4096 at low to 65536 at max, so the
+        // ceiling really is 16x. It is a CEILING, not a spend: the model may
+        // use far less on an easy question, and saying "costs 16x more" would
+        // be a claim the billing data would contradict.
+        gatedEfforts.size > 0
+          ? 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster. Levels above your plan need one with manual model selection.'
+          : 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster.'
+      }
+    >
       <select
         value={enabled ? effort : 'off'}
         onChange={(event) => {
           const next = event.target.value;
           if (next === 'off') setEnabled(false);
-          else setEffort(next as EffortLevel);
+          else if (!gatedEfforts.has(next)) setEffort(next as EffortLevel);
         }}
         aria-label="Reasoning effort"
         className={SELECT_CLASS}
       >
         <option value="off">Off</option>
-        {EFFORT_LEVELS.map((level) => (
-          <option key={level} value={level}>
-            {level === 'xhigh' ? 'Extra high' : level.charAt(0).toUpperCase() + level.slice(1)}
-          </option>
-        ))}
+        {EFFORT_LEVELS.map((level) => {
+          const gated = gatedEfforts.has(level);
+          return (
+            <option key={level} value={level} disabled={gated}>
+              {gated ? `${effortLabel(level)} — not on your plan` : effortLabel(level)}
+            </option>
+          );
+        })}
       </select>
     </Row>
   );
@@ -512,6 +790,81 @@ function AccentColorRow() {
   );
 }
 
+function SidebarItemsRow() {
+  // Coalesced: a persisted store written before this key existed rehydrates
+  // without it, and a crash here would take the whole settings panel down.
+  const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? [];
+  const setNavItemVisible = useSettingsStore((state) => state.setNavItemVisible);
+
+  // Only the destinations the rail itself marks hideable. Chat is excluded at
+  // the source, so it cannot be switched off and strand the user without a way
+  // back to conversations.
+  const hideable = APP_NAV_DESTINATIONS.filter((destination) => destination.hideable);
+
+  return (
+    <Row label="Sidebar items" hint="Hide anything you do not use from the left rail.">
+      <div className="flex flex-wrap justify-end gap-1.5" role="group" aria-label="Sidebar items">
+        {hideable.map((destination) => {
+          const visible = !hiddenNavIds.includes(destination.id);
+          return (
+            <button
+              key={destination.id}
+              type="button"
+              role="switch"
+              aria-checked={visible}
+              aria-label={destination.label}
+              onClick={() => setNavItemVisible(destination.id, !visible)}
+              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                visible
+                  ? 'border-transparent bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {destination.label}
+            </button>
+          );
+        })}
+      </div>
+    </Row>
+  );
+}
+
+function MotionRow() {
+  const motion = useSettingsStore((state) => state.motion);
+  const setMotion = useSettingsStore((state) => state.setMotion);
+
+  const options = [
+    { value: 'system' as const, label: 'System' },
+    { value: 'reduced' as const, label: 'Reduced' },
+  ];
+
+  return (
+    <Row
+      label="Motion"
+      hint="Reduce animation in streaming responses and other interface elements. System follows your device setting."
+    >
+      <div className="flex gap-1" role="group" aria-label="Motion">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={motion === option.value}
+            aria-label={`${option.label} motion`}
+            onClick={() => setMotion(option.value)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              motion === option.value
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </Row>
+  );
+}
+
 function HighContrastRow() {
   const highContrast = useSettingsStore((state) => state.highContrast);
   const setHighContrast = useSettingsStore((state) => state.setHighContrast);
@@ -535,6 +888,42 @@ function HighContrastRow() {
           }`}
         />
       </button>
+    </Row>
+  );
+}
+
+function ChatFontRow() {
+  const chatFont = useSettingsStore((state) => state.chatFont) ?? 'default';
+  const setChatFont = useSettingsStore((state) => state.setChatFont);
+
+  // Only families layout.tsx loads. The control this replaces offered a CDN
+  // font the CSP blocked, so it fell back silently and looked broken.
+  const options = [
+    { value: 'default' as const, label: 'Default' },
+    { value: 'sans' as const, label: 'Sans' },
+    { value: 'serif' as const, label: 'Serif' },
+  ];
+
+  return (
+    <Row label="Chat font" hint="Applies to message text. Code always stays monospace.">
+      <div className="flex gap-1" role="group" aria-label="Chat font">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={chatFont === option.value}
+            aria-label={`${option.label} chat font`}
+            onClick={() => setChatFont(option.value)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              chatFont === option.value
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </Row>
   );
 }
@@ -603,6 +992,46 @@ function KeyboardShortcutsRow() {
         onOpenChange={setOpen}
         shortcuts={KEYBOARD_SHORTCUT_DOCS}
       />
+    </Row>
+  );
+}
+
+function VoiceSpeedRow() {
+  const { isSupported, voices } = useTTS();
+  const voiceSpeed = useSettingsStore((state) => state.voiceSpeed) ?? 'normal';
+  const setVoiceSpeed = useSettingsStore((state) => state.setVoiceSpeed);
+
+  // Hidden rather than disabled when the browser exposes no voices: the row
+  // above already explains the absence, and a second dead control repeating it
+  // adds noise without adding information.
+  if (!isSupported || voices.length === 0) return null;
+
+  const options = [
+    { value: 'slow' as const, label: 'Slow' },
+    { value: 'normal' as const, label: 'Normal' },
+    { value: 'fast' as const, label: 'Fast' },
+  ];
+
+  return (
+    <Row label="Read-aloud speed">
+      <div className="flex gap-1" role="group" aria-label="Read-aloud speed">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={voiceSpeed === option.value}
+            aria-label={`${option.label} read-aloud speed`}
+            onClick={() => setVoiceSpeed(option.value)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              voiceSpeed === option.value
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </Row>
   );
 }

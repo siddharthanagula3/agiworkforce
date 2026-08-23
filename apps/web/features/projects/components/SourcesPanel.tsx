@@ -11,6 +11,7 @@ import {
   removeProjectKnowledgeFile,
   uploadProjectKnowledgeFile,
 } from '../services/project-knowledge-upload';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -87,7 +88,7 @@ export function SourcesPanel({ projectId }: Props) {
     } catch (err) {
       setUploadState({
         status: 'error',
-        message: err instanceof Error ? err.message : 'Upload failed.',
+        message: toUserMessage(err, 'Upload failed.'),
       });
       throw err;
     }

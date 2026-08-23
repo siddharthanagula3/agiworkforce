@@ -525,6 +525,13 @@ export interface ProjectMember {
   addedAt: string;
 }
 
+/**
+ * How many active knowledge files one project may hold. The upload route
+ * refuses past this, and project-context-service queries with the same limit,
+ * so the two cannot drift into a state where a file is stored but never read.
+ */
+export const MAX_PROJECT_KNOWLEDGE_FILES = 20;
+
 export interface ProjectKnowledgeFile {
   id: string;
   projectId: string;

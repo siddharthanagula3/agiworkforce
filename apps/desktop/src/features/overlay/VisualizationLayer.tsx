@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from '../../lib/tauri-mock';
 import { createPortal } from 'react-dom';
 import { ActionOverlay, type ClickEffect, type TypingEffect } from './ActionOverlay';
 import { ScreenshotOverlay, type RegionEffect } from './ScreenshotOverlay';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 type OverlayAnimation =
   | { type: 'click'; x: number; y: number; button: string }
@@ -30,7 +31,25 @@ export function VisualizationLayer() {
   const regionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  const showOverlay = useSettingsStore(
+    (state) => state.executionPreferences.showComputerUseOverlay,
+  );
+
+  // The overlay lives in its own webview, so it only sees a preference change
+  // another window persisted when localStorage tells it to re-read.
   useEffect(() => {
+    const rehydrate = () => {
+      void useSettingsStore.persist.rehydrate();
+    };
+    window.addEventListener('storage', rehydrate);
+    return () => {
+      window.removeEventListener('storage', rehydrate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showOverlay) return;
+
     let active = true;
     let unlisten: UnlistenFn | undefined;
 
@@ -112,7 +131,11 @@ export function VisualizationLayer() {
         void unlisten();
       }
     };
-  }, []);
+  }, [showOverlay]);
+
+  if (!showOverlay) {
+    return null;
+  }
 
   if (typeof document === 'undefined' || !document.body) {
     return null;

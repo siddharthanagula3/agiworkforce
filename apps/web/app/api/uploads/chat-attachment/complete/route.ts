@@ -12,6 +12,8 @@ import {
   getBoundedPrivateObject,
   isPrivateObjectStorageConfigured,
   StoredObjectTooLargeError,
+  copyPrivateObjectIfUnchanged,
+  type BoundedStoredObject,
 } from '@/lib/server/object-storage';
 import { scanUploadBytes } from '@/lib/security/upload-scan';
 import { matchDenylistedUpload, recordModerationEvent } from '@/lib/moderation';
@@ -86,7 +88,10 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const existing = await getMediaAssetByStoragePathname(userId, storageKey, organizationId);
+  const scannedKey = `${storageKey}.scanned`;
+  const existing =
+    (await getMediaAssetByStoragePathname(userId, scannedKey, organizationId)) ??
+    (await getMediaAssetByStoragePathname(userId, storageKey, organizationId));
   if (existing) {
     return NextResponse.json({
       attachment: {
@@ -100,7 +105,7 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  let object: { data: Buffer; contentType: string | undefined } | null;
+  let object: BoundedStoredObject | null;
   try {
     object = await getBoundedPrivateObject(storageKey, byteCount);
   } catch (error) {
@@ -151,14 +156,35 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // The presigned PUT for `storageKey` stays valid for minutes after this check, so the
+  // scanned bytes are sealed under a key no presign covers before anything can serve them.
+  const sealed = object.etag
+    ? await copyPrivateObjectIfUnchanged({
+        sourceKey: storageKey,
+        destinationKey: scannedKey,
+        etag: object.etag,
+      })
+    : false;
+  if (!sealed) {
+    logger.warn(
+      { userId, storageKey, hadEtag: Boolean(object.etag) },
+      '[uploads] rejected an attachment whose bytes changed after inspection',
+    );
+    await purgeRejectedUpload(userId, storageKey);
+    throw createError.validation(
+      'The uploaded file changed during its safety check. Upload it again.',
+    );
+  }
+  await purgeRejectedUpload(userId, storageKey);
+
   const id = await insertMediaAsset({
     userId,
     organizationId,
     kind: isChatImageMimeType(mimeType) ? 'image' : 'file',
     mimeType,
     byteSize: object.data.byteLength,
-    storageUrl: storageKey,
-    storagePathname: storageKey,
+    storageUrl: scannedKey,
+    storagePathname: scannedKey,
     sourceSurface,
     metadata: {
       filename: fileName,

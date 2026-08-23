@@ -47,9 +47,16 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-import { POST } from '../route';
+import { GET, POST } from '../route';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
+
+function listRequest(organizationId: string) {
+  return new Request(
+    `http://localhost:3000/api/settings/team?organizationId=${encodeURIComponent(organizationId)}`,
+    { method: 'GET' },
+  ) as never;
+}
 
 function request(body: unknown) {
   return new Request('http://localhost:3000/api/settings/team', {
@@ -87,9 +94,7 @@ describe('POST /api/settings/team authorization invariants', () => {
   });
 
   it('refuses a caller who is not a member of the named organization', async () => {
-    mockQuery
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+    mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
     const response = await POST(
       request({ organizationId: ORG_A, email: 'someone@example.com', role: 'member' }),
@@ -159,5 +164,18 @@ describe('POST /api/settings/team authorization invariants', () => {
     expect(
       sqls.some((sql) => sql.includes('count(*)') && sql.includes('organization_members')),
     ).toBe(false);
+  });
+});
+
+describe('GET /api/settings/team authorization invariants', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('refuses a non-UUID organizationId before querying', async () => {
+    const response = await GET(listRequest("' or '1'='1"));
+
+    expect(response.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 });

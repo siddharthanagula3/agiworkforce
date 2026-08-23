@@ -214,13 +214,34 @@ describe('CRIT-008 settings modal entry points', () => {
     expect(importers).toEqual([]);
   });
 
-  it('does not navigate for a settings section that has no route', () => {
-    expect(routeExists('/settings/help')).toBe(false);
-
+  it('does not navigate between sections from inside the modal', () => {
+    // This used to assert that /settings/help had no route, using that absence
+    // as proof the modal could not navigate there. The absence was incidental:
+    // every section now resolves through app/settings/[section], which is what
+    // makes a shared or bookmarked settings link work.
+    //
+    // The invariant CRIT-008 actually protects is that section switching inside
+    // the modal does not go through the router — those routes redirect back to
+    // /chat, so navigating to one from inside the modal is the loop. Asserted
+    // directly now, which is stronger than the old proxy.
     const modal = readFileSync(
       join(WEB_DIR, 'features', 'settings', 'components', 'WebSettingsModal.tsx'),
       'utf8',
     );
     expect(modal).not.toMatch(/\buseRouter\b/u);
+
+    const link = readFileSync(
+      join(WEB_DIR, 'features', 'settings', 'components', 'SettingsSectionLink.tsx'),
+      'utf8',
+    );
+    // Inside the modal the navigation context is present and the link is a
+    // button calling onNavigate; only outside it does it fall back to <Link>.
+    expect(link).toContain('SettingsSectionNavigationContext');
+    expect(link).toMatch(/if \(!navigation\)/u);
+    expect(link).toContain('navigation.onNavigate(section)');
+  });
+
+  it('resolves every settings section, so a shared link never 404s', () => {
+    expect(routeExists('/settings/[section]')).toBe(true);
   });
 });

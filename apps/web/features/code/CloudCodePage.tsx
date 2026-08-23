@@ -409,7 +409,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                 <strong>Managed Code is not enabled on this deployment.</strong>
                 <br />
                 Existing session history remains readable. Use the desktop app for local code, or
-                ask an operator to enable managed E2B execution.
+                ask an operator to enable managed sandbox execution.
               </div>
             </div>
           )}
@@ -676,8 +676,8 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                     <>
                       <div className={styles['terminal']} aria-live="polite">
                         <div className={styles['terminalIntro']}>
-                          Managed E2B environment · commands run remotely · session pauses after
-                          every command
+                          Managed sandbox · commands run remotely · session pauses after every
+                          command
                         </div>
                         {entries.map((entry) => (
                           <div key={entry.id}>

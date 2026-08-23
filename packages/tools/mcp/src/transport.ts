@@ -117,6 +117,15 @@ function assertFollowableUrl(url: URL): void {
   }
 }
 
+const CREDENTIAL_HEADERS = ['authorization', 'proxy-authorization', 'cookie'];
+
+function withoutCredentialHeaders(init: RequestInit | undefined): RequestInit | undefined {
+  if (!init?.headers) return init;
+  const headers = new Headers(init.headers);
+  for (const name of CREDENTIAL_HEADERS) headers.delete(name);
+  return { ...init, headers };
+}
+
 export function createEgressGuardedFetch(policy: McpEgressPolicy = {}): McpFetch {
   const baseFetch: McpFetch = policy.fetch ?? ((input, init) => fetch(input, init));
   const maxRedirects = policy.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
@@ -125,12 +134,13 @@ export function createEgressGuardedFetch(policy: McpEgressPolicy = {}): McpFetch
   return async (input, init) => {
     let current = new URL(typeof input === 'string' ? input : input.toString());
     const pinnedOrigin = current.origin;
+    let hopInit = init;
 
     for (let hop = 0; ; hop++) {
       assertFollowableUrl(current);
       if (assertAllowedUrl) await assertAllowedUrl(current.href);
 
-      const response = await baseFetch(current.href, { ...init, redirect: 'manual' });
+      const response = await baseFetch(current.href, { ...hopInit, redirect: 'manual' });
       if (!REDIRECT_STATUSES.has(response.status)) return response;
 
       const location = response.headers.get('location');
@@ -150,10 +160,18 @@ export function createEgressGuardedFetch(policy: McpEgressPolicy = {}): McpFetch
       } catch {
         throw new MCPTransportError(`MCP server redirected to a malformed URL: ${location}`);
       }
-      if (!assertAllowedUrl && next.origin !== pinnedOrigin) {
+      if (current.protocol === 'https:' && next.protocol !== 'https:') {
         throw new MCPTransportError(
-          `MCP server redirected to ${next.origin}, which no egress policy was supplied to re-validate.`,
+          `MCP server redirected from https to ${next.protocol}; refusing the downgrade.`,
         );
+      }
+      if (next.origin !== pinnedOrigin) {
+        if (!assertAllowedUrl) {
+          throw new MCPTransportError(
+            `MCP server redirected to ${next.origin}, which no egress policy was supplied to re-validate.`,
+          );
+        }
+        hopInit = withoutCredentialHeaders(hopInit);
       }
       current = next;
     }

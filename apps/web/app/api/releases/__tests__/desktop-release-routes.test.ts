@@ -1,16 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { fetchMock, getOptionalEnvMock, withRateLimitMock } = vi.hoisted(() => ({
-  fetchMock: vi.fn(),
-  getOptionalEnvMock: vi.fn(),
-  withRateLimitMock: vi.fn(),
-}));
+const { fetchMock, getOptionalEnvMock, withRateLimitMock, neonQueryMock, neonExecuteMock } =
+  vi.hoisted(() => ({
+    fetchMock: vi.fn(),
+    getOptionalEnvMock: vi.fn(),
+    withRateLimitMock: vi.fn(),
+    neonQueryMock: vi.fn(),
+    neonExecuteMock: vi.fn(),
+  }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: withRateLimitMock }));
 vi.mock('@shared/utils/env', () => ({ getOptionalEnv: getOptionalEnvMock }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({
+    query: (...args: unknown[]) => neonQueryMock(...args),
+    execute: (...args: unknown[]) => neonExecuteMock(...args),
+  }),
 }));
 
 vi.stubGlobal('fetch', fetchMock);
@@ -108,8 +117,19 @@ function makeRequest(url: string): never {
   return new Request(url, { method: 'GET' }) as never;
 }
 
+const UNTRUSTED_ASSET_URL = 'https://evil.example.com/agi.AppImage';
+
+function useDatabaseReleaseRow(row: Record<string, unknown>) {
+  getOptionalEnvMock.mockImplementation((name: string) =>
+    name === 'DATABASE_URL' ? 'postgres://releases.test/db' : undefined,
+  );
+  neonQueryMock.mockResolvedValue([row]);
+}
+
 beforeEach(() => {
   withRateLimitMock.mockResolvedValue(null);
+  neonQueryMock.mockResolvedValue([]);
+  neonExecuteMock.mockResolvedValue(undefined);
   getOptionalEnvMock.mockImplementation((name: string) => {
     if (name === 'DESKTOP_GITHUB_OWNER') return 'siddharthanagula3';
     if (name === 'DESKTOP_GITHUB_REPO') return 'agiworkforce';
@@ -326,6 +346,52 @@ describe('desktop release routes', () => {
 
     expect(response.status).toBe(503);
     expect(fetchMock).not.toHaveBeenCalledWith(untrustedUrl, expect.any(Object));
+  });
+
+  it('refuses an update manifest whose release row points at an untrusted asset host', async () => {
+    useDatabaseReleaseRow({
+      id: 'release-1',
+      version: '1.10.0',
+      platform: 'linux-x86_64',
+      download_url: UNTRUSTED_ASSET_URL,
+      signature: 'tauri-signature',
+      notes: null,
+      pub_date: '2026-07-15T00:00:00Z',
+      file_size_bytes: 1024,
+      is_critical: false,
+    });
+
+    const response = await getLatestRelease(
+      makeRequest('https://agi.example/api/releases/latest/linux-x86_64'),
+      { params: Promise.resolve({ platform: 'linux-x86_64' }) },
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: { code: 'NOT_FOUND' } });
+    expect(neonExecuteMock).not.toHaveBeenCalled();
+  });
+
+  it('omits the check-route download_url when the release row points at an untrusted asset host', async () => {
+    useDatabaseReleaseRow({
+      version: '1.10.0',
+      download_url: UNTRUSTED_ASSET_URL,
+      notes: 'Notes for v-desktop-1.10.0',
+      pub_date: '2026-07-15T00:00:00Z',
+      file_size_bytes: 1024,
+      is_critical: false,
+    });
+
+    const response = await checkRelease(
+      makeRequest('https://agi.example/api/releases/check?version=1.9.0&platform=linux-x86_64'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      update_available: true,
+      latest_version: '1.10.0',
+      download_url: null,
+      release_notes: 'Notes for v-desktop-1.10.0',
+    });
   });
 
   it('finds the stable desktop release when other product releases fill an earlier page', async () => {

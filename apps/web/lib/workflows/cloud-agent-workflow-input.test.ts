@@ -6,6 +6,7 @@ import {
   buildCloudAgentWorkflowInput,
   parseCloudAgentWorkflowInput,
 } from './cloud-agent-workflow-input';
+import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 
@@ -110,6 +111,30 @@ describe('cloud agent workflow input', () => {
       estimatedCostCents: 12,
     });
     expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
+  });
+
+  it('carries the saved connector verdicts so the durable loop enforces them too', () => {
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed: makeProcessed(),
+      mcpTools: tools,
+      approvalMode: 'manual',
+      connectorPermissions: connectorToolPermissionsFromEntries([
+        { connectorId: 'github', toolName: 'delete_repository', level: 'deny' },
+        { connectorId: 'github', toolName: 'get_pull_request', level: 'allow' },
+      ]),
+    });
+
+    expect(input.connectorPermissions).toEqual([
+      { connectorId: 'github', toolName: 'delete_repository', level: 'deny' },
+      { connectorId: 'github', toolName: 'get_pull_request', level: 'allow' },
+    ]);
+    const restored = connectorToolPermissionsFromEntries(
+      parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input))).connectorPermissions ?? [],
+    );
+    expect(restored.isConnectorToolDenied('github', 'delete_repository')).toBe(true);
+    expect(restored.levelForConnectorTool('github', 'get_pull_request')).toBe('allow');
   });
 
   it('rejects a workflow launch without a managed usage reservation', () => {

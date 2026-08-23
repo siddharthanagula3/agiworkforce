@@ -23,6 +23,7 @@ import {
   formatCatalogPrice,
   type SelectablePaidPlan,
 } from '../lib/plan-display';
+import { toUserMessage } from '@/lib/user-error-message';
 
 export interface UpgradeConfirmRequest {
   plan: SelectablePaidPlan;
@@ -110,7 +111,7 @@ export function UpgradeConfirmDialog({
               setError('Could not verify the full checkout price. Please refresh and try again.');
             }
           } else {
-            setError(e instanceof Error ? e.message : 'Could not calculate the upgrade cost.');
+            setError(toUserMessage(e, 'Could not calculate the upgrade cost.'));
           }
         }
       })
@@ -152,7 +153,7 @@ export function UpgradeConfirmDialog({
       });
       onConfirmed();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upgrade failed. Your current plan is unchanged.');
+      setError(toUserMessage(e, 'Upgrade failed. Your current plan is unchanged.'));
       setConfirming(false);
     }
   }

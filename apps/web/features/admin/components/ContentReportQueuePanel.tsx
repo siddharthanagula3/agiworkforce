@@ -11,6 +11,7 @@ import {
   type AdminContentReportCounts,
   type ContentReportStatus,
 } from '../services/content-report-queue-client';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const OPEN_STATUSES: readonly ContentReportStatus[] = ['received', 'in_review'];
 const RESOLVED_STATUSES: readonly ContentReportStatus[] = ['actioned', 'dismissed'];
@@ -50,7 +51,7 @@ export default function ContentReportQueuePanel() {
       setReports(data.reports);
       setCounts(data.counts);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to load content reports');
+      setLoadError(toUserMessage(error, 'Unable to load content reports'));
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,7 @@ export default function ContentReportQueuePanel() {
       setNotes((current) => ({ ...current, [report.id]: '' }));
       await loadQueue();
     } catch (error) {
-      setActionResult(error instanceof Error ? error.message : 'Review failed');
+      setActionResult(toUserMessage(error, 'Review failed'));
     } finally {
       setPendingId(null);
     }

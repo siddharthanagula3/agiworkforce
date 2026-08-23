@@ -7,8 +7,12 @@
  */
 
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
+import { EventEmitter } from 'events';
+import * as https from 'https';
+import * as vscode from 'vscode';
 import {
   AgiWorkforceApiError,
+  streamChatCompletion,
   AgiWorkforcePaywallError,
   buildCloudUtilityChatCompletionRequest,
   getAccountAuthState,
@@ -25,6 +29,8 @@ import {
 } from '../utils/api';
 import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
+
+vi.mock('https', () => ({ request: vi.fn() }));
 import { Config } from '../platform/config';
 
 afterEach(() => {
@@ -329,67 +335,135 @@ describe('getApiKey / setApiKey / clearApiKey round-trip', () => {
   });
 });
 
-describe('withRetry pattern', () => {
-  async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 10): Promise<T> {
-    try {
-      return await fn();
-    } catch (err) {
-      if (retries <= 0) {
-        throw err;
-      }
-      if (err instanceof Error && err.message.startsWith('CLIENT:')) {
-        throw err;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-      return withRetry(fn, retries - 1, delayMs * 2);
-    }
+describe('cloud request retry policy', () => {
+  const token = {
+    isCancellationRequested: false,
+    onCancellationRequested: () => ({ dispose: () => undefined }),
+  } as unknown as vscode.CancellationToken;
+
+  function sseBody(text: string): string {
+    return `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
   }
 
-  it('returns immediately on success', async () => {
-    const fn = vi.fn().mockResolvedValue('ok');
-    const result = await withRetry(fn);
-    expect(result).toBe('ok');
-    expect(fn).toHaveBeenCalledTimes(1);
+  function queueResponses(...responses: Array<{ status: number; body: string }>): void {
+    vi.mocked(https.request).mockImplementation(((
+      _options: unknown,
+      callback: (res: EventEmitter & { statusCode?: number }) => void,
+    ) => {
+      const next = responses.shift() ?? { status: 500, body: 'exhausted' };
+      const res = Object.assign(new EventEmitter(), { statusCode: next.status });
+      queueMicrotask(() => {
+        callback(res);
+        res.emit('data', Buffer.from(next.body, 'utf8'));
+        res.emit('end');
+      });
+      return Object.assign(new EventEmitter(), {
+        write: () => true,
+        end: () => undefined,
+        destroy: () => undefined,
+      });
+    }) as never);
+  }
+
+  async function askCloud(): Promise<string> {
+    const context = new ExtensionContext();
+    await setApiKey(context.secrets, 'agi-test-key');
+    const tokens: string[] = [];
+    const settled = streamChatCompletion(
+      context.secrets,
+      [{ role: 'user', content: 'hi' }],
+      { onToken: (t) => tokens.push(t), onDone: () => undefined },
+      token,
+    ).then(
+      () => ({ text: tokens.join('') }),
+      (error: unknown) => ({ error }),
+    );
+    await vi.advanceTimersByTimeAsync(10_000);
+    const outcome = await settled;
+    if ('error' in outcome) throw outcome.error;
+    return outcome.text;
+  }
+
+  beforeEach(() => {
+    vi.mocked(https.request).mockReset();
+    vi.useFakeTimers();
   });
 
-  it('retries on failure and eventually succeeds', async () => {
-    const fn = vi.fn().mockRejectedValueOnce(new Error('SERVER: 500')).mockResolvedValue('ok');
-
-    const result = await withRetry(fn, 2, 1);
-    expect(result).toBe('ok');
-    expect(fn).toHaveBeenCalledTimes(2);
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('throws after exhausting retries', async () => {
-    const fn = vi.fn().mockRejectedValue(new Error('SERVER: 500'));
-    await expect(withRetry(fn, 2, 1)).rejects.toThrow('SERVER: 500');
-    expect(fn).toHaveBeenCalledTimes(3);
+  it('retries a 500 and returns the answer from the retry', async () => {
+    queueResponses({ status: 500, body: 'upstream boom' }, { status: 200, body: sseBody('Hello') });
+
+    await expect(askCloud()).resolves.toBe('Hello');
+    expect(https.request).toHaveBeenCalledTimes(2);
   });
 
-  it('does not retry on client errors', async () => {
-    const fn = vi.fn().mockRejectedValue(new Error('CLIENT: 400'));
-    await expect(withRetry(fn, 2, 1)).rejects.toThrow('CLIENT: 400');
-    expect(fn).toHaveBeenCalledTimes(1);
+  it('gives up after the bounded number of attempts', async () => {
+    queueResponses(
+      { status: 500, body: 'boom' },
+      { status: 502, body: 'boom' },
+      { status: 503, body: 'boom' },
+      { status: 200, body: sseBody('never reached') },
+    );
+
+    await expect(askCloud()).rejects.toBeInstanceOf(AgiWorkforceApiError);
+    expect(https.request).toHaveBeenCalledTimes(3);
   });
-});
 
-describe('ChatMessage type contract', () => {
-  it('accepts valid message roles', () => {
-    type ChatMessage = {
-      role: 'system' | 'user' | 'assistant';
-      content: string;
-    };
+  it('never retries a client error — a bad request is the caller\'s fault', async () => {
+    queueResponses({ status: 400, body: 'bad request' }, { status: 200, body: sseBody('unused') });
 
-    const messages: ChatMessage[] = [
-      { role: 'system', content: 'You are an AI assistant.' },
-      { role: 'user', content: 'Hello' },
-      { role: 'assistant', content: 'Hi there!' },
-    ];
+    await expect(askCloud()).rejects.toBeInstanceOf(AgiWorkforceApiError);
+    expect(https.request).toHaveBeenCalledTimes(1);
+  });
 
-    expect(messages).toHaveLength(3);
-    expect(messages[0].role).toBe('system');
-    expect(messages[1].role).toBe('user');
-    expect(messages[2].role).toBe('assistant');
+  it('never retries a rejected credential', async () => {
+    queueResponses({ status: 401, body: 'nope' }, { status: 200, body: sseBody('unused') });
+
+    await expect(askCloud()).rejects.toMatchObject({ statusCode: 401 });
+    expect(https.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads only SSE data lines, ignoring comments, events and the DONE sentinel', async () => {
+    queueResponses({
+      status: 200,
+      body:
+        ': keep-alive comment\n' +
+        'event: ping\n' +
+        '\n' +
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hel' } }] })}\n` +
+        'retry: 3000\n' +
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'lo' } }] })}\n` +
+        'data: not-json\n' +
+        'data: [DONE]\n\n',
+    });
+
+    await expect(askCloud()).resolves.toBe('Hello');
+  });
+
+  it('backs off between attempts instead of hammering the endpoint', async () => {
+    queueResponses({ status: 500, body: 'boom' }, { status: 200, body: sseBody('ok') });
+    const context = new ExtensionContext();
+    await setApiKey(context.secrets, 'agi-test-key');
+
+    const pending = streamChatCompletion(
+      context.secrets,
+      [{ role: 'user', content: 'hi' }],
+      { onToken: () => undefined, onDone: () => undefined },
+      token,
+    );
+    const settled = vi.fn();
+    void pending.then(settled, settled);
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(https.request).toHaveBeenCalledTimes(1);
+    expect(settled).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await pending;
+    expect(https.request).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -513,33 +587,6 @@ describe('paywall 429 JSON parsing — pattern test', () => {
       reason: 'x',
     });
     expect(parsePaywallBody(429, body)).toBeNull();
-  });
-});
-
-describe('SSE parsing pattern', () => {
-  it('parses a valid SSE data line', () => {
-    const line =
-      'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"fixture-stream-model","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}';
-    const trimmed = line.trim();
-    expect(trimmed.startsWith('data:')).toBe(true);
-
-    const data = trimmed.slice('data:'.length).trim();
-    expect(data).not.toBe('[DONE]');
-
-    const parsed = JSON.parse(data);
-    expect(parsed.choices[0].delta.content).toBe('Hello');
-  });
-
-  it('recognizes the [DONE] sentinel', () => {
-    const line = 'data: [DONE]';
-    const data = line.slice('data:'.length).trim();
-    expect(data).toBe('[DONE]');
-  });
-
-  it('ignores non-data SSE lines', () => {
-    const lines = ['event: message', ': comment', '', 'data: {"id":"1"}'];
-    const dataLines = lines.filter((l) => l.trim().startsWith('data:'));
-    expect(dataLines).toHaveLength(1);
   });
 });
 

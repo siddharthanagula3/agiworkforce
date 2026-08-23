@@ -1,3 +1,5 @@
+import { MAX_PROJECT_KNOWLEDGE_FILES } from '@agiworkforce/types';
+
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 
 export interface ProjectContextDb {
@@ -19,7 +21,7 @@ export interface ProjectContext {
 
 const MAX_INSTRUCTIONS_CHARS = 8_000;
 const MAX_DESCRIPTION_CHARS = 1_000;
-export const MAX_KNOWLEDGE_FILES = 20;
+export const MAX_KNOWLEDGE_FILES = MAX_PROJECT_KNOWLEDGE_FILES;
 const MAX_FILE_SUMMARY_CHARS = 300;
 const MAX_FILE_CONTENT_CHARS = 16_000;
 const MAX_TOTAL_FILE_CONTENT_CHARS = 48_000;

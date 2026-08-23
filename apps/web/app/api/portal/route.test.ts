@@ -51,11 +51,23 @@ vi.mock('stripe', () => ({
 
 import { POST } from './route';
 
-function request() {
+function request(body?: Record<string, unknown>) {
   return new NextRequest('https://agiworkforce.com/api/portal', {
     method: 'POST',
-    headers: { Origin: 'https://agiworkforce.com' },
+    headers: { Origin: 'https://agiworkforce.com', 'content-type': 'application/json' },
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
+}
+
+function activeSubscription() {
+  return [
+    {
+      plan_tier: 'pro',
+      stripe_customer_id: 'cus_123',
+      stripe_subscription_id: 'sub_123',
+      status: 'active',
+    },
+  ];
 }
 
 describe('POST /api/portal', () => {
@@ -175,5 +187,73 @@ describe('POST /api/portal', () => {
         return_url: 'https://agiworkforce.com/pricing',
       });
     });
+  });
+});
+
+// The portal configuration is a Stripe Dashboard setting the API cannot read,
+// so attempting the deep-link and reading the rejection is the only way to
+// learn cancellation is switched off. That must become a route the user can
+// still take, not a generic failure.
+describe('cancel deep-link', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.execute.mockResolvedValue(1);
+    mocks.createPortalSession.mockResolvedValue({
+      id: 'bps_1',
+      url: 'https://billing.stripe.com/session/test',
+    });
+  });
+
+  it('asks Stripe for the cancellation flow scoped to the stored subscription', async () => {
+    mocks.query.mockResolvedValueOnce(activeSubscription());
+
+    const response = await POST(request({ flow: 'cancel' }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.createPortalSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        flow_data: {
+          type: 'subscription_cancel',
+          subscription_cancel: { subscription: 'sub_123' },
+        },
+      }),
+    );
+  });
+
+  it('opens the ordinary portal when no flow was asked for', async () => {
+    mocks.query.mockResolvedValueOnce(activeSubscription());
+
+    await POST(request());
+
+    expect(mocks.createPortalSession).toHaveBeenCalledWith(
+      expect.not.objectContaining({ flow_data: expect.anything() }),
+    );
+  });
+
+  it('names a route that still works when the portal has cancellation disabled', async () => {
+    mocks.query.mockResolvedValueOnce(activeSubscription());
+    mocks.createPortalSession.mockRejectedValueOnce(
+      Object.assign(new Error('flow_data is not enabled on this configuration'), {
+        type: 'StripeInvalidRequestError',
+      }),
+    );
+
+    const response = await POST(request({ flow: 'cancel' }));
+
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error: string; message: string };
+    expect(body.error).toBe('cancellation_unavailable');
+    expect(body.message).toMatch(/Manage billing|contact support/);
+  });
+
+  it('does not report an unrelated Stripe outage as a disabled portal', async () => {
+    mocks.query.mockResolvedValueOnce(activeSubscription());
+    mocks.createPortalSession.mockRejectedValueOnce(
+      Object.assign(new Error('Stripe is down'), { type: 'StripeAPIError' }),
+    );
+
+    const response = await POST(request({ flow: 'cancel' }));
+
+    expect(response.status).not.toBe(409);
   });
 });

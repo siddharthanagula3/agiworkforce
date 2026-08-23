@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 
@@ -91,6 +90,30 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
       const result = await isBearerTokenValid('Bearer x');
       expect(result).toBe(false);
       expect(mockVerifyToken).not.toHaveBeenCalled();
+    });
+
+    it('passes CLERK_AUTHORIZED_PARTIES to verifyToken so a foreign-origin token is rejected', async () => {
+      vi.stubEnv(
+        'CLERK_AUTHORIZED_PARTIES',
+        'https://agiworkforce.com, https://app.agiworkforce.com',
+      );
+      try {
+        mockVerifyToken.mockResolvedValue({ sub: 'user_1' });
+
+        const result = await isBearerTokenValid(
+          'Bearer clerk-session-token-abcdefghijklmnopqrstuvwxyz',
+        );
+
+        expect(result).toBe(true);
+        expect(mockVerifyToken).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            authorizedParties: ['https://agiworkforce.com', 'https://app.agiworkforce.com'],
+          }),
+        );
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
   });
 

@@ -23,6 +23,7 @@ import { useUnifiedAuthStore } from './stores/auth';
 import { isElectronHost, isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
+import { useQuickQueryDoubleTap } from './hooks/useQuickQueryDoubleTap';
 import { useDesktopCloudResearchCapability } from './hooks/useDesktopCloudResearchCapability';
 import { guardedFetch } from './lib/egressGuard';
 import { subscribeToLocalModelCatalogChanges } from './lib/localModelCatalog';
@@ -106,6 +107,7 @@ import {
   toBackendAccelerator,
   type RendererShortcutAction,
 } from './constants/shortcuts';
+import { undoLastChange } from './features/undo/undoLastChange';
 import { useShortcutStore } from './stores/shortcutStore';
 import { useAppModeStore, selectPrivacyMode } from './stores/appModeStore';
 import {
@@ -980,25 +982,7 @@ const DesktopShell = () => {
     };
   }, []);
 
-  const lastAltKeyupAtRef = useRef<number>(0);
-  useEffect(() => {
-    const DOUBLE_TAP_THRESHOLD_MS = 300;
-
-    const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key !== 'Alt') return;
-      const now = Date.now();
-      const elapsed = now - lastAltKeyupAtRef.current;
-      lastAltKeyupAtRef.current = now;
-      if (elapsed > 0 && elapsed < DOUBLE_TAP_THRESHOLD_MS) {
-        setQuickQueryOpen((prev) => !prev);
-      }
-    };
-
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
+  useQuickQueryDoubleTap(() => setQuickQueryOpen((prev) => !prev));
 
   useEffect(() => {
     const handleChatAction = (e: Event) => {
@@ -1303,6 +1287,8 @@ const DesktopShell = () => {
             case 'open_chat':
               setCommandPaletteOpen(true);
               break;
+            // The Rust handler emits `global-hotkey-triggered` as well, and
+            // that listener opens the overlay. Acting here too fires it twice.
             case 'quick_query':
               break;
             case 'voice_input':
@@ -1342,6 +1328,7 @@ const DesktopShell = () => {
       'app.search': () => useSearchModal.getState().toggle(),
       'app.commandPalette': () => setCommandPaletteOpen((open) => !open),
       'model.select': () => openSettingsDialog(isCloudMode ? 'capabilities' : 'models-keys'),
+      'edit.undoLast': () => void undoLastChange(),
       'window.toggleSidebar': () => {
         const ui = useSidecarStore.getState();
         ui.setSidebarCollapsed(!ui.sidebarCollapsed);

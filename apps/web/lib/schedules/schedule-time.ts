@@ -2,6 +2,7 @@ const MIN_INTERVAL_MS = 60_000;
 const MAX_INTERVAL_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_CRON_LENGTH = 256;
 const SEARCH_YEARS = 6;
+const MAX_SEARCH_STEPS = 50_000;
 
 type CronFieldName = 'minute' | 'hour' | 'day of month' | 'month' | 'day of week';
 
@@ -235,9 +236,19 @@ function nextCronOccurrence(expression: string, timezone: string, after: Date): 
   const limit = new Date(candidate);
   limit.setUTCFullYear(limit.getUTCFullYear() + SEARCH_YEARS);
 
+  let steps = 0;
   while (candidate <= limit) {
+    if (++steps > MAX_SEARCH_STEPS) break;
     const parts = localParts(formatter, candidate);
-    if (!dateMatches(cron, parts) || !cron.hour.values.has(parts.hour)) {
+    if (!dateMatches(cron, parts)) {
+      // Jump toward 22:00 local (never past it) so a DST shift inside the jump cannot
+      // overshoot into the next day's first hour; hourly stepping finishes the day.
+      const toLateEvening = (22 - parts.hour) * 60 - parts.minute;
+      const delta = Math.max(60 - parts.minute || 60, toLateEvening);
+      candidate = new Date(candidate.getTime() + delta * 60_000);
+      continue;
+    }
+    if (!cron.hour.values.has(parts.hour)) {
       const delta = 60 - parts.minute || 60;
       candidate = new Date(candidate.getTime() + delta * 60_000);
       continue;

@@ -77,7 +77,7 @@
   "seatTotal_one": "{{count}} postazione · {{total}}/mese",
   "seatTotal_other": "{{count}} postazioni · {{total}}/mese",
   "perSeatPrice": "{{price}}/postazione/mese",
-  "perSeatPriceAnnual": "{{price}}/postazione/anno",
+  "perSeatPriceAnnual": "{{price}}/postazione/mese",
   "seatTotalAnnual_one": "{{count}} postazione · {{total}}/anno",
   "seatTotalAnnual_other": "{{count}} postazioni · {{total}}/anno",
   "seatCadenceMonthly_one": "{{count}} postazione · fatturazione mensile",

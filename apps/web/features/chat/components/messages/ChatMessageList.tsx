@@ -1206,7 +1206,7 @@ const ChatMessageListComponent = ({
         className={cn('relative flex h-full flex-col items-center justify-center', className)}
         data-testid="chat-message-list"
       >
-        <GreetingBanner onSendMessage={onSendMessage} />
+        <GreetingBanner />
       </div>
     );
   }

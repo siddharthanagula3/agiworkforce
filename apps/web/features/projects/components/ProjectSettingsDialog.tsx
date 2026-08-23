@@ -26,6 +26,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import type { Project } from '@features/projects/stores/project-store';
+import { toUserMessage } from '@/lib/user-error-message';
 
 export interface ProjectSettingsDialogProps {
   open: boolean;
@@ -51,6 +52,7 @@ export function ProjectSettingsDialog({
 }: ProjectSettingsDialogProps) {
   const [name, setName] = useState(project.name);
   const [instructions, setInstructions] = useState(project.instructions ?? '');
+  const [usesGlobalMemory, setUsesGlobalMemory] = useState(project.usesGlobalMemory !== false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -58,7 +60,8 @@ export function ProjectSettingsDialog({
   useEffect(() => {
     setName(project.name);
     setInstructions(project.instructions ?? '');
-  }, [project.id, project.name, project.instructions]);
+    setUsesGlobalMemory(project.usesGlobalMemory !== false);
+  }, [project.id, project.name, project.instructions, project.usesGlobalMemory]);
 
   const [isDuplicating, setIsDuplicating] = useState(false);
 
@@ -86,7 +89,7 @@ export function ProjectSettingsDialog({
       );
       onDuplicated?.();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not duplicate the project.');
+      toast.error(toUserMessage(error, 'Could not duplicate the project.'));
     } finally {
       setIsDuplicating(false);
     }
@@ -100,6 +103,7 @@ export function ProjectSettingsDialog({
     const updates = {
       name: name.trim(),
       instructions: instructions.trim() || undefined,
+      usesGlobalMemory,
     };
     setIsSaving(true);
     try {
@@ -109,7 +113,7 @@ export function ProjectSettingsDialog({
       toast.success('Project updated');
       onOpenChange(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update project');
+      toast.error(toUserMessage(error, 'Failed to update project'));
     } finally {
       setIsSaving(false);
     }
@@ -125,7 +129,7 @@ export function ProjectSettingsDialog({
       onOpenChange(false);
       toast.success('Project deleted');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete project');
+      toast.error(toUserMessage(error, 'Failed to delete project'));
     } finally {
       setIsDeleting(false);
     }
@@ -202,27 +206,39 @@ export function ProjectSettingsDialog({
             </div>
 
             {/*
-              Memory.
+              Memory scope.
 
-              The scope <select> that used to sit here was decorative: one
-              option ("Default"), no onChange, no state, and no persistence — a
-              dropdown the user could open but never change. It implied
-              per-project memory scoping that does not exist anywhere in the
-              product: `user_memories` (migration 0010) has no project column,
-              and `managed-memory-context-service.ts` selects purely by user.
-
-              The sentence below is kept because it is TRUE — memory really is
-              account-wide in both directions — and it is the thing a user
-              opening this dialog needs to know. Re-add a control only when
-              memories can actually be scoped to a project.
+              A decorative <select> used to sit here — one option, no onChange,
+              no persistence — implying per-project scoping the product did not
+              have. It was removed with a note to re-add a control only once
+              memories could actually be scoped. Migration 0135 added
+              `user_memories.project_id` and `user_projects.uses_global_memory`,
+              and both the read path (loadManagedMemoryContext) and the write
+              path (persistManagedAutoMemoryFacts) honour them, so this is a
+              real control now.
             */}
             <div className="space-y-1.5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Memory
               </p>
-              <p className="text-xs text-muted-foreground">
-                This project can access memories from outside chats, and vice versa.
-              </p>
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={usesGlobalMemory}
+                  onChange={(e) => setUsesGlobalMemory(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-xs text-foreground">
+                    Use memories from outside this project
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {usesGlobalMemory
+                      ? 'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.'
+                      : 'Chats here use only this project\u2019s memories. Nothing from your other chats is included.'}
+                  </span>
+                </span>
+              </label>
             </div>
 
             {/* Knowledge Files */}

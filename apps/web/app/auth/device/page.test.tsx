@@ -37,7 +37,10 @@ vi.mock('@clerk/nextjs', () => ({
   useClerk: () => ({ signOut: authState.signOut }),
 }));
 
+const routerPush = vi.hoisted(() => vi.fn());
+
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
   useSearchParams: () => ({
     get: (key: string) => {
       if (key === 'user_code') return searchState.userCode;
@@ -260,11 +263,16 @@ describe('/auth/device page', () => {
     await screen.findByRole('heading', { name: 'AGI for VS Code' });
     fireEvent.click(screen.getByRole('button', { name: 'Approve device' }));
 
+    // Approval links a device to the account. Leaving the form live beside a
+    // one-line note lets the user press Approve again on a consumed code and
+    // read an error for something that worked; the settled outcome replaces it.
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(
-        'Return to the app that opened this page; sign-in will finish automatically.',
-      );
+      expect(screen.getByRole('status')).toHaveTextContent('Device connected.');
     });
+    expect(screen.getByRole('status')).toHaveTextContent('You can close this tab.');
+    expect(screen.queryByRole('button', { name: 'Approve device' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Manage linked devices/ }));
+    expect(routerPush).toHaveBeenCalledWith('/settings#account');
   });
 
   it('renders structured approval errors without object text', async () => {

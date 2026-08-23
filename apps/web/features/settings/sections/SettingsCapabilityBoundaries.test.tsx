@@ -14,8 +14,12 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
-  fetchPreferenceNamespace: () => Promise.resolve({ browserReplyReady: true }),
-  savePreferenceNamespace: () => Promise.resolve(undefined),
+  PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
+  fetchStoredPreferenceNamespace: vi.fn(async () => ({})),
+  fetchPreferenceNamespace: vi.fn(async () => ({})),
+  savePreferenceNamespace: vi.fn(async () => {}),
+  refreshProfileConsumers: vi.fn(async () => {}),
+  saveDisplayName: vi.fn(async () => {}),
 }));
 
 vi.mock('@features/settings/hooks/use-settings-queries', () => ({

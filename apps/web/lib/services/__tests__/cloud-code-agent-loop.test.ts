@@ -280,6 +280,33 @@ describe('runCloudCodeAgentTurn', () => {
     expect(onStepCommitted).toHaveBeenCalledTimes(2);
   });
 
+  it('sends execute_code through the command approval boundary instead of around it', async () => {
+    const runner = runnerStub();
+    const result = await runCloudCodeAgentTurn({
+      ...baseInput,
+      adapter: adapterFor([
+        toolTurn('t1', 'execute_code', { language: 'bash', code: 'rm -rf /tmp/x' }),
+      ]),
+      runner,
+    });
+    expect(result.stopReason).toBe('awaiting_approval');
+    expect(result.pendingApproval?.command).toContain('rm -rf /tmp/x');
+    expect(runner.runSharedExecutionTool).not.toHaveBeenCalled();
+    expect(runner.runCommand).not.toHaveBeenCalled();
+  });
+
+  it('refuses a tool the session never declared rather than forwarding it blindly', async () => {
+    const runner = runnerStub();
+    const result = await runCloudCodeAgentTurn({
+      ...baseInput,
+      adapter: adapterFor([toolTurn('t1', 'delete_repository', { name: 'x' }), textTurn('ok')]),
+      runner,
+    });
+    expect(result.stopReason).toBe('done');
+    expect(runner.runSharedExecutionTool).not.toHaveBeenCalled();
+    expect(JSON.stringify(result.messages)).toContain('not available in Code sessions');
+  });
+
   it('routes shared execution tools to their existing owner', async () => {
     const runner = runnerStub();
     await runCloudCodeAgentTurn({

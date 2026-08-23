@@ -129,7 +129,37 @@ export function configureChromeManifest(sourceManifest, configuration) {
 
   const publicKey = normalizeChromeExtensionPublicKey(configuration.chromeExtensionPublicKey);
   if (publicKey) manifest.key = publicKey;
+
+  // Without `key`, Chrome rotates the extension ID. Clerk authenticates the
+  // extension by that ID -- it has to appear in the instance's allowed_origins
+  // as chrome-extension://<id> -- so a rotating ID means the sync-host
+  // handshake is rejected and the panel sits on "Sign in to sync" forever,
+  // while the web app happily reports a live session. That failure is silent
+  // and looks like a bug in the extension rather than a missing build input,
+  // so say so here. Only a remote Clerk instance is affected: a localhost
+  // sync host is a normal offline-development setup.
+  if (!publicKey && syncHost && !isLocalhostOrigin(syncHost)) {
+    console.warn(
+      [
+        '',
+        'WARNING: CHROME_EXTENSION_PUBLIC_KEY is not set, so this build has no stable extension ID.',
+        `  Clerk sync against ${syncHost} will be rejected and the side panel will stay signed out.`,
+        '  Generate a keypair, set CHROME_EXTENSION_PUBLIC_KEY, and add chrome-extension://<id>',
+        "  to the Clerk instance's allowed_origins.",
+        '',
+      ].join('\n'),
+    );
+  }
   return manifest;
+}
+
+function isLocalhostOrigin(origin) {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
 }
 
 export function validateReleaseManifest(manifest, configuration) {

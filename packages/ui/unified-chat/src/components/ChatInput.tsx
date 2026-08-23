@@ -356,6 +356,10 @@ export function ChatInput({
   const activeAgentMode = useAgentControlStore((state) =>
     conversationId ? state.resolve(conversationId, projectId ?? null).mode : 'ask',
   );
+  const activeAgentEffort = useAgentControlStore((state) =>
+    conversationId ? state.resolve(conversationId, projectId ?? null).effort : null,
+  );
+  const setAgentEffort = useAgentControlStore((s) => s.setEffort);
   const { state: browserVoiceState, start: startBrowserVoice } = useVoiceInput({
     onTranscript: (text) => {
       const cleanedText = cleanupVoiceDictation(text);
@@ -1162,6 +1166,12 @@ export function ChatInput({
                 allowFallbackModels={allowModelFallbackModels}
                 disabled={disabled || isStreaming}
                 className="min-w-0 max-w-[12rem]"
+                effort={activeAgentEffort === 'none' ? null : (activeAgentEffort ?? null)}
+                onEffortChange={
+                  conversationId
+                    ? (next) => setAgentEffort(conversationId, next ?? 'none')
+                    : undefined
+                }
               />
 
               {/* Mic button — ghost, hidden when streaming */}

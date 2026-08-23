@@ -16,6 +16,7 @@ import { getProviderDefaultModel, getTaskModelForProvider } from '@agiworkforce/
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { routeGitHubWebhookEvent } from './webhook-router';
 import { recordDeliveryOnce } from './delivery-dedup';
+import { escapeUntrustedPrDiff } from './pr-diff-prompt';
 
 const GITHUB_BOT_LOGIN = process.env['GITHUB_BOT_LOGIN'] ?? 'agi-workforce[bot]';
 const BOT_MENTION = '@agi-workforce';
@@ -306,11 +307,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         ? rawDiff.slice(0, DIFF_MAX_BYTES) + '\n\n[Diff truncated at 50 KB]'
         : rawDiff;
 
-      const escapedDiff = diff
-        .replace(/<tool_use>/gi, '&lt;tool_use&gt;')
-        .replace(/<\/tool_use>/gi, '&lt;/tool_use&gt;')
-        .replace(/<function_call>/gi, '&lt;function_call&gt;')
-        .replace(/<\/function_call>/gi, '&lt;/function_call&gt;');
+      const escapedDiff = escapeUntrustedPrDiff(diff);
 
       const INJECTION_MARKERS = [
         'ignore previous',

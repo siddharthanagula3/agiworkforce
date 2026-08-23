@@ -9,7 +9,12 @@ const mocks = vi.hoisted(() => ({
   fetchPreferences: vi.fn(),
   setAccentColor: vi.fn(),
   setHighContrast: vi.fn(),
-  settings: { accentColor: 'default' as string, highContrast: false },
+  setMotion: vi.fn(),
+  settings: {
+    accentColor: 'default' as string,
+    highContrast: false,
+    motion: 'system' as 'system' | 'reduced',
+  },
   tts: {
     isSupported: false,
     voices: [] as Array<{ voiceURI: string; name: string; lang: string }>,
@@ -63,6 +68,10 @@ vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
         setChatTextSize: vi.fn(),
         codeBlockWrap: false,
         setCodeBlockWrap: vi.fn(),
+        motion: mocks.settings.motion,
+        hiddenNavIds: [],
+        setNavItemVisible: vi.fn(),
+        setMotion: mocks.setMotion,
         accentColor: mocks.settings.accentColor,
         setAccentColor: mocks.setAccentColor,
         highContrast: mocks.settings.highContrast,
@@ -113,6 +122,11 @@ describe('GeneralSection preference hydration', () => {
     mocks.setHighContrast.mockReset();
     mocks.settings.accentColor = 'default';
     mocks.settings.highContrast = false;
+    mocks.settings.motion = 'system';
+    mocks.setMotion.mockReset();
+    mocks.setMotion.mockImplementation((value: 'system' | 'reduced') => {
+      mocks.settings.motion = value;
+    });
     mocks.tts.isSupported = false;
     mocks.tts.voices = [];
   });
@@ -133,6 +147,21 @@ describe('GeneralSection preference hydration', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('offers the Motion preference beside the other appearance controls', async () => {
+    render(<GeneralSection />);
+
+    const group = screen.getByRole('group', { name: 'Motion' });
+    expect(group).toBeVisible();
+    expect(screen.getByRole('button', { name: 'System motion' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reduced motion' }));
+
+    expect(mocks.setMotion).toHaveBeenCalledWith('reduced');
   });
 
   it('uses mobile-safe stacked rows for profile controls', () => {

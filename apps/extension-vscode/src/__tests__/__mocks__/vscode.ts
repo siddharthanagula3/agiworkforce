@@ -115,7 +115,7 @@ class Position {
 class Range {
   constructor(
     public readonly start: Position | number,
-    public readonly startCharacter?: number,
+    public readonly startCharacter?: number | Position,
     public readonly end?: Position | number,
     public readonly endCharacter?: number,
   ) {
@@ -127,8 +127,48 @@ class Range {
     ) {
       this.start = new Position(start, startCharacter);
       this.end = new Position(end, endCharacter);
+    } else if (start instanceof Position && startCharacter instanceof Position) {
+      this.end = startCharacter;
     }
   }
+}
+
+class CodeLens {
+  constructor(
+    public readonly range: Range,
+    public readonly command?: {
+      title: string;
+      command: string;
+      tooltip?: string;
+      arguments?: unknown[];
+    },
+  ) {}
+}
+
+class InlineCompletionItem {
+  constructor(
+    public readonly insertText: string,
+    public readonly range?: Range,
+  ) {}
+}
+
+class CodeAction {
+  command?: { command: string; title: string; arguments?: unknown[] };
+  diagnostics?: unknown[];
+  isPreferred?: boolean;
+  edit?: unknown;
+
+  constructor(
+    public readonly title: string,
+    public readonly kind?: { value: string },
+  ) {}
+}
+
+class Hover {
+  constructor(
+    public readonly contents: MarkdownString | string,
+    public readonly range?: Range,
+  ) {}
 }
 
 class Selection extends Range {
@@ -592,6 +632,10 @@ export {
   CancellationTokenSource,
   Disposable,
   EventEmitter,
+  CodeAction,
+  CodeLens,
+  Hover,
+  InlineCompletionItem,
   MarkdownString,
   Position,
   Range,

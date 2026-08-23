@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -53,7 +54,11 @@ export async function POST(request: NextRequest) {
           { status: 500 },
         );
       }
-      const claims = await verifyToken(parsed.token, { secretKey });
+      const authorizedParties = getClerkAuthorizedParties();
+      const claims = await verifyToken(parsed.token, {
+        secretKey,
+        ...(authorizedParties.length > 0 ? { authorizedParties } : {}),
+      });
       if (!claims.sub) {
         return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 401 });
       }

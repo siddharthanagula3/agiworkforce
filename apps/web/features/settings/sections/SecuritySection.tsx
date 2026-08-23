@@ -18,6 +18,7 @@ import { TwoFactorPanel } from '@features/settings/components/Settings/TwoFactor
 import { TwoFactorEnrollmentPanel } from '@features/settings/components/Settings/TwoFactorEnrollment';
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 import { AdminConsoleEntry } from '@/features/admin/components/AdminConsoleEntry';
+import { DeviceSignInToggle } from '@features/settings/components/DeviceSignInToggle';
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
 
 export function SecuritySection() {
@@ -129,6 +130,8 @@ export function SecuritySection() {
       <AuditLogPanel />
 
       <AdminConsoleEntry />
+
+      <DeviceSignInToggle />
 
       <section
         aria-label="Account security availability"

@@ -10,6 +10,7 @@ import {
   type AdminSecurityDashboard,
   type AdminSecurityEvent,
 } from '../services/admin-security-client';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const ACTION_LABELS: Record<AdminAccountAction, string> = {
   'suspend-user': 'Suspend account',
@@ -52,7 +53,7 @@ export default function SecurityOperationsPanel() {
       setDashboard(data.dashboard);
       setEvents(data.events);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Unable to load security operations');
+      setLoadError(toUserMessage(error, 'Unable to load security operations'));
     } finally {
       setLoading(false);
     }
@@ -84,7 +85,7 @@ export default function SecurityOperationsPanel() {
       setReason('');
       await loadOperations();
     } catch (error) {
-      setActionResult(error instanceof Error ? error.message : 'Account action failed');
+      setActionResult(toUserMessage(error, 'Account action failed'));
     } finally {
       setSubmitting(false);
     }

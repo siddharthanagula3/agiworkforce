@@ -91,6 +91,8 @@ export interface ChatAttachment {
 
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
+export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+
 export const ALLOWED_ATTACHMENT_MIME_PREFIXES: readonly string[] = [
   'application/pdf',
   'text/',

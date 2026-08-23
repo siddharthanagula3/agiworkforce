@@ -11,6 +11,7 @@ import {
   type ToolApprovalPolicy,
   type ToolApprovalPreferences,
 } from '@shared/types/toolApprovalPolicy';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const POLICY_OPTIONS: { policy: ToolApprovalPolicy; label: string; description: string }[] = [
   {
@@ -49,7 +50,7 @@ export function ToolApprovalDefaultsPanel() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : 'Failed to load tool approvals');
+          setLoadError(toUserMessage(error, 'Failed to load tool approvals'));
         }
       });
     return () => {
@@ -70,7 +71,7 @@ export function ToolApprovalDefaultsPanel() {
         setSavedAt(Date.now());
       } catch (error) {
         setPolicy(previous);
-        setSaveError(error instanceof Error ? error.message : 'Failed to save tool approvals');
+        setSaveError(toUserMessage(error, 'Failed to save tool approvals'));
       } finally {
         setSaving(false);
       }

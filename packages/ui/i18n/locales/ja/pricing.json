@@ -77,7 +77,7 @@
   "seatTotal_one": "{{count}} シート · {{total}}/月",
   "seatTotal_other": "{{count}} シート · {{total}}/月",
   "perSeatPrice": "{{price}}/シート/月",
-  "perSeatPriceAnnual": "{{price}}/シート/年",
+  "perSeatPriceAnnual": "{{price}}/シート/月",
   "seatTotalAnnual_one": "{{count}} シート · {{total}}/年",
   "seatTotalAnnual_other": "{{count}} シート · {{total}}/年",
   "seatCadenceMonthly_one": "{{count}} シート · 月払い",
