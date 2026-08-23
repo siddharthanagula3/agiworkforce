@@ -187,17 +187,28 @@ fn is_loopback_endpoint(url: &str) -> bool {
 fn require_secure_credential_transport(url: &str, spec: &ProviderSpec) -> Result<(), LlmError> {
     // `extra_headers` is documented as non-secret (spec.rs), so `Auth` is the
     // only thing that can carry key material here.
-    let carries_secret = !matches!(spec.auth, Auth::None);
-    if !carries_secret || !url.starts_with("http://") {
+    if matches!(spec.auth, Auth::None) {
         return Ok(());
     }
-    if is_loopback_endpoint(url) {
+    // Compare the parsed scheme, never a literal prefix: `Url::parse` lower-cases
+    // the scheme, so `HTTP://gateway.internal` cannot walk past the cleartext
+    // check the way it did under `starts_with("http://")`, and a URL that will
+    // not parse has an unverifiable transport, so it fails closed.
+    let secure_transport = match reqwest::Url::parse(url) {
+        Ok(parsed) => match parsed.scheme() {
+            "https" => true,
+            "http" => is_loopback_endpoint(url),
+            _ => false,
+        },
+        Err(_) => false,
+    };
+    if secure_transport {
         return Ok(());
     }
     Err(LlmError::Auth {
         provider: spec.id.clone(),
         message: format!(
-            "refusing to send credentials over cleartext HTTP to a non-loopback endpoint.              Use https:// for '{url}', or a loopback address for a local runtime."
+            "refusing to send credentials over cleartext HTTP to a non-loopback endpoint. Use https:// for '{url}', or a loopback address for a local runtime."
         ),
     })
 }
@@ -2240,5 +2251,66 @@ mod credential_transport_tests {
             Auth::Bearer("sk-secret".into()),
         );
         assert!(require_secure_credential_transport(&s.base_url, &s).is_err());
+    }
+
+    #[test]
+    fn refuses_cleartext_http_spelled_with_an_upper_case_scheme() {
+        // CWE-178. `HTTP://` is dispatched as plaintext http:// all the same, so
+        // a case-sensitive prefix match handed the key to an on-path observer.
+        for url in [
+            "HTTP://gateway.internal/v1/chat",
+            "Http://gateway.internal/v1/chat",
+            "hTTp://gateway.internal/v1/chat",
+        ] {
+            let s = spec(url, Auth::Bearer("sk-secret".into()));
+            let err = require_secure_credential_transport(url, &s)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("cleartext HTTP"), "{url}: {err}");
+        }
+    }
+
+    #[test]
+    fn refuses_an_upper_case_scheme_carrying_a_custom_auth_header() {
+        let s = spec(
+            "HTTP://gateway.internal/v1/chat",
+            Auth::Header {
+                name: "x-api-key".into(),
+                value: "secret".into(),
+            },
+        );
+        assert!(require_secure_credential_transport(&s.base_url, &s).is_err());
+    }
+
+    #[test]
+    fn a_case_variant_scheme_keeps_the_loopback_and_https_carve_outs() {
+        for url in [
+            "HTTP://localhost:11434/api/chat",
+            "Http://127.0.0.1:1234/v1/chat/completions",
+            "HTTPS://api.openai.com/v1/chat/completions",
+        ] {
+            let s = spec(url, Auth::Bearer("sk-secret".into()));
+            assert!(
+                require_secure_credential_transport(url, &s).is_ok(),
+                "{url} should be permitted"
+            );
+        }
+    }
+
+    #[test]
+    fn refuses_a_scheme_that_is_not_http_or_https() {
+        let s = spec(
+            "ftp://gateway.internal/v1",
+            Auth::Bearer("sk-secret".into()),
+        );
+        assert!(require_secure_credential_transport(&s.base_url, &s).is_err());
+    }
+
+    #[tokio::test]
+    async fn apply_headers_refuses_to_attach_the_key_to_an_upper_case_http_url() {
+        let url = "HTTP://gateway.internal/v1/chat";
+        let s = spec(url, Auth::Bearer("sk-secret".into()));
+        let builder = reqwest::Client::new().post(url);
+        assert!(apply_headers(builder, url, &s).is_err());
     }
 }

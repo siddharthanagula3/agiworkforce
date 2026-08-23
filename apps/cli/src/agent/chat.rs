@@ -20,6 +20,7 @@ use crate::errors::CliError;
 use crate::hooks;
 use crate::models::{self, ContentBlock, Message, StreamCallback, ToolCallResponse};
 use crate::terminal_style as ts;
+use crate::terminal_text::sanitize_terminal_text;
 
 use super::executor::value_to_legacy_args;
 use super::history::build_assistant_message;
@@ -479,7 +480,7 @@ impl AgentSession {
         if crate::tui::tui_active() {
             crate::tui::push_tui_notice(notice);
         } else if !self.quiet {
-            eprintln!("  {}", notice.dimmed());
+            eprintln!("  {}", ts::muted(notice));
         }
     }
 
@@ -1323,7 +1324,7 @@ impl TurnHostAdapter<'_> {
                     eprintln!(
                         "  {} {} blocked by hook: {}",
                         "->".dimmed(),
-                        call.name.bold(),
+                        ts::code(call.name.as_str()),
                         ts::danger(&reason_text)
                     );
                 }
@@ -1337,7 +1338,11 @@ impl TurnHostAdapter<'_> {
             }
             PreToolUseOutcome::Stopped => {
                 if !self.session.quiet {
-                    eprintln!("  {} {} stopped by hook", "->".dimmed(), call.name.bold());
+                    eprintln!(
+                        "  {} {} stopped by hook",
+                        "->".dimmed(),
+                        ts::code(call.name.as_str())
+                    );
                 }
                 return Prepared::PreEmpted {
                     block: ResultBlock {
@@ -1507,7 +1512,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                         eprintln!(
                             "  {} {} blocked by hook: {}",
                             "->".dimmed(),
-                            tc.name.bold(),
+                            ts::code(tc.name.as_str()),
                             ts::danger(&reason_text)
                         );
                     }
@@ -1520,7 +1525,11 @@ impl TurnHost for TurnHostAdapter<'_> {
                 }
                 PreToolUseOutcome::Stopped => {
                     if !self.session.quiet {
-                        eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
+                        eprintln!(
+                            "  {} {} stopped by hook",
+                            "->".dimmed(),
+                            ts::code(tc.name.as_str())
+                        );
                     }
                     result_blocks.push(ResultBlock {
                         tool_use_id: tc.id.clone(),
@@ -1769,7 +1778,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             eprintln!(
                 "  {} {} [{}]",
                 "->".dimmed(),
-                tool_name.bold(),
+                ts::code(tool_name.as_str()),
                 sa_display_status
             );
 
@@ -1929,7 +1938,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                     "  {} {} ({}{})",
                     "->".dimmed(),
                     "update_plan".bold(),
-                    message,
+                    sanitize_terminal_text(&message),
                     if path_disp.is_empty() {
                         String::new()
                     } else {
@@ -2267,7 +2276,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                     eprintln!(
                         "  {} ({})",
                         format!("running {} read-only tools in parallel", names.len()).dimmed(),
-                        names.join(", ")
+                        sanitize_terminal_text(&names.join(", "))
                     );
                 }
             }
@@ -2310,7 +2319,12 @@ impl TurnHost for TurnHostAdapter<'_> {
                     } else {
                         ts::danger("failed").to_string()
                     };
-                    eprintln!("  {} {} [{}]", "->".dimmed(), name.bold(), status);
+                    eprintln!(
+                        "  {} {} [{}]",
+                        "->".dimmed(),
+                        ts::code(name.as_str()),
+                        status
+                    );
                 }
                 if self.session.json_events {
                     crate::agent_events::AgentEvent::ToolResult {

@@ -402,7 +402,12 @@ describe('QR Pairing — isValidPairingCode', () => {
     expect(isValidPairingCode('agiw:ABCDEF123456')).toBe(true);
   });
 
-  it('accepts a secure QR payload with role token', () => {
+  it('accepts the current QR payload, which carries the out-of-band secret', () => {
+    const secret = '9f'.repeat(32);
+    expect(isValidPairingCode(`agiw3:ABCDEF123456:${secret}`)).toBe(true);
+  });
+
+  it('still admits an older Desktop payload so the store can explain the update', () => {
     const token = 'a'.repeat(64);
     expect(isValidPairingCode(`agiw:ABCDEF123456:${token}`)).toBe(true);
   });
@@ -474,6 +479,11 @@ describe('QR Pairing — extractPairingCode', () => {
   it('strips the role token from secure QR payloads', () => {
     const token = 'f'.repeat(64);
     expect(extractPairingCode(`agiw:ABCDEF123456:${token}`)).toBe('ABCDEF123456');
+  });
+
+  it('strips the out-of-band secret from the current QR payload', () => {
+    const secret = '9f'.repeat(32);
+    expect(extractPairingCode(`agiw3:ABCDEF123456:${secret}`)).toBe('ABCDEF123456');
   });
 
   it('returns the raw code unchanged when no prefix is present', () => {
@@ -763,7 +773,6 @@ describe('Execution Streaming — Agent Store mutations', () => {
 });
 
 describe('Agent Store — state mutations (real logic)', () => {
-
   function makeRealState() {
     const ctx = {
       state: {
@@ -1594,7 +1603,6 @@ describe('QR Pairing — edge cases and boundary conditions', () => {
 });
 
 describe('Stream interruption — stale + reconnect flow', () => {
-
   it('markStale increments missedHeartbeats in real store logic', () => {
     const storeState = {
       status: 'connected' as string,

@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
+import { createError } from '@/lib/errors';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import {
@@ -18,7 +19,10 @@ import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-typ
 import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 import { toIsoTimestamp } from '@/lib/server/capability-limit-resets';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
-import { applySubscriptionOwnerHandoff } from '@/lib/server/subscription-owner-handoff';
+import {
+  applySubscriptionOwnerHandoff,
+  subscriptionOwnerHandoffConflictMessage,
+} from '@/lib/server/subscription-owner-handoff';
 import { isValidTopUpPurchase } from '@agiworkforce/types';
 import { describeSessionTax } from '@/lib/billing/tax-policy';
 import {
@@ -28,6 +32,20 @@ import {
   resolveSubscriptionSeats,
 } from './seats';
 import { toStoredSubscriptionStatus } from './subscription-status';
+
+async function claimStripeBillingOwnership(
+  db: DatabaseAdapter,
+  userId: string,
+  context: Record<string, unknown>,
+): Promise<void> {
+  const handoff = await applySubscriptionOwnerHandoff(db, userId, 'stripe');
+  if (!handoff.blocked) return;
+  logger.error(
+    { ...context, userId, incumbents: handoff.incumbents },
+    'CRITICAL: refusing to provision a Stripe subscription while another billing channel is still entitled',
+  );
+  throw createError.conflict(subscriptionOwnerHandoffConflictMessage(handoff));
+}
 
 export async function ensureProfileExists(
   db: DatabaseAdapter,
@@ -697,7 +715,10 @@ export async function upsertSubscriptionFromSession(
 
   logger.info({ subscriptionData: subData }, 'Upserting subscription');
 
-  await applySubscriptionOwnerHandoff(db, resolvedUserId, 'stripe');
+  await claimStripeBillingOwnership(db, resolvedUserId, {
+    sessionId: session.id,
+    stripeSubId,
+  });
 
   const upserted = await db
     .query<{ id: string }>(
@@ -1258,7 +1279,7 @@ export async function updateSubscriptionFromStripeSubscription(
         };
         logger.info({ createData }, 'Upserting subscription (will INSERT or UPDATE as needed)');
 
-        await applySubscriptionOwnerHandoff(db, resolvedUserId, 'stripe');
+        await claimStripeBillingOwnership(db, resolvedUserId, { stripeSubId });
 
         const upserted = await db
           .query<{ id: string }>(

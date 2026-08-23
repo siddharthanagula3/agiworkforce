@@ -1,3 +1,4 @@
+use crate::features::teams::team_permissions::{Permission, TeamPermissions};
 use rusqlite::{params, Connection, OptionalExtension, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -94,6 +95,17 @@ pub struct TeamInvitation {
     pub created_at: i64,
 }
 
+fn verified_actor(actor_id: &str) -> Result<&str, String> {
+    let actor = actor_id.trim();
+    if actor.is_empty() || actor == UNVERIFIED_ACTOR_ID {
+        return Err("Team actions require a signed-in session".to_string());
+    }
+    Ok(actor)
+}
+
+const UNVERIFIED_ACTOR_ID: &str = "default";
+const NOT_A_MEMBER: &str = "Not a member of this team";
+
 pub struct TeamManager {
     db: Arc<Mutex<Connection>>,
 }
@@ -103,12 +115,35 @@ impl TeamManager {
         Self { db }
     }
 
+    pub fn authorize_member(&self, team_id: &str, actor_id: &str) -> Result<TeamMember, String> {
+        let actor = verified_actor(actor_id)?;
+        self.get_team_member(team_id, actor)?
+            .ok_or_else(|| NOT_A_MEMBER.to_string())
+    }
+
+    pub fn authorize_permission(
+        &self,
+        team_id: &str,
+        actor_id: &str,
+        permission: Permission,
+    ) -> Result<TeamMember, String> {
+        let member = self.authorize_member(team_id, actor_id)?;
+        if !TeamPermissions::has_permission(&member, permission) {
+            return Err(format!(
+                "Not authorized to {}",
+                TeamPermissions::get_permission_description(permission).to_lowercase()
+            ));
+        }
+        Ok(member)
+    }
+
     pub fn create_team(
         &self,
         name: String,
         description: Option<String>,
         owner_id: String,
     ) -> Result<Team, String> {
+        let owner_id = verified_actor(&owner_id)?.to_string();
         let team_id = Uuid::new_v4().to_string();
         let settings = TeamSettings::default();
         let settings_json = serde_json::to_string(&settings)
@@ -154,7 +189,9 @@ impl TeamManager {
         })
     }
 
-    pub fn get_team(&self, team_id: &str) -> Result<Option<Team>, String> {
+    pub fn get_team(&self, team_id: &str, actor_id: &str) -> Result<Option<Team>, String> {
+        self.authorize_permission(team_id, actor_id, Permission::ViewTeamSettings)?;
+
         let conn = self
             .db
             .lock()
@@ -190,7 +227,14 @@ impl TeamManager {
         Ok(team)
     }
 
-    pub fn update_team(&self, team_id: &str, updates: TeamUpdates) -> Result<(), String> {
+    pub fn update_team(
+        &self,
+        team_id: &str,
+        actor_id: &str,
+        updates: TeamUpdates,
+    ) -> Result<(), String> {
+        self.authorize_permission(team_id, actor_id, Permission::ModifyTeamSettings)?;
+
         let conn = self
             .db
             .lock()
@@ -227,7 +271,9 @@ impl TeamManager {
         Ok(())
     }
 
-    pub fn delete_team(&self, team_id: &str) -> Result<(), String> {
+    pub fn delete_team(&self, team_id: &str, actor_id: &str) -> Result<(), String> {
+        self.authorize_permission(team_id, actor_id, Permission::DeleteTeam)?;
+
         let conn = self
             .db
             .lock()
@@ -331,7 +377,24 @@ impl TeamManager {
         Ok(())
     }
 
-    pub fn remove_member(&self, team_id: &str, user_id: &str) -> Result<(), String> {
+    pub fn remove_member(
+        &self,
+        team_id: &str,
+        actor_id: &str,
+        user_id: &str,
+    ) -> Result<(), String> {
+        let actor = self.authorize_member(team_id, actor_id)?;
+        if actor.user_id != user_id {
+            let target = self
+                .get_team_member(team_id, user_id)?
+                .ok_or_else(|| "User is not a member of this team".to_string())?;
+            if !TeamPermissions::can_remove_member(&actor)
+                || !TeamPermissions::can_remove_role(actor.role, target.role)
+            {
+                return Err("Not authorized to remove this member".to_string());
+            }
+        }
+
         let conn = self
             .db
             .lock()
@@ -364,9 +427,21 @@ impl TeamManager {
     pub fn update_member_role(
         &self,
         team_id: &str,
+        actor_id: &str,
         user_id: &str,
         new_role: TeamRole,
     ) -> Result<(), String> {
+        let actor = self.authorize_member(team_id, actor_id)?;
+        let target = self
+            .get_team_member(team_id, user_id)?
+            .ok_or_else(|| "User is not a member of this team".to_string())?;
+        if !TeamPermissions::can_modify_member_role(&actor)
+            || !TeamPermissions::can_modify_role(actor.role, target.role)
+            || !TeamPermissions::can_modify_role(actor.role, new_role)
+        {
+            return Err("Not authorized to change this member's role".to_string());
+        }
+
         let conn = self
             .db
             .lock()
@@ -414,7 +489,13 @@ impl TeamManager {
         Ok(())
     }
 
-    pub fn get_team_members(&self, team_id: &str) -> Result<Vec<TeamMember>, String> {
+    pub fn get_team_members(
+        &self,
+        team_id: &str,
+        actor_id: &str,
+    ) -> Result<Vec<TeamMember>, String> {
+        self.authorize_permission(team_id, actor_id, Permission::ViewMembers)?;
+
         let conn = self
             .db
             .lock()
@@ -489,10 +570,21 @@ impl TeamManager {
     pub fn create_invitation(
         &self,
         team_id: &str,
+        actor_id: &str,
         email: String,
         role: TeamRole,
-        invited_by: &str,
     ) -> Result<TeamInvitation, String> {
+        let actor = self.authorize_permission(team_id, actor_id, Permission::InviteMembers)?;
+        if role == TeamRole::Owner {
+            return Err(
+                "Cannot invite a member as owner. Use transfer_ownership instead.".to_string(),
+            );
+        }
+        if !TeamPermissions::can_modify_role(actor.role, role) {
+            return Err("Not authorized to invite a member at this role".to_string());
+        }
+        let invited_by = actor.user_id.as_str();
+
         let invitation_id = Uuid::new_v4().to_string();
         let token = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().timestamp();
@@ -523,6 +615,8 @@ impl TeamManager {
     }
 
     pub fn accept_invitation(&self, token: &str, user_id: &str) -> Result<Team, String> {
+        let user_id = verified_actor(user_id)?;
+
         let conn = self
             .db
             .lock()
@@ -583,7 +677,13 @@ impl TeamManager {
             .ok_or_else(|| "Team not found after accepting invitation".to_string())
     }
 
-    pub fn get_team_invitations(&self, team_id: &str) -> Result<Vec<TeamInvitation>, String> {
+    pub fn get_team_invitations(
+        &self,
+        team_id: &str,
+        actor_id: &str,
+    ) -> Result<Vec<TeamInvitation>, String> {
+        self.authorize_permission(team_id, actor_id, Permission::InviteMembers)?;
+
         let conn = self
             .db
             .lock()
@@ -622,7 +722,17 @@ impl TeamManager {
         Ok(invitations)
     }
 
-    pub fn transfer_ownership(&self, team_id: &str, new_owner_id: &str) -> Result<(), String> {
+    pub fn transfer_ownership(
+        &self,
+        team_id: &str,
+        actor_id: &str,
+        new_owner_id: &str,
+    ) -> Result<(), String> {
+        let actor = self.authorize_member(team_id, actor_id)?;
+        if actor.role != TeamRole::Owner {
+            return Err("Only the team owner can transfer ownership".to_string());
+        }
+
         let conn = self
             .db
             .lock()
@@ -647,6 +757,10 @@ impl TeamManager {
                 |row| row.get(0),
             )
             .map_err(|e| format!("Failed to get current owner: {}", e))?;
+
+        if current_owner_id != actor.user_id {
+            return Err("Only the team owner can transfer ownership".to_string());
+        }
 
         conn.execute(
             "UPDATE team_members SET role = 'admin' WHERE team_id = ?1 AND user_id = ?2",
@@ -751,7 +865,10 @@ mod tests {
             .create_team("Test Team".to_string(), None, "user123".to_string())
             .unwrap();
 
-        let team = manager.get_team(&created_team.id).unwrap().unwrap();
+        let team = manager
+            .get_team(&created_team.id, "user123")
+            .unwrap()
+            .unwrap();
         assert_eq!(team.id, created_team.id);
         assert_eq!(team.name, "Test Team");
     }
@@ -769,7 +886,7 @@ mod tests {
             .add_member(&team.id, "user456", TeamRole::Editor, "owner123")
             .unwrap();
 
-        let members = manager.get_team_members(&team.id).unwrap();
+        let members = manager.get_team_members(&team.id, "owner123").unwrap();
         assert_eq!(members.len(), 2);
     }
 
@@ -787,7 +904,7 @@ mod tests {
             .unwrap();
 
         manager
-            .update_member_role(&team.id, "user456", TeamRole::Admin)
+            .update_member_role(&team.id, "owner123", "user456", TeamRole::Admin)
             .unwrap();
 
         let member = manager
@@ -795,5 +912,215 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(member.role, TeamRole::Admin);
+    }
+
+    fn team_with_editor(manager: &TeamManager) -> Team {
+        let team = manager
+            .create_team("Test Team".to_string(), None, "owner123".to_string())
+            .unwrap();
+        manager
+            .add_member(&team.id, "attacker", TeamRole::Editor, "owner123")
+            .unwrap();
+        team
+    }
+
+    #[test]
+    fn test_transfer_ownership_rejects_non_owner_actor() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+
+        let result = manager.transfer_ownership(&team.id, "attacker", "attacker");
+        assert!(result.is_err());
+
+        let owner = manager
+            .get_team_member(&team.id, "owner123")
+            .unwrap()
+            .unwrap();
+        assert_eq!(owner.role, TeamRole::Owner);
+        let attacker = manager
+            .get_team_member(&team.id, "attacker")
+            .unwrap()
+            .unwrap();
+        assert_eq!(attacker.role, TeamRole::Editor);
+        assert_eq!(
+            manager
+                .get_team(&team.id, "owner123")
+                .unwrap()
+                .unwrap()
+                .owner_id,
+            "owner123"
+        );
+    }
+
+    #[test]
+    fn test_transfer_ownership_rejects_non_member_actor() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+
+        assert!(manager
+            .transfer_ownership(&team.id, "outsider", "attacker")
+            .is_err());
+    }
+
+    #[test]
+    fn test_transfer_ownership_allows_owner() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+
+        manager
+            .transfer_ownership(&team.id, "owner123", "attacker")
+            .unwrap();
+
+        let promoted = manager
+            .get_team_member(&team.id, "attacker")
+            .unwrap()
+            .unwrap();
+        assert_eq!(promoted.role, TeamRole::Owner);
+    }
+
+    #[test]
+    fn test_delete_team_rejects_non_owner_member() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+        manager
+            .update_member_role(&team.id, "owner123", "attacker", TeamRole::Admin)
+            .unwrap();
+
+        assert!(manager.delete_team(&team.id, "attacker").is_err());
+        assert!(manager.get_team(&team.id, "owner123").unwrap().is_some());
+    }
+
+    #[test]
+    fn test_delete_team_rejects_non_member() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+
+        assert!(manager.delete_team(&team.id, "outsider").is_err());
+        assert!(manager.get_team(&team.id, "owner123").unwrap().is_some());
+
+        manager.delete_team(&team.id, "owner123").unwrap();
+        assert!(manager.get_team(&team.id, "owner123").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_remove_member_requires_permission() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+        manager
+            .add_member(&team.id, "victim", TeamRole::Viewer, "owner123")
+            .unwrap();
+
+        assert!(manager
+            .remove_member(&team.id, "attacker", "victim")
+            .is_err());
+        assert!(manager
+            .remove_member(&team.id, "outsider", "victim")
+            .is_err());
+        assert!(manager
+            .get_team_member(&team.id, "victim")
+            .unwrap()
+            .is_some());
+
+        manager
+            .remove_member(&team.id, "attacker", "attacker")
+            .unwrap();
+        manager
+            .remove_member(&team.id, "owner123", "victim")
+            .unwrap();
+        assert!(manager
+            .get_team_member(&team.id, "victim")
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn test_update_member_role_requires_permission() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+
+        assert!(manager
+            .update_member_role(&team.id, "attacker", "attacker", TeamRole::Admin)
+            .is_err());
+        assert!(manager
+            .update_member_role(&team.id, "outsider", "attacker", TeamRole::Admin)
+            .is_err());
+
+        manager
+            .update_member_role(&team.id, "owner123", "attacker", TeamRole::Admin)
+            .unwrap();
+        assert!(manager
+            .update_member_role(&team.id, "attacker", "owner123", TeamRole::Viewer)
+            .is_err());
+    }
+
+    #[test]
+    fn test_reads_require_membership() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+
+        assert!(manager.get_team(&team.id, "outsider").is_err());
+        assert!(manager.get_team_members(&team.id, "outsider").is_err());
+        assert!(manager.get_team_invitations(&team.id, "outsider").is_err());
+        assert!(manager.get_team_invitations(&team.id, "attacker").is_err());
+        assert!(manager.get_team_members(&team.id, "attacker").is_ok());
+    }
+
+    #[test]
+    fn test_invite_requires_permission_and_rejects_owner_role() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+
+        assert!(manager
+            .create_invitation(
+                &team.id,
+                "attacker",
+                "x@example.com".to_string(),
+                TeamRole::Admin
+            )
+            .is_err());
+        assert!(manager
+            .create_invitation(
+                &team.id,
+                "owner123",
+                "x@example.com".to_string(),
+                TeamRole::Owner
+            )
+            .is_err());
+
+        let invitation = manager
+            .create_invitation(
+                &team.id,
+                "owner123",
+                "x@example.com".to_string(),
+                TeamRole::Editor,
+            )
+            .unwrap();
+        assert_eq!(invitation.invited_by, "owner123");
+    }
+
+    #[test]
+    fn test_unauthenticated_actor_is_rejected() {
+        let db = setup_test_db();
+        let manager = TeamManager::new(db);
+        let team = team_with_editor(&manager);
+
+        assert!(manager.delete_team(&team.id, "default").is_err());
+        assert!(manager
+            .transfer_ownership(&team.id, "default", "attacker")
+            .is_err());
+        assert!(manager.get_team_members(&team.id, "").is_err());
+        assert!(manager
+            .create_team("Ghost".to_string(), None, "default".to_string())
+            .is_err());
+        assert!(manager.accept_invitation("token", "default").is_err());
     }
 }

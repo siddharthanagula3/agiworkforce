@@ -1,4 +1,3 @@
-
 import { readAsStringAsync, getInfoAsync } from 'expo-file-system/legacy';
 
 export type SupportedDocType = 'pdf' | 'txt' | 'md' | 'csv' | 'code';
@@ -163,6 +162,101 @@ function parseCsvToText(raw: string): { text: string; rows: number; columns: num
   };
 }
 
+const PDF_MAX_TEXT_PARTS = 50_000;
+const PDF_MAX_TEXT_CHARS = 500_000;
+const PDF_MAX_SCAN_CHARS = 2_000_000;
+
+function isPdfOperatorChar(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function unescapePdfLiteral(value: string): string {
+  return value.replace(/\\([nr()\\])/g, (_, ch: string) =>
+    ch === 'n' ? '\n' : ch === 'r' ? '' : ch,
+  );
+}
+
+function readPdfStringLiteral(block: string, open: number): { value: string | null; next: number } {
+  let depth = 1;
+  let i = open + 1;
+
+  while (i < block.length) {
+    const ch = block[i];
+
+    if (ch === '\\') {
+      i += 2;
+      continue;
+    }
+
+    if (ch === '(') {
+      depth += 1;
+    } else if (ch === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        const end = Math.min(i, open + 1 + PDF_MAX_TEXT_CHARS);
+        return { value: unescapePdfLiteral(block.slice(open + 1, end)), next: i + 1 };
+      }
+    }
+
+    i += 1;
+  }
+
+  // An unterminated literal has to swallow the rest of the block: resuming after the '(' would let
+  // a crafted stream re-scan the same tail once per opener and turn extraction quadratic.
+  return { value: null, next: block.length };
+}
+
+function scanPdfTextBlock(block: string, push: (value: string) => boolean): boolean {
+  let i = 0;
+  let inArray = false;
+  let pending: string[] = [];
+
+  while (i < block.length) {
+    const ch = block[i];
+
+    if (ch === '(') {
+      const { value, next } = readPdfStringLiteral(block, i);
+      if (value !== null) {
+        if (!inArray) pending.length = 0;
+        if (pending.length < PDF_MAX_TEXT_PARTS) pending.push(value);
+      }
+      i = next;
+      continue;
+    }
+
+    if (ch === '[') {
+      inArray = true;
+      pending = [];
+      i += 1;
+      continue;
+    }
+
+    if (ch === ']') {
+      inArray = false;
+      i += 1;
+      continue;
+    }
+
+    if (isPdfOperatorChar(block.charCodeAt(i))) {
+      const start = i;
+      do {
+        i += 1;
+      } while (i < block.length && isPdfOperatorChar(block.charCodeAt(i)));
+      if (i - start === 2 && ch === 'T' && (block[start + 1] === 'j' || block[start + 1] === 'J')) {
+        for (const part of pending) {
+          if (part && !push(part)) return false;
+        }
+      }
+      pending = [];
+      continue;
+    }
+
+    i += 1;
+  }
+
+  return true;
+}
+
 function extractTextFromPdfBuffer(base64: string): { text: string; pages: number } {
   let raw: string;
   try {
@@ -192,25 +286,25 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
   if (pages === 0) pages = 1;
 
   const textParts: string[] = [];
-  const btEtRegex = /BT([\s\S]*?)ET/g;
-  let btMatch;
-  while ((btMatch = btEtRegex.exec(raw)) !== null) {
-    const block = btMatch[1] ?? '';
-    const tjRegex = /\(([^)]*)\)\s*Tj|\[([^\]]*)\]\s*TJ/g;
-    let tjMatch;
-    while ((tjMatch = tjRegex.exec(block)) !== null) {
-      const literal = tjMatch[1] ?? '';
-      const array = tjMatch[2] ?? '';
-      if (literal) {
-        textParts.push(literal.replace(/\\n/g, '\n').replace(/\\r/g, ''));
-      } else if (array) {
-        const stringRegex = /\(([^)]*)\)/g;
-        let sm;
-        while ((sm = stringRegex.exec(array)) !== null) {
-          textParts.push(sm[1] ?? '');
-        }
-      }
-    }
+  let extractedChars = 0;
+  const push = (value: string): boolean => {
+    textParts.push(value);
+    extractedChars += value.length;
+    return textParts.length < PDF_MAX_TEXT_PARTS && extractedChars < PDF_MAX_TEXT_CHARS;
+  };
+
+  let cursor = 0;
+  let scanBudget = PDF_MAX_SCAN_CHARS;
+  while (cursor < raw.length && scanBudget > 0) {
+    const blockStart = raw.indexOf('BT', cursor);
+    if (blockStart === -1) break;
+    const blockEnd = raw.indexOf('ET', blockStart + 2);
+    if (blockEnd === -1) break;
+    const contentStart = blockStart + 2;
+    const contentEnd = Math.min(blockEnd, contentStart + scanBudget);
+    scanBudget -= contentEnd - contentStart;
+    if (!scanPdfTextBlock(raw.slice(contentStart, contentEnd), push)) break;
+    cursor = blockEnd + 2;
   }
 
   const text = textParts.join(' ').replace(/\s+/g, ' ').trim();

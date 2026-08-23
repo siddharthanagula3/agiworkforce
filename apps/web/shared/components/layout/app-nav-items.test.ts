@@ -5,10 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from './app-nav-items';
 
 /**
- * The /admin console had no inbound link anywhere in the app shell, so an owner
- * could only reach it by typing the URL. It is offered in the rail now, and
- * only to the role that can use it — the route's own server-side gate is
- * unchanged and remains the actual boundary.
+ * The rail offers an admin destination only to an org admin or owner, and only
+ * one that role can actually open. `/admin` itself is the platform-operator
+ * console (allowlisted Clerk ids, everyone else is redirected to `/`), so the
+ * rail points at the org-scoped directory-sync page instead of advertising a
+ * console that bounces the user straight back out.
  */
 
 function build(isAdmin: boolean | undefined) {
@@ -33,9 +34,14 @@ describe('app rail · admin destination', () => {
     expect(build(true).map((item) => item.id)).toContain('admin');
   });
 
-  it('is the only admin-gated destination, and points at /admin', () => {
+  it('is the only admin-gated destination, and points at the org-scoped page', () => {
     const gated = APP_NAV_DESTINATIONS.filter((destination) => destination.adminOnly);
-    expect(gated.map((destination) => destination.href)).toEqual(['/admin']);
+    expect(gated.map((destination) => destination.href)).toEqual(['/admin/directory-sync']);
+  });
+
+  it('never offers the platform-operator console, which redirects an org admin away', () => {
+    const offered = APP_NAV_DESTINATIONS.filter((destination) => destination.adminOnly);
+    expect(offered.map((destination) => destination.href)).not.toContain('/admin');
   });
 
   it('marks itself active anywhere under /admin', () => {

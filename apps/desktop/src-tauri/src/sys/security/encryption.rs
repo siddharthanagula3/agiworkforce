@@ -23,11 +23,10 @@ pub struct SecretStore {
 }
 
 impl SecretStore {
-    // AUDIT-003-009 fix: Derive key from machine_key instead of generating random key.
-    // This ensures secrets remain recoverable after application restart by using
-    // a deterministic key derived from machine-specific identifiers.
+    // AUDIT-003-009 fix: derive the key from machine_key instead of generating a
+    // random one, so secrets stay recoverable after an application restart.
     pub fn new() -> Result<Self, String> {
-        let key = Self::derive_persistent_key();
+        let key = Self::derive_persistent_key()?;
 
         Ok(Self {
             key,
@@ -35,13 +34,11 @@ impl SecretStore {
         })
     }
 
-    // AUDIT-003-009 fix: Derive a persistent encryption key from machine identifiers
-    // rather than generating a random key that would be lost on restart.
-    fn derive_persistent_key() -> Vec<u8> {
-        // Use the machine_key module to derive a deterministic key
-        // This key is derived from machine-specific identifiers and is consistent
-        // across restarts, ensuring encrypted secrets remain accessible.
-        machine_key::derive_key(KeyPurpose::MasterEncryption)
+    // F5: the key comes from the per-install secret held by the OS credential
+    // service. Without it there is no key that another local process could not
+    // reproduce, so the store refuses to open at all.
+    fn derive_persistent_key() -> Result<Vec<u8>, String> {
+        machine_key::try_derive_key(KeyPurpose::MasterEncryption).map_err(|error| error.to_string())
     }
 
     pub fn store_secret(&self, name: String, value: &str) -> Result<(), String> {
@@ -104,7 +101,11 @@ pub fn encrypt_secret(key: &[u8], plaintext: &str) -> Result<EncryptedSecret, St
     })
 }
 
-pub fn decrypt_secret(key: &[u8], encrypted: &EncryptedSecret) -> Result<String, String> {
+/// Decrypt a secret with exactly the supplied key.
+///
+/// Use this wherever the caller needs to know which key opened the payload —
+/// for example a migration that must re-wrap legacy ciphertext.
+pub fn decrypt_secret_with_key(key: &[u8], encrypted: &EncryptedSecret) -> Result<String, String> {
     let cipher =
         Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
 
@@ -134,6 +135,40 @@ pub fn decrypt_secret(key: &[u8], encrypted: &EncryptedSecret) -> Result<String,
         .map_err(|e| format!("Failed to convert decrypted data to string: {}", e))
 }
 
+/// Decrypt a secret, transparently reading payloads that an older build wrapped
+/// under the machine-only key for the same purpose.
+///
+/// The fallback is only offered for a key this process currently derives, so a
+/// caller-supplied key can never turn this into a machine-only decryption
+/// oracle. Reading such a payload does not weaken it — its key was already
+/// reproducible by any local process — and the payload is reported through
+/// `machine_key::has_machine_only_secrets` until it is written back under the
+/// per-install key.
+pub fn decrypt_secret(key: &[u8], encrypted: &EncryptedSecret) -> Result<String, String> {
+    let primary_error = match decrypt_secret_with_key(key, encrypted) {
+        Ok(plaintext) => return Ok(plaintext),
+        Err(error) => error,
+    };
+
+    let Some((purpose, legacy_keys)) = machine_key::legacy_keys_for_current_key(key) else {
+        return Err(primary_error);
+    };
+
+    for legacy in legacy_keys {
+        if let Ok(plaintext) = decrypt_secret_with_key(&legacy, encrypted) {
+            machine_key::record_machine_only_payload(purpose.as_str());
+            tracing::warn!(
+                "Read a {} secret still wrapped under the legacy machine-only key; \
+                 it stays reproducible by any local process until it is written again.",
+                purpose.as_str()
+            );
+            return Ok(plaintext);
+        }
+    }
+
+    Err(primary_error)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,7 +176,7 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt() {
         // AUDIT-003-009: Test uses derive_persistent_key instead of random generation
-        let key = SecretStore::derive_persistent_key();
+        let key = SecretStore::derive_persistent_key().unwrap();
         let plaintext = "my secret password 123";
 
         let encrypted = encrypt_secret(&key, plaintext).unwrap();
@@ -153,9 +188,32 @@ mod tests {
     #[test]
     fn test_key_consistency() {
         // AUDIT-003-009: Verify that derived keys are consistent across calls
-        let key1 = SecretStore::derive_persistent_key();
-        let key2 = SecretStore::derive_persistent_key();
+        let key1 = SecretStore::derive_persistent_key().unwrap();
+        let key2 = SecretStore::derive_persistent_key().unwrap();
         assert_eq!(key1, key2, "Derived keys should be consistent");
+    }
+
+    /// F5: a secret an older build wrapped under the machine-only key must stay
+    /// readable, and the process must report that it is not yet re-wrapped.
+    #[test]
+    fn legacy_machine_only_ciphertext_is_readable_and_reported() {
+        let purpose = KeyPurpose::MasterEncryption;
+        let legacy = machine_key::legacy_machine_only_keys(purpose)
+            .first()
+            .copied()
+            .expect("a legacy candidate always exists");
+        let stored = encrypt_secret(&legacy, "legacy-session-token").unwrap();
+        let current = machine_key::try_derive_key(purpose).expect("install secret in tests");
+
+        assert!(decrypt_secret_with_key(&current, &stored).is_err());
+        assert_eq!(
+            decrypt_secret(&current, &stored).unwrap(),
+            "legacy-session-token"
+        );
+        assert!(machine_key::has_machine_only_secrets());
+
+        // An arbitrary key must never reach the machine-only fallback.
+        assert!(decrypt_secret(&[0x33u8; 32], &stored).is_err());
     }
 
     #[test]

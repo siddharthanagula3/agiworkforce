@@ -1,6 +1,7 @@
 use colored::Colorize;
 
 use crate::terminal_style as ts;
+use crate::terminal_text::sanitize_terminal_text;
 
 // ---------------------------------------------------------------------------
 // Streaming Markdown Renderer
@@ -50,7 +51,7 @@ impl MarkdownRenderer {
     /// Process a streaming chunk. Returns formatted text to print immediately.
     /// Buffers incomplete lines until a newline arrives.
     pub fn process_chunk(&mut self, chunk: &str) -> String {
-        self.buffer.push_str(chunk);
+        self.buffer.push_str(sanitize_terminal_text(chunk).as_ref());
 
         let mut output = String::new();
 
@@ -364,6 +365,7 @@ impl MarkdownRenderer {
     /// Apply inline formatting to a line of text.
     /// Handles: **bold**, *italic*/_italic_, ~~strikethrough~~, `code`, [text](url), bare URLs
     fn render_inline(&self, text: &str) -> String {
+        let text = sanitize_terminal_text(text);
         let chars: Vec<char> = text.chars().collect();
         let len = chars.len();
         let mut result = String::new();
@@ -1209,6 +1211,73 @@ mod tests {
         assert!(!is_table_row("| only start"));
         assert!(!is_table_row("no pipes"));
         assert!(!is_table_row("||")); // too short
+    }
+
+    #[test]
+    fn streamed_ansi_escapes_never_reach_the_terminal() {
+        let mut r = MarkdownRenderer::new();
+        let out = r.process_chunk(
+            "see \u{1b}]52;c;cm0gLXJmIC8=\u{7}this \u{1b}[2J\u{1b}[31mfake\u{1b}[0m\n",
+        );
+        assert!(!out.contains("]52;c;"), "OSC 52 survived: {out:?}");
+        assert!(
+            !out.contains("cm0gLXJmIC8="),
+            "OSC 52 payload survived: {out:?}"
+        );
+        assert!(!out.contains("[2J"), "screen-clear CSI survived: {out:?}");
+        assert!(out.contains("see this fake"), "text was mangled: {out:?}");
+    }
+
+    #[test]
+    fn escape_split_across_stream_chunks_cannot_reassemble() {
+        let mut r = MarkdownRenderer::new();
+        let mut seen = String::new();
+        for chunk in ["ok \u{1b}", "]52;c;cm0gLXJmIC8=", "\u{7}done\n"] {
+            seen.push_str(&r.process_chunk(chunk));
+        }
+        seen.push_str(&r.flush());
+
+        assert!(
+            !seen.contains('\u{1b}'),
+            "a split escape reassembled: {seen:?}"
+        );
+        assert!(seen.contains("done"), "text was dropped: {seen:?}");
+    }
+
+    #[test]
+    fn flushed_partial_line_strips_escapes() {
+        let mut r = MarkdownRenderer::new();
+        let _ = r.process_chunk("tail \u{1b}[8mhidden");
+        let out = r.flush();
+        assert!(!out.contains("[8m"), "conceal CSI survived flush: {out:?}");
+        assert!(out.contains("tail hidden"), "text was mangled: {out:?}");
+    }
+
+    #[test]
+    fn code_block_content_strips_escapes() {
+        let mut r = MarkdownRenderer::new();
+        let _ = r.process_chunk("```sh\n");
+        let _ = r.process_chunk("echo \u{1b}]0;pwned\u{7}ok\n");
+        let out = r.process_chunk("```\n");
+        assert!(
+            !out.contains("pwned"),
+            "OSC title survived code block: {out:?}"
+        );
+        assert!(out.contains("echo ok"), "code was mangled: {out:?}");
+    }
+
+    #[test]
+    fn render_inline_strips_escapes_at_the_sink() {
+        let r = MarkdownRenderer::new();
+        let out = r.render_inline("run \u{1b}]52;c;cm0gLXJmIC8=\u{7}now\u{1b}[2J\u{1b}[31m!");
+
+        assert!(!out.contains("]52;c;"), "OSC 52 survived: {out:?}");
+        assert!(
+            !out.contains("cm0gLXJmIC8="),
+            "OSC 52 payload survived: {out:?}"
+        );
+        assert!(!out.contains("[2J"), "screen-clear CSI survived: {out:?}");
+        assert!(out.contains("run now!"), "text was mangled: {out:?}");
     }
 
     #[test]

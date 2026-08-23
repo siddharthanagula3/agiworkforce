@@ -22,6 +22,7 @@ mod exec_gate_parity_tests;
 pub mod guardrails;
 pub mod log_redaction;
 pub mod machine_key;
+pub mod machine_key_rewrap;
 pub mod master_password;
 pub mod master_password_encryption;
 pub mod oauth;
@@ -58,10 +59,18 @@ pub use command_validator::{
 pub use dm_protection::{
     AllowlistedSender, DmProtection, DmProtectionConfig, PairingCode, VerificationMethod,
 };
-pub use encryption::{decrypt_secret, encrypt_secret, EncryptedSecret, SecretStore};
+pub use encryption::{
+    decrypt_secret, decrypt_secret_with_key, encrypt_secret, EncryptedSecret, SecretStore,
+};
 pub use machine_key::{
     derive_key, derive_key_base64, derive_key_with_password, derive_key_with_password_base64,
-    get_machine_id_hash, KeyPurpose,
+    get_machine_id_hash, has_install_secret, has_machine_only_secrets,
+    load_or_create_install_secret, machine_only_payloads, set_install_id, set_install_secret,
+    try_derive_key, InstallSecretError, InstallSecretStore, KeyDerivationError, KeyPurpose,
+    OsInstallSecretStore, INSTALL_SECRET_BYTES,
+};
+pub use machine_key_rewrap::{
+    rewrap_legacy_machine_only_files, spawn_legacy_machine_only_file_rewrap,
 };
 pub use master_password::{MasterPasswordError, MasterPasswordManager, MasterPasswordStatus};
 pub use master_password_encryption::MasterPasswordEncryption;

@@ -2,22 +2,24 @@
 //!
 //! # Trust Model (Security)
 //!
-//! Hooks in this system are **user-authored only**, following the same trust model
-//! as Claude Code hooks. Hook commands come exclusively from:
+//! Hook commands are passed to `sh -c` (or `cmd /C` on Windows) unattended
+//! whenever their event fires, so a hook has the same power as a command the
+//! user runs in their own terminal, minus the env vars filtered out by
+//! `sys::security::env_filter`. They reach this executor from exactly two
+//! sources: the `hooks_add` / `hooks_update` / `hooks_import` Tauri commands,
+//! and `~/.agiworkforce/hooks.yaml` via `hooks_initialize` / `hooks_reload`.
 //!
-//! 1. A YAML config file at `~/.agiworkforce/hooks.yaml` on the user's own machine
-//! 2. The `hooks_add` / `hooks_update` Tauri commands (user action via frontend UI)
-//! 3. The `hooks_import` Tauri command (user manually imports YAML)
+//! Neither source is trusted to be the first-party UI, and neither is trusted
+//! to be the user: every one of those commands displays the exact command in a
+//! confirmation dialog and arms nothing without an approval for that specific
+//! request (see `sys/commands/hooks.rs`). That per-request dialog is the
+//! security boundary — it is deliberately not routed through
+//! `request_tool_confirmation*`, whose auto-approve / remembered-choice /
+//! session-approval shortcuts an IPC caller can pre-arm.
 //!
-//! There is **no** path from marketplace downloads, plugins, or any untrusted source
-//! to the hook system. The workflow marketplace deals exclusively with workflow
-//! definitions and has zero hook integration.
-//!
-//! Despite the user-authored trust model, we apply a defensive blocklist against
-//! clearly destructive commands (rm -rf /, fork bombs, etc.) to protect against
-//! accidental paste errors or importing malicious YAML from untrusted sources.
-//! Hook commands are passed to `sh -c` (or `cmd /C` on Windows), so the user
-//! has the same power as running commands in their own terminal.
+//! [`validate_hook_command`] below is a literal-substring blocklist for
+//! accidental paste errors only — it is trivially routed around and must never
+//! be treated as the gate.
 
 use super::types::{Hook, HookEvent, HookExecutionResult};
 use anyhow::{Context, Result};
@@ -291,8 +293,22 @@ impl HookExecutor {
             cmd.current_dir(working_dir);
         }
 
+        let mut dropped_env: Vec<&str> = Vec::new();
         for (key, value) in &hook.env {
+            if crate::sys::security::env_filter::is_blocked_env_var(key) {
+                dropped_env.push(key.as_str());
+                continue;
+            }
             cmd.env(key, value);
+        }
+        dropped_env.sort_unstable();
+
+        if !dropped_env.is_empty() {
+            warn!(
+                "[HookExecutor] SECURITY: dropped env vars reserved by the app from hook '{}': {}",
+                hook.name,
+                dropped_env.join(", ")
+            );
         }
 
         debug!("Executing hook '{}': {}", hook.name, hook.command);
@@ -344,7 +360,7 @@ impl HookExecutor {
 
         let execution_time_ms = start_time.elapsed().as_millis() as u64;
 
-        let result = match timeout_result {
+        let mut result = match timeout_result {
             Ok(Ok((stdout, stderr, status))) => {
                 let success = status.success();
                 let exit_code = status.code();
@@ -384,6 +400,14 @@ impl HookExecutor {
                 )),
             },
         };
+
+        if !dropped_env.is_empty() {
+            result.stderr = format!(
+                "[hooks] these environment variables are reserved by the app and were not passed to the hook: {}\n{}",
+                dropped_env.join(", "),
+                result.stderr
+            );
+        }
 
         self.update_stats(&hook.name, &result).await;
 
@@ -441,6 +465,57 @@ mod tests {
 
         executor.remove_hook("test_hook").await.unwrap();
         assert_eq!(executor.list_hooks().await.len(), 0);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn blocked_env_vars_never_reach_the_hook_process() {
+        let executor = HookExecutor::new();
+
+        let mut env = HashMap::new();
+        env.insert("LD_PRELOAD".to_string(), "/tmp/evil.so".to_string());
+        env.insert(
+            "dyld_insert_libraries".to_string(),
+            "/tmp/evil.dylib".to_string(),
+        );
+        env.insert(
+            "BASH_FUNC_ls%%".to_string(),
+            "() { curl evil; }".to_string(),
+        );
+        env.insert("HOOK_SAFE_VAR".to_string(), "kept".to_string());
+
+        let hook = Hook {
+            name: "env_probe".to_string(),
+            events: vec![HookEventType::SessionStart],
+            priority: 50,
+            command: "printf '%s|%s|' \"$LD_PRELOAD\" \"$HOOK_SAFE_VAR\"; env | grep -ic 'dyld_insert_libraries\\|bash_func' || true".to_string(),
+            enabled: true,
+            timeout_secs: 30,
+            env,
+            working_dir: None,
+            continue_on_error: true,
+        };
+
+        executor.add_hook(hook).await.unwrap();
+
+        let results = executor
+            .execute_hooks(HookEvent::session_start(
+                "session-1".to_string(),
+                HashMap::new(),
+            ))
+            .await;
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results[0].stdout.trim_end(),
+            "|kept|0",
+            "library-injection env vars must be stripped from the hook process"
+        );
+        assert_eq!(
+            results[0].stderr.lines().next(),
+            Some("[hooks] these environment variables are reserved by the app and were not passed to the hook: BASH_FUNC_ls%%, LD_PRELOAD, dyld_insert_libraries"),
+            "a dropped env var must be reported to the user, not only to the log"
+        );
     }
 
     #[tokio::test]

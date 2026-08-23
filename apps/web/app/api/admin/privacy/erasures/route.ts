@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -23,7 +23,7 @@ async function handleAnonymousErasure(request: NextRequest): Promise<NextRespons
   const rateLimitResponse = await withRateLimit(request, 'admin-security');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId: adminUserId } = await requireAdmin(request);
+  const { userId: adminUserId } = await requirePlatformAdmin(request);
 
   const parsed = AnonymousErasureSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

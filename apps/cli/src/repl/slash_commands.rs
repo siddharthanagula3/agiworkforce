@@ -56,11 +56,10 @@ pub(super) async fn handle_slash_command(
 
     if matches!(cmd.as_str(), "/keybindings" | "/keys") {
         let bindings = crate::keybindings::Keybindings::from_config(&config.ui.keybindings);
-        eprintln!(
-            "{}",
-            bindings.render_help(crate::keybindings::resolved_edit_mode(
-                config.ui.edit_mode.as_deref()
-            ))
+        output::print_block(
+            &bindings.render_help(crate::keybindings::resolved_edit_mode(
+                config.ui.edit_mode.as_deref(),
+            )),
         );
         return SlashResult::Handled;
     }
@@ -164,15 +163,15 @@ pub(super) async fn handle_slash_command(
             registry::handle_permissions(arg);
         }
         "/raw" => {
-            eprintln!("{}", registry::render_raw_last_response(session, arg));
+            output::print_block(&registry::render_raw_last_response(session, arg));
         }
         "/models" => {
-            eprintln!("{}", crate::provider::format_model_list());
+            output::print_block(&crate::provider::format_model_list());
             eprintln!("Live local discovery: run `agi models scan` or `agi models status`.");
         }
         "/skills" => {
             let all = crate::skills::discover_skills();
-            eprintln!("{}", crate::skills::format_skill_list(&all));
+            output::print_block(&crate::skills::format_skill_list(&all));
         }
         "/agents" | "/agent" => {
             // Quick-invoke: /agents <name> — apply agent overrides to current session.
@@ -200,15 +199,15 @@ pub(super) async fn handle_slash_command(
             if is_quick_invoke {
                 return SlashResult::AgentInvoke(arg.to_string());
             }
-            eprintln!("{}", crate::agents::render_agents_command(arg));
+            output::print_block(&crate::agents::render_agents_command(arg));
         }
         "/hooks" => {
             let hcfg = crate::hooks::load_hooks().unwrap_or_default();
-            eprintln!("{}", crate::hooks::format_hooks_list(&hcfg));
+            output::print_block(&crate::hooks::format_hooks_list(&hcfg));
         }
         "/subagents" => {
             let agents = crate::agents::discover_agents();
-            eprintln!("{}", crate::agents::format_subagents(&agents));
+            output::print_block(&crate::agents::format_subagents(&agents));
         }
         "/task" | "/tasks" => {
             let sub = arg.split_whitespace().next().unwrap_or("list");
@@ -218,7 +217,7 @@ pub(super) async fn handle_slash_command(
                         Some(manager) => manager.list().await,
                         None => Vec::new(),
                     };
-                    eprintln!("{}", crate::subagent::format_task_list(&tasks));
+                    output::print_block(&crate::subagent::format_task_list(&tasks));
                 }
                 other => {
                     output::print_warn(&format!(
@@ -228,12 +227,15 @@ pub(super) async fn handle_slash_command(
             }
         }
         "/context" | "/ctx" => {
-            eprintln!("{}", session.context_report());
+            output::print_block(&session.context_report());
         }
         "/status" => {
             eprintln!("{}", ts::accent_header("Status:"));
             eprintln!("  Version:    {}", env!("CARGO_PKG_VERSION"));
-            eprintln!("  Model:      {}", session.model);
+            eprintln!(
+                "  Model:      {}",
+                crate::terminal_text::sanitize_terminal_text(&session.model)
+            );
             eprintln!("  Provider:   {:?}", session.provider);
             eprintln!(
                 "  Plan mode:  {}",
@@ -252,7 +254,7 @@ pub(super) async fn handle_slash_command(
             eprintln!("  Skip perms: {}", session.skip_permissions);
         }
         "/usage" => {
-            eprintln!("{}", crate::claude_parity::render_stats(session));
+            output::print_block(&crate::claude_parity::render_stats(session));
         }
         "/sessions" => {
             registry::handle_sessions(arg);
@@ -328,14 +330,14 @@ pub(super) async fn handle_slash_command(
         "/plan" if arg == "show" || arg == "view" => {
             match (&session.current_plan, &session.current_plan_path) {
                 (Some(plan), Some(path)) => {
-                    eprintln!(
+                    output::print_block(&format!(
                         "\n# Plan ({})\n\n{}",
                         path.display(),
                         plan.render_markdown()
-                    );
+                    ));
                 }
                 (Some(plan), None) => {
-                    eprintln!("\n{}", plan.render_markdown());
+                    output::print_block(&format!("\n{}", plan.render_markdown()));
                 }
                 _ => output::print_info("No plan yet. Ask the model to call `update_plan`."),
             }
@@ -386,7 +388,7 @@ pub(super) async fn handle_slash_command(
             registry::handle_diff();
         }
         "/worktree" | "/wt" => {
-            eprintln!("{}", registry::handle_worktree(arg).await);
+            output::print_block(&registry::handle_worktree(arg).await);
         }
         "/batch" => {
             let batch_parts: Vec<&str> = arg.splitn(2, ' ').collect();
@@ -634,13 +636,10 @@ fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config
 pub(super) fn print_help() {
     let skills = crate::skills::discover_skills();
     let registry = crate::command_registry::registry_from_builtins_and_skills(&skills);
-    eprintln!(
-        "{}",
-        crate::command_registry::format_command_help(
-            &registry,
-            crate::command_registry::ShortcutHelp::Repl,
-        )
-    );
+    output::print_block(&crate::command_registry::format_command_help(
+        &registry,
+        crate::command_registry::ShortcutHelp::Repl,
+    ));
 }
 
 #[cfg(test)]

@@ -15,7 +15,8 @@ jobs:
   process:
     if: |
       (startsWith(github.event.comment.body, '/agi ') || github.event.comment.body == '/agi') &&
-      (github.event.issue.pull_request != null || github.event.pull_request != null)
+      (github.event.issue.pull_request != null || github.event.pull_request != null) &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -28,11 +29,14 @@ jobs:
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          COMMAND=$(echo "$COMMENT_BODY" | sed 's|^/agi *||' | head -1)
+          set -euo pipefail
+          FIRST_LINE=${COMMENT_BODY%%$'\n'*}
+          COMMAND=$(printf '%s' "$FIRST_LINE" | tr -d '\r' |
+            sed 's|^/agi[[:space:]]*||' | awk '{print tolower($1)}' | tr -cd 'a-z0-9_-' | cut -c1-32)
           if [ -z "$COMMAND" ]; then
             COMMAND="help"
           fi
-          echo "command=$COMMAND" >> $GITHUB_OUTPUT
+          echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
 
       - name: React to comment
         uses: actions/github-script@v9

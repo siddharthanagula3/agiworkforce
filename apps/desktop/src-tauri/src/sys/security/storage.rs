@@ -1,8 +1,8 @@
 //! Secure storage with AES-256-GCM encryption
 //!
-//! This module provides secure storage functionality using machine-derived
-//! encryption keys instead of OS keyring. This eliminates permission prompts
-//! while maintaining strong encryption.
+//! Password-derived keys protect the vault. Where no password exists the key
+//! comes from the per-install secret held by the OS credential service, never
+//! from machine identifiers alone.
 
 use super::machine_key::{self, KeyPurpose};
 use crate::core::sync_utils::{MutexExt, RwLockExt};
@@ -79,9 +79,14 @@ impl SecureStorage {
         Ok(())
     }
 
-    /// Initialize with machine-derived key (no password required)
+    /// Initialize with the per-install key (no password required)
+    ///
+    /// F12: fails closed when the OS credential service has not supplied the
+    /// per-install secret, so the vault is never unlocked with a key another
+    /// local process could recompute.
     pub fn init_with_machine_key(&self) -> Result<(), String> {
-        let key = machine_key::derive_key(KeyPurpose::MasterEncryption);
+        let key = machine_key::try_derive_key(KeyPurpose::MasterEncryption)
+            .map_err(|error| error.to_string())?;
         let mut master = self
             .master_key
             .safe_write()
@@ -95,8 +100,12 @@ impl SecureStorage {
         let salt = if let Some(ref db) = self.db_conn {
             self.retrieve_salt_from_database(db)?
         } else {
-            // Use machine-derived salt as fallback
-            machine_key::derive_key(KeyPurpose::MasterEncryption)[..SALT_SIZE].to_vec()
+            // Use the per-install derived salt as fallback
+            machine_key::try_derive_key(KeyPurpose::MasterEncryption)
+                .map_err(|error| error.to_string())?
+                .get(..SALT_SIZE)
+                .ok_or_else(|| "Derived salt material is too short".to_string())?
+                .to_vec()
         };
 
         let key = derive_key_from_password(password, &salt);
@@ -165,7 +174,6 @@ impl SecureStorage {
     }
 
     /// Decrypt data
-    #[allow(deprecated)]
     pub fn decrypt(&self, encrypted: &EncryptedData) -> Result<Vec<u8>, String> {
         let master = self
             .master_key
@@ -175,9 +183,6 @@ impl SecureStorage {
             .as_ref()
             .ok_or("Storage is locked. Call unlock() or init_with_machine_key() first")?;
 
-        let cipher = Aes256Gcm::new_from_slice(key)
-            .map_err(|e| format!("Failed to create cipher: {}", e))?;
-
         let ciphertext = general_purpose::STANDARD
             .decode(&encrypted.ciphertext)
             .map_err(|e| format!("Failed to decode ciphertext: {}", e))?;
@@ -186,11 +191,13 @@ impl SecureStorage {
             .decode(&encrypted.nonce)
             .map_err(|e| format!("Failed to decode nonce: {}", e))?;
 
-        let nonce = Nonce::from_slice(&nonce_bytes);
-
-        cipher
-            .decrypt(nonce, ciphertext.as_ref())
-            .map_err(|e| format!("Decryption failed: {}", e))
+        decrypt_aes_gcm(key, &nonce_bytes, &ciphertext)
+            .or_else(|| {
+                open_with_legacy_machine_keys(key, |legacy| {
+                    decrypt_aes_gcm(legacy, &nonce_bytes, &ciphertext)
+                })
+            })
+            .ok_or_else(|| "Decryption failed".to_string())
     }
 
     /// Store API key in database (encrypted)
@@ -310,6 +317,40 @@ impl SecureStorage {
     }
 }
 
+#[allow(deprecated)]
+fn decrypt_aes_gcm(key: &[u8], nonce_bytes: &[u8], ciphertext: &[u8]) -> Option<Vec<u8>> {
+    if nonce_bytes.len() != NONCE_SIZE {
+        return None;
+    }
+    let cipher = Aes256Gcm::new_from_slice(key).ok()?;
+    cipher
+        .decrypt(Nonce::from_slice(nonce_bytes), ciphertext)
+        .ok()
+}
+
+/// Open a payload with the machine-only keys an older build derived for the
+/// same purpose as `key`.
+///
+/// The fallback is offered only for a key this process currently derives, so a
+/// caller-supplied key can never turn this into a machine-only decryption
+/// oracle. Reading such a payload does not weaken it — its key was already
+/// reproducible by any local process — and it stays reported through
+/// `machine_key::has_machine_only_secrets` until it is written again.
+fn open_with_legacy_machine_keys<T>(
+    key: &[u8],
+    mut open: impl FnMut(&[u8]) -> Option<T>,
+) -> Option<T> {
+    let (purpose, legacy_keys) = machine_key::legacy_keys_for_current_key(key)?;
+    let opened = legacy_keys.iter().find_map(|legacy| open(legacy))?;
+    machine_key::record_machine_only_payload(purpose.as_str());
+    tracing::warn!(
+        "Read a {} payload still wrapped under the legacy machine-only key; \
+         it stays reproducible by any local process until it is written again.",
+        purpose.as_str()
+    );
+    Some(opened)
+}
+
 /// Derive encryption key from password using PBKDF2
 fn derive_key_from_password(password: &str, salt: &[u8]) -> Vec<u8> {
     let key: [u8; KEY_SIZE] =
@@ -382,14 +423,16 @@ pub fn decrypt_file_with_key(
     let nonce_bytes = &encrypted_data[SALT_SIZE..SALT_SIZE + NONCE_SIZE];
     let ciphertext = &encrypted_data[SALT_SIZE + NONCE_SIZE..];
 
-    let cipher =
-        Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
-
-    let nonce = Nonce::from_slice(nonce_bytes);
-
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|e| format!("Decryption failed: {}", e))?;
+    // Files an older build encrypted under the machine-only key (cloud E2EE
+    // uploads above all) have no second copy anywhere. Rotating the purpose key
+    // must not make them permanently unreadable.
+    let plaintext = decrypt_aes_gcm(key, nonce_bytes, ciphertext)
+        .or_else(|| {
+            open_with_legacy_machine_keys(key, |legacy| {
+                decrypt_aes_gcm(legacy, nonce_bytes, ciphertext)
+            })
+        })
+        .ok_or_else(|| "Decryption failed".to_string())?;
 
     fs::write(output_path, plaintext)
         .map_err(|e| format!("Failed to write decrypted file: {}", e))?;
@@ -608,5 +651,58 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Decryption failed"));
+    }
+
+    /// F5/F12 migration: a cloud E2EE file an older build wrote under the
+    /// machine_key machine-only derivation has no second copy anywhere, so
+    /// rotating the purpose key must not make it permanently unreadable.
+    #[test]
+    fn legacy_machine_key_encrypted_file_still_decrypts_after_key_rotation() {
+        use std::fs;
+        use tempfile::tempdir;
+
+        let purpose = KeyPurpose::CloudEncryption;
+        let legacy_key = machine_key::legacy_machine_only_keys(purpose)
+            .first()
+            .copied()
+            .expect("a legacy candidate always exists");
+        let current_key =
+            machine_key::try_derive_key(purpose).expect("install secret available in tests");
+        assert_ne!(legacy_key.as_slice(), current_key.as_slice());
+
+        let dir = tempdir().expect("temp dir");
+        let plain = dir.path().join("upload.txt");
+        let encrypted = dir.path().join("upload.enc");
+        let restored = dir.path().join("download.txt");
+        fs::write(&plain, b"end-to-end encrypted payload").expect("seed plaintext");
+
+        encrypt_file_with_key(
+            plain.to_str().expect("path"),
+            encrypted.to_str().expect("path"),
+            &legacy_key,
+        )
+        .expect("encrypt under the legacy machine-only key");
+
+        decrypt_file_with_key(
+            encrypted.to_str().expect("path"),
+            restored.to_str().expect("path"),
+            &current_key,
+        )
+        .expect("the rotated key must still open a legacy machine-only file");
+        assert_eq!(
+            fs::read(&restored).expect("read restored file"),
+            b"end-to-end encrypted payload"
+        );
+        assert!(machine_key::has_machine_only_secrets());
+
+        // An arbitrary key must never reach the machine-only fallback.
+        let stray = dir.path().join("stray.txt");
+        assert!(decrypt_file_with_key(
+            encrypted.to_str().expect("path"),
+            stray.to_str().expect("path"),
+            &[0x33u8; KEY_SIZE],
+        )
+        .is_err());
+        assert!(!stray.exists());
     }
 }

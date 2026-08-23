@@ -91,6 +91,7 @@ pub mod sandbox;
 pub mod shell_snapshot;
 pub mod sync;
 pub mod terminal_style;
+pub mod terminal_text;
 pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
@@ -1380,7 +1381,12 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             );
             for (i, msg) in messages.iter().enumerate() {
                 let preview: String = msg.text_content().chars().take(120).collect();
-                println!("  [{:>3}] {:<10}  {}", i, msg.role, preview);
+                println!(
+                    "  [{:>3}] {:<10}  {}",
+                    i,
+                    msg.role,
+                    terminal_text::sanitize_terminal_text(&preview)
+                );
             }
             Ok(())
         }
@@ -1550,6 +1556,11 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
 /// only classified as git when they look like an actual git remote (a
 /// scheme URL, scp-like `user@host:path` shorthand, or a `.git` suffix).
 fn is_git_plugin_source(source: &str) -> bool {
+    // `--upload-pack=...git` matches the heuristics below; never hand a
+    // `-`-prefixed source to git as a remote.
+    if source.starts_with('-') {
+        return false;
+    }
     // An existing local path wins over any name-based heuristic.
     if std::path::Path::new(source).exists() {
         return false;
@@ -2293,7 +2304,12 @@ pub async fn run_main() -> Result<()> {
                         );
                         for s in &servers {
                             let transport = if s.url.is_some() { "HTTP/SSE" } else { "stdio" };
-                            println!("  {} ({}) [{}]", s.name, s.source, transport);
+                            println!(
+                                "  {} ({}) [{}]",
+                                terminal_text::sanitize_terminal_text(&s.name),
+                                terminal_text::sanitize_terminal_text(&s.source),
+                                transport
+                            );
                         }
                         if !report.skipped_existing.is_empty() {
                             println!(
@@ -2332,7 +2348,11 @@ pub async fn run_main() -> Result<()> {
                                 .as_deref()
                                 .or(s.url.as_deref())
                                 .unwrap_or("(unknown)");
-                            println!("  {} — {}", s.name, cmd_display);
+                            println!(
+                                "  {} — {}",
+                                terminal_text::sanitize_terminal_text(&s.name),
+                                terminal_text::sanitize_terminal_text(cmd_display)
+                            );
                         }
                     }
                     Ok(())
@@ -2471,7 +2491,12 @@ pub async fn run_main() -> Result<()> {
                 match action {
                     MarketplaceSubcommand::Search { query } => {
                         let results = mp.search(query).await?;
-                        println!("{}", marketplace::format_search_results(&results));
+                        println!(
+                            "{}",
+                            terminal_text::sanitize_terminal_text(
+                                &marketplace::format_search_results(&results)
+                            )
+                        );
                         Ok(())
                     }
                     MarketplaceSubcommand::Install { source, scope } => {

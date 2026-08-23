@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-mod approval;
+pub(crate) mod approval;
+pub(crate) mod command_shape;
 mod dangerous_commands;
 
 pub use dangerous_commands::DANGEROUS_COMMANDS;
@@ -101,7 +102,7 @@ pub fn classify_command(command: &str) -> CommandSafety {
 
 /// Split a command line on `|`, `;`, and `&&`, trimming each segment.
 /// Respects single and double quotes — operators inside quotes are literal.
-fn split_segments(command: &str) -> Vec<String> {
+pub(crate) fn split_segments(command: &str) -> Vec<String> {
     let mut segments = Vec::new();
     let mut current = String::new();
     let mut in_single_quote = false;
@@ -222,6 +223,16 @@ fn contains_unquoted_shell_redirection(command: &str) -> bool {
     false
 }
 
+/// Downgrade a `Safe` verdict to `Unknown` when the segment carries shell
+/// redirection. `Dangerous` is preserved so a redirected destructive command
+/// keeps its warning.
+fn demote_safe_on_redirection(classification: CommandSafety, segment: &str) -> CommandSafety {
+    if classification == CommandSafety::Safe && contains_unquoted_shell_redirection(segment) {
+        return CommandSafety::Unknown;
+    }
+    classification
+}
+
 /// Classify a single command segment (no pipes/chains).
 fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety {
     let trimmed = segment.trim();
@@ -242,48 +253,54 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
     }
 
     // --- Tool-specific validation ---
+    //
+    // Every tool-specific verdict is funnelled through `demote_safe_on_redirection`.
+    // These classifiers return early and would otherwise never reach the generic
+    // redirection guard below, so `sed -n 1,999p secrets.yml > ci.yml` and
+    // `git diff --no-index /dev/null secrets.env > /tmp/exfil` would auto-approve
+    // an arbitrary file read/write with no prompt.
 
     // `rm` — force flags make it Dangerous, otherwise Unknown.
     if base_cmd == "rm" {
-        return classify_rm(trimmed);
+        return demote_safe_on_redirection(classify_rm(trimmed), trimmed);
     }
 
     // `find` — dangerous if any exec/delete options present.
     if base_cmd == "find" {
-        return classify_find(trimmed);
+        return demote_safe_on_redirection(classify_find(trimmed), trimmed);
     }
 
     // `rg` (ripgrep) — dangerous if any execution options present.
     if base_cmd == "rg" {
-        return classify_rg(trimmed);
+        return demote_safe_on_redirection(classify_rg(trimmed), trimmed);
     }
 
     // `sed` — only safe when used as read-only print: `sed -n Np` or `sed -n M,Np`.
     if base_cmd == "sed" {
-        return classify_sed(trimmed);
+        return demote_safe_on_redirection(classify_sed(trimmed), trimmed);
     }
 
     // `base64` — dangerous with output file options.
     if base_cmd == "base64" {
-        return classify_base64(trimmed);
+        return demote_safe_on_redirection(classify_base64(trimmed), trimmed);
     }
 
     // `sort` — safe unless it writes through output options.
     if base_cmd == "sort" {
-        return classify_sort(trimmed);
+        return demote_safe_on_redirection(classify_sort(trimmed), trimmed);
     }
 
     // Network inspection commands can also mutate network interfaces/routes.
     if base_cmd == "ifconfig" {
-        return classify_ifconfig(trimmed);
+        return demote_safe_on_redirection(classify_ifconfig(trimmed), trimmed);
     }
     if base_cmd == "ip" {
-        return classify_ip(trimmed);
+        return demote_safe_on_redirection(classify_ip(trimmed), trimmed);
     }
 
     // `git` — enhanced subcommand validation.
     if base_cmd == "git" {
-        return classify_git(trimmed);
+        return demote_safe_on_redirection(classify_git(trimmed), trimmed);
     }
 
     // Check dangerous single-word commands (exact match or prefix like mkfs.ext4).
@@ -382,6 +399,15 @@ fn classify_xargs(segment: &str, prev_was_safe: bool) -> CommandSafety {
         return CommandSafety::Unknown;
     }
 
+    match xargs_payload(segment) {
+        None => CommandSafety::Safe,
+        Some(payload) => classify_single_segment(&payload, false),
+    }
+}
+
+/// The command an `xargs` segment will actually execute, with xargs' own flags
+/// and their values removed. `None` when xargs has no payload.
+pub(crate) fn xargs_payload(segment: &str) -> Option<String> {
     let args: Vec<&str> = segment.split_whitespace().collect();
     let mut i = 1;
     while i < args.len() {
@@ -419,10 +445,10 @@ fn classify_xargs(segment: &str, prev_was_safe: bool) -> CommandSafety {
     }
 
     if i >= args.len() {
-        return CommandSafety::Safe;
+        return None;
     }
 
-    classify_single_segment(&args[i..].join(" "), false)
+    Some(args[i..].join(" "))
 }
 
 // ---------------------------------------------------------------------------
@@ -477,6 +503,53 @@ mod tests {
         );
         assert_eq!(classify_command("tr a-z A-Z"), CommandSafety::Safe);
         assert_eq!(classify_command("diff a.txt b.txt"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn tool_specific_classifiers_never_auto_approve_redirection() {
+        // Each of these returns early from a tool-specific classifier and would
+        // otherwise skip the generic redirection guard, auto-running an
+        // arbitrary file read-and-write with no confirmation prompt.
+        assert_eq!(
+            classify_command(
+                "sed -n 1,999p config/prod-credentials.yml > .github/workflows/ci.yml"
+            ),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("git diff --no-index /dev/null secrets.env > /tmp/exfil.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("find . -name '*.rs' > /tmp/inventory"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("rg secret . > /tmp/hits"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("base64 secrets.env > /tmp/blob"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("sort names.txt > /etc/passwd"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("git status < /tmp/input"),
+            CommandSafety::Unknown
+        );
+        // Redirection must not soften a dangerous verdict.
+        assert_eq!(
+            classify_command("rm -rf target > /dev/null"),
+            CommandSafety::Dangerous
+        );
+        // Redirection inside quotes is literal text, not a shell operator.
+        assert_eq!(
+            classify_command("git log --grep '>' --oneline"),
+            CommandSafety::Safe
+        );
     }
 
     #[test]

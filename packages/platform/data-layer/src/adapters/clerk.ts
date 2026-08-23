@@ -52,13 +52,23 @@ export class ClerkAuthAdapter implements AuthAdapter {
   async verifyJwt(token: string): Promise<VerifiedJwt | null> {
     if (token.trim().length === 0) return null;
 
+    const authorizedParties = (this.config.authorizedParties ?? [])
+      .map((party) => party.trim())
+      .filter(Boolean);
+    // Clerk skips the azp check when authorizedParties is empty, which accepts
+    // any same-instance token minted for another origin.
+    if (authorizedParties.length === 0) {
+      throw new DataLayerConfigError(
+        'Clerk auth adapter refuses to verify session tokens without an authorized-party ' +
+          'allowlist. Set CLERK_AUTHORIZED_PARTIES (or pass clerkAuthorizedParties) so Clerk ' +
+          'enforces the token azp claim against this deployment origin.',
+      );
+    }
+
     const verifyToken = this.config.verifyToken ?? (await loadClerkBackend()).verifyToken;
-    const options: ClerkVerifyTokenOptions = {};
+    const options: ClerkVerifyTokenOptions = { authorizedParties };
     if (this.config.jwtKey) options.jwtKey = this.config.jwtKey;
     if (this.config.secretKey) options.secretKey = this.config.secretKey;
-    if (this.config.authorizedParties?.length) {
-      options.authorizedParties = this.config.authorizedParties;
-    }
 
     try {
       const claims = await verifyToken(token, options);

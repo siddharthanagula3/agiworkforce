@@ -803,8 +803,9 @@ const SSE_CONNECT_TIMEOUT_SECS: u64 = 30;
 /// Desktop-side POLICY stays here in [`HttpSseTransport::new`]: SSRF URL
 /// validation + the 50 MB response cap + the 30s connect / 60s read timeouts
 /// (as engine hardening knobs), the SEV-DESK-07 `verify_ssl` policy (refused
-/// in release builds; debug builds localhost-only), and the
-/// api-key/bearer/custom header mapping with build-time validation.
+/// in release builds; debug builds localhost-only), the credential-over-
+/// cleartext refusal, and the api-key/bearer/custom header mapping with
+/// build-time validation.
 ///
 /// Same actor model as [`StdioTransport`]: a background task exclusively owns
 /// the engine client behind a FIFO command channel.
@@ -833,6 +834,51 @@ pub struct HttpSseTransport {
 /// Maximum inline response body size accepted from a remote MCP server
 /// (Content-Length checked before the body is read). FIX R-10 preserved.
 const MAX_RESPONSE_BODY_BYTES: u64 = 50_000_000; // 50 MB
+
+/// Refuse a URL that would carry a caller-supplied header over a cleartext
+/// network hop. HTTPS is fine; so is loopback, where nothing leaves the host.
+///
+/// The scheme is read from the parser, never matched textually: URL schemes are
+/// case-insensitive, so `HTTP://host` connects exactly like `http://host` while
+/// slipping past any `starts_with("http://")` test. An unparseable URL fails
+/// closed.
+fn refuse_cleartext_credential_hop(url: &str) -> Result<(), String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid MCP server URL: {}", e))?;
+    if parsed.scheme() == "https" {
+        return Ok(());
+    }
+    let loopback = match parsed.host() {
+        Some(url::Host::Domain(domain)) => domain.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(v4)) => v4.is_loopback(),
+        Some(url::Host::Ipv6(v6)) => v6.is_loopback(),
+        None => false,
+    };
+    if loopback {
+        return Ok(());
+    }
+    Err(format!(
+        "scheme '{}' for host '{}' is not encrypted",
+        parsed.scheme(),
+        parsed.host_str().unwrap_or("")
+    ))
+}
+
+/// Lowercase the scheme of a URL handed to the engine, leaving the rest
+/// byte-for-byte so `{base}/message` keeps its exact shape. The engine's own
+/// cleartext refusal for the SSE listener compares the scheme textually, so an
+/// `HTTP://` spelling would otherwise slip past it.
+fn canonical_scheme(url: &str) -> String {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return url.to_string();
+    };
+    let scheme = parsed.scheme();
+    match url.get(..scheme.len()) {
+        Some(prefix) if prefix != scheme && prefix.eq_ignore_ascii_case(scheme) => {
+            format!("{}{}", scheme, &url[scheme.len()..])
+        }
+        _ => url.to_string(),
+    }
+}
 
 impl HttpSseTransport {
     /// Create a new HTTP/SSE transport over the shared engine.
@@ -895,6 +941,29 @@ impl HttpSseTransport {
             }
         }
 
+        // CWE-319: refuse to attach a caller-supplied header unless the
+        // configured URL is HTTPS or loopback. Every such header counts, not
+        // just recognisably-named ones — a name-based denylist misses
+        // conventions like `apikey`, `x-access-key` or `authentication`, and
+        // the config file an attacker can write picks the name. This gates the
+        // configured URL only; a 3xx downgrade mid-flight is the engine
+        // client's redirect policy to enforce.
+        let sends_caller_headers =
+            config.api_key.is_some() || config.bearer_token.is_some() || !config.headers.is_empty();
+        if sends_caller_headers {
+            refuse_cleartext_credential_hop(&config.url).map_err(|reason| {
+                tracing::error!(
+                    "[MCP HTTP Transport] Refusing to send credentials for server '{}' over cleartext HTTP: {}",
+                    server_name,
+                    reason
+                );
+                McpError::ConnectionError(format!(
+                    "Refusing to send MCP credentials over cleartext HTTP. Remote MCP servers must use HTTPS: {}",
+                    reason
+                ))
+            })?;
+        }
+
         // Header mapping with build-time validation (old `build_headers`
         // semantics): api_key -> X-API-Key, bearer_token -> Authorization,
         // plus custom headers. Content-Type is set per-request by the engine.
@@ -927,7 +996,7 @@ impl HttpSseTransport {
         // response cap (FIX R-10), the 30s connect timeout, and the 60s
         // stalled-stream read timeout. The SSE listener's HTTPS-for-remote
         // refusal lives inside the engine supervisor (old `connect_sse`
-        // parity; cleartext-remote POSTs stay allowed, as before).
+        // parity); credential-free cleartext-remote POSTs stay allowed.
         let timeouts = agiworkforce_mcp::McpTimeouts {
             validate_urls: true,
             verify_tls: config.verify_ssl,
@@ -938,7 +1007,7 @@ impl HttpSseTransport {
         };
 
         let engine_config = agiworkforce_mcp::TransportConfig::SseLegacy {
-            base_url: config.url.clone(),
+            base_url: canonical_scheme(&config.url),
             headers: engine_headers,
         };
 
@@ -1485,5 +1554,242 @@ mod tests {
         if let Ok(transport) = result {
             let _ = transport.shutdown().await;
         }
+    }
+
+    fn cleartext_remote(name: &str) -> String {
+        format!("http://{}.example.com:8080", name)
+    }
+
+    async fn expect_credential_refusal(server: &str, config: HttpSseConfig) -> McpError {
+        match HttpSseTransport::new(server.to_string(), config).await {
+            Ok(transport) => {
+                let _ = transport.shutdown().await;
+                panic!(
+                    "credentials over cleartext http:// must be refused ({})",
+                    server
+                );
+            }
+            Err(e) => e,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_bearer_token_refused_over_cleartext_remote() {
+        let config = HttpSseConfig {
+            url: cleartext_remote("bearer"),
+            bearer_token: Some("secret-token".to_string()),
+            ..Default::default()
+        };
+
+        let msg = expect_credential_refusal("cleartext-bearer", config)
+            .await
+            .to_string();
+        assert!(msg.contains("HTTPS"), "unexpected error: {}", msg);
+        assert!(
+            !msg.contains("secret-token"),
+            "error must not leak the credential: {}",
+            msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_api_key_refused_over_cleartext_remote() {
+        let config = HttpSseConfig {
+            url: cleartext_remote("apikey"),
+            api_key: Some("secret-key".to_string()),
+            ..Default::default()
+        };
+
+        let msg = expect_credential_refusal("cleartext-api-key", config)
+            .await
+            .to_string();
+        assert!(msg.contains("HTTPS"), "unexpected error: {}", msg);
+        assert!(!msg.contains("secret-key"), "leaked credential: {}", msg);
+    }
+
+    #[tokio::test]
+    async fn test_custom_credential_header_refused_over_cleartext_remote() {
+        for name in ["Authorization", "X-Api-Key", "X-Auth-Token", "Cookie"] {
+            let config = HttpSseConfig {
+                url: cleartext_remote("custom"),
+                headers: HashMap::from([(name.to_string(), "secret".to_string())]),
+                ..Default::default()
+            };
+
+            let msg = expect_credential_refusal("cleartext-custom", config)
+                .await
+                .to_string();
+            assert!(msg.contains("HTTPS"), "header '{}': {}", name, msg);
+        }
+    }
+
+    /// The gate cannot depend on recognising a header name: `apikey` and
+    /// friends carry no `-`/`_` separator, and the config file an attacker can
+    /// write picks the name. Every caller-supplied header is gated.
+    #[tokio::test]
+    async fn test_any_custom_header_refused_over_cleartext_remote() {
+        for name in [
+            "apikey",
+            "x-apikey",
+            "authentication",
+            "x-auth",
+            "x-access-key",
+            "x-trace-id",
+        ] {
+            let config = HttpSseConfig {
+                url: cleartext_remote("anyheader"),
+                headers: HashMap::from([(name.to_string(), "secret".to_string())]),
+                ..Default::default()
+            };
+
+            let msg = expect_credential_refusal("cleartext-any-header", config)
+                .await
+                .to_string();
+            assert!(msg.contains("HTTPS"), "header '{}': {}", name, msg);
+        }
+    }
+
+    /// URL schemes are case-insensitive on the wire, so an uppercase or mixed
+    /// spelling must not buy a cleartext hop for a credential.
+    #[tokio::test]
+    async fn test_uppercase_scheme_cleartext_remote_refuses_credentials() {
+        for scheme in ["HTTP", "HtTp", "hTTP"] {
+            let config = HttpSseConfig {
+                url: format!("{}://mcp.example.com:8080", scheme),
+                bearer_token: Some("secret-token".to_string()),
+                ..Default::default()
+            };
+
+            let msg = expect_credential_refusal("uppercase-scheme", config)
+                .await
+                .to_string();
+            assert!(msg.contains("HTTPS"), "scheme '{}': {}", scheme, msg);
+            assert!(
+                !msg.contains("secret-token"),
+                "error must not leak the credential: {}",
+                msg
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_uppercase_scheme_cleartext_remote_refuses_custom_header() {
+        let config = HttpSseConfig {
+            url: "HTTP://mcp.example.com:8080".to_string(),
+            headers: HashMap::from([("apikey".to_string(), "secret".to_string())]),
+            ..Default::default()
+        };
+
+        let msg = expect_credential_refusal("uppercase-scheme-header", config)
+            .await
+            .to_string();
+        assert!(msg.contains("HTTPS"), "unexpected error: {}", msg);
+    }
+
+    /// A URL the parser cannot resolve to an encrypted scheme fails closed
+    /// rather than falling through to the header mapping.
+    #[tokio::test]
+    async fn test_unresolvable_scheme_refuses_credentials() {
+        for url in ["not a url", "mcp.example.com:8080", "ftp://mcp.example.com"] {
+            let config = HttpSseConfig {
+                url: url.to_string(),
+                api_key: Some("secret-key".to_string()),
+                ..Default::default()
+            };
+
+            let msg = expect_credential_refusal("unresolvable-scheme", config)
+                .await
+                .to_string();
+            assert!(msg.contains("HTTPS"), "url '{}': {}", url, msg);
+            assert!(!msg.contains("secret-key"), "leaked credential: {}", msg);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_uppercase_https_remote_still_allowed() {
+        let config = HttpSseConfig {
+            url: "HTTPS://mcp.example.com".to_string(),
+            bearer_token: Some("remote-token".to_string()),
+            ..Default::default()
+        };
+
+        let transport = HttpSseTransport::new("uppercase-https".to_string(), config)
+            .await
+            .expect("uppercase https remote with credentials must be allowed");
+        let _ = transport.shutdown().await;
+    }
+
+    #[test]
+    fn test_engine_sees_a_lowercase_scheme() {
+        assert_eq!(
+            canonical_scheme("HTTP://mcp.example.com:8080"),
+            "http://mcp.example.com:8080"
+        );
+        assert_eq!(
+            canonical_scheme("HtTpS://mcp.example.com/base"),
+            "https://mcp.example.com/base"
+        );
+        assert_eq!(
+            canonical_scheme("http://localhost:8080"),
+            "http://localhost:8080"
+        );
+        assert_eq!(canonical_scheme("not a url"), "not a url");
+    }
+
+    #[tokio::test]
+    async fn test_credentials_allowed_over_loopback_http() {
+        for host in ["localhost", "127.0.0.1", "[::1]"] {
+            let config = HttpSseConfig {
+                url: format!("http://{}:8080", host),
+                bearer_token: Some("local-token".to_string()),
+                ..Default::default()
+            };
+
+            let transport = HttpSseTransport::new("loopback".to_string(), config)
+                .await
+                .unwrap_or_else(|e| panic!("loopback {} must stay allowed: {:?}", host, e));
+            let _ = transport.shutdown().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_credentials_allowed_over_https_remote() {
+        let config = HttpSseConfig {
+            url: "https://mcp.example.com".to_string(),
+            bearer_token: Some("remote-token".to_string()),
+            ..Default::default()
+        };
+
+        let transport = HttpSseTransport::new("https-remote".to_string(), config)
+            .await
+            .expect("https remote with credentials must be allowed");
+        let _ = transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn test_header_free_cleartext_remote_still_allowed() {
+        let config = HttpSseConfig {
+            url: cleartext_remote("nocreds"),
+            ..Default::default()
+        };
+
+        let transport = HttpSseTransport::new("no-creds".to_string(), config)
+            .await
+            .expect("cleartext remote without caller headers keeps prior behaviour");
+        let _ = transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn test_custom_headers_allowed_over_loopback_http() {
+        let config = HttpSseConfig {
+            url: "http://127.0.0.1:8080".to_string(),
+            headers: HashMap::from([("X-Trace-Id".to_string(), "abc".to_string())]),
+            ..Default::default()
+        };
+
+        let transport = HttpSseTransport::new("loopback-headers".to_string(), config)
+            .await
+            .expect("loopback keeps custom headers");
+        let _ = transport.shutdown().await;
     }
 }

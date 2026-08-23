@@ -7,6 +7,8 @@ use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 use super::capture::{capture_screen_full, capture_screen_region};
+use super::computer_use::{require_consent, run_when_consented};
+use super::settings_v2::SettingsServiceState;
 use super::AppDatabase;
 use crate::automation::screen::{perform_ocr, OcrResult};
 use crate::{
@@ -155,6 +157,23 @@ fn default_drag_duration() -> u32 {
     300
 }
 
+/// F20 (audit 2026-08-21): these commands synthesize the same keystrokes,
+/// clicks, and screen reads the `computer_use_*` commands do, from the same
+/// renderer, so they carry the same persisted-consent gate.
+///
+/// The gate is not only about parity. It also refuses while the native consent
+/// prompt is on screen, which is what keeps the prompt answerable only on the
+/// desktop: without it a caller could raise the prompt through any
+/// `computer_use_*` command and then press its default button from here.
+async fn consent_for_element_access(
+    app: &AppHandle,
+    settings: &SettingsServiceState,
+) -> Result<(), AGIError> {
+    require_consent(app, settings)
+        .await
+        .map_err(AGIError::PermissionError)
+}
+
 #[tauri::command]
 pub fn automation_list_windows(app: AppHandle) -> Result<Vec<UIElementInfo>, AGIError> {
     ensure_overlay_ready(&app);
@@ -185,7 +204,19 @@ pub fn automation_find_elements(
 }
 
 #[tauri::command]
-pub fn automation_invoke(request: InvokeRequest) -> Result<(), AGIError> {
+pub async fn automation_invoke(
+    app: AppHandle,
+    settings: State<'_, SettingsServiceState>,
+    request: InvokeRequest,
+) -> Result<(), AGIError> {
+    run_when_consented(
+        consent_for_element_access(&app, &settings),
+        invoke_element(&request),
+    )
+    .await
+}
+
+async fn invoke_element(request: &InvokeRequest) -> Result<(), AGIError> {
     global_service()?
         .native
         .invoke(&request.element_id)
@@ -193,7 +224,19 @@ pub fn automation_invoke(request: InvokeRequest) -> Result<(), AGIError> {
 }
 
 #[tauri::command]
-pub fn automation_set_value(request: ValueRequest) -> Result<(), AGIError> {
+pub async fn automation_set_value(
+    app: AppHandle,
+    settings: State<'_, SettingsServiceState>,
+    request: ValueRequest,
+) -> Result<(), AGIError> {
+    run_when_consented(
+        consent_for_element_access(&app, &settings),
+        set_element_value(&request),
+    )
+    .await
+}
+
+async fn set_element_value(request: &ValueRequest) -> Result<(), AGIError> {
     let service = global_service()?;
     if request.focus.unwrap_or(false) {
         service
@@ -221,18 +264,42 @@ pub fn automation_get_text(element_id: String) -> Result<String, AGIError> {
 }
 
 #[tauri::command]
-pub fn automation_toggle(element_id: String) -> Result<(), AGIError> {
+pub async fn automation_toggle(
+    app: AppHandle,
+    settings: State<'_, SettingsServiceState>,
+    element_id: String,
+) -> Result<(), AGIError> {
+    run_when_consented(
+        consent_for_element_access(&app, &settings),
+        toggle_element(&element_id),
+    )
+    .await
+}
+
+async fn toggle_element(element_id: &str) -> Result<(), AGIError> {
     global_service()?
         .native
-        .toggle(&element_id)
+        .toggle(element_id)
         .map_err(AGIError::from)
 }
 
 #[tauri::command]
-pub fn automation_focus_window(element_id: String) -> Result<(), AGIError> {
+pub async fn automation_focus_window(
+    app: AppHandle,
+    settings: State<'_, SettingsServiceState>,
+    element_id: String,
+) -> Result<(), AGIError> {
+    run_when_consented(
+        consent_for_element_access(&app, &settings),
+        focus_window(&element_id),
+    )
+    .await
+}
+
+async fn focus_window(element_id: &str) -> Result<(), AGIError> {
     global_service()?
         .native
-        .focus_window(&element_id)
+        .focus_window(element_id)
         .map_err(AGIError::from)
 }
 
@@ -240,7 +307,20 @@ pub fn automation_focus_window(element_id: String) -> Result<(), AGIError> {
 pub async fn automation_send_keys(
     app: AppHandle,
     db: State<'_, AppDatabase>,
+    settings: State<'_, SettingsServiceState>,
     request: SendKeysRequest,
+) -> Result<(), String> {
+    run_when_consented(
+        require_consent(&app, &settings),
+        send_keys_now(&app, &db, &request),
+    )
+    .await
+}
+
+async fn send_keys_now(
+    app: &AppHandle,
+    db: &State<'_, AppDatabase>,
+    request: &SendKeysRequest,
 ) -> Result<(), String> {
     if request.text.is_empty() {
         return Err("Text cannot be empty".to_string());
@@ -267,11 +347,19 @@ pub async fn automation_send_keys(
         }
     }
 
-    execute_text_input(&app, &db, &request, false).await
+    execute_text_input(app, db, request, false).await
 }
 
 #[tauri::command]
-pub async fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
+pub async fn automation_hotkey(
+    app: AppHandle,
+    settings: State<'_, SettingsServiceState>,
+    request: HotkeyRequest,
+) -> Result<(), String> {
+    run_when_consented(require_consent(&app, &settings), send_hotkey_now(&request)).await
+}
+
+async fn send_hotkey_now(request: &HotkeyRequest) -> Result<(), String> {
     let modifiers: Vec<Key> = request
         .modifiers
         .iter()
@@ -298,9 +386,22 @@ pub async fn automation_hotkey(request: HotkeyRequest) -> Result<(), String> {
 pub async fn automation_click(
     app: AppHandle,
     db: State<'_, AppDatabase>,
+    settings: State<'_, SettingsServiceState>,
     request: ClickRequest,
 ) -> Result<(), String> {
-    ensure_overlay_ready(&app);
+    run_when_consented(
+        require_consent(&app, &settings),
+        click_now(&app, &db, &request),
+    )
+    .await
+}
+
+async fn click_now(
+    app: &AppHandle,
+    db: &State<'_, AppDatabase>,
+    request: &ClickRequest,
+) -> Result<(), String> {
+    ensure_overlay_ready(app);
 
     if let (Some(x), Some(y)) = (request.x, request.y) {
         if !(-10_000..=100_000).contains(&x) {
@@ -343,7 +444,7 @@ pub async fn automation_click(
         Err(err) => {
             let err_str = err.to_string();
             emit_ui_action(
-                &app,
+                app,
                 "UI Click",
                 &format!("Failed to prepare click: {}", err_str),
                 "failed",
@@ -363,7 +464,7 @@ pub async fn automation_click(
                     Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
                     .to_string();
                 emit_ui_action(
-                    &app,
+                    app,
                     "UI Click",
                     &err_str,
                     "failed",
@@ -383,7 +484,7 @@ pub async fn automation_click(
         if let Err(err) = mouse.click(x, y, button) {
             let err_str = err.to_string();
             emit_ui_action(
-                &app,
+                app,
                 "UI Click",
                 &format!("Failed to click: {}", err_str),
                 "failed",
@@ -401,7 +502,7 @@ pub async fn automation_click(
 
     if let Ok(conn) = db.conn.lock() {
         if let Err(err) = dispatch_overlay_animation(
-            &app,
+            app,
             &conn,
             OverlayAnimation::Click {
                 x,
@@ -414,7 +515,7 @@ pub async fn automation_click(
     }
 
     emit_ui_action(
-        &app,
+        app,
         "UI Click",
         &format!("Clicked at ({}, {}) with {}", x, y, button_name),
         "success",
@@ -434,18 +535,36 @@ pub async fn automation_click(
 pub async fn automation_type(
     app: AppHandle,
     db: State<'_, AppDatabase>,
+    settings: State<'_, SettingsServiceState>,
     request: SendKeysRequest,
 ) -> Result<(), String> {
-    execute_text_input(&app, &db, &request, true).await
+    run_when_consented(
+        require_consent(&app, &settings),
+        execute_text_input(&app, &db, &request, true),
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn automation_drag_drop(
     app: AppHandle,
     db: State<'_, AppDatabase>,
+    settings: State<'_, SettingsServiceState>,
     request: DragDropRequest,
 ) -> Result<(), String> {
-    ensure_overlay_ready(&app);
+    run_when_consented(
+        require_consent(&app, &settings),
+        drag_drop_now(&app, &db, &request),
+    )
+    .await
+}
+
+async fn drag_drop_now(
+    app: &AppHandle,
+    db: &State<'_, AppDatabase>,
+    request: &DragDropRequest,
+) -> Result<(), String> {
+    ensure_overlay_ready(app);
 
     if request.from_x < -10_000 || request.from_x > 100_000 {
         return Err(format!(
@@ -502,7 +621,7 @@ pub async fn automation_drag_drop(
     {
         let message = err.to_string();
         emit_ui_action(
-            &app,
+            app,
             "Drag && Drop",
             &format!("Failed to drag and drop: {}", message),
             "failed",
@@ -519,7 +638,7 @@ pub async fn automation_drag_drop(
     {
         let conn = db.connection()?;
         if let Err(err) = dispatch_overlay_animation(
-            &app,
+            app,
             &conn,
             OverlayAnimation::RegionHighlight {
                 x: request.from_x.min(request.to_x),
@@ -533,7 +652,7 @@ pub async fn automation_drag_drop(
     }
 
     emit_ui_action(
-        &app,
+        app,
         "Drag && Drop",
         "Dragged item via UI automation",
         "success",
@@ -589,6 +708,19 @@ pub async fn automation_ocr(image_path: String) -> Result<OcrResult, String> {
 
 #[tauri::command]
 pub async fn automation_screenshot(
+    app: AppHandle,
+    db: State<'_, AppDatabase>,
+    settings: State<'_, SettingsServiceState>,
+    request: ScreenshotRequest,
+) -> Result<crate::sys::commands::capture::CaptureResult, String> {
+    run_when_consented(
+        require_consent(&app, &settings),
+        screenshot_now(app.clone(), db, request),
+    )
+    .await
+}
+
+async fn screenshot_now(
     app: AppHandle,
     db: State<'_, AppDatabase>,
     request: ScreenshotRequest,
@@ -914,5 +1046,106 @@ fn animation_from_event(event: OverlayEvent) -> Option<OverlayAnimation> {
             .data
             .as_deref()
             .and_then(|json| serde_json::from_str::<OverlayAnimation>(json).ok()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Commands in this file that cannot synthesize input or read the screen.
+    /// Everything else must open with the computer-use consent gate, so adding
+    /// a command here is a deliberate decision rather than an omission.
+    const NO_CONSENT_NEEDED: &[&str] = &[
+        "automation_list_windows",
+        "automation_find_elements",
+        "automation_get_value",
+        "automation_get_text",
+        "automation_clipboard_get",
+        "automation_clipboard_set",
+        "automation_ocr",
+        "overlay_emit_click",
+        "overlay_emit_type",
+        "overlay_emit_region",
+        "overlay_replay_recent",
+    ];
+
+    fn shipped_commands() -> Vec<(String, String)> {
+        const SOURCE: &str = include_str!("automation.rs");
+        let shipped = SOURCE.split("#[cfg(test)]").next().expect("shipped source");
+        shipped
+            .split("#[tauri::command]")
+            .skip(1)
+            .map(|chunk| {
+                let name = chunk
+                    .split_once("fn ")
+                    .and_then(|(_, rest)| rest.split_once('('))
+                    .map(|(name, _)| name.trim().to_string())
+                    .unwrap_or_default();
+                let body = chunk
+                    .split_once(" {\n")
+                    .map(|(_, body)| body)
+                    .unwrap_or(chunk);
+                let body = body
+                    .split_once("\n}\n")
+                    .map(|(body, _)| body)
+                    .unwrap_or(body);
+                (name, body.trim_start().to_string())
+            })
+            .collect()
+    }
+
+    /// F20 (audit 2026-08-21): `automation_hotkey` mapped a raw VK code from the
+    /// renderer straight onto `enigo` with no consent check, so a compromised
+    /// webview could raise the native computer-use consent prompt through
+    /// `computer_use_*` and then press its default button through here. Every
+    /// command that can synthesize input or read the screen now opens with the
+    /// same persisted-consent gate, which also refuses while that prompt is up.
+    #[test]
+    fn every_synthetic_input_command_opens_with_the_consent_gate() {
+        let commands = shipped_commands();
+        assert!(!commands.is_empty(), "no commands found to scan");
+
+        for (name, body) in commands {
+            assert!(!name.is_empty(), "could not read a command name");
+            if NO_CONSENT_NEEDED.contains(&name.as_str()) {
+                continue;
+            }
+            assert!(
+                body.starts_with("run_when_consented("),
+                "{name} must run the computer-use consent gate before it acts"
+            );
+            let gate: String = body.lines().take(4).collect();
+            assert!(
+                gate.contains("require_consent(&app, &settings)")
+                    || gate.contains("consent_for_element_access(&app, &settings)"),
+                "{name} must gate on persisted computer-use consent"
+            );
+        }
+    }
+
+    /// The exempt list is only honest while those commands stay read-only.
+    #[test]
+    fn no_exempt_command_touches_the_input_layer() {
+        const INPUT_LAYER: &[&str] = &[
+            ".mouse.lock()",
+            ".keyboard.lock()",
+            "native.invoke(",
+            "native.set_value(",
+            "native.toggle(",
+            "capture_screen_full(",
+            "capture_screen_region(",
+            "execute_text_input(",
+        ];
+
+        for (name, body) in shipped_commands() {
+            if !NO_CONSENT_NEEDED.contains(&name.as_str()) {
+                continue;
+            }
+            for marker in INPUT_LAYER {
+                assert!(
+                    !body.contains(marker),
+                    "{name} reaches {marker} and can no longer skip the consent gate"
+                );
+            }
+        }
     }
 }
