@@ -88,13 +88,18 @@ would send database traffic and credentials over an unencrypted socket to
 another machine.
 
 ```sh
-docker run -d --name agi-wsproxy -p 5480:80   --add-host=host.docker.internal:host-gateway   -e APPEND_PORT=55433 -e ALLOW_ADDR_REGEX='.*'   ghcr.io/neondatabase/wsproxy:latest
+# Do NOT set APPEND_PORT. The hook already sends the full host:port in
+# ?address=, and letting wsproxy append its own dials 5543355433 and fails.
+docker run -d --name agi-wsproxy -p 5480:80 \
+  --add-host=host.docker.internal:host-gateway \
+  -e ALLOW_ADDR_REGEX='.*' \
+  ghcr.io/neondatabase/wsproxy:latest
 
 # The app must be REBUILT after changing the data layer — `next start` serves
 # the bundle, and a stale one silently ignores the hook.
 NEXT_PUBLIC_APP_URL=http://localhost:3000 pnpm build
 
-AGI_ALLOW_INVALID_ENV=1 AGI_DATABASE_WS_PROXY=localhost:5480 AGI_DATABASE_URL=postgresql://postgres:test@host.docker.internal/agitest CLERK_AUTHORIZED_PARTIES=http://localhost:3000 NEXT_PUBLIC_APP_URL=http://localhost:3000 EMAIL_HASH_PEPPER=$(openssl rand -hex 32)   npx next start
+AGI_ALLOW_INVALID_ENV=1 AGI_DATABASE_WS_PROXY=localhost:5480 AGI_DATABASE_URL=postgresql://postgres:test@host.docker.internal:55433/agitest CLERK_AUTHORIZED_PARTIES=http://localhost:3000 NEXT_PUBLIC_APP_URL=http://localhost:3000 EMAIL_HASH_PEPPER=$(openssl rand -hex 32)   npx next start
 ```
 
 Two env guards will otherwise refuse to boot, and both are correct:
