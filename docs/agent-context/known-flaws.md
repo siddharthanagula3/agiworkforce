@@ -22,12 +22,18 @@ compute off for every existing organization the moment this shipped. `PATCH`
 therefore merges onto the current effective policy and writes a complete row, so
 a one-field patch can never materialize a row that silently disables the rest.
 
-- **ORGPOLICY-01 — OPEN, not verified against a live workspace.** Every layer is
-  unit-tested (94 tests across the evaluator, gate, gate response, and route) and
-  the deny path returns a 403 with a stable code, but no managed turn has been
-  observed being denied against a real Neon organization with a saved policy.
-  That is the exit criterion this wave set for itself and it is not met. Needs a
-  seeded org, a member, and a watched request.
+- **ORGPOLICY-01 — CLOSED 2026-08-23.** Observed: a real POST to
+  `/api/llm/v1/chat/completions` on a seeded Enterprise workspace with
+  `allow_managed_compute = false` returned 403 `managed_compute_disabled` with the
+  administrator-facing reason, before any provider was contacted. Superseded text:
+
+**Formerly: not verified against a live workspace.** Every layer is
+unit-tested (94 tests across the evaluator, gate, gate response, and route) and
+the deny path returns a 403 with a stable code, but no managed turn has been
+observed being denied against a real Neon organization with a saved policy.
+That is the exit criterion this wave set for itself and it is not met. Needs a
+seeded org, a member, and a watched request.
+
 - **ORGPOLICY-02 — OPEN by design, per-surface sync is not a security boundary.**
   `chat_sync_surfaces` and `allow_*_cloud_sync` resolve from the client-supplied
   `x-agi-surface` hint, so they govern the clients an organization deploys, not
@@ -81,6 +87,28 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 `unconfigured`) is load-bearing, not decoration. It is what keeps `retentionDays`
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
+
+## 2026-08-23 Three denials observed on live requests
+
+Against the seeded Enterprise workspace, with the app talking to a real database:
+
+- chat completions with `allow_managed_compute = false` → 403
+  `managed_compute_disabled`
+- chat completions naming a blocked catalog model → 403 `model_blocked`
+- chat completions with 500c settled against a 1c cap → 402 `over_cap`
+
+None needed provider credentials, because all three fire before any provider is
+contacted — which is the property that makes them cheap to regression-test and
+is worth preserving if these gates are ever moved.
+
+The order they fire in is itself a finding: managed compute is checked first, so
+with it off you never see a model denial however the policy is set. Anyone
+testing model governance must enable managed compute first or they will conclude
+the model rule does not work.
+
+Managed Cloud chat also requires an `Idempotency-Key` header. A request without
+one is refused 400 before either gate, so a probe that omits it proves nothing
+about policy.
 
 ## 2026-08-23 The console, verified as a real enterprise owner
 
@@ -273,10 +301,11 @@ workspace is freed at once rather than a window later.
 asks before reserving credit — a turn a cap will refuse must not spend first and
 be refunded.
 
-**SPENDLIMIT-01 — PARTIALLY CLOSED 2026-08-23.** A cap round-trips through a
-REAL Postgres and the month-to-date aggregate runs against the real schema
-without error. Still unproven: a turn refused with 402 once spend passes the
-cap, which needs seeded managed-usage rows.
+**SPENDLIMIT-01 — CLOSED 2026-08-23.** Observed: with a settled 500-cent turn
+seeded and a 1-cent cap set to `block`, a real chat request returned 402
+`over_cap`. Note the cache: the decision is held for SPEND_CACHE_TTL_MS, so a
+cap lowered under a warm cache does not bite until it expires — which is the
+eventual-enforcement behaviour the console describes, seen working.
 
 ## 2026-08-23 Connector governance — one enforcement point, on purpose
 
@@ -401,11 +430,11 @@ drifts back above the resolution line, or if a call site passes a
 provider-facing `apiModelId` where the catalog id belongs. Do not add a route to
 an exemption list there without writing the reason beside it.
 
-**MODELPOLICY-02 — PARTIALLY CLOSED 2026-08-23.** The policy now round-trips
-through a REAL Postgres and the evaluator agrees with what was stored: a blocked
-model is refused, an unrelated one allowed. What is still unproven is a denial
-observed on a live chat turn, which needs the app talking to a seeded database —
-see the Neon-driver note below.
+**MODELPOLICY-02 — CLOSED 2026-08-23.** Observed on a live chat turn: a real
+POST naming a blocked catalog model returned 403 with
+`"Your workspace administrator has blocked the model ..."` and code
+`model_blocked`. The denial fires after model resolution and before any provider
+call, which is why it needs no provider credentials to reproduce.
 
 ## 2026-08-23 Retention enforcement — the fail-closed rule is load-bearing
 
