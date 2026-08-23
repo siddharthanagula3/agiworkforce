@@ -28,6 +28,7 @@ interface Fixture {
   activeHolds?: number;
   modelRules?: [number, number, number, number] | null;
   connectorRules?: [number, number, boolean] | null;
+  spendLimit?: { cap: number; enforcement: string } | null;
   policyRow?: Record<string, unknown> | null;
   org?: { name: string | null; licensed_seats: number | null; seats_consumed: number | null };
 }
@@ -65,6 +66,11 @@ function harness(fixture: Fixture = {}) {
       return count(fixture.sharedConnectors);
     if (text.includes('from public.enterprise_audit_events')) return count(fixture.auditEvents);
     if (text.includes('from public.legal_holds')) return count(fixture.activeHolds);
+    if (text.includes('from public.organization_spend_limits')) {
+      const l = fixture.spendLimit;
+      if (l === undefined || l === null) return [];
+      return [{ monthly_cap_cents: l.cap, enforcement: l.enforcement }];
+    }
     if (text.includes('from public.organization_connector_policies')) {
       const c = fixture.connectorRules;
       if (c === undefined || c === null) return [];
@@ -183,6 +189,33 @@ describe('readWorkspacePosture', () => {
 
     expect(s.enforcement).toBe('enforced');
     expect(['Allowed', 'Blocked']).toContain(s.value);
+  });
+
+  it('does not call a notify-only spend cap an enforced control', async () => {
+    // notify reports a crossing and refuses nothing. Badging it as enforced
+    // would tell a finance owner their budget binds when it does not.
+    const h = harness({ spendLimit: { cap: 50_000, enforcement: 'notify' } });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'spend-limit');
+
+    expect(s.enforcement).toBe('stated');
+    expect(s.value).toContain('notify');
+  });
+
+  it('reports a blocking spend cap as enforced, and says it is eventual', async () => {
+    const h = harness({ spendLimit: { cap: 50_000, enforcement: 'block' } });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'spend-limit');
+
+    expect(s.enforcement).toBe('enforced');
+    expect(s.value).toBe('$500.00 a month, enforced');
+    expect(s.detail).toMatch(/eventual rather than exact/i);
+  });
+
+  it('flags an uncapped workspace rather than staying silent about it', async () => {
+    const h = harness({ spendLimit: null });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'spend-limit');
+
+    expect(s.value).toBe('None');
+    expect(s.state).toBe('attention');
   });
 
   it('counts switching off custom connectors as a restriction', async () => {

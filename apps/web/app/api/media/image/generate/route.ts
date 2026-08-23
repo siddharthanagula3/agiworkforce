@@ -25,6 +25,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  buildSpendLimitGateResponse,
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
@@ -793,6 +794,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     },
   );
   if (policyGateResponse) return policyGateResponse;
+
+  // The workspace budget, checked before any credit is reserved so a turn
+  // that a spend cap will refuse never spends anything first.
+  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
+  if (spendGateResponse) return spendGateResponse;
 
   const subscription = await SubscriptionService.getSubscription(userId);
 

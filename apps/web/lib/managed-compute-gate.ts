@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { evaluateModelAccessForRequest } from '@/lib/services/model-policy-gate';
+import { evaluateSpendLimit } from '@/lib/services/spend-limit-service';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import type { PolicySurface } from '@/lib/services/organization-policy-evaluator';
@@ -211,5 +213,53 @@ export async function buildExternalSharingGateResponse(
   return NextResponse.json(
     { error: { message: decision.reason, type: 'forbidden', code: decision.code } },
     { status: 403, headers },
+  );
+}
+
+/**
+ * Refuses a metered turn once the workspace has reached a spend limit it chose
+ * to enforce.
+ *
+ * Only the `block` mode refuses; `notify` exists so a finance owner can watch a
+ * budget before deciding to enforce it. The decision is cached briefly, so
+ * enforcement is eventual rather than exact and a workspace can overshoot by
+ * roughly one window of spend — the console says so rather than implying a hard
+ * ceiling it does not have.
+ *
+ * Ungoverned on any failure, including an unresolvable workspace or an
+ * unreachable database: a billing lookup failing is an infrastructure fault, and
+ * refusing every member's work over it is worse than briefly overshooting.
+ */
+export async function buildSpendLimitGateResponse(
+  userId: string,
+  request: NextRequest,
+  headers?: HeadersInit,
+): Promise<NextResponse | null> {
+  let decision;
+  try {
+    const db = getNeonDb();
+    const organizationId = await resolveActiveOrganizationId(db, userId, request);
+    decision = await evaluateSpendLimit(db, organizationId);
+  } catch (error) {
+    logger.error({ error, userId }, '[spend-limit] unavailable; request treated as ungoverned');
+    return null;
+  }
+
+  if (decision.allowed) return null;
+
+  logger.warn(
+    { userId, code: decision.code, spentCents: decision.state?.spentCents },
+    '[spend-limit] request refused by workspace budget',
+  );
+
+  return NextResponse.json(
+    {
+      error: {
+        message: decision.reason,
+        type: 'insufficient_quota',
+        code: decision.code,
+      },
+    },
+    { status: 402, headers },
   );
 }
