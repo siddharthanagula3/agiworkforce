@@ -76,6 +76,42 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 How to actually verify this stack: Docker Postgres, not mocks
+
+Every service test in `apps/web` mocks the database adapter, so a query naming a
+column that does not exist, casting wrongly, or violating a constraint passes
+happily. Two real defects hid behind that and were found in one afternoon by
+running the schema for real.
+
+The recipe, because it is worth repeating:
+
+    docker run -d --name agi-migtest -e POSTGRES_PASSWORD=test \
+      -e POSTGRES_DB=agitest -p 55433:5432 postgres:16-alpine
+
+Apply every file in `apps/web/db/neon/*.sql` in order, each wrapped in its own
+`BEGIN; SET LOCAL lock_timeout='10s'; ... COMMIT;` — that is exactly what
+`scripts/lib/neon-migrations.mjs` does, and applying them WITHOUT the transaction
+produces a spurious failure on 0136 (`LOCK TABLE can only be used in transaction
+blocks`).
+
+Then drive the services directly: they all take `db: DatabaseAdapter` as their
+first parameter, so a thirty-line `pg`-backed adapter is enough to run their real
+SQL against the real schema with no app server involved.
+
+Two things this catches that nothing else does: SQL that is wrong against the
+actual columns, and grants that contradict the comment above them. It found
+0144's missing REVOKE and it found `current_app_user_id()` reads
+`request.jwt.claim.sub` — a scalar GUC — rather than the `request.jwt.claims`
+JSON blob that a first guess reaches for.
+
+**What it CANNOT do:** run the app itself. The data layer uses
+`@neondatabase/serverless`'s WebSocket `Pool`, which cannot reach a plain
+Postgres over TCP, and the adapter exposes no `neonConfig.wsProxy` hook. Pointing
+`AGI_DATABASE_URL` at a local Postgres gets as far as "account_status lookup
+failed after retry; denying request (fail-closed)" — the guard behaving
+correctly over a transport that cannot connect. Verifying a live denial end to
+end needs either a Neon branch or a wsproxy hook in the adapter.
+
 ## 2026-08-23 GRANT SELECT does not revoke anything — 0037 grants writes by default
 
 0037 ran `ALTER DEFAULT PRIVILEGES ... GRANT SELECT, INSERT, UPDATE, DELETE ON
@@ -131,9 +167,10 @@ failures, not disabled — an administrator's configuration is not ours to switc
 off, and the console shows the failure count so they can see why nothing
 arrives.
 
-**AUDITSTREAM-01 — OPEN, never delivered to a real endpoint.** 16 tests with a
-stubbed fetch. Needs the same seeded workspace as CONSOLE-01, plus any HTTPS
-receiver.
+**AUDITSTREAM-01 — PARTIALLY CLOSED 2026-08-23.** A destination round-trips
+through a REAL Postgres and the raw signing secret is confirmed absent from the
+stored row — only its hash and prefix are there. Still unproven: an actual
+signed delivery to an HTTPS receiver.
 
 ## 2026-08-23 The Windows release ships remote-databases, and the audit file said it did not
 
@@ -197,8 +234,10 @@ workspace is freed at once rather than a window later.
 asks before reserving credit — a turn a cap will refuse must not spend first and
 be refunded.
 
-**SPENDLIMIT-01 — OPEN, never observed refusing a live turn.** 29 tests with a
-mocked adapter. Needs the same seeded workspace as CONSOLE-01.
+**SPENDLIMIT-01 — PARTIALLY CLOSED 2026-08-23.** A cap round-trips through a
+REAL Postgres and the month-to-date aggregate runs against the real schema
+without error. Still unproven: a turn refused with 402 once spend passes the
+cap, which needs seeded managed-usage rows.
 
 ## 2026-08-23 Connector governance — one enforcement point, on purpose
 
@@ -224,8 +263,9 @@ not a control.
   the policy table blipped would break every member's tools for a reason no
   administrator chose.
 
-**CONNECTORPOLICY-01 — OPEN, never observed removing a live connector.** 38
-tests, all with a mocked adapter. Needs the same seeded workspace as CONSOLE-01.
+**CONNECTORPOLICY-01 — PARTIALLY CLOSED 2026-08-23.** The policy round-trips
+through a REAL Postgres, including the custom-connector switch. Still unproven:
+a connector actually vanishing from an offered tool catalog on a live turn.
 
 ## 2026-08-23 Deprovision — three properties that must not be simplified
 
@@ -322,10 +362,11 @@ drifts back above the resolution line, or if a call site passes a
 provider-facing `apiModelId` where the catalog id belongs. Do not add a route to
 an exemption list there without writing the reason beside it.
 
-**MODELPOLICY-02 — OPEN, never observed denying a live turn.** 37 tests across
-the evaluator, gate, and route, all with a mocked adapter. Same blocker as
-CONSOLE-01, RETENTION-01, and ORGPOLICY-01: one seeded workspace closes all
-four.
+**MODELPOLICY-02 — PARTIALLY CLOSED 2026-08-23.** The policy now round-trips
+through a REAL Postgres and the evaluator agrees with what was stored: a blocked
+model is refused, an unrelated one allowed. What is still unproven is a denial
+observed on a live chat turn, which needs the app talking to a seeded database —
+see the Neon-driver note below.
 
 ## 2026-08-23 Retention enforcement — the fail-closed rule is load-bearing
 
@@ -353,12 +394,13 @@ deletes customer conversations. Three properties are deliberate and must not be
 record it can edit is not evidence. Writes go through the privileged connection
 in a route that has already checked the owner/admin role.
 
-**RETENTION-01 — OPEN, never observed deleting a real row.** All 24 tests are
-unit-level with a mocked adapter. No sweep has run against a live Neon
-organization, so the fail-closed path, the hold exclusion, and the cascade from
-`web_conversations` to `web_messages` are unproven in practice. Run the cron with
-`?dryRun=1` against a seeded workspace before enabling enforcement for any
-customer. Same blocker as CONSOLE-01 and ORGPOLICY-01.
+**RETENTION-01 — PARTIALLY CLOSED 2026-08-23.** The sweep now runs against a
+REAL Postgres carrying the full migration chain, on a seeded Enterprise
+workspace: it returns `held` under an organization-wide hold and deletes
+nothing, then proceeds once the hold is released, and every run writes its
+evidence row. What is still unproven is deletion of actual conversation rows and
+the cascade to `web_messages` — the seeded workspace has no conversations. Seed
+some and re-run before enabling enforcement for a customer.
 
 ## 2026-08-23 Branch audit: what the ahead/behind counters hide
 
