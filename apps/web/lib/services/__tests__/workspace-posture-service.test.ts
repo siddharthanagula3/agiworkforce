@@ -26,6 +26,7 @@ interface Fixture {
   sharedConnectors?: number;
   auditEvents?: number;
   activeHolds?: number;
+  modelRules?: [number, number, number, number] | null;
   policyRow?: Record<string, unknown> | null;
   org?: { name: string | null; licensed_seats: number | null; seats_consumed: number | null };
 }
@@ -63,6 +64,18 @@ function harness(fixture: Fixture = {}) {
       return count(fixture.sharedConnectors);
     if (text.includes('from public.enterprise_audit_events')) return count(fixture.auditEvents);
     if (text.includes('from public.legal_holds')) return count(fixture.activeHolds);
+    if (text.includes('from public.organization_model_policies')) {
+      const r = fixture.modelRules;
+      if (r === undefined || r === null) return [];
+      return [
+        {
+          allowed_providers: r[0],
+          blocked_providers: r[1],
+          allowed_models: r[2],
+          blocked_models: r[3],
+        },
+      ];
+    }
     if (text.includes('from public.organization_admin_policies')) {
       return fixture.policyRow ? [fixture.policyRow] : [];
     }
@@ -154,6 +167,26 @@ describe('readWorkspacePosture', () => {
     expect(hold.value).toBe('2 holds active');
     expect(hold.state).toBe('attention');
     expect(hold.enforcement).toBe('enforced');
+  });
+
+  it('does not call an empty model policy a restriction', async () => {
+    // A saved row of four empty lists governs nothing. Reporting it as
+    // "policy saved" would put an enforced badge on a control that denies
+    // nothing.
+    const h = harness({ modelRules: [0, 0, 0, 0] });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'model-policy');
+
+    expect(s.value).toBe('All models available');
+    expect(s.enforcement).toBe('unconfigured');
+  });
+
+  it('reports a real model restriction as enforced', async () => {
+    const h = harness({ modelRules: [0, 2, 0, 1] });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'model-policy');
+
+    expect(s.value).toBe('3 rules in force');
+    expect(s.enforcement).toBe('enforced');
+    expect(s.detail).toMatch(/after auto-routing resolves/i);
   });
 
   it('marks managed compute and privacy modes as enforced', async () => {
