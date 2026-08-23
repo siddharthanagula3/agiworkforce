@@ -25,6 +25,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
@@ -1002,6 +1003,20 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   }
 
   const catalogModel = resolveImageCatalogModel(provider, requestedModel);
+
+  // The workspace model policy, checked on the RESOLVED catalog model rather
+  // than on what was requested — a provider default must not be a way past a
+  // rule the administrator wrote.
+  if (catalogModel) {
+    const modelPolicyResponse = await buildModelPolicyGateResponse(
+      userId,
+      request,
+      { provider: String(catalogModel.provider), modelId: catalogModel.id },
+      { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    );
+    if (modelPolicyResponse) return modelPolicyResponse;
+  }
+
   if (!catalogModel) {
     return NextResponse.json(
       {
