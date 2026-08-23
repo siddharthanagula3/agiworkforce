@@ -14,7 +14,11 @@ import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapte
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import {
+  buildManagedComputeGateResponse,
+  buildOrganizationPolicyGateResponse,
+} from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { getProviderProbeModel, normalizeModelId, type Provider } from '@agiworkforce/types';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 
@@ -90,6 +94,14 @@ async function handleTestProvider(request: NextRequest) {
     feature: 'provider_probe',
   });
   if (managedGateResponse) return managedGateResponse;
+
+  const policyGateResponse = await buildOrganizationPolicyGateResponse(userId, request, {
+    provider,
+    model: probeModel,
+    feature: 'provider_probe',
+    surface: resolveCloudChatSurface(request),
+  });
+  if (policyGateResponse) return policyGateResponse;
 
   try {
     const adapter = buildServerProviderAdapter(provider);

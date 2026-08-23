@@ -22,7 +22,11 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import {
+  buildManagedComputeGateResponse,
+  buildOrganizationPolicyGateResponse,
+} from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
   canUseBillingPlanCapability,
   getModelMetadataById,
@@ -772,6 +776,22 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     },
   );
   if (managedGateResponse) return managedGateResponse;
+
+  const policyGateResponse = await buildOrganizationPolicyGateResponse(
+    userId,
+    request,
+    {
+      provider: 'managed-media',
+      model: 'image-generation',
+      feature: 'media_image_generation',
+      surface: resolveCloudChatSurface(request),
+    },
+    {
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  );
+  if (policyGateResponse) return policyGateResponse;
 
   const subscription = await SubscriptionService.getSubscription(userId);
 

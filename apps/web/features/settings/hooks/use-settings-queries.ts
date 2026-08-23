@@ -27,7 +27,11 @@ import settingsService, {
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
 import { TimeoutPresets, withTimeout } from '@shared/lib/error-utils';
-import { requireProviderDefaultModel, type BillingPlanTier } from '@agiworkforce/types';
+import {
+  requireProviderDefaultModel,
+  type AdminPolicy,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
@@ -1775,6 +1779,90 @@ export function useShareConnectorWithOrganization(): UseMutationResult<unknown, 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORG_SHARED_QUERY_KEY });
       toast.success('Connector shared with your organization');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+// ── Workspace policy (organization_admin_policies) ─────────────────────────
+
+export type WorkspaceAdminPolicy = AdminPolicy;
+
+export interface WorkspacePolicyOverview {
+  organizationId: string;
+  configured: boolean;
+  canManagePolicy: boolean;
+  currentUserRole: OrgSharingRole;
+  policy: WorkspaceAdminPolicy;
+}
+
+const ORG_POLICY_QUERY_KEY = ['settings', 'organization', 'policy'] as const;
+
+/**
+ * The workspace's administrative policy.
+ *
+ * `null` means the caller belongs to no organization, or their plan does not
+ * include team administration — both are 403s and both are legitimate states
+ * for a personal account, so neither is surfaced as an error.
+ *
+ * `configured: false` means no policy row exists. The `policy` field then holds
+ * the values a first save WOULD write, not values in force: an unconfigured
+ * workspace is ungoverned. The UI must keep that distinction visible.
+ */
+export function useWorkspacePolicy(): UseQueryResult<WorkspacePolicyOverview | null, Error> {
+  return useQuery<WorkspacePolicyOverview | null, Error>({
+    queryKey: ORG_POLICY_QUERY_KEY,
+    queryFn: async (): Promise<WorkspacePolicyOverview | null> => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const res = await fetch('/api/settings/organization/policy', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.status === 403) return null;
+      if (!res.ok) throw new Error(await readApiError(res));
+
+      return (await res.json()) as WorkspacePolicyOverview;
+    },
+    staleTime: 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    meta: { errorMessage: 'Failed to load workspace policy' },
+  });
+}
+
+export function useUpdateWorkspacePolicy(): UseMutationResult<
+  WorkspacePolicyOverview,
+  Error,
+  Partial<Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt'>>
+> {
+  const queryClient: QueryClient = useQueryClient();
+  return useMutation<
+    WorkspacePolicyOverview,
+    Error,
+    Partial<Omit<WorkspaceAdminPolicy, 'organizationId' | 'updatedAt'>>
+  >({
+    mutationFn: async (patch) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch('/api/settings/organization/policy', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify(patch),
+      });
+
+      if (!res.ok) throw new Error(await readApiError(res));
+      return (await res.json()) as WorkspacePolicyOverview;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(ORG_POLICY_QUERY_KEY, data);
+      toast.success('Workspace policy saved');
     },
     onError: (error: Error) => toast.error(error.message),
   });
