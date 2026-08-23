@@ -221,7 +221,6 @@ export default function CliPage() {
             { href: '/agi-code', label: 'Explore AGI Code' },
             { label: 'Enterprise early access', waitlist: true },
           ]}
-          stamp={SURFACE_STATUS.cli}
         />
 
         <MarketingFooter />

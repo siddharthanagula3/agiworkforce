@@ -127,7 +127,6 @@ export default async function FeaturesPluginsPage() {
             { href: '/skills', label: 'Browse Skills' },
             { href: '/download', label: 'Get notified' },
           ]}
-          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />
