@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
@@ -43,6 +43,35 @@ a one-field patch can never materialize a row that silently disables the rest.
   Desktop client reads it yet). Retention is shown in the settings panel as a
   stated position rather than a control, so it cannot read as a setting that
   decides something.
+
+## 2026-08-23 Workspace admin console — landed, with one named gap
+
+Wave 2 of `docs/plans/teams-enterprise-2026-08-22.md`. The customer-facing
+console lives at `/workspace`; `/admin` remains the platform operator console.
+
+- **CONSOLE-01 — OPEN, never rendered as an actual workspace owner.** All seven
+  routes, the anonymous gate, the 403 on the posture API, and axe cleanliness
+  are verified in a real browser against a live Clerk session
+  (`apps/web/e2e/workspace-console.spec.ts`). What is NOT verified is the
+  posture dashboard itself: the QA account is on `max_15x`, and workspace
+  creation correctly refuses with `SUBSCRIPTION_REQUIRED`, so the console has
+  only ever been observed in its "No workspace selected" state. Needs a seeded
+  Team or Enterprise workspace. Same blocker as ORGPOLICY-01 — one seeded
+  organization closes both.
+- **CONSOLE-02 — RESOLVED 2026-08-23, but the trap will catch the next agent.**
+  Server-side `auth()` verifies the session's authorized party against
+  `CLERK_AUTHORIZED_PARTIES`, which falls back to `NEXT_PUBLIC_APP_URL`'s origin
+  (`apps/web/lib/clerk-authorized-parties.ts`). Against a localhost dev server
+  that fallback is the PRODUCTION origin, so every protected page redirects to
+  sign-in however valid the browser session is. The symptom is indistinguishable
+  from broken authentication, and it is why no agent had visually verified any
+  authenticated page in this repo before now. Start the dev server with
+  `CLERK_AUTHORIZED_PARTIES=http://localhost:3000`.
+
+The `enforcement` field on every posture signal (`enforced` / `stated` /
+`unconfigured`) is load-bearing, not decoration. It is what keeps `retentionDays`
+— stored and swept by nothing — from rendering beside managed-compute admission
+wearing the same badge. Do not remove it to simplify the type.
 
 ## 2026-08-23 Branch audit: what the ahead/behind counters hide
 
