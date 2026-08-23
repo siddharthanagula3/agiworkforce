@@ -13,6 +13,8 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { clerkClient } from '@clerk/nextjs/server';
+import { deprovisionMember } from '@/lib/services/deprovision-service';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { requireTeamAdminAccess } from '../team-admin-access';
 
@@ -136,21 +138,46 @@ async function handleRemove(
 
   logger.info({ requesterId, organizationId, targetUserId }, 'Team member removed');
 
+  // Dropping the membership row stops the NEXT request from resolving this
+  // workspace. It does not stop a signed-in browser, a paired desktop, or a
+  // developer key that is already live — the gap between "removed" and
+  // "actually cut off" is the offboarding hole a security review looks for.
+  // Deliberately after the membership delete: if revocation fails the member is
+  // still out of the workspace, and the audit event says what remained.
+  const deprovision = await deprovisionMember(getNeonDb(), await clerkClient(), {
+    userId: targetUserId,
+    organizationId,
+  });
+
   await recordAuditEvent({
     userId: requesterId,
     eventType: 'member_removed',
     request,
     organizationId,
+    outcome: deprovision.errors.length > 0 ? 'failure' : 'success',
+    severity: deprovision.errors.length > 0 ? 'critical' : 'warning',
     detail: {
       resourceType: 'organization_member',
       resourceId: targetUserId,
       organizationId,
       targetUserId,
       previousRole: removedRole,
+      count: deprovision.sessionsRevoked,
+      reason: deprovision.errors.length > 0 ? deprovision.errors.join('; ') : undefined,
     },
   });
 
-  return NextResponse.json({ message: 'Member removed' });
+  return NextResponse.json({
+    message: 'Member removed',
+    // Reported rather than swallowed: an administrator offboarding someone
+    // needs to know if a credential is still live.
+    revoked: {
+      sessions: deprovision.sessionsRevoked,
+      deviceTokens: deprovision.deviceTokensRevoked,
+      apiKeys: deprovision.apiKeysRevoked,
+    },
+    warnings: deprovision.errors,
+  });
 }
 
 async function handleUpdateRole(

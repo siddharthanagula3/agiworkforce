@@ -76,6 +76,46 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 Deprovision — three properties that must not be simplified
+
+`deprovisionMember` (`apps/web/lib/services/deprovision-service.ts`) runs when a
+member is removed by hand and when SCIM deactivates or deletes them.
+
+- **Each step is independent.** A Clerk outage must not leave the leaver's
+  developer keys live as well, so a failure in one revocation does not abandon
+  the rest. What could not be reached is RETURNED, not swallowed: a deprovision
+  that silently half-succeeded is worse than one that failed loudly, because an
+  administrator believes the person is cut off.
+- **A failed session LIST does not report zero.** Reporting zero would read as
+  "this user had no sessions", the opposite of the truth.
+- **It revokes credentials, never the account.** A member removed from one
+  workspace keeps their personal account and signs in again into personal scope.
+  Deleting the account is a different, far more destructive act that no
+  administrator asked for by removing a member.
+
+The SCIM path never throws: an IdP treats a non-2xx as a failed deprovision and
+retries, which would re-run a revoke that already succeeded and report the whole
+operation as failed when the membership WAS revoked. Warnings land on the
+directory sync event instead.
+
+**DEPROVISION-01 — OPEN, never observed against a live IdP.** Eight unit tests
+with a stubbed Clerk client. No real session has been watched dying. Needs the
+same seeded workspace as CONSOLE-01.
+
+## 2026-08-23 Turbopack dies sweeping many routes in dev
+
+`pnpm dev` panics after roughly twenty sequential cold page compiles:
+`turbo-tasks: an internal panic occurred outside the per-task panic boundary`
+from `turbo-tasks-backend/src/backend/operation/mod.rs`. It is a Turbopack bug,
+not a product one, and it silently turns the rest of a browser sweep into
+`ERR_CONNECTION_REFUSED` that reads like dozens of broken pages.
+
+Sweep against a production build (`pnpm build` then `next start`) instead. Two
+things it needs that dev does not: `EMAIL_HASH_PEPPER` (the env guard refuses to
+boot without it) and `NEXT_PUBLIC_APP_URL=http://localhost:3000` AT BUILD TIME,
+since that value is inlined into the client bundle and a production origin there
+leaves the browser session unusable by the server.
+
 ## 2026-08-23 External sharing — two states, and why not three
 
 `external_sharing_enabled` (0140) refuses NEW anonymous public links on both
