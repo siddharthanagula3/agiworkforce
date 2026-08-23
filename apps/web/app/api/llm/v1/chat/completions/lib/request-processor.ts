@@ -28,6 +28,7 @@ import {
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { selectCheapestRequestFallback } from '@/lib/services/request-cost-fallback';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
+import { evaluateModelAccessForRequest } from '@/lib/services/model-policy-gate';
 import { canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
@@ -1898,6 +1899,31 @@ export async function processRequest(
   }
 
   chatRequest.model = routeDecision.modelKey;
+
+  // The workspace administrator's model policy, checked AFTER auto-routing has
+  // resolved. Checking the requested model instead would let a blocked model be
+  // reached by asking for `auto` and having the router pick it — a bypass that
+  // no amount of picker filtering closes.
+  const modelAccess = await evaluateModelAccessForRequest(
+    userId,
+    { provider: resolveProviderFromModel(chatRequest.model), modelId: chatRequest.model },
+    request,
+  );
+  if (!modelAccess.allowed) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: modelAccess.reason,
+            type: 'invalid_request_error',
+            code: modelAccess.code,
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
 
   if (requestedModel !== chatRequest.model) {
     logger.info(

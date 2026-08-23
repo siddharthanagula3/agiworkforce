@@ -8,6 +8,7 @@ import {
   Share2,
   KeyRound,
   SlidersHorizontal,
+  Boxes,
   ScrollText,
   Gavel,
   CreditCard,
@@ -63,6 +64,12 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         label: 'Policy',
         icon: SlidersHorizontal,
         hint: 'Privacy modes, managed compute, sync',
+      },
+      {
+        href: '/workspace/models',
+        label: 'Models',
+        icon: Boxes,
+        hint: 'Approved models and providers',
       },
       {
         href: '/workspace/sharing',
