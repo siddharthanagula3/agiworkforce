@@ -38,6 +38,41 @@ interface WorkspaceScopedRequest {
  * containment barrier — the tenancy layer is what stops cross-workspace access,
  * and it fails closed.
  */
+/**
+ * The form for a caller that has ALREADY resolved the active workspace.
+ *
+ * The chat path resolves it once for the scoped database handle, including the
+ * `x-agi-organization-id` override, and re-resolving here would add a second
+ * round trip to the hot path for an answer already in hand. `null` means
+ * personal scope, which is ungoverned.
+ */
+export async function evaluateModelAccessForOrganization(
+  db: DatabaseAdapter,
+  organizationId: string | null,
+  ask: ModelAccessAsk,
+): Promise<ModelAccessDecision> {
+  if (!organizationId) return UNGOVERNED;
+
+  try {
+    const policy = await readModelPolicy(db, organizationId);
+    const decision = evaluateModelAccess(policy, ask);
+
+    if (!decision.allowed) {
+      logger.info(
+        { organizationId, provider: ask.provider, model: ask.modelId, code: decision.code },
+        '[model-policy] model refused by workspace policy',
+      );
+    }
+    return decision;
+  } catch (error) {
+    logger.error(
+      { error, organizationId },
+      '[model-policy] policy read failed; request ungoverned',
+    );
+    return UNGOVERNED;
+  }
+}
+
 export async function evaluateActiveWorkspaceModelAccess(
   db: DatabaseAdapter,
   userId: string,
