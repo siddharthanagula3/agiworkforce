@@ -385,7 +385,7 @@ export function WorkspacePolicySection() {
         <div
           style={{
             fontSize: 12,
-            color: coherenceError ? 'var(--danger, #b3261e)' : 'var(--text-3)',
+            color: coherenceError ? 'var(--settings-destructive-foreground)' : 'var(--text-3)',
           }}
         >
           {coherenceError ??
