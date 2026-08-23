@@ -88,6 +88,39 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 SSO enforcement: designed, deliberately not shipped
+
+"SSO required" is the last genuinely ABSENT capability in the workspace posture,
+and it is the one place this session declined to ship rather than ship
+unverified. The reasoning, so nobody has to reconstruct it:
+
+**The check that is available is weaker than the control it would be labelled
+as.** Clerk exposes a user's linked `samlAccounts`, so "this member HAS an SSO
+identity on a verified domain of this workspace" is checkable today. What an
+enterprise means by "SSO required" is "THIS SESSION arrived through our IdP",
+which is a different claim. Shipping the first under the second's name is
+exactly the fake-control failure the `enforced` / `stated` badge exists to
+prevent, and it would be worse here than elsewhere because a security reviewer
+would reasonably stop asking after seeing it.
+
+**An auth boundary that cannot be verified must not ship.** §112 lists SSO
+lockout as a P0 failure. Every other control added this session denies a
+request; this one denies ACCESS, and getting it wrong locks an organization out
+of its own workspace. The live Clerk verification that would prove it needs a
+paid plan with enterprise connections — the blocker already recorded for Wave 5.
+
+**The safe design, when that plan exists.** Deny the WORKSPACE, never the login:
+a member who authenticates outside the IdP still signs in and lands in personal
+scope with no access to what the workspace owns. That removes the lockout class
+entirely, because an owner can always reach the console to turn it off, which is
+also the "emergency recovery procedure" §19 asks for. Enforce it in
+`evaluateActiveWorkspacePolicy` alongside the other resources so it binds on
+every surface rather than at the login page.
+
+**SSOENFORCE-01 — ABSENT by decision, not oversight.** The posture says "Not
+available" and must keep saying so until the session-level check is real and has
+been watched working against a live IdP.
+
 ## 2026-08-23 Seeding a stale conversation: messages bump the parent
 
 `update_conversation_on_message` sets `web_conversations.updated_at` when a
