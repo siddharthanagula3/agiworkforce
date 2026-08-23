@@ -172,3 +172,44 @@ export async function buildModelPolicyGateResponse(
     { status: 403, headers },
   );
 }
+
+/**
+ * Refuses a request that would mint an anonymous public link when the caller's
+ * workspace has turned public sharing off.
+ *
+ * Only NEW links are refused. A link already published stays reachable, because
+ * revoking published content is a different decision with different
+ * consequences — a member who shared a document with a customer last week
+ * should not have it break because an administrator changed a setting today.
+ * The policy copy says so, and so does the settings panel.
+ */
+export async function buildExternalSharingGateResponse(
+  userId: string,
+  request: NextRequest,
+  headers?: HeadersInit,
+): Promise<NextResponse | null> {
+  let decision;
+  try {
+    decision = await evaluateActiveWorkspacePolicy(
+      getNeonDb(),
+      userId,
+      { resource: 'external_sharing' },
+      request,
+    );
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      '[external-sharing] workspace policy unavailable; request treated as ungoverned',
+    );
+    return null;
+  }
+
+  if (decision.allowed) return null;
+
+  logger.warn({ userId, code: decision.code }, '[external-sharing] refused by workspace policy');
+
+  return NextResponse.json(
+    { error: { message: decision.reason, type: 'forbidden', code: decision.code } },
+    { status: 403, headers },
+  );
+}

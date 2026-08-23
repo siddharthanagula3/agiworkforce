@@ -123,7 +123,7 @@ describe('readWorkspacePosture', () => {
     const h = harness();
     const posture = await readWorkspacePosture(h.db, ORG);
 
-    for (const id of ['sso-required', 'deprovision', 'external-sharing', 'siem']) {
+    for (const id of ['sso-required', 'deprovision', 'siem']) {
       const s = signal(posture.groups, id);
       expect(s.value).toBe('Not available');
       expect(s.enforcement).toBe('unconfigured');
@@ -167,6 +167,14 @@ describe('readWorkspacePosture', () => {
     expect(hold.value).toBe('2 holds active');
     expect(hold.state).toBe('attention');
     expect(hold.enforcement).toBe('enforced');
+  });
+
+  it('reports public sharing from the workspace policy, not as unavailable', async () => {
+    const h = harness();
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'external-sharing');
+
+    expect(s.enforcement).toBe('enforced');
+    expect(['Allowed', 'Blocked']).toContain(s.value);
   });
 
   it('does not call an empty model policy a restriction', async () => {

@@ -472,12 +472,14 @@ export async function readWorkspacePosture(
         },
         {
           id: 'external-sharing',
-          label: 'External sharing policy',
-          value: 'Not available',
-          state: 'off',
-          enforcement: 'unconfigured',
-          detail:
-            'There is no workspace control over public share links or external collaborators yet. Members share under the product-wide rules.',
+          label: 'Public sharing',
+          value: effectivePolicy.externalSharingEnabled ? 'Allowed' : 'Blocked',
+          state: 'ok',
+          enforcement: 'enforced',
+          detail: effectivePolicy.externalSharingEnabled
+            ? 'Members may publish a chat or an artifact to an anonymous public link. Both paths check this before minting one.'
+            : 'New public links are refused on both the chat-share and artifact-publish paths. Links already published stay reachable — revoking those is a separate action.',
+          href: '/workspace/policy',
         },
         {
           id: 'retention',

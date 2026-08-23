@@ -64,6 +64,15 @@ export interface AdminPolicy {
    * control.
    */
   retentionEnforced: boolean;
+  /**
+   * Whether members may mint anonymous public links.
+   *
+   * Two states, not three: a public link has no recipient identity at fetch
+   * time, so an "approved domains only" middle state would be a control that
+   * decides nothing. Defaults true so no existing workspace loses sharing when
+   * this ships.
+   */
+  externalSharingEnabled: boolean;
   metadata?: Record<string, unknown>;
   updatedAt: string;
 }
@@ -362,6 +371,7 @@ export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId'
   // Off by default and never flipped by a migration: enabling retention starts
   // permanently deleting conversations, which only a workspace owner can decide.
   retentionEnforced: false,
+  externalSharingEnabled: true,
 };
 
 export const MANAGED_COMPUTE_MARGIN_POLICY = {
