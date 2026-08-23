@@ -10,7 +10,11 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
-import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import {
+  buildManagedComputeGateResponse,
+  buildOrganizationPolicyGateResponse,
+} from '@/lib/managed-compute-gate';
+import { resolveAuthenticatedSurface } from './lib/request-surface';
 import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
 // GOV-3: per-plan concurrent-turn admission (see handleChatCompletions).
 import { acquireManagedTurnSlot, type ManagedTurnSlotResult } from '@/lib/rate-limit';
@@ -266,6 +270,21 @@ async function dispatchChatCompletions(
     getSecurityHeaders(),
   );
   if (managedGateResponse) return managedGateResponse;
+
+  // The workspace administrator's decision, evaluated before `processRequest`
+  // so a denied turn never reserves credits it will not spend.
+  const policyGateResponse = await buildOrganizationPolicyGateResponse(
+    userId,
+    request,
+    {
+      provider: 'managed',
+      model: 'chat-completions',
+      feature: 'llm_v1_chat_completions',
+      surface: resolveAuthenticatedSurface(request, authResult),
+    },
+    getSecurityHeaders(),
+  );
+  if (policyGateResponse) return policyGateResponse;
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
   const processResult = await processRequest(request, authResult);

@@ -1,0 +1,238 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+
+const { mockQuery, mockGetUserScopedDb, mockRecordAuditEvent, mockRequireTeamAdminAccess } =
+  vi.hoisted(() => ({
+    mockQuery: vi.fn(),
+    mockGetUserScopedDb: vi.fn(),
+    mockRecordAuditEvent: vi.fn(async (_event: unknown) => undefined),
+    mockRequireTeamAdminAccess: vi.fn(async () => ({ plan: 'team', canManageTeam: true })),
+  }));
+
+vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockRecordAuditEvent }));
+vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+  requireTeamAdminAccess: mockRequireTeamAdminAccess,
+}));
+
+import { GET, PATCH } from '../route';
+
+const ORG_ID = '11111111-1111-4111-8111-111111111111';
+
+const SAVED_POLICY = {
+  organization_id: ORG_ID,
+  default_privacy_mode: 'managed',
+  allowed_privacy_modes: ['local', 'byok', 'managed'],
+  allow_managed_compute: true,
+  require_local_to_byok_preview: true,
+  chat_sync_surfaces: ['web', 'desktop', 'mobile'],
+  allow_cli_cloud_sync: false,
+  allow_vscode_cloud_sync: false,
+  allow_chrome_cloud_sync: false,
+  audit_export_enabled: true,
+  retention_days: 365,
+  metadata: {},
+  updated_at: '2026-08-22T00:00:00.000Z',
+};
+
+interface Fixture {
+  role?: 'owner' | 'admin' | 'member' | 'viewer';
+  policyRow?: Record<string, unknown> | null;
+  upsertResult?: Record<string, unknown>;
+}
+
+function bindCaller({ role = 'admin', policyRow = null, upsertResult }: Fixture = {}): void {
+  mockQuery.mockImplementation(async (sql: string) => {
+    const text = String(sql);
+    if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG_ID }];
+    if (/from public\.organization_members/i.test(text)) {
+      return [{ organization_id: ORG_ID, role }];
+    }
+    if (/insert into public\.organization_admin_policies/i.test(text)) {
+      return [upsertResult ?? SAVED_POLICY];
+    }
+    if (/from public\.organization_admin_policies/i.test(text)) {
+      return policyRow ? [policyRow] : [];
+    }
+    return [];
+  });
+}
+
+function request(body?: unknown): Request {
+  return new Request('https://app.test/api/settings/organization/policy', {
+    method: body ? 'PATCH' : 'GET',
+    ...(body
+      ? { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }
+      : {}),
+  });
+}
+
+function upsertParams(): unknown[] {
+  const call = mockQuery.mock.calls.find((entry) =>
+    /insert into public\.organization_admin_policies/i.test(String(entry[0])),
+  );
+  return (call?.[1] ?? []) as unknown[];
+}
+
+describe('GET /api/settings/organization/policy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { query: (...args: unknown[]) => mockQuery(...args) },
+      userId: 'user-1',
+    });
+  });
+
+  it('reports an unconfigured workspace as unconfigured rather than as governed defaults', async () => {
+    bindCaller({ policyRow: null });
+
+    const body = await (await GET(request() as never)).json();
+
+    expect(body.configured).toBe(false);
+    expect(body.organizationId).toBe(ORG_ID);
+    expect(body.policy.allowManagedCompute).toBe(false);
+  });
+
+  it('returns the saved policy when one exists', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const body = await (await GET(request() as never)).json();
+
+    expect(body.configured).toBe(true);
+    expect(body.policy.allowManagedCompute).toBe(true);
+    expect(body.policy.allowedPrivacyModes).toEqual(['local', 'byok', 'managed']);
+  });
+
+  it('lets a member read the policy but not manage it', async () => {
+    bindCaller({ role: 'member', policyRow: SAVED_POLICY });
+
+    const body = await (await GET(request() as never)).json();
+
+    expect(body.canManagePolicy).toBe(false);
+    expect(body.currentUserRole).toBe('member');
+  });
+});
+
+describe('PATCH /api/settings/organization/policy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { query: (...args: unknown[]) => mockQuery(...args) },
+      userId: 'user-1',
+    });
+  });
+
+  it('refuses a member', async () => {
+    bindCaller({ role: 'member', policyRow: SAVED_POLICY });
+
+    const response = await PATCH(request({ retentionDays: 30 }) as never);
+
+    expect(response.status).toBe(403);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it('merges a partial patch onto the SAVED policy, never onto the table defaults', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(request({ retentionDays: 30 }) as never);
+
+    const params = upsertParams();
+    // allow_managed_compute is parameter 4 (1-indexed $4) and must survive a
+    // patch that never mentioned it. Inheriting the column default here would
+    // silently switch managed compute off for the whole workspace.
+    expect(params[3]).toBe(true);
+    expect(params[2]).toEqual(['local', 'byok', 'managed']);
+    expect(params[10]).toBe(30);
+  });
+
+  it('rejects a default privacy mode that is not in the allowed set', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(
+      request({ defaultPrivacyMode: 'managed', allowedPrivacyModes: ['local'] }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it('rejects turning on managed compute while the managed privacy mode stays disallowed', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    const response = await PATCH(
+      request({
+        allowManagedCompute: true,
+        allowedPrivacyModes: ['local', 'byok'],
+        defaultPrivacyMode: 'byok',
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(upsertParams()).toEqual([]);
+  });
+
+  it('rejects a body with no policy fields', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    expect((await PATCH(request({}) as never)).status).toBe(400);
+  });
+
+  it('rejects a retention window outside the schema bounds', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    expect((await PATCH(request({ retentionDays: 0 }) as never)).status).toBe(400);
+    expect((await PATCH(request({ retentionDays: 4000 }) as never)).status).toBe(400);
+  });
+
+  it('writes an audit event naming the fields that changed', async () => {
+    bindCaller({
+      policyRow: SAVED_POLICY,
+      upsertResult: { ...SAVED_POLICY, retention_days: 30 },
+    });
+
+    await PATCH(request({ retentionDays: 30 }) as never);
+
+    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    const event = mockRecordAuditEvent.mock.calls[0]?.[0] as {
+      eventType: string;
+      organizationId: string;
+      detail: { changedKeys: string[]; status: string };
+    };
+    expect(event.eventType).toBe('admin_policy_changed');
+    expect(event.organizationId).toBe(ORG_ID);
+    expect(event.detail.changedKeys).toEqual(['retentionDays']);
+    expect(event.detail.status).toBe('updated');
+  });
+
+  it('marks the first save as a creation', async () => {
+    bindCaller({ policyRow: null });
+
+    await PATCH(request({ allowManagedCompute: false }) as never);
+
+    const event = mockRecordAuditEvent.mock.calls[0]?.[0] as { detail: { status: string } };
+    expect(event.detail.status).toBe('created');
+  });
+
+  it('deduplicates repeated modes and surfaces before writing', async () => {
+    bindCaller({ policyRow: SAVED_POLICY });
+
+    await PATCH(
+      request({
+        allowedPrivacyModes: ['local', 'local', 'byok'],
+        defaultPrivacyMode: 'byok',
+        allowManagedCompute: false,
+        chatSyncSurfaces: ['web', 'web'],
+      }) as never,
+    );
+
+    const params = upsertParams();
+    expect(params[2]).toEqual(['local', 'byok']);
+    expect(params[5]).toEqual(['web']);
+  });
+});

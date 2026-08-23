@@ -59,11 +59,11 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
   return [
     {
       area: 'Privacy modes',
-      status: 'Fail-closed',
+      status: 'Per-workspace policy',
       tone: 'ok',
       source: 'config',
       owner: 'Platform',
-      evidence: `${DEFAULT_ENTERPRISE_ADMIN_POLICY.allowedPrivacyModes.join(', ')} allowed by default`,
+      evidence: `Each workspace sets its own in organization_admin_policies and is enforced server-side; a workspace with no saved policy is unrestricted. Shipped default on first save: ${DEFAULT_ENTERPRISE_ADMIN_POLICY.allowedPrivacyModes.join(', ')}.`,
     },
     {
       area: 'Managed compute',
@@ -157,15 +157,17 @@ function buildPolicyTiles(managedComputeOpen: boolean) {
   return [
     {
       icon: LockKeyhole,
-      label: 'Default Privacy',
+      label: 'Default Privacy On First Save',
       value: DEFAULT_ENTERPRISE_ADMIN_POLICY.defaultPrivacyMode.toUpperCase(),
-      detail: 'Local and BYOK are public-safe. Managed mode requires admin and commercial gates.',
+      detail:
+        'Not a live setting. This is what a workspace gets the first time its owner saves a policy at /settings/team; each workspace then owns its own value, and one that has never saved is unrestricted.',
     },
     {
       icon: ShieldCheck,
-      label: 'Chat Sync',
+      label: 'Chat Sync On First Save',
       value: DEFAULT_ENTERPRISE_ADMIN_POLICY.chatSyncSurfaces.join(' / '),
-      detail: 'Normal synced chat is intentionally limited to Web, Desktop, and Mobile.',
+      detail:
+        'Not a live setting. Normal synced chat starts limited to Web, Desktop, and Mobile; a workspace owner may widen or narrow it, and the choice is enforced server-side on every managed request.',
     },
     {
       icon: BadgeDollarSign,

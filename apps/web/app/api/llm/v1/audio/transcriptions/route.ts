@@ -11,7 +11,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import {
+  buildManagedComputeGateResponse,
+  buildOrganizationPolicyGateResponse,
+} from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
   getModelMetadataById,
   getRoutingSlotModel,
@@ -219,6 +223,22 @@ async function handleTranscriptions(request: NextRequest) {
     },
   );
   if (managedGateResponse) return managedGateResponse;
+
+  const policyGateResponse = await buildOrganizationPolicyGateResponse(
+    userId,
+    request,
+    {
+      provider: 'openai',
+      model: 'audio-transcription',
+      feature: 'audio_transcription',
+      surface: resolveCloudChatSurface(request),
+    },
+    {
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  );
+  if (policyGateResponse) return policyGateResponse;
 
   let formData: FormData;
   try {

@@ -9,7 +9,11 @@ import {
   getCorsHeaders,
   withCorsRoute,
 } from '@/lib/cors';
-import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import {
+  buildManagedComputeGateResponse,
+  buildOrganizationPolicyGateResponse,
+} from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate } from '../lib/auth-gate';
@@ -121,6 +125,20 @@ async function handleToolApproval(request: NextRequest) {
     getSecurityHeaders(),
   );
   if (managedGateResponse) return managedGateResponse;
+
+  const policyGateResponse = await buildOrganizationPolicyGateResponse(
+    userId,
+    request,
+    {
+      provider: 'managed',
+      model: 'chat-completions',
+      feature: 'llm_v1_chat_completions',
+      isFreeTrial: isFreeTierRequest,
+      surface: resolveCloudChatSurface(request),
+    },
+    getSecurityHeaders(),
+  );
+  if (policyGateResponse) return policyGateResponse;
 
   let resumeFields;
   try {
