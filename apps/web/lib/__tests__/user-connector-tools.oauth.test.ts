@@ -77,6 +77,7 @@ import {
   evictConnectorOAuthCaches,
 } from '../user-connector-tools';
 import { parseConnectorAuthorizationRequired } from '@/lib/connectors/connect-required';
+import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 
 function unauthorized(): Error {
   return Object.assign(new Error('Streamable HTTP error: Error POSTing to endpoint: {}'), {
@@ -151,12 +152,15 @@ describe('OAuth connector catalog gating', () => {
 
     expect(defs.map((d) => d.qualifiedName)).toEqual(['mcp__linear__create_issue']);
     expect(defs[0]?.serverId).toBe('linear');
-    expect(mockBuildMcpToolCatalog).toHaveBeenCalledWith({
-      linear: expect.objectContaining({
-        url: PROVIDER.mcpUrl,
-        headers: { Authorization: 'Bearer tok' },
-      }),
-    });
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledWith(
+      {
+        linear: expect.objectContaining({
+          url: PROVIDER.mcpUrl,
+          headers: { Authorization: 'Bearer tok' },
+        }),
+      },
+      MCP_EGRESS_POLICY,
+    );
   });
 
   it('still applies the user per-tool BLOCK verdict to an OAuth connector', async () => {
@@ -192,9 +196,10 @@ describe('OAuth connector catalog gating', () => {
 
     expect(defs.map((d) => d.qualifiedName)).toEqual(['mcp__linear__operator_tool']);
     expect(mockResolveAccessToken).not.toHaveBeenCalled();
-    expect(mockBuildMcpToolCatalog).toHaveBeenCalledWith({
-      linear: expect.objectContaining({ url: 'https://operator.example.com/mcp' }),
-    });
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledWith(
+      { linear: expect.objectContaining({ url: 'https://operator.example.com/mcp' }) },
+      MCP_EGRESS_POLICY,
+    );
   });
 });
 

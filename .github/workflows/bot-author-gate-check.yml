@@ -1,0 +1,59 @@
+name: Bot author gate check
+
+# W6-A (security sweep 2026-08-21): issue_comment runs in the base repo context
+# with the workflow's write-scoped GITHUB_TOKEN, so an unauthenticated-to-the-repo
+# commenter could otherwise drive /agi into privileged issues/pull-requests writes.
+# The job gate in agiworkforce-bot.yml is the only thing standing between a public
+# comment and that token, so pin it here.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/agiworkforce-bot.yml'
+      - '.github/workflows/bot-author-gate-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/agiworkforce-bot.yml'
+      - '.github/workflows/bot-author-gate-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: /agi stays restricted to repo collaborators
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Assert the bot job gates on comment author association
+        shell: bash
+        run: |
+          set -euo pipefail
+          workflow=.github/workflows/agiworkforce-bot.yml
+          fail() {
+            echo "::error file=$workflow::$1"
+            exit 1
+          }
+          gate=$(awk '/^  process:/{inside=1} inside && /^    runs-on:/{exit} inside' "$workflow")
+          case "$gate" in
+            *github.event.comment.author_association*) ;;
+            *) fail 'the /agi job must gate on github.event.comment.author_association' ;;
+          esac
+          case "$gate" in
+            *'contains(fromJSON('"'"'["OWNER","MEMBER","COLLABORATOR"]'"'"'), github.event.comment.author_association)'*) ;;
+            *) fail 'the /agi job must allow only OWNER, MEMBER and COLLABORATOR authors' ;;
+          esac
+          case "$gate" in
+            *CONTRIBUTOR* | *FIRST_TIME* | *MANNEQUIN* | *NONE*)
+              fail 'the /agi job must not widen the gate to non-collaborator authors'
+              ;;
+          esac
+          body=$(cat "$workflow")
+          case "$body" in
+            *"tr -cd 'a-z0-9_-'"*) ;;
+            *) fail 'the parsed /agi command must be sanitized before it reaches $GITHUB_OUTPUT' ;;
+          esac
+          echo "bot author gate present"

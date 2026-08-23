@@ -190,7 +190,7 @@
     "check:knip:production": "knip --production",
     "check:marketing-models": "node scripts/check-marketing-models.mjs",
     "check:workflow-cargo-features": "node scripts/check-workflow-cargo-features.mjs",
-    "check:secrets": "node scripts/check-secrets.mjs",
+    "check:secrets": "node --test scripts/check-secrets.test.mjs && node scripts/check-secrets.mjs",
     "check:secrets:history": "node scripts/check-secrets.mjs --history",
     "check:vacuous-e2e": "node scripts/check-vacuous-e2e.mjs"
   },

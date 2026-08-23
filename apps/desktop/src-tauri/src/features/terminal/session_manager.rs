@@ -14,6 +14,98 @@ pub struct SessionContext {
     pub cwd: String,
 }
 
+const MAX_ENV_KEY_LEN: usize = 256;
+
+pub fn validate_env_key(key: &str) -> Result<()> {
+    let mut chars = key.chars();
+    let shape_ok = matches!(chars.next(), Some(c) if c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !shape_ok || key.len() > MAX_ENV_KEY_LEN {
+        return Err(Error::Other(format!(
+            "Invalid environment variable name {:?}: names must match [A-Za-z_][A-Za-z0-9_]*",
+            key
+        )));
+    }
+    Ok(())
+}
+
+/// The rendered assignment is typed into a LIVE line editor, so a value's bytes
+/// are consumed by readline/PSReadLine as keystrokes before any shell parser
+/// sees them, and quoting cannot reach them. Control bytes are editing commands
+/// there: `\x18\x05` is readline's `edit-and-execute-command`, which hands the
+/// rest of the value to $EDITOR as keystrokes and then EXECUTES the edited
+/// buffer, with no newline anywhere in the value. Bytes above ASCII are no
+/// safer -- with `convert-meta` on (readline's default whenever the locale is
+/// not 8-bit clean, which is what a GUI app inherits when it is launched
+/// without LANG) each one arrives as ESC + byte and reaches meta bindings such
+/// as `shell-expand-line`, which performs command substitution. Printable ASCII
+/// is the only alphabet that self-inserts under every one of those settings.
+pub fn validate_env_value(value: &str) -> Result<()> {
+    if let Some(rejected) = value.chars().find(|c| !matches!(c, ' '..='~')) {
+        return Err(Error::Other(format!(
+            "Invalid environment variable value: {:?} is not printable ASCII, and the terminal's line editor would read it as a keystroke rather than text",
+            rejected
+        )));
+    }
+    Ok(())
+}
+
+fn posix_single_quote(value: &str) -> String {
+    // Backslash does not escape inside POSIX single quotes; the only way to emit
+    // one is to close the quote, add an escaped quote, and reopen.
+    value.replace('\'', r#"'"'"'"#)
+}
+
+pub fn set_env_command(shell_type: &ShellType, key: &str, value: &str) -> Result<String> {
+    validate_env_key(key)?;
+    validate_env_value(value)?;
+
+    Ok(match shell_type {
+        ShellType::PowerShell => format!("$env:{}='{}'", key, value.replace('\'', "''")),
+        ShellType::Cmd => {
+            // cmd.exe offers no escape that survives inside `set`: a quote ends the
+            // quoted assignment and %VAR% / !VAR! re-expand into command position,
+            // so such values are refused rather than quoted.
+            if value.contains(['"', '%', '!']) {
+                return Err(Error::Other(
+                    "Environment variable values containing \", % or ! are not supported on cmd.exe"
+                        .to_string(),
+                ));
+            }
+            format!("set \"{}={}\"", key, value)
+        }
+        // Fish is the one shell here whose single quotes honour backslash
+        // escapes, so the POSIX form leaves `export FOO='C:\'` unterminated and
+        // hangs the prompt on a continuation.
+        ShellType::Fish => format!(
+            "export {}='{}'",
+            key,
+            value.replace('\\', r"\\").replace('\'', r"\'")
+        ),
+        _ => format!("export {}='{}'", key, posix_single_quote(value)),
+    })
+}
+
+pub fn get_env_command(shell_type: &ShellType, key: &str) -> Result<String> {
+    validate_env_key(key)?;
+
+    Ok(match shell_type {
+        ShellType::PowerShell => format!("echo $env:{}", key),
+        ShellType::Cmd => format!("echo %{}%", key),
+        _ => format!("echo ${}", key),
+    })
+}
+
+pub fn unset_env_command(shell_type: &ShellType, key: &str) -> Result<String> {
+    validate_env_key(key)?;
+
+    Ok(match shell_type {
+        ShellType::PowerShell => format!("Remove-Item Env:{}", key),
+        ShellType::Cmd => format!("set {}=", key),
+        _ => format!("unset {}", key),
+    })
+}
+
 #[derive(Clone)]
 pub struct SessionManager {
     sessions: Arc<Mutex<HashMap<String, Arc<Mutex<PtySession>>>>>,
@@ -68,7 +160,14 @@ impl SessionManager {
             let mut session = session_arc.lock().await;
             session.write(data)?;
 
-            tracing::debug!("Sent input to session {}: {:?}", session_id, data);
+            // Every keystroke line reaches this log, including a password typed
+            // at an interactive prompt, and the rolling log file it lands in is
+            // collected verbatim into support bundles (sys/support_bundle.rs).
+            tracing::debug!(
+                "Sent input to session {}: {:?}",
+                session_id,
+                crate::sys::security::log_redaction::redact_secrets(data)
+            );
 
             if data.ends_with('\n') || data.ends_with("\r\n") {
                 let command = data.trim();
@@ -153,12 +252,7 @@ impl SessionManager {
 
         let mut session = session_arc.lock().await;
 
-        // Build the command based on shell type
-        let command = match session.shell_type {
-            ShellType::PowerShell => format!("$env:{}='{}'", key, value.replace("'", "''")),
-            ShellType::Cmd => format!("set {}={}", key, value),
-            _ => format!("export {}='{}'", key, value.replace("'", "\\'")),
-        };
+        let command = set_env_command(&session.shell_type, key, value)?;
 
         session.execute_command(&command)?;
         tracing::debug!("Set environment variable {} in session {}", key, session_id);
@@ -178,12 +272,7 @@ impl SessionManager {
 
         let mut session = session_arc.lock().await;
 
-        // Build the command based on shell type
-        let command = match session.shell_type {
-            ShellType::PowerShell => format!("echo $env:{}", key),
-            ShellType::Cmd => format!("echo %{}%", key),
-            _ => format!("echo ${}", key),
-        };
+        let command = get_env_command(&session.shell_type, key)?;
 
         let output = session.execute_command(&command)?;
 
@@ -248,12 +337,7 @@ impl SessionManager {
 
         let mut session = session_arc.lock().await;
 
-        // Build the command based on shell type
-        let command = match session.shell_type {
-            ShellType::PowerShell => format!("Remove-Item Env:{}", key),
-            ShellType::Cmd => format!("set {}=", key),
-            _ => format!("unset {}", key),
-        };
+        let command = unset_env_command(&session.shell_type, key)?;
 
         session.execute_command(&command)?;
         tracing::debug!(
@@ -365,8 +449,17 @@ impl SessionManager {
 
 /// Bug #191 fix: Scrub potential secrets from a command string before storing in DB.
 /// Masks values matching common secret patterns (PASSWORD=xxx, --password xxx,
-/// export SECRET=xxx, API_KEY=xxx, TOKEN=xxx, etc.).
-fn scrub_secrets(command: &str) -> String {
+/// export SECRET=xxx, API_KEY=xxx, TOKEN=xxx, auth headers, `-u user:pass`,
+/// attached short flags like `-pSECRET`, and credentials embedded in URLs).
+///
+/// This is best-effort. It cannot recognise a bare pasted token, and it cannot
+/// recognise a password typed at an interactive prompt at all -- `send_input`
+/// logs every line the user enters and a typed password has no shape to match.
+/// The scrubber is therefore not the containment boundary: keeping
+/// `command_history` off the LLM db_query allowlist
+/// (core/llm/tool_executor/db_tools.rs) is what stops this text reaching a
+/// provider.
+pub(crate) fn scrub_secrets(command: &str) -> String {
     use once_cell::sync::Lazy;
     use regex::Regex;
 
@@ -389,9 +482,98 @@ fn scrub_secrets(command: &str) -> String {
         .expect("invalid regex")
     });
 
+    // `-H "Authorization: Bearer ..."`, `-H 'X-Api-Key: ...'` and friends.
+    static HEADER_SECRET: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r#"(?i)\b(authorization|proxy-authorization|x-api-key|api-key|x-auth-token|cookie|set-cookie)(\s*:\s*)[^"'\r\n]+"#,
+        )
+        .expect("invalid regex")
+    });
+
+    // `curl -u user:pass` / `--user user:pass`: keep the user, drop the secret.
+    static USERINFO_FLAG: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r#"(?i)(^|\s)(--user|-u)(\s+['"]?)([^\s:'"]+):([^\s'"]*)"#)
+            .expect("invalid regex")
+    });
+
+    // Attached short flags with no separator: `mysql -pSECRET`, `-uroot`.
+    static ATTACHED_SHORT_FLAG: Lazy<Regex> =
+        Lazy::new(|| Regex::new(r#"(?i)(^|\s)(-[pu])([^\s'"=-][^\s'"]*)"#).expect("invalid regex"));
+
+    // Credentials in a URL: https://user:TOKEN@host, https://TOKEN@host.
+    static URL_USERINFO_PAIR: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r#"(?i)([a-z][a-z0-9+.\-]*://)([^\s:/@'"]+):([^\s/@'"]+)@"#)
+            .expect("invalid regex")
+    });
+    static URL_USERINFO_SINGLE: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(r#"(?i)([a-z][a-z0-9+.\-]*://)([^\s:/@'"]+)@"#).expect("invalid regex")
+    });
+
     let scrubbed = SECRET_ASSIGN.replace_all(command, "$1=****");
     let scrubbed = FLAG_SECRET.replace_all(&scrubbed, "$1 ****");
+    let scrubbed = HEADER_SECRET.replace_all(&scrubbed, "${1}${2}****");
+    let scrubbed = USERINFO_FLAG.replace_all(&scrubbed, "${1}${2}${3}${4}:****");
+    let scrubbed = ATTACHED_SHORT_FLAG.replace_all(&scrubbed, |caps: &regex::Captures| {
+        let value = &caps[3];
+        // A port or other all-numeric argument (`-p8080`, `-p 2222`) is not a
+        // credential; masking it would bury useful history for no gain.
+        if value.chars().all(|c| c.is_ascii_digit() || c == ':') {
+            caps[0].to_string()
+        } else {
+            format!("{}{}****", &caps[1], &caps[2])
+        }
+    });
+    let scrubbed = URL_USERINFO_PAIR.replace_all(&scrubbed, "${1}${2}:****@");
+    let scrubbed = URL_USERINFO_SINGLE.replace_all(&scrubbed, "${1}****@");
     scrubbed.into_owned()
+}
+
+/// Re-mask stored history rows the current scrubber would catch.
+///
+/// Scrubbing on write only protects rows written after the scrubber learned a
+/// shape. Header, `-u user:pass`, attached short-flag and URL credentials typed
+/// before that are still on disk in cleartext, where anything running as the
+/// user reads them straight out of the sqlite file — masking them on the way out
+/// of `get_command_history` keeps them off the wire but leaves the file. This
+/// rewrites the stored text instead, and is idempotent: a row already equal to
+/// its scrubbed form is not touched.
+pub(crate) fn rescrub_stored_history(conn: &rusqlite::Connection) -> rusqlite::Result<usize> {
+    use rusqlite::params;
+
+    let stale: Vec<(i64, String)> = {
+        let mut stmt = conn.prepare("SELECT id, command FROM command_history")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+        rows.filter_map(|row| row.ok())
+            .filter_map(|(id, command)| {
+                let scrubbed = scrub_secrets(&command);
+                (scrubbed != command).then_some((id, scrubbed))
+            })
+            .collect()
+    };
+
+    for (id, scrubbed) in &stale {
+        conn.execute(
+            "UPDATE command_history SET command = ?1 WHERE id = ?2",
+            params![scrubbed, id],
+        )?;
+    }
+
+    Ok(stale.len())
+}
+
+fn rescrub_stored_history_once(conn: &rusqlite::Connection) {
+    static RESCRUB: std::sync::Once = std::sync::Once::new();
+
+    RESCRUB.call_once(|| match rescrub_stored_history(conn) {
+        Ok(0) => {}
+        Ok(rewritten) => tracing::info!(
+            "Masked credentials in {} stored terminal history rows",
+            rewritten
+        ),
+        Err(e) => tracing::warn!("Could not re-scrub stored terminal history: {}", e),
+    });
 }
 
 async fn log_command_to_db(
@@ -411,6 +593,8 @@ async fn log_command_to_db(
         .conn
         .lock()
         .map_err(|e| Error::Generic(format!("Database lock error: {}", e)))?;
+
+    rescrub_stored_history_once(&conn);
 
     let working_dir = std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())
@@ -449,18 +633,25 @@ pub async fn get_command_history(
         .lock()
         .map_err(|e| Error::Generic(format!("Database lock error: {}", e)))?;
 
+    rescrub_stored_history_once(&conn);
+
     // AUDIT-TERMINAL-029 fix: Filter by session_id to make history session-scoped
     let mut stmt = conn
         .prepare("SELECT command FROM command_history WHERE session_id = ?1 ORDER BY created_at DESC LIMIT ?2")
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
     let commands = stmt
-        .query_map(params![session_id, limit as i64], |row| row.get(0))
+        .query_map(params![session_id, limit as i64], |row| {
+            row.get::<_, String>(0)
+        })
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?
         .collect::<std::result::Result<Vec<String>, _>>()
         .map_err(|e| Error::Generic(format!("Database error: {}", e)))?;
 
-    Ok(commands)
+    // `rescrub_stored_history_once` has already rewritten what the scrubber can
+    // mask; this covers a row inserted by another process between that pass and
+    // this read.
+    Ok(commands.iter().map(|c| scrub_secrets(c)).collect())
 }
 
 #[cfg(test)]

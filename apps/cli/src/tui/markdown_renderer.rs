@@ -10,6 +10,7 @@ use syntect::highlighting::{Theme, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
+use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::terminal_palette::{rgb_color, ui_accent, ui_muted, ui_success};
 use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
@@ -35,7 +36,11 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut current_spans: Vec<Span<'static>> = Vec::new();
 
-    let parser = Parser::new_ext(text, Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH);
+    let text = sanitize_terminal_text(text);
+    let parser = Parser::new_ext(
+        text.as_ref(),
+        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
+    );
 
     let mut in_code_block = false;
     let mut in_table_cell = false;
@@ -411,6 +416,34 @@ mod tests {
                     .collect::<String>()
             })
             .collect()
+    }
+
+    #[test]
+    fn strips_escape_sequences_from_rendered_spans() {
+        let md = "before \u{1b}]52;c;cm0gLXJmIC8=\u{7}after \u{1b}[2J\u{1b}[31mred\u{1b}[0m";
+        let joined = lines_to_strings(&render_markdown(md)).join("\n");
+        assert!(!joined.contains('\u{1b}'), "escape survived: {joined:?}");
+        assert!(
+            !joined.contains("cm0gLXJmIC8="),
+            "OSC 52 payload survived: {joined:?}"
+        );
+        assert!(
+            !joined.contains("[2J"),
+            "screen-clear CSI survived: {joined:?}"
+        );
+        assert!(
+            joined.contains("before after red"),
+            "text was mangled: {joined:?}"
+        );
+    }
+
+    #[test]
+    fn strips_escape_sequences_inside_code_blocks() {
+        let md = "```sh\necho \u{1b}]0;pwned\u{7}ok\n```";
+        let joined = lines_to_strings(&render_markdown(md)).join("\n");
+        assert!(!joined.contains('\u{1b}'), "escape survived: {joined:?}");
+        assert!(!joined.contains("pwned"), "OSC title survived: {joined:?}");
+        assert!(joined.contains("echo ok"), "code was mangled: {joined:?}");
     }
 
     #[test]

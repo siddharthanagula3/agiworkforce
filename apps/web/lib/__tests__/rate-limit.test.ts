@@ -19,6 +19,14 @@ vi.mock('@upstash/redis', () => ({
 }));
 
 vi.mock('server-only', () => ({}));
+
+const clerk = vi.hoisted(() => ({ verifyToken: vi.fn() }));
+vi.mock('@clerk/backend', () => ({
+  verifyToken: (...args: unknown[]) => clerk.verifyToken(...args),
+}));
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: async () => ({ userId: null }),
+}));
 vi.mock('../logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
@@ -349,5 +357,72 @@ describe('BILL-33 — an automated block is auditable and appealable', () => {
       'appeal-path',
       'rate_limit:chat-message',
     );
+  });
+});
+
+describe('verified-user bucketing binds Clerk tokens to an authorized party', () => {
+  const savedAppUrl = process.env['NEXT_PUBLIC_APP_URL'];
+  const savedParties = process.env['CLERK_AUTHORIZED_PARTIES'];
+
+  beforeEach(() => {
+    vi.resetModules();
+    clerk.verifyToken.mockReset();
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['VERCEL_ENV'];
+    delete process.env['CLERK_AUTHORIZED_PARTIES'];
+    process.env['CLERK_SECRET_KEY'] = 'sk_test_rate_limit';
+    process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+  });
+
+  afterEach(() => {
+    if (savedAppUrl === undefined) delete process.env['NEXT_PUBLIC_APP_URL'];
+    else process.env['NEXT_PUBLIC_APP_URL'] = savedAppUrl;
+    if (savedParties === undefined) delete process.env['CLERK_AUTHORIZED_PARTIES'];
+    else process.env['CLERK_AUTHORIZED_PARTIES'] = savedParties;
+  });
+
+  function bearerRequest(token: string): NextRequest {
+    return {
+      headers: new Headers({ authorization: `Bearer ${token}` }),
+      url: 'https://agiworkforce.com/api/chat',
+    } as unknown as NextRequest;
+  }
+
+  it('passes the deployment origin as authorizedParties when CLERK_AUTHORIZED_PARTIES is unset', async () => {
+    clerk.verifyToken.mockResolvedValue({ sub: 'user_rl_1' });
+    const { checkRateLimit } = await import('../rate-limit');
+
+    const result = await checkRateLimit(bearerRequest('a.clerk.jwt'), 'chat-message');
+
+    expect(result.identifier).toBe('user:user_rl_1');
+    expect(clerk.verifyToken).toHaveBeenCalledWith('a.clerk.jwt', {
+      secretKey: 'sk_test_rate_limit',
+      authorizedParties: ['https://app.agiworkforce.test'],
+    });
+  });
+
+  it('passes the configured allowlist when CLERK_AUTHORIZED_PARTIES is set', async () => {
+    process.env['CLERK_AUTHORIZED_PARTIES'] = 'https://app.example.com, https://admin.example.com';
+    clerk.verifyToken.mockResolvedValue({ sub: 'user_rl_2' });
+    const { checkRateLimit } = await import('../rate-limit');
+
+    await checkRateLimit(bearerRequest('b.clerk.jwt'), 'chat-message');
+
+    expect(clerk.verifyToken).toHaveBeenCalledWith('b.clerk.jwt', {
+      secretKey: 'sk_test_rate_limit',
+      authorizedParties: ['https://app.example.com', 'https://admin.example.com'],
+    });
+  });
+
+  it('does not verify the token at all when no authorized party can be resolved', async () => {
+    delete process.env['NEXT_PUBLIC_APP_URL'];
+    clerk.verifyToken.mockResolvedValue({ sub: 'user_rl_3' });
+    const { checkRateLimit } = await import('../rate-limit');
+
+    const result = await checkRateLimit(bearerRequest('c.clerk.jwt'), 'chat-message');
+
+    expect(clerk.verifyToken).not.toHaveBeenCalled();
+    expect(result.identifier).not.toBe('user:user_rl_3');
   });
 });

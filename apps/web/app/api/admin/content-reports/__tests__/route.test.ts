@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -19,9 +19,9 @@ vi.mock('@/lib/security-audit', () => ({
   getClientIp: () => '203.0.113.7',
 }));
 
-const { authUser, role } = vi.hoisted(() => ({
+const { authUser, assertAccountActive } = vi.hoisted(() => ({
   authUser: { current: { userId: 'admin-1' } as { userId: string } | null },
-  role: { current: 'admin' as string | undefined },
+  assertAccountActive: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/api-auth', () => ({
@@ -29,12 +29,7 @@ vi.mock('@/lib/api-auth', () => ({
     if (!authUser.current) throw new Error('unauthenticated');
     return authUser.current;
   },
-}));
-
-vi.mock('@clerk/nextjs/server', () => ({
-  clerkClient: async () => ({
-    users: { getUser: async () => ({ publicMetadata: { role: role.current } }) },
-  }),
+  assertAccountActive: (...args: unknown[]) => assertAccountActive(...(args as [])),
 }));
 
 const { db } = vi.hoisted(() => ({ db: { current: null as unknown } }));
@@ -42,10 +37,23 @@ const { db } = vi.hoisted(() => ({ db: { current: null as unknown } }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db.current }));
 
 import { NextRequest } from 'next/server';
+import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-access';
 import { GET, POST } from '../route';
 
 const OPEN_ID = '11111111-1111-4111-8111-111111111111';
 const STALE_ID = '22222222-2222-4222-8222-222222222222';
+const OPERATOR_ID = 'admin-1';
+const ORG_OWNER_ID = 'org-owner-1';
+
+const originalAllowlist = process.env[PLATFORM_ADMIN_ENV_VAR];
+
+afterEach(() => {
+  if (originalAllowlist === undefined) {
+    delete process.env[PLATFORM_ADMIN_ENV_VAR];
+  } else {
+    process.env[PLATFORM_ADMIN_ENV_VAR] = originalAllowlist;
+  }
+});
 
 type Row = Record<string, unknown>;
 
@@ -149,13 +157,16 @@ function reviewRequest(body: unknown) {
 
 describe('GET /api/admin/content-reports', () => {
   let rows: Row[];
+  let store: ReturnType<typeof fakeDb>;
 
   beforeEach(() => {
     rows = seed();
-    db.current = fakeDb(rows);
-    authUser.current = { userId: 'admin-1' };
-    role.current = 'admin';
+    store = fakeDb(rows);
+    db.current = store;
+    process.env[PLATFORM_ADMIN_ENV_VAR] = OPERATOR_ID;
+    authUser.current = { userId: OPERATOR_ID };
     mockLogSecurityEvent.mockClear();
+    assertAccountActive.mockClear();
   });
 
   it('hands a reviewer the open queue oldest-first with SLA state', async () => {
@@ -173,21 +184,33 @@ describe('GET /api/admin/content-reports', () => {
     expect(body.counts).toMatchObject({ received: 2, overdue: 1, slaHours: 24 });
   });
 
-  it('refuses a non-admin caller', async () => {
-    role.current = 'user';
-    expect((await GET(queueRequest())).status).toBe(403);
+  it('refuses an org admin who is not a platform operator', async () => {
+    authUser.current = { userId: ORG_OWNER_ID };
+
+    expect((await GET(queueRequest())).status).toBe(404);
+    expect(store.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses everyone when no operator allowlist is configured', async () => {
+    delete process.env[PLATFORM_ADMIN_ENV_VAR];
+
+    expect((await GET(queueRequest())).status).toBe(404);
+    expect(store.query).not.toHaveBeenCalled();
   });
 });
 
 describe('POST /api/admin/content-reports', () => {
   let rows: Row[];
+  let store: ReturnType<typeof fakeDb>;
 
   beforeEach(() => {
     rows = seed();
-    db.current = fakeDb(rows);
-    authUser.current = { userId: 'admin-1' };
-    role.current = 'admin';
+    store = fakeDb(rows);
+    db.current = store;
+    process.env[PLATFORM_ADMIN_ENV_VAR] = OPERATOR_ID;
+    authUser.current = { userId: OPERATOR_ID };
     mockLogSecurityEvent.mockClear();
+    assertAccountActive.mockClear();
   });
 
   it('records a disposition and drops the report out of the open queue', async () => {
@@ -238,15 +261,16 @@ describe('POST /api/admin/content-reports', () => {
     expect(rows[0]?.['status']).toBe('received');
   });
 
-  it('refuses a non-admin caller and leaves the report unreviewed', async () => {
-    role.current = 'user';
+  it('refuses an org admin who is not a platform operator and leaves the report unreviewed', async () => {
+    authUser.current = { userId: ORG_OWNER_ID };
 
     const response = await POST(
       reviewRequest({ reportId: OPEN_ID, status: 'actioned', reviewerNote: 'malicious' }),
     );
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     expect(rows[0]?.['status']).toBe('received');
+    expect(store.query).not.toHaveBeenCalled();
     expect(mockLogSecurityEvent).not.toHaveBeenCalled();
   });
 

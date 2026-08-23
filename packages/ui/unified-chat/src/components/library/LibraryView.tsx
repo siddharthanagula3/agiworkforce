@@ -35,6 +35,7 @@ import {
   type GeneratedFileKind,
   type SourceSurface,
 } from '@agiworkforce/types';
+import { generatedFileTrustBoundary } from '../MessageGeneratedFiles';
 import { GeneratedFileCard } from '../GeneratedFileCard';
 import { ArtifactRenderer, type NativeExportFormat } from '../ArtifactRenderer';
 import { Button } from '@agiworkforce/ui';
@@ -132,8 +133,12 @@ export function generatedFileFromLibraryItem(item: LibraryItem): GeneratedFile {
     computeSessionId: '',
     ownerUserId: '',
     sourceSurface,
-    privacyMode: 'managed',
-    providerMode: 'ManagedGateway',
+    // SECURITY-FIX F3 (CWE-863): every Library row used to render a "Managed"
+    // privacy chip regardless of which provider produced it. The row records
+    // the provider and the model, so the boundary is read from those; managed
+    // survives only as the fallback, which is honest here because the Library
+    // lists files already held in managed-cloud storage.
+    ...generatedFileTrustBoundary({ provider: item.provider, model: item.model }),
     kind: iconKindFor(item.file_name, item.mime_type),
     fileName: item.file_name,
     mimeType: item.mime_type,
