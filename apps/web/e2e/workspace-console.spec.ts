@@ -16,6 +16,14 @@ const CONSOLE_ROUTES = [
   '/workspace/billing',
 ] as const;
 
+/** The shape of `window.Clerk` this suite actually touches. */
+interface ClerkBrowser {
+  loaded?: boolean;
+  client: { signIn: { create(options: unknown): Promise<{ createdSessionId?: string }> } };
+  session?: { getToken(): Promise<string | null> };
+  setActive(options: { session: string }): Promise<void>;
+}
+
 async function mintSignInTicket(): Promise<string> {
   const secret = process.env['CLERK_SECRET_KEY'];
   if (!secret) {
@@ -48,7 +56,7 @@ async function signIn(page: Page): Promise<void> {
     { timeout: 20000 },
   );
   await page.evaluate(async (t) => {
-    const clerk = (window as unknown as { Clerk: any }).Clerk;
+    const clerk = (window as unknown as { Clerk: ClerkBrowser }).Clerk;
     const res = await clerk.client.signIn.create({ strategy: 'ticket', ticket: t });
     if (res.createdSessionId) await clerk.setActive({ session: res.createdSessionId });
   }, ticket);
@@ -57,7 +65,7 @@ async function signIn(page: Page): Promise<void> {
 
 async function authedFetch(page: Page, path: string): Promise<{ status: number; body: string }> {
   return page.evaluate(async (p) => {
-    const clerk = (window as unknown as { Clerk: any }).Clerk;
+    const clerk = (window as unknown as { Clerk: ClerkBrowser }).Clerk;
     const token = await clerk.session?.getToken();
     const res = await fetch(p, { headers: { Authorization: `Bearer ${token}` } });
     return { status: res.status, body: (await res.text()).slice(0, 400) };
