@@ -45,8 +45,13 @@ function measure() {
     const source = readFileSync(file, 'utf8');
     const rls = RLS_CLIENTS.test(source);
     const owner = OWNER_CLIENT.test(source);
-    if (rls) rlsScoped += 1;
-    else if (owner) ownerOnly += 1;
+    // A route that reaches for the owner connection at all is counted against
+    // us, even if it also reads under RLS. Some legitimately need both — legal
+    // holds read scoped and write privileged — but its writes still bypass
+    // policy, and a public isolation claim should be the number that cannot be
+    // argued down.
+    if (owner) ownerOnly += 1;
+    else if (rls) rlsScoped += 1;
     else noDatabase += 1;
   }
 

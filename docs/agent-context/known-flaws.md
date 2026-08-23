@@ -35,14 +35,17 @@ a one-field patch can never materialize a row that silently disables the rest.
   `api` rather than denying untagged callers. The UI says so in the panel copy.
   `allow_managed_compute` and `allowed_privacy_modes` are the controls that bind
   regardless of client. Do not relabel these as enforcement.
-- **ORGPOLICY-03 — PARTIALLY CLOSED 2026-08-23.** `auditExportEnabled` is now
-  enforced: it gates `GET /api/settings/organization/audit/export`, and a
-  refusal is written to the trail. Still recorded-but-unenforced:
-  `retentionDays` (nothing sweeps on it) and `requireLocalToByokPreview`
-  (Desktop owns that transition; the web endpoint serves the obligation but no
-  Desktop client reads it yet). Retention is shown in the settings panel as a
-  stated position rather than a control, so it cannot read as a setting that
-  decides something.
+- **ORGPOLICY-03 — NEARLY CLOSED 2026-08-23.** `auditExportEnabled` gates
+  `GET /api/settings/organization/audit/export` and a refusal is written to the
+  trail. `retentionDays` is now enforced too, behind an explicit per-workspace
+  opt-in (`retention_enforced`, 0138): the nightly sweep at
+  `/api/cron/enforce-workspace-retention` deletes conversations past the window,
+  legal holds suspend it, and every run is recorded. The posture badge follows
+  the workspace rather than a constant — `stated` until an owner opts in,
+  `enforced` after. Still recorded-but-unenforced: `requireLocalToByokPreview`
+  alone (Desktop owns that transition; the web endpoint serves the obligation
+  but no Desktop client reads it yet), and the policy panel now says so on the
+  row itself.
 
 ## 2026-08-23 Workspace admin console — landed, with one named gap
 
@@ -72,6 +75,39 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 `unconfigured`) is load-bearing, not decoration. It is what keeps `retentionDays`
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
+
+## 2026-08-23 Retention enforcement — the fail-closed rule is load-bearing
+
+`sweepOrganizationRetention` (`apps/web/lib/services/retention-service.ts`)
+deletes customer conversations. Three properties are deliberate and must not be
+"simplified" away:
+
+- **It fails closed.** If the legal-hold set cannot be read, it deletes nothing
+  and records `aborted`. A missed sweep costs a day of retention drift and is
+  corrected on the next run; a sweep that deletes records under legal hold
+  destroys evidence, cannot be undone, and ends an enterprise relationship. The
+  asymmetry is total, so every uncertain path declines to delete.
+- **Opt-in, never inherited.** An organization with no policy row, or one that
+  has not set `retention_enforced`, is skipped — the cron filters on the column
+  AND the service re-checks rather than trusting its caller. Sweeping on the
+  strength of the shipped 365-day default would delete data nobody chose to
+  delete. `DEFAULT_ENTERPRISE_ADMIN_POLICY.retentionEnforced` is pinned false by
+  a test in the contracts package for the same reason.
+- **Retention runs from `updated_at`, not `created_at`.** An old conversation
+  someone is still working in has not been dormant for the window; deleting it
+  reads as data loss rather than as policy.
+
+`legal_holds` and `organization_retention_sweeps` are SELECT-only for `app_rls`
+(0138). A hold the held organization can delete is not a hold, and a sweep
+record it can edit is not evidence. Writes go through the privileged connection
+in a route that has already checked the owner/admin role.
+
+**RETENTION-01 — OPEN, never observed deleting a real row.** All 24 tests are
+unit-level with a mocked adapter. No sweep has run against a live Neon
+organization, so the fail-closed path, the hold exclusion, and the cascade from
+`web_conversations` to `web_messages` are unproven in practice. Run the cron with
+`?dryRun=1` against a seeded workspace before enabling enforcement for any
+customer. Same blocker as CONSOLE-01 and ORGPOLICY-01.
 
 ## 2026-08-23 Branch audit: what the ahead/behind counters hide
 

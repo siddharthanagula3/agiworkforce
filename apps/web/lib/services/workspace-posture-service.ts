@@ -121,6 +121,7 @@ export async function readWorkspacePosture(
     sharedProjectRows,
     sharedConnectorRows,
     auditRows,
+    holdRows,
     policy,
   ] = await Promise.all([
     db.query<OrgRow>(
@@ -194,6 +195,12 @@ export async function readWorkspacePosture(
         where organization_id = $1 and created_at > now() - interval '30 days'`,
       [organizationId],
     ),
+    db.query<CountRow>(
+      `select count(*)::int as count
+         from public.legal_holds
+        where organization_id = $1 and released_at is null`,
+      [organizationId],
+    ),
     getEffectiveOrganizationPolicy(db, organizationId),
   ]);
 
@@ -220,6 +227,7 @@ export async function readWorkspacePosture(
   const sharedProjects = toCount(sharedProjectRows[0]);
   const sharedConnectors = toCount(sharedConnectorRows[0]);
   const auditEvents = toCount(auditRows[0]);
+  const activeHolds = toCount(holdRows[0]);
   const { configured, policy: effectivePolicy } = policy;
 
   const groups: PostureGroup[] = [
@@ -434,20 +442,28 @@ export async function readWorkspacePosture(
         {
           id: 'retention',
           label: 'Retention',
-          value: `${effectivePolicy.retentionDays} days`,
-          state: 'attention',
-          enforcement: 'stated',
-          detail:
-            'This is the retention position recorded for this workspace. No job currently sweeps on it, so treat it as a stated policy and not as deletion you can evidence to an auditor.',
+          value: effectivePolicy.retentionEnforced
+            ? `${effectivePolicy.retentionDays} days, enforced`
+            : `${effectivePolicy.retentionDays} days, not enforced`,
+          state: effectivePolicy.retentionEnforced ? 'ok' : 'attention',
+          enforcement: effectivePolicy.retentionEnforced ? 'enforced' : 'stated',
+          detail: effectivePolicy.retentionEnforced
+            ? `A nightly sweep permanently deletes workspace conversations with no activity for ${effectivePolicy.retentionDays} days. Records under legal hold are withheld, and every sweep is written to an evidence trail an admin can read.`
+            : 'The window is recorded as this workspace’s position and nothing is deleted. Treat it as a stated policy, not as deletion you can evidence to an auditor, until an owner turns enforcement on.',
           href: '/workspace/policy',
         },
         {
           id: 'legal-hold',
           label: 'Legal hold',
-          value: 'Not available',
-          state: 'off',
-          enforcement: 'unconfigured',
-          detail: 'Legal hold and custodian management are not implemented.',
+          value:
+            activeHolds === 0 ? 'None active' : `${plural(activeHolds, 'hold', 'holds')} active`,
+          state: activeHolds === 0 ? 'ok' : 'attention',
+          enforcement: 'enforced',
+          detail:
+            activeHolds === 0
+              ? 'No custodian is currently held. A hold suspends retention for its subject, and the retention sweep refuses to delete anything at all if the hold set cannot be read.'
+              : 'Retention is suspended for the held subjects. Their conversations survive the sweep regardless of age.',
+          href: '/workspace/data',
         },
       ],
     },
