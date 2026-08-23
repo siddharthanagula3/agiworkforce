@@ -76,6 +76,33 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 Connector governance — one enforcement point, on purpose
+
+`organization_connector_policies` (0141) is applied inside
+`loadUserConnectorToolCatalog`, where the tool catalog is assembled. That is the
+single path chat, scheduled tasks, and cloud agent runs all share, so a blocked
+connector is never offered to the model from any of them. Enforcing per caller
+would produce a rule that holds in chat and not in a scheduled task, which is
+not a control.
+
+- **Filtering IS the enforcement.** A tool the model is never told about cannot
+  be called. Do not weaken this to a flag on an offered tool.
+- **The workspace policy is applied BEFORE the per-turn `isToolDenied` hook.**
+  That hook is a caller's own restriction; the administrator's has to bound what
+  a caller can widen. `connector-policy-coverage.test.ts` asserts the ordering.
+- **Custom connectors are a separate switch**, and naming one on the approved
+  list does not escape it. A custom connector is an arbitrary member-supplied
+  MCP endpoint — a different risk from a catalog integration — so "no arbitrary
+  endpoints" must not be silently defeatable.
+- **Ungoverned on a read failure**, like model policy. Connector governance
+  decides which approved integrations staff use; the tenancy layer is what stops
+  cross-workspace access and that fails closed. Denying every connector because
+  the policy table blipped would break every member's tools for a reason no
+  administrator chose.
+
+**CONNECTORPOLICY-01 — OPEN, never observed removing a live connector.** 38
+tests, all with a mocked adapter. Needs the same seeded workspace as CONSOLE-01.
+
 ## 2026-08-23 Deprovision — three properties that must not be simplified
 
 `deprovisionMember` (`apps/web/lib/services/deprovision-service.ts`) runs when a

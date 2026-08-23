@@ -9,6 +9,7 @@ import {
   KeyRound,
   SlidersHorizontal,
   Boxes,
+  PlugZap,
   ScrollText,
   Gavel,
   BarChart3,
@@ -71,6 +72,12 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         label: 'Models',
         icon: Boxes,
         hint: 'Approved models and providers',
+      },
+      {
+        href: '/workspace/connectors',
+        label: 'Connectors',
+        icon: PlugZap,
+        hint: 'Approved integrations',
       },
       {
         href: '/workspace/sharing',
