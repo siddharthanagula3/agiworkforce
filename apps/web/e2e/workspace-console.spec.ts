@@ -12,6 +12,7 @@ const CONSOLE_ROUTES = [
   '/workspace/sharing',
   '/workspace/audit',
   '/workspace/data',
+  '/workspace/usage',
   '/workspace/billing',
 ] as const;
 

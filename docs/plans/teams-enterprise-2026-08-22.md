@@ -102,8 +102,13 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `0087` SECURITY DEFINER writer, and policy changes now do. The missing half is
   read and export — Wave 3. `0087`'s stale reference to the removed
   `services/api-gateway` reader was corrected on 2026-08-22.
-- **`organization_usage_ledger` has no admin read path.** No route, no
-  dashboard, no export.
+- **`organization_usage_ledger` has NO WRITER, and is not the usage table.**
+  Only `lib/server/account-erasure.ts` and `lib/billing/financial-record-retention.ts`
+  reference it; nothing inserts. A dashboard built on it would report zero
+  forever while looking authoritative. Workspace usage analytics
+  (`/workspace/usage`, 2026-08-23) therefore reads `managed_usage_requests`,
+  which is where a managed turn actually lands. Either give the ledger a writer
+  or drop it — do not build a second read path on it.
 - **Two designed contracts with no implementation** — `ConnectorPolicy` and
   `AuditExportRequest` in `packages/contracts/types/src/enterprise/index.ts` are
   referenced nowhere else in the tree. `AdminPolicy` (Wave 1),
@@ -390,7 +395,7 @@ policy denial holds identically on every one.
 | Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |
 | Compliance export / SIEM      | Enterprise on both         | ABSENT                          | 3    |
 | Custom retention + legal hold | Enterprise on both         | SHIPPED, opt-in, unrun live     | 3    |
-| Usage and cost analytics      | Both                       | INERT, ledger unread            | 6    |
+| Usage and cost analytics      | Both                       | SHIPPED, read-only, no caps     | 6    |
 | Central billing and seats     | Both                       | PARTIAL, live prices missing    | 6    |
 | IP allowlist / device policy  | Enterprise on both         | ABSENT                          | 7    |
 | External sharing control      | Both                       | SHIPPED, enforced on both paths | 3    |
