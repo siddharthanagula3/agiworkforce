@@ -350,6 +350,27 @@ const SPREADSHEET_EXPORTS = new Set([
   'uos',
 ]);
 
+/**
+ * Trims trailing dots and whitespace in one linear pass.
+ *
+ * The obvious `/[\s.]+$/` is a polynomial-ReDoS shape: anchored at the end with
+ * a repeated character class, it backtracks quadratically over a long run that
+ * does not ultimately match. The input here is a model-chosen filename
+ * extension, so its length is not ours to bound, and a scan is both safe and
+ * cheaper than the regex it replaces.
+ */
+function stripTrailingDotsAndWhitespace(value: string): string {
+  let end = value.length;
+  while (end > 0) {
+    const code = value.charCodeAt(end - 1);
+    const isDot = code === 46;
+    const isSpace = code === 32 || (code >= 9 && code <= 13) || code === 160 || code === 0xfeff;
+    if (!isDot && !isSpace) break;
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
 export function spreadsheetExportDelimiter(
   extension: string | null | undefined,
 ): SpreadsheetDelimiter | null {
@@ -357,9 +378,7 @@ export function spreadsheetExportDelimiter(
   // spreadsheet acts on is the last dot-separated segment, not the whole string, and
   // Windows drops the trailing dots and spaces of "csv." before the file is created
   const normalized =
-    (extension ?? '')
-      .toLowerCase()
-      .replace(/[\s.]+$/, '')
+    stripTrailingDotsAndWhitespace((extension ?? '').toLowerCase())
       .split('.')
       .pop()
       ?.trim() ?? '';
