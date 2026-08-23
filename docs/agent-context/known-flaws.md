@@ -76,6 +76,33 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 GRANT SELECT does not revoke anything — 0037 grants writes by default
+
+0037 ran `ALTER DEFAULT PRIVILEGES ... GRANT SELECT, INSERT, UPDATE, DELETE ON
+TABLES TO app_rls`. Every table created since inherits full DML for the
+application role, automatically, whatever a later migration writes.
+
+0138 through 0143 each stated "writable by nobody through the application role"
+and each wrote `GRANT SELECT`. That is additive: it granted nothing new and
+revoked nothing. All six tables came back `DELETE,INSERT,SELECT,UPDATE` from
+`information_schema.role_table_grants`. 0144 revokes them explicitly, the way
+0087 already had to for `enterprise_audit_events`.
+
+**It was never exploitable**, and the reason matters: each table has a
+`FOR SELECT` policy and no permissive policy for the write verbs, so with RLS
+forced an INSERT is refused and an UPDATE matches zero rows. The protection was
+real but accidental — it rested on a policy NOT existing rather than a privilege
+not being held. Anyone later adding a `FOR ALL` policy for a legitimate read
+reason would have silently handed over write access to legal holds, retention
+evidence, spend caps, and SIEM configuration.
+
+**How it was found, because the method is the point:** applying all 143
+migrations to a throwaway Postgres in Docker and querying the grants. Text
+review passed them; `check:neon-migrations` passed them; every unit test passed.
+Only running them showed it. Any new migration that says "writable by nobody"
+must REVOKE, not GRANT SELECT, and the claim should be checked against
+`role_table_grants` rather than against the SQL that was written.
+
 ## 2026-08-23 Audit streaming — the cursor rule is the whole design
 
 `organization_audit_destinations` (0143) POSTs new audit events to a customer's
