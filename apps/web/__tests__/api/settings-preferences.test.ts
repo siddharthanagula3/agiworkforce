@@ -16,6 +16,17 @@ const mockExecute = vi.fn();
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mockQuery, execute: mockExecute }),
 }));
+// The route moved from getNeonDb() to getUserScopedDb() when 0134 put a FORCE'd
+// RLS policy on user_settings — the owner role has BYPASSRLS, so staying on the
+// unscoped client would have made the policy decorative. Same fake db, reached
+// the way the route now reaches it.
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    db: { query: mockQuery, execute: mockExecute },
+    userId: 'user-123',
+    organizationId: null,
+  })),
+}));
 
 import { PUT } from '@/app/api/settings/preferences/route';
 

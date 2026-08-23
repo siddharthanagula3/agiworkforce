@@ -256,6 +256,15 @@ const ALLOWLIST = [
 
 const CROSS_TENANT_TABLES = new Map([
   [
+    'beta_applications',
+    'the public beta intake queue. Applying requires no account, so `user_id` is nullable and ' +
+      'most rows have no owner at all — a tenant policy would hide every anonymous application ' +
+      'from the operators the queue exists for, and would refuse the signed-out insert that ' +
+      'creates it. The only read is the platform-wide count in operator-metrics.ts; no ' +
+      'user-facing path selects from it. Account erasure still deletes by user_id (0131), which ' +
+      'is owner-constrained on its own.',
+  ],
+  [
     'support_agent_presence',
     'the support-agent roster. Its `agent_user_id` is staff, not a customer, and the console ' +
       'exists to list every online agent so a waiting visitor can be routed to one.',

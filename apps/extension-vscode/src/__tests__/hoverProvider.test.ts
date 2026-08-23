@@ -1,42 +1,93 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
+import { AgiHoverProvider } from '../features/hover/hoverProvider';
 
-import { describe, it, expect } from 'vitest';
+const token = { isCancellationRequested: false } as vscode.CancellationToken;
 
-describe('AgiHoverProvider logic', () => {
-  function provideHover(
-    hoverEnabled: boolean,
-    hasWord: boolean,
-  ): { markdown: string; isTrusted: boolean } | undefined {
-    if (!hoverEnabled) {
-      return undefined;
-    }
-    if (!hasWord) {
-      return undefined;
-    }
+const sections: string[] = [];
+
+function configured(hoverEnabled: unknown): void {
+  vi.mocked(vscode.workspace.getConfiguration).mockImplementation((section?: string) => {
+    sections.push(section ?? '');
     return {
-      markdown: '**AGI Workforce** -- Explain | Fix | Tests',
-      isTrusted: true,
-    };
-  }
+      get: vi.fn((key: string) => (key === 'hoverEnabled' ? hoverEnabled : undefined)),
+      update: vi.fn(),
+      has: vi.fn().mockReturnValue(true),
+      inspect: vi.fn(),
+    } as unknown as vscode.WorkspaceConfiguration;
+  });
+}
 
-  it('returns undefined when hover is disabled', () => {
-    expect(provideHover(false, true)).toBeUndefined();
+const WORD_RANGE = new vscode.Range(4, 6, 4, 13);
+
+function documentWithWord(wordRange: vscode.Range | undefined): vscode.TextDocument {
+  return {
+    uri: vscode.Uri.file('/workspace/src/app.ts'),
+    languageId: 'typescript',
+    getWordRangeAtPosition: vi.fn(() => wordRange),
+  } as unknown as vscode.TextDocument;
+}
+
+function hoverOver(wordRange: vscode.Range | undefined): vscode.Hover | undefined {
+  return new AgiHoverProvider().provideHover(
+    documentWithWord(wordRange),
+    new vscode.Position(4, 8),
+    token,
+  );
+}
+
+beforeEach(() => {
+  sections.length = 0;
+  vi.clearAllMocks();
+  configured(true);
+});
+
+describe('AgiHoverProvider', () => {
+  it('offers nothing while the hover setting is off', () => {
+    configured(false);
+    expect(hoverOver(WORD_RANGE)).toBeUndefined();
   });
 
-  it('returns undefined when no word is at position', () => {
-    expect(provideHover(true, false)).toBeUndefined();
+  it('offers nothing when the setting has never been set', () => {
+    configured(undefined);
+    expect(hoverOver(WORD_RANGE)).toBeUndefined();
   });
 
-  it('returns hover content when enabled and word exists', () => {
-    const result = provideHover(true, true);
-    expect(result).toBeDefined();
-    expect(result?.markdown).toContain('AGI Workforce');
-    expect(result?.isTrusted).toBe(true);
+  it('reads the setting from the agiWorkforce section', () => {
+    hoverOver(WORD_RANGE);
+    expect(sections).toEqual(['agiWorkforce']);
   });
 
-  it('includes action links in hover content', () => {
-    const result = provideHover(true, true);
-    expect(result?.markdown).toContain('Explain');
-    expect(result?.markdown).toContain('Fix');
-    expect(result?.markdown).toContain('Tests');
+  it('offers nothing when the cursor is not over a word', () => {
+    expect(hoverOver(undefined)).toBeUndefined();
+  });
+
+  it('anchors the hover to the word under the cursor', () => {
+    const hover = hoverOver(WORD_RANGE);
+    expect(hover?.range).toBe(WORD_RANGE);
+  });
+
+  it('links each quick action to the command that runs it', () => {
+    const markdown = hoverOver(WORD_RANGE)?.contents as vscode.MarkdownString;
+
+    expect(markdown.value).toContain('command:agi-workforce.explain');
+    expect(markdown.value).toContain('command:agi-workforce.fix');
+    expect(markdown.value).toContain('command:agi-workforce.generateTests');
+  });
+
+  it('trusts the markdown so the command links are clickable', () => {
+    const markdown = hoverOver(WORD_RANGE)?.contents as vscode.MarkdownString;
+
+    expect(markdown.isTrusted).toBe(true);
+    expect(markdown.supportThemeIcons).toBe(true);
+  });
+
+  it('labels the actions under the product name', () => {
+    const markdown = hoverOver(WORD_RANGE)?.contents as vscode.MarkdownString;
+
+    expect(markdown.value).toContain('AGI Workforce');
+    expect(markdown.value).toContain('Explain');
+    expect(markdown.value).toContain('Fix');
+    expect(markdown.value).toContain('Tests');
   });
 });

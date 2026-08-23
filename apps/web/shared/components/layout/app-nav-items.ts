@@ -28,6 +28,7 @@ import {
   MessageSquare,
   Settings,
   ShieldCheck,
+  Sparkles,
   TerminalSquare,
 } from 'lucide-react';
 import type { SidebarIconComponent, SidebarNavItem } from '@agiworkforce/ui';
@@ -76,6 +77,12 @@ export interface AppNavDestination {
    * link that redirects straight back out.
    */
   adminOnly?: boolean;
+  /**
+   * Entries the user may hide from the rail. Chat is deliberately not
+   * hideable: it is where "new chat" and the conversation list live, so a rail
+   * without it has no way back to the product's main surface.
+   */
+  hideable?: boolean;
 }
 
 /**
@@ -96,6 +103,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: TerminalSquare,
     href: '/chat/code',
     isActive: (pathname) => isUnder(pathname, '/chat/code'),
+    hideable: true,
   },
   // Persistent Projects entry (claude.ai parity). The Projects *section* in the
   // sidebar body only renders once the user has at least one project, so a
@@ -106,6 +114,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: FolderOpen,
     href: '/chat/projects',
     isActive: (pathname) => isUnder(pathname, '/chat/projects'),
+    hideable: true,
   },
   // Artifacts — a finished, account-scoped artifacts gallery that had no entry
   // point anywhere in the signed-in app. The only link to it in the tree pointed
@@ -125,6 +134,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: Layers,
     href: '/chat/artifacts',
     isActive: (pathname) => isUnder(pathname, '/chat/artifacts'),
+    hideable: true,
   },
   // Library — browse generated files without scrolling back to their origin
   // message (ChatGPT-Library / mobile-LibraryScreen parity).
@@ -134,6 +144,19 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: LibraryBig,
     href: '/chat/library',
     isActive: (pathname) => isUnder(pathname, '/chat/library'),
+    hideable: true,
+  },
+  // Skills — a shipped, indexed surface that marketing links to and that
+  // /settings/skills and /ai-skills both redirect onto, yet the app shell had
+  // no entry for it: a signed-in user could only reach it by typing the URL.
+  // Same defect the Admin entry below was added to fix.
+  {
+    id: 'skills',
+    label: 'Skills',
+    icon: Sparkles,
+    href: '/skills',
+    isActive: (pathname) => isUnder(pathname, '/skills'),
+    hideable: true,
   },
   {
     id: 'tasks',
@@ -141,6 +164,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: ListChecks,
     href: '/tasks',
     isActive: (pathname) => isUnder(pathname, '/tasks'),
+    hideable: true,
   },
   {
     id: 'schedules',
@@ -148,6 +172,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: CalendarClock,
     href: '/chat/schedules',
     isActive: (pathname) => isUnder(pathname, '/chat/schedules'),
+    hideable: true,
   },
   // Admin — directory sync is the org-scoped page an admin or owner can
   // actually use. The console at `/admin` itself is platform-operator only
@@ -159,6 +184,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     icon: ShieldCheck,
     href: '/admin/directory-sync',
     isActive: (pathname) => isUnder(pathname, '/admin'),
+    hideable: true,
     adminOnly: true,
   },
   {
@@ -170,6 +196,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     // plainly labelled sections inside the same modal.
     href: null,
     isActive: () => false,
+    hideable: true,
   },
 ];
 
@@ -185,9 +212,16 @@ export function buildAppNavItems(options: {
   onOpenCustomize: () => void;
   /** Whether the signed-in user holds the admin or owner role. */
   isAdmin?: boolean;
+  /**
+   * Destination ids the user chose to hide. A non-hideable entry stays whatever
+   * this contains, so a stale or hand-edited value cannot empty the rail.
+   */
+  hiddenIds?: readonly string[];
 }): SidebarNavItem[] {
-  const { pathname, navigate, onOpenCustomize, isAdmin = false } = options;
-  return APP_NAV_DESTINATIONS.filter((destination) => !destination.adminOnly || isAdmin).map(
+  const { pathname, navigate, onOpenCustomize, isAdmin = false, hiddenIds = [] } = options;
+  return APP_NAV_DESTINATIONS.filter((destination) => !destination.adminOnly || isAdmin)
+    .filter((destination) => !(destination.hideable && hiddenIds.includes(destination.id)))
+    .map(
     (destination) => {
       const { href } = destination;
       return {

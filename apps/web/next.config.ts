@@ -32,6 +32,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  serverExternalPackages: ['undici'],
   experimental: {
     optimizePackageImports: [
       'lucide-react',

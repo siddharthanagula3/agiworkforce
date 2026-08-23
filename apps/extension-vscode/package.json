@@ -54,6 +54,7 @@
         "agiWorkforce.desktopBridge.enabled",
         "agiWorkforce.desktopBridge.port",
         "agiWorkforce.autoApplyFixes",
+        "agiWorkforce.memory.enabled",
         "agiWorkforce.telemetryEndpoint"
       ]
     }
@@ -358,6 +359,11 @@
         "icon": "$(book)"
       },
       {
+        "command": "agi-workforce.memory.toggle",
+        "title": "AGI Workforce: Turn Memory On or Off",
+        "icon": "$(circle-slash)"
+      },
+      {
         "command": "agi-workforce.memory.refresh",
         "title": "AGI Workforce: Refresh Memory",
         "icon": "$(refresh)"
@@ -636,6 +642,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "agi-workforce.memory.toggle",
+          "when": "view == agi-workforce.memory",
+          "group": "navigation@0"
+        },
+        {
           "command": "agi-workforce.memory.refresh",
           "when": "view == agi-workforce.memory",
           "group": "navigation@1"
@@ -752,6 +763,11 @@
           "type": "boolean",
           "default": false,
           "description": "Send anonymous usage telemetry to help improve AGI Workforce"
+        },
+        "agiWorkforce.memory.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include your saved workspace memory facts with chat turns. Turn this off to stop sending them without deleting them; the Memory view keeps showing what is stored."
         },
         "agiWorkforce.hoverEnabled": {
           "type": "boolean",

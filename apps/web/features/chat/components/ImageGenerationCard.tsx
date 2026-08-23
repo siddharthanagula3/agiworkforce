@@ -39,6 +39,7 @@ import {
   normalizeImageAspectRatioForModel,
   type ImageAspectRatio,
 } from '../lib/imageGenerationOptions';
+import { toUserMessage } from '@/lib/user-error-message';
 
 // ---------------------------------------------------------------------------
 // Re-export the shared media option type for existing card consumers.
@@ -231,13 +232,19 @@ interface ShareModalProps {
   imageUrl: string;
   prompt: string;
   onClose: () => void;
+  /**
+   * Video reuses this modal, so the noun has to follow the medium — sharing a
+   * clip under copy that calls it an image is wrong in the share text, the
+   * accessible name, and the preview element alike.
+   */
+  mediaKind?: 'image' | 'video';
 }
 
-function ShareModal({ imageUrl, prompt, onClose }: ShareModalProps) {
+export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: ShareModalProps) {
   const [copied, setCopied] = useState(false);
   const title = prompt.length > 40 ? prompt.slice(0, 40) + '...' : prompt;
   const encodedUrl = encodeURIComponent(imageUrl);
-  const encodedText = encodeURIComponent(`Check out this AI-generated image: ${title}`);
+  const encodedText = encodeURIComponent(`Check out this AI-generated ${mediaKind}: ${title}`);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -250,8 +257,8 @@ function ShareModal({ imageUrl, prompt, onClose }: ShareModalProps) {
   }, [imageUrl]);
 
   const handleDownload = useCallback(
-    () => void downloadImage(imageUrl, `ai-image-${Date.now()}`),
-    [imageUrl],
+    () => void downloadImage(imageUrl, `ai-${mediaKind}-${Date.now()}`),
+    [imageUrl, mediaKind],
   );
 
   // Close on Escape
@@ -269,7 +276,7 @@ function ShareModal({ imageUrl, prompt, onClose }: ShareModalProps) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
       role="dialog"
       aria-modal="true"
-      aria-label="Share image"
+      aria-label={`Share ${mediaKind}`}
     >
       <div className="relative w-full max-w-sm rounded-2xl border border-border/40 bg-card/95 p-6 shadow-2xl backdrop-blur-xl">
         {/* Header */}
@@ -287,7 +294,17 @@ function ShareModal({ imageUrl, prompt, onClose }: ShareModalProps) {
 
         {/* Thumbnail */}
         <div className="mb-5 overflow-hidden rounded-xl border border-border/30 bg-muted/30">
-          <img src={imageUrl} alt="Generated image preview" className="h-40 w-full object-cover" />
+          {mediaKind === 'video' ? (
+            <video
+              src={imageUrl}
+              controls
+              playsInline
+              preload="metadata"
+              className="h-40 w-full object-cover"
+            />
+          ) : (
+            <img src={imageUrl} alt="Generated image preview" className="h-40 w-full object-cover" />
+          )}
         </div>
 
         {/* Action buttons row */}
@@ -435,7 +452,7 @@ function EditPanel({
         setCurrentUrl(newUrl);
         onImageUpdated(newUrl, newAspect, currentPrompt);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = toUserMessage(err, String(err));
         setGenError(msg.includes('upgrade') || msg.includes('403') ? 'Upgrade required' : msg);
       } finally {
         setGenerating(false);
@@ -462,7 +479,7 @@ function EditPanel({
       setEditText('');
       onImageUpdated(newUrl, currentAspect, combinedPrompt);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = toUserMessage(err, String(err));
       setGenError(msg.includes('upgrade') || msg.includes('403') ? 'Upgrade required' : msg);
     } finally {
       setGenerating(false);

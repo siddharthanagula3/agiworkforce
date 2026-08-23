@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 import { useComputerUseStore } from '../../stores/computerUseStore';
 import { useBrowserStore } from '../../stores/browserStore';
 import { useExecutionSidecarStore } from '../../stores/executionSidecarStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { ComputerUseOverlay } from './ComputerUseOverlay';
 
 export function ExecutionSidecarScreenView() {
@@ -16,6 +17,8 @@ export function ExecutionSidecarScreenView() {
   const actionLog = useComputerUseStore((s) => s.actionLog);
   const screenWidth = useComputerUseStore((s) => s.screenWidth);
   const screenHeight = useComputerUseStore((s) => s.screenHeight);
+
+  const showOverlay = useSettingsStore((s) => s.executionPreferences.showComputerUseOverlay);
 
   const lastAction = actionLog.length > 0 ? actionLog[actionLog.length - 1] : undefined;
 
@@ -97,7 +100,7 @@ export function ExecutionSidecarScreenView() {
           )}
           onLoad={handleImageLoad}
         />
-        {computerUseActive && lastAction && containerSize.width > 0 && (
+        {showOverlay && computerUseActive && lastAction && containerSize.width > 0 && (
           <ComputerUseOverlay
             lastAction={{
               type: lastAction.action_type,

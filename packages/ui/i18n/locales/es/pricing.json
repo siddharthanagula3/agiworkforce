@@ -173,7 +173,7 @@
   "checkoutFailed": "No se pudo iniciar el pago. Inténtalo de nuevo.",
   "perSeatPricingSub": "por licencia, al mes",
   "perSeatPrice": "{{price}}/licencia/mes",
-  "perSeatPriceAnnual": "{{price}}/licencia/año",
+  "perSeatPriceAnnual": "{{price}}/licencia/mes",
   "seatCountLabel": "Licencias",
   "changeSeatsCta": "Actualizar licencias",
   "audienceLabel": "Tipo de facturación",

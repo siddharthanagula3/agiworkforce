@@ -71,6 +71,7 @@ describe('settingsStore', () => {
         approvalTimeoutSeconds: 300,
         approvalTimeoutPolicy: 'auto-deny',
         streamInactivityTimeoutSeconds: 30,
+        showComputerUseOverlay: true,
         terminalSandbox: { ...defaultTerminalSandboxPreferences },
       },
       allowedDirectories: [],

@@ -66,6 +66,7 @@ import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox
 import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
 import { useArtifactsStore } from '../../stores/artifacts-store';
+import { toUserMessage } from '@/lib/user-error-message';
 
 /**
  * AUDIT-FIX ART-24: single guarded clipboard write.
@@ -266,7 +267,7 @@ export function ArtifactPreview({
         const result = await mammoth.convertToHtml({ arrayBuffer });
         if (!cancelled) setDocxHtml(result.value);
       } catch (err) {
-        if (!cancelled) setDocxError(err instanceof Error ? err.message : 'DOCX conversion failed');
+        if (!cancelled) setDocxError(toUserMessage(err, 'DOCX conversion failed'));
       }
     }
 
@@ -735,7 +736,7 @@ if (__AgiApp) {
       }
     } catch (error) {
       setPublishedUrl(null);
-      toast.error(error instanceof Error ? error.message : 'Failed to publish artifact');
+      toast.error(toUserMessage(error, 'Failed to publish artifact'));
     } finally {
       setIsPublishing(false);
     }
@@ -797,7 +798,7 @@ if (__AgiApp) {
         generatedFileSummary.mimeType,
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not download this file');
+      toast.error(toUserMessage(error, 'Could not download this file'));
     }
   };
 
@@ -815,7 +816,7 @@ if (__AgiApp) {
     try {
       await downloadGeneratedFile(imageSrc, fileName, mimeType);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not download this image');
+      toast.error(toUserMessage(error, 'Could not download this image'));
     }
   };
 

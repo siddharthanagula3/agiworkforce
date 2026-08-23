@@ -88,11 +88,11 @@ describe('anonymous subject erasure', () => {
     const rights = deletes.find((statement) => statement.sql.includes('data_rights_requests'));
 
     expect(waitlist?.sql).toMatch(/lower\(email\)/u);
-    expect(waitlist?.params).toEqual([NORMALIZED_EMAIL]);
+    expect(waitlist?.params).toEqual([[NORMALIZED_EMAIL]]);
     expect(consent?.sql).toMatch(/lower\(subject_email_sha256\)/u);
-    expect(consent?.params).toEqual([hashConsentSubjectEmail(SUBJECT_EMAIL)]);
+    expect(consent?.params).toEqual([[hashConsentSubjectEmail(SUBJECT_EMAIL)]]);
     expect(rights?.sql).toMatch(/lower\(contact_email\)/u);
-    expect(rights?.params).toEqual([NORMALIZED_EMAIL]);
+    expect(rights?.params).toEqual([[NORMALIZED_EMAIL]]);
 
     expect(report.deleted).toBe(3);
     expect(report.complete).toBe(true);

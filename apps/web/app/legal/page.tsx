@@ -37,6 +37,11 @@ const DOCS: { href: string; label: string; body: string }[] = [
     body: 'Prohibited uses, automated-access limits, and what happens on a violation.',
   },
   {
+    href: '/disclaimer',
+    label: 'Disclaimer',
+    body: 'Accuracy limits of model output, why it is not professional advice, and third-party providers.',
+  },
+  {
     href: '/agent-permissions',
     label: 'Agent permissions',
     body: 'What the agent may do without asking, what always requires approval, and how to revoke access.',

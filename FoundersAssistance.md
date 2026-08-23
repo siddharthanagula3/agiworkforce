@@ -297,7 +297,13 @@ logical keys below in source:
    sandbox verification succeeds.
 5. Configure Apple verification with `APPLE_APP_STORE_BUNDLE_ID`,
    `APPLE_APP_STORE_APP_ID`, and
-   `APPLE_APP_STORE_ROOT_CA_CERTS_BASE64_JSON`. Register App Store Server
+   `APPLE_APP_STORE_ROOT_CA_CERTS_BASE64_JSON`. The verifier trusts only the
+   environment named by `APPLE_APP_STORE_ENVIRONMENT` (`production` when
+   unset); set it to `sandbox` on staging deployments only, because sandbox
+   purchases are free and must never unlock production entitlements. Also set
+   `EMAIL_HASH_PEPPER` (32+ random bytes, hex) on every deployment: stored
+   email pseudonyms are keyed under it, and without it they fall back to an
+   unkeyed SHA-256 that a dictionary reverses. Register App Store Server
    Notifications V2 at
    `https://agiworkforce.com/api/mobile/iap/apple-notifications`.
 6. Configure Google verification with `GOOGLE_PLAY_PACKAGE_NAME` and
@@ -2185,3 +2191,715 @@ hole the sweep closed.
 which boots the real server as a child process with and without `ALLOWED_ORIGINS`
 and asserts the close codes. Five of its nine assertions fail against the pre-fix
 handler.
+## Three Neon migrations are written but not applied — RESOLVED 2026-08-21
+
+Applied to production on 2026-08-21 with founder authorization, after
+`backup-pre-0131-20260821` was taken from production as the rollback point.
+0131, 0132, 0133 and 0134 all applied clean; `pnpm db:migrate verify` reports
+134 applied, 0 pending, 0 drift. Nothing further is needed here.
+
+## Chinese-HQ provider opt-in is enforced on mobile but not on web
+
+**Status:** `BLOCKED_BY_HUMAN` — the code is straightforward; the decision is not.
+
+`deepseek`, `moonshot`, `qwen` and `zhipu` are in `models.json` and selectable
+on web. The compliance contract that gates them
+(`packages/contracts/compliance/src/provider-jurisdiction.ts`, via
+`ensureLlmGateOpen`) has exactly one production caller — `apps/mobile`. The same
+model selection on web reaches the provider with no named-provider consent.
+
+Mobile enforces it partly for Apple 5.1.2(i), which does not bind web. So this
+is not automatically a web requirement; it is a question about what you want
+users to have agreed to before their prompt leaves for a Chinese-headquartered
+provider.
+
+No migration is needed — `consent_records.purpose` is a text column, so new
+consent purposes are code-only. The work is: per-provider consent purposes, an
+opt-in sheet in the model picker, and a check on the web send path.
+
+**Why I did not just build it**
+
+Enforcing the check without the sheet blocks paying users mid-conversation with
+no way to proceed. Shipping the sheet without the check is a consent dialog that
+grants nothing — the fake-control pattern this goal exists to remove. Both
+halves have to land together, and whether they should land at all is a
+founder/counsel call about legal exposure and user friction, not an engineering
+one.
+
+**What is needed from you**
+
+- Decide whether web should require a named-provider opt-in before routing to a
+  Chinese-headquartered provider. If yes, I will build both halves together and
+  verify the block and the grant end to end.
+- If no, say so and I will narrow the contract's documented scope to mobile so
+  nothing claims coverage it does not have.
+
+## The plugin catalogue works but has only four plugins in it
+
+**Status:** `BLOCKED_BY_HUMAN` — content, not code.
+
+`audit/ui-gaps.csv` carried GAP-274, "Plugin catalogue is a 4-entry preview that
+installs nothing". Half of that is wrong and I have corrected the record:
+installing works, and it matters. `POST /api/plugins/installations` calls
+`installWebPlugin`, and `listEnabledPluginIdsForUser` gates real skill
+availability in the chat request-processor, the tool-loop and `/api/skills`.
+Production holds one real installation.
+
+What is true is the other half. `plugin_registry_entries` has exactly four rows
+in production:
+
+    CRM Sync · Calendar Assistant · GitHub Automation · Research Pack
+
+So a working system looks like a dead preview, which is the impression a visitor
+takes away. claude.ai's equivalent list runs to roughly 22.
+
+**What is needed from you**
+
+- Decide what the plugin catalogue should contain, and whether entries are
+  authored by you or opened to third parties. I can seed entries once the list
+  exists, but inventing plugins and their capabilities is not something I should
+  do unprompted — a registry entry claims a capability, and a fabricated one is
+  the same fake-availability defect this goal exists to remove.
+
+## Automatic credit recharge needs your decision before any UI
+
+**Status:** `BLOCKED_BY_HUMAN` — the toggle is trivial; what it authorises is not.
+
+Self-serve credit purchase already ships: Billing renders a Usage top-up
+section for Stripe-billed paid accounts with a unit rate, a minimum and a
+self-serve maximum. (The `CreditAlertModal` that once declared "no credit
+top-ups, ever" no longer exists — that record was stale.)
+
+Automatic recharge does not exist at all: no `autoReload` field, column or
+handler anywhere in the tree. It is the one remaining half of GAP-280.
+
+**Why I did not build it**
+
+Auto-recharge is a standing authorisation to charge a saved card while the user
+is not present. The switch is an afternoon; the behaviour behind it is the real
+work — a threshold that triggers it, a cap so a runaway loop cannot bill someone
+repeatedly, an idempotency guard so a retry does not double-charge, a receipt
+and a notification for a charge nobody watched happen, and a clear path to
+revoke it. Shipping the toggle first would be a control that promises to spend
+money and does not, and shipping the behaviour without the guards is worse.
+
+**What is needed from you**
+
+- Decide whether you want auto-recharge at all, and if so the trigger threshold,
+  the per-period cap, and what the user is told after an unattended charge. I
+  will build all of it together or none of it.
+
+## Should new accounts get a pre-seeded example project?
+
+**Status:** `BLOCKED_BY_HUMAN` — a product call, not an engineering gap.
+
+The reference seeds every new account's Projects list with a "How to use
+Claude" example that doubles as an interactive onboarding guide. Ours does not.
+
+Everything needed exists — projects, instructions, knowledge files — so this is
+buildable in an afternoon. I have not built it because it means creating a row
+in a real user's account at signup that they did not ask for and have to delete
+if they do not want it, and because it writes to production on every signup.
+
+**What is needed from you**
+
+- Say whether new accounts should get one, and what it should contain. If yes I
+  will also need to know whether it is created at signup or lazily on first
+  visit to Projects — lazily is cheaper and leaves accounts that never open
+  Projects untouched.
+
+## Nine live API routes have no caller anywhere
+
+**Status:** `BLOCKED_BY_HUMAN` — wire or delete is your call, not mine.
+
+I swept all 233 routes under `apps/web/app/api` for a caller in apps, packages,
+docs or scripts. Most of the unreferenced ones are legitimately external — cron
+via vercel.json, SCIM from an identity provider, IAP and GitHub webhooks, the
+desktop and mobile clients, the public `/api/v1` surface. Eight more are
+deliberate 410 Gone tombstones with tests pinning the status, which is correct
+practice.
+
+That leaves nine live routes, roughly 530 lines, that nothing calls:
+
+    billing/analytics        memory/search           me/routing-preferences
+    settings/test-provider   usage/history           usage/providers
+    webhook-diagnostic       voice/health            debug/llm-status
+
+Three are plausibly ops endpoints hit by monitoring rather than app code —
+`voice/health`, `debug/llm-status`, `webhook-diagnostic`. If that is what they
+are, they are fine and I will annotate them so the next sweep does not re-flag
+them. `me/routing-preferences` corroborates an existing recorded flaw
+(WEB-US-ONLY-ROUTING-NOT-THREADED-01): the preference is stored and never
+threaded through routing.
+
+**Why I did not just delete them**
+
+An endpoint can have a caller outside this repository — a script of yours, a
+partner integration, a saved request. Deleting a live route is a breaking change
+that no test in here would catch, and it is not reversible by the person who
+notices at 2am.
+
+**What is needed from you**
+
+- Confirm which of the three are monitored ops endpoints.
+- For the rest: say wire or delete. If wire, say what should call them; if
+  delete, I will remove them together with their tests and leave 410 tombstones
+  where an external caller is plausible.
+
+---
+
+## BLOCKED_BY_HUMAN: two env vars documented nowhere, and CI is red on it
+
+`pnpm check:env-contract` (inside `check:llm-operability`, which CI runs in
+`repo-operability.yml`) fails:
+
+```
+- web: apps/web/lib/server/email-pseudonym.ts reads undocumented environment
+       variable EMAIL_HASH_PEPPER
+- web: apps/web/lib/server/mobile-iap-store-verification.ts reads undocumented
+       environment variable APPLE_APP_STORE_ENVIRONMENT
+```
+
+The fix is two lines in `apps/web/.env.example`. I cannot make it: that path is
+in a permission-denied directory for me, so this is yours to paste.
+
+```
+# Server-side pepper for email pseudonymisation. Email addresses are
+# low-entropy and enumerable, so an unkeyed digest is reversible by dictionary;
+# this pepper is what makes the stored value a pseudonym. UNSET IS NOT INERT —
+# pseudonymizeEmail() silently falls back to legacyEmailSha256(), an unkeyed
+# SHA-256, so production without this stores reversible digests.
+EMAIL_HASH_PEPPER=
+
+# Which App Store environment signed receipts are trusted against: empty or
+# "production" means production, "sandbox" means sandbox, anything else makes
+# verification fail closed with 503. Deliberately deployment config and never
+# read from the JWS payload, because a Sandbox-signed transaction is a free
+# test purchase and must not unlock production entitlements.
+APPLE_APP_STORE_ENVIRONMENT=
+```
+
+**Worth your attention beyond the guard:** `EMAIL_HASH_PEPPER` unset is not a
+no-op. `pseudonymizeEmail()` falls back to an unkeyed SHA-256 of the address, and
+an unkeyed digest of a low-entropy value is reversible by dictionary — the exact
+weakness the pepper exists to prevent. Please confirm it is actually set in the
+production environment; the code cannot tell you, because the fallback is silent.
+
+---
+
+## URGENT: an uncommitted change in the tree will break CI for every surface
+
+`pnpm install --frozen-lockfile` currently FAILS at the repo root. That is the
+exact command every workflow runs — `js-verify`, `rust-desktop-cli`,
+`release-mobile.yml:89`, all of them — before any test executes. If the current
+working tree is committed as-is, CI does not fail a test; it fails to install,
+on every surface at once.
+
+Reproduced directly:
+
+    ERR_PNPM_OUTDATED_LOCKFILE  Cannot install with "frozen-lockfile" because
+    pnpm-lock.yaml is not up to date with <ROOT>/apps/web/package.json
+
+Exactly one specifier differs out of ~150, nothing added or missing:
+
+    lockfile records   apps/web -> undici: ^8.10.0
+    computed spec is   apps/web -> undici: >=8.9.0 <9
+
+CAUSE: `apps/web/package.json:143` now declares `"undici": "^8.10.0"` as a
+direct dependency, while the root `overrides` block in `pnpm-lock.yaml:21`
+forces `undici: '>=8.9.0 <9'`. pnpm resolves the importer's effective spec
+through the override, so the recorded specifier and the computed spec can never
+agree. Regenerating the lockfile does not fix it — one of the two declarations
+has to change.
+
+THIS IS NOT ON THE BRANCH. `git show HEAD:apps/web/package.json` contains no
+undici entry at all. Both `apps/web/package.json` and `pnpm-lock.yaml` are
+modified-uncommitted, and they were not modified when this session began. They
+appear to be live work from another session — most likely a security-driven
+undici pin, given the override reads like a CVE floor.
+
+DECISION NEEDED, and it is not mine to make because I cannot know the intent
+behind the pin:
+  - drop the direct `undici` dependency from apps/web and let the root override
+    supply it, or
+  - widen the root override to admit `^8.10.0`.
+
+I did not touch either file. Working around it with `--no-frozen-lockfile` would
+rewrite the lockfile underneath another session's in-flight edit.
+
+SIDE EFFECT: this also blocks the mobile verification. `apps/mobile`'s jest
+failure locally is a stale-install artifact, and settling it requires a clean
+`--frozen-lockfile` run, which is impossible until the undici conflict is
+resolved.
+
+---
+
+## SAFETY: two app allow/deny systems in one panel, and the visible one does nothing
+
+Desktop Settings -> Computer Use contains TWO app allow/deny mechanisms. One is
+real. The other sits ABOVE it on the same page and is inert.
+
+THE REAL ONE — "Per-app permission registry". `AppPermissionManager`
+(`src-tauri/src/automation/computer_use/app_permissions.rs`) is constructed at
+startup (`lib.rs:1000-1009`), persisted to `app_permissions.json`, and consulted
+inside the actual agent action loop: `anthropic_agent.rs:321` and
+`observe_plan_act.rs:358` both call `check_app_permission()` via
+`SafetyLayer::check_app_permission` (`safety.rs:409`), gated by
+`safety.check_app_permissions`, default true. Five IPC commands expose it and
+`ComputerUseSettings.tsx` calls all five. This section works.
+
+THE DECORATIVE ONE — "Allowed / denied app lists", higher in the same panel.
+Backed by the `allowedApps`/`deniedApps` zustand arrays. `handleAddAllowedApp`
+and `handleAddDeniedApp` push onto a local array and nothing else. Those arrays
+are read in exactly two places, both of which render them back to the user. No
+`invoke` anywhere — the strings never reach Rust, never reach
+`AppPermissionManager`, never reach the safety layer. `computerUseStore` has no
+`persist` middleware, so the lists are also discarded on restart.
+
+WHY THIS IS WORSE THAN AN INERT CONTROL. Someone hardening Computer Use opens
+the panel, sees "Allowed apps" and "Denied apps", types the applications they
+want an agent kept out of, sees them listed back, and is protected by nothing.
+The mechanism that would actually have stopped the agent is a different control
+further down the same page, which they may never reach. A user who fills in the
+wrong list is worse off than if neither existed, because the decorative one
+gives them the feeling of having locked the door.
+
+DECISION NEEDED:
+  (a) delete the decorative lists and their store plumbing, leaving the per-app
+      permission registry as the single allow/deny surface — nothing is lost,
+      the registry already carries the always-blocked list and active-window
+      helper; or
+  (b) keep them as a convenience front-end, in which case they MUST write
+      through to `app_permissions_set` / `app_permissions_remove` so they are a
+      second view of the same data rather than a competing one.
+
+Nothing has been changed. Recommendation is (a).
+
+Related and already actioned on the same reasoning: `hideAppsOnTask`, a toggle
+in the same safety section whose copy read "Apps hidden during a task are
+restored when the agent stops", had no reader anywhere and no persistence. It
+has been removed — no OS-level app-hiding capability exists in the Rust tree at
+all, so there was nothing to wire it to.
+
+---
+
+## EMAIL_HASH_PEPPER: the code no longer degrades silently — but two things are yours
+
+The silent-degradation defect is fixed. `pseudonymizeEmail()` now FAILS CLOSED in
+production runtime when the pepper is absent, instead of quietly falling back to
+an unkeyed SHA-256 of a low-entropy, dictionary-reversible address. A boot
+assertion in `lib/validate-env.ts` feeds `instrumentation.ts`, which already
+throws on a production env error, so a misconfigured deployment now fails at
+BOOT naming the variable rather than at the first waitlist signup.
+
+Two things it deliberately does NOT do, both correct:
+
+- A production BUILD does not throw. `NEXT_PHASE=phase-production-build` is
+  checked first, so `next build` takes the legacy path. A guard that fired
+  during the build would break deploys rather than protect anything.
+- Vercel PREVIEW does not throw. Preview runs with `NODE_ENV=production`, so a
+  naive check would have thrown on every preview deployment.
+
+MATCHING IS PRESERVED. `emailPseudonymCandidates()` no longer routes through the
+throwing function — it reads the pepper itself and returns the legacy digest
+alone when the pepper is missing, without throwing, even in production. Rows
+written before the pepper stay findable and erasure still purges them. Had it
+kept routing through, the new throw would have propagated into the erasure query
+and made pre-pepper rows UNERASABLE — a confidentiality bug turned into a
+compliance failure.
+
+### DECISION 1 — a misconfigured production now BLOCKS erasure instead of degrading it
+
+The erasure RECEIPT (`anonymous-erasure.ts:48`) is a write. So if production ever
+runs without the pepper, a DPDP erasure request fails rather than stamping a
+reversible digest into the security-audit record. I judged that correct — the
+receipt is itself a stored pseudonym — but you should know the behaviour from me
+rather than from an incident. The erasure QUERY is unaffected; only the receipt.
+
+### DECISION 2 — rows written before the pepper keep unkeyed digests, permanently
+
+`docs/agent-context/known-flaws.md:89-92` states the variable was added to Vercel
+Production and Preview on 2026-08-20, effective on each surface's next deploy.
+That is an in-repo claim, not evidence — nobody in this session could see the
+dashboard.
+
+If no deploy has happened since then, production has been writing reversible
+digests, and every row written in that window keeps its unkeyed digest FOREVER: a
+pseudonym cannot be recomputed from a hash. Affected columns are
+`waitlist.email` and `consent_records.subject_email_sha256`.
+
+You need to decide whether those rows are re-keyed from a plaintext source or
+accepted as legacy. Matching is unaffected either way — the exposure is the
+stored value itself.
+
+### STILL OUTSTANDING
+
+`pnpm check:env-contract` remains red. It wants `EMAIL_HASH_PEPPER` and
+`APPLE_APP_STORE_ENVIRONMENT` documented in `apps/web/.env.example`, a path my
+permissions deny. The exact text to paste is recorded earlier in this file.
+
+---
+
+## DECISION: `pnpm build:desktop` cannot exit 0 on any developer machine
+
+The desktop app builds and code-signs correctly. Verified on this machine:
+
+    target/release/bundle/macos/AGI.app          signed, TeamIdentifier=D2PR62RLT4
+    target/release/bundle/dmg/AGI_1.2.0_aarch64.dmg   25.5 MB
+    target/release/bundle/macos/AGI.app.tar.gz   24 MB, UNSIGNED
+
+Vite genuinely ran (9933 modules transformed), codesign used the real Developer
+ID with no keychain prompt, and notarization was skipped with a WARNING because
+`APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID` are absent — the correct behaviour
+for a local build.
+
+But the command exits 1. After bundling, Tauri builds an updater artifact that
+must be signed with `TAURI_SIGNING_PRIVATE_KEY` — a DIFFERENT secret from the
+Developer ID codesigning identity. It is Tauri's own updater-manifest key, and
+only its public half is in the repo (`tauri.conf.json:103`). Without the private
+half that step throws a hard error:
+
+    Error A public key has been found, but no private key.
+          Make sure to set `TAURI_SIGNING_PRIVATE_KEY` environment variable.
+    Failed: @agiworkforce/desktop#build
+
+THE ASYMMETRY IS THE FINDING. Notarization needs release-only secrets and
+degrades to a warning. Updater signing needs a release-only secret and hard
+fails. So `pnpm build:desktop` returns non-zero on EVERY developer machine, not
+just this one — a developer cannot run the documented full build and see it
+succeed, and cannot distinguish "my change broke the build" from "I do not hold
+a release secret".
+
+YOUR CALL, two defensible options:
+  (a) Intended — the full build is a release-only path, in which case the script
+      or its docs should say so, because today it looks like a broken build.
+  (b) Make updater-bundle generation conditional on `TAURI_SIGNING_PRIVATE_KEY`
+      being present, mirroring how notarization already degrades. Local runs
+      would then produce .app and .dmg and exit 0; CI, which supplies the secret
+      and guards on it being non-empty (release-desktop.yml:69-73), still
+      produces and signs the updater artifact.
+
+I did not change the build script. Which of these is right depends on whether
+you want local full builds to be a supported workflow, and that is a product
+decision.
+
+NOTE ON MY OWN REPORTING: I initially told you this build SUCCEEDED, reading
+success from the presence of the artifacts without checking the exit code. It
+exited 1. The artifacts are real and signed; the claim of success was not.
+
+---
+
+## 141 of the VS Code extension's 890 "passing" tests cannot fail
+
+An audit of all 95 test files found that ~16% of the suite asserts on logic
+DEFINED INSIDE THE TEST FILE. Those tests are green regardless of what the
+extension does. Five files are entirely vacuous; six more are mixed.
+
+The proof they track nothing is that four have already DRIFTED from the
+production they impersonate:
+
+1. `api.test.ts` "withRetry pattern" — the local copy decides retryability with
+   `err.message.startsWith('CLIENT:')`. The string `CLIENT:` appears NOWHERE in
+   production. Real `withRetry` retries on `AgiWorkforceApiError` with
+   `statusCode >= 500`. Four tests assert the retry policy of a convention that
+   does not exist.
+
+2. `inlineCompletionProvider.test.ts` "extractCompletionText" — production takes
+   `(raw, maxLength)` and truncates on both return paths. The copy takes `(raw)`
+   and never truncates. So `agiWorkforce.inlineCompletions.maxLength` — a
+   registered, shipped, user-facing setting — has ZERO test coverage, while a
+   file named after that provider shows 7 green tests over that function.
+
+3. `trust-boundary.test.ts` "endpoint validation" — 7 tests, 5 labelled
+   CRITICAL, over a local `isValidApiEndpoint` and a local host allowlist. The
+   copy ALLOWS `agiworkforce-api.vercel.app`, which production REJECTS, and
+   never covers `staging.agiworkforce.com` or `::1`, which production allows.
+   Mitigating: the real `validateEndpointUrl` IS covered by security.test.ts
+   VSCODE-01, so the control is not unguarded — these 7 are drifted duplicates.
+
+4. THE ONE I MOST WANT YOU TO SEE — `security.test.ts` VSCODE-05 and VSCODE-06.
+   VSCODE-05 defines `const SAFE_HREF_RE = /^(https?:|mailto:)/i` INSIDE each of
+   its five tests and asserts the regex behaves as written. The actual
+   sanitization is DOMPurify in `src/webview/render.ts` — `ALLOWED_URI_REGEXP`,
+   `FORBID_TAGS`, `FORBID_ATTR`, and an `afterSanitizeAttributes` hook — which
+   this file never imports. VSCODE-06 does a `.replace()` inline and asserts the
+   replacement worked; one of its tests even carries the comment "We just verify
+   the detection — the actual skip happens in sidebarProvider", so the author
+   knew.
+
+   NO TEST ANYWHERE asserts the real sanitizer's URI or tag policy. That is a
+   genuine coverage gap sitting behind two CVE-style identifiers that read as if
+   it were covered.
+
+WHAT THE NUMBER MEANS: roughly 749 of the 890 exercise production. I have
+reported "887 / 890 extension tests passing" to you several times today; that
+number is real as a count and weaker as evidence than it sounds.
+
+The concentration is what matters more than the total — the vacuous blocks
+cluster on retry policy, endpoint validation, completion truncation and HTML
+sanitization, which are precisely the places a green suite gets read as proof
+that a control works.
+
+Not a regression, and not urgent in the incident sense: these tests have always
+been vacuous, and no defect is known to have shipped because of them. But the
+extension's real coverage is lower than its numbers imply, and the security-ID
+blocks actively mislead.
+
+REWRITE IS UNDERWAY, highest misleading value first: the security blocks plus
+real-sanitizer coverage, then completion truncation, then retry policy. The two
+large whole-file rewrites (codeLensProvider 35 tests, workspaceIndexer 30) are
+volume work and can follow.
+
+---
+
+## VS Code indexes the user's workspace on every file save, and nothing reads it
+
+Found while auditing test coverage, not while looking for it.
+
+`apps/extension-vscode/src/data/workspaceIndexer.ts` exposes
+`getRelevantContext()` and `isStale()`. Both have ZERO callers in production —
+grep across `src` finds only their definitions.
+
+What IS wired is `registerFileWatcher()` (chatSetup.ts:64). On every change,
+create and save of any `.ts .tsx .js .jsx .py .go .rs .java .cs .cpp .c .h .rb
+.php .swift .kt` file, it runs `executeDocumentSymbolProvider` and writes up to
+500 files' worth of symbols into `workspaceState`.
+
+So the extension pays CPU, disk and battery to build and persist a symbol index
+on every save, and no code path ever reads the result. This is the same shape as
+the dead `contextBudget.ts` deleted earlier today — background work with no
+consumer — except this one is attached to a file watcher, so unlike dead code it
+costs the user something continuously.
+
+DECISION NEEDED, and it is a product call rather than a cleanup:
+  (a) DELETE the indexer and its watcher. Nothing reads it, so nothing regresses,
+      and users stop paying for it.
+  (b) WIRE `getRelevantContext()` into chat context, which is evidently what it
+      was built for. That is a feature decision — it changes what gets sent to
+      the model — and it needs your intent, not a guess from me.
+
+Not urgent in the incident sense; it has presumably always been this way. But it
+is the only finding today that costs the user resources continuously rather than
+merely misleading a reader.
+
+RELATED, for scale: its 30 tests are vacuous — they test a local copy whose
+shape has drifted from production (free function vs method, top-10 vs top-20,
+hardcoded 2000 vs a `maxChars` parameter nothing tests). Do not spend effort
+rewriting them until (a) or (b) is decided, because (a) deletes them outright.
+
+---
+
+## A privacy notice with zero test coverage (found, now covered)
+
+`checkInlineCompletionsFirstRun` (`apps/extension-vscode/src/extension.ts:236`,
+called from `activate` at :208) is the first-run notice telling the user that
+inline completions send roughly 100 lines of surrounding code on each keystroke,
+and which files are excluded. It is the disclosure the user sees before that
+starts happening.
+
+It had NO test coverage anywhere. What sat in its place were six tautologies of
+the form `const shouldWarn = enabled && !acknowledged; expect(shouldWarn).toBe(true)`
+— assertions on a local expression, in a file named `extension.test.ts`.
+
+If that notice had silently stopped firing — an activate-ordering change, a
+guard inverted — nothing would have failed. Users would be sending surrounding
+code with no disclosure, and the suite would still be green.
+
+It is now covered by three real tests driving the actual `activate`: the notice
+fires once with its real text, it does not repeat once acknowledged, and it stays
+silent while inline completions are off. Proven by break run: removing the
+`checkInlineCompletionsFirstRun` call from `activate` fails the first test.
+
+WHY THIS ALMOST GOT DELETED. I had authorised removing all 20 tautologies in
+that file on the grounds they were redundant, with the condition that redundancy
+be proven input by input first. That check found FOUR of the six blocks were not
+redundant at all:
+  - the privacy notice above (zero coverage anywhere)
+  - `commandLabel`, real exported code behind the plan-mode confirmation prompt,
+    where the copy had also DRIFTED — production has five labels including
+    `docs: 'Generate Docs'`, the copy had four
+  - the API-key validator at `commandSetup.ts:515`, no coverage
+Only two blocks were genuinely deletable, plus one that described a function
+(`isLocalPortReachable`) that does not exist.
+
+Recording this because the lesson generalises: "vacuous" and "redundant" are not
+the same property. A test can assert nothing AND be the only thing pointing at a
+behaviour that matters. Deleting on the first property without checking the
+second would have quietly removed the only marker that a privacy disclosure
+existed.
+
+ONE GAP RECORDED, NOT FIXED: the real configuration-change handler
+(`extension.ts:140`) reacts to `agent.mode`, `agent.effort` and `cliPath` —
+restarting local runtimes, reconciling consent. The tautologies that pretended to
+cover it named three DIFFERENT keys, so deleting them lost nothing true. But that
+handler still has no coverage.
+
+---
+
+## Fake-test sweep across all six surfaces — web is fine, Chrome is not
+
+The VS Code finding (145 of 986 tests unable to fail) prompted a sweep of every
+other surface. Rates are ESTIMATES from biased samples, not censuses; the
+vacuous counts themselves are verified by reading.
+
+  extension (chrome)  166 vacuous / 1587 blocks   ~10.5%   worst
+  desktop             163 / 3230                  ~5.0%
+  web                 113 / 8695                  ~1.3%
+  mobile               27 / 2897                  ~0.9%
+  cli                   8 / 1942                  ~0.4%    effectively clean
+
+### WEB IS NOT INFECTED — the number I quoted you holds
+
+~1.3%, and more importantly its security corpus is VERIFIED CLEAN: 145 files
+covering security/, billing/, csrf, auth, rate-limit, encryption, secrets, PII,
+redaction, consent, retention, erasure, entitlement, quota and paywall — ZERO
+vacuous. `html-sanitizer.test.ts` genuinely exercises the real sanitizer with 63
+tests. The exact thing that was hollow in VS Code is solid on web.
+
+### THE ONE THAT MAY BE A REAL SECURITY GAP, NOT JUST A FAKE TEST
+
+`apps/mobile/__tests__/trust-boundary.test.ts` is 20/20 vacuous AND drifted. Its
+test named "CRITICAL: local mode must never see cloud unlocked without auth"
+asserts a local `isCloudUnlocked(authToken, hasSubscription)`.
+
+Production `isCloudUnlocked` (`src/features/model-picker/store.ts:21`) is
+ZERO-ARGUMENT: `return useWaitlistStore.getState().cloudUnlocked`. No auth check.
+No subscription check.
+
+So a test carrying a CRITICAL label asserts a gate the product does not
+implement. Either the gate is enforced somewhere else and the test is merely
+misplaced, or cloud unlock genuinely has no auth check on mobile. I did not
+determine which — that needs someone who knows the intended trust boundary, and
+it is the single highest-priority item out of this sweep.
+
+### CHROME IS THE WORST, AND IT READS AS A REMEDIATION LEDGER
+
+`apps/extension/__tests__/security-fixes.test.ts` is organised by finding ID —
+C-2, CHROME-CRIT-1, H-07, H-01, H-1/H-2/H-3, P0-D and others — with 63 of its
+102 blocks vacuous. The code under test is either ABSENT from production
+(C-2's `resolveAuthHeader`/`isBridgeRequest` have no counterpart at all) or
+measurably DRIFTED (CHROME-CRIT-1 asserts a 16-hex-char fence nonce; production
+`createFenceNonce` emits 32, so that test would FAIL against the real function).
+
+A file named `security-fixes.test.ts`, indexed by finding ID, is exactly what a
+reader treats as proof those findings were fixed and stay fixed.
+
+Also on Chrome, all verified:
+- `background.cookies.test.ts` 25/25, with PROVEN drift. Production was rewritten
+  to structured `CookieBlockEntry` parsing; the suite still holds 44 regexes and
+  its own matcher, and never noticed. They also DISAGREE: the test's pattern
+  blocks `foox.com`, production's suffix mode allows it.
+- `recorder-redaction.test.ts` 16/16 — PRIVACY, re-implements the API-key/JWT
+  redaction instead of calling `sanitizeRecordedValue`.
+- `connection-lifecycle.test.ts` 33/33 — the three classes it tests do not exist.
+- `screenshot-tab-restriction.test.ts` 4/4 — the cross-tab screenshot control.
+
+### DESKTOP HAS A DIFFERENT FAILURE MODE
+
+Mostly MOCK-ECHO rather than re-implementation: `expect(invoke).toHaveBeenCalledWith(x)`
+where the test passed `x` to the mock itself. Green regardless, without copying
+anything. `memory.test.ts` (55 blocks) and `scheduler.test.ts` (37) are this
+shape — `api/memory.ts` and its `fenceUntrustedMemoryContent` sanitisation never
+run. And `stores/__tests__/apiStore.test.ts` tests a store that WAS NEVER
+WRITTEN — `stores/apiStore.ts` does not exist.
+
+### CLI IS CLEAN — report it as such
+
+8 of 1942 (0.4%), both clusters self-labelled "// Simulate". Every auth,
+credential, permission, redaction, billing and policy module is genuinely wired.
+`src/routing/classify.rs:292` is best-in-class: it diffs production Rust statics
+against the canonical TS source and its docstring forbids re-typing thresholds.
+
+### THE SEARCHABLE SIGNATURE, worth more than the counts
+
+CONCEPT-NAMED test files are the infected stratum. `trust-boundary.test.ts`
+exists on web, mobile AND extension — all three ~100% fake. Module-named files
+(`fooStore.test.ts`, `fooProvider.test.ts`) were 0/12 in a random control and
+clean everywhere sampled. A file named after an IDEA rather than a module has
+nothing to import, so it invents its subject.
+
+The cheap detector: a test file with NO import specifier starting with `.`, `@/`,
+`@shared`, `@features` or `@agiworkforce`, and no `readFileSync` of production
+source, is almost certainly vacuous. That single rule caught every genuine web
+hit with only the SQL-migration family as noise.
+
+---
+
+## RESOLVED: the mobile `isCloudUnlocked` question is BENIGN — cleared
+
+I flagged this as the highest-priority item from the fake-test sweep. It has
+been traced and it is NOT a security gap. Recording the clearance as prominently
+as the alarm.
+
+VERIFIED: no managed compute is served without a Clerk-verified userId and a
+server-side subscription lookup keyed on that userId. Forcing
+`cloudUnlocked === true` on an unauthenticated device unlocks UI affordances and
+nothing else — every resulting request is rejected 401/403 at the server. A UI
+defect class, not compute theft.
+
+WHY, in the three places it matters:
+
+1. THE FLAG NEVER GATES A NETWORK CALL. The two sites that look like network
+   gates are dead: `remoteChatGate.ts:36` reads `flags.v1LocalOnly && !cloudUnlocked`
+   and `v1FeatureFlags.ts:2` has `v1LocalOnly: false`, so that branch cannot
+   execute. The real pre-flight guard is `captureCloudAccountEpoch()`
+   (`chatExecutionStore.ts:777`), which returns non-null only with an active
+   Clerk owner id and does not read the flag at all. Everything else the flag
+   touches is model-picker filtering and UI labels.
+
+2. PERSISTENCE IS ACTIVELY DESIGNED AGAINST THE OBVIOUS BUG. `waitlist/store.ts`
+   excludes `cloudUnlocked` from `partialize` entirely, and `merge` rebuilds from
+   the signup record only, so a legacy blob cannot reintroduce the grant. The
+   code comment names the exact attack: a rehydrated `true` routing chats to
+   managed cloud on cold start before that session is proven. The test covering
+   this is REAL — verified, given the session's subject.
+
+3. THE SERVER ENFORCES INDEPENDENTLY. `auth-gate.ts`: no Bearer → 401 before
+   anything else; token verified with real crypto via `@clerk/backend`; the
+   subscription lookup is keyed on the SERVER-derived userId, never on anything
+   the client sent; inactive plan → 403. The request body carries no
+   `cloudUnlocked` field — the flag is never transmitted.
+
+The CRITICAL-labelled test was wrong about the function's shape AND testing the
+wrong layer, but it was not papering over a hole. The invariant it wants is
+enforced in two other places.
+
+### TWO BACKLOG ITEMS, NEITHER URGENT
+
+1. DELETE THE INVITE PATH. `'ALPHATESTER'` is a hardcoded unlock string still
+   shipping in the mobile bundle (`waitlist/service.ts:36`), wired to a writer
+   that sets `cloudUnlocked: true` with no auth and no network — a pure local
+   string compare that works offline. It is unreachable today only because
+   `InviteCodeModal` is mounted nowhere; it is leftover from the waitlist-gate
+   removal. Still 401 at the server if it ever fired, so cosmetic — but it is one
+   import away from being live and has no upside. Clean up the four stale
+   `jest.mock('.../cloud-bridge')` calls that outlived the gate removal too.
+
+2. DELETE OR REWRITE `apps/mobile/__tests__/trust-boundary.test.ts`. All 20
+   blocks vacuous, three of its four local copies drifted. Leaving it means the
+   next reader sees "CRITICAL: local mode must never see cloud unlocked without
+   auth" and believes it is guarded there.
+
+---
+
+## 39. The operator console has no in-app entry point (merge of the security sweep, 2026-08-22)
+
+**Status:** `BLOCKED_BY_HUMAN` — a product decision, not a code gap.
+
+`apps/web/features/admin/components/AdminConsoleEntry.tsx` was added on
+`compliance/dpdp` to surface an "Open admin console" card in Settings → Security.
+It gated on `hasAdminConsoleAccess(user.publicMetadata)` — the **organisation**
+`owner`/`admin` role — while the routes behind it are now gated on
+`requirePlatformAdmin`, i.e. the deploy-time `AGI_PLATFORM_ADMIN_USER_IDS`
+allowlist (CLAUDE-SECURITY-20260821-144214 F2/F3/F5/F6).
+
+That combination is worse than having no link: it advertises a console
+described as doing "account suspend, ban, and reactivate" to every customer who
+owns their own org, and then answers 404 when they click it. The component was
+deleted rather than kept dead, so nobody re-wires it with the same gate.
+
+**The decision needed:** whether the operator console should have an in-app
+entry at all. If yes, it cannot be gated client-side — `AGI_PLATFORM_ADMIN_USER_IDS`
+is server-only by design — so it needs a server component or an endpoint that
+reports platform membership for the signed-in user. Until then, reach the console
+by navigating to `/admin` directly; it works for allowlisted operators.

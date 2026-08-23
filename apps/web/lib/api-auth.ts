@@ -14,6 +14,8 @@ import { apiKeyHasScope, type ApiKeyScope } from '@/lib/api-key-scopes';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
+export { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
+
 export interface AuthResult {
   userId: string;
   email?: string;

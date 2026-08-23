@@ -1,14 +1,21 @@
 /**
- * Platform-operator identity, deliberately separate from the organisation
- * `admin`/`owner` role in Clerk `publicMetadata`. That role is org-scoped and
- * self-service: a customer who owns their own org holds it. Platform-wide
- * surfaces — every account's security telemetry, cross-tenant erasure, the
- * trust-and-safety queue, takedown of anyone's shared content — must never be
- * gated on it, or any customer admin can act on every other tenant.
+ * Who may see the operator dashboard.
  *
- * Membership comes only from `AGI_PLATFORM_ADMIN_USER_IDS`, a deploy-time
- * comma-separated allowlist of Clerk user ids. An unset or empty list denies
- * everyone: no accidental open door in an environment that forgot to set it.
+ * This is deliberately NOT {@link hasAdminConsoleAccess}. That check passes for
+ * any Clerk user whose `publicMetadata.role` is `owner` or `admin`, which is an
+ * ORGANISATION role — a customer who owns their own org holds it. The enterprise
+ * console is scoped to their org, so that is correct there.
+ *
+ * The operator dashboard is not scoped to an org. It reads every account, every
+ * feedback row, and can reset another user's usage. Gating that on an org role
+ * would hand the platform's own books to any customer admin, so it needs an
+ * allowlist of platform operators and nothing weaker.
+ *
+ * The allowlist lives in AGI_PLATFORM_ADMIN_USER_IDS as a comma-separated list
+ * of Clerk user ids. Ids, not emails: an email can be changed on the identity
+ * provider by whoever controls the mailbox, and a verified-email check would
+ * make the gate only as strong as that. An unset variable denies everyone,
+ * which is the safe direction for a surface that can mutate billing state.
  */
 
 export const PLATFORM_ADMIN_ENV_VAR = 'AGI_PLATFORM_ADMIN_USER_IDS';
@@ -17,8 +24,8 @@ export function parsePlatformAdminIds(raw: string | undefined | null): string[] 
   if (!raw) return [];
   return raw
     .split(',')
-    .map((id) => id.trim())
-    .filter((id) => id.length > 0);
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 export function isPlatformAdmin(

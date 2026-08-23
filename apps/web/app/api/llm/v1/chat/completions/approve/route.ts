@@ -264,6 +264,7 @@ async function handleToolApproval(request: NextRequest) {
       mcpTools,
       approvalMode: 'manual',
       toolApprovalPolicy,
+      connectorPermissions,
       continuation: {
         eventSessionId: claim.checkpoint.sessionId,
         eventTurnId: claim.checkpoint.turnId,

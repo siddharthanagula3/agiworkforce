@@ -19,6 +19,7 @@ import {
   type DesktopReleasePlatform,
   type DesktopReleaseChannel,
 } from '@/lib/releases/github-desktop-releases';
+import { isTrustedReleaseAssetUrl } from '@/lib/releases/trusted-release-asset-url';
 
 const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
 const RELEASE_DOWNLOAD_IP_DOMAIN = 'release-download';
@@ -167,6 +168,17 @@ async function handleGetLatestRelease(
   if (!release) {
     return NextResponse.json(
       { error: { code: 'NOT_FOUND', message: 'No release found for this platform' } },
+      { status: 404 },
+    );
+  }
+
+  if (!isTrustedReleaseAssetUrl(release.download_url)) {
+    logger.warn(
+      { platform: validPlatform, channel, downloadUrl: release.download_url },
+      'Release download_url is not on the trusted asset allowlist; refusing to serve an update manifest',
+    );
+    return NextResponse.json(
+      { error: { code: 'NOT_FOUND', message: 'No valid release found for this platform' } },
       { status: 404 },
     );
   }

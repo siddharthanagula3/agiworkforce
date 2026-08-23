@@ -1,7 +1,13 @@
 import { useEffect, useCallback } from 'react';
 import { safePlatform } from '@shared/utils/browser-utils';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
+
+// A fresh [] each render changes the identity every time and defeats the
+// memoization below, which is what the exhaustive-deps warning was pointing at.
+const EMPTY_SHORTCUT_IDS: string[] = [];
 
 export interface KeyboardShortcut {
+  id: string;
   key: string;
   ctrl?: boolean;
   meta?: boolean;
@@ -12,20 +18,20 @@ export interface KeyboardShortcut {
   category: 'navigation' | 'conversation' | 'message' | 'ui';
 }
 
-export type KeyboardShortcutDoc = Omit<KeyboardShortcut, 'action'>;
+export type KeyboardShortcutDoc = Omit<KeyboardShortcut, 'action'> & { id: string };
 
 export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
-  { key: 'K', ctrl: true, meta: true, description: 'Open search', category: 'navigation' },
-  { key: '/', ctrl: true, meta: true, description: 'Show keyboard shortcuts', category: 'ui' },
-  { key: 'N', ctrl: true, meta: true, description: 'New conversation', category: 'conversation' },
-  { key: 'B', ctrl: true, meta: true, description: 'Toggle sidebar', category: 'ui' },
-  { key: 'Escape', description: 'Focus message composer', category: 'navigation' },
+  { key: 'K', ctrl: true, meta: true, id: 'open-search', description: 'Open search', category: 'navigation' },
+  { key: '/', ctrl: true, meta: true, id: 'show-shortcuts', description: 'Show keyboard shortcuts', category: 'ui' },
+  { key: 'N', ctrl: true, meta: true, id: 'new-conversation', description: 'New conversation', category: 'conversation' },
+  { key: 'B', ctrl: true, meta: true, id: 'toggle-sidebar', description: 'Toggle sidebar', category: 'ui' },
+  { key: 'Escape', id: 'focus-composer', description: 'Focus message composer', category: 'navigation' },
   {
     key: 'C',
     ctrl: true,
     meta: true,
     shift: true,
-    description: 'Copy last message',
+    id: 'copy-last-message', description: 'Copy last message',
     category: 'message',
   },
   {
@@ -33,7 +39,7 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     ctrl: true,
     meta: true,
     shift: true,
-    description: 'Regenerate last message',
+    id: 'regenerate-last-message', description: 'Regenerate last message',
     category: 'message',
   },
   {
@@ -41,7 +47,7 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     ctrl: true,
     meta: true,
     shift: true,
-    description: 'Toggle artifacts panel',
+    id: 'toggle-artifacts', description: 'Toggle artifacts panel',
     category: 'ui',
   },
 ];
@@ -71,6 +77,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     enabled = true,
   } = options;
 
+  const disabledIds = useSettingsStore((state) => state.disabledShortcutIds) ?? EMPTY_SHORTCUT_IDS;
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return;
@@ -85,18 +93,35 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       // every Shift binding below has to compare against the unshifted letter.
       const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
 
-      const matched = (
-        [
-          [modifierKey && key === 'k', onSearch],
-          [modifierKey && key === '/', onShowShortcuts],
-          [modifierKey && key === 'n', onNewChat],
-          [modifierKey && key === 'b', onToggleSidebar],
-          [key === 'Escape' && !isInputField, onFocusComposer],
-          [modifierKey && event.shiftKey && key === 'c', onCopyLastMessage],
-          [modifierKey && event.shiftKey && key === 'r', onRegenerateLastMessage],
-          [modifierKey && event.shiftKey && key === 'a', onToggleArtifacts],
-        ] as ReadonlyArray<readonly [boolean, (() => void) | undefined]>
-      ).find(([isMatch]) => isMatch);
+      // Driven by KEYBOARD_SHORTCUT_DOCS rather than a parallel hardcoded list.
+      // The two used to be separate, so the Settings list described bindings
+      // this matcher did not read — and a disable switch over that list would
+      // have been decorative. One source now decides both what is shown and
+      // what fires.
+      const handlerFor: Record<string, (() => void) | undefined> = {
+        'open-search': onSearch,
+        'show-shortcuts': onShowShortcuts,
+        'new-conversation': onNewChat,
+        'toggle-sidebar': onToggleSidebar,
+        'focus-composer': onFocusComposer,
+        'copy-last-message': onCopyLastMessage,
+        'regenerate-last-message': onRegenerateLastMessage,
+        'toggle-artifacts': onToggleArtifacts,
+      };
+
+      const matched = KEYBOARD_SHORTCUT_DOCS.filter((doc) => !disabledIds.includes(doc.id))
+        .map((doc): readonly [boolean, (() => void) | undefined] => {
+          const wantsModifier = Boolean(doc.ctrl || doc.meta);
+          const modifierOk = wantsModifier ? modifierKey : !modifierKey;
+          const shiftOk = Boolean(doc.shift) === event.shiftKey;
+          const altOk = Boolean(doc.alt) === event.altKey;
+          const keyOk =
+            doc.key.length === 1 ? key === doc.key.toLowerCase() : key === doc.key;
+          // Escape must not steal a keystroke from a field the user is typing in.
+          const contextOk = doc.key === 'Escape' ? !isInputField : true;
+          return [modifierOk && shiftOk && altOk && keyOk && contextOk, handlerFor[doc.id]];
+        })
+        .find(([isMatch]) => isMatch);
 
       // Swallowing the browser default for a shortcut this mount does not
       // implement would break the key for whoever does; only claim what we run.
@@ -106,6 +131,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       run();
     },
     [
+      disabledIds,
       enabled,
       onNewChat,
       onSearch,
@@ -126,18 +152,18 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
   }, [enabled, handleKeyDown]);
 
   const handlers: Record<string, (() => void) | undefined> = {
-    'Open search': onSearch,
-    'Show keyboard shortcuts': onShowShortcuts,
-    'New conversation': onNewChat,
-    'Toggle sidebar': onToggleSidebar,
-    'Focus message composer': onFocusComposer,
-    'Copy last message': onCopyLastMessage,
-    'Regenerate last message': onRegenerateLastMessage,
-    'Toggle artifacts panel': onToggleArtifacts,
+    'open-search': onSearch,
+    'show-shortcuts': onShowShortcuts,
+    'new-conversation': onNewChat,
+    'toggle-sidebar': onToggleSidebar,
+    'focus-composer': onFocusComposer,
+    'copy-last-message': onCopyLastMessage,
+    'regenerate-last-message': onRegenerateLastMessage,
+    'toggle-artifacts': onToggleArtifacts,
   };
   const shortcuts: KeyboardShortcut[] = KEYBOARD_SHORTCUT_DOCS.map((doc) => ({
     ...doc,
-    action: () => handlers[doc.description]?.(),
+    action: () => handlers[doc.id]?.(),
   }));
 
   return { shortcuts };

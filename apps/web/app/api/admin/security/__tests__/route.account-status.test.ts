@@ -52,6 +52,11 @@ vi.mock('@clerk/nextjs/server', () => ({
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
   assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
+  getClerkAuthorizedParties: () =>
+    (process.env['CLERK_AUTHORIZED_PARTIES'] ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
 }));
 
 import { GET, POST } from '../route';

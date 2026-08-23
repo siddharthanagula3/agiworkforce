@@ -171,6 +171,32 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
   },
 ];
 
+/**
+ * Every key a settings route may address, derived from the union type's own
+ * members rather than restated — a second hardcoded list would drift, and the
+ * drift shows up as a deep link 404 nobody notices.
+ *
+ * Includes the conversation-data sections, which are real routes even though
+ * SETTINGS_NAV_GROUPS_WEB deliberately omits them from the rail.
+ */
+const SETTINGS_NAV_KEY_SET: ReadonlySet<string> = new Set<SettingsNavKey>([
+  ...SETTINGS_NAV.map((entry) => entry.key),
+  'security',
+  'safety',
+  'team',
+  'reflect',
+  'time-focus',
+  'skills',
+  'help',
+  'archived',
+  'deleted-chats',
+  'shared-links',
+]);
+
+export function isSettingsNavKey(value: string): value is SettingsNavKey {
+  return SETTINGS_NAV_KEY_SET.has(value);
+}
+
 export const SETTINGS_NAV_KEYWORDS: Partial<Record<SettingsNavKey, string[]>> = SETTINGS_NAV.reduce<
   Partial<Record<SettingsNavKey, string[]>>
 >((map, entry) => {

@@ -331,6 +331,9 @@ jobs:
           done
           ls -R dist/cli/
 
+      - name: Test CLI npm wrapper
+        run: npm test --prefix apps/cli/npm
+
       - name: Verify npm package staging
         run: npm run --prefix apps/cli/npm package-check -- --staged
 

@@ -165,4 +165,26 @@ describe('set-token route (Clerk)', () => {
       expect(cookieWrites).toEqual([]);
     });
   });
+
+  it('passes CLERK_AUTHORIZED_PARTIES to verifyToken so a foreign-origin token is rejected', async () => {
+    vi.stubEnv(
+      'CLERK_AUTHORIZED_PARTIES',
+      'https://agiworkforce.com, https://app.agiworkforce.com',
+    );
+    try {
+      mockVerifyToken.mockResolvedValue({ sub: 'user_abc123' });
+
+      const res = await POST(makeRequest({ token: 'access-token-1234567890abcdef' }));
+
+      expect(res.status).toBe(200);
+      expect(mockVerifyToken).toHaveBeenCalledWith(
+        'access-token-1234567890abcdef',
+        expect.objectContaining({
+          authorizedParties: ['https://agiworkforce.com', 'https://app.agiworkforce.com'],
+        }),
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

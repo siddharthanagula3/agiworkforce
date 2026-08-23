@@ -18,6 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@agiworkforce/ui';
+import { toUserMessage } from '@/lib/user-error-message';
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -51,7 +52,7 @@ export function SharedLinksSection() {
       setShares(await listSharedLinks(signal));
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
-      setError(caught instanceof Error ? caught.message : 'Failed to load shared links');
+      setError(toUserMessage(caught, 'Failed to load shared links'));
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -88,7 +89,7 @@ export function SharedLinksSection() {
       setNotice(`Revoked the link for “${share.title}”.`);
       setShareToRevoke(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to revoke shared link');
+      setError(toUserMessage(caught, 'Failed to revoke shared link'));
     } finally {
       setActionToken(null);
     }

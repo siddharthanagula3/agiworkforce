@@ -337,6 +337,29 @@ describe('runResearchLoop', () => {
     expect(appendedNotes?.content).not.toContain(READY_MARKER);
   });
 
+  it('ends the run with a terminal stop envelope so the activity spine stops spinning', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report'), finishEvent()]));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    const events = canonicalAgentEvents(run);
+    expect(events[events.length - 1]).toEqual({ type: 'stop', reason: 'end-turn' });
+  });
+
+  it('ends a failed run with a terminal stop envelope', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockRejectedValueOnce(new Error('upstream exploded'));
+
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING));
+
+    const events = canonicalAgentEvents(run);
+    expect(events[events.length - 1]).toEqual({ type: 'stop', reason: 'error' });
+  });
+
   it('emits web_search tool running/completed status events per gathering round', async () => {
     streamRequestMock
       .mockResolvedValueOnce(planStream())

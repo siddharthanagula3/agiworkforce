@@ -61,8 +61,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
        values ($1, $2, $3, $4, $5)
        on conflict (email, source)
        do update set
-         user_id = excluded.user_id,
-         updated_at = excluded.updated_at`,
+         user_id = coalesce(cloud_managed_waitlist.user_id, excluded.user_id),
+         updated_at = excluded.updated_at
+       where cloud_managed_waitlist.user_id is null
+          or cloud_managed_waitlist.user_id = excluded.user_id`,
       [userId, email, source, now, now],
     );
     const rankRows = await db.query<WaitlistRankRow>(

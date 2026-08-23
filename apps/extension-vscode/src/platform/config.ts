@@ -37,6 +37,7 @@ export interface MutableConfigValues {
   hoverEnabled: boolean;
   codeLensEnabled: boolean;
   autoApplyFixes: boolean;
+  'memory.enabled': boolean;
   'inlineCompletions.enabled': boolean;
   'inlineCompletions.debounceMs': number;
   'inlineCompletions.maxLength': number;
@@ -67,6 +68,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'hoverEnabled',
   'codeLensEnabled',
   'autoApplyFixes',
+  'memory.enabled',
   'inlineCompletions.enabled',
   'inlineCompletions.debounceMs',
   'inlineCompletions.maxLength',
@@ -94,6 +96,7 @@ const DEFAULTS = {
   codeLensEnabled: false,
   hoverEnabled: false,
   autoApplyFixes: false,
+  memoryEnabled: true,
   inlineCompletionsEnabled: false,
   inlineCompletionsDebounceMs: 300,
   inlineCompletionsMaxLength: 500,
@@ -154,6 +157,9 @@ export const Config = {
   },
   autoApplyFixes(): boolean {
     return get<boolean>('autoApplyFixes', DEFAULTS.autoApplyFixes);
+  },
+  memoryEnabled(): boolean {
+    return get<boolean>('memory.enabled', DEFAULTS.memoryEnabled);
   },
   inlineCompletionsEnabled(): boolean {
     return get<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
@@ -220,6 +226,7 @@ export const Config = {
         hoverEnabled: this.hoverEnabled(),
         codeLensEnabled: this.codeLensEnabled(),
         autoApplyFixes: this.autoApplyFixes(),
+        'memory.enabled': this.memoryEnabled(),
         'inlineCompletions.enabled': this.inlineCompletionsEnabled(),
         'inlineCompletions.debounceMs': this.inlineCompletionsDebounceMs(),
         'inlineCompletions.maxLength': this.inlineCompletionsMaxLength(),

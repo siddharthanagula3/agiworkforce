@@ -149,17 +149,23 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
 
   const cookies = _request.headers.get('cookie') || '';
 
-  const sessionId = readCookie(cookies, 'session-id');
-  if (sessionId) {
-    return sessionId;
-  }
-
-  const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
+  const hostPrefixed = readAnonSessionCookie(cookies);
   if (hostPrefixed) {
     return hostPrefixed;
   }
 
   return `anon-${crypto.randomUUID()}`;
+}
+
+const ANON_SESSION_COOKIE = '__Host-anon-session-id';
+const ANON_SESSION_ID_PATTERN =
+  /^anon-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+// Only the id shape this server mints is honoured, so a client cannot present a Clerk user id
+// (or any other principal) as its anonymous identity.
+function readAnonSessionCookie(cookies: string): string | null {
+  const value = readCookie(cookies, ANON_SESSION_COOKIE);
+  return value && ANON_SESSION_ID_PATTERN.test(value) ? value : null;
 }
 
 export async function getOrCreateAnonSession(
@@ -176,12 +182,7 @@ export async function getOrCreateAnonSession(
 
   const cookies = request.headers.get('cookie') || '';
 
-  const sessionId = readCookie(cookies, 'session-id');
-  if (sessionId) {
-    return { id: sessionId };
-  }
-
-  const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
+  const hostPrefixed = readAnonSessionCookie(cookies);
   if (hostPrefixed) {
     return { id: hostPrefixed };
   }
@@ -189,7 +190,7 @@ export async function getOrCreateAnonSession(
   const anonId = `anon-${crypto.randomUUID()}`;
   return {
     id: anonId,
-    newCookie: `__Host-anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
+    newCookie: `${ANON_SESSION_COOKIE}=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
   };
 }
 

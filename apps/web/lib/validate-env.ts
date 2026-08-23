@@ -316,6 +316,30 @@ export function validateSecurityEscapeHatches(): ValidationResult {
   return { valid: errors.length === 0, errors, warnings };
 }
 
+export function validateEmailPseudonymPepper(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (process.env['EMAIL_HASH_PEPPER']?.trim()) return { valid: true, errors, warnings };
+
+  const message =
+    'EMAIL_HASH_PEPPER is not set — email addresses are low-entropy and enumerable, so the ' +
+    'unkeyed SHA-256 fallback is reversible by dictionary and is not a pseudonym. Writing a new ' +
+    'pseudonym (waitlist joins, consent records, erasure receipts) throws at runtime in ' +
+    'production until this is set to 32+ random bytes.';
+
+  const vercelEnv = process.env['VERCEL_ENV'];
+  const isProductionRuntime =
+    process.env['NEXT_PHASE'] !== 'phase-production-build' &&
+    vercelEnv !== 'preview' &&
+    (vercelEnv === 'production' || process.env['NODE_ENV'] === 'production');
+
+  if (isProductionRuntime) errors.push(message);
+  else warnings.push(message);
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
 export function validateGeneratedMediaStorage(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -391,6 +415,7 @@ export function validateEnvironment(): ValidationResult {
     validateProductionKeyTypes(),
     validateStripeKeyModeConsistency(),
     validateSecurityEscapeHatches(),
+    validateEmailPseudonymPepper(),
     validateGeneratedMediaStorage(),
   ];
 

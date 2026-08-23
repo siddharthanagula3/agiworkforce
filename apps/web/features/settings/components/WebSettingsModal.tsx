@@ -33,6 +33,8 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { z } from 'zod';
 import { Mic } from 'lucide-react';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
@@ -44,6 +46,7 @@ import type {
 } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { ConnectorConsentSummary } from '@/features/connectors/components/ConnectorConsentSummary';
+import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 
@@ -72,6 +75,7 @@ import {
   ManagedSkillsResponseSchema,
   type ManagedSkillSummary as ApiSkill,
 } from '@agiworkforce/cloud-contracts';
+import { toUserMessage } from '@/lib/user-error-message';
 
 // ---------------------------------------------------------------------------
 // Skeleton shown while a section is still hydrating
@@ -116,6 +120,12 @@ const PluginInstallationsResponseSchema = z.object({
     }),
   ),
 });
+
+class ConnectorLoadError extends Error {
+  constructor(readonly kind: 'signed-out' | 'request' | 'invalid-data') {
+    super(kind);
+  }
+}
 
 const ConnectorsResponseSchema = z.object({
   connectors: z.array(
@@ -276,6 +286,10 @@ export function WebSettingsModal({
     return null;
   })();
 
+  // The work description the user gave in General settings. Used only to order
+  // connector suggestions — never sent anywhere from here.
+  const workRole = useBillingStore((state) => state.user?.profile?.work_description ?? null);
+
   const [activeSection, setActiveSection] = useState<string>(sectionFromPath ?? initialSection);
 
   // Sync the active section when the URL changes (deep-link) OR when the modal is
@@ -325,6 +339,19 @@ export function WebSettingsModal({
   //      `connectedConnectors` below, namespaced `custom-<row id>` to match
   //      the chat tool loop (lib/user-connector-tools.ts).
 
+  // The `__session` cookie is a short-lived JWT that only a document request
+  // can refresh through Clerk's handshake redirect. A fetch that relies on it
+  // alone starts 401ing as soon as it goes stale, so mint a fresh token the
+  // way the chat sync client does and send it explicitly.
+  const { getToken } = useAuth();
+  const authedHeaders = useCallback(
+    async (base?: Record<string, string>): Promise<Record<string, string>> => {
+      const token = await getToken();
+      return { ...base, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+    },
+    [getToken],
+  );
+
   const [connectedConnectors, setConnectedConnectors] = useState<
     { connectorId: string; connectedAt?: string }[]
   >([]);
@@ -349,12 +376,15 @@ export function WebSettingsModal({
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
 
   const refreshCustomConnectors = useCallback(async () => {
-    const response = await fetch('/api/connectors/custom', { credentials: 'include' });
+    const response = await fetch('/api/connectors/custom', {
+      credentials: 'include',
+      headers: await authedHeaders(),
+    });
     if (!response.ok) throw new Error('Custom connector directory request failed.');
     const parsed = CustomConnectorsResponseSchema.safeParse(await response.json());
     if (!parsed.success) throw new Error('Custom connector directory returned invalid data.');
     setCustomConnectors(parsed.data.connectors);
-  }, []);
+  }, [authedHeaders]);
 
   const loadConnectors = useCallback(async (signal?: AbortSignal) => {
     setConnectorsLoading(true);
@@ -362,6 +392,7 @@ export function WebSettingsModal({
     try {
       const requestOptions = {
         credentials: 'include' as const,
+        headers: await authedHeaders(),
         ...(signal ? { signal } : {}),
       };
       const [connectorsResponse, installationsResponse, customResponse] = await Promise.all([
@@ -370,7 +401,10 @@ export function WebSettingsModal({
         fetch('/api/connectors/custom', requestOptions),
       ]);
       if (!connectorsResponse.ok || !installationsResponse.ok || !customResponse.ok) {
-        throw new Error('A connector directory request failed.');
+        const status = [connectorsResponse, installationsResponse, customResponse].find(
+          (response) => !response.ok,
+        )?.status;
+        throw new ConnectorLoadError(status === 401 || status === 403 ? 'signed-out' : 'request');
       }
       const [connectorsJson, installationsJson, customJson] = await Promise.all([
         connectorsResponse.json(),
@@ -381,7 +415,7 @@ export function WebSettingsModal({
       const installationsResult = GitHubInstallationsResponseSchema.safeParse(installationsJson);
       const customResult = CustomConnectorsResponseSchema.safeParse(customJson);
       if (!connectorsResult.success || !installationsResult.success || !customResult.success) {
-        throw new Error('The connector directory returned invalid data.');
+        throw new ConnectorLoadError('invalid-data');
       }
       if (signal?.aborted) return;
       setConnectedConnectors(connectorsResult.data.connectors);
@@ -395,11 +429,18 @@ export function WebSettingsModal({
       setCustomConnectors(customResult.data.connectors);
     } catch (error) {
       if (signal?.aborted) return;
-      setConnectorsError('Connectors could not be loaded. Check your connection and try again.');
+      const kind = error instanceof ConnectorLoadError ? error.kind : 'request';
+      setConnectorsError(
+        kind === 'signed-out'
+          ? 'Your session expired. Reload the page to sign back in, then reopen Connectors.'
+          : kind === 'invalid-data'
+            ? 'Connectors returned data this page could not read. Try again, or contact support if it persists.'
+            : 'Connectors could not be loaded. Check your connection and try again.',
+      );
     } finally {
       if (!signal?.aborted) setConnectorsLoading(false);
     }
-  }, []);
+  }, [authedHeaders]);
 
   useEffect(() => {
     if (!open) return;
@@ -426,6 +467,12 @@ export function WebSettingsModal({
       })),
     [customConnectors],
   );
+
+  // Per-tool connector permissions are enforced on every turn
+  // (tool-loop connector-tool-permissions) and were previously only reachable
+  // from the standalone /connectors page, which signed-in users are redirected
+  // away from — so the rules applied to a user were invisible to them.
+  const [toolPermissionsConnectorId, setToolPermissionsConnectorId] = useState<string | null>(null);
 
   const mergedSettingsConnectors = useMemo(
     () =>
@@ -466,7 +513,11 @@ export function WebSettingsModal({
     const csrfToken = await getCsrfToken();
     const res = await fetch('/api/connectors', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+      headers: await authedHeaders({
+        'Content-Type': 'application/json',
+        'x-csrf-token': csrfToken,
+      }),
+      credentials: 'include',
       body: JSON.stringify({ connectorId: id, authType: connector.authType }),
     });
     if (!res.ok) {
@@ -489,7 +540,7 @@ export function WebSettingsModal({
       ...prev.filter((c) => c.connectorId !== id),
       { connectorId: json.connector.connectorId, connectedAt: json.connector.connectedAt },
     ]);
-  }, []);
+  }, [authedHeaders]);
 
   const disconnectConnector = useCallback(
     async (id: string) => {
@@ -500,7 +551,10 @@ export function WebSettingsModal({
         for (const installation of githubInstallations) {
           const res = await fetch('/api/github/installations', {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+            headers: await authedHeaders({
+              'Content-Type': 'application/json',
+              'x-csrf-token': csrfToken,
+            }),
             credentials: 'include',
             body: JSON.stringify({ installationId: installation.installation_id }),
           });
@@ -515,7 +569,7 @@ export function WebSettingsModal({
         const rowId = id.slice('custom-'.length);
         const res = await fetch(`/api/connectors/custom?id=${encodeURIComponent(rowId)}`, {
           method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken },
+          headers: await authedHeaders({ 'x-csrf-token': csrfToken }),
           credentials: 'include',
         });
         if (!res.ok) {
@@ -526,7 +580,7 @@ export function WebSettingsModal({
       }
       const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        headers: { 'x-csrf-token': csrfToken },
+        headers: await authedHeaders({ 'x-csrf-token': csrfToken }),
         credentials: 'include',
       });
       if (!res.ok) {
@@ -534,7 +588,7 @@ export function WebSettingsModal({
       }
       setConnectedConnectors((prev) => prev.filter((c) => c.connectorId !== id));
     },
-    [githubInstallations],
+    [authedHeaders, githubInstallations],
   );
 
   // ── Skills state ───────────────────────────────────────────────────────────
@@ -566,6 +620,7 @@ export function WebSettingsModal({
           source: skill.source,
           tab: skill.source === 'bundled' ? 'prompts' : 'agents',
           statusLabel: skill.lifecycle === 'draft' ? 'Coming later' : 'Included',
+          ...(skill.version ? { version: skill.version } : {}),
           ...(skill.downloadable
             ? { downloadHref: `/api/skills/${encodeURIComponent(skill.name)}/download` }
             : {}),
@@ -688,7 +743,7 @@ export function WebSettingsModal({
     } catch (error) {
       setPluginMutationErrors((current) => ({
         ...current,
-        [pluginId]: error instanceof Error ? error.message : 'Plugin update failed.',
+        [pluginId]: toUserMessage(error, 'Plugin update failed.'),
       }));
     } finally {
       setPluginMutationIds((current) => {
@@ -765,7 +820,10 @@ export function WebSettingsModal({
       const csrfToken = await getCsrfToken();
       const res = await fetch('/api/connectors/custom', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+        headers: await authedHeaders({
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        }),
         credentials: 'include',
         body: JSON.stringify({
           name: input.name,
@@ -779,11 +837,23 @@ export function WebSettingsModal({
       }
       await refreshCustomConnectors();
     },
-    [refreshCustomConnectors],
+    [authedHeaders, refreshCustomConnectors],
   );
 
   // Attention badge on the Connectors nav row, so an expired grant is visible
   // from any settings tab rather than only from inside Connectors.
+  const toolPermissionsConnector = useMemo(() => {
+    if (!toolPermissionsConnectorId) return null;
+    const match = mergedSettingsConnectors.find((c) => c.id === toolPermissionsConnectorId);
+    if (!match) return null;
+    return {
+      id: match.id,
+      name: match.name,
+      iconText: match.iconText,
+      iconBg: match.iconBg,
+    };
+  }, [mergedSettingsConnectors, toolPermissionsConnectorId]);
+
   const navBadges = useMemo(
     () =>
       expiredConnectorIds.length > 0
@@ -871,8 +941,28 @@ export function WebSettingsModal({
           navGroups={WEB_SETTINGS_NAV_GROUPS}
           adapter={adapter}
           connectorDisclosure={<ConnectorConsentSummary />}
+          workRole={workRole}
+          renderConnectorToolPermissions={(connectorId) => (
+            <button
+              type="button"
+              onClick={() => setToolPermissionsConnectorId(connectorId)}
+              className="w-full rounded-lg border border-border px-3 py-2 text-left text-xs text-foreground transition-colors hover:bg-muted"
+            >
+              <span className="font-medium">Tool permissions</span>
+              <span className="mt-0.5 block text-muted-foreground">
+                Choose when the assistant may use each of this connector&rsquo;s tools.
+              </span>
+            </button>
+          )}
           navBadges={navBadges}
           title="Settings"
+        />
+        <ToolPermissionsPanel
+          connector={toolPermissionsConnector}
+          open={toolPermissionsConnector !== null}
+          onOpenChange={(next) => {
+            if (!next) setToolPermissionsConnectorId(null);
+          }}
         />
       </SettingsSectionNavigationProvider>
     </Suspense>

@@ -80,8 +80,36 @@ const UNCOMPRESSED_AUDIO_BYTES_PER_SECOND = 8_000;
 const COMPRESSED_AUDIO_BYTES_PER_SECOND = 2_000;
 const UNCOMPRESSED_AUDIO_TYPES = new Set(['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/flac']);
 
-export function estimateAudioSeconds(byteSize: number, mimeType: string): number {
-  const bytesPerSecond = UNCOMPRESSED_AUDIO_TYPES.has(mimeType)
+function isUncompressedAudioHead(head: Uint8Array): boolean {
+  const riffWave =
+    head.length >= 12 &&
+    head[0] === 0x52 &&
+    head[1] === 0x49 &&
+    head[2] === 0x46 &&
+    head[3] === 0x46 &&
+    head[8] === 0x57 &&
+    head[9] === 0x41 &&
+    head[10] === 0x56 &&
+    head[11] === 0x45;
+  const flac =
+    head.length >= 4 &&
+    head[0] === 0x66 &&
+    head[1] === 0x4c &&
+    head[2] === 0x61 &&
+    head[3] === 0x43;
+  return riffWave || flac;
+}
+
+// The declared MIME type is caller-controlled; the uncompressed (cheaper-per-byte) rate is
+// only granted when the magic bytes agree, so a compressed file cannot under-count minutes.
+export function estimateAudioSeconds(
+  byteSize: number,
+  mimeType: string,
+  head?: Uint8Array,
+): number {
+  const uncompressed =
+    UNCOMPRESSED_AUDIO_TYPES.has(mimeType) && (head === undefined || isUncompressedAudioHead(head));
+  const bytesPerSecond = uncompressed
     ? UNCOMPRESSED_AUDIO_BYTES_PER_SECOND
     : COMPRESSED_AUDIO_BYTES_PER_SECOND;
   return Math.max(1, Math.ceil(byteSize / bytesPerSecond));
@@ -331,7 +359,7 @@ async function handleTranscriptions(request: NextRequest) {
     forwardForm.append('language', language);
   }
 
-  const estimatedSeconds = estimateAudioSeconds(file.size, file.type);
+  const estimatedSeconds = estimateAudioSeconds(file.size, file.type, headBytes);
   const estimatedInputTokens = estimatedSeconds * INPUT_TOKENS_PER_AUDIO_SECOND;
   const estimatedCostCents = estimateTranscriptionCostCents(
     selectedModel,

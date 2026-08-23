@@ -342,18 +342,22 @@ export function AgiWorkProjects({
                 {isLoading ? 'Retrying…' : 'Try again'}
               </button>
             </div>
-          ) : isLoading && projects.length === 0 ? (
-            <div className="py-8 text-center text-sm text-[var(--chat-text-muted)]">
-              {t('common.loading')}
-            </div>
-          ) : projects.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[var(--chat-border)] px-4 py-8 text-center text-sm text-[var(--chat-text-muted)]">
-              {query.trim()
-                ? 'No projects match your search.'
-                : showArchived
-                  ? 'No archived projects.'
-                  : t('agiWork.projects.empty')}
-            </div>
+          ) : null}
+
+          {projects.length === 0 ? (
+            error ? null : isLoading ? (
+              <div className="py-8 text-center text-sm text-[var(--chat-text-muted)]">
+                {t('common.loading')}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-[var(--chat-border)] px-4 py-8 text-center text-sm text-[var(--chat-text-muted)]">
+                {query.trim()
+                  ? 'No projects match your search.'
+                  : showArchived
+                    ? 'No archived projects.'
+                    : t('agiWork.projects.empty')}
+              </div>
+            )
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {projects.map((project, index) => (

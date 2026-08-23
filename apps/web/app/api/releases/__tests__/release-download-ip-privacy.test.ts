@@ -58,7 +58,7 @@ beforeEach(() => {
       id: '11111111-2222-3333-4444-555555555555',
       version: '1.10.0',
       platform: 'linux-x86_64',
-      download_url: 'https://releases.example/agi.AppImage.tar.gz',
+      download_url: 'https://downloads.agiworkforce.com/agi.AppImage.tar.gz',
       signature: 'signature',
       notes: null,
       pub_date: '2026-07-15T00:00:00Z',

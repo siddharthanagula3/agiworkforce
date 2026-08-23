@@ -135,6 +135,7 @@ export interface ExecutionPreferences {
   approvalTimeoutSeconds: number;
   approvalTimeoutPolicy: ApprovalTimeoutPolicy;
   streamInactivityTimeoutSeconds: number;
+  showComputerUseOverlay: boolean;
   terminalSandbox: TerminalSandboxPreferences;
 }
 
@@ -225,6 +226,7 @@ interface SettingsState {
   setApprovalTimeoutSeconds: (seconds: number) => void;
   setApprovalTimeoutPolicy: (policy: ApprovalTimeoutPolicy) => void;
   setStreamInactivityTimeoutSeconds: (seconds: number) => void;
+  setShowComputerUseOverlay: (show: boolean) => void;
   setTerminalSandboxEnabled: (enabled: boolean) => void;
   setTerminalSandboxBackend: (backend: TerminalSandboxBackend) => void;
   setTerminalSandboxPolicy: (policy: TerminalSandboxPolicy) => void;
@@ -339,6 +341,7 @@ const defaultSettings: Pick<
     approvalTimeoutSeconds: 300, // 5 minutes default
     approvalTimeoutPolicy: 'auto-deny' as ApprovalTimeoutPolicy,
     streamInactivityTimeoutSeconds: 30, // 30 seconds default
+    showComputerUseOverlay: true,
     terminalSandbox: { ...defaultTerminalSandboxPreferences },
   },
   globalHotkeyPreferences: {
@@ -678,6 +681,16 @@ export const useSettingsStore = create<SettingsState>()(
             }),
             undefined,
             'settings/setStreamInactivityTimeoutSeconds',
+          );
+        },
+
+        setShowComputerUseOverlay: (show: boolean) => {
+          set(
+            (state) => ({
+              executionPreferences: { ...state.executionPreferences, showComputerUseOverlay: show },
+            }),
+            undefined,
+            'settings/setShowComputerUseOverlay',
           );
         },
 
@@ -1436,6 +1449,10 @@ export const useSettingsStore = create<SettingsState>()(
                 300,
                 hydratedCurrent.executionPreferences.streamInactivityTimeoutSeconds ?? 30,
               ),
+              showComputerUseOverlay:
+                settings.executionPreferences?.showComputerUseOverlay ??
+                hydratedCurrent.executionPreferences.showComputerUseOverlay ??
+                true,
             };
 
             const mergedGlobalHotkeyPreferences: GlobalHotkeyPreferences = {
@@ -1900,6 +1917,7 @@ export const useSettingsStore = create<SettingsState>()(
                 approvalTimeoutSeconds: 300,
                 approvalTimeoutPolicy: 'auto-deny' as ApprovalTimeoutPolicy,
                 streamInactivityTimeoutSeconds: 30,
+                showComputerUseOverlay: true,
                 terminalSandbox: { ...defaultTerminalSandboxPreferences },
               };
             }
