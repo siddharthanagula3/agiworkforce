@@ -399,7 +399,7 @@ policy denial holds identically on every one.
 | Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |
 | Compliance export / SIEM      | Enterprise on both         | ABSENT                          | 3    |
 | Custom retention + legal hold | Enterprise on both         | SHIPPED, opt-in, unrun live     | 3    |
-| Usage and cost analytics      | Both                       | SHIPPED, read-only, no caps     | 6    |
+| Usage and cost analytics      | Both                       | SHIPPED, with enforceable caps  | 6    |
 | Central billing and seats     | Both                       | PARTIAL, live prices missing    | 6    |
 | IP allowlist / device policy  | Enterprise on both         | ABSENT                          | 7    |
 | External sharing control      | Both                       | SHIPPED, enforced on both paths | 3    |
