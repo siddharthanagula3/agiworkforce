@@ -133,7 +133,12 @@ function applyLocalWebSocketProxy(neon: NeonModule): void {
     );
   }
 
-  neon.neonConfig.wsProxy = () => proxy;
+  // The driver hands the target host and port to this callback, and wsproxy
+  // reads them from `?address=`. Returning the bare proxy host instead produces
+  // a 404 on the upgrade, and letting wsproxy APPEND_PORT do the job doubles the
+  // port into something like 5543355433 — both cost a debugging cycle.
+  neon.neonConfig.wsProxy = (host: string, port: number | string) =>
+    `${proxy}/v1?address=${host}:${port}`;
   neon.neonConfig.useSecureWebSocket = false;
   neon.neonConfig.pipelineTLS = false;
   neon.neonConfig.pipelineConnect = false;
