@@ -82,6 +82,7 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     auditExportEnabled: policy.auditExportEnabled,
     retentionDays: policy.retentionDays,
     retentionEnforced: policy.retentionEnforced,
+    externalSharingEnabled: policy.externalSharingEnabled,
   };
 }
 
@@ -341,6 +342,23 @@ export function WorkspacePolicySection() {
           ))}
         </div>
       </div>
+
+      <Row
+        title="Public sharing"
+        description={
+          draft.externalSharingEnabled
+            ? 'Members may publish a chat or an artifact to an anonymous public link.'
+            : 'Off. Members cannot create new public links. Links already published stay reachable — revoking those is a separate action.'
+        }
+        control={
+          <Toggle
+            checked={draft.externalSharingEnabled}
+            disabled={!canEdit}
+            label="Allow public sharing"
+            onChange={(next) => setDraft({ ...draft, externalSharingEnabled: next })}
+          />
+        }
+      />
 
       <Row
         title="Audit export"
