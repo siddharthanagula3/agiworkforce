@@ -27,6 +27,7 @@ interface Fixture {
   auditEvents?: number;
   activeHolds?: number;
   modelRules?: [number, number, number, number] | null;
+  connectorRules?: [number, number, boolean] | null;
   policyRow?: Record<string, unknown> | null;
   org?: { name: string | null; licensed_seats: number | null; seats_consumed: number | null };
 }
@@ -64,6 +65,13 @@ function harness(fixture: Fixture = {}) {
       return count(fixture.sharedConnectors);
     if (text.includes('from public.enterprise_audit_events')) return count(fixture.auditEvents);
     if (text.includes('from public.legal_holds')) return count(fixture.activeHolds);
+    if (text.includes('from public.organization_connector_policies')) {
+      const c = fixture.connectorRules;
+      if (c === undefined || c === null) return [];
+      return [
+        { allowed_connectors: c[0], blocked_connectors: c[1], allow_custom_connectors: c[2] },
+      ];
+    }
     if (text.includes('from public.organization_model_policies')) {
       const r = fixture.modelRules;
       if (r === undefined || r === null) return [];
@@ -175,6 +183,24 @@ describe('readWorkspacePosture', () => {
 
     expect(s.enforcement).toBe('enforced');
     expect(['Allowed', 'Blocked']).toContain(s.value);
+  });
+
+  it('counts switching off custom connectors as a restriction', async () => {
+    // Blocking arbitrary member-supplied MCP endpoints is a real control even
+    // when no individual connector is named.
+    const h = harness({ connectorRules: [0, 0, false] });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'connector-policy');
+
+    expect(s.enforcement).toBe('enforced');
+    expect(s.value).toBe('1 rule in force');
+  });
+
+  it('does not call a permissive connector policy a restriction', async () => {
+    const h = harness({ connectorRules: [0, 0, true] });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'connector-policy');
+
+    expect(s.value).toBe('All connectors available');
+    expect(s.enforcement).toBe('unconfigured');
   });
 
   it('does not call an empty model policy a restriction', async () => {

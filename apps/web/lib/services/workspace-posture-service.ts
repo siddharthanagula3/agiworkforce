@@ -61,6 +61,12 @@ interface CountRow {
   count: string | number | null;
 }
 
+interface ConnectorPolicyCountsRow {
+  allowed_connectors: number;
+  blocked_connectors: number;
+  allow_custom_connectors: boolean;
+}
+
 interface ModelPolicyCountsRow {
   allowed_providers: number;
   blocked_providers: number;
@@ -129,6 +135,7 @@ export async function readWorkspacePosture(
     sharedConnectorRows,
     auditRows,
     holdRows,
+    connectorPolicyRows,
     modelPolicyRows,
     policy,
   ] = await Promise.all([
@@ -209,6 +216,15 @@ export async function readWorkspacePosture(
         where organization_id = $1 and released_at is null`,
       [organizationId],
     ),
+    db.query<ConnectorPolicyCountsRow>(
+      `select cardinality(allowed_connectors) as allowed_connectors,
+              cardinality(blocked_connectors) as blocked_connectors,
+              allow_custom_connectors
+         from public.organization_connector_policies
+        where organization_id = $1
+        limit 1`,
+      [organizationId],
+    ),
     db.query<ModelPolicyCountsRow>(
       `select cardinality(allowed_providers) as allowed_providers,
               cardinality(blocked_providers) as blocked_providers,
@@ -246,6 +262,12 @@ export async function readWorkspacePosture(
   const sharedConnectors = toCount(sharedConnectorRows[0]);
   const auditEvents = toCount(auditRows[0]);
   const activeHolds = toCount(holdRows[0]);
+  const connectorPolicy = connectorPolicyRows[0] ?? null;
+  const connectorRules = connectorPolicy
+    ? connectorPolicy.allowed_connectors +
+      connectorPolicy.blocked_connectors +
+      (connectorPolicy.allow_custom_connectors ? 0 : 1)
+    : 0;
   const modelPolicy = modelPolicyRows[0] ?? null;
   const modelRules = modelPolicy
     ? modelPolicy.allowed_providers +
@@ -444,6 +466,21 @@ export async function readWorkspacePosture(
               ? 'No model or provider restriction is saved, so members may use any model in the catalog. A saved row with empty lists would also mean unrestricted — restriction is something an administrator states.'
               : 'Checked server-side after auto-routing resolves, so a blocked model cannot be reached by asking for Auto. A named model outranks a blocked provider, which is how "no Provider X except this one model" is expressed.',
           href: '/workspace/models',
+        },
+        {
+          id: 'connector-policy',
+          label: 'Approved connectors',
+          value:
+            connectorRules === 0
+              ? 'All connectors available'
+              : `${plural(connectorRules, 'rule', 'rules')} in force`,
+          state: 'ok',
+          enforcement: connectorRules === 0 ? 'unconfigured' : 'enforced',
+          detail:
+            connectorRules === 0
+              ? 'No connector restriction is saved, so members may use any integration. Custom connectors — arbitrary member-supplied MCP endpoints — are allowed too.'
+              : 'Applied where the tool catalog is assembled, which is the one path chat, scheduled tasks, and cloud agent runs all share. A blocked connector is never offered to the model, so it cannot be called from any of them.',
+          href: '/workspace/connectors',
         },
         {
           id: 'sync-surfaces',

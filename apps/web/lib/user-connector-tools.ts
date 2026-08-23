@@ -1348,6 +1348,57 @@ export interface LoadUserConnectorToolOptions {
   isToolDenied?: (connectorId: string, toolName: string) => boolean;
 }
 
+/**
+ * Removes connectors the workspace does not permit from an offered catalog.
+ *
+ * Filtering the catalog is the enforcement, not a cosmetic hide: a tool the
+ * model is never told about cannot be called, and every caller — chat,
+ * scheduled tasks, cloud agent runs — loads its catalog through here.
+ *
+ * Ungoverned on a read failure, deliberately. Connector governance decides
+ * which approved integrations staff use; it is not the barrier that stops
+ * cross-workspace access, which is the tenancy layer and fails closed. Denying
+ * every connector because the policy table blipped would break every member's
+ * tools for a reason no administrator chose.
+ */
+async function applyConnectorPolicy(
+  defs: WebMcpToolDef[],
+  organizationId: string | null,
+  customServerIds: ReadonlySet<string>,
+  userId: string,
+): Promise<WebMcpToolDef[]> {
+  if (!organizationId || defs.length === 0) return defs;
+
+  const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
+  const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
+  const { getNeonDb } = await import('@/lib/server/neon-db');
+
+  let policy;
+  try {
+    policy = await readConnectorPolicySafely(getNeonDb(), organizationId);
+  } catch (error) {
+    logger.error({ error, organizationId }, '[connector-policy] unavailable; catalog ungoverned');
+    return defs;
+  }
+  if (!policy) return defs;
+
+  const kept = defs.filter(
+    (def) =>
+      evaluateConnectorAccess(policy, {
+        connectorId: def.serverId,
+        isCustom: customServerIds.has(def.serverId),
+      }).allowed,
+  );
+
+  if (kept.length !== defs.length) {
+    logger.info(
+      { userId, organizationId, removed: defs.length - kept.length },
+      '[connector-policy] workspace policy removed connectors from the offered catalog',
+    );
+  }
+  return kept;
+}
+
 export async function loadUserConnectorToolCatalog(
   userId: string,
   options: LoadUserConnectorToolOptions = {},
@@ -1398,10 +1449,18 @@ export async function loadUserConnectorToolCatalog(
       options.customConnectorLimit === undefined
         ? undefined
         : Math.max(0, Math.floor(options.customConnectorLimit));
+    // Tracked so the workspace connector policy can tell a member-supplied MCP
+    // endpoint from a catalog integration. They are different risks and the
+    // policy governs them separately.
+    const customServerIds = new Set<string>();
+
     const customRows = await getUserCustomConnectorRows(userId, customConnectorLimit);
     for (const row of customRows) {
       const catalog = await buildCustomConnectorCatalog(userId, row);
-      if (catalog) defs.push(...catalogToConnectorToolDefs(catalog, row.name));
+      if (!catalog) continue;
+      const customDefs = catalogToConnectorToolDefs(catalog, row.name);
+      for (const def of customDefs) customServerIds.add(def.serverId);
+      defs.push(...customDefs);
     }
 
     const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
@@ -1413,15 +1472,24 @@ export async function loadUserConnectorToolCatalog(
       );
       for (const row of sharedRows) {
         const catalog = await buildOrgSharedConnectorCatalog(row);
-        if (catalog) defs.push(...catalogToConnectorToolDefs(catalog, row.name));
+        if (!catalog) continue;
+        const sharedDefs = catalogToConnectorToolDefs(catalog, row.name);
+        for (const def of sharedDefs) customServerIds.add(def.serverId);
+        defs.push(...sharedDefs);
       }
     }
 
+    // The workspace administrator's connector policy, applied to the catalog a
+    // turn is offered. This is the single place chat, scheduled tasks, and
+    // cloud agent runs all pass through, so a blocked connector is unavailable
+    // to every one of them rather than only to the chat picker.
+    const governed = await applyConnectorPolicy(defs, organizationId, customServerIds, userId);
+
     const isToolDenied = options.isToolDenied;
     const allowed = isToolDenied
-      ? defs.filter((def) => !isToolDenied(def.serverId, def.toolName))
-      : defs;
-    if (isToolDenied && allowed.length !== defs.length) {
+      ? governed.filter((def) => !isToolDenied(def.serverId, def.toolName))
+      : governed;
+    if (isToolDenied && allowed.length !== governed.length) {
       logger.info(
         { userId, blocked: defs.length - allowed.length },
         '[user-connector] omitted blocked connector tools from the offered catalog',

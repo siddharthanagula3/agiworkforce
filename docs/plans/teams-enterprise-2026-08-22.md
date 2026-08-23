@@ -109,9 +109,10 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   (`/workspace/usage`, 2026-08-23) therefore reads `managed_usage_requests`,
   which is where a managed turn actually lands. Either give the ledger a writer
   or drop it — do not build a second read path on it.
-- **Two designed contracts with no implementation** — `ConnectorPolicy` and
-  `AuditExportRequest` in `packages/contracts/types/src/enterprise/index.ts` are
-  referenced nowhere else in the tree. `AdminPolicy` (Wave 1),
+- **One designed contract with no implementation** — `AuditExportRequest` in
+  `packages/contracts/types/src/enterprise/index.ts` is referenced nowhere else
+  in the tree. `ConnectorPolicy`'s substance shipped as
+  `organization_connector_policies` (0141). `AdminPolicy` (Wave 1),
   `RetentionPolicy`'s conversation window (0138), and `ProviderPolicy`'s
   substance (0139, as `organization_model_policies`) are now implemented. The
   remaining two belong to Waves 3 and 4.
@@ -393,7 +394,7 @@ policy denial holds identically on every one.
 | Shared project conversations  | Both                       | ABSENT                          | 4    |
 | Shared agents/skills/prompts  | Both                       | ABSENT                          | 4    |
 | Admin model/provider policy   | Both                       | SHIPPED, enforced post-routing  | 1    |
-| Admin connector policy        | Both                       | INERT, contract only            | 1, 4 |
+| Admin connector policy        | Both                       | SHIPPED, enforced in the loader | 1    |
 | Central admin console         | Both                       | SHIPPED, unverified as owner    | 2    |
 | Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |
 | Compliance export / SIEM      | Enterprise on both         | ABSENT                          | 3    |
