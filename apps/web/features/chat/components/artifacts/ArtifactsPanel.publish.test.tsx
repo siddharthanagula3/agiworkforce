@@ -4,7 +4,7 @@ import type { PublishResult } from '@agiworkforce/artifacts';
 import { ArtifactsPanel } from './ArtifactsPanel';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 
 let capturedPublish: (() => Promise<PublishResult>) | undefined;
 
@@ -34,6 +34,17 @@ const MESSAGE_ID = 'msg-publish-test';
 const ARTIFACT_ID = 'artifact-publish-test';
 const CONTENT = '<h1>Sales dashboard</h1>';
 
+// SECURITY-FIX F3 (CWE-863): publishing now refuses an artifact whose
+// originating trust boundary the app cannot establish, so a wiring test has to
+// state the boundary it is publishing from.
+const MANAGED_TURN: Message = {
+  id: MESSAGE_ID,
+  role: 'assistant',
+  content: 'Sales dashboard',
+  createdAt: '2026-08-05T00:00:00.000Z',
+  metadata: { privacyMode: 'managed', providerMode: 'ManagedGateway' },
+};
+
 function seedArtifact() {
   useArtifactsStore.getState().addArtifactForMessage(
     MESSAGE_ID,
@@ -53,7 +64,11 @@ describe('ArtifactsPanel · publish wiring', () => {
     capturedPublish = undefined;
     useArtifactsStore.getState().reset();
     useStreamingArtifactStore.getState().clearStreamingArtifact();
-    useChatStore.setState({ activeConversationId: CONVERSATION_ID });
+    useChatStore.setState({
+      activeConversationId: CONVERSATION_ID,
+      messagesByConversation: { [CONVERSATION_ID]: [MANAGED_TURN] },
+      messages: [MANAGED_TURN],
+    });
     useArtifactsStore.getState().setPanelOpen(true);
     seedArtifact();
     useArtifactsStore.getState().selectArtifact(ARTIFACT_ID);
@@ -61,6 +76,7 @@ describe('ArtifactsPanel · publish wiring', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    useChatStore.setState({ messagesByConversation: {}, messages: [] });
   });
 
   it('injects a publishArtifact prop into the artifact viewer', () => {

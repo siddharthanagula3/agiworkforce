@@ -25,6 +25,7 @@ globalThis.ResizeObserver = class ResizeObserver {
   unobserve() {}
 } as unknown as typeof ResizeObserver;
 
+process.env['NEXT_PUBLIC_APP_URL'] ||= 'https://app.agiworkforce.test';
 process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
 process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_test_secret';
 process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '1';

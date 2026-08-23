@@ -146,6 +146,105 @@ impl DatabaseExecutor {
         Ok(())
     }
 
+    /// Operations `db_execute` must never run, whatever the planner asked for.
+    ///
+    /// `db_execute` exists to write rows; schema destruction, permission
+    /// changes, attaching other database files, and stored-procedure execution
+    /// are not writes and have no legitimate caller in the autonomous loop.
+    const BLOCKED_WRITE_KEYWORDS: &'static [&'static str] = &[
+        "DROP", "TRUNCATE", "GRANT", "REVOKE", "ATTACH", "DETACH", "PRAGMA", "VACUUM", "EXEC",
+        "EXECUTE", "CALL", "COPY", "LOAD", "REINDEX", "CLUSTER", "ALTER", "CREATE", "RENAME",
+    ];
+
+    /// Validate a statement bound for `db_execute`.
+    ///
+    /// `db_query`'s [`Self::validate_query`] rejects every write, so the write
+    /// path needs its own check rather than the upstream `ToolExecutionGuard`
+    /// substring denylist: the SQL is LLM-authored and reachable from content
+    /// the agent merely read.
+    pub(crate) fn validate_write_statement(sql: &str) -> Result<()> {
+        Self::check_multiple_statements(sql)?;
+
+        let code_only = Self::strip_string_literals(sql);
+        let words: Vec<String> = code_only
+            .split(|c: char| !c.is_alphanumeric() && c != '_')
+            .filter(|word| !word.is_empty())
+            .map(str::to_uppercase)
+            .collect();
+
+        // `REPLACE INTO` deletes every conflicting row before it inserts, and
+        // it carries no predicate for [`ToolExecutionGuard::validate_write_predicate`]
+        // to narrow. The two words have to be adjacent: `REPLACE` on its own is
+        // the string function an ordinary `UPDATE … SET x = REPLACE(x, …)` uses.
+        if words
+            .windows(2)
+            .any(|pair| pair[0] == "REPLACE" && pair[1] == "INTO")
+        {
+            tracing::error!("[DatabaseExecutor] db_execute blocked: REPLACE INTO overwrites rows it never names");
+            return Err(anyhow!(
+                "SQL operation 'REPLACE INTO' is not allowed in db_execute: it deletes the rows it conflicts with. Use INSERT ... ON CONFLICT DO UPDATE."
+            ));
+        }
+
+        for keyword in Self::BLOCKED_WRITE_KEYWORDS {
+            if words.iter().any(|word| word == keyword) {
+                tracing::error!(
+                    "[DatabaseExecutor] db_execute blocked: '{}' is not a write operation",
+                    keyword
+                );
+                return Err(anyhow!(
+                    "SQL operation '{}' is not allowed in db_execute.",
+                    keyword
+                ));
+            }
+        }
+
+        crate::sys::security::ToolExecutionGuard::validate_write_predicate(sql).map_err(
+            |reason| {
+                tracing::error!("[DatabaseExecutor] db_execute blocked: {}", reason);
+                anyhow!("{} Refused in db_execute.", reason)
+            },
+        )?;
+
+        Ok(())
+    }
+
+    /// Blank out string literals so keyword screening reads SQL, not payload
+    /// text ("please DROP by the office" is a note, not a schema change).
+    fn strip_string_literals(sql: &str) -> String {
+        let chars: Vec<char> = sql.chars().collect();
+        let mut out = String::with_capacity(sql.len());
+        let mut quote: Option<char> = None;
+        let mut i = 0;
+
+        while i < chars.len() {
+            let c = chars[i];
+            match quote {
+                None => {
+                    if c == '\'' || c == '"' {
+                        quote = Some(c);
+                        out.push(' ');
+                    } else {
+                        out.push(c);
+                    }
+                }
+                Some(open) => {
+                    if c == open {
+                        if i + 1 < chars.len() && chars[i + 1] == open {
+                            i += 1;
+                        } else if !(i > 0 && chars[i - 1] == '\\') {
+                            quote = None;
+                        }
+                    }
+                    out.push(' ');
+                }
+            }
+            i += 1;
+        }
+
+        out
+    }
+
     /// Check for multiple SQL statements in a single query.
     ///
     /// Multiple statements are not allowed to prevent SQL injection attacks
@@ -302,6 +401,8 @@ impl DatabaseExecutor {
                 sql.len()
             ));
         }
+
+        Self::validate_write_statement(sql)?;
 
         // Get optional prepared statement parameters
         let params = parameters
@@ -612,6 +713,128 @@ mod tests {
         assert!(DatabaseExecutor::validate_query("COMMIT").is_err());
         assert!(DatabaseExecutor::validate_query("ROLLBACK").is_err());
         assert!(DatabaseExecutor::validate_query("SAVEPOINT my_savepoint").is_err());
+    }
+
+    // CLAUDE-SECURITY F3 — db_execute ran LLM-authored SQL with only the
+    // upstream substring denylist in front of the live connection.
+
+    fn write_context() -> ExecutorContext {
+        ExecutorContext {
+            app_handle: None,
+            automation: std::sync::Arc::new(
+                crate::automation::AutomationService::new().expect("automation service for tests"),
+            ),
+            router: std::sync::Arc::new(tokio::sync::RwLock::new(
+                crate::core::llm::LLMRouter::new(),
+            )),
+            tool_cache: std::sync::Arc::new(crate::data::cache::ToolResultCache::new()),
+            security_guard: std::sync::Arc::new(crate::sys::security::ToolExecutionGuard::new()),
+            change_tracker: None,
+            session_id: "test_session".to_string(),
+            tool_id: "test_tool".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn execute_sql_refuses_tautological_delete_before_reaching_the_connection() {
+        let context = write_context();
+        let mut parameters = HashMap::new();
+        parameters.insert("connection_id".to_string(), json!("primary"));
+        parameters.insert(
+            "sql".to_string(),
+            json!("DELETE FROM support_tickets WHERE 1=1"),
+        );
+
+        let error = DatabaseExecutor::execute_sql(&context, &parameters)
+            .await
+            .expect_err("a mass delete must never reach the database")
+            .to_string();
+
+        assert!(
+            error.contains("always-true WHERE predicate"),
+            "validation must run before the connection is opened, got: {error}"
+        );
+    }
+
+    #[test]
+    fn validate_write_statement_blocks_unnarrowed_and_schema_changing_writes() {
+        for sql in [
+            "DELETE FROM support_tickets WHERE 1=1",
+            "DELETE FROM support_tickets WHERE 'a' = 'a'",
+            "DELETE FROM support_tickets",
+            "UPDATE users SET role = 'admin'",
+            "UPDATE users SET role = 'admin' WHERE TRUE",
+            "DROP TABLE users",
+            "ATTACH DATABASE '/tmp/exfil.db' AS exfil",
+            "PRAGMA key = 'x'",
+            "INSERT INTO notes (body) VALUES ('hi'); ALTER TABLE users ADD COLUMN backdoor TEXT",
+            // Same table-wiping impact as `WHERE 1=1`, no syntactic `x = x`.
+            "DELETE FROM support_tickets WHERE id IS NOT NULL",
+            "DELETE FROM support_tickets WHERE 1 < 2",
+            "DELETE FROM support_tickets WHERE id NOT IN (-1)",
+            "DELETE FROM support_tickets WHERE username LIKE '%'",
+            // A constant-valued call is a filter that filters nothing; each of
+            // these was accepted by the previous predicate check.
+            "DELETE FROM support_tickets WHERE upper('a') = 'A'",
+            "DELETE FROM support_tickets WHERE abs(1) = 1",
+            "DELETE FROM support_tickets WHERE length('') = 0",
+            "DELETE FROM support_tickets WHERE trim(' ') = ''",
+            "DELETE FROM support_tickets WHERE typeof(id) = 'integer'",
+            "UPDATE users SET role = 'admin' WHERE substr(name, 1, 0) = ''",
+            // A comment, an invisible character or a CTE in front of the write
+            // is enough when the rule keys off the statement's first token.
+            "/*x*/DELETE FROM support_tickets WHERE 1=1",
+            "-- note\nDELETE FROM support_tickets WHERE 1=1",
+            "\u{feff}DELETE FROM support_tickets WHERE 1=1",
+            "WITH x AS (SELECT 1 WHERE 1=1) DELETE FROM support_tickets",
+            "EXPLAIN ANALYZE DELETE FROM support_tickets WHERE 1=1",
+            "DELETE FROM support_tickets WHERE id||''=id||''",
+            // Schema changes are not row writes and have no caller here.
+            "ALTER TABLE users ADD COLUMN backdoor TEXT",
+            "CREATE TABLE exfil (data TEXT)",
+            // A destructive upsert: the rows it conflicts with are deleted, and
+            // it has no WHERE clause for the predicate check to narrow.
+            "REPLACE INTO users (id, role) VALUES (1, 'admin')",
+            "replace into users (id, role) values (1, 'admin')",
+        ] {
+            assert!(
+                DatabaseExecutor::validate_write_statement(sql).is_err(),
+                "db_execute must refuse: {sql}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_write_statement_allows_targeted_writes() {
+        for sql in [
+            "INSERT INTO support_tickets (subject) VALUES ('printer is on fire')",
+            "UPDATE support_tickets SET status = 'closed' WHERE id = 42",
+            "DELETE FROM support_tickets WHERE id = 42",
+            "INSERT INTO notes (body) VALUES ('please DROP by the office')",
+            // A predicate check that reads the SET clause or the payload text
+            // refuses these; only the WHERE clause decides which rows change.
+            "UPDATE counters SET count = count + 1 WHERE id = 42",
+            "UPDATE posts SET views = views + 1 WHERE id = 7",
+            "UPDATE accounts SET balance = balance - 100 WHERE id = 3",
+            "UPDATE inventory SET qty = qty - 1 WHERE sku = 'ABC'",
+            "INSERT INTO notes (body) VALUES ('a=a')",
+            "INSERT INTO settings (k, v) VALUES ('mode', 'x=x')",
+            "DELETE FROM support_tickets WHERE id IN (1, 2, 3)",
+            "UPDATE support_tickets SET status = 'closed' WHERE id = ?1",
+            "DELETE FROM support_tickets WHERE id = 42 OR id = 43",
+            // Retention and range deletes name their rows through a column;
+            // refusing them would push callers back to raw connections.
+            "DELETE FROM items WHERE id BETWEEN 1 AND 10",
+            "DELETE FROM logs WHERE created_at < 1700000000",
+            "DELETE FROM sessions WHERE expires_at < ?",
+            "DELETE FROM cache WHERE key LIKE 'tmp:%'",
+            // `REPLACE` on its own is the string function, not the statement.
+            "UPDATE notes SET body = REPLACE(body, 'old', 'new') WHERE id = 7",
+            "INSERT INTO counters (id, n) VALUES (1, 1) ON CONFLICT (id) DO UPDATE SET n = counters.n + 1",
+        ] {
+            DatabaseExecutor::validate_write_statement(sql)
+                .unwrap_or_else(|e| panic!("db_execute must still run: {sql} ({e})"));
+        }
     }
 
     #[test]

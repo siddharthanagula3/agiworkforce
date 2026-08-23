@@ -187,6 +187,31 @@ impl ExtensionPackage {
         })
     }
 
+    /// Validate a package-relative path that will be joined onto the install
+    /// directory.
+    ///
+    /// `Path::join` silently discards the base when the joined value is
+    /// absolute, so every untrusted path (ZIP entry names and manifest fields
+    /// alike) must clear this before it reaches the filesystem.
+    pub(super) fn validate_entry_path(path: &str) -> ExtensionResult<()> {
+        Self::validate_path(path)?;
+
+        use std::path::Component;
+        for component in Path::new(path).components() {
+            match component {
+                Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                    return Err(ExtensionError::SecurityViolation(format!(
+                        "Path escapes the package root: {}",
+                        path
+                    )));
+                }
+                Component::CurDir | Component::Normal(_) => {}
+            }
+        }
+
+        Ok(())
+    }
+
     /// Validate a file path for security issues
     fn validate_path(path: &str) -> ExtensionResult<()> {
         // Normalize path separators
@@ -356,6 +381,14 @@ impl ExtensionPackage {
     pub fn file_paths(&self) -> Vec<&str> {
         self.files.iter().map(|f| f.path.as_str()).collect()
     }
+
+    /// Whether the package ships a regular file at the given archive path
+    pub fn contains_file(&self, path: &str) -> bool {
+        let normalized = path.replace('\\', "/");
+        self.files
+            .iter()
+            .any(|f| !f.is_directory && f.path.replace('\\', "/") == normalized)
+    }
 }
 
 #[cfg(test)]
@@ -371,6 +404,18 @@ mod tests {
         assert!(ExtensionPackage::validate_path("/etc/passwd").is_err());
         assert!(ExtensionPackage::validate_path("~/.ssh/id_rsa").is_err());
         assert!(ExtensionPackage::validate_path("C:\\Windows\\System32").is_err());
+    }
+
+    #[test]
+    fn test_validate_entry_path_rejects_escapes() {
+        assert!(ExtensionPackage::validate_entry_path("assets/icon.png").is_ok());
+        assert!(ExtensionPackage::validate_entry_path("./assets/icon.png").is_ok());
+
+        assert!(ExtensionPackage::validate_entry_path("/Users/victim/.ssh/id_rsa").is_err());
+        assert!(ExtensionPackage::validate_entry_path("../../../etc/passwd").is_err());
+        assert!(ExtensionPackage::validate_entry_path("assets/../../secret").is_err());
+        assert!(ExtensionPackage::validate_entry_path("C:\\Windows\\win.ini").is_err());
+        assert!(ExtensionPackage::validate_entry_path("assets\\..\\..\\secret").is_err());
     }
 
     #[test]

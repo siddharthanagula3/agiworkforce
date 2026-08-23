@@ -443,11 +443,15 @@ export {
   parseTabular,
   parseDelimited,
   toCsv,
+  csvField,
+  neutralizeSpreadsheetText,
+  spreadsheetExportDelimiter,
+  spreadsheetSafeExport,
   toMarkdownTable,
   isNumericCell,
   numericValue,
 } from './lib/tabular';
-export type { TabularData } from './lib/tabular';
+export type { TabularData, SpreadsheetDelimiter, SpreadsheetSafeExport } from './lib/tabular';
 export { selectArtifacts, selectActiveArtifact, selectArtifactById } from './stores/artifactStore';
 
 export { BrandedGreeting } from './components/BrandedGreeting';

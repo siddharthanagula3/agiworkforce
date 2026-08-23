@@ -59,11 +59,18 @@ jest.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'Light' },
 }));
 
-jest.mock('@/services/companion', () => ({
-  isValidPairingCode: (raw: string) => /^[A-Za-z0-9]{12}$/.test(raw.trim().replace(/[ -]/g, '')),
+jest.mock('@/stores/connectionStore', () => ({
+  useConnectionStore: { getState: jest.fn(() => ({ status: 'disconnected' })) },
+}));
+
+jest.mock('@/stores/dispatchTaskStore', () => ({
+  useDispatchTaskStore: { getState: jest.fn(() => ({})) },
 }));
 
 import { QRScanner } from '../src/features/companion/components/QRScanner';
+
+const PAIRING_SECRET = '9f'.repeat(32);
+const DESKTOP_PAIRING_PAYLOAD = `agiw3:WXYZ1234ABCD:${PAIRING_SECRET}`;
 
 describe('QRScanner manual pairing', () => {
   it('shows the Desktop code format and submits a spaced 12-character code', () => {
@@ -77,6 +84,31 @@ describe('QRScanner manual pairing', () => {
 
     expect(onScan).toHaveBeenCalledWith('WXYZ 1234 ABCD');
     expect(screen.getByText(/Settings → Connections/)).toBeTruthy();
+  });
+
+  it('hands the scanned pairing link to the store instead of silently ignoring it', () => {
+    const onScan = jest.fn();
+    const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);
+
+    const camera = screen.getByTestId('camera-view');
+    const onBarcodeScanned = camera.props.onBarcodeScanned as (result: { data: string }) => void;
+    onBarcodeScanned({ data: DESKTOP_PAIRING_PAYLOAD });
+
+    expect(onScan).toHaveBeenCalledWith(DESKTOP_PAIRING_PAYLOAD);
+  });
+
+  it('accepts a pasted pairing link whole, without truncating the secret away', () => {
+    const onScan = jest.fn();
+    const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);
+
+    fireEvent.press(screen.getByLabelText('Enter code manually'));
+    const input = screen.getByPlaceholderText('ABCD EFGH IJKL');
+    expect(DESKTOP_PAIRING_PAYLOAD.length).toBeLessThanOrEqual(input.props.maxLength as number);
+
+    fireEvent.changeText(input, DESKTOP_PAIRING_PAYLOAD);
+    fireEvent.press(screen.getByLabelText('Connect'));
+
+    expect(onScan).toHaveBeenCalledWith(DESKTOP_PAIRING_PAYLOAD);
   });
 
   it('rejects a legacy short code before attempting a connection', () => {

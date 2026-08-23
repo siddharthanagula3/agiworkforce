@@ -1,4 +1,3 @@
-
 export interface TabularData {
   columns: string[];
   rows: string[][];
@@ -80,15 +79,14 @@ export function parseDelimited(text: string, delimiter: ',' | '\t' | ';'): strin
       inQuotes = true;
     } else if (ch === delimiter) {
       pushField();
-    } else if (ch === '\n') {
-      if (field.endsWith('\r')) field = field.slice(0, -1);
+    } else if (ch === '\r' || ch === '\n') {
+      if (ch === '\r' && text[i + 1] === '\n') i += 1;
       pushRow();
     } else {
       field += ch;
     }
   }
   if (field !== '' || row.length > 0 || (sawAnything && rows.length === 0)) {
-    if (field.endsWith('\r')) field = field.slice(0, -1);
     pushRow();
   }
   while (rows.length > 0 && rows[rows.length - 1]!.every((c) => c.trim() === '')) {
@@ -177,14 +175,225 @@ function stringifyJsonCell(value: unknown): string {
   return String(value);
 }
 
-function csvField(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+const CSV_FORMULA_LEAD_RE = /^\s*[=+\-@]/;
+const CSV_CONTROL_LEAD_RE = /^[\t\r]/;
+
+// the numeric exemption is only safe for a cell that is a number end to end. Anything a
+// number is glued to is attacker-chosen and the importer evaluates the whole cell it read:
+// "-1,2+cmd|'/c calc'!A0" is -1.2 plus a DDE reference to a european Excel, and the newline
+// in "+1\n+WEBSERVICE(...)" is formula whitespace, not a boundary, once the cell is quoted.
+function needsFormulaGuard(value: string, exemptNumeric = true): boolean {
+  // a leading tab or CR is the injection vector itself, so it never earns the numeric exemption
+  if (CSV_CONTROL_LEAD_RE.test(value)) return true;
+  if (!CSV_FORMULA_LEAD_RE.test(value)) return false;
+  return !exemptNumeric || !isNumericCell(value);
+}
+
+export type SpreadsheetDelimiter = ',' | '\t' | ';';
+
+// an importer commits to one separator before it reads a cell: Excel takes the locale list
+// separator, which is ';' across much of Europe, and Google Sheets auto-detects a tab. Each
+// choice yields a different set of cells, so a guard has to hold under every one of them.
+const FIELD_SEPARATORS = [',', ';', '\t'];
+
+// a cell is quoted when it carries any character an importer could read as a field
+// boundary: a european Excel splits .csv on ';' and Google Sheets' import auto-detect
+// splits the same bytes on a tab, so an unquoted "deleted; -rf /" or "note\t=1+1" would
+// become a cell that starts a formula
+const SPREADSHEET_QUOTE_RE = /[",;\t\n\r]/;
+
+// quoting only binds the importer that splits on this document's own delimiter. One that
+// splits on a different separator reads our quotes as ordinary text once the cell is not the
+// row's first field, then re-splits the cell itself, so every record and field start it would
+// carve out of the cell text carries a guard as well.
+function guardFieldStarts(
+  value: string,
+  delimiter: SpreadsheetDelimiter,
+  exemptNumeric: boolean,
+): string {
+  const reSplit = new Set([...FIELD_SEPARATORS, '\r', '\n']);
+  reSplit.delete(delimiter);
+  let out = '';
+  let start = 0;
+  const emit = (end: number) => {
+    const segment = value.slice(start, end);
+    const guarded = needsFormulaGuard(start === 0 ? value : segment, exemptNumeric);
+    out += guarded ? `'${segment}` : segment;
+  };
+  for (let i = 0; i < value.length; i += 1) {
+    if (!reSplit.has(value[i]!)) continue;
+    emit(i);
+    out += value[i]!;
+    start = i + 1;
+  }
+  emit(value.length);
+  return out;
+}
+
+function spreadsheetField(
+  value: string,
+  delimiter: SpreadsheetDelimiter,
+  exemptNumeric = true,
+): string {
+  const cell = guardFieldStarts(value, delimiter, exemptNumeric);
+  return SPREADSHEET_QUOTE_RE.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
+}
+
+// one cell for a writer whose rows this module never sees. Without the record an importer
+// reads, a number cannot be proved harmless: a caller joining "-1" and "2+cmd|'/c calc'!A0"
+// hands a european Excel the single cell -1.2 + a DDE reference. So this takes the OWASP
+// rule as written and exempts nothing.
+export function csvField(value: string): string {
+  return spreadsheetField(value, ',', false);
+}
+
+function toDelimited(data: TabularData, delimiter: SpreadsheetDelimiter): string {
+  const line = (cells: string[]) =>
+    cells.map((c) => spreadsheetField(c, delimiter)).join(delimiter);
+  // a per-cell guard cannot see the record an importer with another separator reads, so the
+  // assembled document goes through the same union pass raw artifact text gets
+  return neutralizeSpreadsheetText([line(data.columns), ...data.rows.map(line)].join('\n'));
 }
 
 export function toCsv(data: TabularData): string {
-  const lines = [data.columns.map(csvField).join(',')];
-  for (const row of data.rows) lines.push(row.map(csvField).join(','));
-  return lines.join('\n');
+  return toDelimited(data, ',');
+}
+
+function collectGuards(text: string, start: number, separator: string, guards: Set<number>): void {
+  let fieldStart = start;
+  let value = '';
+  let inQuotes = false;
+
+  const endField = () => {
+    if (needsFormulaGuard(value)) {
+      // in a quoted cell the apostrophe belongs after the opening quote, or the quoting
+      // itself becomes part of the cell text
+      guards.add(fieldStart + (text[fieldStart] === '"' ? 1 : 0));
+    }
+    value = '';
+  };
+
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inQuotes) {
+      if (ch === '"' && text[i + 1] === '"') {
+        value += '"';
+        i += 1;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        value += ch;
+      }
+      continue;
+    }
+    if (ch === '"' && value === '') {
+      inQuotes = true;
+    } else if (ch === separator || ch === '\r' || ch === '\n') {
+      // a lone CR ends a record for Excel, Sheets and python csv alike, so the cell after it
+      // is a field start like any other
+      endField();
+      if (ch === '\r' && text[i + 1] === '\n') i += 1;
+      fieldStart = i + 1;
+    } else {
+      value += ch;
+    }
+  }
+  endField();
+}
+
+// Byte-preserving guard: the only edit is an apostrophe inserted ahead of a cell a
+// spreadsheet would evaluate, so the delimiter, spacing, blank rows, trailing newline
+// and CRLF of the original content all survive the export.
+export function neutralizeSpreadsheetText(content: string): string {
+  const text = content ?? '';
+  const start = text.charCodeAt(0) === 0xfeff ? 1 : 0;
+  const guards = new Set<number>();
+  for (const separator of FIELD_SEPARATORS) collectGuards(text, start, separator, guards);
+  if (guards.size === 0) return text;
+
+  let out = '';
+  let copied = 0;
+  // an apostrophe never opens or closes a field, so inserting one cannot move the cell
+  // boundaries the other separators were measured against
+  for (const at of [...guards].sort((a, b) => a - b)) {
+    out += `${text.slice(copied, at)}'`;
+    copied = at;
+  }
+  return out + text.slice(copied);
+}
+
+const TAB_DELIMITED_EXPORTS = new Set(['tsv', 'tab']);
+
+// every extension a spreadsheet opens as text and evaluates formulas in, including the
+// SYLK/DIF/OpenDocument names a model can pick as an artifact language
+const SPREADSHEET_EXPORTS = new Set([
+  'csv',
+  'tsv',
+  'tab',
+  'prn',
+  'slk',
+  'sylk',
+  'dif',
+  'xls',
+  'xlsx',
+  'xlsm',
+  'xlsb',
+  'xlt',
+  'xltx',
+  'xltm',
+  'xlam',
+  'xla',
+  'xlw',
+  'ods',
+  'ots',
+  'fods',
+  'uos',
+]);
+
+export function spreadsheetExportDelimiter(
+  extension: string | null | undefined,
+): SpreadsheetDelimiter | null {
+  // a model-chosen language of "foo.csv" still lands a .csv on disk, so what a
+  // spreadsheet acts on is the last dot-separated segment, not the whole string, and
+  // Windows drops the trailing dots and spaces of "csv." before the file is created
+  const normalized =
+    (extension ?? '')
+      .toLowerCase()
+      .replace(/[\s.]+$/, '')
+      .split('.')
+      .pop()
+      ?.trim() ?? '';
+  if (!SPREADSHEET_EXPORTS.has(normalized)) return null;
+  return TAB_DELIMITED_EXPORTS.has(normalized) ? '\t' : ',';
+}
+
+export interface SpreadsheetSafeExport {
+  body: string;
+  mimeType: string;
+}
+
+// a JSON array-of-objects artifact is rendered as a grid, never as its literal text, so a
+// spreadsheet-named download owes the user real rows; delimited text is guarded in place
+function jsonTable(content: string): TabularData | null {
+  const text = stripBom(content ?? '').trimStart();
+  if (!text.startsWith('[')) return null;
+  const parsed = parseTabular(content);
+  return parsed?.source === 'json' ? parsed : null;
+}
+
+export function spreadsheetSafeExport(
+  content: string,
+  extension: string | null | undefined,
+): SpreadsheetSafeExport {
+  const delimiter = spreadsheetExportDelimiter(extension);
+  if (!delimiter) return { body: content, mimeType: 'text/plain' };
+  const mimeType =
+    delimiter === '\t' ? 'text/tab-separated-values;charset=utf-8;' : 'text/csv;charset=utf-8;';
+  const json = jsonTable(content);
+  return {
+    body: json ? toDelimited(json, delimiter) : neutralizeSpreadsheetText(content),
+    mimeType,
+  };
 }
 
 export function toMarkdownTable(data: TabularData): string {

@@ -197,7 +197,7 @@ export function ComputerUseSettings() {
       }
       setComputerUseEnabled(enabled);
       if (!enabled) {
-        toast.info('Computer use disabled');
+        toast.info('Computer use disabled. This computer will ask again before the next action.');
       }
     },
     [consentAccepted, setComputerUseEnabled],
@@ -221,7 +221,9 @@ export function ComputerUseSettings() {
           <div>
             <h3 className="text-lg font-semibold">Computer Use</h3>
             <p className="text-sm text-muted-foreground">
-              Let the agent control your mouse, keyboard, and take screenshots.
+              Let the agent control your mouse, keyboard, and take screenshots. This computer asks
+              once per app session before the first action; turning this off withdraws it
+              immediately.
             </p>
           </div>
         </div>

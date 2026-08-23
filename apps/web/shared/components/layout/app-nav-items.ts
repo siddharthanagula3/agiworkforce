@@ -71,8 +71,10 @@ export interface AppNavDestination {
   /** Derived from the live pathname — never hardcoded by a caller. */
   isActive: (pathname: string) => boolean;
   /**
-   * Rendered only for an admin or owner. The route enforces the role itself on
-   * the server; this only decides whether the destination is offered.
+   * Rendered only for an organisation admin or owner, and so it may only point
+   * at an org-scoped route. Platform-operator surfaces are gated on an
+   * allowlist this flag knows nothing about, so offering one here would be a
+   * link that redirects straight back out.
    */
   adminOnly?: boolean;
   /**
@@ -172,16 +174,15 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     isActive: (pathname) => isUnder(pathname, '/chat/schedules'),
     hideable: true,
   },
-  // Admin — the console had no inbound link anywhere in the app shell, so an
-  // owner or admin could only reach it by typing the URL. Shown only when the
-  // caller says the signed-in user holds the role; the route's own server-side
-  // gate is unchanged and remains the real boundary, since a nav item is a
-  // convenience, not an authorization.
+  // Admin — directory sync is the org-scoped page an admin or owner can
+  // actually use. The console at `/admin` itself is platform-operator only
+  // (AGI_PLATFORM_ADMIN_USER_IDS), matching the cross-tenant APIs it drives, so
+  // sending an org admin there would bounce them back to `/`.
   {
     id: 'admin',
     label: 'Admin',
     icon: ShieldCheck,
-    href: '/admin',
+    href: '/admin/directory-sync',
     isActive: (pathname) => isUnder(pathname, '/admin'),
     hideable: true,
     adminOnly: true,

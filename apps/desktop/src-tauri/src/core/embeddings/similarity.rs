@@ -18,6 +18,23 @@ pub struct SimilaritySearch {
     db: Connection,
 }
 
+/// Adds a nullable TEXT column, tolerating a concurrent writer that added it
+/// first. The caller's `PRAGMA table_info` check is a read followed by a write,
+/// so two connections opening the same database can both observe the column
+/// missing and both issue the ALTER; SQLite fails the loser with "duplicate
+/// column name" rather than serializing them. Losing that race means the column
+/// exists, which is the outcome the caller wanted.
+fn add_column_if_missing(db: &rusqlite::Connection, column: &str) -> Result<()> {
+    match db.execute(
+        &format!("ALTER TABLE embeddings ADD COLUMN {column} TEXT"),
+        [],
+    ) {
+        Ok(_) => Ok(()),
+        Err(error) if error.to_string().contains("duplicate column name") => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
 impl SimilaritySearch {
     pub fn new(db_path: PathBuf) -> Result<Self> {
         let db = Connection::open(db_path)?;
@@ -72,8 +89,7 @@ impl SimilaritySearch {
             .any(|col| col == "model_id");
 
         if !has_model_id {
-            self.db
-                .execute("ALTER TABLE embeddings ADD COLUMN model_id TEXT", [])?;
+            add_column_if_missing(&self.db, "model_id")?;
         }
 
         let has_ann_bucket: bool = self
@@ -84,8 +100,7 @@ impl SimilaritySearch {
             .any(|col| col == "ann_bucket");
 
         if !has_ann_bucket {
-            self.db
-                .execute("ALTER TABLE embeddings ADD COLUMN ann_bucket TEXT", [])?;
+            add_column_if_missing(&self.db, "ann_bucket")?;
         }
 
         // Index on model_id for efficient same-model filtering during search.

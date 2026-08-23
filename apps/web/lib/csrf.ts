@@ -1,6 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { auth } from '@clerk/nextjs/server';
-import { getClerkAuthorizedParties } from '@/lib/clerk-authorized-parties';
 
 const MIN_CSRF_SECRET_BYTES = 32;
 let cachedSecret: string | null = null;
@@ -219,17 +218,15 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     return true;
   }
 
+  const secretKey = process.env['CLERK_SECRET_KEY'];
+  if (!secretKey) return false;
+
   try {
+    const { getClerkAuthorizedParties } = await import('@/lib/clerk-authorized-parties');
+    const authorizedParties = getClerkAuthorizedParties();
     const { verifyToken } = await import('@clerk/backend');
-    const secretKey = process.env['CLERK_SECRET_KEY'];
-    if (secretKey) {
-      const authorizedParties = getClerkAuthorizedParties();
-      const claims = await verifyToken(token, {
-        secretKey,
-        ...(authorizedParties.length > 0 ? { authorizedParties } : {}),
-      });
-      if (claims.sub) return true;
-    }
+    const claims = await verifyToken(token, { secretKey, authorizedParties });
+    if (claims.sub) return true;
   } catch {
     // Not a valid Clerk token
   }

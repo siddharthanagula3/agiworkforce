@@ -161,26 +161,14 @@
           'http://localhost:5173',
         ]);
 
-        // Vercel preview hosts for this project, and nothing else. The old form
-        // of this check was startsWith('agiworkforce-') + endsWith('.vercel.app'),
-        // which anyone could satisfy by registering agiworkforce-pwn.vercel.app
-        // and then driving the render sink in this frame.
-        // Shape: agiworkforce-<deployment hash>-<team>.vercel.app. The hash
-        // segment is what an attacker cannot mint: Vercel assigns it, and it is
-        // long and hex-ish. Requiring it rejects agiworkforce-pwn.vercel.app
-        // and short two-segment names like agiworkforce-a-b.vercel.app that a
-        // project/team pair could otherwise be crafted to produce.
-        const VERCEL_PREVIEW_HOST =
-          /^agiworkforce-[a-z0-9]{9,}-[a-z0-9]+(?:-[a-z0-9]+)*\.vercel\.app$/;
-
+        // Exact origins only, never a hostname shape. This gate used to also
+        // accept anything matching agiworkforce-<hash>-<team>.vercel.app, but a
+        // Vercel project name is attacker-chosen and unique only inside one
+        // team, so any free account can deploy a host of that shape and drive
+        // the render sink below. A preview deployment that needs to embed this
+        // renderer has to be added to the set above by hand.
         function isAllowedParent(origin) {
-          if (ALLOWED_PARENT_ORIGINS.has(origin)) return true;
-          try {
-            const u = new URL(origin);
-            return u.protocol === 'https:' && VERCEL_PREVIEW_HOST.test(u.hostname);
-          } catch (e) {
-            return false;
-          }
+          return ALLOWED_PARENT_ORIGINS.has(origin);
         }
 
         // --------------------------------------------------------------

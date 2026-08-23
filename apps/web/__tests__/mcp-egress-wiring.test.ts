@@ -12,8 +12,21 @@ const CALL_SITES = [
   'lib/user-connector-tools.ts',
 ];
 
+const CATALOG_SITES = ['lib/mcp-tool-executor.ts', 'lib/user-connector-tools.ts'];
+
+function callArgumentBlocks(source: string, callee: string): string[] {
+  return source
+    .split(callee)
+    .slice(1)
+    .map((tail) => tail.split(');')[0] ?? '');
+}
+
 function read(relative: string): string {
   return readFileSync(join(WEB_ROOT, relative), 'utf8');
+}
+
+function readMcpSource(file: string): string {
+  return readFileSync(join(WEB_ROOT, '..', '..', 'packages', 'tools', 'mcp', 'src', file), 'utf8');
 }
 
 describe('every connectMcpServer call site carries the SSRF egress policy', () => {
@@ -36,6 +49,39 @@ describe('every connectMcpServer call site carries the SSRF egress policy', () =
     const source = read('lib/mcp-egress-policy.ts');
     expect(source).toContain('assertResolvedPublicHostname');
     expect(source).toContain('assertAllowedUrl');
+  });
+
+  it('every buildMcpToolCatalog call site forwards the policy to discovery', () => {
+    for (const file of CATALOG_SITES) {
+      const source = read(file);
+      const blocks = callArgumentBlocks(source, 'buildMcpToolCatalog(');
+      expect(blocks.length, `${file} builds no MCP catalog`).toBeGreaterThan(0);
+      for (const block of blocks) {
+        expect(block, `${file} builds a catalog without MCP_EGRESS_POLICY`).toContain(
+          'MCP_EGRESS_POLICY',
+        );
+      }
+      expect(source).toContain("from '@/lib/mcp-egress-policy'");
+    }
+  });
+
+  it('buildMcpToolCatalog requires an egress policy from its callers', () => {
+    const connect = readMcpSource('connect.ts');
+    expect(connect).toContain('egressPolicy: McpEgressOptions,');
+    expect(connect).toContain('connectMcpServer({ serverName, config, egressPolicy })');
+  });
+
+  it('no MCP connection can fall back to unpinned global fetch', () => {
+    const connect = readMcpSource('connect.ts');
+    expect(connect).toContain("from './pinned-fetch'");
+    expect(connect).toContain(
+      'resolveMcpTransport(config, resolveEgressPolicy(params.egressPolicy))',
+    );
+    expect(connect).not.toContain('params.egressPolicy ?? {}');
+
+    const pinned = readMcpSource('pinned-fetch.ts');
+    expect(pinned).toContain("from 'node:dns/promises'");
+    expect(pinned).toContain('lookup: pinnedLookup(addresses)');
   });
 
   it('no web call site connects without the policy', () => {

@@ -4,20 +4,56 @@ export type ExtensionAgentMode = 'ask' | 'auto' | 'plan' | 'bypass';
 export type ExtensionAgentEffort = 'low' | 'medium' | 'high' | 'max';
 
 const BYPASS_CONSENT_KEY = 'agiWorkforce.agentMode.bypassConsentVersion';
-const BYPASS_CONSENT_VERSION = 1;
+const BYPASS_CONSENT_VERSION = 2;
 const MAX_BYPASS_CONSENT_KEY = 'agiWorkforce.agentMode.maxBypassConsentVersion';
-const MAX_BYPASS_CONSENT_VERSION = 1;
+const MAX_BYPASS_CONSENT_VERSION = 2;
 
 export const BYPASS_CONFIRM_ACTION = 'Turn On Bypass Permissions';
 export const BYPASS_CANCEL_ACTION = 'Cancel';
 export const MAX_BYPASS_CONFIRM_ACTION = 'Use Max with Bypass Permissions';
 export const MAX_BYPASS_CANCEL_ACTION = 'Keep Safer Settings';
 
-let bypassConsentActive = false;
-let maxBypassConsentActive = false;
+interface WorkspaceConsentRecord {
+  version: number;
+  workspace: string;
+}
+
+let bypassConsentWorkspace: string | undefined;
+let maxBypassConsentWorkspace: string | undefined;
 let trustedConfigurationWrites = 0;
 let trustedEffortWrites = 0;
 let reconciliationQueue = Promise.resolve();
+
+function workspaceIdentity(): string {
+  const workspaceFile = vscode.workspace.workspaceFile;
+  if (workspaceFile) return `workspace:${workspaceFile.toString()}`;
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (folders.length === 0) return 'window:no-folder';
+  return `folders:${folders
+    .map((folder) => folder.uri.toString())
+    .sort()
+    .join(' ')}`;
+}
+
+function workspaceLabel(): string {
+  const name = vscode.workspace.name;
+  return name ? `the "${name}" workspace` : 'this window';
+}
+
+function grantsConsent(record: unknown, version: number): boolean {
+  const consent = record as WorkspaceConsentRecord | undefined;
+  return consent?.version === version && consent.workspace === workspaceIdentity();
+}
+
+function hasBypassConsent(): boolean {
+  return bypassConsentWorkspace !== undefined && bypassConsentWorkspace === workspaceIdentity();
+}
+
+function hasMaxBypassConsent(): boolean {
+  return (
+    maxBypassConsentWorkspace !== undefined && maxBypassConsentWorkspace === workspaceIdentity()
+  );
+}
 
 function configuredAgentMode(): ExtensionAgentMode {
   const value = vscode.workspace.getConfiguration('agiWorkforce').get<string>('agent.mode', 'auto');
@@ -39,18 +75,27 @@ async function persistBypassConsent(
   context: vscode.ExtensionContext,
   active: boolean,
 ): Promise<void> {
-  bypassConsentActive = active;
-  await context.globalState.update(BYPASS_CONSENT_KEY, active ? BYPASS_CONSENT_VERSION : undefined);
+  const workspace = workspaceIdentity();
+  bypassConsentWorkspace = active ? workspace : undefined;
+  await context.workspaceState.update(
+    BYPASS_CONSENT_KEY,
+    active
+      ? ({ version: BYPASS_CONSENT_VERSION, workspace } satisfies WorkspaceConsentRecord)
+      : undefined,
+  );
 }
 
 async function persistMaxBypassConsent(
   context: vscode.ExtensionContext,
   active: boolean,
 ): Promise<void> {
-  maxBypassConsentActive = active;
-  await context.globalState.update(
+  const workspace = workspaceIdentity();
+  maxBypassConsentWorkspace = active ? workspace : undefined;
+  await context.workspaceState.update(
     MAX_BYPASS_CONSENT_KEY,
-    active ? MAX_BYPASS_CONSENT_VERSION : undefined,
+    active
+      ? ({ version: MAX_BYPASS_CONSENT_VERSION, workspace } satisfies WorkspaceConsentRecord)
+      : undefined,
   );
 }
 
@@ -86,8 +131,7 @@ async function confirmBypassPermissions(): Promise<boolean> {
     'Turn on Bypass Permissions?',
     {
       modal: true,
-      detail:
-        "Bypass Permissions removes approval prompts from every enabled agent tool. That includes tools that read or modify the current workspace and any additional directories you already granted, terminal commands that can install software or change system settings using the app's OS-level access, network-capable commands, and configured MCP tools. It does not expand existing OS or workspace grants, but it significantly increases the risk of data loss, sensitive-data exposure, and prompt-injection attacks. You can turn it off from the mode picker or Settings.",
+      detail: `Bypass Permissions removes approval prompts from every enabled agent tool. That includes tools that read or modify the current workspace and any additional directories you already granted, terminal commands that can install software or change system settings using the app's OS-level access, network-capable commands, and configured MCP tools. It does not expand existing OS or workspace grants, but it significantly increases the risk of data loss, sensitive-data exposure, and prompt-injection attacks. You can turn it off from the mode picker or Settings. This applies only to ${workspaceLabel()}; every other project you open asks again.`,
     },
     cancel,
     confirm,
@@ -115,19 +159,27 @@ async function confirmMaxBypassCombination(): Promise<boolean> {
 }
 
 export function initializeAgentModeConsent(context: vscode.ExtensionContext): void {
-  const storedConsent =
-    context.globalState.get<number>(BYPASS_CONSENT_KEY) === BYPASS_CONSENT_VERSION;
-  bypassConsentActive = storedConsent && configuredAgentMode() === 'bypass';
-  if (storedConsent && !bypassConsentActive) {
-    void context.globalState.update(BYPASS_CONSENT_KEY, undefined);
+  void context.globalState.update(BYPASS_CONSENT_KEY, undefined);
+  void context.globalState.update(MAX_BYPASS_CONSENT_KEY, undefined);
+
+  const storedConsent = context.workspaceState.get(BYPASS_CONSENT_KEY);
+  bypassConsentWorkspace =
+    grantsConsent(storedConsent, BYPASS_CONSENT_VERSION) && configuredAgentMode() === 'bypass'
+      ? workspaceIdentity()
+      : undefined;
+  if (storedConsent !== undefined && bypassConsentWorkspace === undefined) {
+    void context.workspaceState.update(BYPASS_CONSENT_KEY, undefined);
   }
 
-  const storedMaxBypassConsent =
-    context.globalState.get<number>(MAX_BYPASS_CONSENT_KEY) === MAX_BYPASS_CONSENT_VERSION;
-  maxBypassConsentActive =
-    storedMaxBypassConsent && bypassConsentActive && configuredAgentEffort() === 'max';
-  if (storedMaxBypassConsent && !maxBypassConsentActive) {
-    void context.globalState.update(MAX_BYPASS_CONSENT_KEY, undefined);
+  const storedMaxBypassConsent = context.workspaceState.get(MAX_BYPASS_CONSENT_KEY);
+  maxBypassConsentWorkspace =
+    grantsConsent(storedMaxBypassConsent, MAX_BYPASS_CONSENT_VERSION) &&
+    hasBypassConsent() &&
+    configuredAgentEffort() === 'max'
+      ? workspaceIdentity()
+      : undefined;
+  if (storedMaxBypassConsent !== undefined && maxBypassConsentWorkspace === undefined) {
+    void context.workspaceState.update(MAX_BYPASS_CONSENT_KEY, undefined);
   }
 
   trustedConfigurationWrites = 0;
@@ -136,7 +188,7 @@ export function initializeAgentModeConsent(context: vscode.ExtensionContext): vo
 }
 
 export function enforceAgentModeConsent(mode: ExtensionAgentMode): ExtensionAgentMode {
-  return mode === 'bypass' && !bypassConsentActive ? 'auto' : mode;
+  return mode === 'bypass' && !hasBypassConsent() ? 'auto' : mode;
 }
 
 export async function setAgentModeWithConsent(
@@ -145,12 +197,12 @@ export async function setAgentModeWithConsent(
 ): Promise<boolean> {
   const current = configuredAgentMode();
   const targetUsesMaxBypass = mode === 'bypass' && configuredAgentEffort() === 'max';
-  const needsBypassConsent = mode === 'bypass' && (current !== 'bypass' || !bypassConsentActive);
+  const needsBypassConsent = mode === 'bypass' && (current !== 'bypass' || !hasBypassConsent());
 
   if (needsBypassConsent) {
     if (!(await confirmBypassPermissions())) return false;
   }
-  if (targetUsesMaxBypass && !maxBypassConsentActive) {
+  if (targetUsesMaxBypass && !hasMaxBypassConsent()) {
     if (!(await confirmMaxBypassCombination())) return false;
   }
 
@@ -168,7 +220,7 @@ export async function setAgentEffortWithConsent(
   const targetUsesMaxBypass =
     effort === 'max' && enforceAgentModeConsent(configuredAgentMode()) === 'bypass';
 
-  if (targetUsesMaxBypass && !maxBypassConsentActive) {
+  if (targetUsesMaxBypass && !hasMaxBypassConsent()) {
     if (!(await confirmMaxBypassCombination())) return false;
   }
 
@@ -180,10 +232,10 @@ export async function setAgentEffortWithConsent(
 export async function reconcileAgentModeConsent(context: vscode.ExtensionContext): Promise<void> {
   const configured = configuredAgentMode();
   if (configured !== 'bypass') {
-    if (bypassConsentActive) await persistBypassConsent(context, false);
+    if (bypassConsentWorkspace !== undefined) await persistBypassConsent(context, false);
     return;
   }
-  if (bypassConsentActive || trustedConfigurationWrites > 0) return;
+  if (hasBypassConsent() || trustedConfigurationWrites > 0) return;
 
   await writeAgentMode('auto');
   if (await setAgentModeWithConsent(context, 'bypass')) return;
@@ -199,10 +251,10 @@ export async function reconcileAgentEffortConsent(context: vscode.ExtensionConte
     enforceAgentModeConsent(configuredAgentMode()) === 'bypass';
 
   if (!usesMaxBypass) {
-    if (maxBypassConsentActive) await persistMaxBypassConsent(context, false);
+    if (maxBypassConsentWorkspace !== undefined) await persistMaxBypassConsent(context, false);
     return;
   }
-  if (maxBypassConsentActive || trustedEffortWrites > 0) return;
+  if (hasMaxBypassConsent() || trustedEffortWrites > 0) return;
 
   await writeAgentEffort('high');
   if (await setAgentEffortWithConsent(context, 'max')) return;

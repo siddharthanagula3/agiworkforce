@@ -1,6 +1,12 @@
-import type { Breadcrumb, ErrorEvent, EventHint } from '@sentry/nextjs';
+import type { Breadcrumb, ErrorEvent, Event, EventHint, spanToJSON } from '@sentry/nextjs';
 
 import { maskSecretText, redactDeepValue } from '@/lib/observability/redact';
+
+// @sentry/nextjs re-exports these shapes only through values, not as named types.
+export type SpanJSON = ReturnType<typeof spanToJSON>;
+export type TransactionEvent = Event & { type: 'transaction' };
+
+type SpanAttributes = SpanJSON['data'];
 
 export function getSentryDsn(): string | undefined {
   return process.env['NEXT_PUBLIC_SENTRY_DSN'] || process.env['SENTRY_DSN'] || undefined;
@@ -71,16 +77,125 @@ function scrubFrame(frame: StackFrame): StackFrame {
   return frame;
 }
 
+function scrubUrlLike(value: string): string {
+  const cut = value.search(/[?#]/u);
+  return maskSecretText(cut === -1 ? value : value.slice(0, cut));
+}
+
 function scrubException(exception: ExceptionValue): ExceptionValue {
   if (typeof exception.value === 'string') exception.value = maskSecretText(exception.value);
   if (exception.mechanism?.data) {
-    exception.mechanism.data = redactDeepValue(exception.mechanism.data) as NonNullable<
+    const data = redactDeepValue(exception.mechanism.data) as NonNullable<
       ExceptionValue['mechanism']
     >['data'];
+    if (data && typeof data['url'] === 'string') data['url'] = scrubUrlLike(data['url']);
+    exception.mechanism.data = data;
   }
   const frames = exception.stacktrace?.frames;
   if (frames) exception.stacktrace!.frames = frames.map(scrubFrame);
   return exception;
+}
+
+function scrubRequest(request: NonNullable<Event['request']>): void {
+  delete request.cookies;
+  delete request.data;
+  delete request.query_string;
+  if (request.headers) request.headers = {};
+  // request.url repeats the raw query string, so deleting query_string alone still
+  // ships OAuth codes and magic-link tokens to Sentry.
+  if (typeof request.url === 'string') request.url = scrubUrlLike(request.url);
+}
+
+const SPAN_QUERY_ATTRIBUTE = /(?:^|\.)(?:query|query_string|search|fragment)$/iu;
+const SPAN_URL_ATTRIBUTE = /(?:^|\.)(?:url|uri|href|target|location)(?:\.(?:full|path))?$/iu;
+const SPAN_PAYLOAD_ATTRIBUTE = /^http\.(?:request|response)\.(?:header|body)\./iu;
+
+type SpanAttribute = NonNullable<SpanAttributes[string]>;
+
+function scrubSpanAttributes(data: SpanAttributes): SpanAttributes {
+  const out: SpanAttributes = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+    if (
+      SPAN_QUERY_ATTRIBUTE.test(key) ||
+      SPAN_PAYLOAD_ATTRIBUTE.test(key) ||
+      SENSITIVE_KEY.test(key)
+    ) {
+      out[key] = REDACTED;
+    } else if (typeof value === 'string') {
+      out[key] = SPAN_URL_ATTRIBUTE.test(key) ? scrubUrlLike(value) : maskSecretText(value);
+    } else if (Array.isArray(value)) {
+      out[key] = value.map((entry) =>
+        typeof entry === 'string' ? maskSecretText(entry) : entry,
+      ) as SpanAttribute;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+// Only cut at a "?" when the description really is a url or a method + route, so a
+// parameterised db statement keeps its placeholders.
+const URL_LIKE_DESCRIPTION = /^(?:[A-Z]+ )?(?:https?:\/\/|\/)/u;
+
+/**
+ * Runs for every root, child and standalone span. requestDataIntegration copies the
+ * raw request url, query string, cookies and headers onto the segment span, none of
+ * which pass through beforeSend.
+ */
+export function scrubSpan(span: SpanJSON): SpanJSON {
+  if (typeof span.description === 'string' && URL_LIKE_DESCRIPTION.test(span.description)) {
+    span.description = scrubUrlLike(span.description);
+  }
+  if (span.data) span.data = scrubSpanAttributes(span.data);
+  return span;
+}
+
+// captureRequestError stores the raw request target in contexts.nextjs.request_path,
+// which no sensitive-key or secret-shape rule matches, so the query string survives
+// redactDeep unless every url/path-like context string is cut at "?" as well.
+const URL_LIKE_CONTEXT_KEY =
+  /(?:^|[._-])(?:url|uri|href|path|pathname|route|location|referrer|target)$/iu;
+
+function scrubContextUrls(value: unknown, depth = 0): unknown {
+  if (depth > 8 || !value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((entry) => scrubContextUrls(entry, depth + 1));
+  const record = value as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(record)) {
+    if (typeof entry === 'string') {
+      if (URL_LIKE_CONTEXT_KEY.test(key)) record[key] = scrubUrlLike(entry);
+    } else {
+      record[key] = scrubContextUrls(entry, depth + 1);
+    }
+  }
+  return record;
+}
+
+function scrubSharedEventFields(event: Event): void {
+  if (event.breadcrumbs) event.breadcrumbs = event.breadcrumbs.map(scrubBreadcrumb);
+  if (event.request) scrubRequest(event.request);
+  if (typeof event.transaction === 'string') event.transaction = scrubUrlLike(event.transaction);
+  // The server and edge runtimes initialise Sentry per request and cannot read
+  // the per-user telemetry preference, so hasTelemetryConsent() is false there
+  // and no stable identifier is ever attached to a server event. On the client
+  // it also re-checks opt-out made after init.
+  if (event.user) {
+    const id = hasTelemetryConsent() ? event.user.id : undefined;
+    if (id) event.user = { id: String(id) };
+    else delete event.user;
+  }
+  if (event.extra) event.extra = redactDeep(event.extra) as Record<string, unknown>;
+  if (event.contexts) {
+    event.contexts = scrubContextUrls(redactDeep(event.contexts)) as typeof event.contexts;
+    const traceData = event.contexts.trace?.data;
+    if (traceData) event.contexts.trace!.data = scrubSpanAttributes(traceData);
+  }
+  if (event.tags) {
+    for (const k of Object.keys(event.tags)) {
+      if (SENSITIVE_KEY.test(k)) event.tags[k] = REDACTED;
+    }
+  }
 }
 
 /**
@@ -96,40 +211,41 @@ export function scrubEvent(event: ErrorEvent, _hint?: EventHint): ErrorEvent | n
       ErrorEvent['logentry']
     >['params'];
   }
-  if (event.breadcrumbs) event.breadcrumbs = event.breadcrumbs.map(scrubBreadcrumb);
   if (event.threads?.values) {
     for (const thread of event.threads.values) {
       const frames = thread.stacktrace?.frames;
       if (frames) thread.stacktrace!.frames = frames.map(scrubFrame);
     }
   }
-  if (event.request) {
-    delete event.request.cookies;
-    delete event.request.data;
-    delete event.request.query_string;
-    if (event.request.headers) event.request.headers = {};
-  }
-  // The server and edge runtimes initialise Sentry per request and cannot read
-  // the per-user telemetry preference, so hasTelemetryConsent() is false there
-  // and no stable identifier is ever attached to a server event. On the client
-  // it also re-checks opt-out made after init.
-  if (event.user) {
-    const id = hasTelemetryConsent() ? event.user.id : undefined;
-    if (id) event.user = { id: String(id) };
-    else delete event.user;
-  }
-  if (event.extra) event.extra = redactDeep(event.extra) as Record<string, unknown>;
-  if (event.contexts) event.contexts = redactDeep(event.contexts) as typeof event.contexts;
-  if (event.tags) {
-    for (const k of Object.keys(event.tags)) {
-      if (SENSITIVE_KEY.test(k)) event.tags[k] = REDACTED;
-    }
-  }
+  scrubSharedEventFields(event);
   return event;
 }
 
+/**
+ * beforeSend is only consulted for error events, so transaction events would
+ * otherwise leave with the request url, query string, cookies and headers that
+ * scrubEvent removes.
+ */
+export function scrubTransactionEvent(
+  event: TransactionEvent,
+  _hint?: EventHint,
+): TransactionEvent | null {
+  if (event.spans) event.spans = event.spans.map(scrubSpan);
+  scrubSharedEventFields(event);
+  return event;
+}
+
+const URL_BEARING_BREADCRUMB_KEYS = ['url', 'href', 'to', 'from', 'location', 'referrer'] as const;
+
 export function scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
-  if (breadcrumb.data) breadcrumb.data = redactDeep(breadcrumb.data) as Record<string, unknown>;
+  if (breadcrumb.data) {
+    const data = redactDeep(breadcrumb.data) as Record<string, unknown>;
+    for (const key of URL_BEARING_BREADCRUMB_KEYS) {
+      const value = data[key];
+      if (typeof value === 'string') data[key] = scrubUrlLike(value);
+    }
+    breadcrumb.data = data;
+  }
   if (typeof breadcrumb.message === 'string') {
     breadcrumb.message = maskSecretText(breadcrumb.message);
   }
@@ -144,6 +260,8 @@ export function commonInitOptions() {
     sendDefaultPii: false,
     tracesSampleRate: 0.1,
     beforeSend: scrubEvent,
+    beforeSendTransaction: scrubTransactionEvent,
+    beforeSendSpan: scrubSpan,
     beforeBreadcrumb: scrubBreadcrumb,
   };
 }

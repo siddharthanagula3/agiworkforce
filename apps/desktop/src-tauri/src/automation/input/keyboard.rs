@@ -4,6 +4,21 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 use super::enigo_lock::lock_enigo;
+use crate::automation::computer_use::consent::consent_prompt_is_on_screen;
+
+/// F20 (audit 2026-08-21): the native computer-use consent prompt is only a
+/// decision the user makes if the app cannot answer it for them. Every command
+/// that reaches this simulator is gated on persisted consent, but the script
+/// executor reaches it without one, so the refusal also lives here — a
+/// synthesized `Return` must never be what accepts the prompt.
+fn refuse_while_consent_prompt_is_on_screen() -> Result<()> {
+    if consent_prompt_is_on_screen() {
+        return Err(anyhow!(
+            "Refusing to synthesize input while the computer-use consent prompt is open. Answer it on this computer first."
+        ));
+    }
+    Ok(())
+}
 
 pub struct KeyboardSimulator {
     enigo: Enigo,
@@ -45,6 +60,7 @@ impl KeyboardSimulator {
     }
 
     pub async fn send_text_with_delay(&mut self, text: &str, delay_ms: u64) -> Result<()> {
+        refuse_while_consent_prompt_is_on_screen()?;
         for ch in text.chars() {
             {
                 let _enigo_lock = lock_enigo()?;
@@ -60,6 +76,7 @@ impl KeyboardSimulator {
     }
 
     pub fn press_key(&mut self, key: Key) -> Result<()> {
+        refuse_while_consent_prompt_is_on_screen()?;
         let _enigo_lock = lock_enigo()?;
         self.enigo
             .key(key, Direction::Press)
@@ -67,6 +84,7 @@ impl KeyboardSimulator {
     }
 
     pub fn release_key(&mut self, key: Key) -> Result<()> {
+        refuse_while_consent_prompt_is_on_screen()?;
         let _enigo_lock = lock_enigo()?;
         self.enigo
             .key(key, Direction::Release)
@@ -74,6 +92,7 @@ impl KeyboardSimulator {
     }
 
     pub fn tap_key(&mut self, key: Key) -> Result<()> {
+        refuse_while_consent_prompt_is_on_screen()?;
         let _enigo_lock = lock_enigo()?;
         self.enigo
             .key(key, Direction::Click)
@@ -81,6 +100,7 @@ impl KeyboardSimulator {
     }
 
     pub fn send_hotkey(&mut self, modifiers: &[Key], key: Key) -> Result<()> {
+        refuse_while_consent_prompt_is_on_screen()?;
         let _enigo_lock = lock_enigo()?;
 
         for modifier in modifiers {
@@ -159,6 +179,45 @@ impl KeyboardSimulator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::automation::computer_use::consent::consent_prompt_on_screen;
+
+    /// Every keystroke this simulator can emit is a keystroke that could accept
+    /// the native consent prompt, so none of them may reach `enigo` while that
+    /// prompt is waiting for the user.
+    #[test]
+    fn keystrokes_are_refused_while_the_consent_prompt_is_on_screen() {
+        let _prompt = consent_prompt_on_screen();
+        let refusal = refuse_while_consent_prompt_is_on_screen()
+            .expect_err("synthetic input during the consent prompt");
+        assert!(refusal.to_string().contains("consent prompt is open"));
+    }
+
+    /// The refusal is only worth anything while every emitting method asks for
+    /// it before it touches `enigo`.
+    #[test]
+    fn every_emitting_method_asks_before_it_types() {
+        const SOURCE: &str = include_str!("keyboard.rs");
+        for method in [
+            "pub async fn send_text_with_delay(",
+            "pub fn press_key(",
+            "pub fn release_key(",
+            "pub fn tap_key(",
+            "pub fn send_hotkey(",
+        ] {
+            let after = SOURCE
+                .split(method)
+                .nth(1)
+                .unwrap_or_else(|| panic!("{method} is missing from this file"));
+            let (_, body) = after
+                .split_once("> {\n")
+                .unwrap_or_else(|| panic!("{method} has no recognizable body"));
+            assert_eq!(
+                body.trim_start().lines().next().unwrap_or_default().trim(),
+                "refuse_while_consent_prompt_is_on_screen()?;",
+                "{method} must refuse before it synthesizes input"
+            );
+        }
+    }
 
     #[test]
     fn test_keyboard_simulator_creation() {

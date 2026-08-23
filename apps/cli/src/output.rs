@@ -1,10 +1,12 @@
 use indicatif::{ProgressBar, ProgressStyle};
+use std::borrow::Cow;
 use std::env;
 use std::time::Duration;
 
 use crate::markdown::MarkdownRenderer;
 use crate::model_catalog;
 use crate::terminal_style as ts;
+use crate::terminal_text::sanitize_terminal_text;
 
 // ---------------------------------------------------------------------------
 // Color depth detection
@@ -133,11 +135,17 @@ pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {
         return String::new();
     }
 
+    let headers: Vec<Cow<'_, str>> = headers.iter().map(|h| sanitize_terminal_text(h)).collect();
+    let rows: Vec<Vec<Cow<'_, str>>> = rows
+        .iter()
+        .map(|row| row.iter().map(|c| sanitize_terminal_text(c)).collect())
+        .collect();
+
     // Compute column widths — max of header and all cell widths.
     let col_count = headers.len();
     let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
 
-    for row in rows {
+    for row in &rows {
         for (i, cell) in row.iter().enumerate() {
             if i < col_count {
                 widths[i] = widths[i].max(cell.len());
@@ -164,10 +172,10 @@ pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {
     out.push('\n');
 
     // Data rows
-    for row in rows {
+    for row in &rows {
         let cells: Vec<String> = (0..col_count)
             .map(|i| {
-                let cell = row.get(i).map(|s| s.as_str()).unwrap_or("");
+                let cell: &str = row.get(i).map(|s| s.as_ref()).unwrap_or("");
                 format!("{:<width$}", cell, width = widths[i])
             })
             .collect();
@@ -210,7 +218,7 @@ pub fn print_user_prompt() {
 
 /// Print assistant text chunk. Called incrementally during streaming (raw mode).
 pub fn print_assistant_chunk(text: &str) {
-    print!("{}", text);
+    print!("{}", sanitize_terminal_text(text));
     flush_stdout();
 }
 
@@ -236,17 +244,24 @@ pub fn print_assistant_end() {
 
 /// Print a system/info message.
 pub fn print_info(message: &str) {
-    eprintln!("{} {}", ts::info_label(), message);
+    eprintln!("{} {}", ts::info_label(), sanitize_terminal_text(message));
 }
 
 /// Print a warning message.
 pub fn print_warn(message: &str) {
-    eprintln!("{} {}", ts::warn_label(), message);
+    eprintln!("{} {}", ts::warn_label(), sanitize_terminal_text(message));
 }
 
 /// Print an error message.
 pub fn print_error(message: &str) {
-    eprintln!("{} {}", ts::error_label(), message);
+    eprintln!("{} {}", ts::error_label(), sanitize_terminal_text(message));
+}
+
+/// Print an already-rendered block (a table, a listing, a raw payload) whose
+/// text came from outside this process — the model, a tool, an MCP server, or
+/// files in the checkout — with terminal escapes stripped.
+pub fn print_block(text: &str) {
+    eprintln!("{}", sanitize_terminal_text(text));
 }
 
 // ---------------------------------------------------------------------------
@@ -426,7 +441,7 @@ pub fn print_tool_execution_summary(tool_name: &str, duration_ms: u64, success: 
     eprintln!(
         "  {} {} {} {}",
         ts::muted("tool:"),
-        ts::accent(tool_name),
+        ts::accent(sanitize_terminal_text(tool_name)),
         duration,
         status
     );
@@ -474,7 +489,7 @@ pub fn print_mcp_status(server_name: &str, tool_count: usize) {
     eprintln!(
         "  {} {} ({})",
         ts::muted("mcp:"),
-        ts::accent(server_name),
+        ts::accent(sanitize_terminal_text(server_name)),
         ts::muted(tools_display)
     );
 }
@@ -490,9 +505,9 @@ pub fn print_session_loaded(id: &str, msg_count: usize, model: &str) {
     eprintln!(
         "{} Resumed session {} — {} ({})",
         ts::info_label(),
-        ts::muted(id),
+        ts::muted(sanitize_terminal_text(id)),
         msgs,
-        ts::muted(model)
+        ts::muted(sanitize_terminal_text(model))
     );
 }
 
@@ -517,7 +532,7 @@ pub fn print_compact_header(provider: &str) {
         ts::muted(format!(
             "agiworkforce {} · provider: {} · credentials: {}",
             version,
-            provider,
+            sanitize_terminal_text(provider),
             crate::auth::credential_storage_label(),
         ))
     );
@@ -534,7 +549,11 @@ pub fn print_banner(model: &str, provider: &str) {
         "{} {} {}{}",
         ts::brand_header("AGI CLI"),
         ts::muted(format!("v{}", env!("CARGO_PKG_VERSION"))),
-        ts::muted(format!("({} via {})", model, provider)),
+        ts::muted(format!(
+            "({} via {})",
+            sanitize_terminal_text(model),
+            sanitize_terminal_text(provider)
+        )),
         ts::muted(color_info)
     );
     eprintln!("{}", ts::muted("Type /help for commands, /exit to quit."));
@@ -1082,6 +1101,24 @@ mod tests {
         assert!(lines[0].starts_with("Model"));
         assert!(lines[2].starts_with("fixture-short"));
         assert!(lines[3].starts_with("fixture-model-long"));
+    }
+
+    #[test]
+    fn format_table_strips_escape_sequences_from_cells() {
+        let headers = &["Provider", "URL"];
+        let rows = vec![vec![
+            "evil\u{1b}]52;c;cm0gLXJmIC8=\u{7}corp".to_string(),
+            "https://e.co\u{1b}[2J\u{1b}[31m".to_string(),
+        ]];
+        let result = format_table(headers, &rows);
+
+        assert!(!result.contains('\u{1b}'), "escape survived: {result:?}");
+        assert!(
+            !result.contains("cm0gLXJmIC8="),
+            "OSC 52 payload survived: {result:?}"
+        );
+        assert!(!result.contains("[2J"), "screen clear survived: {result:?}");
+        assert!(result.contains("evilcorp"), "text was mangled: {result:?}");
     }
 
     #[test]

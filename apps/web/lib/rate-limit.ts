@@ -712,8 +712,10 @@ async function resolveVerifiedUserBucket(request: NextRequest): Promise<string |
     const secretKey = process.env['CLERK_SECRET_KEY'];
     if (!secretKey) return null;
     try {
+      const { getClerkAuthorizedParties } = await import('./clerk-authorized-parties');
+      const authorizedParties = getClerkAuthorizedParties();
       const { verifyToken } = await import('@clerk/backend');
-      const claims = await verifyToken(token, { secretKey });
+      const claims = await verifyToken(token, { secretKey, authorizedParties });
       return typeof claims.sub === 'string' && claims.sub.length > 0 ? `user:${claims.sub}` : null;
     } catch {
       return null;

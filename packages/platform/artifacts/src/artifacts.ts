@@ -8,10 +8,24 @@
  *     exported artifact under the user data directory supplied by the host
  *     adapter. No network call is made.
  *   - `privacyMode === 'byok' | 'managed'` → delegates to the host-injected
- *     {@link CloudPublisher}. When the host supplies one the result is
- *     `{ kind: 'cloud', shareUrl }`; when it does not, the result is
- *     `{ kind: 'unavailable', reason }` — a statement about THIS host's wiring,
- *     not a launch gate.
+ *     {@link CloudPublisher}, but ONLY after the trust-boundary cross-check in
+ *     {@link cloudPublishDenial} passes. When the host supplies no publisher
+ *     the result is `{ kind: 'unavailable', reason }` — a statement about THIS
+ *     host's wiring, not a launch gate.
+ *
+ * SECURITY-FIX F3 (CWE-863, 2026-08-21): the caller's `privacyMode` used to be
+ * the whole authorization decision, so a UI that hardcoded `'managed'` could
+ * hand a Local or BYOK artifact to the managed-cloud publisher. The caller now
+ * also declares {@link PublishArtifactInput.originPrivacyMode} — the boundary
+ * the artifact was actually produced in — and the injected {@link CloudPublisher}
+ * is a managed-cloud sink, so it is reachable only when the artifact itself
+ * originated in managed mode and the caller asked for that same mode. A Local
+ * or BYOK artifact resolves to `{ kind: 'unavailable' }` instead: moving it
+ * across that boundary needs the explicit handoff ceremony (context selection,
+ * secret scan, payload preview, consent), which this path does not implement.
+ * Hosts derive that origin with {@link resolveOriginPrivacyMode}, which reduces
+ * every boundary signal they observed to the most restrictive one and yields
+ * `undefined` when they observed nothing at all.
  *
  * AUDIT-FIX ART-27 (2026-07-25): this function used to return
  * `{ kind: 'waitlist', waitlistGated: true }` for byok/managed unconditionally,
@@ -66,13 +80,50 @@
 import {
   assertSurfaceCanSyncChats,
   assertGeneratedFileTrustBoundary,
+  formatPrivacyModeLabel,
   type SourceSurface,
   type PrivacyMode,
+  type ProviderMode,
   type GeneratedFileTrustBoundaryInput,
   type ComputeSession,
   type GeneratedFile,
   type ArtifactManifest,
 } from '@agiworkforce/types';
+
+const PRIVACY_MODE_BY_ORIGIN_SIGNAL = {
+  local: 'local',
+  byok: 'byok',
+  managed: 'managed',
+  Local: 'local',
+  DirectByok: 'byok',
+  ManagedGateway: 'managed',
+  ManagedNative: 'managed',
+} as const satisfies Record<PrivacyMode | ProviderMode, PrivacyMode>;
+
+const ORIGIN_PRIVACY_PRECEDENCE = ['local', 'byok', 'managed'] as const;
+
+/**
+ * Reduce every boundary signal a host observed about an artifact's origin to
+ * the one privacy mode the publish decision may use.
+ *
+ * Signals are privacy modes, provider modes, or unrecognized wire strings, in
+ * no particular order. The most restrictive observed boundary wins, so a
+ * client-side default of `managed` can never outrank an observed Local or BYOK
+ * turn, and an empty (or entirely unrecognized) signal set resolves to
+ * `undefined` — the honest "origin unknown" that {@link publishArtifact}
+ * refuses to publish rather than guessing at.
+ */
+export function resolveOriginPrivacyMode(
+  signals: readonly (string | null | undefined)[],
+): PrivacyMode | undefined {
+  const observed = new Set<PrivacyMode>();
+  for (const signal of signals) {
+    if (!signal) continue;
+    const mode = (PRIVACY_MODE_BY_ORIGIN_SIGNAL as Record<string, PrivacyMode | undefined>)[signal];
+    if (mode) observed.add(mode);
+  }
+  return ORIGIN_PRIVACY_PRECEDENCE.find((mode) => observed.has(mode));
+}
 
 export interface PublishableArtifact {
   id: string;
@@ -120,6 +171,13 @@ export interface PublishArtifactInput {
    * When `privacyMode === 'local'` the adapter is never called.
    */
   cloudPublisher?: CloudPublisher;
+  /**
+   * The privacy mode the artifact was actually produced in, read from the
+   * originating conversation/message trust-boundary labels rather than from
+   * whatever the publish UI wants to do. Required for any cloud publish:
+   * without it the boundary cannot be verified and the publish is refused.
+   */
+  originPrivacyMode?: PrivacyMode;
 }
 
 export type LocalFileWriter = (artifact: PublishableArtifact) => Promise<string>;
@@ -191,11 +249,39 @@ function buildTrustBoundaryInput(
   return { computeSession, generatedFile, artifactManifest };
 }
 
+function unavailable(reason: string): CloudUnavailablePublishResult {
+  return { kind: 'unavailable', shareUrl: null, reason };
+}
+
+function cloudPublishDenial(
+  requested: PrivacyMode,
+  origin: PrivacyMode | undefined,
+): CloudUnavailablePublishResult | null {
+  if (!origin) {
+    return unavailable(
+      'Publishing is unavailable: the privacy mode this artifact was created in is unknown. Download the artifact instead.',
+    );
+  }
+  if (origin !== 'managed') {
+    return unavailable(
+      `This artifact was created in ${formatPrivacyModeLabel(origin)} mode. Publishing uploads it to AGI managed cloud, so it is unavailable in this privacy mode. Download the artifact instead.`,
+    );
+  }
+  if (requested !== origin) {
+    return unavailable(
+      `Publishing was requested in ${formatPrivacyModeLabel(requested)} mode, but this artifact was created in ${formatPrivacyModeLabel(origin)} mode. Download the artifact instead.`,
+    );
+  }
+  return null;
+}
+
 /**
  * Publish an artifact.
  *
  * Enforces the chat-sync surface rule (CLI / VSCode / Chrome must not use
- * this path) and the generated-file trust boundary before performing any I/O.
+ * this path), the artifact's originating trust boundary (a Local or BYOK
+ * artifact never reaches the managed-cloud publisher), and the generated-file
+ * trust boundary before performing any I/O.
  *
  * @throws {Error} When surface is a developer-session surface.
  * @throws {Error} When the trust boundary is violated.
@@ -209,13 +295,13 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
   assertSurfaceCanSyncChats(surface);
 
   if (privacyMode === 'byok' || privacyMode === 'managed') {
+    const denial = cloudPublishDenial(privacyMode, input.originPrivacyMode);
+    if (denial) return denial;
+
     if (!cloudPublisher) {
-      return {
-        kind: 'unavailable',
-        shareUrl: null,
-        reason:
-          'Cloud publish is not available on this surface yet. Download the artifact instead.',
-      };
+      return unavailable(
+        'Cloud publish is not available on this surface yet. Download the artifact instead.',
+      );
     }
 
     const published = await cloudPublisher(artifact, privacyMode);

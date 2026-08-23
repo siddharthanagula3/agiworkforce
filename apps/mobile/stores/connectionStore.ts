@@ -45,7 +45,12 @@ import type {
   DispatchTaskLifecycleStatus,
   DispatchTaskStatusEvent,
 } from '@agiworkforce/types';
-import { claimManualPairingToken, normalizePairingInput } from '@/services/manualPairing';
+import {
+  claimManualPairingToken,
+  parsePairingPayload,
+  PAIRING_SECRET_REQUIRED_MESSAGE,
+  PAIRING_UPDATE_REQUIRED_MESSAGE,
+} from '@/services/manualPairing';
 
 export type ConnectionStatus =
   | 'disconnected'
@@ -203,25 +208,15 @@ interface RTCSessionDescriptionInit {
 let dataChannel: RTCDataChannelType | null = null;
 
 /**
- * Parse the pairing payload from a QR string.
- * Accepts raw codes, `agiw:XXXXXXXXXXXX`, or `agiw:XXXXXXXXXXXX:<64-hex-token>`.
- *
- * AUDIT-FIX: H-12 — server now mints 12-character codes from a 36-symbol
- * alphabet (36^12 ≈ 62 bits of entropy).
- * We strip out human-readable separators (spaces or '-') that the desktop
- * UI may print to display the code as 3 groups of 4. Matches against
- * `/^[A-Z0-9]{12}$/`; legacy short codes are rejected.
+ * The out-of-band pairing secret for the code we are paired with, held only in
+ * memory. Reconnects call `connect(pairingCode)` with the bare code, so the
+ * secret scanned from the QR has to survive between attempts — but it must
+ * never be persisted alongside the relay-visible pairing code.
  */
-function parsePairingPayload(raw: string): { code: string; pairToken: string | null } {
-  const trimmed = normalizePairingInput(raw);
-  if (trimmed.startsWith('agiw:')) {
-    const [code = '', token] = trimmed.slice(5).split(':');
-    return {
-      code: code.toUpperCase(),
-      pairToken: token && /^[a-fA-F0-9]{64}$/.test(token) ? token.toLowerCase() : null,
-    };
-  }
-  return { code: trimmed.toUpperCase(), pairToken: null };
+let rememberedPairing: { code: string; secret: string } | null = null;
+
+function forgetPairingSecret(): void {
+  rememberedPairing = null;
 }
 
 function isDispatchCompanionEnabled(): boolean {
@@ -586,6 +581,9 @@ async function handleControlMessageAsync(envelope: unknown): Promise<void> {
   const result = await verifyMessage(hmacState, envelopeToVerify);
   if (!result.ok) {
     console.warn('[dispatch] Message rejected:', result.reason);
+    if (result.reason === 'protocol_version_unsupported') {
+      useConnectionStore.setState({ error: PAIRING_UPDATE_REQUIRED_MESSAGE });
+    }
     return;
   }
 
@@ -871,6 +869,7 @@ export const useConnectionStore = create<ConnectionState>()(
         }
 
         const currentState = get();
+        const rememberedAtEntry = rememberedPairing;
         const isReconnect =
           currentState.status === 'stale' || currentState.status === 'reconnecting';
         if (currentState.status === 'connecting' || currentState.status === 'connected') {
@@ -879,9 +878,32 @@ export const useConnectionStore = create<ConnectionState>()(
 
         const attemptId = ++connectionAttemptId;
         const parsed = parsePairingPayload(rawCode);
+        const remembered =
+          rememberedAtEntry && rememberedAtEntry.code === parsed.code ? rememberedAtEntry : null;
+        const pairingSecret = parsed.pairingSecret ?? remembered?.secret ?? null;
         const suppliedPairToken =
-          parsed.pairToken ??
-          (parsed.code === currentState.pairingCode ? currentState.pairToken : null);
+          parsed.code === currentState.pairingCode ? currentState.pairToken : null;
+
+        if (!pairingSecret) {
+          invalidateConnectionAttempt();
+          clearConnectWatchdog();
+          forgetPairingSecret();
+          hmacState = null;
+          pendingControlQueue.length = 0;
+          clearPendingControlAcks();
+          set({
+            status: 'error',
+            error: parsed.legacyPayload
+              ? PAIRING_UPDATE_REQUIRED_MESSAGE
+              : PAIRING_SECRET_REQUIRED_MESSAGE,
+            pairingCode: null,
+            pairToken: null,
+            connectionQuality: 'disconnected',
+            reconnectStartedAt: null,
+          });
+          return;
+        }
+        rememberedPairing = { code: parsed.code, secret: pairingSecret };
 
         set((state) => ({
           status: 'connecting',
@@ -948,7 +970,7 @@ export const useConnectionStore = create<ConnectionState>()(
               hex += (saltBytes[i] as number).toString(16).padStart(2, '0');
             }
             sessionMetadata.dispatchSalt = hex;
-            const secret = await deriveDispatchSecret(parsed.code, hex);
+            const secret = await deriveDispatchSecret(parsed.code, hex, pairingSecret);
             if (!isCurrentConnectionAttempt(attemptId)) return;
             hmacState = { secret, nonceCache: new Map() };
           } catch (err) {
@@ -1053,6 +1075,7 @@ export const useConnectionStore = create<ConnectionState>()(
 
                 case 'terminated':
                   clearConnectWatchdog();
+                  forgetPairingSecret();
                   set({
                     status: 'disconnected',
                     pairingCode: null,
@@ -1151,6 +1174,7 @@ export const useConnectionStore = create<ConnectionState>()(
       markSessionExpired: () => {
         invalidateConnectionAttempt();
         clearConnectWatchdog();
+        forgetPairingSecret();
         pendingControlQueue.length = 0;
         clearPendingControlAcks();
         set({
@@ -1168,6 +1192,7 @@ export const useConnectionStore = create<ConnectionState>()(
       disconnect: () => {
         invalidateConnectionAttempt();
         clearConnectWatchdog();
+        forgetPairingSecret();
         if (signalingClient) {
           signalingClient.close();
           signalingClient = null;

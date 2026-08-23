@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { Download, Filter, Search, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { csvField } from '@agiworkforce/unified-chat';
 import { useToolStore } from '../../stores/chat/toolStore';
 import type { ActionLogEntry } from '../../stores/chat/toolStore';
 import { cn } from '../../lib/utils';
@@ -25,26 +26,19 @@ function formatTimestamp(date: Date | string): string {
   });
 }
 
-function escapeCSV(val: string): string {
-  if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-    return `"${val.replace(/"/g, '""')}"`;
-  }
-  return val;
-}
-
 function exportToCSV(entries: ActionLogEntry[]): void {
   const header = ['Timestamp', 'Tool', 'Type', 'Status', 'Description', 'Result', 'Error'].join(
     ',',
   );
   const rows = entries.map((e) =>
     [
-      escapeCSV(formatTimestamp(e.createdAt)),
-      escapeCSV(e.title),
-      escapeCSV(e.type),
-      escapeCSV(e.status),
-      escapeCSV(e.description ?? ''),
-      escapeCSV(e.result ?? ''),
-      escapeCSV(e.error ?? ''),
+      csvField(formatTimestamp(e.createdAt)),
+      csvField(e.title),
+      csvField(e.type),
+      csvField(e.status),
+      csvField(e.description ?? ''),
+      csvField(e.result ?? ''),
+      csvField(e.error ?? ''),
     ].join(','),
   );
   const csv = [header, ...rows].join('\n');

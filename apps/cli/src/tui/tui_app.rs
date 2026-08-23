@@ -23,6 +23,9 @@ use crate::command_registry::{
 };
 use crate::config::CliConfig;
 use crate::context::SystemContext;
+use crate::terminal_text::{
+    sanitize_terminal_line, sanitize_terminal_lines, sanitize_terminal_text,
+};
 
 use super::{display_width, pad_to_cols, truncate_cols};
 
@@ -687,6 +690,26 @@ fn approval_choice_to_decision(
     }
 }
 
+/// Build the approval overlay for one request.
+///
+/// The summary and detail lines are the model's own command line and diff
+/// hunks; they are stripped here because the overlay paints them directly
+/// above the y/n prompt they describe.
+fn approval_overlay_for(
+    request: &crate::tui::approval_broker::ApprovalRequest,
+) -> crate::tui::widgets::approval_overlay::ApprovalOverlayState {
+    let mut overlay = crate::tui::widgets::approval_overlay::ApprovalOverlayState::default();
+    overlay.open(
+        sanitize_terminal_text(&request.summary).into_owned(),
+        request
+            .detail
+            .iter()
+            .map(|line| sanitize_terminal_text(line).into_owned())
+            .collect(),
+    );
+    overlay
+}
+
 /// Render a keyboard-navigable approval modal and return the user's choice.
 ///
 /// The agent turn is parked on the broker (`request().await`) while this runs,
@@ -703,11 +726,10 @@ fn run_tui_approval_modal(
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
 ) -> Result<crate::tui::widgets::approval_overlay::ApprovalChoice> {
-    use crate::tui::widgets::approval_overlay::{ApprovalChoice, ApprovalOverlayState};
+    use crate::tui::widgets::approval_overlay::ApprovalChoice;
     use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
 
-    let mut overlay = ApprovalOverlayState::default();
-    overlay.open(request.summary.clone(), request.detail.clone());
+    let mut overlay = approval_overlay_for(request);
 
     loop {
         terminal.draw(|frame| {
@@ -755,7 +777,7 @@ fn handle_mcp_elicitation_event(
     let action = match event {
         Event::Key(key) => overlay.handle_key(crossterm_to_keyaction(key)),
         Event::Paste(text) => {
-            for character in text.chars() {
+            for character in sanitize_terminal_text(&text).chars() {
                 let _ = overlay.handle_key(KeyAction::Char(character));
             }
             ViewAction::Continue
@@ -1122,7 +1144,8 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         }),
     ));
 
-    let header_text = Line::from(spans);
+    let mut header_text = Line::from(spans);
+    sanitize_terminal_line(&mut header_text);
 
     let tokens_text = format!(
         " {}in / {}out │ Turns: {} ",
@@ -1292,6 +1315,10 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         }
     }
 
+    // Assistant, tool, and streamed provider text all land in these spans, and
+    // ratatui hands a span's bytes to the terminal unchanged.
+    sanitize_terminal_lines(&mut lines);
+
     // Scroll
     let visible_height = area.height.saturating_sub(2) as usize;
     let total_lines = lines.len();
@@ -1404,7 +1431,7 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         .add_modifier(Modifier::BOLD);
 
     let lines_text: Vec<&str> = app.input.split('\n').collect();
-    let lines: Vec<Line> = lines_text
+    let mut lines: Vec<Line> = lines_text
         .iter()
         .enumerate()
         .map(|(i, &text)| {
@@ -1423,6 +1450,8 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
             }
         })
         .collect();
+
+    sanitize_terminal_lines(&mut lines);
 
     let widget = Paragraph::new(lines).block(block);
     frame.render_widget(widget, area);
@@ -1467,7 +1496,9 @@ fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &Tui
     };
     let text = format!(
         " ↘ Falling back: {} → {} ({})  ",
-        banner.from, banner.to, banner.reason
+        sanitize_terminal_text(&banner.from),
+        sanitize_terminal_text(&banner.to),
+        sanitize_terminal_text(&banner.reason)
     );
     let width = (display_width(&text) as u16).min(chat_area.width.saturating_sub(2));
     if width == 0 {
@@ -1734,8 +1765,10 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         }
     }
 
-    let bar = Paragraph::new(Line::from(spans))
-        .style(Style::default().bg(ui_status_bar_bg()).fg(ui_on_dark()));
+    let mut bar_line = Line::from(spans);
+    sanitize_terminal_line(&mut bar_line);
+    let bar =
+        Paragraph::new(bar_line).style(Style::default().bg(ui_status_bar_bg()).fg(ui_on_dark()));
     frame.render_widget(bar, area);
 }
 
@@ -1783,7 +1816,7 @@ fn render_overlay(
 ) {
     // Prefer a view's styled lines (e.g. the diff review's +/- coloring); fall
     // back to the plain text render for every other overlay.
-    let lines: Vec<Line> = match ov.render_styled() {
+    let mut lines: Vec<Line> = match ov.render_styled() {
         Some(styled) => styled,
         None => {
             let text = ov.render();
@@ -1796,6 +1829,10 @@ fn render_overlay(
     if lines.is_empty() {
         return;
     }
+    // Overlays quote model, tool, and MCP text directly above a consent
+    // prompt, so an escape here could repaint the decision the user is about
+    // to give.
+    sanitize_terminal_lines(&mut lines);
     // Each InteractiveView already renders its own complete ASCII box (with a
     // title row), so size the overlay to that content and draw it WITHOUT an
     // extra ratatui border. Previously this wrapped the already-boxed text in
@@ -2155,7 +2192,13 @@ fn handle_paste_text(app: &mut TuiApp, text: &str) {
     if app.active_overlay.is_some() {
         return;
     }
-    insert_str_at_cursor(&mut app.input, &mut app.cursor, text);
+    // Clipboard content is untrusted here: an OSC 52 write from an earlier
+    // turn can put escapes on the clipboard that would repaint the composer.
+    insert_str_at_cursor(
+        &mut app.input,
+        &mut app.cursor,
+        sanitize_terminal_text(text).as_ref(),
+    );
 }
 
 fn backspace_at_cursor(input: &mut String, cursor: &mut usize) {
@@ -3299,7 +3342,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     destination,
                     provider,
                 } => {
-                    app.input = prompt;
+                    app.input = sanitize_terminal_text(&prompt).into_owned();
                     app.cursor = app.input.len();
                     SlashResult::SystemMessage(format!(
                         "Drafted {} continuation for provider `{provider}`. Review the exact payload before pressing Enter; edits require a fresh preview.",
@@ -3411,12 +3454,15 @@ pub async fn run(
         match crate::agents::find_agent(name) {
             Some(agent_def) => {
                 agent_def.apply_to_session(&mut session);
-                eprintln!("Agent '{}' loaded.", agent_def.name);
+                eprintln!(
+                    "Agent '{}' loaded.",
+                    sanitize_terminal_text(&agent_def.name)
+                );
             }
             None => {
                 eprintln!(
                     "Warning: agent '{}' not found. Run /agents to list available agents.",
-                    name
+                    sanitize_terminal_text(name)
                 );
             }
         }
@@ -4009,7 +4055,12 @@ fn compact_tool_output_preview(output: &str) -> Option<String> {
         .map(str::trim)
         .find(|line| !line.is_empty())?;
     const MAX_COLS: usize = 96;
-    Some(truncate_cols(line, MAX_COLS))
+    // Strip before truncating: `truncate_cols` measures display width, which
+    // would both mis-count an escape and cut one in half.
+    Some(truncate_cols(
+        sanitize_terminal_text(line).as_ref(),
+        MAX_COLS,
+    ))
 }
 
 async fn send_message(
@@ -4113,7 +4164,10 @@ async fn send_message(
     let result = {
         let callback = Box::new(move |chunk: &str| {
             if let Ok(mut buf) = buf_for_callback.lock() {
-                buf.push_str(chunk);
+                // Sanitize per chunk so a sequence split across two chunks
+                // cannot reassemble in the buffer that feeds the live frame,
+                // the finalized transcript message, and cancelled-turn replay.
+                buf.push_str(sanitize_terminal_text(chunk).as_ref());
             }
         });
 
@@ -5424,6 +5478,328 @@ mod tests {
         assert!(
             rendered.contains("Esc or Ctrl-C to cancel") || rendered.contains("working"),
             "composer/status chrome must still be visible under the approval overlay, not blanked"
+        );
+    }
+
+    const ESCAPE_PAYLOAD: &str = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2J\u{1b}[1;1H\u{1b}[31m";
+
+    fn rendered_symbols(terminal: &Terminal<ratatui::backend::TestBackend>) -> String {
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect()
+    }
+
+    fn assert_no_terminal_escapes(rendered: &str, what: &str) {
+        assert!(
+            !rendered.contains('\u{1b}'),
+            "{what}: an ESC byte reached the frame buffer, which crossterm writes verbatim to the real terminal"
+        );
+        assert!(
+            !rendered.contains("52;c;cm0gLXJmIC8="),
+            "{what}: the OSC 52 clipboard payload survived"
+        );
+        assert!(
+            !rendered.contains("[2J"),
+            "{what}: the screen-clear CSI survived"
+        );
+    }
+
+    /// Every externally-sourced string in the transcript — streamed provider
+    /// chunks, tool/system message text, and tool-cell summary/output rows —
+    /// used to reach the frame buffer verbatim: `Paragraph` only skips
+    /// zero-width graphemes and `unicode-width` scores ESC as one column, so
+    /// crossterm printed the escape to the operator's terminal.
+    #[test]
+    fn transcript_frame_strips_model_and_tool_escape_sequences() {
+        use ratatui::backend::TestBackend;
+
+        let chat_messages = vec![
+            ChatMessage {
+                role: ChatRole::Assistant,
+                text: format!("assistant {ESCAPE_PAYLOAD}reply"),
+            },
+            ChatMessage {
+                role: ChatRole::Tool,
+                text: format!("tool {ESCAPE_PAYLOAD}result"),
+            },
+            ChatMessage {
+                role: ChatRole::System,
+                text: format!("system {ESCAPE_PAYLOAD}notice"),
+            },
+        ];
+        let tool_cells = vec![ToolCell {
+            call_id: "call-1".to_string(),
+            name: "run_command".to_string(),
+            summary: format!("echo {ESCAPE_PAYLOAD}safe"),
+            state: crate::tui::transcript_cell::TranscriptCellState::Complete,
+            output_preview: compact_tool_output_preview(&format!("out {ESCAPE_PAYLOAD}ok")),
+        }];
+        let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
+        let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
+        let ctx = FrameCtx {
+            model_name: "fixture-local-model:latest",
+            statusline: &statusline_cfg,
+            provider_name: "ollama",
+            git_branch: None,
+            total_input_tokens: 10,
+            total_output_tokens: 5,
+            turn_count: 1,
+            context_percent: 1,
+            chat_messages: &chat_messages,
+            tool_cells: &tool_cells,
+            is_loading: true,
+            stream_start: None,
+            stream_buffer: &stream_buffer,
+            spinner_char: "⠋",
+            loading_verb: "Reasoning",
+            scroll_offset: 0,
+            access_mode: crate::design_system::AccessMode::Local,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            mode: InteractionMode::Chat,
+            effort_label: "Medium",
+            sandbox_type: None,
+            cost_str: "$0.00".to_string(),
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(120, 60)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                draw_turn_chrome(frame, &ctx);
+            })
+            .expect("draw");
+
+        let rendered = rendered_symbols(&terminal);
+        assert_no_terminal_escapes(&rendered, "transcript frame");
+        assert!(
+            rendered.contains("streaming") && rendered.contains("tokens"),
+            "streamed text must still be shown: {rendered:?}"
+        );
+    }
+
+    /// The approval and elicitation modals composite an overlay over the chrome;
+    /// both the styled path (diff review) and the plain-text path (every other
+    /// `InteractiveView`) painted server-supplied text straight into the buffer.
+    #[test]
+    fn overlay_frame_strips_escape_sequences_from_both_render_paths() {
+        use crate::tui::widgets::diff_review::{DiffReviewView, FileDiff};
+        use ratatui::backend::TestBackend;
+
+        let chat_messages: Vec<ChatMessage> = Vec::new();
+        let tool_cells: Vec<ToolCell> = Vec::new();
+        let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
+        let ctx = FrameCtx {
+            model_name: "fixture-local-model:latest",
+            statusline: &statusline_cfg,
+            provider_name: "ollama",
+            git_branch: None,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            turn_count: 0,
+            context_percent: 0,
+            chat_messages: &chat_messages,
+            tool_cells: &tool_cells,
+            is_loading: false,
+            stream_start: None,
+            stream_buffer: "",
+            spinner_char: "⠋",
+            loading_verb: "Reasoning",
+            scroll_offset: 0,
+            access_mode: crate::design_system::AccessMode::Local,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            mode: InteractionMode::Chat,
+            effort_label: "Medium",
+            sandbox_type: None,
+            cost_str: "$0.00".to_string(),
+        };
+
+        let diff_review = DiffReviewView::new(vec![FileDiff::new(
+            "src/main.rs",
+            vec![format!("+ let ok = {ESCAPE_PAYLOAD}true;")],
+            1,
+            0,
+        )]);
+        let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                let chat_area = draw_turn_chrome(frame, &ctx);
+                render_overlay(frame, chat_area, &diff_review, 0);
+            })
+            .expect("draw");
+        assert_no_terminal_escapes(&rendered_symbols(&terminal), "diff review overlay");
+
+        let mut elicitation =
+            crate::tui::widgets::elicitation_overlay::ElicitationOverlayState::default();
+        elicitation.open(
+            format!("evil{ESCAPE_PAYLOAD}server"),
+            crate::mcp::elicitation::ElicitationRequest {
+                message: format!("Approve {ESCAPE_PAYLOAD}this"),
+                requested_schema: serde_json::json!({
+                    "properties": {"note": {"type": "string", "default": ESCAPE_PAYLOAD}}
+                }),
+                mode: crate::mcp::elicitation::ElicitationMode::Form,
+                url: None,
+                elicitation_id: None,
+            },
+        );
+        terminal
+            .draw(|frame| {
+                let chat_area = draw_turn_chrome(frame, &ctx);
+                render_overlay(frame, chat_area, &elicitation, 0);
+            })
+            .expect("draw");
+        assert_no_terminal_escapes(&rendered_symbols(&terminal), "elicitation overlay");
+    }
+
+    /// A tool-approval request carries the model's own command line and diff
+    /// hunks; the overlay painted them verbatim right above the y/n prompt.
+    #[test]
+    fn approval_modal_strips_escape_sequences_from_summary_and_detail() {
+        use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
+        use ratatui::backend::TestBackend;
+
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: "rm -rf /".to_string(),
+            },
+            format!("Allow run_command {ESCAPE_PAYLOAD}(safe)?"),
+            vec![format!("$ rm -rf / {ESCAPE_PAYLOAD}--dry-run")],
+        );
+
+        let overlay = approval_overlay_for(&request);
+
+        let mut terminal = Terminal::new(TestBackend::new(120, 30)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                overlay.render_into(frame, frame.area());
+            })
+            .expect("draw");
+        assert_no_terminal_escapes(&rendered_symbols(&terminal), "approval overlay");
+    }
+
+    #[test]
+    fn pasted_text_cannot_carry_escapes_into_the_composer() {
+        let mut app = minimal_app();
+        handle_paste_text(&mut app, &format!("git {ESCAPE_PAYLOAD}push"));
+
+        assert_eq!(app.input, "git push");
+        assert_eq!(app.cursor, app.input.len());
+    }
+
+    /// The header and status bar are chrome, but their fields are not ours:
+    /// the model id comes from a config file the agent can write, and the
+    /// branch name from the checkout. Both were painted verbatim.
+    #[test]
+    fn chrome_frame_strips_escapes_from_header_and_status_bar() {
+        use ratatui::backend::TestBackend;
+
+        let model_name = format!("local{ESCAPE_PAYLOAD}model");
+        let branch = format!("feature{ESCAPE_PAYLOAD}main");
+        let chat_messages: Vec<ChatMessage> = Vec::new();
+        let tool_cells: Vec<ToolCell> = Vec::new();
+        let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig {
+            show_model: true,
+            show_tokens: true,
+            show_cost: true,
+            show_branch: true,
+            show_mode: true,
+        };
+        let ctx = FrameCtx {
+            model_name: &model_name,
+            statusline: &statusline_cfg,
+            provider_name: "ollama",
+            git_branch: Some(&branch),
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            turn_count: 0,
+            context_percent: 0,
+            chat_messages: &chat_messages,
+            tool_cells: &tool_cells,
+            is_loading: true,
+            stream_start: None,
+            stream_buffer: "",
+            spinner_char: "⠋",
+            loading_verb: "Reasoning",
+            scroll_offset: 0,
+            access_mode: crate::design_system::AccessMode::Local,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            mode: InteractionMode::Chat,
+            effort_label: "Medium",
+            sandbox_type: None,
+            cost_str: "$0.00".to_string(),
+        };
+
+        let mut terminal = Terminal::new(TestBackend::new(200, 40)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                draw_turn_chrome(frame, &ctx);
+            })
+            .expect("draw");
+
+        let rendered = rendered_symbols(&terminal);
+        assert_no_terminal_escapes(&rendered, "header and status bar");
+        assert!(
+            rendered.contains("localmodel"),
+            "the model label must still be shown: {rendered:?}"
+        );
+    }
+
+    /// The composer is repainted every tick from `app.input`, which is not
+    /// only keystrokes: paste and the `/continue-with-*` draft both write to
+    /// it, so the paint itself is the gate.
+    #[test]
+    fn composer_and_fallback_banner_frames_strip_escapes() {
+        use ratatui::backend::TestBackend;
+
+        let mut app = minimal_app();
+        app.input = format!("send {ESCAPE_PAYLOAD}this");
+        app.cursor = app.input.len();
+        *app.fallback_banner.lock().expect("banner slot") = Some(FallbackBanner {
+            from: format!("primary{ESCAPE_PAYLOAD}model"),
+            to: format!("backup{ESCAPE_PAYLOAD}model"),
+            reason: format!("provider said {ESCAPE_PAYLOAD}overloaded"),
+            shown_at: Instant::now(),
+        });
+
+        let mut terminal = Terminal::new(TestBackend::new(200, 20)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                let area = frame.area();
+                render_input(
+                    frame,
+                    Rect {
+                        x: 0,
+                        y: 0,
+                        width: area.width,
+                        height: 3,
+                    },
+                    &app,
+                );
+                render_fallback_banner(
+                    frame,
+                    Rect {
+                        x: 0,
+                        y: 4,
+                        width: area.width,
+                        height: 3,
+                    },
+                    &app,
+                );
+            })
+            .expect("draw");
+
+        let rendered = rendered_symbols(&terminal);
+        assert_no_terminal_escapes(&rendered, "composer and fallback banner");
+        assert!(
+            rendered.contains("send this"),
+            "the composed text must still be shown: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("Falling back"),
+            "the fallback banner must still be shown: {rendered:?}"
         );
     }
 }

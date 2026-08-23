@@ -1,3 +1,4 @@
+use crate::features::terminal::session_manager::{validate_env_key, validate_env_value};
 use crate::features::terminal::{
     detect_available_shells, get_default_shell, SessionManager, ShellInfo, ShellType, TerminalAI,
 };
@@ -688,6 +689,9 @@ pub async fn terminal_set_env(
     value: String,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
+    validate_env_key(&key).map_err(|e| e.to_string())?;
+    validate_env_value(&value).map_err(|e| e.to_string())?;
+
     tracing::info!(
         "Setting environment variable {} in session {}",
         key,
@@ -709,6 +713,8 @@ pub async fn terminal_get_env(
     key: String,
     state: State<'_, SessionManager>,
 ) -> Result<Option<String>, String> {
+    validate_env_key(&key).map_err(|e| e.to_string())?;
+
     tracing::debug!(
         "Getting environment variable {} from session {}",
         key,
@@ -742,6 +748,8 @@ pub async fn terminal_unset_env(
     key: String,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
+    validate_env_key(&key).map_err(|e| e.to_string())?;
+
     tracing::info!(
         "Unsetting environment variable {} in session {}",
         key,

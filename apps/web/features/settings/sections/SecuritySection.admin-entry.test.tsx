@@ -57,21 +57,9 @@ beforeEach(() => {
   service.get2FAStatus.mockResolvedValue({ data: { enabled: false, backupCodesRemaining: 0 } });
 });
 
-describe('SecuritySection · admin console entry point', () => {
-  it.each([['admin'], ['owner']])(
-    'gives a %s an inbound link to /admin from the settings shell',
-    (role) => {
-      clerk.user = { publicMetadata: { role } };
-      render(<SecuritySection />);
-
-      const link = adminConsoleLink();
-      expect(link).not.toBeNull();
-      expect(link?.getAttribute('href')).toBe('/admin');
-    },
-  );
-
-  it.each([['member'], ['viewer'], ['ADMIN'], ['']])(
-    'renders no admin entry point for role %s',
+describe('SecuritySection · operator console is not advertised to customers', () => {
+  it.each([['admin'], ['owner'], ['member'], ['viewer'], ['ADMIN'], ['']])(
+    'renders no inbound /admin link for role %s',
     (role) => {
       clerk.user = { publicMetadata: { role } };
       render(<SecuritySection />);
@@ -83,14 +71,6 @@ describe('SecuritySection · admin console entry point', () => {
 
   it('renders no admin entry point when the user has no role metadata', () => {
     clerk.user = { publicMetadata: {} };
-    render(<SecuritySection />);
-
-    expect(screen.queryByTestId('admin-console-entry')).toBeNull();
-  });
-
-  it('does not flash the entry point before Clerk has loaded the user', () => {
-    clerk.isLoaded = false;
-    clerk.user = { publicMetadata: { role: 'admin' } };
     render(<SecuritySection />);
 
     expect(screen.queryByTestId('admin-console-entry')).toBeNull();

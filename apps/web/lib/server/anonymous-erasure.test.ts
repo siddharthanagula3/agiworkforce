@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
-  requireAdmin: vi.fn(async () => ({ userId: 'admin_1' })),
+  requirePlatformAdmin: vi.fn(async () => ({ userId: 'admin_1' })),
   logSecurityEvent: vi.fn(async (_event: { details: Record<string, unknown> }) => undefined),
 }));
 
@@ -15,7 +15,8 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/auth-guards', () => ({
-  requireAdmin: (...args: Parameters<typeof mocks.requireAdmin>) => mocks.requireAdmin(...args),
+  requirePlatformAdmin: (...args: Parameters<typeof mocks.requirePlatformAdmin>) =>
+    mocks.requirePlatformAdmin(...args),
 }));
 vi.mock('@/lib/security-audit', () => ({
   getClientIp: () => '203.0.113.10',
@@ -60,7 +61,7 @@ function deleteStatements(statements: Statement[]): Statement[] {
 describe('anonymous subject erasure', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireAdmin.mockResolvedValue({ userId: 'admin_1' });
+    mocks.requirePlatformAdmin.mockResolvedValue({ userId: 'admin_1' });
   });
 
   it('covers every table that holds an anonymous subject with no user id', () => {
@@ -145,7 +146,7 @@ describe('anonymous subject erasure', () => {
 describe('POST /api/admin/privacy/erasures', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requireAdmin.mockResolvedValue({ userId: 'admin_1' });
+    mocks.requirePlatformAdmin.mockResolvedValue({ userId: 'admin_1' });
   });
 
   function erasureRequest(body: unknown): NextRequest {
@@ -176,15 +177,15 @@ describe('POST /api/admin/privacy/erasures', () => {
     expect(JSON.stringify(audited)).not.toContain(NORMALIZED_EMAIL);
   });
 
-  it('refuses a non-admin caller before touching any row', async () => {
+  it('refuses a caller who is not a platform operator before touching any row', async () => {
     const statements = captureStatements();
-    mocks.requireAdmin.mockRejectedValue(createError.forbidden('Admin privileges required'));
+    mocks.requirePlatformAdmin.mockRejectedValue(createError.notFound('Not found.'));
 
     const response = await eraseAnonymousSubject(
       erasureRequest({ email: SUBJECT_EMAIL, reason: 'no' }),
     );
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     expect(deleteStatements(statements)).toHaveLength(0);
   });
 

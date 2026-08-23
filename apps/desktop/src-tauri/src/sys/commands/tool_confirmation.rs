@@ -34,6 +34,11 @@ use tracing::{debug, info, warn};
 /// Migration v63's purge list covers the original (2026-05-19) entries; the
 /// `fix_f6_never_rememberable_alignment_tests` module records which entries
 /// are additionally covered read-side only.
+///
+/// The list also gates the two other standing grants — a session approval
+/// ([`ToolConfirmationState::is_session_approved`]) and `auto_approve_all`
+/// (see [`may_stand_on_a_prior_approval`]) — so nothing a user clicked
+/// earlier, however wide, can answer for these tools.
 pub const NEVER_REMEMBERABLE: &[&str] = &[
     // Privileged-mode transitions — flipping these silently is the
     // canonical LITL bypass.
@@ -63,6 +68,15 @@ pub const NEVER_REMEMBERABLE: &[&str] = &[
     "git_push",
     "cloud_upload",
     "db_execute",
+    // CLAUDE-SECURITY F2: the whole behaviour of these tools is the script the
+    // caller wrote, so a remembered "always allow" would hand every later
+    // injected script a standing channel into whatever page the browser is
+    // signed in to, with the content screen as the only remaining guard. All
+    // three evaluate a caller-supplied body in the page's main world, so the
+    // grant has to be refused for the capability, not for one tool name.
+    "browser_execute_async_js",
+    "browser_evaluate",
+    "browser_execute_in_frame",
 ];
 
 pub const FOLDER_ACCESS_TOOL_NAME: &str = "folder_access";
@@ -82,6 +96,21 @@ struct PendingConfirmation {
 /// Settings → Connectors, which `enforce_mcp_connector_permission` reads.
 pub fn is_tool_remember_eligible(tool_name: &str) -> bool {
     !tool_name.starts_with("mcp__") && !NEVER_REMEMBERABLE.contains(&tool_name)
+}
+
+/// Returns `true` when an approval given earlier may answer for this call.
+///
+/// The three standing grants — a remembered choice, a session approval, and
+/// `auto_approve_all` — differ only in how long they last, so
+/// [`NEVER_REMEMBERABLE`] governs all three. `auto_approve_all` is the widest
+/// of them and it is not opt-in per tool: selecting Autopilot turns it on for
+/// everything (`setAgentMode` in the desktop settings store), which is how a
+/// tool whose entire behaviour is the argument the planner wrote this
+/// time — `browser_execute_async_js`, `db_execute`, `terminal_execute` — used
+/// to reach its sink with no prompt at all. Autopilot still skips the dialog
+/// for every other tool.
+pub fn may_stand_on_a_prior_approval(tool_name: &str) -> bool {
+    is_tool_remember_eligible(tool_name)
 }
 
 /// `settings_v2` key used to persist [`ToolConfirmationState::agent_mode`]
@@ -527,13 +556,27 @@ impl ToolConfirmationState {
         }
     }
 
-    /// Check if a tool has been approved for this session
+    /// Check if a tool has been approved for this session.
+    ///
+    /// A [`NEVER_REMEMBERABLE`] tool is never session-approved, whatever the
+    /// set holds: a session grant is a standing approval with a shorter life,
+    /// so honouring one for `db_execute` or `browser_execute_async_js` would
+    /// give every later injected parameter the same free pass that
+    /// [`Self::get_remembered_choice`] refuses to give it.
     pub fn is_session_approved(&self, tool_name: &str) -> bool {
-        self.session_approved_tools.lock().contains(tool_name)
+        is_tool_remember_eligible(tool_name)
+            && self.session_approved_tools.lock().contains(tool_name)
     }
 
     /// Add a tool to the session-approved set
     pub fn approve_for_session(&self, tool_name: &str) {
+        if !is_tool_remember_eligible(tool_name) {
+            warn!(
+                "[ToolConfirmation] refusing a session-scoped approval for '{}': it must prompt on every call",
+                tool_name
+            );
+            return;
+        }
         self.session_approved_tools
             .lock()
             .insert(tool_name.to_string());
@@ -1625,7 +1668,7 @@ pub async fn request_tool_confirmation<R: tauri::Runtime>(
     enforce_agent_mode_gate(app_handle, state, &tool_name)?;
 
     // Global auto-approve bypass — skip all dialogs when trust-all is enabled
-    if state.is_auto_approve_all() {
+    if state.is_auto_approve_all() && may_stand_on_a_prior_approval(&tool_name) {
         debug!(
             "[ToolConfirmation] Auto-approve-all active, skipping dialog for '{}'",
             tool_name
@@ -1733,7 +1776,7 @@ pub async fn request_tool_confirmation_no_mode_gate(
     let tool_name = request.tool_name.clone();
 
     // Global auto-approve bypass
-    if state.is_auto_approve_all() {
+    if state.is_auto_approve_all() && may_stand_on_a_prior_approval(&tool_name) {
         debug!(
             "[ToolConfirmation] Auto-approve-all active, skipping dialog for '{}'",
             tool_name
@@ -2418,18 +2461,31 @@ mod tests {
         let state = ToolConfirmationState::new();
 
         // Initially no session approvals
-        assert!(!state.is_session_approved("file_write"));
+        assert!(!state.is_session_approved("file_read"));
 
         // Approve for session
-        state.approve_for_session("file_write");
-        assert!(state.is_session_approved("file_write"));
+        state.approve_for_session("file_read");
+        assert!(state.is_session_approved("file_read"));
 
         // Other tools still not approved
         assert!(!state.is_session_approved("code_execute"));
 
         // Clear session approvals
         state.clear_session_approvals();
-        assert!(!state.is_session_approved("file_write"));
+        assert!(!state.is_session_approved("file_read"));
+    }
+
+    #[test]
+    fn session_approval_cannot_stand_in_for_a_never_rememberable_tool() {
+        let state = ToolConfirmationState::new();
+
+        for tool in NEVER_REMEMBERABLE {
+            state.approve_for_session(tool);
+            assert!(
+                !state.is_session_approved(tool),
+                "'{tool}' must prompt on every call, and a session grant is a standing approval"
+            );
+        }
     }
 
     #[test]
@@ -2637,6 +2693,9 @@ mod fix_f6_never_rememberable_alignment_tests {
         "git_push",
         "cloud_upload",
         "db_execute",
+        "browser_execute_async_js",
+        "browser_evaluate",
+        "browser_execute_in_frame",
     ];
 
     /// The subset that migration v63 deletes from `remembered_tool_choices`

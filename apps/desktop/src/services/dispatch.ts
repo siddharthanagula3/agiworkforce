@@ -1,4 +1,3 @@
-
 import { invoke } from '../lib/tauri-mock';
 
 export const DISPATCH_HMAC_REQUIRED_AFTER = '2026-05-26T00:00:00.000Z';
@@ -25,6 +24,7 @@ export interface DispatchListenerCallbacks {
   onVersionMismatch?: (mobileVersion: string, minRequired: string) => void;
   onUnsignedTransitional?: () => void;
   onKeyRotated?: (newKeyHex: string) => void;
+  onProtocolVersionUnsupported?: () => void;
 }
 
 let _sessionActive = false;
@@ -103,17 +103,21 @@ export function setDispatchCallbacks(callbacks: DispatchListenerCallbacks): void
  * Initialise the desktop dispatch session key.
  *
  * Called from the connection store when `peer_ready` metadata contains a
- * `dispatchSalt`. The pairing code the desktop generated and the salt the
- * mobile generated together feed HKDF-SHA-256 to derive the shared key.
+ * `dispatchSalt`. The keying material is `pairingSecret` — 32 random bytes
+ * this desktop generated and published only in the QR / pairing-link payload,
+ * never to the signaling relay. The relay-visible pairing code and salt are
+ * mixed in to bind the key to one session but are not sufficient to derive it.
  *
  * @param pairingCode - The 8+ char pairing code shared between devices.
  * @param dispatchSalt - Hex salt from `peer_ready` metadata.
+ * @param pairingSecret - 64-char hex out-of-band secret from the QR payload.
  * @param mobileVersion - Optional mobile app version string for mismatch check.
  * @returns hex-encoded 64-char derived key (diagnostic only; do not persist).
  */
 export async function initDispatchSession(
   pairingCode: string,
   dispatchSalt: string,
+  pairingSecret: string,
   mobileVersion?: string,
 ): Promise<string> {
   if (mobileVersion && !isMobileVersionSufficient(mobileVersion)) {
@@ -138,6 +142,7 @@ export async function initDispatchSession(
       const keyHex = await invoke<string>('dispatch_hmac_init', {
         pairingCode,
         sessionSalt: dispatchSalt,
+        pairingSecret,
       });
       if (setupGeneration !== _sessionLifecycleGeneration) {
         throw new DispatchSessionSupersededError();
@@ -204,6 +209,15 @@ export async function verifyInbound(
       return { ok: false, reason };
     }
 
+    if (reason === 'update_required') {
+      console.error(
+        '[dispatch] Rejecting envelope from a peer on an older dispatch protocol. ' +
+          'Both apps must be updated before pairing can be secured.',
+      );
+      _callbacks.onProtocolVersionUnsupported?.();
+      return { ok: false, reason };
+    }
+
     return { ok: false, reason };
   }
 
@@ -251,11 +265,13 @@ export async function signOutbound(payload: unknown, msgType: string): Promise<s
  * Retries up to 3 times with exponential backoff on failure.
  *
  * @param pairingCode - The current pairing code.
+ * @param pairingSecret - The out-of-band secret from the active QR payload.
  * @param rotateKeyRequest - A function that calls the cloud key-rotation
  *   endpoint and returns `{ new_salt: string }`.
  */
 export async function rotateDispatchKey(
   pairingCode: string,
+  pairingSecret: string,
   rotateKeyRequest: () => Promise<{ new_salt: string }>,
 ): Promise<void> {
   const MAX_ATTEMPTS = 3;
@@ -279,7 +295,7 @@ export async function rotateDispatchKey(
         throw new DispatchSessionSupersededError();
       }
       expectedGenerationAfterOwnSetup = rotationGeneration + 1;
-      const keyHex = await initDispatchSession(pairingCode, new_salt);
+      const keyHex = await initDispatchSession(pairingCode, new_salt, pairingSecret);
       console.debug('[dispatch] key rotated successfully');
       _callbacks.onKeyRotated?.(keyHex);
       return;

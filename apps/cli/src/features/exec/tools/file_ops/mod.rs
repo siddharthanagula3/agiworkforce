@@ -11,6 +11,7 @@ use tokio::io::AsyncReadExt;
 
 use crate::permissions::FilePermissionOperation;
 use crate::terminal_style as ts;
+use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 use super::common::{
@@ -66,6 +67,32 @@ fn saved_denial_message(action: &str) -> String {
         "{} is denied by saved permissions. Use /permissions reset to clear.",
         action
     )
+}
+
+/// Render a diff preview for the terminal.
+///
+/// The hunks mix the file on disk with the model's proposed content, and this
+/// preview is printed immediately above an approval prompt, so an escape here
+/// could scroll or repaint what the operator believes they are approving.
+fn diff_preview_lines(diff: &str) -> Vec<String> {
+    diff.lines()
+        .map(|line| {
+            let line = sanitize_terminal_text(line);
+            if let Some(rest) = line.strip_prefix('+') {
+                format!("  {}{}", ts::addition("+"), ts::addition(rest))
+            } else if let Some(rest) = line.strip_prefix('-') {
+                format!("  {}{}", ts::deletion("-"), ts::deletion(rest))
+            } else {
+                format!("  {}", line.as_ref().dimmed())
+            }
+        })
+        .collect()
+}
+
+fn print_diff_preview(diff: &str) {
+    for line in diff_preview_lines(diff) {
+        eprintln!("{line}");
+    }
 }
 
 /// Reached when a mutating tool needs approval, there is no TUI/approval
@@ -496,24 +523,22 @@ pub(super) async fn execute_write_file(
                                 let diff = generate_simple_diff(&existing, content);
                                 eprintln!(
                                     "{}",
-                                    format!("  Diff for {} ({} lines):", path, line_count).dimmed()
+                                    format!(
+                                        "  Diff for {} ({} lines):",
+                                        sanitize_terminal_text(path),
+                                        line_count
+                                    )
+                                    .dimmed()
                                 );
-                                for line in diff.lines() {
-                                    if let Some(rest) = line.strip_prefix('+') {
-                                        eprintln!("  {}{}", ts::addition("+"), ts::addition(rest));
-                                    } else if let Some(rest) = line.strip_prefix('-') {
-                                        eprintln!("  {}{}", ts::deletion("-"), ts::deletion(rest));
-                                    } else {
-                                        eprintln!("  {}", line.dimmed());
-                                    }
-                                }
+                                print_diff_preview(&diff);
                             }
                             Err(message) => {
                                 eprintln!(
                                     "{}",
                                     format!(
                                         "  {message}\n  Will write {} lines to {}",
-                                        line_count, path
+                                        line_count,
+                                        sanitize_terminal_text(path)
                                     )
                                     .dimmed()
                                 );
@@ -522,7 +547,12 @@ pub(super) async fn execute_write_file(
                     } else {
                         eprintln!(
                             "{}",
-                            format!("  [new file] {} ({} lines)", path, line_count).dimmed()
+                            format!(
+                                "  [new file] {} ({} lines)",
+                                sanitize_terminal_text(path),
+                                line_count
+                            )
+                            .dimmed()
                         );
                     }
 
@@ -755,8 +785,16 @@ pub(super) async fn execute_edit_file(
                     if stdin_is_noninteractive() {
                         abort_noninteractive_auto_deny("edit_file", "Editing this file");
                     }
-                    eprintln!("  {} {}", ts::deletion("-"), ts::deletion(old_preview));
-                    eprintln!("  {} {}", ts::addition("+"), ts::addition(new_preview));
+                    eprintln!(
+                        "  {} {}",
+                        ts::deletion("-"),
+                        ts::deletion(sanitize_terminal_text(&old_preview))
+                    );
+                    eprintln!(
+                        "  {} {}",
+                        ts::addition("+"),
+                        ts::addition(sanitize_terminal_text(&new_preview))
+                    );
 
                     let confirmed = Confirm::new()
                         .with_prompt("Allow this edit?")
@@ -1050,17 +1088,14 @@ pub(super) async fn execute_multiedit(
                     }
                     eprintln!(
                         "{}",
-                        format!("  Diff for {} ({} edits):", path, edits.len()).dimmed()
+                        format!(
+                            "  Diff for {} ({} edits):",
+                            sanitize_terminal_text(&path),
+                            edits.len()
+                        )
+                        .dimmed()
                     );
-                    for line in diff.lines() {
-                        if let Some(rest) = line.strip_prefix('+') {
-                            eprintln!("  {}{}", ts::addition("+"), ts::addition(rest));
-                        } else if let Some(rest) = line.strip_prefix('-') {
-                            eprintln!("  {}{}", ts::deletion("-"), ts::deletion(rest));
-                        } else {
-                            eprintln!("  {}", line.dimmed());
-                        }
-                    }
+                    print_diff_preview(&diff);
 
                     let confirmed = Confirm::new()
                         .with_prompt("Allow these edits?")
@@ -1224,6 +1259,31 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
 mod tests {
     use super::*;
     use std::path::Path;
+
+    /// The preview is the operator's only look at the change before the
+    /// confirm prompt; a hunk carrying OSC/CSI bytes used to reach the
+    /// terminal verbatim and could repaint that prompt.
+    #[test]
+    fn diff_preview_strips_escape_sequences_from_hunks() {
+        let payload = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2J\u{1b}[1;1H";
+        let rendered = diff_preview_lines(&format!(
+            "+ added {payload}line\n- removed {payload}line\n  ctx"
+        ))
+        .join("\n");
+
+        assert!(
+            !rendered.contains("52;c;cm0gLXJmIC8="),
+            "OSC 52 payload survived: {rendered:?}"
+        );
+        assert!(
+            !rendered.contains("[2J"),
+            "screen-clear CSI survived: {rendered:?}"
+        );
+        assert!(
+            rendered.contains("added line") && rendered.contains("removed line"),
+            "diff text was mangled: {rendered:?}"
+        );
+    }
 
     #[test]
     fn multiedit_applies_all_edits_in_memory_before_write() {

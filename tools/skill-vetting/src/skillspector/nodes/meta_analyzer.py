@@ -224,6 +224,10 @@ def _format_findings_for_prompt(findings: list[Finding]) -> str:
 
 _NO_LLM_CONFIDENCE_THRESHOLD = 0.4
 _HIGH_SEVERITY_PASS_THROUGH = frozenset({"CRITICAL", "HIGH"})
+# The LLM verdict is reached by the untrusted skill text, so it may only
+# downweight these severities, never delete them. LOW is excluded: the noise
+# cost of retaining every unconfirmed LOW outweighs what an injection wins.
+_UNCONFIRMED_RETAINED_SEVERITIES = frozenset({"CRITICAL", "HIGH", "MEDIUM"})
 _CODE_EXAMPLE_DOWNWEIGHT = 0.5
 _UNCONFIRMED_DOWNWEIGHT = 0.5
 # A downweighted finding must stay above zero: _compute_risk_score skips
@@ -370,13 +374,13 @@ class LLMMetaAnalyzer(LLMAnalyzerBase):
         findings: list[Finding],
         batch_results: list[tuple[Batch, list[dict[str, object]]]],
     ) -> list[Finding]:
-        """Enrich LLM-confirmed findings; drop unconfirmed ones below HIGH severity.
+        """Enrich LLM-confirmed findings; drop unconfirmed LOW-severity ones.
 
         The prompt embeds the untrusted skill file, so the model's verdict may be
-        attacker-influenced. For CRITICAL and HIGH findings the verdict is therefore
-        advisory only — an unconfirmed finding is kept at reduced confidence rather
-        than deleted, matching the ``--no-llm`` heuristic. MEDIUM and below are still
-        filtered out when unconfirmed.
+        attacker-influenced. For CRITICAL, HIGH, and MEDIUM findings the verdict is
+        therefore advisory only — an unconfirmed finding is kept at reduced
+        confidence rather than deleted, matching the ``--no-llm`` heuristic. Only
+        LOW severity is filtered out when unconfirmed.
 
         Uses granular ``(file, rule_id, start_line, end_line)`` keying when the
         LLM provides a ``start_line``, so multiple findings with the same
@@ -434,7 +438,7 @@ class LLMMetaAnalyzer(LLMAnalyzerBase):
                 expl, rem, conf = confirmed_by_start[start_key]
             elif coarse_key in confirmed_coarse:
                 expl, rem, conf = confirmed_coarse[coarse_key]
-            elif f.severity.upper() in _HIGH_SEVERITY_PASS_THROUGH:
+            elif f.severity.upper() in _UNCONFIRMED_RETAINED_SEVERITIES:
                 retained_unconfirmed += 1
                 result.append(
                     _with_defaults(
@@ -471,7 +475,7 @@ class LLMMetaAnalyzer(LLMAnalyzerBase):
             )
         if retained_unconfirmed:
             logger.info(
-                "Retained %d unconfirmed CRITICAL/HIGH finding(s) at reduced confidence",
+                "Retained %d unconfirmed CRITICAL/HIGH/MEDIUM finding(s) at reduced confidence",
                 retained_unconfirmed,
             )
         return result

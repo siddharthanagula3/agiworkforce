@@ -12,12 +12,20 @@
 //! use crate::data::db::encryption;
 //! use crate::sys::security::machine_key::{self, KeyPurpose};
 //!
-//! let key = machine_key::derive_key(KeyPurpose::DatabaseEncryption);
+//! let key = machine_key::try_derive_key(KeyPurpose::DatabaseEncryption)?;
 //! let conn = encryption::open_encrypted_connection("/path/to/db", &key)?;
 //! ```
 
 use rusqlite::{Connection, OpenFlags};
 use std::path::Path;
+use std::sync::Mutex;
+
+/// Serializes the rekey of every auxiliary database.
+///
+/// Two threads opening the same store on first launch would otherwise back up,
+/// rekey, and restore the same file group concurrently and corrupt it. Rekeys
+/// happen once per file, so one lock for all of them costs nothing.
+static REKEY_LOCK: Mutex<()> = Mutex::new(());
 
 /// The formats that can be proven without writing to the database file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -330,7 +338,7 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
 /// etc.) so they never open plaintext. It mirrors the main-DB bootstrap in
 /// `lib.rs`:
 ///
-/// 1. Derives the per-machine `DatabaseEncryption` key.
+/// 1. Derives the per-install `DatabaseEncryption` key.
 /// 2. Opens the connection with the encryption key applied.
 /// 3. Only if that keyed open fails for an existing file, attempts the legacy
 ///    plaintext-to-SQLCipher migration and retries the keyed open. Migration
@@ -343,18 +351,206 @@ pub fn migrate_to_encrypted(db_path: &str, key: &[u8]) -> Result<(), String> {
 /// * `path` - Filesystem path to the SQLite database file
 ///
 /// # Errors
-/// Returns an error string if the connection cannot be opened or the encryption
-/// key cannot be applied/verified.
+/// Returns an error string when no per-install key is available, when the
+/// connection cannot be opened, or when the encryption key cannot be
+/// applied/verified.
 pub fn open_keyed_connection(path: impl AsRef<std::path::Path>) -> Result<Connection, String> {
-    use crate::sys::security::{derive_key, KeyPurpose};
+    use crate::sys::security::machine_key::{self, KeyPurpose};
 
     // Accept &str / &Path / PathBuf uniformly; the lower-level helpers take &str.
     let path_ref = path.as_ref();
-    let path_str = path_ref.to_string_lossy();
+    let path_str = path_ref.to_string_lossy().to_string();
 
-    let key = derive_key(KeyPurpose::DatabaseEncryption);
+    // F5: fails closed. A key derived from machine identifiers alone is
+    // reproducible by any unprivileged local process, so an auxiliary database
+    // is never created or opened without the per-install secret.
+    let key = machine_key::try_derive_key(KeyPurpose::DatabaseEncryption)
+        .map_err(|error| format!("Encrypted database key unavailable: {error}"))?;
 
-    open_or_migrate_encrypted_connection(&path_str, &key).map_err(|error| error.to_string())
+    let open_error = match open_or_migrate_encrypted_connection(&path_str, &key) {
+        Ok(connection) => return Ok(connection),
+        Err(error) => error,
+    };
+
+    let label = format!("sqlcipher:{path_str}");
+    let _rekey_guard = REKEY_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    // Another thread may have finished rekeying this file while we waited.
+    if matches!(
+        inspect_database_format(path_ref, &key),
+        Ok(DatabaseFormat::Keyed)
+    ) {
+        return open_encrypted_connection(&path_str, &key);
+    }
+
+    for legacy in machine_key::legacy_machine_only_keys(KeyPurpose::DatabaseEncryption) {
+        if !matches!(
+            inspect_database_format(path_ref, &legacy),
+            Ok(DatabaseFormat::Keyed)
+        ) {
+            continue;
+        }
+
+        machine_key::record_machine_only_payload(&label);
+        tracing::info!("Rekeying {path_str} from the legacy machine-derived key");
+        rekey_encrypted_database(path_ref, &legacy, &key, &label)?;
+        machine_key::clear_machine_only_payload(&label);
+
+        return open_encrypted_connection(&path_str, &key);
+    }
+
+    Err(open_error.to_string())
+}
+
+fn database_file_group(path: &Path) -> Vec<std::path::PathBuf> {
+    let mut files = vec![path.to_path_buf()];
+    for suffix in ["-wal", "-shm"] {
+        let mut sidecar = path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        files.push(std::path::PathBuf::from(sidecar));
+    }
+    files
+}
+
+fn back_up_database_group(
+    path: &Path,
+    suffix: &str,
+) -> Result<Vec<(std::path::PathBuf, std::path::PathBuf)>, String> {
+    let mut backups = Vec::new();
+    for file in database_file_group(path) {
+        if !file.exists() {
+            continue;
+        }
+        let mut backup = file.as_os_str().to_os_string();
+        backup.push(suffix);
+        let backup = std::path::PathBuf::from(backup);
+        std::fs::copy(&file, &backup).map_err(|error| {
+            format!(
+                "Failed to back up {} before rekeying: {error}",
+                file.display()
+            )
+        })?;
+        backups.push((file, backup));
+    }
+    Ok(backups)
+}
+
+fn restore_database_group(path: &Path, backups: &[(std::path::PathBuf, std::path::PathBuf)]) {
+    // A partial rekey can leave journal sidecars the backup does not cover;
+    // restoring the main file next to them would corrupt the database.
+    for file in database_file_group(path) {
+        if backups.iter().any(|(original, _)| original == &file) {
+            continue;
+        }
+        let _ = std::fs::remove_file(&file);
+    }
+
+    for (file, backup) in backups {
+        if let Err(error) = std::fs::rename(backup, file) {
+            tracing::error!(
+                "Failed to restore {} from {} after a failed rekey: {error}",
+                file.display(),
+                backup.display()
+            );
+        }
+    }
+}
+
+/// Delete the pre-rekey copies.
+///
+/// A surviving backup is still readable under the publicly reproducible
+/// machine-only key, so a file that cannot be removed is truncated first and
+/// reported if even that fails.
+fn discard_database_backups(backups: &[(std::path::PathBuf, std::path::PathBuf)], label: &str) {
+    use crate::sys::security::machine_key;
+
+    for (_, backup) in backups {
+        if std::fs::remove_file(backup).is_ok() {
+            continue;
+        }
+
+        let truncated = std::fs::write(backup, b"").is_ok();
+        if std::fs::remove_file(backup).is_ok() {
+            continue;
+        }
+
+        if truncated {
+            tracing::warn!(
+                "Rekey succeeded and the backup at {} was emptied, but it could not be deleted",
+                backup.display()
+            );
+            continue;
+        }
+
+        machine_key::record_machine_only_payload(&format!("{label}.backup"));
+        tracing::error!(
+            "Rekey succeeded but the backup at {} could not be deleted or emptied; \
+             it stays readable under the legacy machine-derived key until it is removed",
+            backup.display()
+        );
+    }
+}
+
+/// Re-encrypt a database in place from `from_key` to `to_key`.
+///
+/// The whole file group is copied first and restored if anything fails, so a
+/// database is never left half-rekeyed or keyed by a value no longer stored.
+///
+/// Both the auxiliary stores here and the main database's startup key adoption
+/// in [`crate::data::db::key_management`] use this to retire a key an older
+/// build derived from machine identifiers alone.
+pub fn rekey_encrypted_database(
+    path: &Path,
+    from_key: &[u8],
+    to_key: &[u8],
+    label: &str,
+) -> Result<(), String> {
+    // A fixed backup name would let a second rekey of the same file overwrite
+    // the copy the first one still needs to restore from.
+    let suffix = format!(
+        ".machine-key-{}-{}.bak",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_nanos())
+            .unwrap_or_default()
+    );
+    let backups = back_up_database_group(path, &suffix)?;
+    let path_str = path.to_string_lossy().to_string();
+
+    let rekeyed = (|| -> Result<(), String> {
+        {
+            let connection = open_encrypted_connection(&path_str, from_key)?;
+            // [M24] The key is redacted from the error so it cannot reach logs.
+            connection
+                .execute_batch(&format!("PRAGMA rekey = \"x'{}'\";", hex::encode(to_key)))
+                .map_err(|_| {
+                    "Failed to rekey the encrypted database (key redacted from logs)".to_string()
+                })?;
+        }
+
+        match inspect_database_format(path, to_key) {
+            Ok(DatabaseFormat::Keyed) => Ok(()),
+            Ok(DatabaseFormat::Plaintext) => {
+                Err("Rekey left the database readable without a key".to_string())
+            }
+            Ok(DatabaseFormat::New) => Err("Rekey emptied the database".to_string()),
+            Err(error) => Err(error.to_string()),
+        }
+    })();
+
+    match rekeyed {
+        Ok(()) => {
+            discard_database_backups(&backups, label);
+            Ok(())
+        }
+        Err(error) => {
+            restore_database_group(path, &backups);
+            Err(format!("{error}; the database was restored unchanged"))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -613,5 +809,74 @@ mod tests {
         assert!(!db_path.with_extension("db-shm").exists());
         assert!(!db_path.with_extension("db.unencrypted.bak").exists());
         assert!(!db_path.with_extension("db.encrypting").exists());
+    }
+
+    /// F5: an auxiliary database keyed by an older build from machine
+    /// identifiers alone must be rekeyed to the per-install key on the next
+    /// open, and must stop opening under the publicly reproducible key.
+    #[test]
+    fn open_keyed_connection_rekeys_a_legacy_machine_keyed_database() {
+        use crate::sys::security::machine_key::{self, KeyPurpose};
+
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("legacy_machine_key.db");
+        let path = db_path.to_string_lossy().to_string();
+
+        let legacy_key = machine_key::legacy_machine_only_keys(KeyPurpose::DatabaseEncryption)
+            .first()
+            .copied()
+            .expect("a legacy candidate always exists");
+        let current_key: Vec<u8> = machine_key::try_derive_key(KeyPurpose::DatabaseEncryption)
+            .expect("install secret available in tests");
+        assert_ne!(legacy_key.as_slice(), current_key.as_slice());
+
+        {
+            let connection =
+                open_encrypted_connection(&path, &legacy_key).expect("create legacy database");
+            connection
+                .execute_batch(
+                    "CREATE TABLE memory (value TEXT NOT NULL);
+                     INSERT INTO memory (value) VALUES ('legacy-note');",
+                )
+                .expect("seed legacy database");
+        }
+
+        let connection = open_keyed_connection(&db_path).expect("adopt and rekey legacy database");
+        let value: String = connection
+            .query_row("SELECT value FROM memory", [], |row| row.get(0))
+            .expect("legacy row survives the rekey");
+        assert_eq!(value, "legacy-note");
+        drop(connection);
+
+        assert_eq!(
+            inspect_database_format(&db_path, &current_key).expect("inspect rekeyed database"),
+            DatabaseFormat::Keyed
+        );
+        assert!(
+            matches!(
+                inspect_database_format(&db_path, &legacy_key),
+                Err(DatabaseOpenError::EncryptedOrCorrupt { .. })
+            ),
+            "the machine-only key must no longer open the database"
+        );
+        assert!(!machine_key::machine_only_payloads().contains(&format!("sqlcipher:{path}")));
+        let leftovers: Vec<String> = std::fs::read_dir(temp_dir.path())
+            .expect("list the database directory")
+            .filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().to_string()))
+            .filter(|name| name.contains(".machine-key"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "a pre-rekey copy readable under the machine-only key survived: {leftovers:?}"
+        );
+
+        // Re-opening a database already under the per-install key must not
+        // touch it again.
+        let bytes_after_rekey = std::fs::read(&db_path).expect("snapshot rekeyed database");
+        drop(open_keyed_connection(&db_path).expect("reopen rekeyed database"));
+        assert_eq!(
+            std::fs::read(&db_path).expect("re-read rekeyed database"),
+            bytes_after_rekey
+        );
     }
 }

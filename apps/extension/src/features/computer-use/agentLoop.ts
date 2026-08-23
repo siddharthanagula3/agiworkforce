@@ -1,4 +1,3 @@
-
 import * as cdp from './cdpDriver';
 import {
   assertDestinationAllowlisted,
@@ -124,6 +123,18 @@ export class InjectionDetectedError extends Error {
   }
 }
 
+async function readGuardedPageContent(tabId: number, options: AgentLoopOptions): Promise<string> {
+  const content = await runOwnedOperation(options, () => cdp.getPageContent(tabId, options.signal));
+  const injectionHit = scanForInjection(content);
+  if (injectionHit) {
+    throw new InjectionDetectedError(
+      `Prompt injection detected in page content: ${injectionHit}. ` +
+        `Agent loop aborted for safety. Please review the page at the current URL.`,
+    );
+  }
+  return content;
+}
+
 async function executeTool(
   tabId: number,
   toolName: string,
@@ -223,18 +234,7 @@ async function executeTool(
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 2_000, signal: options.signal }),
       );
-      const content = await runOwnedOperation(options, () =>
-        cdp.getPageContent(tabId, options.signal),
-      );
-
-      const injectionHit = scanForInjection(content);
-      if (injectionHit && content.startsWith('SECURITY WARNING')) {
-        throw new InjectionDetectedError(
-          `Prompt injection detected in page content: ${injectionHit}. ` +
-            `Agent loop aborted for safety. Please review the page at the current URL.`,
-        );
-      }
-      return content;
+      return readGuardedPageContent(tabId, options);
     }
 
     case 'navigate': {
@@ -263,9 +263,7 @@ async function executeTool(
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 1_500, signal: options.signal }),
       );
-      const domContent = await runOwnedOperation(options, () =>
-        cdp.getPageContent(tabId, options.signal),
-      );
+      const domContent = await readGuardedPageContent(tabId, options);
       return (
         `Searching for: ${String(description)}\n\n` +
         `Current page DOM summary (use this to find the element):\n${domContent}`
@@ -306,7 +304,7 @@ export async function runAgentLoop(
     await runOwnedOperation(options, () => waitForStable(tabId, { signal: options.signal }));
     const [initialScreenshot, initialDom] = await Promise.all([
       runOwnedOperation(options, () => cdp.screenshot(tabId, options.signal)),
-      runOwnedOperation(options, () => cdp.getPageContent(tabId, options.signal)),
+      readGuardedPageContent(tabId, options),
     ]);
 
     const systemMessage: AgentMessage = {

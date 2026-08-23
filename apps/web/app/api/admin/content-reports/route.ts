@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -59,7 +59,7 @@ async function handleReadQueue(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'admin-security');
   if (rateLimitResponse) return rateLimitResponse as NextResponse;
 
-  await requireAdmin(request);
+  await requirePlatformAdmin(request);
 
   const statuses = parseStatuses(request.nextUrl.searchParams.get('status'));
   const limit = parseLimit(request.nextUrl.searchParams.get('limit'));
@@ -86,7 +86,7 @@ async function handleReview(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'admin-security');
   if (rateLimitResponse) return rateLimitResponse as NextResponse;
 
-  const { userId: reviewerId } = await requireAdmin(request);
+  const { userId: reviewerId } = await requirePlatformAdmin(request);
 
   const body = await request.json().catch(() => null);
   const parsed = ReviewSchema.safeParse(body);

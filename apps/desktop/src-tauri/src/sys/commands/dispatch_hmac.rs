@@ -12,7 +12,8 @@
 //!
 //! 1. After signaling pairing, the frontend receives `dispatchSalt` from
 //!    the relay's `registered`/`peer_ready` event metadata. It calls
-//!    [`dispatch_hmac_init`] with the user's pairing code + that salt.
+//!    [`dispatch_hmac_init`] with the pairing code, that salt, and the
+//!    out-of-band pairing secret it published only in the QR payload.
 //! 2. Per incoming envelope: [`dispatch_hmac_verify`] returns `"signed"`,
 //!    `"unsigned_transitional"`, or an error string the caller should
 //!    surface to the user / drop the message on.
@@ -86,9 +87,11 @@ impl Default for DispatchHmacState {
 /// Derive + store the session key for the active Dispatch connection.
 ///
 /// `pairing_code` is the user-visible 8+ char pairing code shared between
-/// devices. `session_salt` is the random per-session salt the signaling
-/// relay sent in `dispatchSalt`. Both are needed so the desktop derives
-/// the same 32-byte key the mobile side derives.
+/// devices and `session_salt` is the random per-session salt the signaling
+/// relay sent in `dispatchSalt` — both are relay-visible and only bind the key
+/// to one session. `pairing_secret` is the 64-char hex of the 32 random bytes
+/// this desktop published solely in the QR payload; it is the keying material
+/// that keeps the relay from reproducing the session key.
 ///
 /// Returns the derived key as a 64-char hex string for diagnostic logging
 /// only; do not persist it.
@@ -97,8 +100,9 @@ pub fn dispatch_hmac_init(
     state: State<'_, DispatchHmacState>,
     pairing_code: String,
     session_salt: String,
+    pairing_secret: String,
 ) -> Result<String, String> {
-    let key = dispatch_hmac::derive_session_key(&pairing_code, &session_salt)
+    let key = dispatch_hmac::derive_session_key(&pairing_code, &session_salt, &pairing_secret)
         .map_err(|e| e.to_string())?;
     let mut inner = state
         .inner
@@ -193,6 +197,7 @@ fn verify_error_to_string(e: VerifyError) -> String {
         VerifyError::TimestampExpired(_) => "timestamp_expired".to_string(),
         VerifyError::NonceReplay => "nonce_replay".to_string(),
         VerifyError::HmacMismatch => "hmac_mismatch".to_string(),
+        VerifyError::ProtocolVersionUnsupported => "update_required".to_string(),
         VerifyError::InvalidEncoding(detail) => format!("invalid_encoding: {detail}"),
     }
 }
@@ -220,7 +225,8 @@ mod tests {
     fn init_and_get_key(state: &DispatchHmacState) -> [u8; 32] {
         // Mimic dispatch_hmac_init without the Tauri State wrapper — the inner
         // Mutex is the same.
-        let key = dispatch_hmac::derive_session_key("ABCD1234", "saltsalt").unwrap();
+        let key =
+            dispatch_hmac::derive_session_key("ABCD1234", "saltsalt", &"ab".repeat(32)).unwrap();
         let mut inner = state.inner.lock().unwrap();
         inner.session_key = Some(key);
         inner.cache = NonceCache::new();
@@ -301,6 +307,10 @@ mod tests {
         assert_eq!(
             verify_error_to_string(VerifyError::UnsignedTransitional),
             "unsigned_after_cutoff"
+        );
+        assert_eq!(
+            verify_error_to_string(VerifyError::ProtocolVersionUnsupported),
+            "update_required"
         );
     }
 }

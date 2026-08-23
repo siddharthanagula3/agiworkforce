@@ -5,6 +5,13 @@
 //! candidates rank first — far better than a plain substring filter (e.g. `mdl`
 //! matches `model`, and `/model` ranks above a description-only hit).
 
+/// Whole-string `to_lowercase` can turn one char into several (U+0130 lowercases
+/// to `i` + U+0307), so a lowercased char vector cannot be indexed with the same
+/// index as the original chars. Folding per char keeps the two 1:1.
+fn fold(c: char) -> char {
+    c.to_lowercase().next().unwrap_or(c)
+}
+
 /// Returns `Some(score)` (higher is better) when `query` fuzzy-matches
 /// `candidate`, or `None` when it doesn't. An empty query matches everything
 /// with a neutral score.
@@ -12,19 +19,18 @@ pub fn fuzzy_score(query: &str, candidate: &str) -> Option<i32> {
     if query.is_empty() {
         return Some(0);
     }
-    let q: Vec<char> = query.to_lowercase().chars().collect();
+    let q: Vec<char> = query.chars().map(fold).collect();
     let cand: Vec<char> = candidate.chars().collect();
-    let cand_lower: Vec<char> = candidate.to_lowercase().chars().collect();
 
     let mut qi = 0usize;
     let mut score = 0i32;
     let mut prev_match: Option<usize> = None;
 
-    for (ci, &ch) in cand_lower.iter().enumerate() {
+    for (ci, &ch) in cand.iter().enumerate() {
         if qi >= q.len() {
             break;
         }
-        if ch != q[qi] {
+        if fold(ch) != q[qi] {
             continue;
         }
         score += 1;
@@ -32,7 +38,7 @@ pub fn fuzzy_score(query: &str, candidate: &str) -> Option<i32> {
             score += 12; // start of string
         } else if !cand[ci - 1].is_alphanumeric() {
             score += 9; // word boundary (after space/-/_/etc.)
-        } else if cand[ci].is_uppercase() && cand[ci - 1].is_lowercase() {
+        } else if ch.is_uppercase() && cand[ci - 1].is_lowercase() {
             score += 5; // camelCase boundary
         }
         if prev_match == Some(ci.wrapping_sub(1)) {
@@ -88,5 +94,16 @@ mod tests {
             !scored.iter().any(|(_, s)| *s == "memory"),
             "non-match dropped"
         );
+    }
+
+    #[test]
+    fn expanding_lowercase_candidate_does_not_panic() {
+        // U+0130 lowercases to two chars, so a whole-string lowercase index used
+        // to walk past the end of the original char vec and panic the TUI.
+        assert!(fuzzy_score("ix", "\u{130}x").is_some());
+        assert!(fuzzy_score("x", "a\u{130}x").is_some());
+        assert!(fuzzy_score("zzz", "\u{130}\u{130}\u{130}z").is_none());
+        assert!(fuzzy_score("gpt", "\u{130}\u{130}gpt-image").is_some());
+        assert_eq!(fuzzy_score("i", "\u{130}"), fuzzy_score("i", "I"));
     }
 }

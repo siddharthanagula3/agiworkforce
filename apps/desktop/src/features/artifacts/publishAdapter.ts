@@ -21,11 +21,24 @@
 
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { writeTextFile, mkdir } from '@tauri-apps/plugin-fs';
+import { spreadsheetSafeExport } from '@agiworkforce/unified-chat';
 import { publishArtifact as corePublishArtifact } from '@agiworkforce/artifacts';
 import type { LocalPublishResult } from '@agiworkforce/artifacts';
 import type { PublishableArtifact } from '@agiworkforce/artifacts';
 
 export type { LocalPublishResult };
+
+// language is model-controlled and lands inside a filesystem path, so it is reduced to a
+// single plain extension token: it can neither escape the artifacts directory nor smuggle
+// a second extension ("data.csv") past the spreadsheet guard below
+function languageExtension(language: string | undefined): string {
+  return (
+    (language ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '') || 'txt'
+  );
+}
 
 function artifactTypeToExtension(type: string, language?: string): string {
   switch (type) {
@@ -45,7 +58,7 @@ function artifactTypeToExtension(type: string, language?: string): string {
     case 'image':
       return 'png';
     case 'code':
-      return language ?? 'txt';
+      return languageExtension(language);
     default:
       return 'txt';
   }
@@ -62,7 +75,10 @@ async function tauriLocalFileWriter(artifact: PublishableArtifact): Promise<stri
   const fileName = `${safeTitle}-${artifact.id}.${ext}`;
   const filePath = await join(artifactsDir, fileName);
 
-  await writeTextFile(filePath, artifact.content);
+  // artifact.language is model-controlled, so `code` publishes can name this file .csv and
+  // the success toast hands the user its path: neutralize before the bytes reach disk
+  const { body } = spreadsheetSafeExport(artifact.content, ext);
+  await writeTextFile(filePath, body);
 
   return `file://${filePath}`;
 }

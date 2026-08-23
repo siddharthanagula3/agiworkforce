@@ -538,6 +538,12 @@ impl ManagedAccessTokenState {
             generation: 0,
         }
     }
+
+    fn subject(&self) -> Option<String> {
+        self.identity
+            .as_ref()
+            .map(|identity| identity.subject.clone())
+    }
 }
 
 /// Native ownership proof captured when a Managed Cloud goal starts.
@@ -637,6 +643,17 @@ pub(crate) fn capture_managed_auth_boundary() -> Result<ManagedAuthBoundary, Str
         identity,
         generation: state.generation,
     })
+}
+
+/// Account subject (`sub`) proven by the access token that is currently
+/// installed. Authorization-sensitive scoping must derive the account from
+/// here rather than from a webview-supplied argument, so local data can only
+/// be pushed to, or pulled into, the account whose bearer token is used.
+pub fn current_account_subject() -> Option<String> {
+    ACCESS_TOKEN
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .subject()
 }
 
 /// Return the boundary inherited by the currently executing native goal.
@@ -1322,8 +1339,9 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 mod tests {
     use super::{
         build_device_authorization_request, delete_cloud_credential, load_cloud_credential,
-        normalize_device_user_code, store_cloud_credential, validate_api_base_url,
-        CloudCredentialVault, CreditBalanceResponse, OsCloudCredentialVault, UserProfile,
+        managed_auth_session_identity, normalize_device_user_code, store_cloud_credential,
+        validate_api_base_url, CloudCredentialVault, CreditBalanceResponse,
+        ManagedAccessTokenState, OsCloudCredentialVault, UserProfile,
         CLOUD_ACCESS_TOKEN_KEYRING_ACCOUNT, CLOUD_ACCESS_TOKEN_SECRET_KEY,
         CLOUD_REFRESH_TOKEN_KEYRING_ACCOUNT, CLOUD_REFRESH_TOKEN_SECRET_KEY,
     };
@@ -1697,5 +1715,24 @@ mod tests {
             }"#,
         );
         assert!(invalid.is_err());
+    }
+
+    #[test]
+    fn account_subject_comes_from_the_installed_token_claims() {
+        use base64::Engine;
+
+        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(serde_json::json!({ "sub": "account-a", "sid": "session-a" }).to_string());
+        let token = format!("header.{payload}.signature");
+        let identity =
+            managed_auth_session_identity(&token).expect("test token should carry a subject");
+        let signed_in = ManagedAccessTokenState {
+            token: Some(token),
+            identity: Some(identity),
+            generation: 1,
+        };
+
+        assert_eq!(signed_in.subject(), Some("account-a".to_string()));
+        assert_eq!(ManagedAccessTokenState::empty().subject(), None);
     }
 }

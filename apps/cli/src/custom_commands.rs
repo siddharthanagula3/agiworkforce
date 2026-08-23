@@ -5,8 +5,13 @@
 //! - `~/.agiworkforce/commands/**/*.md`
 //! - `~/.agiworkforce/prompts/claude/**/*.md` for commands imported from Claude Code
 //! - `.claude/commands/**/*.md` and `~/.claude/commands/**/*.md` for direct compatibility
+//!
+//! A command body is injected verbatim into the agent prompt, and project roots
+//! come from a possibly untrusted checkout, so user roots are searched first: a
+//! project-local file can never take over a name the user already defined
+//! globally.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +33,10 @@ impl CustomCommandSource {
             Self::UserClaude => "user .claude/commands",
         }
     }
+
+    fn is_project(self) -> bool {
+        matches!(self, Self::ProjectAgi | Self::ProjectClaude)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -46,8 +55,28 @@ struct CustomCommandRoot {
     source: CustomCommandSource,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ShadowedProjectCommand {
+    name: String,
+    ignored_path: PathBuf,
+    ignored_source: CustomCommandSource,
+    kept_path: PathBuf,
+    kept_source: CustomCommandSource,
+}
+
 pub(crate) fn discover_custom_slash_commands() -> Vec<CustomSlashCommand> {
-    discover_custom_slash_commands_from_roots(default_roots())
+    let (commands, shadowed) = discover_custom_slash_commands_from_roots(default_roots());
+    for entry in &shadowed {
+        tracing::warn!(
+            command = %entry.name,
+            ignored = %entry.ignored_path.display(),
+            ignored_source = entry.ignored_source.label(),
+            kept = %entry.kept_path.display(),
+            kept_source = entry.kept_source.label(),
+            "ignoring project-local slash command that collides with your own command"
+        );
+    }
+    commands
 }
 
 pub(crate) fn expand_custom_slash_invocation(input: &str) -> Option<String> {
@@ -81,18 +110,12 @@ pub(crate) fn expand_custom_command(command: &CustomSlashCommand, args: &str) ->
 }
 
 fn default_roots() -> Vec<CustomCommandRoot> {
+    roots_for(std::env::current_dir().ok(), dirs::home_dir())
+}
+
+fn roots_for(cwd: Option<PathBuf>, home: Option<PathBuf>) -> Vec<CustomCommandRoot> {
     let mut roots = Vec::new();
-    if let Ok(cwd) = std::env::current_dir() {
-        roots.push(CustomCommandRoot {
-            path: cwd.join(".agiworkforce").join("commands"),
-            source: CustomCommandSource::ProjectAgi,
-        });
-        roots.push(CustomCommandRoot {
-            path: cwd.join(".claude").join("commands"),
-            source: CustomCommandSource::ProjectClaude,
-        });
-    }
-    if let Some(home) = dirs::home_dir() {
+    if let Some(home) = home {
         roots.push(CustomCommandRoot {
             path: home.join(".agiworkforce").join("commands"),
             source: CustomCommandSource::UserAgi,
@@ -106,14 +129,25 @@ fn default_roots() -> Vec<CustomCommandRoot> {
             source: CustomCommandSource::UserClaude,
         });
     }
+    if let Some(cwd) = cwd {
+        roots.push(CustomCommandRoot {
+            path: cwd.join(".agiworkforce").join("commands"),
+            source: CustomCommandSource::ProjectAgi,
+        });
+        roots.push(CustomCommandRoot {
+            path: cwd.join(".claude").join("commands"),
+            source: CustomCommandSource::ProjectClaude,
+        });
+    }
     roots
 }
 
 fn discover_custom_slash_commands_from_roots(
     roots: Vec<CustomCommandRoot>,
-) -> Vec<CustomSlashCommand> {
-    let mut seen = HashSet::new();
+) -> (Vec<CustomSlashCommand>, Vec<ShadowedProjectCommand>) {
+    let mut seen: HashMap<String, (PathBuf, CustomCommandSource)> = HashMap::new();
     let mut commands = Vec::new();
+    let mut shadowed = Vec::new();
 
     for root in roots {
         if !root.path.is_dir() {
@@ -123,9 +157,19 @@ fn discover_custom_slash_commands_from_roots(
             let Some(name) = command_name_for_path(&root.path, &path) else {
                 continue;
             };
-            if !seen.insert(name.clone()) {
+            if let Some((kept_path, kept_source)) = seen.get(&name) {
+                if root.source.is_project() && !kept_source.is_project() {
+                    shadowed.push(ShadowedProjectCommand {
+                        name,
+                        ignored_path: path,
+                        ignored_source: root.source,
+                        kept_path: kept_path.clone(),
+                        kept_source: *kept_source,
+                    });
+                }
                 continue;
             }
+            seen.insert(name.clone(), (path.clone(), root.source));
             let Ok(raw) = std::fs::read_to_string(&path) else {
                 continue;
             };
@@ -142,7 +186,7 @@ fn discover_custom_slash_commands_from_roots(
     }
 
     commands.sort_by(|left, right| left.name.cmp(&right.name));
-    commands
+    (commands, shadowed)
 }
 
 fn markdown_files_recursive(root: &Path) -> Vec<PathBuf> {
@@ -351,7 +395,7 @@ mod tests {
         std::fs::write(first.join("ship.md"), "First").unwrap();
         std::fs::write(second.join("ship.md"), "Second").unwrap();
 
-        let commands = discover_custom_slash_commands_from_roots(vec![
+        let (commands, shadowed) = discover_custom_slash_commands_from_roots(vec![
             CustomCommandRoot {
                 path: first,
                 source: CustomCommandSource::ProjectAgi,
@@ -365,5 +409,78 @@ mod tests {
         assert_eq!(commands.len(), 1);
         assert_eq!(commands[0].content, "First");
         assert_eq!(commands[0].source, CustomCommandSource::ProjectAgi);
+        assert!(shadowed.is_empty());
+    }
+
+    #[test]
+    fn user_roots_are_searched_before_project_roots() {
+        let roots = roots_for(
+            Some(PathBuf::from("/repo")),
+            Some(PathBuf::from("/home/user")),
+        );
+
+        let first_project = roots
+            .iter()
+            .position(|root| root.source.is_project())
+            .expect("project roots are registered");
+        let last_user = roots
+            .iter()
+            .rposition(|root| !root.source.is_project())
+            .expect("user roots are registered");
+
+        assert!(
+            last_user < first_project,
+            "project roots must come last: {:?}",
+            roots.iter().map(|root| root.source).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn project_command_cannot_shadow_user_command() {
+        let home = tempfile::tempdir().unwrap();
+        let cwd = tempfile::tempdir().unwrap();
+        let user_dir = home.path().join(".agiworkforce").join("commands");
+        let project_dir = cwd.path().join(".agiworkforce").join("commands");
+        std::fs::create_dir_all(&user_dir).unwrap();
+        std::fs::create_dir_all(&project_dir).unwrap();
+        std::fs::write(user_dir.join("deploy.md"), "Trusted deploy").unwrap();
+        std::fs::write(project_dir.join("deploy.md"), "Attacker deploy").unwrap();
+
+        let (commands, shadowed) = discover_custom_slash_commands_from_roots(roots_for(
+            Some(cwd.path().to_path_buf()),
+            Some(home.path().to_path_buf()),
+        ));
+
+        let deploy = commands
+            .iter()
+            .find(|command| command.name == "deploy")
+            .expect("deploy command is discovered");
+        assert_eq!(deploy.content, "Trusted deploy");
+        assert_eq!(deploy.source, CustomCommandSource::UserAgi);
+        assert_eq!(shadowed.len(), 1);
+        assert_eq!(shadowed[0].name, "deploy");
+        assert_eq!(shadowed[0].ignored_path, project_dir.join("deploy.md"));
+        assert_eq!(shadowed[0].ignored_source, CustomCommandSource::ProjectAgi);
+        assert_eq!(shadowed[0].kept_source, CustomCommandSource::UserAgi);
+    }
+
+    #[test]
+    fn project_command_without_user_collision_is_kept() {
+        let home = tempfile::tempdir().unwrap();
+        let cwd = tempfile::tempdir().unwrap();
+        let project_dir = cwd.path().join(".claude").join("commands");
+        std::fs::create_dir_all(&project_dir).unwrap();
+        std::fs::write(project_dir.join("bench.md"), "Project bench").unwrap();
+
+        let (commands, shadowed) = discover_custom_slash_commands_from_roots(roots_for(
+            Some(cwd.path().to_path_buf()),
+            Some(home.path().to_path_buf()),
+        ));
+
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].name, "bench");
+        assert_eq!(commands[0].content, "Project bench");
+        assert_eq!(commands[0].source, CustomCommandSource::ProjectClaude);
+        assert!(shadowed.is_empty());
     }
 }

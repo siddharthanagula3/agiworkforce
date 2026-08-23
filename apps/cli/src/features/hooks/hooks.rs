@@ -789,7 +789,11 @@ fn merge_plugin_hooks(config: &mut HooksConfig) {
                 Err(e) => {
                     eprintln!(
                         "[plugins] failed to load hook for event {}: {} (raw: {})",
-                        event_name, e, value
+                        crate::terminal_text::sanitize_terminal_text(&event_name),
+                        crate::terminal_text::sanitize_terminal_text(&e.to_string()),
+                        crate::terminal_text::sanitize_terminal_text(
+                            &crate::secret_redaction::redact_secrets(&value.to_string())
+                        )
                     );
                 }
             }
@@ -976,28 +980,67 @@ pub fn audit_log_updated_input(
     original_args: &serde_json::Value,
     new_args: &serde_json::Value,
 ) {
-    let entry = format!(
-        "[{}] updated_input rewrite by hook {:?}\n  original: {}\n  new:      {}\n",
-        chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%z"),
-        hook_command,
-        original_args,
-        new_args,
-    );
+    let rewrite = RedactedHookRewrite::new(hook_command, original_args, new_args);
+
     // Emit at WARN level to stderr so interactive users always see it.
-    eprintln!("[security] hook rewrote tool args:\n  hook:     {hook_command}\n  original: {original_args}\n  new:      {new_args}");
+    eprintln!(
+        "[security] hook rewrote tool args:\n  hook:     {}\n  original: {}\n  new:      {}",
+        crate::terminal_text::sanitize_terminal_text(&rewrite.hook_command),
+        crate::terminal_text::sanitize_terminal_text(&rewrite.original_args),
+        crate::terminal_text::sanitize_terminal_text(&rewrite.new_args)
+    );
 
     // Append to the security audit log (best-effort).
     if let Ok(dir) = crate::config::CliConfig::config_dir() {
-        let log_path = dir.join("security-audit.log");
-        use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log_path)
-        {
-            let _ = f.write_all(entry.as_bytes());
+        let _ = append_updated_input_audit(&dir.join("security-audit.log"), &rewrite);
+    }
+}
+
+/// Tool arguments and hook commands routinely carry credentials, so every copy
+/// that leaves memory (stderr, audit log) is scrubbed first.
+struct RedactedHookRewrite {
+    hook_command: String,
+    original_args: String,
+    new_args: String,
+}
+
+impl RedactedHookRewrite {
+    fn new(
+        hook_command: &str,
+        original_args: &serde_json::Value,
+        new_args: &serde_json::Value,
+    ) -> Self {
+        use crate::secret_redaction::redact_secrets;
+        Self {
+            hook_command: redact_secrets(hook_command),
+            original_args: redact_secrets(&original_args.to_string()),
+            new_args: redact_secrets(&new_args.to_string()),
         }
     }
+}
+
+fn append_updated_input_audit(
+    path: &std::path::Path,
+    rewrite: &RedactedHookRewrite,
+) -> std::io::Result<()> {
+    use std::io::Write;
+    let entry = format!(
+        "[{}] updated_input rewrite by hook {:?}\n  original: {}\n  new:      {}\n",
+        chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%z"),
+        rewrite.hook_command,
+        rewrite.original_args,
+        rewrite.new_args,
+    );
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+    }
+    file.write_all(entry.as_bytes())
 }
 
 /// Aggregate transformer fields across hook results. Caller decides how to
@@ -2108,6 +2151,103 @@ mod tests {
         assert!(
             transformers.updated_input.is_none(),
             "no updated_input → nothing to log or aggregate"
+        );
+    }
+
+    const FAKE_BEARER_TOKEN: &str = "EXAMPLE-NOT-A-REAL-BEARER-TOKEN";
+    const FAKE_ANTHROPIC_KEY: &str = "sk-ant-EXAMPLENOTAREALANTHROPICKEY00000";
+    const FAKE_GITHUB_TOKEN: &str = "ghp_EXAMPLENOTAREALGITHUBTOKEN000000000";
+    const FAKE_DATABASE_URL: &str =
+        "postgres://EXAMPLE_USER:EXAMPLE_FAKE_PASS@db.example.com:5432/app";
+
+    #[test]
+    fn updated_input_audit_redacts_secrets_and_restricts_permissions() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("security-audit.log");
+        let original = serde_json::json!({
+            "command": format!("curl -H 'Authorization: Bearer {FAKE_BEARER_TOKEN}' https://api.example.com")
+        });
+        let new = serde_json::json!({
+            "command": format!("export ANTHROPIC_API_KEY={FAKE_ANTHROPIC_KEY}")
+        });
+        let rewrite = RedactedHookRewrite::new(
+            &format!("lint.sh --token {FAKE_GITHUB_TOKEN}"),
+            &original,
+            &new,
+        );
+
+        append_updated_input_audit(&path, &rewrite).expect("append audit entry");
+
+        let contents = std::fs::read_to_string(&path).expect("read audit log");
+        for secret in [FAKE_BEARER_TOKEN, FAKE_ANTHROPIC_KEY, FAKE_GITHUB_TOKEN] {
+            assert!(
+                !contents.contains(secret),
+                "secret survived into audit log: {secret}\n{contents}"
+            );
+        }
+        assert!(contents.contains("[REDACTED_ANTHROPIC_KEY]"));
+        assert!(contents.contains("[REDACTED_GITHUB_TOKEN]"));
+        assert!(contents.contains("updated_input rewrite by hook"));
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path)
+                .expect("metadata")
+                .permissions()
+                .mode()
+                & 0o777;
+            assert_eq!(mode, 0o600, "audit log must be owner-only");
+        }
+    }
+
+    #[test]
+    fn updated_input_audit_stderr_fields_are_redacted() {
+        let rewrite = RedactedHookRewrite::new(
+            "hook.sh",
+            &serde_json::json!({ "url": FAKE_DATABASE_URL }),
+            &serde_json::json!({ "url": "postgres://db.example.com:5432/app" }),
+        );
+
+        assert!(!rewrite.original_args.contains("EXAMPLE_FAKE_PASS"));
+        assert!(rewrite.original_args.contains("[CREDENTIALS_REDACTED]"));
+        assert_eq!(
+            rewrite.new_args,
+            serde_json::json!({ "url": "postgres://db.example.com:5432/app" }).to_string(),
+            "non-secret args must pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn audit_fixtures_read_as_fake_yet_still_trip_the_redactor() {
+        for fixture in [
+            FAKE_BEARER_TOKEN,
+            FAKE_ANTHROPIC_KEY,
+            FAKE_GITHUB_TOKEN,
+            FAKE_DATABASE_URL,
+        ] {
+            assert!(
+                fixture.contains("EXAMPLE"),
+                "fixture must be unmistakably fake to a reader and to check:secrets: {fixture}"
+            );
+        }
+        for (fixture, marker) in [
+            (FAKE_ANTHROPIC_KEY, "[REDACTED_ANTHROPIC_KEY]"),
+            (FAKE_GITHUB_TOKEN, "[REDACTED_GITHUB_TOKEN]"),
+            (FAKE_DATABASE_URL, "[CREDENTIALS_REDACTED]"),
+        ] {
+            let redacted = crate::secret_redaction::redact_secrets(fixture);
+            assert!(
+                redacted.contains(marker),
+                "fixture stopped matching the redactor it exercises: {fixture} -> {redacted}"
+            );
+        }
+        let bearer = crate::secret_redaction::redact_secrets(&format!(
+            "Authorization: Bearer {FAKE_BEARER_TOKEN}"
+        ));
+        assert!(
+            !bearer.contains(FAKE_BEARER_TOKEN),
+            "bearer fixture stopped matching the redactor it exercises: {bearer}"
         );
     }
 }

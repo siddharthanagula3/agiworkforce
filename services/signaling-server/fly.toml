@@ -21,3 +21,15 @@ primary_region = 'sjc'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 1024
+
+[env]
+  # Required before this app can serve any WebSocket client.
+  # ALLOWED_ORIGINS is a comma-separated allow-list of the exact Origin headers the
+  # desktop and mobile clients send. It is intentionally NOT defaulted: with an empty
+  # allow-list the server rejects every Origin-bearing WebSocket handshake (close 1008
+  # origin_not_configured) and admits only clients presenting a valid
+  # x-signaling-internal-secret. Set it before the first production deploy:
+  #   fly secrets set ALLOWED_ORIGINS="https://app.example,https://other.example"
+  # Also required as secrets (never in this file):
+  #   NEON_DATABASE_URL, SIGNALING_INTERNAL_SECRET
+  # Optional: SIGNALING_HTTP_URL, SIGNALING_WS_URL, ADMIN_API_KEY, TRUST_PROXY

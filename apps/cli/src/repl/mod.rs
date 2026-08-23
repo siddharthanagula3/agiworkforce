@@ -14,6 +14,7 @@ use crate::markdown::MarkdownRenderer;
 use crate::memory::{MemoryManager, MemoryTier};
 use crate::output;
 use crate::terminal_style as ts;
+use crate::terminal_text::sanitize_terminal_text;
 
 use slash_commands::{handle_slash_command, SlashResult};
 
@@ -85,12 +86,15 @@ pub async fn run_repl(
         match crate::agents::find_agent(name) {
             Some(agent_def) => {
                 agent_def.apply_to_session(&mut session);
-                eprintln!("Agent '{}' loaded.", agent_def.name);
+                eprintln!(
+                    "Agent '{}' loaded.",
+                    sanitize_terminal_text(&agent_def.name)
+                );
             }
             None => {
                 eprintln!(
                     "Warning: agent '{}' not found. Run /agents to list available agents.",
-                    name
+                    sanitize_terminal_text(name)
                 );
             }
         }
@@ -249,7 +253,12 @@ pub async fn run_repl(
                         SlashResult::Ecosystem(subcmd) => match subcmd.as_str() {
                             "scan" => {
                                 let detected = crate::ecosystem::scan();
-                                eprintln!("{}", crate::ecosystem::format_table(&detected));
+                                eprintln!(
+                                    "{}",
+                                    sanitize_terminal_text(&crate::ecosystem::format_table(
+                                        &detected
+                                    ))
+                                );
                             }
                             "import" => {
                                 let detected = crate::ecosystem::scan();
@@ -259,13 +268,22 @@ pub async fn run_repl(
                                 } else {
                                     eprintln!("Imported {} MCP server config(s):", servers.len());
                                     for s in &servers {
-                                        eprintln!("  {} ({})", s.name, s.source);
+                                        eprintln!(
+                                            "  {} ({})",
+                                            sanitize_terminal_text(&s.name),
+                                            sanitize_terminal_text(&s.source)
+                                        );
                                     }
                                 }
                             }
                             _ => {
                                 let detected = crate::ecosystem::scan();
-                                eprintln!("{}", crate::ecosystem::format_table(&detected));
+                                eprintln!(
+                                    "{}",
+                                    sanitize_terminal_text(&crate::ecosystem::format_table(
+                                        &detected
+                                    ))
+                                );
                             }
                         },
                         SlashResult::Marketplace(subcmd) => {
@@ -278,7 +296,11 @@ pub async fn run_repl(
                                         Ok(results) => {
                                             eprintln!(
                                                 "{}",
-                                                crate::marketplace::format_search_results(&results)
+                                                sanitize_terminal_text(
+                                                    &crate::marketplace::format_search_results(
+                                                        &results
+                                                    )
+                                                )
                                             );
                                         }
                                         Err(e) => {
@@ -294,7 +316,9 @@ pub async fn run_repl(
                                         crate::marketplace::Marketplace::list_installed(&home);
                                     eprintln!(
                                         "{}",
-                                        crate::marketplace::format_installed(&registry)
+                                        sanitize_terminal_text(
+                                            &crate::marketplace::format_installed(&registry)
+                                        )
                                     );
                                 }
                                 (_, Err(e)) => {
@@ -315,7 +339,11 @@ pub async fn run_repl(
                                             eprintln!("No synced files found.");
                                         } else {
                                             for (path, change) in &changes {
-                                                eprintln!("  {:<35} {}", path, change);
+                                                eprintln!(
+                                                    "  {:<35} {}",
+                                                    sanitize_terminal_text(path),
+                                                    change
+                                                );
                                             }
                                         }
                                     }
@@ -395,7 +423,7 @@ pub async fn run_repl(
                             spinner.finish_and_clear();
                             match answer {
                                 Ok(text) => {
-                                    eprintln!("{text}");
+                                    eprintln!("{}", sanitize_terminal_text(&text));
                                     eprintln!(
                                         "{}",
                                         "  (advisor side query — not added to conversation)"
@@ -415,7 +443,7 @@ pub async fn run_repl(
                             .await
                             {
                                 Ok(output) => {
-                                    eprintln!("{}", output);
+                                    eprintln!("{}", sanitize_terminal_text(&output));
                                 }
                                 Err(e) => {
                                     output::print_error(&format!("A2A error: {:#}", e));
@@ -699,7 +727,7 @@ fn collect_multiline(first_line: &str, editor: &mut DefaultEditor) -> Result<Str
 }
 
 async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
-    eprintln!("{}", format!("$ {}", cmd).dimmed());
+    eprintln!("{}", format!("$ {}", sanitize_terminal_text(cmd)).dimmed());
 
     let call = crate::agent::ToolCall {
         name: "run_command".to_string(),
@@ -721,10 +749,11 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
     match crate::tools::execute_tool_with_opts(&call, &opts).await {
         Ok(result) => {
             if !result.output.is_empty() {
+                let output = sanitize_terminal_text(&result.output);
                 if result.success {
-                    eprintln!("{}", result.output);
+                    eprintln!("{}", output);
                 } else {
-                    eprintln!("{}", ts::danger(&result.output));
+                    eprintln!("{}", ts::danger(output));
                 }
             }
 

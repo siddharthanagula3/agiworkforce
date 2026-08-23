@@ -1,3 +1,4 @@
+import { spreadsheetSafeExport } from '@agiworkforce/unified-chat';
 
 export interface DownloadableArtifact {
   title?: string;
@@ -30,6 +31,11 @@ function artifactFilename(artifact: DownloadableArtifact): string {
   if (/\.[a-z0-9]{1,12}$/i.test(title)) return title;
   const ext = sanitizeFilename(artifact.language || artifact.type || 'txt').replace(/^\.+/, '');
   return `${title}.${ext || 'txt'}`;
+}
+
+function filenameExtension(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  return dot > 0 ? filename.slice(dot + 1) : '';
 }
 
 function uniqueFilename(filename: string, used: Set<string>): string {
@@ -105,7 +111,10 @@ export async function createArtifactsZip(
     artifacts.map(async (artifact) => {
       const fileName = uniqueFilename(artifactFilename(artifact), usedNames);
       if (!artifact.generatedFile?.uri) {
-        return { fileName, data: artifact.content };
+        // the entry name comes from the model-controlled title/language, so a zipped
+        // Title.csv gets the same formula neutralization as a single-file download
+        const { body } = spreadsheetSafeExport(artifact.content, filenameExtension(fileName));
+        return { fileName, data: body };
       }
 
       const response = await fetchGeneratedFile(artifact.generatedFile.uri, fileName);

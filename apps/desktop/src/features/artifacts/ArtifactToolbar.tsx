@@ -1,7 +1,7 @@
-
 import { Check, Copy, Download, ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { spreadsheetSafeExport } from '@agiworkforce/unified-chat';
 import { cn } from '@/lib/utils';
 import { ArtifactTypeIcon, getArtifactFileExtension } from '@/lib/artifactUtils';
 import { Button } from '@/ui/Button';
@@ -50,11 +50,13 @@ export function ArtifactToolbar({
   }, [content, isMounted]);
 
   const handleDownload = useCallback(() => {
-    const blob = new Blob([content], { type: 'text/plain' });
+    const extension = getArtifactFileExtension(artifactType);
+    const { body, mimeType } = spreadsheetSafeExport(content, extension);
+    const blob = new Blob([body], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${title || 'artifact'}.${getArtifactFileExtension(artifactType)}`;
+    a.download = `${title || 'artifact'}.${extension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

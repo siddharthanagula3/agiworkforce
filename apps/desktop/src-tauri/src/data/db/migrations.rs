@@ -1,10 +1,11 @@
+use crate::sys::security::machine_key;
 use hmac::{Hmac, Mac};
 use rusqlite::{params, Connection, Result};
 use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 78;
+const CURRENT_VERSION: i32 = 81;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -647,6 +648,18 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 78 {
         run_migration_in_transaction(conn, 78, apply_migration_v78)?;
+    }
+
+    if current_version < 79 {
+        run_migration_in_transaction(conn, 79, apply_migration_v79)?;
+    }
+
+    if current_version < 80 {
+        run_migration_in_transaction(conn, 80, apply_migration_v80)?;
+    }
+
+    if current_version < 81 {
+        run_migration_in_transaction(conn, 81, apply_migration_v81)?;
     }
 
     Ok(())
@@ -4982,25 +4995,44 @@ fn migration_security_error(message: impl Into<String>) -> rusqlite::Error {
     rusqlite::Error::ToSqlConversionFailure(std::io::Error::other(message.into()).into())
 }
 
-fn migration_hmac_token(token: &str) -> Result<String> {
-    let key_bytes = crate::sys::security::machine_key::derive_key(
+/// Key for the auth-session token index and ciphertext.
+///
+/// F12: fails closed. Deriving from machine identifiers alone would let any
+/// local process recompute the token index and decrypt every stored session.
+fn migration_master_key() -> Result<Vec<u8>> {
+    crate::sys::security::machine_key::try_derive_key(
         crate::sys::security::machine_key::KeyPurpose::MasterEncryption,
-    );
-    let mut mac = HmacSha256::new_from_slice(&key_bytes)
+    )
+    .map_err(|error| migration_security_error(error.to_string()))
+}
+
+fn migration_hmac_token_with(key_bytes: &[u8], token: &str) -> Result<String> {
+    let mut mac = HmacSha256::new_from_slice(key_bytes)
         .map_err(|e| migration_security_error(format!("HMAC init failed: {e}")))?;
     mac.update(token.as_bytes());
     Ok(hex::encode(mac.finalize().into_bytes()))
 }
 
-fn migration_encrypt_token(token: &str) -> Result<String> {
-    let key_bytes = crate::sys::security::machine_key::derive_key(
-        crate::sys::security::machine_key::KeyPurpose::MasterEncryption,
-    );
-    let encrypted = crate::sys::security::encryption::encrypt_secret(&key_bytes, token)
+fn migration_hmac_token(token: &str) -> Result<String> {
+    migration_hmac_token_with(&migration_master_key()?, token)
+}
+
+fn migration_encrypt_token_with(key_bytes: &[u8], token: &str) -> Result<String> {
+    let encrypted = crate::sys::security::encryption::encrypt_secret(key_bytes, token)
         .map_err(migration_security_error)?;
     serde_json::to_string(&encrypted).map_err(|e| {
         migration_security_error(format!("Serialize encrypted auth session token: {e}"))
     })
+}
+
+fn migration_encrypt_token(token: &str) -> Result<String> {
+    migration_encrypt_token_with(&migration_master_key()?, token)
+}
+
+fn migration_decrypt_token_with(key_bytes: &[u8], stored: &str) -> Option<String> {
+    let encrypted: crate::sys::security::encryption::EncryptedSecret =
+        serde_json::from_str(stored).ok()?;
+    crate::sys::security::encryption::decrypt_secret_with_key(key_bytes, &encrypted).ok()
 }
 
 fn apply_migration_v59(conn: &Connection) -> Result<()> {
@@ -6217,6 +6249,303 @@ fn apply_migration_v78(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration v79: re-wrap auth-session tokens that an older build encrypted and
+/// indexed with the machine-only key.
+///
+/// The whole migration runs inside one savepoint, so a partial re-wrap can
+/// never leave a session with a token index that no longer matches its
+/// ciphertext. Rows already under the per-install key are left untouched, which
+/// makes re-running the migration a no-op.
+fn apply_migration_v79(conn: &Connection) -> Result<()> {
+    use crate::sys::security::machine_key::{self, KeyPurpose};
+
+    let table_exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='auth_sessions')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !table_exists {
+        return Ok(());
+    }
+
+    let rows: Vec<(String, String, String)> = conn
+        .prepare(
+            "SELECT session_id, access_token_encrypted, refresh_token_encrypted
+             FROM auth_sessions",
+        )?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .collect::<Result<Vec<_>>>()?;
+
+    // Deriving the legacy keys costs 600,000 PBKDF2 rounds per machine
+    // identifier; a fresh install has nothing to rotate.
+    if rows.is_empty() {
+        return Ok(());
+    }
+
+    let current_key = match machine_key::try_derive_key(KeyPurpose::MasterEncryption) {
+        Ok(key) => key,
+        Err(error) => {
+            // Startup fails closed before migrations when the per-install
+            // secret is missing. Reaching here means some other entry point ran
+            // migrations, so report the sessions as still machine-only wrapped
+            // rather than destroying them.
+            machine_key::record_machine_only_payload("auth_sessions");
+            tracing::warn!("Skipping auth-session key rotation: {error}");
+            return Ok(());
+        }
+    };
+
+    let legacy_keys = machine_key::legacy_machine_only_keys(KeyPurpose::MasterEncryption);
+    if legacy_keys.is_empty() {
+        return Ok(());
+    }
+
+    let mut rewrapped = 0usize;
+    for (session_id, access_stored, refresh_stored) in rows {
+        let Some((access_token, refresh_token)) = legacy_keys.iter().find_map(|legacy| {
+            let access = migration_decrypt_token_with(legacy, &access_stored)?;
+            let refresh = migration_decrypt_token_with(legacy, &refresh_stored)?;
+            Some((access, refresh))
+        }) else {
+            continue;
+        };
+
+        conn.execute(
+            "UPDATE auth_sessions
+             SET access_token_hash = ?1,
+                 access_token_encrypted = ?2,
+                 refresh_token_hash = ?3,
+                 refresh_token_encrypted = ?4
+             WHERE session_id = ?5",
+            params![
+                migration_hmac_token_with(&current_key, &access_token)?,
+                migration_encrypt_token_with(&current_key, &access_token)?,
+                migration_hmac_token_with(&current_key, &refresh_token)?,
+                migration_encrypt_token_with(&current_key, &refresh_token)?,
+                session_id,
+            ],
+        )?;
+        rewrapped += 1;
+    }
+
+    if rewrapped > 0 {
+        tracing::info!(
+            "Migration v79: re-wrapped {rewrapped} auth session(s) under the per-install key"
+        );
+    }
+
+    Ok(())
+}
+
+/// Migration v80: re-wrap MCP credentials and OAuth tokens an older build
+/// encrypted with the machine-only key.
+///
+/// `settings_v2` holds every secret written through `core::mcp::config` and
+/// `sys::commands::mcp_oauth`, and those readers derive one key and decrypt
+/// with it directly. Without this pass the rotated key would leave every stored
+/// token unreadable and overwritten on the next save. AES-GCM authentication
+/// decides which rows belong to this purpose, so rows other consumers of the
+/// table wrote — settings under the database key above all — are never touched.
+fn apply_migration_v80(conn: &Connection) -> Result<()> {
+    use crate::sys::security::machine_key::{self, KeyPurpose};
+    use crate::sys::security::machine_key_rewrap;
+
+    let table_exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='settings_v2')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !table_exists {
+        return Ok(());
+    }
+
+    let mut rows: Vec<(String, String)> = conn
+        .prepare("SELECT key, value FROM settings_v2 WHERE typeof(value) = 'text' AND value <> ''")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<Vec<_>>>()?;
+
+    // Deriving the legacy keys costs 600,000 PBKDF2 rounds per machine
+    // identifier; a row that cannot hold this framing must never pay for it.
+    rows.retain(|(_, value)| machine_key_rewrap::looks_like_combined_payload(value));
+    if rows.is_empty() {
+        return Ok(());
+    }
+
+    if !machine_key::has_install_secret() {
+        // Startup fails closed before migrations when the per-install secret is
+        // missing. Reaching here means some other entry point ran migrations,
+        // so report the credentials as still machine-only wrapped rather than
+        // rewriting them under an ephemeral key nothing can read back.
+        machine_key::record_machine_only_payload("settings_v2:mcp_credentials");
+        tracing::warn!("Skipping MCP credential key rotation: no per-install secret is available");
+        return Ok(());
+    }
+
+    let mut rewrapped = 0usize;
+    for (key, value) in rows {
+        let label = format!("settings_v2:{key}");
+        let Ok(Some(rotated)) =
+            machine_key_rewrap::rewrap_value(KeyPurpose::McpCredentials, &label, &value)
+        else {
+            continue;
+        };
+
+        conn.execute(
+            "UPDATE settings_v2 SET value = ?1 WHERE key = ?2",
+            params![rotated, key],
+        )?;
+        machine_key::clear_machine_only_payload(&label);
+        rewrapped += 1;
+    }
+
+    if rewrapped > 0 {
+        tracing::info!(
+            "Migration v80: re-wrapped {rewrapped} MCP credential(s) under the per-install key"
+        );
+    }
+
+    Ok(())
+}
+
+/// Columns holding a JSON [`EncryptedSecret`] an older build wrapped with the
+/// machine-only key. Table and column names are compile-time constants, so the
+/// statements built from them below carry no caller-supplied SQL.
+const MACHINE_ONLY_SECRET_COLUMNS: [(&str, &str, machine_key::KeyPurpose); 5] = [
+    (
+        "email_accounts",
+        "password_encrypted",
+        machine_key::KeyPurpose::EmailCredentials,
+    ),
+    (
+        "gmail_accounts",
+        "token_encrypted",
+        machine_key::KeyPurpose::EmailCredentials,
+    ),
+    (
+        "gmail_accounts",
+        "client_secret_encrypted",
+        machine_key::KeyPurpose::EmailCredentials,
+    ),
+    (
+        "calendar_accounts",
+        "token_json",
+        machine_key::KeyPurpose::CalendarCredentials,
+    ),
+    (
+        "settings",
+        "value",
+        machine_key::KeyPurpose::DatabaseEncryption,
+    ),
+];
+
+/// Migration v81: re-wrap the email, Gmail, calendar, and generic app secrets
+/// an older build encrypted with the machine-only key.
+///
+/// Those readers already fall back to the legacy key, so nothing is unreadable
+/// without this pass — but until each row is rewritten it stays decryptable by
+/// any unprivileged local process, which is exactly what F5 reported. Rewriting
+/// them on read alone would leave a credential the user never touches again
+/// exposed forever.
+fn apply_migration_v81(conn: &Connection) -> Result<()> {
+    if !machine_key::has_install_secret() {
+        machine_key::record_machine_only_payload("stored_account_credentials");
+        tracing::warn!("Skipping account credential key rotation: no per-install secret available");
+        return Ok(());
+    }
+
+    let mut rewrapped = 0usize;
+    for (table, column, purpose) in MACHINE_ONLY_SECRET_COLUMNS {
+        rewrapped += rewrap_machine_only_column(conn, table, column, purpose)?;
+    }
+
+    if rewrapped > 0 {
+        tracing::info!(
+            "Migration v81: re-wrapped {rewrapped} stored credential(s) under the per-install key"
+        );
+    }
+
+    Ok(())
+}
+
+fn rewrap_machine_only_column(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    purpose: machine_key::KeyPurpose,
+) -> Result<usize> {
+    use crate::sys::security::encryption::{decrypt_secret_with_key, EncryptedSecret};
+
+    let table_exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?1)",
+        params![table],
+        |row| row.get(0),
+    )?;
+    if !table_exists {
+        return Ok(0);
+    }
+
+    let column_exists: i64 = conn.query_row(
+        &format!("SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = ?1"),
+        params![column],
+        |row| row.get(0),
+    )?;
+    if column_exists == 0 {
+        return Ok(0);
+    }
+
+    // The JSON prefix keeps plaintext and legacy base64 columns from reaching
+    // the 600,000-round legacy derivation below.
+    let rows: Vec<(i64, String)> = conn
+        .prepare(&format!(
+            "SELECT rowid, {column} FROM {table} \
+             WHERE typeof({column}) = 'text' AND {column} LIKE '{{%'"
+        ))?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<Vec<_>>>()?;
+    if rows.is_empty() {
+        return Ok(0);
+    }
+
+    let current_key = match machine_key::try_derive_key(purpose) {
+        Ok(key) => key,
+        Err(error) => {
+            machine_key::record_machine_only_payload(table);
+            tracing::warn!("Skipping {table}.{column} key rotation: {error}");
+            return Ok(0);
+        }
+    };
+
+    let mut rewrapped = 0usize;
+    for (rowid, stored) in rows {
+        let Ok(encrypted) = serde_json::from_str::<EncryptedSecret>(&stored) else {
+            continue;
+        };
+
+        let label = format!("{table}.{column}#{rowid}");
+        let opened = machine_key::open_with_key_rotation(purpose, &label, |key| {
+            decrypt_secret_with_key(key, &encrypted).ok()
+        });
+        let Ok(Some(opened)) = opened else {
+            continue;
+        };
+        if !opened.rewrap_required {
+            continue;
+        }
+
+        conn.execute(
+            &format!("UPDATE {table} SET {column} = ?1 WHERE rowid = ?2"),
+            params![
+                migration_encrypt_token_with(&current_key, &opened.value)?,
+                rowid
+            ],
+        )?;
+        machine_key::clear_machine_only_payload(&label);
+        rewrapped += 1;
+    }
+
+    Ok(rewrapped)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -7190,5 +7519,268 @@ mod tests {
             )
             .unwrap();
         assert_eq!(column_count, 1);
+    }
+
+    /// F12: sessions an older build indexed and encrypted with the machine-only
+    /// key must be re-wrapped under the per-install key, and the rewrite must
+    /// keep the token index consistent with the ciphertext.
+    #[test]
+    fn v79_rewraps_machine_only_auth_sessions() {
+        use crate::sys::security::machine_key::{self, KeyPurpose};
+
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let legacy_key = machine_key::legacy_machine_only_keys(KeyPurpose::MasterEncryption)
+            .first()
+            .copied()
+            .expect("a legacy candidate always exists");
+        let access = "legacy-access-token";
+        let refresh = "legacy-refresh-token";
+
+        conn.execute(
+            "INSERT INTO users (id, email, password_hash, role, created_at)              VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                "user-79",
+                "legacy@example.com",
+                "pw",
+                "editor",
+                "2026-01-01T00:00:00Z"
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO auth_sessions (
+                session_id, user_id, access_token_hash, access_token_encrypted,
+                refresh_token_hash, refresh_token_encrypted,
+                created_at, expires_at, last_activity_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?7)",
+            params![
+                "session-79",
+                "user-79",
+                migration_hmac_token_with(&legacy_key, access).unwrap(),
+                migration_encrypt_token_with(&legacy_key, access).unwrap(),
+                migration_hmac_token_with(&legacy_key, refresh).unwrap(),
+                migration_encrypt_token_with(&legacy_key, refresh).unwrap(),
+                "2026-01-01T00:00:00Z"
+            ],
+        )
+        .unwrap();
+
+        apply_migration_v79(&conn).expect("v79 must rotate machine-only sessions");
+
+        let current_key = machine_key::try_derive_key(KeyPurpose::MasterEncryption)
+            .expect("install secret in tests");
+        let (access_hash, access_blob, refresh_blob): (String, String, String) = conn
+            .query_row(
+                "SELECT access_token_hash, access_token_encrypted, refresh_token_encrypted                  FROM auth_sessions WHERE session_id = ?1",
+                params!["session-79"],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+
+        assert_eq!(
+            access_hash,
+            migration_hmac_token_with(&current_key, access).unwrap(),
+            "the token index must be recomputed with the per-install key"
+        );
+        assert_eq!(
+            migration_decrypt_token_with(&current_key, &access_blob),
+            Some(access.to_string())
+        );
+        assert_eq!(
+            migration_decrypt_token_with(&current_key, &refresh_blob),
+            Some(refresh.to_string())
+        );
+        assert_eq!(
+            migration_decrypt_token_with(&legacy_key, &access_blob),
+            None,
+            "the machine-only key must no longer open the stored token"
+        );
+
+        // Re-running the migration must leave the already-rotated row alone.
+        apply_migration_v79(&conn).expect("v79 must be idempotent");
+        let unchanged: String = conn
+            .query_row(
+                "SELECT access_token_hash FROM auth_sessions WHERE session_id = ?1",
+                params!["session-79"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(unchanged, access_hash);
+    }
+
+    /// F5/F12 migration: MCP OAuth tokens and credentials that an older build
+    /// wrapped with the machine_key machine-only derivation must survive the
+    /// key rotation. Their readers derive one key and decrypt with it directly,
+    /// so a row left behind is unreadable and overwritten on the next save.
+    #[test]
+    fn v80_rewraps_machine_key_only_mcp_credentials() {
+        use crate::sys::security::machine_key::{self, KeyPurpose};
+        use crate::sys::security::machine_key_rewrap::{decrypt_combined, encrypt_combined};
+
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let legacy_key = machine_key::legacy_machine_only_keys(KeyPurpose::McpCredentials)
+            .first()
+            .copied()
+            .expect("a legacy candidate always exists");
+        let current_key =
+            machine_key::try_derive_key(KeyPurpose::McpCredentials).expect("install secret");
+        let settings_key =
+            machine_key::try_derive_key(KeyPurpose::DatabaseEncryption).expect("install secret");
+
+        let insert = |key: &str, value: &str| {
+            conn.execute(
+                "INSERT OR REPLACE INTO settings_v2
+                     (key, value, category, encrypted, created_at, updated_at)
+                 VALUES (?1, ?2, 'security', 1, ?3, ?3)",
+                params![key, value, "2026-01-01T00:00:00Z"],
+            )
+            .unwrap();
+        };
+        let read = |key: &str| -> String {
+            conn.query_row(
+                "SELECT value FROM settings_v2 WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+
+        let token = encrypt_combined(&legacy_key, "legacy-mcp-access-token").unwrap();
+        let wrapped = encrypt_combined(&legacy_key, "legacy-vercel-secret").unwrap();
+        let foreign = encrypt_combined(&settings_key, "an unrelated setting").unwrap();
+        insert("mcp_oauth_vercel_access_token", &token);
+        insert(
+            "mcp_oauth_config_vercel_client_secret",
+            &format!("<enc:{wrapped}>"),
+        );
+        insert("some_other_setting", &foreign);
+
+        apply_migration_v80(&conn).expect("v80 must rotate machine-only MCP credentials");
+
+        let rotated_token = read("mcp_oauth_vercel_access_token");
+        assert_eq!(
+            decrypt_combined(&current_key, &rotated_token).as_deref(),
+            Some("legacy-mcp-access-token")
+        );
+        assert_eq!(
+            decrypt_combined(&legacy_key, &rotated_token),
+            None,
+            "the machine-only key must no longer open the stored token"
+        );
+
+        let rotated_credential = read("mcp_oauth_config_vercel_client_secret");
+        let inner = rotated_credential
+            .strip_prefix("<enc:")
+            .and_then(|rest| rest.strip_suffix('>'))
+            .expect("the encrypted-at-rest marker must be preserved");
+        assert_eq!(
+            decrypt_combined(&current_key, inner).as_deref(),
+            Some("legacy-vercel-secret")
+        );
+
+        assert_eq!(
+            read("some_other_setting"),
+            foreign,
+            "a row of another purpose must never be rewritten"
+        );
+
+        apply_migration_v80(&conn).expect("v80 must be idempotent");
+        assert_eq!(read("mcp_oauth_vercel_access_token"), rotated_token);
+    }
+
+    /// F5: email, Gmail, calendar, and generic app secrets an older build wrote
+    /// stay decryptable by any local process until the row is rewritten, so the
+    /// machine_key rotation has to reach them too.
+    #[test]
+    fn v81_rewraps_machine_key_only_account_credentials() {
+        use crate::sys::security::machine_key::KeyPurpose;
+
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let legacy_key = machine_key::legacy_machine_only_keys(KeyPurpose::EmailCredentials)
+            .first()
+            .copied()
+            .expect("a legacy candidate always exists");
+        let current_key =
+            machine_key::try_derive_key(KeyPurpose::EmailCredentials).expect("install secret");
+        let legacy_row = migration_encrypt_token_with(&legacy_key, "hunter2-imap").unwrap();
+
+        let insert_account = |id: i64, email: &str, password: &str| {
+            conn.execute(
+                "INSERT INTO email_accounts (
+                     id, provider, email, imap_host, imap_port, smtp_host, smtp_port,
+                     password_encrypted, created_at
+                 ) VALUES (?1, 'imap', ?2, 'imap.example.com', 993, 'smtp.example.com', 465, ?3, 0)",
+                params![id, email, password],
+            )
+            .unwrap();
+        };
+        insert_account(1, "legacy@example.com", &legacy_row);
+        insert_account(2, "plain@example.com", "not-json-at-all");
+
+        assert_eq!(
+            rewrap_machine_only_column(
+                &conn,
+                "email_accounts",
+                "password_encrypted",
+                KeyPurpose::EmailCredentials
+            )
+            .expect("rotate email credentials"),
+            1
+        );
+
+        let stored: String = conn
+            .query_row(
+                "SELECT password_encrypted FROM email_accounts WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            migration_decrypt_token_with(&current_key, &stored),
+            Some("hunter2-imap".to_string())
+        );
+        assert_eq!(
+            migration_decrypt_token_with(&legacy_key, &stored),
+            None,
+            "the machine-only key must no longer open the stored password"
+        );
+
+        let untouched: String = conn
+            .query_row(
+                "SELECT password_encrypted FROM email_accounts WHERE id = 2",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(untouched, "not-json-at-all");
+
+        assert_eq!(
+            rewrap_machine_only_column(
+                &conn,
+                "email_accounts",
+                "password_encrypted",
+                KeyPurpose::EmailCredentials
+            )
+            .expect("v81 must be idempotent"),
+            0
+        );
+
+        // A table the schema never created must be skipped, not raise.
+        assert_eq!(
+            rewrap_machine_only_column(
+                &conn,
+                "table_that_does_not_exist",
+                "value",
+                KeyPurpose::EmailCredentials
+            )
+            .expect("a missing table is not an error"),
+            0
+        );
     }
 }

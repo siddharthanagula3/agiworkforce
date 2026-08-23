@@ -11,6 +11,14 @@
  *   - Same inputs produce the same key (deterministic)
  *   - Different pairingCode produces a different key
  *   - Different sessionSalt produces a different key
+ *   - Relay-visible code + salt alone do not determine the key
+ *   - Derivation refuses a missing or malformed out-of-band pairing secret
+ *   - Derivation matches the desktop Rust vector byte for byte
+ *
+ *  Wire protocol version
+ *   - signMessage stamps DISPATCH_ENVELOPE_VERSION
+ *   - A v2 envelope is rejected as protocol_version_unsupported
+ *   - A newer claimed version is rejected as protocol_version_unsupported
  *
  *  HMAC Sign / Verify — round-trip
  *   - signMessage returns a valid envelope with all required fields
@@ -97,12 +105,19 @@ import {
   deriveDispatchSecret,
   signMessage,
   verifyMessage,
+  DISPATCH_ENVELOPE_VERSION,
   DISPATCH_HMAC_REQUIRED_AFTER,
   type HmacSessionState,
 } from '../lib/dispatchHmac';
 
-async function makeState(pairingCode = 'TESTCODE', salt = 'testsalt'): Promise<HmacSessionState> {
-  const secret = await deriveDispatchSecret(pairingCode, salt);
+const PAIRING_SECRET = '9f'.repeat(32);
+
+async function makeState(
+  pairingCode = 'TESTCODE',
+  salt = 'testsalt',
+  pairingSecret = PAIRING_SECRET,
+): Promise<HmacSessionState> {
+  const secret = await deriveDispatchSecret(pairingCode, salt, pairingSecret);
   return { secret, nonceCache: new Map() };
 }
 
@@ -112,27 +127,80 @@ function cloneState(state: HmacSessionState): HmacSessionState {
 
 describe('Key derivation — deriveDispatchSecret', () => {
   it('produces a 64-char hex string (32 bytes)', async () => {
-    const key = await deriveDispatchSecret('ABCD1234', 'saltsalt');
+    const key = await deriveDispatchSecret('ABCD1234', 'saltsalt', PAIRING_SECRET);
     expect(key).toHaveLength(64);
     expect(key).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('is deterministic: same inputs produce the same key', async () => {
-    const k1 = await deriveDispatchSecret('MYCODE99', 'sessionA');
-    const k2 = await deriveDispatchSecret('MYCODE99', 'sessionA');
+    const k1 = await deriveDispatchSecret('MYCODE99', 'sessionA', PAIRING_SECRET);
+    const k2 = await deriveDispatchSecret('MYCODE99', 'sessionA', PAIRING_SECRET);
     expect(k1).toBe(k2);
   });
 
   it('different pairingCode produces a different key', async () => {
-    const k1 = await deriveDispatchSecret('AAAABBBB', 'saltsalt');
-    const k2 = await deriveDispatchSecret('CCCCDDDD', 'saltsalt');
+    const k1 = await deriveDispatchSecret('AAAABBBB', 'saltsalt', PAIRING_SECRET);
+    const k2 = await deriveDispatchSecret('CCCCDDDD', 'saltsalt', PAIRING_SECRET);
     expect(k1).not.toBe(k2);
   });
 
   it('different sessionSalt produces a different key', async () => {
-    const k1 = await deriveDispatchSecret('AAAABBBB', 'salt1');
-    const k2 = await deriveDispatchSecret('AAAABBBB', 'salt2');
+    const k1 = await deriveDispatchSecret('AAAABBBB', 'salt1', PAIRING_SECRET);
+    const k2 = await deriveDispatchSecret('AAAABBBB', 'salt2', PAIRING_SECRET);
     expect(k1).not.toBe(k2);
+  });
+
+  it('the relay-visible code and salt alone do not determine the key', async () => {
+    // The relay sees the pairing code (claim call, register frame) and the
+    // session salt (register metadata). Holding both must not be enough.
+    const relayGuess = await deriveDispatchSecret('AAAABBBB', 'saltsalt', '11'.repeat(32));
+    const real = await deriveDispatchSecret('AAAABBBB', 'saltsalt', '22'.repeat(32));
+    expect(relayGuess).not.toBe(real);
+  });
+
+  it('refuses to derive without a 32-byte out-of-band secret', async () => {
+    await expect(deriveDispatchSecret('AAAABBBB', 'saltsalt', '')).rejects.toThrow(
+      'pairing secret',
+    );
+    await expect(deriveDispatchSecret('AAAABBBB', 'saltsalt', 'not-hex')).rejects.toThrow(
+      'pairing secret',
+    );
+    await expect(deriveDispatchSecret('AAAABBBB', 'saltsalt', '9f'.repeat(31))).rejects.toThrow(
+      'pairing secret',
+    );
+  });
+
+  it('matches the desktop Rust vector byte for byte', async () => {
+    // Pinned against derive_session_key in
+    // apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs, which asserts
+    // the same vector in derive_matches_the_mobile_vector.
+    const key = await deriveDispatchSecret('ABCD1234WXYZ', 'a1b2c3d4e5f60718', PAIRING_SECRET);
+    expect(key).toBe('99d81f2ce90a7f72238227e608fd6a72795fc6fde038e9e5b9c5f9ec5b9ab6d3');
+  });
+});
+
+describe('Wire protocol version', () => {
+  it('signMessage stamps the current envelope version', async () => {
+    const state = await makeState();
+    const env = await signMessage(state, 'ping', {});
+    expect(env.v).toBe(DISPATCH_ENVELOPE_VERSION);
+  });
+
+  it('rejects a v2 envelope with protocol_version_unsupported, not hmac_mismatch', async () => {
+    const state = await makeState();
+    const env = await signMessage(state, 'approval_response', { approved: true });
+    const { v: _v, ...v2Envelope } = env;
+    const result = await verifyMessage(cloneState(state), v2Envelope);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('protocol_version_unsupported');
+  });
+
+  it('rejects an envelope claiming a newer protocol version', async () => {
+    const state = await makeState();
+    const env = await signMessage(state, 'ping', {});
+    const result = await verifyMessage(cloneState(state), { ...env, v: 4 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('protocol_version_unsupported');
   });
 });
 
@@ -416,6 +484,7 @@ describe('Malformed message rejection', () => {
       ts: Date.now(),
       type: 'ping',
       payload: {},
+      v: DISPATCH_ENVELOPE_VERSION,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('malformed');
@@ -428,6 +497,7 @@ describe('Malformed message rejection', () => {
       nonce: 'AAAAAAAAAAAAAAAAAAAAAA==',
       type: 'ping',
       payload: {},
+      v: DISPATCH_ENVELOPE_VERSION,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('malformed');
@@ -440,6 +510,7 @@ describe('Malformed message rejection', () => {
       nonce: 'AAAAAAAAAAAAAAAAAAAAAA==',
       ts: Date.now(),
       payload: {},
+      v: DISPATCH_ENVELOPE_VERSION,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('malformed');
@@ -533,6 +604,7 @@ describe('Wire format — canonical signing input', () => {
     expect(keys).toContain('payload');
     expect(keys).toContain('ts');
     expect(keys).toContain('type');
+    expect(keys).toContain('v');
   });
 
   it('hmac is 64 hex characters (32 bytes)', async () => {

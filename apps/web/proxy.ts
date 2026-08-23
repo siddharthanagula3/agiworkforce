@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { withCorsAndSecurityHeaders } from './lib/cors';
 import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-route-contract';
 import { decideEuAccess, euBlockEnabled } from './lib/eu-access';
+import { getClerkAuthorizedParties } from './lib/clerk-authorized-parties';
 
 const UNAVAILABLE_PATH = '/region-unavailable';
 
@@ -122,9 +123,30 @@ const isClerkSessionRoute = createRouteMatcher([
   '/api/(.*)',
 ]);
 
-const clerkAwareProxy = clerkMiddleware((_auth, request: NextRequest) => {
-  return buildCspResponse(request);
-});
+const clerkAuthorizedParties = ((): string[] | null => {
+  try {
+    return getClerkAuthorizedParties();
+  } catch {
+    return null;
+  }
+})();
+
+// Clerk skips the azp check entirely when authorizedParties is empty, so an
+// unresolvable allowlist must stop the request instead of authenticating it.
+const clerkAwareProxy = clerkAuthorizedParties
+  ? clerkMiddleware((_auth, request: NextRequest) => buildCspResponse(request), {
+      authorizedParties: clerkAuthorizedParties,
+    })
+  : null;
+
+function clerkUnconfiguredResponse(): NextResponse {
+  const response = NextResponse.json(
+    { error: 'Authentication is unavailable: no Clerk authorized-party allowlist is configured.' },
+    { status: 503 },
+  );
+  response.headers.set('Content-Security-Policy', buildCspWithNonce(btoa(crypto.randomUUID())));
+  return response;
+}
 
 function attachApiCors(request: NextRequest, response: Response): Response {
   return request.nextUrl.pathname.startsWith('/api/')
@@ -202,6 +224,7 @@ export const proxy: NextMiddleware = async (request, event) => {
     isClerkSessionRoute(request) ||
     apiHostRewriteUsesClerk(request.nextUrl.pathname)
   ) {
+    if (!clerkAwareProxy) return attachApiCors(request, clerkUnconfiguredResponse());
     const response = await clerkAwareProxy(request, event);
     return response ? attachApiCors(request, response) : response;
   }

@@ -5,6 +5,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use crate::terminal_text::sanitize_terminal_text;
+
 const MAX_FIELD_CHARS: usize = 1_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,15 +98,13 @@ fn append_entry_at(path: &Path, entry: &ApprovalAuditEntry) -> Result<()> {
 }
 
 fn sanitize_field(raw: &str) -> String {
-    let mut out = String::new();
-    for ch in raw.chars().take(MAX_FIELD_CHARS) {
-        if ch.is_control() {
-            out.push(' ');
-        } else {
-            out.push(ch);
-        }
-    }
-    if raw.chars().count() > MAX_FIELD_CHARS {
+    let stripped = sanitize_terminal_text(raw);
+    let mut out: String = stripped
+        .chars()
+        .take(MAX_FIELD_CHARS)
+        .map(|ch| if ch.is_control() { ' ' } else { ch })
+        .collect();
+    if stripped.chars().count() > MAX_FIELD_CHARS {
         out.push_str(" [truncated]");
     }
     out
@@ -122,6 +122,16 @@ mod tests {
         assert!(!sanitized.contains('\n'));
         assert!(!sanitized.contains('\t'));
         assert!(sanitized.ends_with(" [truncated]"));
+    }
+
+    #[test]
+    fn sanitize_field_drops_whole_escape_sequences() {
+        let sanitized = sanitize_field("rm -rf /\u{1b}]52;c;cm0gLXJmIC8=\u{7} --safe");
+
+        assert!(!sanitized.contains('\u{1b}'));
+        assert!(!sanitized.contains("]52;c;"));
+        assert!(!sanitized.contains("cm0gLXJmIC8="));
+        assert_eq!(sanitized, "rm -rf / --safe");
     }
 
     #[test]

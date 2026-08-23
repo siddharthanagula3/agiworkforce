@@ -45,6 +45,41 @@ pub enum SettingsServiceError {
     LockError(String),
 }
 
+fn cipher_from_key(key: &[u8]) -> Result<Aes256Gcm, SettingsServiceError> {
+    let key_bytes: [u8; 32] = key
+        .try_into()
+        .map_err(|_| SettingsServiceError::Encryption("Invalid master key length".into()))?;
+    Ok(Aes256Gcm::new(&Key::<Aes256Gcm>::from(key_bytes)))
+}
+
+fn decrypt_with_cipher(
+    cipher: &Aes256Gcm,
+    encrypted: &str,
+) -> Result<String, SettingsServiceError> {
+    let combined = general_purpose::STANDARD
+        .decode(encrypted)
+        .map_err(|e| SettingsServiceError::Encryption(format!("Invalid encrypted data: {}", e)))?;
+
+    if combined.len() < 12 {
+        return Err(SettingsServiceError::Encryption(
+            "Encrypted data too short".to_string(),
+        ));
+    }
+
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce_array: [u8; 12] = nonce_bytes
+        .try_into()
+        .map_err(|_| SettingsServiceError::Encryption("Invalid nonce length".into()))?;
+    let nonce = Nonce::from(nonce_array);
+
+    let plaintext = cipher
+        .decrypt(&nonce, ciphertext)
+        .map_err(|e| SettingsServiceError::Encryption(format!("Decryption failed: {}", e)))?;
+
+    String::from_utf8(plaintext)
+        .map_err(|e| SettingsServiceError::Encryption(format!("Invalid UTF-8: {}", e)))
+}
+
 /// Settings service with encryption and caching
 pub struct SettingsService {
     conn: Arc<Mutex<Connection>>,
@@ -55,15 +90,14 @@ pub struct SettingsService {
 
 impl SettingsService {
     /// Create a new settings service
+    ///
+    /// F5: fails closed when the OS credential service has not supplied the
+    /// per-install secret, rather than encrypting settings under a key any
+    /// local process can recompute from machine identifiers.
     pub fn new(conn: Arc<Mutex<Connection>>) -> Result<Self, SettingsServiceError> {
-        // Get encryption key from machine-derived keys
-        let master_key = machine_key::derive_key(KeyPurpose::DatabaseEncryption);
-        let key_bytes: [u8; 32] = master_key
-            .as_slice()
-            .try_into()
-            .map_err(|_| SettingsServiceError::Encryption("Invalid master key length".into()))?;
-        let key = Key::<Aes256Gcm>::from(key_bytes);
-        let cipher = Aes256Gcm::new(&key);
+        let master_key = machine_key::try_derive_key(KeyPurpose::DatabaseEncryption)
+            .map_err(|error| SettingsServiceError::Encryption(error.to_string()))?;
+        let cipher = cipher_from_key(&master_key)?;
 
         Ok(Self {
             conn,
@@ -92,33 +126,57 @@ impl SettingsService {
         Ok(general_purpose::STANDARD.encode(combined))
     }
 
-    fn decrypt(&self, encrypted: &str) -> Result<String, SettingsServiceError> {
-        let cipher = self.cipher.lock().map_err(|_| {
-            SettingsServiceError::Encryption("Failed to acquire cipher lock".into())
+    /// Decrypt a setting an older build may have wrapped under the machine-only
+    /// key, reporting whether it still needs to be written back.
+    fn decrypt_rotating(
+        &self,
+        key: &str,
+        encrypted: &str,
+    ) -> Result<(String, bool), SettingsServiceError> {
+        let label = format!("settings_v2:{key}");
+        let opened = machine_key::open_with_key_rotation(
+            KeyPurpose::DatabaseEncryption,
+            &label,
+            |candidate| {
+                let cipher = cipher_from_key(candidate).ok()?;
+                decrypt_with_cipher(&cipher, encrypted).ok()
+            },
+        )
+        .map_err(|error| SettingsServiceError::Encryption(error.to_string()))?
+        .ok_or_else(|| {
+            SettingsServiceError::Encryption(format!("Decryption failed for setting '{key}'"))
         })?;
 
-        let combined = general_purpose::STANDARD.decode(encrypted).map_err(|e| {
-            SettingsServiceError::Encryption(format!("Invalid encrypted data: {}", e))
-        })?;
+        Ok((opened.value, opened.rewrap_required))
+    }
 
-        if combined.len() < 12 {
-            return Err(SettingsServiceError::Encryption(
-                "Encrypted data too short".to_string(),
-            ));
+    /// Write a legacy-wrapped setting back under the per-install key.
+    ///
+    /// A failed re-wrap leaves the readable legacy row untouched and keeps the
+    /// setting reported by `machine_key::has_machine_only_secrets`, so the next
+    /// read retries instead of losing the value.
+    fn rewrap_setting(&self, conn: &Connection, setting: &Setting, plaintext: &str) {
+        let rewrapped = self.encrypt(plaintext).and_then(|encrypted| {
+            repository::upsert_setting(
+                conn,
+                setting.key.clone(),
+                SettingValue::String(encrypted),
+                setting.category,
+                true,
+            )
+            .map_err(SettingsServiceError::from)
+        });
+
+        match rewrapped {
+            Ok(()) => tracing::info!(
+                "Re-wrapped setting '{}' under the per-install encryption key",
+                setting.key
+            ),
+            Err(error) => tracing::warn!(
+                "Could not re-wrap setting '{}' under the per-install encryption key: {error}",
+                setting.key
+            ),
         }
-
-        let (nonce_bytes, ciphertext) = combined.split_at(12);
-        let nonce_array: [u8; 12] = nonce_bytes
-            .try_into()
-            .map_err(|_| SettingsServiceError::Encryption("Invalid nonce length".into()))?;
-        let nonce = Nonce::from(nonce_array);
-
-        let plaintext = cipher
-            .decrypt(&nonce, ciphertext)
-            .map_err(|e| SettingsServiceError::Encryption(format!("Decryption failed: {}", e)))?;
-
-        String::from_utf8(plaintext)
-            .map_err(|e| SettingsServiceError::Encryption(format!("Invalid UTF-8: {}", e)))
     }
 
     pub fn set(
@@ -173,7 +231,10 @@ impl SettingsService {
                 .as_string()
                 .ok_or_else(|| SettingsServiceError::InvalidType(key.to_string()))?
                 .to_owned();
-            let decrypted = self.decrypt(&encrypted_str)?;
+            let (decrypted, rewrap_required) = self.decrypt_rotating(key, &encrypted_str)?;
+            if rewrap_required {
+                self.rewrap_setting(&conn, &setting, &decrypted);
+            }
             SettingValue::from_json_string(&decrypted)?
         } else {
             stored_value
@@ -339,7 +400,11 @@ impl SettingsService {
                     .as_string()
                     .ok_or_else(|| SettingsServiceError::InvalidType(setting.key.clone()))?
                     .to_owned();
-                let decrypted = self.decrypt(&encrypted_str)?;
+                let (decrypted, rewrap_required) =
+                    self.decrypt_rotating(&setting.key, &encrypted_str)?;
+                if rewrap_required {
+                    self.rewrap_setting(&conn, &setting, &decrypted);
+                }
                 SettingValue::from_json_string(&decrypted)?
             } else {
                 stored_value

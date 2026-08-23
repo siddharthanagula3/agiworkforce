@@ -28,6 +28,8 @@ import yaml
 
 from skillspector.constants import MODEL_CONFIG
 from skillspector.logging_config import get_logger
+from skillspector.models import Finding
+from skillspector.nodes.analyzers.static_runner import MAX_FILE_BYTES
 from skillspector.state import SkillspectorState
 
 logger = get_logger(__name__)
@@ -59,6 +61,22 @@ _FILE_TYPES: dict[str, str] = {
 _EXECUTABLE_EXTENSIONS = frozenset(
     {".py", ".sh", ".bash", ".zsh", ".js", ".ts", ".rb", ".go", ".rs", ".pl"}
 )
+
+# Manifest fields are attacker-authored and reach every metadata analyzer, so
+# they are capped the way file bodies are capped by MAX_FILE_BYTES. Without a
+# cap, one multi-megabyte frontmatter value costs each analyzer a full pass (and
+# a superlinear one for any pattern that scans for a delimiter), which stalls
+# the vetting gate on a skill the attacker submits.
+MAX_MANIFEST_FIELD_CHARS = 20_000
+
+# The frontmatter search and the YAML parse run on attacker-authored bytes, so
+# they get the same budget the analyzers get for a file body. Both caps are
+# reported as a finding whenever they bite: the loader that installs the skill
+# reads the whole manifest, so what is cut here is metadata only the scanner is
+# blind to, and silence about that is an evasion rather than a saving.
+MAX_MANIFEST_BYTES = MAX_FILE_BYTES
+
+_MANIFEST_CATEGORY = "Manifest Integrity"
 
 
 def _resolve_skill_dir(state: SkillspectorState) -> Path:
@@ -189,62 +207,197 @@ def _read_file_cache(skill_dir: Path, components: list[str]) -> dict[str, str]:
     return file_cache
 
 
-def _parse_manifest(skill_dir: Path) -> dict[str, object]:
+def _unread_manifest_finding(file_name: str, message: str) -> Finding:
+    """Report manifest metadata the scanner cut before any analyzer saw it."""
+    return Finding(
+        rule_id="MF1",
+        message=message,
+        severity="HIGH",
+        confidence=0.85,
+        file=file_name,
+        category=_MANIFEST_CATEGORY,
+        explanation=(
+            "A skill loader reads the whole manifest, while the analyzers here only see what "
+            "this node parsed. Padding a manifest past these caps therefore hides later "
+            "fields — including any hidden instruction — from every metadata check."
+        ),
+        remediation=(
+            "Keep SKILL.md frontmatter and its fields small enough to analyze, and close the "
+            "frontmatter with '---'. Treat a manifest that needs cutting as untrusted."
+        ),
+    )
+
+
+def _unparsed_manifest_finding(file_name: str) -> Finding:
+    """Report a frontmatter that exists but yields no manifest to analyze."""
+    return Finding(
+        rule_id="MF2",
+        message=f"{file_name} frontmatter is not a YAML mapping this scanner can parse.",
+        severity="MEDIUM",
+        confidence=0.7,
+        file=file_name,
+        category=_MANIFEST_CATEGORY,
+        explanation=(
+            "Every manifest analyzer skips a skill whose frontmatter fails to parse, so YAML "
+            "this parser rejects and a skill loader accepts would clear the gate unexamined."
+        ),
+        remediation="Fix the SKILL.md frontmatter so it parses as a YAML mapping, then rescan.",
+    )
+
+
+def _cap_text(value: str, field: str, truncated: list[str]) -> str:
+    """Truncate an over-long manifest string so analyzers see a bounded field."""
+    if len(value) <= MAX_MANIFEST_FIELD_CHARS:
+        return value
+    truncated.append(field)
+    logger.warning(
+        "Manifest field %s is %d chars; truncating to %d before analysis",
+        field,
+        len(value),
+        MAX_MANIFEST_FIELD_CHARS,
+    )
+    return value[:MAX_MANIFEST_FIELD_CHARS]
+
+
+def _cap_field(value: object, field: str, truncated: list[str]) -> object:
+    """Cap a manifest value of unknown type, leaving non-strings untouched."""
+    return _cap_text(value, field, truncated) if isinstance(value, str) else value
+
+
+def _cap_parameter(param: dict, index: int, truncated: list[str]) -> dict:
+    """Return a parameter dict whose string values are length-capped."""
+    return {
+        key: _cap_field(value, f"parameters[{index}].{key}", truncated)
+        for key, value in param.items()
+    }
+
+
+def _capped_manifest(data: dict, truncated: list[str]) -> dict[str, object]:
+    """Build the manifest analyzers consume, capping every attacker-authored string."""
+    manifest: dict[str, object] = {}
+    if "name" in data:
+        manifest["name"] = _cap_field(data["name"], "name", truncated)
+    if "description" in data:
+        manifest["description"] = _cap_field(data["description"], "description", truncated)
+    triggers = data.get("triggers", [])
+    manifest["triggers"] = (
+        [_cap_text(str(t), f"triggers[{i}]", truncated) for i, t in enumerate(triggers)]
+        if isinstance(triggers, list)
+        else []
+    )
+    permissions = data.get("permissions", [])
+    manifest["permissions"] = (
+        [_cap_text(str(perm), f"permissions[{i}]", truncated) for i, perm in enumerate(permissions)]
+        if isinstance(permissions, list)
+        else []
+    )
+    # Preserve parameter definitions as dicts so the MCP tool-poisoning
+    # analyzer (TP1/TP2/TP3 parameter checks) can inspect them. Without
+    # this, those checks never fire on real scans because the manifest
+    # carried no `parameters` key.
+    parameters = data.get("parameters", [])
+    manifest["parameters"] = (
+        [_cap_parameter(p, i, truncated) for i, p in enumerate(parameters) if isinstance(p, dict)]
+        if isinstance(parameters, list)
+        else []
+    )
+    return manifest
+
+
+def _read_manifest(path: Path) -> tuple[str, bool]:
+    """Read a manifest up to the read cap, reporting whether the cap cut it."""
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        content = handle.read(MAX_MANIFEST_BYTES + 1)
+    if len(content) > MAX_MANIFEST_BYTES:
+        logger.warning(
+            "Manifest %s exceeds %d characters; analyzing the prefix only",
+            path.name,
+            MAX_MANIFEST_BYTES,
+        )
+        return content[:MAX_MANIFEST_BYTES], True
+    return content, False
+
+
+def _load_frontmatter(text: str, *, cut_mid_line: bool) -> object:
+    """Parse frontmatter YAML, retrying once without the line the read cap split."""
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError:
+        if not cut_mid_line:
+            raise
+        last_line = text.rfind("\n")
+        if last_line < 0:
+            return None
+        try:
+            return yaml.safe_load(text[:last_line])
+        except yaml.YAMLError:
+            return None
+
+
+def _parse_manifest(skill_dir: Path) -> tuple[dict[str, object], list[Finding]]:
     """Parse SKILL.md or skill.md YAML frontmatter into a manifest dict.
 
-    Returns dict with name, description, triggers (list), permissions (list).
-    Returns {} if no file or parse fails.
+    Returns the manifest (name, description, triggers, permissions, parameters)
+    together with findings for any part of it the scanner could not read the way
+    the loader installing the skill will. Returns ({}, []) if no file, no
+    frontmatter, or an empty one.
     """
     for name in ("SKILL.md", "skill.md"):
         path = skill_dir / name
         if not path.is_file():
             continue
         try:
-            content = path.read_text(encoding="utf-8", errors="replace")
+            content, capped = _read_manifest(path)
         except OSError:
             logger.debug("Could not read manifest file: %s", name)
-            return {}
+            return {}, []
         if not content.startswith("---"):
-            return {}
+            return {}, []
         end_match = re.search(r"\n---\s*\n", content[3:])
-        if not end_match:
-            return {}
-        frontmatter = content[3 : end_match.start() + 3]
+        if end_match is None and not capped:
+            return {}, []
+        findings: list[Finding] = []
+        if end_match is not None:
+            frontmatter = content[3 : end_match.start() + 3]
+        else:
+            frontmatter = content[3:]
+            findings.append(
+                _unread_manifest_finding(
+                    name,
+                    f"{name} frontmatter has no closing '---' within its first "
+                    f"{MAX_MANIFEST_BYTES} characters, so any field past that point was "
+                    "never analyzed.",
+                )
+            )
         try:
-            data = yaml.safe_load(frontmatter)
+            data = _load_frontmatter(frontmatter, cut_mid_line=end_match is None)
         except yaml.YAMLError:
-            logger.debug("Manifest parse failed for %s", name)
-            return {}
+            logger.warning("Manifest parse failed for %s", name)
+            return {}, [_unparsed_manifest_finding(name)]
+        if data is None:
+            return {}, findings
         if not isinstance(data, dict):
-            return {}
-        manifest: dict[str, object] = {}
-        if "name" in data:
-            manifest["name"] = data["name"]
-        if "description" in data:
-            manifest["description"] = data["description"]
-        triggers = data.get("triggers", [])
-        manifest["triggers"] = [str(t) for t in triggers] if isinstance(triggers, list) else []
-        permissions = data.get("permissions", [])
-        manifest["permissions"] = (
-            [str(p) for p in permissions] if isinstance(permissions, list) else []
-        )
-        # Preserve parameter definitions as dicts so the MCP tool-poisoning
-        # analyzer (TP1/TP2/TP3 parameter checks) can inspect them. Without
-        # this, those checks never fire on real scans because the manifest
-        # carried no `parameters` key.
-        parameters = data.get("parameters", [])
-        manifest["parameters"] = (
-            [p for p in parameters if isinstance(p, dict)] if isinstance(parameters, list) else []
-        )
-        return manifest
-    return {}
+            return {}, [*findings, _unparsed_manifest_finding(name)]
+        truncated: list[str] = []
+        manifest = _capped_manifest(data, truncated)
+        if truncated:
+            findings.append(
+                _unread_manifest_finding(
+                    name,
+                    f"{name} metadata field(s) {', '.join(truncated)} exceed "
+                    f"{MAX_MANIFEST_FIELD_CHARS} characters, so only the first "
+                    f"{MAX_MANIFEST_FIELD_CHARS} of each were analyzed.",
+                )
+            )
+        return manifest, findings
+    return {}, []
 
 
 def build_context(state: SkillspectorState) -> dict[str, object]:
     """Build flat ScanContext fields from state skill_path (local directory).
 
     Resolves skill_path to a directory, walks files, builds file_cache
-    and manifest. Returns only context keys; leaves findings untouched.
+    and manifest. Returns context keys plus any manifest-integrity findings.
     Raises ValueError if skill_path is missing or not an existing directory.
     """
     skill_dir = _resolve_skill_dir(state)
@@ -257,7 +410,7 @@ def build_context(state: SkillspectorState) -> dict[str, object]:
             ", ".join(escaping_links),
         )
     file_cache = _read_file_cache(skill_dir, components)
-    manifest = _parse_manifest(skill_dir)
+    manifest, manifest_findings = _parse_manifest(skill_dir)
     component_metadata, has_executable_scripts = _build_component_metadata(skill_dir, components)
 
     return {
@@ -266,6 +419,7 @@ def build_context(state: SkillspectorState) -> dict[str, object]:
         "file_cache": file_cache,
         "ast_cache": {},
         "manifest": manifest,
+        "findings": manifest_findings,
         "previous_manifest": None,
         "model_config": MODEL_CONFIG,
         "component_metadata": component_metadata,

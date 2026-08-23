@@ -31,6 +31,7 @@ pub(crate) async fn connect(
     if timeouts.validate_urls {
         crate::security::validate_server_url(url).with_context(|| format!("[{name}] SSE"))?;
     }
+    refuse_cleartext_credentials(name, url, headers)?;
     let client = build_sse_client(url, &timeouts)?;
 
     let resp = open_sse_stream(name, &client, url, headers).await?;
@@ -49,7 +50,7 @@ pub(crate) async fn connect(
         name,
         url,
         resp,
-        timeouts.max_frame_bytes,
+        timeouts.frame_cap(),
         tx,
         Some(endpoint_tx),
         notif_tx,
@@ -88,6 +89,7 @@ pub(crate) async fn connect_legacy(
         crate::security::validate_server_url(base_url)
             .with_context(|| format!("[{name}] SSE-legacy"))?;
     }
+    refuse_cleartext_credentials(name, base_url, headers)?;
     let client = build_sse_client(base_url, &timeouts)?;
 
     let base = base_url.trim_end_matches('/');
@@ -107,7 +109,7 @@ pub(crate) async fn connect_legacy(
         sse_url,
         headers.clone(),
         client.clone(),
-        timeouts.max_frame_bytes,
+        timeouts.frame_cap(),
         tx,
         notif_tx,
     );
@@ -119,6 +121,23 @@ pub(crate) async fn connect_legacy(
         rx,
         session_id: None,
     })
+}
+
+/// Refuse to hand configured credentials to a cleartext connection. Loopback
+/// stays exempt so local `http://` dev MCP servers keep working; every other
+/// host must be reached over HTTPS before an `Authorization`/API-key header the
+/// host configured is attached to a GET or a POST. Headers that carry no secret
+/// do not gate bringup — see [`super::http::headers_carry_credentials`].
+fn refuse_cleartext_credentials(
+    name: &str,
+    url: &str,
+    headers: &HashMap<String, String>,
+) -> Result<()> {
+    if !super::http::headers_carry_credentials(headers) {
+        return Ok(());
+    }
+    crate::security::enforce_https_for_remote(url)
+        .with_context(|| format!("[{name}] refusing to send configured MCP headers in cleartext"))
 }
 
 /// Reconnect cap for the legacy SSE listener: consecutive connect failures
@@ -138,7 +157,7 @@ fn spawn_legacy_sse_supervisor(
     sse_url: String,
     headers: HashMap<String, String>,
     client: reqwest::Client,
-    max_frame: Option<usize>,
+    max_frame: usize,
     tx: mpsc::Sender<serde_json::Value>,
     notif_tx: mpsc::Sender<McpNotification>,
 ) {
@@ -202,7 +221,12 @@ fn spawn_legacy_sse_supervisor(
 /// cap kills it. Per-call timeouts are applied via `tokio::time::timeout` in
 /// send_request.
 fn build_sse_client(url: &str, timeouts: &McpTimeouts) -> Result<reqwest::Client> {
-    let mut builder = reqwest::Client::builder();
+    // This one client carries the SSE GET *and* every JSON-RPC POST, so the
+    // redirect pin has to be here: an unpinned client would hand a
+    // `307 Location: http://attacker.example/` the replayed request body and
+    // the configured credential headers, whatever the endpoint-hint and
+    // cleartext checks decided about the URL we asked for.
+    let mut builder = reqwest::Client::builder().redirect(super::http::pinned_redirect_policy(url));
     // Takes the url so the policy is enforced HERE, beside the dangerous call,
     // rather than at each caller where a new one could forget it. Release
     // builds refuse this outright; debug builds allow loopback only.
@@ -265,7 +289,7 @@ fn spawn_stream_drain(
     name: &str,
     url: &str,
     resp: reqwest::Response,
-    max_frame: Option<usize>,
+    max_frame: usize,
     tx: mpsc::Sender<serde_json::Value>,
     endpoint_tx: Option<mpsc::Sender<String>>,
     notif_tx: mpsc::Sender<McpNotification>,
@@ -292,7 +316,7 @@ async fn drain_stream(
     server_name: &str,
     base_url: &str,
     resp: reqwest::Response,
-    max_frame: Option<usize>,
+    max_frame: usize,
     tx: &mpsc::Sender<serde_json::Value>,
     endpoint_tx: Option<&mpsc::Sender<String>>,
     notif_tx: &mpsc::Sender<McpNotification>,
@@ -310,13 +334,12 @@ async fn drain_stream(
                 }
             };
             buf.extend_from_slice(&chunk);
-            // Optional hardening: reject a single unbounded frame instead of
-            // growing the buffer without limit. Off by default (CLI parity).
-            if let Some(cap) = max_frame {
-                if buf.len() > cap && find_subsequence(&buf, b"\n\n").is_none() {
-                    eprintln!("[{server_name}] SSE frame exceeded {cap} bytes; closing stream");
-                    break;
-                }
+            // The bytes come from the remote server, so this cap is not
+            // optional: without a frame boundary the buffer would grow until
+            // the host process dies.
+            if buf.len() > max_frame && find_subsequence(&buf, b"\n\n").is_none() {
+                eprintln!("[{server_name}] SSE frame exceeded {max_frame} bytes; closing stream");
+                break;
             }
             // SSE frames are separated by "\n\n"; data lines start with "data: ".
             while let Some(pos) = find_subsequence(&buf, b"\n\n") {
@@ -346,8 +369,16 @@ async fn drain_stream(
                 // their POST endpoint is fixed at `{base}/message`.
                 if current_event.as_deref() == Some("endpoint") {
                     if let Some(ep_tx) = endpoint_tx {
-                        let endpoint = resolve_endpoint(base_url, data_buf.trim());
-                        let _ = ep_tx.try_send(endpoint);
+                        match resolve_endpoint(base_url, data_buf.trim()) {
+                            Ok(endpoint) => {
+                                let _ = ep_tx.try_send(endpoint);
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "[{server_name}] SSE: ignoring endpoint hint: {e:#}; POSTing to {base_url}"
+                                );
+                            }
+                        }
                     }
                     current_event = None;
                     continue;
@@ -387,14 +418,148 @@ async fn drain_stream(
 
 /// Resolve the SSE-supplied endpoint hint against the original SSE URL. Hints
 /// may be absolute (`https://...`) or relative paths (`/messages?id=…`).
-fn resolve_endpoint(base_url: &str, hint: &str) -> String {
-    if hint.starts_with("http://") || hint.starts_with("https://") {
-        return hint.to_string();
+///
+/// The hint is chosen by the remote server, and every later JSON-RPC POST —
+/// carrying the credential headers the host configured for *this* server — goes
+/// to whatever it names. So it is resolved against the configured URL and then
+/// held to that origin: a cross-origin hint (absolute, or a protocol-relative
+/// `//other.host/path` that `join` would honor) is refused, and the caller
+/// keeps POSTing to the URL the user configured.
+fn resolve_endpoint(base_url: &str, hint: &str) -> Result<String> {
+    let base = reqwest::Url::parse(base_url)
+        .with_context(|| format!("parse SSE base URL '{base_url}'"))?;
+    let resolved = base
+        .join(hint)
+        .with_context(|| format!("resolve SSE endpoint hint '{hint}'"))?;
+    crate::security::enforce_same_origin(base_url, resolved.as_str(), "SSE endpoint hint")?;
+    Ok(resolved.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BASE: &str = "https://legit-mcp.example.com/sse";
+
+    #[test]
+    fn relative_hint_resolves_against_the_configured_url() {
+        assert_eq!(
+            resolve_endpoint(BASE, "/messages?sessionId=42").unwrap(),
+            "https://legit-mcp.example.com/messages?sessionId=42"
+        );
     }
-    if let Ok(base) = reqwest::Url::parse(base_url) {
-        if let Ok(joined) = base.join(hint) {
-            return joined.into();
-        }
+
+    #[test]
+    fn same_origin_absolute_hint_is_kept() {
+        assert_eq!(
+            resolve_endpoint(BASE, "https://legit-mcp.example.com/messages").unwrap(),
+            "https://legit-mcp.example.com/messages"
+        );
     }
-    hint.to_string()
+
+    #[test]
+    fn cross_origin_absolute_hint_is_refused() {
+        let err = resolve_endpoint(BASE, "https://attacker.example/collect")
+            .expect_err("cross-origin endpoint hint must be refused");
+        assert!(
+            format!("{err:#}").contains("does not match the pinned origin"),
+            "{err:#}"
+        );
+    }
+
+    #[test]
+    fn protocol_relative_hint_is_refused() {
+        let err = resolve_endpoint(BASE, "//attacker.example/collect")
+            .expect_err("protocol-relative endpoint hint must be refused");
+        assert!(
+            format!("{err:#}").contains("does not match the pinned origin"),
+            "{err:#}"
+        );
+    }
+
+    #[test]
+    fn downgraded_and_offport_hints_are_refused() {
+        assert!(resolve_endpoint(BASE, "http://legit-mcp.example.com/messages").is_err());
+        assert!(resolve_endpoint(BASE, "https://legit-mcp.example.com:8443/messages").is_err());
+        assert!(resolve_endpoint(BASE, "file:///etc/passwd").is_err());
+    }
+
+    #[test]
+    fn loopback_dev_server_hint_still_works() {
+        assert_eq!(
+            resolve_endpoint(
+                "http://127.0.0.1:3000/sse",
+                "http://127.0.0.1:3000/messages"
+            )
+            .unwrap(),
+            "http://127.0.0.1:3000/messages"
+        );
+    }
+
+    #[test]
+    fn credential_headers_are_refused_over_cleartext_to_a_remote_host() {
+        let creds = HashMap::from([("Authorization".to_string(), "Bearer s3cret".to_string())]);
+        assert!(refuse_cleartext_credentials("t", "http://mcp.example.com/sse", &creds).is_err());
+        assert!(refuse_cleartext_credentials("t", "https://mcp.example.com/sse", &creds).is_ok());
+        assert!(refuse_cleartext_credentials("t", "http://127.0.0.1:3000/sse", &creds).is_ok());
+        assert!(
+            refuse_cleartext_credentials("t", "http://mcp.example.com/sse", &HashMap::new())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_benign_header_does_not_block_a_cleartext_lan_server() {
+        let benign = HashMap::from([("X-Client".to_string(), "agi".to_string())]);
+        assert!(refuse_cleartext_credentials("t", "http://192.168.1.5:3000/sse", &benign).is_ok());
+        let key = HashMap::from([("X-Api-Key".to_string(), "s3cret".to_string())]);
+        assert!(refuse_cleartext_credentials("t", "http://192.168.1.5:3000/sse", &key).is_err());
+    }
+
+    #[tokio::test]
+    async fn cross_origin_redirect_on_a_credentialed_post_is_refused() {
+        let (collector, hits) = crate::transport::http::raw_http::spawn_collector().await;
+        let server = crate::transport::http::raw_http::spawn_scripted(vec![format!(
+            "HTTP/1.1 307 Temporary Redirect\r\nLocation: http://{collector}/collect\r\nContent-Length: 0\r\n\r\n"
+        )])
+        .await;
+
+        let url = format!("http://{server}/sse");
+        let client = build_sse_client(&url, &McpTimeouts::default()).expect("build sse client");
+
+        let result = client
+            .post(&url)
+            .header("X-Api-Key", "STATIC_API_KEY")
+            .json(&serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call"}))
+            .send()
+            .await;
+
+        let seen = hits.lock().expect("collector lock").clone();
+        assert!(seen.is_empty(), "attacker origin was contacted: {seen:?}");
+        let err = result.expect_err("a cross-origin redirect must not be followed");
+        assert!(err.is_redirect(), "{err}");
+    }
+
+    #[tokio::test]
+    async fn same_origin_redirect_on_the_sse_client_is_followed() {
+        let server = crate::transport::http::raw_http::spawn_scripted(vec![
+            "HTTP/1.1 307 Temporary Redirect\r\nLocation: /message\r\nContent-Length: 0\r\n\r\n"
+                .to_string(),
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}"
+                .to_string(),
+        ])
+        .await;
+
+        let url = format!("http://{server}/sse");
+        let client = build_sse_client(&url, &McpTimeouts::default()).expect("build sse client");
+
+        let resp = client
+            .post(&url)
+            .json(&serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call"}))
+            .send()
+            .await
+            .expect("a same-origin redirect must still be followed");
+        assert!(resp.status().is_success(), "{}", resp.status());
+        assert!(resp.url().path().ends_with("/message"), "{}", resp.url());
+    }
 }

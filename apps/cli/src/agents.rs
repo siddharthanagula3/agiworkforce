@@ -56,7 +56,11 @@ impl AgentDefinition {
         if let Some(ref model) = self.model {
             if !model.is_empty() {
                 if let Err(err) = session.switch_model(model) {
-                    eprintln!("Agent `{}` model override ignored: {}", self.name, err);
+                    eprintln!(
+                        "Agent `{}` model override ignored: {}",
+                        crate::terminal_text::sanitize_terminal_text(&self.name),
+                        crate::terminal_text::sanitize_terminal_text(&err.to_string())
+                    );
                 }
             }
         }

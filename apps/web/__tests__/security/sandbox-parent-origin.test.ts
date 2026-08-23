@@ -4,36 +4,81 @@ import { join } from 'node:path';
 
 /**
  * The artifact sandbox renders whatever its parent tells it to render, so the
- * parent check is the whole boundary. It used to accept any host that both
- * started with `agiworkforce-` and ended with `.vercel.app`, which anyone can
- * satisfy by registering a project of that name.
+ * parent check is the whole boundary. It used to accept any host whose *shape*
+ * looked like a Vercel preview of this project (`agiworkforce-<hash>-<team>`),
+ * which anyone can mint by naming a free Vercel project `agiworkforce`.
  */
 
-const SANDBOX_HTML = readFileSync(
-  join(__dirname, '..', '..', '..', '..', 'infrastructure', 'sandbox', 'index.html'),
-  'utf8',
-);
+const SANDBOX_DIR = join(__dirname, '..', '..', '..', '..', 'infrastructure', 'sandbox');
+const SANDBOX_HTML = readFileSync(join(SANDBOX_DIR, 'index.html'), 'utf8');
+const SANDBOX_VERCEL_JSON = JSON.parse(readFileSync(join(SANDBOX_DIR, 'vercel.json'), 'utf8')) as {
+  headers: { source: string; headers: { key: string; value: string }[] }[];
+};
 
-function previewHostPattern(): RegExp {
-  const match = SANDBOX_HTML.match(/const VERCEL_PREVIEW_HOST\s*=\s*\n?\s*(\/[\s\S]*?\/);/);
-  if (!match) throw new Error('VERCEL_PREVIEW_HOST is no longer declared in the sandbox');
-  const body = match[1]!.slice(1, -1);
-  return new RegExp(body);
+function parentGateSource(): string {
+  const start = SANDBOX_HTML.indexOf('const ALLOWED_PARENT_ORIGINS');
+  const fnStart = SANDBOX_HTML.indexOf('function isAllowedParent(', start);
+  if (start < 0 || fnStart < 0) throw new Error('sandbox parent gate is no longer declared');
+  let depth = 0;
+  let i = SANDBOX_HTML.indexOf('{', fnStart);
+  for (; i < SANDBOX_HTML.length; i += 1) {
+    const char = SANDBOX_HTML[i];
+    if (char === '{') depth += 1;
+    else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) break;
+    }
+  }
+  return SANDBOX_HTML.slice(start, i + 1);
+}
+
+const isAllowedParent = new Function(`${parentGateSource()}\nreturn isAllowedParent;`)() as (
+  origin: string,
+) => boolean;
+
+function allowedOrigins(): string[] {
+  return [...parentGateSource().matchAll(/'([a-z]+:\/\/[^']+)'/g)].map((m) => m[1]!);
+}
+
+function frameAncestors(): string[] {
+  const csp = SANDBOX_VERCEL_JSON.headers
+    .flatMap((entry) => entry.headers)
+    .find((header) => header.key.toLowerCase() === 'content-security-policy');
+  if (!csp) throw new Error('sandbox vercel.json no longer sets a Content-Security-Policy');
+  const directive = csp.value
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith('frame-ancestors'));
+  if (!directive) throw new Error('sandbox CSP no longer sets frame-ancestors');
+  return directive.split(/\s+/).slice(1);
 }
 
 describe('artifact sandbox parent-origin allowlist', () => {
-  it('accepts a real Vercel preview host for this project', () => {
-    const pattern = previewHostPattern();
-    expect(pattern.test('agiworkforce-k3n8x2p9q-siddharthas-projects.vercel.app')).toBe(true);
+  it('accepts the enumerated application origins', () => {
+    for (const origin of ['https://agiworkforce.com', 'https://chat.agiworkforce.com']) {
+      expect(isAllowedParent(origin)).toBe(true);
+    }
+  });
+
+  it('keeps accepting the desktop host origins', () => {
+    expect(isAllowedParent('tauri://localhost')).toBe(true);
+    expect(isAllowedParent('http://tauri.localhost')).toBe(true);
   });
 
   it.each([
-    ['agiworkforce-pwn.vercel.app', 'a project anyone can register'],
-    ['agiworkforce-a-b.vercel.app', 'no deployment hash'],
-    ['notagiworkforce-k3n8x2p9q-team.vercel.app', 'a different project prefix'],
-    ['agiworkforce-k3n8x2p9q-team.vercel.app.evil.com', 'suffix smuggling'],
-  ])('rejects %s (%s)', (hostname) => {
-    expect(previewHostPattern().test(hostname)).toBe(false);
+    ['https://agiworkforce-k3n8x2p9q-atkteam.vercel.app', 'a preview host anyone can mint'],
+    ['https://agiworkforce-pwn.vercel.app', 'a project anyone can register'],
+    ['https://agiworkforce-chat.vercel.app.evil.com', 'suffix smuggling'],
+    ['https://evil.agiworkforce.com', 'an unlisted subdomain'],
+    ['http://agiworkforce.com', 'the wrong scheme'],
+    ['null', 'an opaque origin'],
+  ])('rejects %s (%s)', (origin) => {
+    expect(isAllowedParent(origin)).toBe(false);
+  });
+
+  it('has no hostname-shape fallback left in the gate', () => {
+    expect(SANDBOX_HTML).not.toContain('VERCEL_PREVIEW_HOST');
+    expect(parentGateSource()).not.toMatch(/\.test\(|startsWith\(|endsWith\(|RegExp/);
   });
 
   it('drops a message that did not come from the embedding parent', () => {
@@ -45,8 +90,16 @@ describe('artifact sandbox parent-origin allowlist', () => {
     expect(listener).toContain('event.source !== window.parent');
   });
 
-  it('keeps the origin check anchored, not a prefix/suffix pair', () => {
-    expect(SANDBOX_HTML).not.toContain("hostname.startsWith('agiworkforce-')");
-    expect(SANDBOX_HTML).not.toContain("hostname.endsWith('.vercel.app')");
+  it('lets no wildcard host frame the sandbox', () => {
+    for (const ancestor of frameAncestors()) {
+      expect(ancestor).not.toContain('*');
+    }
+  });
+
+  it('only lets origins the message gate trusts frame the sandbox', () => {
+    const allowed = new Set(allowedOrigins());
+    for (const ancestor of frameAncestors()) {
+      expect(allowed.has(ancestor)).toBe(true);
+    }
   });
 });

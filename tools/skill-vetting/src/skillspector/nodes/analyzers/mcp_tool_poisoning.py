@@ -22,6 +22,7 @@ import json
 import logging
 import re
 import unicodedata
+from collections.abc import Iterator
 
 from skillspector.llm_utils import chat_completion
 from skillspector.models import Finding
@@ -124,11 +125,64 @@ _TP1_INSTRUCTION_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
-# HTML comment patterns — handle both <!-- and <\!-- (YAML-escaped variant)
-_HTML_COMMENT_RE = re.compile(r"<\\?!--.*?-->", re.DOTALL)
+# Comment detection is delimiter pairing, not a regex gap. A lazy `.*?` between
+# an opener and its closing delimiter rescans everything after each opener, so a
+# metadata field of repeated `<!--` with no `-->` costs O(n^2) and stalls the
+# scan on attacker-authored frontmatter. `_iter_delimited` pairs each opener
+# with the next closer in one forward pass, which stays linear and — unlike a
+# bounded `.{0,N}?` gap — still reports comments of any length.
+# Do not reintroduce a `.*?` gap here.
+
+# HTML comment openers — handle both <!-- and <\!-- (YAML-escaped variant)
+_HTML_COMMENT_OPEN_RE = re.compile(r"<\\?!--")
+_HTML_COMMENT_CLOSE = "-->"
 
 # Markdown comment: [//]: # (...)
-_MARKDOWN_COMMENT_RE = re.compile(r"\[//\]:\s*#\s*\(.*?\)")
+_MARKDOWN_COMMENT_OPEN_RE = re.compile(r"\[//\]:\s*#\s*\(")
+_MARKDOWN_COMMENT_CLOSE = ")"
+
+
+def _iter_delimited(
+    text: str,
+    opener_re: re.Pattern[str],
+    closer: str,
+    *,
+    same_line: bool,
+) -> Iterator[str]:
+    """Yield each opener..closer span, scanning the text at most once."""
+    pos = 0
+    line_end = -1
+    closer_pos = -1
+    while True:
+        opener = opener_re.search(text, pos)
+        if opener is None:
+            return
+        body_start = opener.end()
+        if closer_pos < body_start:
+            # Openers arrive in increasing order, so each lookup starts past the
+            # previous closer and the lookups cover disjoint spans: this is a
+            # watermark, not the per-opener rescan that makes a lazy gap
+            # quadratic. A cached closer at or after body_start is still the
+            # first one, because it was the first at or after an earlier start.
+            closer_pos = text.find(closer, body_start)
+            if closer_pos < 0:
+                return
+        limit = len(text)
+        if same_line:
+            if body_start > line_end:
+                newline = text.find("\n", body_start)
+                line_end = len(text) if newline < 0 else newline
+            limit = line_end
+        if closer_pos + len(closer) > limit:
+            # This opener cannot pair, but a later one may: an opener whose own
+            # body starts past this line still reaches the closer, so advance by
+            # one opener rather than skipping the span.
+            pos = opener.start() + 1
+            continue
+        end = closer_pos + len(closer)
+        yield text[opener.start() : end]
+        pos = end
+
 
 # Zero-width chars followed by visible text
 _ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d]+\S")
@@ -136,8 +190,9 @@ _ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d]+\S")
 # Base64 blobs (>=50 chars) — checked AFTER data URI to avoid double-counting
 _BASE64_RE = re.compile(r"[A-Za-z0-9+/]{50,}={0,2}")
 
-# Data URI prefix
-_DATA_URI_RE = re.compile(r"data:text/[^;]+;base64,")
+# Data URI prefix. The subtype run is bounded: an unbounded `[^;]+` rescans to
+# the end of the field for every `data:text/` occurrence when no `;` follows.
+_DATA_URI_RE = re.compile(r"data:text/[^;\s]{1,255};base64,")
 
 
 def _check_tp1(text: str, source_field: str) -> list[Finding]:
@@ -173,8 +228,9 @@ def _check_tp1(text: str, source_field: str) -> list[Finding]:
         )
 
     # --- HTML comments ---
-    for m in _HTML_COMMENT_RE.finditer(text):
-        comment_text = m.group()
+    for comment_text in _iter_delimited(
+        text, _HTML_COMMENT_OPEN_RE, _HTML_COMMENT_CLOSE, same_line=False
+    ):
         if _TP1_INSTRUCTION_KEYWORDS.search(comment_text):
             confidence = 0.95
         else:
@@ -201,7 +257,9 @@ def _check_tp1(text: str, source_field: str) -> list[Finding]:
         )
 
     # --- Markdown comments ---
-    for m in _MARKDOWN_COMMENT_RE.finditer(text):
+    for comment_text in _iter_delimited(
+        text, _MARKDOWN_COMMENT_OPEN_RE, _MARKDOWN_COMMENT_CLOSE, same_line=True
+    ):
         findings.append(
             Finding(
                 rule_id="TP1",
@@ -213,7 +271,7 @@ def _check_tp1(text: str, source_field: str) -> list[Finding]:
                 file="SKILL.md",
                 category=_CATEGORY,
                 tags=list(_FRAMEWORK_TAGS),
-                matched_text=m.group(),
+                matched_text=comment_text,
                 explanation=(
                     "Markdown-style comments in metadata fields may hide instructions from users "
                     "while still being processed by AI systems."

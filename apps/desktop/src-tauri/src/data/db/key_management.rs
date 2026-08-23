@@ -1,14 +1,17 @@
-//! Stable SQLCipher key storage and legacy-key adoption for the main database.
+//! Stable SQLCipher key storage and legacy-key retirement for the main database.
 //!
 //! New installations use a random 256-bit key stored by the operating system's
 //! credential service. Existing machine-derived databases are opened only after
-//! a read-only SQLCipher proof, then that proven key is adopted into secure
-//! storage without rekeying or rewriting the database.
+//! a read-only SQLCipher proof, and a key that proof identifies as one of the
+//! legacy machine-only derivations is never kept: the database is rekeyed onto
+//! a fresh random key in the same step, because the legacy key is recomputable
+//! offline by any unprivileged local process from public machine identifiers.
 
 use super::encryption::{
-    inspect_database_format, open_or_migrate_encrypted_connection, DatabaseFormat,
-    DatabaseOpenError,
+    inspect_database_format, open_or_migrate_encrypted_connection, rekey_encrypted_database,
+    DatabaseFormat, DatabaseOpenError,
 };
+use crate::sys::security::machine_key;
 use rand::{rngs::OsRng, RngCore};
 use rusqlite::Connection;
 use std::path::Path;
@@ -154,7 +157,7 @@ pub enum DatabaseKeyError {
 pub enum DatabaseKeyOrigin {
     Stored,
     Generated,
-    AdoptedLegacy,
+    RekeyedLegacy,
     MigratedPlaintext,
 }
 
@@ -258,12 +261,52 @@ fn create_stable_database<S: DatabaseKeyStore>(
     open_with_key(path, &key, key_origin)
 }
 
+/// Retire a proven legacy machine-derived key by rekeying onto a fresh one.
+///
+/// Keeping the proven key would leave every byte of the database — chat
+/// history included — decryptable by anyone who can read this machine's public
+/// identifiers, which is the whole reason the key is legacy.
+///
+/// The replacement is persisted before the rekey runs. A crash between the two
+/// leaves a stored key that no longer opens the file, which the legacy proof
+/// below recovers from on the next launch; rekeying first would instead strand
+/// the database under a key nobody holds.
+fn retire_legacy_database_key<S: DatabaseKeyStore>(
+    path: &Path,
+    path_string: &str,
+    legacy_key: &[u8; DATABASE_KEY_BYTES],
+    store: &S,
+) -> Result<StableDatabase, DatabaseKeyError> {
+    let replacement = random_database_key()?;
+    store.store(&replacement)?;
+    // A store that accepts a write it does not keep (the WDIO harness stub) would
+    // otherwise leave the rekeyed file openable by nobody.
+    if store.load()?.as_ref() != Some(&replacement) {
+        return Err(DatabaseKeyError::SecureStorage(
+            "the replacement database key was not retained".to_string(),
+        ));
+    }
+
+    let label = format!("sqlcipher:{path_string}");
+    machine_key::record_machine_only_payload(&label);
+    tracing::info!("Rekeying {path_string} off the legacy machine-derived key");
+    rekey_encrypted_database(path, legacy_key, &replacement, &label).map_err(|error| {
+        DatabaseOpenError::KeyedDatabase(format!(
+            "the legacy machine-derived key could not be replaced: {error}"
+        ))
+    })?;
+    machine_key::clear_machine_only_payload(&label);
+
+    open_with_key(path_string, &replacement, DatabaseKeyOrigin::RekeyedLegacy)
+}
+
 /// Open the main database using a stable OS-protected key.
 ///
 /// Existing ciphertext is never modified while candidate keys are evaluated.
-/// A legacy candidate is persisted only after it has successfully read the
-/// schema. Plaintext migration uses a newly generated stable key unless a
-/// stored stable key already exists.
+/// A legacy candidate that reads the schema authorizes exactly one action —
+/// rekeying the file onto a fresh random key — and is never itself persisted,
+/// including when secure storage already holds it. Plaintext migration uses a
+/// newly generated stable key unless a stored stable key already exists.
 pub fn open_main_database<S: DatabaseKeyStore>(
     path: impl AsRef<Path>,
     store: &S,
@@ -276,6 +319,12 @@ pub fn open_main_database<S: DatabaseKeyStore>(
 
     if let Some(key) = stored_key {
         match inspect_database_format(path, &key) {
+            // An earlier build persisted the proven legacy key instead of
+            // replacing it, so secure storage holding a candidate is not proof
+            // the database is protected.
+            Ok(DatabaseFormat::Keyed) if legacy_candidates.contains(&key) => {
+                return retire_legacy_database_key(path, &path_string, &key, store);
+            }
             Ok(DatabaseFormat::New | DatabaseFormat::Keyed) => {
                 return open_with_key(&path_string, &key, DatabaseKeyOrigin::Stored);
             }
@@ -303,13 +352,10 @@ pub fn open_main_database<S: DatabaseKeyStore>(
         }
 
         match inspect_database_format(path, candidate) {
+            // Only a candidate that actually opened the schema authorizes a
+            // rekey, and the candidate itself is never what gets stored.
             Ok(DatabaseFormat::Keyed) => {
-                let database =
-                    open_with_key(&path_string, candidate, DatabaseKeyOrigin::AdoptedLegacy)?;
-                // Only a candidate that actually opened the schema can replace
-                // a missing/stale keychain item.
-                store.store(candidate)?;
-                return Ok(database);
+                return retire_legacy_database_key(path, &path_string, candidate, store);
             }
             Ok(DatabaseFormat::Plaintext) => {
                 return create_stable_database(
@@ -345,11 +391,13 @@ pub fn open_main_database<S: DatabaseKeyStore>(
             }
             Ok(DatabaseFormat::Keyed) => {
                 // A real SQLCipher database cannot be keyed with an arbitrary
-                // value by coincidence; keep the branch exhaustive.
-                return open_with_key(
+                // value by coincidence; keep the branch exhaustive, and retire
+                // a key this obviously guessable the same way.
+                return retire_legacy_database_key(
+                    path,
                     &path_string,
                     &[0u8; DATABASE_KEY_BYTES],
-                    DatabaseKeyOrigin::AdoptedLegacy,
+                    store,
                 );
             }
             Err(error @ DatabaseOpenError::EncryptedOrCorrupt { .. }) => {
@@ -495,8 +543,27 @@ mod tests {
         assert_eq!(value, "persisted");
     }
 
+    fn seed_database(path: &str, key: &[u8; DATABASE_KEY_BYTES], value: &str) {
+        let connection = open_encrypted_connection(path, key).expect("create database");
+        connection
+            .execute_batch(&format!(
+                "CREATE TABLE durable (value TEXT NOT NULL);
+                 INSERT INTO durable (value) VALUES ('{value}');"
+            ))
+            .expect("seed database");
+    }
+
+    fn durable_value(connection: &Connection) -> String {
+        connection
+            .query_row("SELECT value FROM durable", [], |row| row.get(0))
+            .expect("read durable value")
+    }
+
+    /// F12: the legacy candidates are PBKDF2 over public machine identifiers,
+    /// so any local process can recompute them offline. Proving one opens the
+    /// main database must retire it, not persist it.
     #[test]
-    fn proven_legacy_key_is_adopted_without_rewriting_database_bytes() {
+    fn proven_legacy_key_is_retired_and_stops_opening_the_database() {
         let temp_dir = tempfile::tempdir().expect("temp directory");
         let db_path = temp_dir.path().join("legacy.db");
         let path = db_path.to_string_lossy().to_string();
@@ -504,29 +571,149 @@ mod tests {
         let legacy_key = [0x83u8; DATABASE_KEY_BYTES];
         let store = MemoryKeyStore::default();
 
-        {
-            let connection =
-                open_encrypted_connection(&path, &legacy_key).expect("create legacy database");
-            connection
-                .execute_batch(
-                    "CREATE TABLE durable (value TEXT NOT NULL);
-                     INSERT INTO durable (value) VALUES ('legacy');",
-                )
-                .expect("seed legacy database");
-        }
-        let before = std::fs::read(&db_path).expect("snapshot legacy database");
+        seed_database(&path, &legacy_key, "legacy");
 
         let opened = open_main_database(&db_path, &store, &[wrong_key, legacy_key])
-            .expect("adopt proven legacy key");
-        assert_eq!(opened.key_origin, DatabaseKeyOrigin::AdoptedLegacy);
+            .expect("retire the proven legacy key");
+        assert_eq!(opened.key_origin, DatabaseKeyOrigin::RekeyedLegacy);
+        assert_eq!(durable_value(&opened.connection), "legacy");
         drop(opened);
-        assert_eq!(store.load().expect("load adopted key"), Some(legacy_key));
-        assert_eq!(*store.writes.lock().expect("write count"), 1);
+
+        let stored = store
+            .load()
+            .expect("load stored key")
+            .expect("a replacement key was persisted");
+        assert_ne!(stored, legacy_key, "the legacy key must never be stored");
+        assert_ne!(stored, wrong_key);
+
+        assert!(
+            matches!(
+                inspect_database_format(&db_path, &legacy_key),
+                Err(DatabaseOpenError::EncryptedOrCorrupt { .. })
+            ),
+            "the recomputable legacy key must no longer open the database"
+        );
+        assert!(
+            !std::fs::read_dir(temp_dir.path())
+                .expect("read temp dir")
+                .filter_map(Result::ok)
+                .any(|entry| entry.file_name().to_string_lossy().contains(".bak")),
+            "the pre-rekey copy stays readable under the legacy key and must be gone"
+        );
+
+        let reopened = open_main_database(&db_path, &store, &[wrong_key, legacy_key])
+            .expect("reopen under the replacement key");
+        assert_eq!(reopened.key_origin, DatabaseKeyOrigin::Stored);
+        assert_eq!(durable_value(&reopened.connection), "legacy");
+        assert_eq!(
+            *store.writes.lock().expect("write count"),
+            1,
+            "retiring the legacy key must be one-shot"
+        );
+    }
+
+    /// F12's exploit verbatim: recompute the shipped derivation from public
+    /// machine identifiers and open the main database with it. After startup
+    /// no candidate on that list may open the file any more.
+    #[test]
+    fn a_real_machine_key_candidate_no_longer_opens_the_main_database() {
+        let candidates = machine_key::legacy_database_key_candidates();
+        let attacker_key = *candidates
+            .first()
+            .expect("a legacy candidate always exists");
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("agiworkforce.db");
+        let path = db_path.to_string_lossy().to_string();
+        let store = MemoryKeyStore::default();
+
+        seed_database(&path, &attacker_key, "chat-history");
+        assert!(
+            matches!(
+                inspect_database_format(&db_path, &attacker_key),
+                Ok(DatabaseFormat::Keyed)
+            ),
+            "the recomputed key must open the shipped database before startup"
+        );
+
+        let opened =
+            open_main_database(&db_path, &store, &candidates).expect("startup opens the database");
+        assert_eq!(durable_value(&opened.connection), "chat-history");
+        drop(opened);
+
+        let stored = store.load().expect("load").expect("a key was persisted");
+        assert!(
+            !candidates.contains(&stored),
+            "a recomputable machine-only key must never be persisted"
+        );
+        for candidate in &candidates {
+            assert!(
+                matches!(
+                    inspect_database_format(&db_path, candidate),
+                    Err(DatabaseOpenError::EncryptedOrCorrupt { .. })
+                ),
+                "a recomputable machine-only key must no longer open the database"
+            );
+        }
+        assert!(
+            !machine_key::machine_only_payloads().contains(&format!("sqlcipher:{path}")),
+            "a retired database must stop reporting itself as machine-only"
+        );
+    }
+
+    /// An earlier build persisted the proven legacy key into secure storage.
+    /// A stored key is therefore not evidence the database is protected.
+    #[test]
+    fn a_stored_legacy_candidate_is_retired_on_the_next_launch() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("adopted.db");
+        let path = db_path.to_string_lossy().to_string();
+        let legacy_key = [0x4du8; DATABASE_KEY_BYTES];
+        let store = MemoryKeyStore::default();
+        store.store(&legacy_key).expect("seed adopted key");
+
+        seed_database(&path, &legacy_key, "adopted");
+
+        let opened = open_main_database(&db_path, &store, &[legacy_key])
+            .expect("retire the stored legacy key");
+        assert_eq!(opened.key_origin, DatabaseKeyOrigin::RekeyedLegacy);
+        assert_eq!(durable_value(&opened.connection), "adopted");
+        drop(opened);
+
+        assert_ne!(store.load().expect("load key"), Some(legacy_key));
+        assert!(matches!(
+            inspect_database_format(&db_path, &legacy_key),
+            Err(DatabaseOpenError::EncryptedOrCorrupt { .. })
+        ));
+    }
+
+    /// The replacement key is persisted first, so a store that cannot hold it
+    /// must leave the database exactly as it was rather than rekey blind.
+    #[test]
+    fn a_failed_key_replacement_leaves_the_legacy_database_intact() {
+        let temp_dir = tempfile::tempdir().expect("temp directory");
+        let db_path = temp_dir.path().join("legacy.db");
+        let path = db_path.to_string_lossy().to_string();
+        let legacy_key = [0x57u8; DATABASE_KEY_BYTES];
+        let store = MemoryKeyStore {
+            fail_writes: true,
+            ..MemoryKeyStore::default()
+        };
+
+        seed_database(&path, &legacy_key, "legacy");
+        let before = std::fs::read(&db_path).expect("snapshot legacy database");
+
+        let error = open_main_database(&db_path, &store, &[legacy_key])
+            .err()
+            .expect("an unpersistable replacement key must fail closed");
+        assert!(matches!(error, DatabaseKeyError::SecureStorage(_)));
         assert_eq!(
             std::fs::read(&db_path).expect("re-read legacy database"),
-            before,
-            "legacy-key adoption must not rekey or rewrite database bytes"
+            before
         );
+        assert!(matches!(
+            inspect_database_format(&db_path, &legacy_key),
+            Ok(DatabaseFormat::Keyed)
+        ));
     }
 
     #[test]

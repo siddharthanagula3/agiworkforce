@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -24,6 +24,23 @@ const DEFAULT_MEMORY_LIMIT_MB: u64 = 512;
 /// child process tree.
 #[cfg(target_os = "macos")]
 const MACOS_NETWORK_DENY_PROFILE: &str = "(version 1)\n(allow default)\n(deny network*)\n";
+
+#[cfg(not(windows))]
+const SANDBOX_PATH: &str = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin";
+
+/// Windows resolves executables and loads system DLLs through these; a child
+/// spawned with an empty environment fails to start at all.
+#[cfg(windows)]
+const WINDOWS_REQUIRED_ENV_VARS: &[&str] = &[
+    "PATH",
+    "PATHEXT",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "WINDIR",
+    "COMSPEC",
+    "NUMBER_OF_PROCESSORS",
+    "PROCESSOR_ARCHITECTURE",
+];
 
 /// Result of code execution in a sandbox
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -244,6 +261,54 @@ fn build_execution_command(
     }
 }
 
+/// Build the complete environment for the sandboxed child.
+///
+/// The child runs LLM-authored code with no human approval gate, and its
+/// stdout is folded back into the model's context. Inheriting the desktop
+/// process environment would therefore expose every ambient secret (signing
+/// keys, provider API keys) to that code, so the caller must `env_clear()`
+/// and apply only this map.
+fn sandbox_child_env(workspace_path: &Path, config: &ExecutionConfig) -> BTreeMap<String, String> {
+    let mut env = BTreeMap::new();
+    let workspace = workspace_path.to_string_lossy().into_owned();
+
+    #[cfg(not(windows))]
+    env.insert("PATH".to_string(), SANDBOX_PATH.to_string());
+
+    #[cfg(windows)]
+    for key in WINDOWS_REQUIRED_ENV_VARS {
+        if let Some(value) = std::env::var_os(key) {
+            env.insert((*key).to_string(), value.to_string_lossy().into_owned());
+        }
+    }
+
+    env.insert("HOME".to_string(), workspace.clone());
+    env.insert("TMPDIR".to_string(), workspace.clone());
+    env.insert("TEMP".to_string(), workspace.clone());
+    env.insert("TMP".to_string(), workspace);
+
+    if let Some(env_vars) = &config.env_vars {
+        for (key, value) in env_vars {
+            if crate::sys::security::env_filter::is_blocked_env_var(key) {
+                tracing::warn!(
+                    "[Sandbox] Blocked attempt to set dangerous environment variable: {}",
+                    key
+                );
+                continue;
+            }
+            env.insert(key.clone(), value.clone());
+        }
+    }
+
+    if !config.allow_network {
+        env.insert("OFFLINE".to_string(), "1".to_string());
+        env.insert("npm_config_offline".to_string(), "true".to_string());
+        env.insert("PIP_NO_INDEX".to_string(), "1".to_string());
+    }
+
+    env
+}
+
 /// A sandbox for isolated code execution
 #[derive(Debug, Clone)]
 pub struct Sandbox {
@@ -349,46 +414,8 @@ impl Sandbox {
         )?;
         cmd.current_dir(&self.workspace_path);
 
-        // Set environment variables
-        cmd.env("HOME", &self.workspace_path);
-        cmd.env("TMPDIR", &self.workspace_path);
-        cmd.env("TEMP", &self.workspace_path);
-        cmd.env("TMP", &self.workspace_path);
-
-        // Restrict PATH to essential directories only
-        #[cfg(not(windows))]
-        {
-            cmd.env("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
-        }
-
-        // Add custom environment variables.
-        //
-        // BATCH-5 (audit 2026-05-19): the inline `BLOCKED_ENV_VARS` constant
-        // formerly lived here. It moved to `crate::sys::security::env_filter`
-        // so this site, `sys/commands/code_execution`, and
-        // `core/mcp/transport` all consume the same canonical list. The
-        // BASH_FUNC_* prefix check is now handled by `is_blocked_env_var`.
-        if let Some(env_vars) = &config.env_vars {
-            for (key, value) in env_vars {
-                if crate::sys::security::env_filter::is_blocked_env_var(key) {
-                    tracing::warn!(
-                        "[Sandbox] Blocked attempt to set dangerous environment variable: {}",
-                        key
-                    );
-                } else {
-                    cmd.env(key, value);
-                }
-            }
-        }
-
-        // Keep common package managers in offline mode as defense in depth.
-        // This is not the enforcement boundary; build_execution_command above
-        // has already selected an OS sandbox or refused the launch.
-        if !config.allow_network {
-            cmd.env("OFFLINE", "1");
-            cmd.env("npm_config_offline", "true");
-            cmd.env("PIP_NO_INDEX", "1");
-        }
+        cmd.env_clear();
+        cmd.envs(sandbox_child_env(&self.workspace_path, &config));
 
         // Set up stdio
         cmd.stdout(Stdio::piped());
@@ -873,6 +900,7 @@ impl Drop for SandboxManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[tokio::test]
     async fn test_sandbox_creation() {
@@ -1144,5 +1172,122 @@ mod tests {
         let result = manager.execute_code(config).await.unwrap();
         assert!(result.success, "{}", result.stderr);
         assert_eq!(result.stdout.trim(), "1");
+    }
+
+    #[test]
+    fn sandbox_child_env_is_limited_to_the_minimal_allowlist() {
+        let mut env_vars = HashMap::new();
+        env_vars.insert("SAFE_TOKEN".to_string(), "ok".to_string());
+        env_vars.insert("LD_PRELOAD".to_string(), "/tmp/evil.so".to_string());
+        env_vars.insert("PATH".to_string(), "/tmp/evil".to_string());
+
+        let env = sandbox_child_env(
+            Path::new("/tmp/agi-sandbox"),
+            &ExecutionConfig {
+                env_vars: Some(env_vars),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(
+            env.get("HOME").map(String::as_str),
+            Some("/tmp/agi-sandbox")
+        );
+        assert_eq!(
+            env.get("TMPDIR").map(String::as_str),
+            Some("/tmp/agi-sandbox")
+        );
+        assert_eq!(env.get("SAFE_TOKEN").map(String::as_str), Some("ok"));
+        assert_eq!(env.get("OFFLINE").map(String::as_str), Some("1"));
+        assert!(!env.contains_key("LD_PRELOAD"));
+        assert_ne!(env.get("PATH").map(String::as_str), Some("/tmp/evil"));
+
+        #[cfg(windows)]
+        let platform_allowed: &[&str] = WINDOWS_REQUIRED_ENV_VARS;
+        #[cfg(not(windows))]
+        let platform_allowed: &[&str] = &[];
+
+        let allowed: Vec<&str> = [
+            &[
+                "HOME",
+                "PATH",
+                "TMPDIR",
+                "TEMP",
+                "TMP",
+                "OFFLINE",
+                "npm_config_offline",
+                "PIP_NO_INDEX",
+                "SAFE_TOKEN",
+            ][..],
+            platform_allowed,
+        ]
+        .concat();
+
+        for key in env.keys() {
+            assert!(
+                allowed.contains(&key.as_str()),
+                "unexpected sandbox env var {key}"
+            );
+        }
+    }
+
+    fn env_key_set(stdout: &str) -> HashSet<String> {
+        stdout
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn sandboxed_code_never_inherits_the_parent_process_environment() {
+        let dump_env = "import os\nfor key in sorted(os.environ):\n    print(key)";
+        let config = ExecutionConfig {
+            language: "python".to_string(),
+            code: dump_env.to_string(),
+            allow_network: true,
+            ..Default::default()
+        };
+
+        // Interpreter shims add their own variables (on macOS the CoreFoundation
+        // and xcrun ones), so the baseline is measured from an explicitly cleared
+        // launch of the same runner rather than hardcoded.
+        let runner = LanguageRunner::for_language(&config.language).unwrap();
+        let baseline = std::process::Command::new(&runner.command)
+            .args(&runner.args)
+            .arg("-c")
+            .arg(dump_env)
+            .env_clear()
+            .envs(sandbox_child_env(Path::new("/tmp"), &config))
+            .output();
+        let baseline = match baseline {
+            Ok(output) if output.status.success() => output,
+            _ => return,
+        };
+        let permitted = env_key_set(&String::from_utf8_lossy(&baseline.stdout));
+
+        let manager = SandboxManager::new().unwrap();
+        let result = match manager.execute_code(config).await {
+            Ok(result) => result,
+            Err(error) if error.to_string().contains("Is python") => return,
+            Err(error) => panic!("{error}"),
+        };
+        assert!(result.success, "{}", result.stderr);
+
+        let child_keys = env_key_set(&result.stdout);
+        assert!(child_keys.contains("HOME"), "{}", result.stdout);
+        assert!(child_keys.contains("PATH"), "{}", result.stdout);
+        assert!(
+            std::env::vars().any(|(key, _)| !permitted.contains(&key)),
+            "parent process holds no extra env vars, test would be vacuous"
+        );
+
+        for key in &child_keys {
+            assert!(
+                permitted.contains(key),
+                "sandboxed child inherited ambient env var {key}"
+            );
+        }
     }
 }

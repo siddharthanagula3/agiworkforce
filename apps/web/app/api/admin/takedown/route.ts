@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -18,7 +18,7 @@ import { findPublicTarget, normalizeToken } from './lib/public-target';
 // Operator-side revocation of publicly reachable content. DELETE
 // /api/share/[token] and DELETE /api/artifacts/publish/[token] stay owner-only
 // on purpose — a rights-holder notice must not be answered by loosening the
-// owner guard, so takedown is a separate, admin-gated, audited path.
+// owner guard, so takedown is a separate, platform-operator-gated, audited path.
 //
 // The public intake that feeds it is POST /api/copyright-notice, which records
 // and forwards a notice but never removes anything: an allegation from an
@@ -33,7 +33,7 @@ async function handleLookup(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'admin-security');
   if (rateLimitResponse) return rateLimitResponse;
 
-  await requireAdmin(request);
+  await requirePlatformAdmin(request);
 
   const raw = request.nextUrl.searchParams.get('token');
   if (!raw) {
@@ -60,7 +60,7 @@ async function handleTakedown(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'admin-security');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId: adminUserId } = await requireAdmin(request);
+  const { userId: adminUserId } = await requirePlatformAdmin(request);
 
   const body = await request.json().catch(() => null);
   const parsed = TakedownSchema.safeParse(body);

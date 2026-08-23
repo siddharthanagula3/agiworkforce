@@ -44,21 +44,23 @@ export async function POST(request: NextRequest) {
   let verifiedUserId: string | null = null;
 
   if (parsed.token) {
+    const secretKey = process.env['CLERK_SECRET_KEY'];
+    if (!secretKey) {
+      logger.error({}, 'CLERK_SECRET_KEY not configured');
+      return NextResponse.json({ ok: false, error: 'Server configuration error' }, { status: 500 });
+    }
+
+    let authorizedParties: string[];
+    try {
+      authorizedParties = getClerkAuthorizedParties();
+    } catch (error) {
+      logger.error({ error }, 'Clerk authorized parties are not configured');
+      return NextResponse.json({ ok: false, error: 'Server configuration error' }, { status: 500 });
+    }
+
     try {
       const { verifyToken } = await import('@clerk/backend');
-      const secretKey = process.env['CLERK_SECRET_KEY'];
-      if (!secretKey) {
-        logger.error({}, 'CLERK_SECRET_KEY not configured');
-        return NextResponse.json(
-          { ok: false, error: 'Server configuration error' },
-          { status: 500 },
-        );
-      }
-      const authorizedParties = getClerkAuthorizedParties();
-      const claims = await verifyToken(parsed.token, {
-        secretKey,
-        ...(authorizedParties.length > 0 ? { authorizedParties } : {}),
-      });
+      const claims = await verifyToken(parsed.token, { secretKey, authorizedParties });
       if (!claims.sub) {
         return NextResponse.json({ ok: false, error: 'Invalid token' }, { status: 401 });
       }

@@ -45,4 +45,11 @@ SIGNALING_WS_PATH = "/ws"
 # - NEON_DATABASE_URL
 # - SIGNALING_HTTP_URL (set to your Railway public URL)
 # - SIGNALING_WS_URL (set to wss://your-domain.railway.app/ws)
-# - ALLOWED_ORIGINS (comma-separated list of allowed origins)
+# - SIGNALING_INTERNAL_SECRET (bearer secret for /pairings and for no-Origin clients)
+#
+# REQUIRED before the first production deploy:
+# - ALLOWED_ORIGINS (comma-separated list of the exact Origin headers the desktop and
+#   mobile clients send). It is deliberately not defaulted here: with an empty
+#   allow-list the server rejects every Origin-bearing WebSocket handshake
+#   (close 1008 origin_not_configured) and admits only clients presenting a valid
+#   x-signaling-internal-secret, so a deploy that omits it serves no pairings.

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
   BYPASS_CANCEL_ACTION,
@@ -37,9 +37,27 @@ function configurationHarness(
   return { update, mode: () => mode, effort: () => effort };
 }
 
+const BYPASS_CONSENT_STATE_KEY = 'agiWorkforce.agentMode.bypassConsentVersion';
+
+function mutableWorkspace(): { workspaceFolders: unknown; name: string | undefined } {
+  return vscode.workspace as unknown as { workspaceFolders: unknown; name: string | undefined };
+}
+
+function openWorkspace(folder: string): void {
+  const workspace = mutableWorkspace();
+  workspace.workspaceFolders = [{ uri: vscode.Uri.file(folder) }];
+  workspace.name = folder;
+}
+
 describe('agent-mode bypass consent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    const workspace = mutableWorkspace();
+    workspace.workspaceFolders = undefined;
+    workspace.name = undefined;
   });
 
   it('keeps a cancelled bypass escalation on the current safe mode', async () => {
@@ -261,5 +279,71 @@ describe('agent-mode bypass consent', () => {
     expect(config.mode()).toBe('bypass');
     expect(config.effort()).toBe('max');
     expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('never lets a second workspace inherit the consent a first workspace granted', async () => {
+    const context = new vscode.ExtensionContext();
+    openWorkspace('/trusted-project');
+    const trusted = configurationHarness('auto');
+    initializeAgentModeConsent(context);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce({
+      title: BYPASS_CONFIRM_ACTION,
+    });
+    await expect(setAgentModeWithConsent(context, 'bypass')).resolves.toBe(true);
+    expect(trusted.mode()).toBe('bypass');
+    expect(enforceAgentModeConsent('bypass')).toBe('bypass');
+
+    openWorkspace('/cloned-hostile-repo');
+    const hostile = configurationHarness('bypass');
+    initializeAgentModeConsent(context);
+
+    expect(enforceAgentModeConsent('bypass')).toBe('auto');
+
+    vi.mocked(vscode.window.showWarningMessage).mockClear();
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce({
+      title: BYPASS_CANCEL_ACTION,
+      isCloseAffordance: true,
+    });
+    await reconcileAgentModeConsent(context);
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce();
+    expect(hostile.mode()).toBe('auto');
+    expect(enforceAgentModeConsent('bypass')).toBe('auto');
+  });
+
+  it('keeps consent for the workspace that granted it across a reload', async () => {
+    const context = new vscode.ExtensionContext();
+    openWorkspace('/trusted-project');
+    configurationHarness('auto');
+    initializeAgentModeConsent(context);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce({
+      title: BYPASS_CONFIRM_ACTION,
+    });
+    await setAgentModeWithConsent(context, 'bypass');
+
+    configurationHarness('bypass');
+    initializeAgentModeConsent(context);
+    vi.mocked(vscode.window.showWarningMessage).mockClear();
+    await reconcileAgentModeConsent(context);
+
+    expect(enforceAgentModeConsent('bypass')).toBe('bypass');
+    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  it('records the consent in workspace state and leaves device-global state empty', async () => {
+    const context = new vscode.ExtensionContext();
+    openWorkspace('/trusted-project');
+    configurationHarness('auto');
+    initializeAgentModeConsent(context);
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce({
+      title: BYPASS_CONFIRM_ACTION,
+    });
+    await setAgentModeWithConsent(context, 'bypass');
+
+    expect(context.globalState.get(BYPASS_CONSENT_STATE_KEY)).toBeUndefined();
+    expect(context.workspaceState.get(BYPASS_CONSENT_STATE_KEY)).toEqual({
+      version: expect.any(Number),
+      workspace: expect.stringContaining('/trusted-project'),
+    });
   });
 });

@@ -8,6 +8,7 @@ use crate::memory::{self, MemoryManager, MemoryTier};
 use crate::output;
 use crate::sessions;
 use crate::terminal_style as ts;
+use crate::terminal_text::sanitize_terminal_text;
 
 // ---------------------------------------------------------------------------
 // Conversation commands
@@ -129,7 +130,7 @@ pub fn handle_history() {
                     "  {}. {} {} {} ({})",
                     format!("{:>2}", i + 1).dimmed(),
                     s.id.bold(),
-                    s.title.dimmed(),
+                    ts::muted(s.title.as_str()),
                     format!("[{}]", s.model).dimmed(),
                     format!("{} msgs", s.message_count).dimmed(),
                 );
@@ -230,7 +231,7 @@ pub fn handle_export(arg: &str, session: &AgentSession) {
         }
     } else {
         let md = conversations::export_as_markdown(session);
-        println!("{}", md);
+        println!("{}", sanitize_terminal_text(&md));
     }
 }
 
@@ -334,7 +335,7 @@ fn is_permissions_tab(tab: &str) -> bool {
 
 fn show_permissions_tab(tab: &str) {
     match crate::permissions::PermissionStore::load() {
-        Ok(store) => eprintln!("{}", store.display_tab(tab)),
+        Ok(store) => eprintln!("{}", sanitize_terminal_text(&store.display_tab(tab))),
         Err(e) => output::print_error(&format!("Failed to load permissions: {:#}", e)),
     }
 }
@@ -474,7 +475,10 @@ pub(super) fn handle_sessions(arg: &str) {
                         "{}",
                         ts::accent_header(format!("Search results for '{}':", sub_arg))
                     );
-                    eprintln!("{}", sessions::format_session_list(&results));
+                    eprintln!(
+                        "{}",
+                        sanitize_terminal_text(&sessions::format_session_list(&results))
+                    );
                 }
                 Err(e) => output::print_error(&format!("Search failed: {:#}", e)),
             }
@@ -704,7 +708,7 @@ pub(super) fn handle_diff() {
                 return;
             }
             eprintln!("{}", ts::accent_header("Git diff summary:"));
-            eprintln!("{}", stat);
+            eprintln!("{}", sanitize_terminal_text(&stat));
 
             match std::process::Command::new("git").args(["diff"]).output() {
                 Ok(diff_output) => {
@@ -719,7 +723,7 @@ pub(super) fn handle_diff() {
                         } else if line.starts_with("@@") {
                             eprintln!("{}", ts::accent(*line));
                         } else {
-                            eprintln!("{}", line);
+                            eprintln!("{}", sanitize_terminal_text(line));
                         }
                     }
                     if lines.len() > max_lines {
@@ -774,7 +778,10 @@ pub(super) async fn handle_mcp(arg: &str, session: &mut AgentSession) {
                 let state = if row.enabled { "enabled" } else { "disabled" };
                 eprintln!(
                     "  {:<24} [{}] {:<6} {}",
-                    row.name, state, row.kind, row.target
+                    sanitize_terminal_text(&row.name),
+                    state,
+                    sanitize_terminal_text(&row.kind),
+                    sanitize_terminal_text(&row.target)
                 );
             }
         }
@@ -950,8 +957,12 @@ pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> Str
         serde_json::to_string_pretty(&value)
             .unwrap_or_else(|e| format!("Failed to render JSON: {e}"))
     } else {
-        // Raw text: no markdown formatting, no cost footer — verbatim payload.
-        response
+        // Raw text: no markdown formatting and no cost footer, but terminal
+        // escapes are still stripped — this prints the assistant message
+        // straight to the terminal, so an OSC 52 the model relayed from an
+        // untrusted page would otherwise reach the clipboard one keystroke
+        // after the rendered transcript safely dropped it.
+        sanitize_terminal_text(&response).into_owned()
     }
 }
 
@@ -1056,7 +1067,7 @@ pub fn handle_memory(arg: &str) {
                     if let Ok(content) = std::fs::read_to_string(path) {
                         let preview = memory::content_preview(&content, 5);
                         for line in preview.lines() {
-                            eprintln!("    {}", line.dimmed());
+                            eprintln!("    {}", ts::muted(line));
                         }
                         eprintln!();
                     }
@@ -1140,7 +1151,7 @@ pub fn handle_memory(arg: &str) {
                             entry.file_path.display()
                         ))
                     );
-                    eprintln!("{}", entry.content);
+                    eprintln!("{}", sanitize_terminal_text(&entry.content));
                 }
             }
         }
@@ -1210,7 +1221,7 @@ pub(super) fn handle_config(arg: &str, config: &mut CliConfig) {
 
     match sub_cmd {
         "" | "show" => {
-            eprintln!("{}", config.display());
+            eprintln!("{}", sanitize_terminal_text(&config.display()));
         }
         "get" => {
             let key = sub_parts.get(1).map(|s| s.trim()).unwrap_or_default();
@@ -1292,7 +1303,7 @@ pub(super) async fn handle_batch_command(
         ))
     );
     for f in &entries {
-        eprintln!("  {}", f);
+        eprintln!("  {}", sanitize_terminal_text(f));
     }
 
     let mut file_list = String::new();
@@ -1429,6 +1440,36 @@ mod tests {
         assert_eq!(parsed["response"], "**bold** raw payload");
         assert_eq!(parsed["is_error"], false);
         assert_eq!(parsed["model"], session.model);
+    }
+
+    /// `/raw` prints the assistant message straight to the terminal, so the
+    /// escape stripping the rendered transcript applies must hold here too —
+    /// otherwise one keystroke after a safely rendered turn replays an OSC 52
+    /// clipboard write the model relayed from an untrusted page.
+    #[test]
+    fn raw_alias_strips_terminal_escapes_from_the_assistant_message() {
+        let ctx = empty_context();
+        let mut session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+        session
+            .messages
+            .push(crate::models::Message::text("user", "summarize that page"));
+        session.messages.push(crate::models::Message::text(
+            "assistant",
+            "here it is: \u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2Jdone",
+        ));
+
+        let raw = render_raw_last_response(&session, "");
+        assert!(!raw.contains('\u{1b}'), "escape survived /raw: {raw:?}");
+        assert!(!raw.contains("52;c"), "clipboard payload survived: {raw:?}");
+        assert_eq!(raw, "here it is: done");
+
+        // JSON mode must keep the bytes recoverable for machine consumers —
+        // serde encodes them as \u001b rather than emitting a live escape.
+        let json = render_raw_last_response(&session, "json");
+        assert!(
+            !json.contains('\u{1b}'),
+            "escape survived /raw json: {json:?}"
+        );
     }
 
     /// `/worktree` dispatch must reach the real git-worktree helpers: list a

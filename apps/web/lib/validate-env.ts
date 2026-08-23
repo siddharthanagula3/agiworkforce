@@ -43,6 +43,11 @@ export function validateRequiredEnvVars(): ValidationResult {
     'CLERK_AUTHORIZED_PARTIES',
     'LOG_SALT',
     'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
+    // Unset, every platform-operator surface (/admin, the cross-tenant admin
+    // APIs) answers 404 to everyone. That fail-closed default is deliberate, so
+    // this is a warning rather than a critical variable.
+    'AGI_PLATFORM_ADMIN_USER_IDS',
+    'IP_HASH_PEPPER',
   ];
 
   const priceIdVars = [
