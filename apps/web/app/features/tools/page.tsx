@@ -116,7 +116,6 @@ export default function FeaturesToolsPage() {
             { href: '/connectors', label: 'Browse Connectors' },
             { href: '/download', label: 'Get notified' },
           ]}
-          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />

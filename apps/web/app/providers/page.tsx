@@ -227,7 +227,6 @@ export default function ProvidersPage() {
             { href: '/byok', label: 'Set Up BYOK' },
             { href: '/local', label: 'Run AGI Locally' },
           ]}
-          stamp={LAUNCH.publicLabel}
         />
 
         <MarketingFooter />
