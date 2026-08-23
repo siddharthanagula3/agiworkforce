@@ -20,6 +20,9 @@ vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team setting
 vi.mock('../sections/OrganizationSharingSection', () => ({
   OrganizationSharingSection: () => <div>Organization sharing content</div>,
 }));
+vi.mock('../sections/WorkspaceAuditSection', () => ({
+  WorkspaceAuditSection: () => <div>Workspace audit content</div>,
+}));
 vi.mock('../sections/WorkspacePolicySection', () => ({
   WorkspacePolicySection: () => <div>Workspace policy content</div>,
 }));
