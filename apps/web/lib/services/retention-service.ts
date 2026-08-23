@@ -43,8 +43,19 @@ export function isSwept(result: RetentionSweep): result is RetentionSweepResult 
   return result.outcome !== 'not_enforced';
 }
 
-/** Bounded so one organization's backlog cannot pin the connection for a night. */
+/** Rows per DELETE, so one statement cannot hold locks on the live path. */
 export const RETENTION_SWEEP_BATCH = 500;
+
+/**
+ * Batches per organization per run.
+ *
+ * One batch per run would be a defect rather than caution: a workspace that
+ * switches on a 90-day window with a year of history behind it has tens of
+ * thousands of rows past the cutoff, and at 500 a night the backlog outlives
+ * the compliance promise the setting was made to keep. Looping to this ceiling
+ * clears 5,000 a night while each individual statement stays small.
+ */
+export const RETENTION_SWEEP_MAX_BATCHES = 10;
 
 interface HoldRow {
   id: string;
@@ -297,25 +308,41 @@ export async function sweepOrganizationRetention(
       return result;
     }
 
-    const deleted = await db.query<{ id: string }>(
-      `delete from public.web_conversations
-        where id in (
-          select id from public.web_conversations
-           where organization_id = $1
-             and updated_at < $2
-             and not (user_id = any($3::text[]))
-           limit $4
-        )
-        returning id`,
-      [organizationId, cutoff, heldUserIds, RETENTION_SWEEP_BATCH],
-    );
+    // Batched rather than one unbounded DELETE: the statement stays small
+    // enough not to hold locks on the table that serves live chat, and the loop
+    // stops as soon as a batch comes back short, so a quiet workspace costs one
+    // query rather than ten.
+    let totalDeleted = 0;
+    let remaining = false;
+    for (let batch = 0; batch < RETENTION_SWEEP_MAX_BATCHES; batch++) {
+      const deleted = await db.query<{ id: string }>(
+        `delete from public.web_conversations
+          where id in (
+            select id from public.web_conversations
+             where organization_id = $1
+               and updated_at < $2
+               and not (user_id = any($3::text[]))
+             limit $4
+          )
+          returning id`,
+        [organizationId, cutoff, heldUserIds, RETENTION_SWEEP_BATCH],
+      );
+      totalDeleted += deleted.length;
+      if (deleted.length < RETENTION_SWEEP_BATCH) break;
+      remaining = batch === RETENTION_SWEEP_MAX_BATCHES - 1;
+    }
 
     const result: RetentionSweepResult = {
       ...base,
-      outcome: deleted.length > 0 ? 'deleted' : 'nothing_due',
-      conversationsDeleted: deleted.length,
+      outcome: totalDeleted > 0 ? 'deleted' : 'nothing_due',
+      conversationsDeleted: totalDeleted,
       conversationsHeld,
       activeHolds: holds.length,
+      // Said out loud so a workspace clearing a large backlog can see it is
+      // still working through it rather than assuming retention has caught up.
+      error: remaining
+        ? `Reached the per-run ceiling of ${RETENTION_SWEEP_MAX_BATCHES * RETENTION_SWEEP_BATCH} conversations. More remain past the cutoff and will be deleted on the next run.`
+        : null,
     };
     await recordSweep(db, result);
     return result;

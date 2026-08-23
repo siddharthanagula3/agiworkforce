@@ -9,6 +9,7 @@ import {
   releaseLegalHold,
   sweepOrganizationRetention,
   RETENTION_SWEEP_BATCH,
+  RETENTION_SWEEP_MAX_BATCHES,
 } from '../retention-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -180,7 +181,62 @@ describe('sweepOrganizationRetention', () => {
     expect(isSwept(result) && result.cutoff).toBe('2026-05-25T00:00:00.000Z');
   });
 
-  it('bounds one run so a backlog cannot pin the connection', async () => {
+  it('drains a backlog across batches instead of 500 rows a night', async () => {
+    // A workspace switching on a 90-day window with a year of history has tens
+    // of thousands of rows past the cutoff. One batch per run would outlive the
+    // compliance promise the setting was made to keep.
+    const full = Array.from({ length: RETENTION_SWEEP_BATCH }, (_, i) => ({ id: `c${i}` }));
+    let calls = 0;
+    const h = harness();
+    const original = (h.db as unknown as { query: typeof vi.fn }).query;
+    void original;
+
+    const query = vi.fn(async (sql: string, params?: unknown[]) => {
+      if (/delete from public\.web_conversations/i.test(String(sql))) {
+        calls += 1;
+        return calls < 3 ? full : [{ id: 'last' }];
+      }
+      if (/from public\.organization_admin_policies/i.test(String(sql))) {
+        return [{ retention_days: 90, retention_enforced: true }];
+      }
+      if (/from public\.legal_holds/i.test(String(sql))) return [];
+      if (/insert into public\.organization_retention_sweeps/i.test(String(sql))) return [];
+      if (/count\(\*\)/i.test(String(sql))) return [{ count: 0 }];
+      void params;
+      return [];
+    });
+    const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+
+    const result = await sweepOrganizationRetention(db, ORG, { now: NOW });
+
+    expect(calls).toBe(3);
+    expect(isSwept(result) && result.conversationsDeleted).toBe(RETENTION_SWEEP_BATCH * 2 + 1);
+  });
+
+  it('stops at the per-run ceiling and says more remain', async () => {
+    const full = Array.from({ length: RETENTION_SWEEP_BATCH }, (_, i) => ({ id: `c${i}` }));
+    const query = vi.fn(async (sql: string) => {
+      if (/delete from public\.web_conversations/i.test(String(sql))) return full;
+      if (/from public\.organization_admin_policies/i.test(String(sql))) {
+        return [{ retention_days: 90, retention_enforced: true }];
+      }
+      if (/from public\.legal_holds/i.test(String(sql))) return [];
+      if (/insert into public\.organization_retention_sweeps/i.test(String(sql))) return [];
+      if (/count\(\*\)/i.test(String(sql))) return [{ count: 0 }];
+      return [];
+    });
+    const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+
+    const result = await sweepOrganizationRetention(db, ORG, { now: NOW });
+    const deletes = query.mock.calls.filter((c) =>
+      /delete from public\.web_conversations/i.test(String(c[0])),
+    );
+
+    expect(deletes).toHaveLength(RETENTION_SWEEP_MAX_BATCHES);
+    expect(isSwept(result) && result.error).toMatch(/More remain past the cutoff/i);
+  });
+
+  it('bounds each statement so one delete cannot pin the connection', async () => {
     const h = harness();
     await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 

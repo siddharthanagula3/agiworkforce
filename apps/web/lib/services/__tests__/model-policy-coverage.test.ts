@@ -48,7 +48,7 @@ describe('workspace model policy covers every model-serving route', () => {
       const text = source(file);
 
       expect(
-        /buildModelPolicyGateResponse|evaluateModelAccessForRequest/.test(text),
+        /buildModelPolicyGateResponse|evaluateModelAccessFor(Request|Organization)/.test(text),
         `${file} never asks the model policy, so a blocked model reaches the provider through it`,
       ).toBe(true);
     });
@@ -60,7 +60,7 @@ describe('workspace model policy covers every model-serving route', () => {
     // picker filtering closes.
     const text = source('app/api/llm/v1/chat/completions/lib/request-processor.ts');
     const resolution = text.indexOf('chatRequest.model = routeDecision.modelKey');
-    const gate = text.indexOf('evaluateModelAccessForRequest(');
+    const gate = text.indexOf('evaluateModelAccessForOrganization(');
 
     expect(resolution).toBeGreaterThan(-1);
     expect(gate).toBeGreaterThan(-1);
@@ -86,11 +86,12 @@ describe('workspace model policy covers every model-serving route', () => {
     for (const route of MODEL_SERVING_ROUTES) {
       const file = GATE_CALLERS[route] ?? route;
       const text = source(file);
-      const index =
-        text.indexOf('ModelPolicyGateResponse(') >= 0
-          ? text.indexOf('ModelPolicyGateResponse(')
-          : text.indexOf('evaluateModelAccessForRequest(');
-      const call = text.slice(index, index + 400);
+      const index = ['ModelPolicyGateResponse(', 'evaluateModelAccessForOrganization(']
+        .map((needle) => text.indexOf(needle))
+        .find((at) => at >= 0);
+
+      expect(index, `${file} has no model-policy call to inspect`).toBeDefined();
+      const call = text.slice(index as number, (index as number) + 400);
 
       expect(call, `${file} must send a provider`).toMatch(/provider:/);
       expect(call, `${file} must send a model id`).toMatch(/modelId:/);
