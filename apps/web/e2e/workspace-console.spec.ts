@@ -10,6 +10,7 @@ const CONSOLE_ROUTES = [
   '/workspace/policy',
   '/workspace/sharing',
   '/workspace/audit',
+  '/workspace/data',
   '/workspace/billing',
 ] as const;
 
@@ -122,7 +123,10 @@ test.describe('workspace administration console', () => {
     await page.goto('/workspace', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2500);
 
-    const results = await new AxeBuilder({ page })
+    // @axe-core/playwright bundles its own Playwright types, which do not
+    // structurally match this repo's. authenticated-flows.spec.ts casts the
+    // same way.
+    const results = await new AxeBuilder({ page: page as never })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze();
 

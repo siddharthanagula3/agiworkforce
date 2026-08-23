@@ -189,7 +189,10 @@ export type AuditEventType =
   | 'data_exported'
   | 'account_deletion_requested'
   | 'two_factor_disabled'
-  | 'admin_policy_changed';
+  | 'admin_policy_changed'
+  | 'retention_sweep_completed'
+  | 'legal_hold_created'
+  | 'legal_hold_released';
 
 export type AuditOutcome = 'success' | 'failure' | 'denied';
 
@@ -217,6 +220,10 @@ export interface AuditEventDetail {
   reason?: string;
   status?: string;
   isCurrent?: boolean;
+  deleted?: number;
+  held?: number;
+  dryRun?: boolean;
+  scope?: string;
 }
 
 export interface AuditEvent {
@@ -249,6 +256,10 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'subjectRef',
   'scopes',
   'changedKeys',
+  'deleted',
+  'held',
+  'dryRun',
+  'scope',
   'count',
   'reason',
   'status',

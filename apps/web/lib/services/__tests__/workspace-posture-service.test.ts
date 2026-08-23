@@ -25,6 +25,7 @@ interface Fixture {
   sharedProjects?: number;
   sharedConnectors?: number;
   auditEvents?: number;
+  activeHolds?: number;
   policyRow?: Record<string, unknown> | null;
   org?: { name: string | null; licensed_seats: number | null; seats_consumed: number | null };
 }
@@ -61,6 +62,7 @@ function harness(fixture: Fixture = {}) {
     if (text.includes('from public.organization_shared_connectors'))
       return count(fixture.sharedConnectors);
     if (text.includes('from public.enterprise_audit_events')) return count(fixture.auditEvents);
+    if (text.includes('from public.legal_holds')) return count(fixture.activeHolds);
     if (text.includes('from public.organization_admin_policies')) {
       return fixture.policyRow ? [fixture.policyRow] : [];
     }
@@ -108,11 +110,50 @@ describe('readWorkspacePosture', () => {
     const h = harness();
     const posture = await readWorkspacePosture(h.db, ORG);
 
-    for (const id of ['sso-required', 'deprovision', 'external-sharing', 'legal-hold', 'siem']) {
+    for (const id of ['sso-required', 'deprovision', 'external-sharing', 'siem']) {
       const s = signal(posture.groups, id);
       expect(s.value).toBe('Not available');
       expect(s.enforcement).toBe('unconfigured');
     }
+  });
+
+  it('promotes retention to enforced once the workspace opts in', async () => {
+    // The badge must follow the workspace, not a constant. Before 0138 this
+    // signal was hardcoded to "stated"; a workspace that turns the sweep on has
+    // a control, and one that has not still only has a position.
+    const h = harness({
+      policyRow: {
+        organization_id: ORG,
+        default_privacy_mode: 'byok',
+        allowed_privacy_modes: ['local', 'byok'],
+        allow_managed_compute: false,
+        require_local_to_byok_preview: true,
+        chat_sync_surfaces: ['web'],
+        allow_cli_cloud_sync: false,
+        allow_vscode_cloud_sync: false,
+        allow_chrome_cloud_sync: false,
+        audit_export_enabled: true,
+        retention_days: 90,
+        retention_enforced: true,
+        metadata: {},
+        updated_at: '2026-08-23T00:00:00.000Z',
+      },
+    });
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const retention = signal(posture.groups, 'retention');
+
+    expect(retention.enforcement).toBe('enforced');
+    expect(retention.value).toBe('90 days, enforced');
+    expect(retention.state).toBe('ok');
+  });
+
+  it('says plainly when a legal hold is suspending retention', async () => {
+    const h = harness({ activeHolds: 2 });
+    const hold = signal((await readWorkspacePosture(h.db, ORG)).groups, 'legal-hold');
+
+    expect(hold.value).toBe('2 holds active');
+    expect(hold.state).toBe('attention');
+    expect(hold.enforcement).toBe('enforced');
   });
 
   it('marks managed compute and privacy modes as enforced', async () => {
@@ -228,6 +269,7 @@ describe('readWorkspacePosture', () => {
         allow_chrome_cloud_sync: true,
         audit_export_enabled: true,
         retention_days: 90,
+        retention_enforced: true,
         metadata: {},
         updated_at: '2026-08-23T00:00:00.000Z',
       },
