@@ -76,6 +76,39 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 The Windows release ships remote-databases, and the audit file said it did not
+
+`.cargo/audit.toml` suppressed four vulnerability-class advisories (two
+`hickory-proto`, `rsa`, `proc-macro-error2`) on the grounds that
+`remote-databases` is "off by default and gated behind a build flag", so "users
+who enable it accept these advisories".
+
+`build-windows-release.yml:278` builds the shipped NSIS installer with
+`--no-default-features --features shell,updater,billing,devtools,vad,remote-databases`.
+Every Windows user is running mongodb and mysql_async. Nobody enabled anything
+and nobody accepted anything.
+
+The file's own COVERAGE BOUNDARY note warned about exactly this shape — "the
+same shape of reasoning that hid the rustls-webpki line for months under a claim
+about Tauri that turned out to be false" — and then asserted this one was "true
+and checkable". It was checkable. Checking it showed the claim answered the
+wrong question: not "is it on by default" but "what ships".
+
+Compounding it, `deny.toml` sets `[graph] all-features = false`, so the blocking
+CI advisory step never walks the `remote-databases` edge at all. The suppression
+is not what leaves those advisories unenforced; nothing was enforcing them.
+
+**SUPPLYCHAIN-01 — OPEN, needs a product decision.** Three ways out, none of
+which an agent should pick unilaterally: bump `mongodb` past its `hickory-proto
+^0.25` pin, drop `remote-databases` from the Windows build if the desktop app
+does not need remote database connectors, or accept the risk explicitly with the
+corrected reasoning in front of whoever accepts it. The comment block now states
+the truth so the next reader is not misled.
+
+**SUPPLYCHAIN-02 — OPEN, noticed alongside.** The same Windows release line
+enables `devtools` in the signed production installer. Worth confirming that is
+intended rather than inherited.
+
 ## 2026-08-23 Spend caps — eventual on purpose, and said so
 
 `organization_spend_limits` (0142) refuses metered turns once a workspace passes
