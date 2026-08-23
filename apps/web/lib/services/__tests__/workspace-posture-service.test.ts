@@ -29,6 +29,7 @@ interface Fixture {
   modelRules?: [number, number, number, number] | null;
   connectorRules?: [number, number, boolean] | null;
   spendLimit?: { cap: number; enforcement: string } | null;
+  auditDestination?: { enabled: boolean; failures: number } | null;
   policyRow?: Record<string, unknown> | null;
   org?: { name: string | null; licensed_seats: number | null; seats_consumed: number | null };
 }
@@ -66,6 +67,11 @@ function harness(fixture: Fixture = {}) {
       return count(fixture.sharedConnectors);
     if (text.includes('from public.enterprise_audit_events')) return count(fixture.auditEvents);
     if (text.includes('from public.legal_holds')) return count(fixture.activeHolds);
+    if (text.includes('from public.organization_audit_destinations')) {
+      const a = fixture.auditDestination;
+      if (a === undefined || a === null) return [];
+      return [{ enabled: a.enabled, consecutive_failures: a.failures, last_delivered_at: null }];
+    }
     if (text.includes('from public.organization_spend_limits')) {
       const l = fixture.spendLimit;
       if (l === undefined || l === null) return [];
@@ -137,7 +143,7 @@ describe('readWorkspacePosture', () => {
     const h = harness();
     const posture = await readWorkspacePosture(h.db, ORG);
 
-    for (const id of ['sso-required', 'siem']) {
+    for (const id of ['sso-required']) {
       const s = signal(posture.groups, id);
       expect(s.value).toBe('Not available');
       expect(s.enforcement).toBe('unconfigured');
@@ -189,6 +195,22 @@ describe('readWorkspacePosture', () => {
 
     expect(s.enforcement).toBe('enforced');
     expect(['Allowed', 'Blocked']).toContain(s.value);
+  });
+
+  it('flags a SIEM destination that is failing rather than reporting it as delivering', async () => {
+    const h = harness({ auditDestination: { enabled: true, failures: 5 } });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'siem');
+
+    expect(s.value).toBe('Failing (5 in a row)');
+    expect(s.state).toBe('attention');
+  });
+
+  it('reports a healthy SIEM destination as delivering', async () => {
+    const h = harness({ auditDestination: { enabled: true, failures: 0 } });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'siem');
+
+    expect(s.value).toBe('Delivering');
+    expect(s.enforcement).toBe('enforced');
   });
 
   it('does not call a notify-only spend cap an enforced control', async () => {

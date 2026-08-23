@@ -137,7 +137,6 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `retention_enforced`; nightly sweep at
   `/api/cron/enforce-workspace-retention`; fails closed when holds cannot be
   read. See RETENTION-01 for what is still unproven.
-- Compliance/audit export and SIEM streaming.
 - Admin adoption, value, and cost reporting.
 - IP allowlist, tenant restrictions, managed device policy (MDM/plist/registry).
 - Sharing of prompts, skills, agents, artifacts, or files outside a project.
@@ -319,8 +318,14 @@ sweep.
 - **Legal hold — LANDED 2026-08-23.** Organization-wide or per-member, with
   release recorded at critical severity. Both tables are SELECT-only for the
   application role.
-- **SIEM streaming — STILL ABSENT.** Pull the JSONL export on a schedule until
-  a webhook or log drain exists.
+- **SIEM streaming — LANDED 2026-08-23.** `organization_audit_destinations`
+  (0143). Events are POSTed with an HMAC-SHA256 signature over timestamp and
+  body, drained every ten minutes rather than written during the audited action
+  — an unreachable endpoint must never stop the thing it records. A failed
+  delivery HOLDS the keyset cursor, so events are retried rather than dropped.
+  The endpoint is validated with `assertResolvedPublicHostname` on save AND on
+  every send, and delivered through `pinnedPublicFetch`, so a DNS rebind cannot
+  turn it into an internal request.
 - **One writer for `audit_logs` and `enterprise_audit_events` — STILL OPEN.**
 
 **Exit:** a privileged action is reconstructable from the export with actor,
@@ -397,7 +402,7 @@ policy denial holds identically on every one.
 | Admin connector policy        | Both                       | SHIPPED, enforced in the loader | 1    |
 | Central admin console         | Both                       | SHIPPED, unverified as owner    | 2    |
 | Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |
-| Compliance export / SIEM      | Enterprise on both         | ABSENT                          | 3    |
+| Compliance export / SIEM      | Enterprise on both         | SHIPPED, signed webhook drain   | 3    |
 | Custom retention + legal hold | Enterprise on both         | SHIPPED, opt-in, unrun live     | 3    |
 | Usage and cost analytics      | Both                       | SHIPPED, with enforceable caps  | 6    |
 | Central billing and seats     | Both                       | PARTIAL, live prices missing    | 6    |
