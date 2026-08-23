@@ -12,6 +12,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mocks.auth() }));
+vi.mock('./StaleSessionRecovery', () => ({
+  StaleSessionRecovery: (props: { loginUrl: string; alreadyRetried: boolean }) => (
+    <div
+      data-testid="stale-session-recovery"
+      data-login-url={props.loginUrl}
+      data-already-retried={String(props.alreadyRetried)}
+    />
+  ),
+}));
 vi.mock('next/navigation', () => ({
   redirect: (url: string) => {
     mocks.redirect(url);
@@ -68,21 +77,43 @@ describe('/login/complete', () => {
     );
   });
 
-  it('returns a signed-out Desktop arrival to the embedded login flow', async () => {
+  // Redirecting straight back to /login is what produced an infinite loop:
+  // /login renders <SignIn forceRedirectUrl="/login/complete">, so a browser
+  // holding a session the server rejects bounces between the two forever.
+  it('clears a stale browser session instead of bouncing back to /login', async () => {
     mocks.auth.mockResolvedValue({ userId: null });
 
-    await expect(
-      LoginCompletePage({
+    render(
+      await LoginCompletePage({
         searchParams: Promise.resolve({
           redirectTo: '/auth/device?user_code=ABCD',
           surface: 'desktop',
         }),
       }),
-    ).rejects.toThrow(
-      'redirect:/login?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD&surface=desktop',
     );
 
+    const recovery = screen.getByTestId('stale-session-recovery');
+    expect(recovery).toHaveAttribute(
+      'data-login-url',
+      '/login?redirectTo=%2Fauth%2Fdevice%3Fuser_code%3DABCD&surface=desktop&authRetry=1',
+    );
+    expect(recovery).toHaveAttribute('data-already-retried', 'false');
     expect(mocks.accepted).not.toHaveBeenCalled();
+  });
+
+  it('stops after one attempt rather than looping again', async () => {
+    mocks.auth.mockResolvedValue({ userId: null });
+
+    render(
+      await LoginCompletePage({
+        searchParams: Promise.resolve({ redirectTo: '/chat', authRetry: '1' }),
+      }),
+    );
+
+    expect(screen.getByTestId('stale-session-recovery')).toHaveAttribute(
+      'data-already-retried',
+      'true',
+    );
   });
 
   it('re-sanitizes the final destination', async () => {
