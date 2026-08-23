@@ -76,6 +76,43 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 Model governance — where the check lives is the design
+
+`organization_model_policies` (0139) with one evaluator,
+`lib/services/model-policy-evaluator.ts`. Four properties are deliberate:
+
+- **The check runs AFTER auto-routing resolves**, in
+  `app/api/llm/v1/chat/completions/lib/request-processor.ts` at the line that
+  assigns `chatRequest.model = routeDecision.modelKey`. Checking the REQUESTED
+  model would let a blocked model be reached by asking for `auto` and having the
+  router pick it — a bypass no amount of picker filtering closes. Do not move
+  this check earlier.
+- **An empty allowlist means unrestricted, not deny-all.** A row that arrives
+  empty must not lock every member out of every model. Denial is something an
+  administrator says, never something a blank field implies. Same rule 0076 set
+  for the admin policy.
+- **A named model outranks a blocked provider.** "No Provider X except this one
+  model" is a policy enterprises write, and it cannot be expressed if the
+  provider block swallows it. Precedence is specificity-ordered: model rules
+  beat provider rules, deny beats allow within each level.
+- **The gate acquires its own database handle inside try/catch**
+  (`evaluateModelAccessForRequest`). Leaving `getNeonDb()` at the call site turns
+  a missing connection string into a 500 on every chat turn — the identical
+  mistake that shipped once in the managed-compute gate, and that broke 48 tests
+  here before it was caught.
+
+**MODELPOLICY-01 — OPEN, only the chat-completions path is covered.** Media
+generation (`/api/media/image/generate`, `/api/media/video/generate`),
+embeddings, transcriptions, and the provider probe resolve models without asking
+this evaluator. A workspace that blocks a provider still blocks it for chat, but
+an image request on that provider goes through. Wire the remaining routes before
+describing model governance as complete to a customer.
+
+**MODELPOLICY-02 — OPEN, never observed denying a live turn.** 37 tests across
+the evaluator, gate, and route, all with a mocked adapter. Same blocker as
+CONSOLE-01, RETENTION-01, and ORGPOLICY-01: one seeded workspace closes all
+four.
+
 ## 2026-08-23 Retention enforcement — the fail-closed rule is load-bearing
 
 `sweepOrganizationRetention` (`apps/web/lib/services/retention-service.ts`)

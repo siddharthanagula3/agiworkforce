@@ -8,6 +8,7 @@ const CONSOLE_ROUTES = [
   '/workspace/people',
   '/workspace/identity',
   '/workspace/policy',
+  '/workspace/models',
   '/workspace/sharing',
   '/workspace/audit',
   '/workspace/data',

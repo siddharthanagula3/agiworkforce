@@ -104,11 +104,12 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `services/api-gateway` reader was corrected on 2026-08-22.
 - **`organization_usage_ledger` has no admin read path.** No route, no
   dashboard, no export.
-- **Four designed contracts with no implementation** — `ProviderPolicy`,
-  `ConnectorPolicy`, `RetentionPolicy`, `AuditExportRequest` in
-  `packages/contracts/types/src/enterprise/index.ts` are referenced nowhere else
-  in the tree. `AdminPolicy` was the fifth and is now implemented; these four
-  belong to Waves 3, 4, and 6.
+- **Two designed contracts with no implementation** — `ConnectorPolicy` and
+  `AuditExportRequest` in `packages/contracts/types/src/enterprise/index.ts` are
+  referenced nowhere else in the tree. `AdminPolicy` (Wave 1),
+  `RetentionPolicy`'s conversation window (0138), and `ProviderPolicy`'s
+  substance (0139, as `organization_model_policies`) are now implemented. The
+  remaining two belong to Waves 3 and 4.
 - **Directory groups drive only a role.** `scim_groups` / `scim_group_members`
   map to an org role via `/api/admin/directory-sync/groups`. No sharing grant,
   policy scope, or budget is addressable by group.
@@ -383,6 +384,7 @@ policy denial holds identically on every one.
 | Shared projects               | Both                       | PARTIAL, invisible in UI        | 4    |
 | Shared project conversations  | Both                       | ABSENT                          | 4    |
 | Shared agents/skills/prompts  | Both                       | ABSENT                          | 4    |
+| Admin model/provider policy   | Both                       | SHIPPED, enforced post-routing  | 1    |
 | Admin connector policy        | Both                       | INERT, contract only            | 1, 4 |
 | Central admin console         | Both                       | SHIPPED, unverified as owner    | 2    |
 | Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |

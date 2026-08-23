@@ -61,6 +61,13 @@ interface CountRow {
   count: string | number | null;
 }
 
+interface ModelPolicyCountsRow {
+  allowed_providers: number;
+  blocked_providers: number;
+  allowed_models: number;
+  blocked_models: number;
+}
+
 interface RoleCountRow {
   role: string;
   count: string | number | null;
@@ -122,6 +129,7 @@ export async function readWorkspacePosture(
     sharedConnectorRows,
     auditRows,
     holdRows,
+    modelPolicyRows,
     policy,
   ] = await Promise.all([
     db.query<OrgRow>(
@@ -201,6 +209,16 @@ export async function readWorkspacePosture(
         where organization_id = $1 and released_at is null`,
       [organizationId],
     ),
+    db.query<ModelPolicyCountsRow>(
+      `select cardinality(allowed_providers) as allowed_providers,
+              cardinality(blocked_providers) as blocked_providers,
+              cardinality(allowed_models) as allowed_models,
+              cardinality(blocked_models) as blocked_models
+         from public.organization_model_policies
+        where organization_id = $1
+        limit 1`,
+      [organizationId],
+    ),
     getEffectiveOrganizationPolicy(db, organizationId),
   ]);
 
@@ -228,6 +246,13 @@ export async function readWorkspacePosture(
   const sharedConnectors = toCount(sharedConnectorRows[0]);
   const auditEvents = toCount(auditRows[0]);
   const activeHolds = toCount(holdRows[0]);
+  const modelPolicy = modelPolicyRows[0] ?? null;
+  const modelRules = modelPolicy
+    ? modelPolicy.allowed_providers +
+      modelPolicy.blocked_providers +
+      modelPolicy.allowed_models +
+      modelPolicy.blocked_models
+    : 0;
   const { configured, policy: effectivePolicy } = policy;
 
   const groups: PostureGroup[] = [
@@ -403,6 +428,21 @@ export async function readWorkspacePosture(
           enforcement: 'enforced',
           detail: `Default is ${effectivePolicy.defaultPrivacyMode}. A mode outside this list is refused server-side, not merely hidden in the picker.`,
           href: '/workspace/policy',
+        },
+        {
+          id: 'model-policy',
+          label: 'Approved models',
+          value:
+            modelRules === 0
+              ? 'All models available'
+              : `${plural(modelRules, 'rule', 'rules')} in force`,
+          state: 'ok',
+          enforcement: modelRules === 0 ? 'unconfigured' : 'enforced',
+          detail:
+            modelRules === 0
+              ? 'No model or provider restriction is saved, so members may use any model in the catalog. A saved row with empty lists would also mean unrestricted — restriction is something an administrator states.'
+              : 'Checked server-side after auto-routing resolves, so a blocked model cannot be reached by asking for Auto. A named model outranks a blocked provider, which is how "no Provider X except this one model" is expressed.',
+          href: '/workspace/models',
         },
         {
           id: 'sync-surfaces',
