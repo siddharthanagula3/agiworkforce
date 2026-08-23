@@ -61,6 +61,12 @@ interface CountRow {
   count: string | number | null;
 }
 
+interface AuditDestinationRow {
+  enabled: boolean;
+  consecutive_failures: number;
+  last_delivered_at: string | Date | null;
+}
+
 interface SpendLimitRow {
   monthly_cap_cents: number;
   enforcement: 'off' | 'notify' | 'block';
@@ -140,6 +146,7 @@ export async function readWorkspacePosture(
     sharedConnectorRows,
     auditRows,
     holdRows,
+    auditDestinationRows,
     spendLimitRows,
     connectorPolicyRows,
     modelPolicyRows,
@@ -222,6 +229,13 @@ export async function readWorkspacePosture(
         where organization_id = $1 and released_at is null`,
       [organizationId],
     ),
+    db.query<AuditDestinationRow>(
+      `select enabled, consecutive_failures, last_delivered_at
+         from public.organization_audit_destinations
+        where organization_id = $1
+        limit 1`,
+      [organizationId],
+    ),
     db.query<SpendLimitRow>(
       `select monthly_cap_cents, enforcement
          from public.organization_spend_limits
@@ -275,6 +289,7 @@ export async function readWorkspacePosture(
   const sharedConnectors = toCount(sharedConnectorRows[0]);
   const auditEvents = toCount(auditRows[0]);
   const activeHolds = toCount(holdRows[0]);
+  const auditDestination = auditDestinationRows[0] ?? null;
   const spendLimit = spendLimitRows[0] ?? null;
   const connectorPolicy = connectorPolicyRows[0] ?? null;
   const connectorRules = connectorPolicy
@@ -623,11 +638,25 @@ export async function readWorkspacePosture(
         {
           id: 'siem',
           label: 'SIEM streaming',
-          value: 'Not available',
-          state: 'off',
-          enforcement: 'unconfigured',
+          value:
+            auditDestination === null
+              ? 'Not configured'
+              : !auditDestination.enabled
+                ? 'Configured, paused'
+                : auditDestination.consecutive_failures > 0
+                  ? `Failing (${auditDestination.consecutive_failures} in a row)`
+                  : 'Delivering',
+          state:
+            auditDestination === null
+              ? 'off'
+              : auditDestination.enabled && auditDestination.consecutive_failures === 0
+                ? 'ok'
+                : 'attention',
+          enforcement: auditDestination === null ? 'unconfigured' : 'enforced',
           detail:
-            'There is no webhook or log drain. Pull the JSONL export on a schedule if your SIEM needs these events.',
+            auditDestination === null
+              ? 'No endpoint is configured. Pull the JSONL export on a schedule, or point us at an HTTPS endpoint and events will be delivered signed.'
+              : 'Events are POSTed with an HMAC-SHA256 signature over the timestamp and body, drained on a schedule rather than written during the audited action — an unreachable endpoint must never stop the thing it records. A failed delivery holds the cursor, so events are retried rather than dropped.',
           href: '/workspace/audit',
         },
       ],
