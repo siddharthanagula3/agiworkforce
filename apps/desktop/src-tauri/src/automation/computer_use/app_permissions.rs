@@ -123,34 +123,59 @@ pub fn is_always_blocked_host(host: &str) -> bool {
         .any(|blocked| lowered == *blocked || lowered.ends_with(&format!(".{}", blocked)))
 }
 
-/// Reject a navigation URL that targets an always-blocked host.
+/// The empty document a freshly created tab starts on. It carries no origin and
+/// no content, so it is the one host-less target automated navigation may reach.
+pub const BLANK_DOCUMENT_URL: &str = "about:blank";
+
+/// Reject a navigation URL that automated browsing must never open.
 ///
-/// The policy used to be enforced only in the `browser_navigate` Tauri command
-/// and when a brand-new CDP tab was created, so every agent-driven path that
-/// reached an *already open* tab — the AGI `BrowserExecutor`, the LLM
-/// `browser_tools` navigate handlers, the realtime WebSocket bridge and the
-/// continuous job runner — drove the same browser to the same brokerage or
-/// banking host with no check at all. This helper is the single guard the
-/// three real navigation implementations (`CdpClient::navigate`,
-/// `PlaywrightBridge::navigate`, `ExtensionBridge::navigate`) call, so the
-/// policy holds no matter which caller gets there.
+/// The single guard behind `CdpClient::navigate`, `PlaywrightBridge::navigate`,
+/// `ExtensionBridge::navigate` and the `browser_navigate` command, so the policy
+/// holds no matter which caller reaches the page.
 ///
-/// A URL that does not parse, or parses without a host, is allowed through to
-/// the caller's existing error handling: this guard only ever denies, it is not
-/// the scheme or syntax validator.
+/// It refuses the always-blocked broker, bank, and wallet hosts, and every
+/// scheme that is not http or https: `file:`, `data:` and `javascript:` URLs
+/// parse without a host, so until this check existed a realtime-bridge peer
+/// could point the live browser at a local file and read it back through
+/// `get_page_content`. `about:blank` stays allowed — it is the empty document a
+/// new tab is created on.
+///
+/// A URL the parser rejects is deferred to the caller's own error handling; a
+/// string that is not a URL never becomes a page. Loopback and private ranges
+/// are deliberately not refused here, because this guard also runs on the
+/// browser viewer's URL bar where reaching a dev server or a LAN device is the
+/// user's own choice. Automated navigation driven by a realtime-bridge peer,
+/// which is not the user, is held to the stricter internal-destination policy in
+/// `RealtimeServer::ensure_bridge_navigation_allowed`.
 pub fn ensure_navigation_url_allowed(url: &str) -> std::result::Result<(), String> {
-    let Ok(parsed) = url::Url::parse(url) else {
+    let candidate = url.trim();
+    if candidate.eq_ignore_ascii_case(BLANK_DOCUMENT_URL) {
+        return Ok(());
+    }
+
+    let Ok(parsed) = url::Url::parse(candidate) else {
         return Ok(());
     };
+
+    let scheme = parsed.scheme().to_ascii_lowercase();
+    if !matches!(scheme.as_str(), "http" | "https") {
+        tracing::warn!("blocked agent navigation to a {scheme}: URL");
+        return Err(format!(
+            "Navigation to a {scheme}: URL is blocked. Automated browsing may only open http and https pages."
+        ));
+    }
+
     let Some(host) = parsed.host_str() else {
-        return Ok(());
+        return Err("Navigation is blocked: the target http(s) URL has no host.".to_string());
     };
+
     if is_always_blocked_host(host) {
         tracing::warn!("blocked agent navigation to always-blocked host: {}", host);
         return Err(format!(
             "Navigation to {host} is blocked. Financial, brokerage, and wallet sites are off-limits to automated browsing."
         ));
     }
+
     Ok(())
 }
 
@@ -466,6 +491,85 @@ mod tests {
                 .await,
             PermissionStatus::Denied
         );
+    }
+
+    #[test]
+    fn navigation_refuses_every_scheme_that_is_not_http_or_https() {
+        for url in [
+            "file:///etc/passwd",
+            "file:///Users/victim/.ssh/id_rsa",
+            "data:text/html,<script>fetch('https://evil.test')</script>",
+            "javascript:alert(document.cookie)",
+            "chrome://settings",
+            "about:config",
+            "view-source:https://example.com",
+            "ftp://example.com/secret",
+        ] {
+            assert!(
+                ensure_navigation_url_allowed(url).is_err(),
+                "expected {url} to be blocked"
+            );
+        }
+    }
+
+    #[test]
+    fn navigation_defers_a_url_the_parser_rejects() {
+        // The caller's own error handling reports these. Failing them here also
+        // fails the browser viewer's URL bar, which shares this guard.
+        assert!(ensure_navigation_url_allowed("not a url").is_ok());
+        assert!(ensure_navigation_url_allowed("").is_ok());
+    }
+
+    #[test]
+    fn navigation_allows_only_the_blank_document_without_a_host() {
+        assert!(ensure_navigation_url_allowed(BLANK_DOCUMENT_URL).is_ok());
+        assert!(ensure_navigation_url_allowed("About:Blank").is_ok());
+        assert!(ensure_navigation_url_allowed("about:blank#/../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn navigation_leaves_internal_destinations_to_the_automated_bridge_policy() {
+        // A user typing their own dev server or router into the browser viewer
+        // must not be refused; RealtimeServer::ensure_bridge_navigation_allowed
+        // is what holds a bridge peer to the internal-destination policy.
+        for url in [
+            "http://127.0.0.1:3000/",
+            "http://localhost:5173/",
+            "http://192.168.1.1/",
+        ] {
+            assert!(
+                ensure_navigation_url_allowed(url).is_ok(),
+                "expected {url} to be allowed for a user-driven navigation"
+            );
+        }
+    }
+
+    #[test]
+    fn navigation_still_allows_an_ordinary_public_page() {
+        for url in [
+            "https://example.com/docs",
+            "https://notchase.com",
+            "http://93.184.216.34/",
+        ] {
+            assert!(
+                ensure_navigation_url_allowed(url).is_ok(),
+                "expected {url} to be allowed"
+            );
+        }
+    }
+
+    #[test]
+    fn navigation_keeps_blocking_financial_hosts() {
+        for url in [
+            "https://chase.com/login",
+            "https://accounts.coinbase.com/signin",
+            "http://robinhood.com",
+        ] {
+            assert!(
+                ensure_navigation_url_allowed(url).is_err(),
+                "expected {url} to be blocked"
+            );
+        }
     }
 
     #[tokio::test]

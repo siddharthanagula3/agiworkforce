@@ -96,6 +96,16 @@ ignore = [
     # http-types 2.12.0 — no patched release available; transitive dependency
     # with narrow impact. Ignored until upstream ships a fix.
     "RUSTSEC-2026-0174", # http-types (transitive, no patched release)
+
+    # h2 0.3.27 — low-severity DoS (unbounded empty DATA frames). Patched in
+    # 0.4.16, which the tree already carries for the crates that moved to
+    # hyper 1.x. The 0.3 line is held by hyper 0.14.32, reached only through
+    # reqwest 0.11.27 and async-stripe 0.31.2, so closing it needs a
+    # reqwest 0.11 -> 0.12 major bump plus an async-stripe upgrade across the
+    # whole Rust surface. Pre-existing on main; not introduced by the
+    # 2026-08-21 security sweep. Track the dependency upgrade separately
+    # rather than blocking a release on it.
+    "RUSTSEC-2026-0258", # h2 0.3.x via hyper 0.14 (reqwest 0.11, async-stripe)
 ]
 
 [yanked]

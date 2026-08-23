@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,11 +124,12 @@ impl InteractiveView for DiffReviewView {
                 .get(&file.path)
                 .map(|d| d.label())
                 .unwrap_or("[ ] Pending   ");
-            let name = file
-                .path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("?");
+            let name = sanitize_terminal_text(
+                file.path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?"),
+            );
             let stat = format!("+{} -{}", file.additions, file.deletions);
             let row = pad_to_cols(&format!("{decision_str}  {name}  {stat}"), 58);
             out.push_str(&format!("│ {cursor} {row}│\n"));
@@ -137,7 +139,7 @@ impl InteractiveView for DiffReviewView {
 
         // Hunk preview for current file
         for hunk in self.current_hunks().iter().take(3) {
-            let hunk = pad_to_cols(hunk, 58);
+            let hunk = pad_to_cols(sanitize_terminal_text(hunk).as_ref(), 58);
             out.push_str(&format!("│  {hunk}│\n"));
         }
 
@@ -187,11 +189,12 @@ impl InteractiveView for DiffReviewView {
                 Some(ReviewDecision::Skip) => ("[s] Skipped ", ui_warning()),
                 None => ("[ ] Pending   ", ui_muted()),
             };
-            let name = file
-                .path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("?");
+            let name = sanitize_terminal_text(
+                file.path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?"),
+            );
             let stat = format!("+{} -{}", file.additions, file.deletions);
             let row = pad_to_cols(&format!("{decision_str}  {name}  {stat}"), 58);
             // Color just the leading decision label (ASCII → byte len == char count).
@@ -213,7 +216,7 @@ impl InteractiveView for DiffReviewView {
 
         // Hunk preview — +added green, -removed red, @@ headers accented.
         for hunk in self.current_hunks().iter().take(3) {
-            let hunk = pad_to_cols(hunk, 58);
+            let hunk = pad_to_cols(sanitize_terminal_text(hunk).as_ref(), 58);
             let style = if hunk.starts_with('+') {
                 Style::default().fg(ui_success())
             } else if hunk.starts_with('-') {
@@ -452,6 +455,44 @@ mod tests {
         let view = make_view();
         let text = view.render();
         assert!(text.contains("@@ -1,3 +1,5 @@"));
+    }
+
+    /// The hunks are the model's proposed edit; painting them verbatim let a
+    /// crafted patch move the cursor and repaint the decision column, so the
+    /// operator could read "[y] Approved" over a file they rejected.
+    #[test]
+    fn hunk_and_file_name_escapes_never_reach_the_terminal() {
+        let payload = "\u{1b}]52;c;cm0gLXJmIC8=\u{7}\u{1b}[2J\u{1b}[1;1H\u{1b}[32m[y] Approved";
+        let view = DiffReviewView::new(vec![FileDiff::new(
+            format!("src/{payload}main.rs"),
+            vec![format!("+ let ok = {payload};")],
+            1,
+            0,
+        )]);
+
+        let text = view.render();
+        let styled: String = view
+            .render_styled()
+            .expect("styled lines")
+            .iter()
+            .flat_map(|line| line.spans.iter())
+            .map(|span| span.content.to_string())
+            .collect();
+
+        for (what, rendered) in [("render", &text), ("render_styled", &styled)] {
+            assert!(
+                !rendered.contains('\u{1b}'),
+                "{what} kept an escape byte: {rendered:?}"
+            );
+            assert!(
+                !rendered.contains("52;c;cm0gLXJmIC8="),
+                "{what} kept the OSC 52 payload: {rendered:?}"
+            );
+            assert!(
+                !rendered.contains("[2J"),
+                "{what} kept the screen-clear CSI: {rendered:?}"
+            );
+        }
     }
 
     #[test]

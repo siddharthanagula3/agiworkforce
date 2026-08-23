@@ -166,22 +166,22 @@ fn extract_parts_recursive(
 fn parse_email_address(addr_str: &str) -> EmailAddress {
     let addr_str = addr_str.trim();
 
-    if let Some(start) = addr_str.find('<') {
-        if let Some(end) = addr_str.find('>') {
-            let name = addr_str[..start].trim().to_string();
-            let email = addr_str[start + 1..end].trim().to_string();
+    let bracketed = addr_str.find('<').and_then(|open| {
+        let rest = addr_str.get(open + 1..)?;
+        let close = open + 1 + rest.find('>')?;
+        let email = addr_str.get(open + 1..close)?.trim().to_string();
+        let name = addr_str.get(..open)?.trim().to_string();
 
-            return EmailAddress {
-                email,
-                name: if name.is_empty() { None } else { Some(name) },
-            };
-        }
-    }
+        Some(EmailAddress {
+            email,
+            name: if name.is_empty() { None } else { Some(name) },
+        })
+    });
 
-    EmailAddress {
+    bracketed.unwrap_or_else(|| EmailAddress {
         email: addr_str.to_string(),
         name: None,
-    }
+    })
 }
 
 fn parse_email_address_list(addr_list: &str) -> Vec<EmailAddress> {
@@ -354,6 +354,43 @@ mod tests {
         assert_eq!(addrs[0].email, "john@example.com");
         assert_eq!(addrs[1].email, "jane@example.com");
         assert_eq!(addrs[1].name, Some("Jane Doe".to_string()));
+    }
+
+    #[test]
+    fn a_closing_bracket_before_the_opening_one_does_not_panic() {
+        let addr = parse_email_address(">a<attacker@example.com>");
+        assert_eq!(addr.email, "attacker@example.com");
+        assert_eq!(addr.name, Some(">a".to_string()));
+    }
+
+    #[test]
+    fn an_unclosed_bracket_falls_back_to_the_whole_string() {
+        let addr = parse_email_address("a>b");
+        assert_eq!(addr.email, "a>b");
+        assert_eq!(addr.name, None);
+
+        let addr2 = parse_email_address("Name <no-close@example.com");
+        assert_eq!(addr2.email, "Name <no-close@example.com");
+        assert_eq!(addr2.name, None);
+    }
+
+    #[test]
+    fn a_multibyte_display_name_is_preserved() {
+        let addr = parse_email_address("Zoë Ünicode 🙂 <zoe@example.com>");
+        assert_eq!(addr.email, "zoe@example.com");
+        assert_eq!(addr.name, Some("Zoë Ünicode 🙂".to_string()));
+
+        let hostile = parse_email_address("é>ß<a@b.example>");
+        assert_eq!(hostile.email, "a@b.example");
+        assert_eq!(hostile.name, Some("é>ß".to_string()));
+    }
+
+    #[test]
+    fn a_reversed_bracket_entry_in_a_list_does_not_panic() {
+        let addrs = parse_email_address_list(">x<a@example.com>, Jane <jane@example.com>");
+        assert_eq!(addrs.len(), 2);
+        assert_eq!(addrs[0].email, "a@example.com");
+        assert_eq!(addrs[1].email, "jane@example.com");
     }
 
     #[test]

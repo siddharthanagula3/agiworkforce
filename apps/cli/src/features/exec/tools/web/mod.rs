@@ -61,69 +61,138 @@ pub(super) fn is_private_or_internal_ip(ip: &std::net::IpAddr) -> bool {
         }
         std::net::IpAddr::V6(v6) => {
             let segments = v6.segments();
+            if let Some(embedded) = embedded_ipv4(&segments) {
+                return is_private_or_internal_ip(&std::net::IpAddr::V4(embedded));
+            }
             *v6 == std::net::Ipv6Addr::LOCALHOST
                 || *v6 == std::net::Ipv6Addr::UNSPECIFIED
                 || (segments[0] & 0xffc0 == 0xfe80)
                 || (segments[0] & 0xfe00 == 0xfc00)
                 || v6.is_multicast()
-                || {
-                    let is_v4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
-                    if is_v4_mapped {
-                        let mapped = std::net::Ipv4Addr::new(
-                            (segments[6] >> 8) as u8,
-                            segments[6] as u8,
-                            (segments[7] >> 8) as u8,
-                            segments[7] as u8,
-                        );
-                        is_private_or_internal_ip(&std::net::IpAddr::V4(mapped))
-                    } else {
-                        false
-                    }
-                }
         }
     }
 }
 
-/// Resolves a redirect hop and refuses it when any address is internal.
-///
-/// This is a blocking lookup because reqwest's redirect policy is synchronous.
-/// The cost is one DNS query per hop, bounded by the five-redirect limit and
-/// the client's 30s timeout; the alternative is following the hop unresolved.
-fn redirect_target_resolves_publicly(url: &reqwest::Url) -> std::result::Result<(), String> {
-    use std::net::ToSocketAddrs;
-
-    let host = url
-        .host_str()
-        .ok_or_else(|| "redirect has no host".to_string())?;
-    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-        return if is_private_or_internal_ip(&ip) {
-            Err(format!("redirect target is an internal IP: {ip}"))
-        } else {
-            Ok(())
-        };
+/// Extract the IPv4 address carried by a v4-mapped (`::ffff:0:0/96`) or NAT64
+/// (`64:ff9b::/96`) address so the v4 rules above apply to it — otherwise a
+/// redirect to `http://[64:ff9b::169.254.169.254]/` is classified public and
+/// reaches IMDS through a NAT64 gateway.
+fn embedded_ipv4(segments: &[u16; 8]) -> Option<std::net::Ipv4Addr> {
+    let is_v4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
+    let is_nat64 = segments[0] == 0x0064 && segments[1] == 0xff9b && segments[2..6] == [0, 0, 0, 0];
+    if !is_v4_mapped && !is_nat64 {
+        return None;
     }
+    Some(std::net::Ipv4Addr::new(
+        (segments[6] >> 8) as u8,
+        segments[6] as u8,
+        (segments[7] >> 8) as u8,
+        segments[7] as u8,
+    ))
+}
 
-    let port = url
-        .port_or_known_default()
-        .ok_or_else(|| "redirect has no port".to_string())?;
-    let addrs = (host, port)
-        .to_socket_addrs()
-        .map_err(|e| format!("redirect DNS resolution failed for {host}: {e}"))?;
+/// Maximum redirect hops followed by `web_fetch`.
+const WEB_FETCH_MAX_REDIRECTS: usize = 5;
 
-    let mut any = false;
-    for addr in addrs {
-        any = true;
-        if is_private_or_internal_ip(&addr.ip()) {
-            return Err(format!(
-                "redirect target {host} resolves to internal IP {}",
-                addr.ip()
-            ));
+/// Maximum response bytes read per `web_fetch` hop. A hostile endpoint can
+/// otherwise stream until the process runs out of memory.
+const WEB_FETCH_MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+
+/// Validate one hop and return the addresses its connection must be pinned to.
+///
+/// `validate_fetch_url` only rejects IP *literals*; the resolve step is what
+/// catches `http://metadata.attacker.test` pointing at 169.254.169.254, and the
+/// addresses it returns are what the hop's client connects to, so DNS cannot be
+/// re-answered with an internal address between the check and the connect.
+async fn validate_hop(url: &str) -> std::result::Result<Vec<std::net::SocketAddr>, String> {
+    validate_fetch_url(url)?;
+    resolve_and_validate_for_pinning(url).await
+}
+
+fn pinned_hop_client(
+    url: &str,
+    addrs: &[std::net::SocketAddr],
+) -> std::result::Result<reqwest::Client, String> {
+    let mut builder = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::none());
+    if !addrs.is_empty() {
+        if let Some(host) = reqwest::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(|h| h.to_string()))
+        {
+            builder = builder.resolve_to_addrs(&host, addrs);
         }
     }
-    if !any {
-        return Err(format!("redirect DNS returned no addresses for {host}"));
+    builder
+        .build()
+        .map_err(|e| format!("failed to build HTTP client: {e}"))
+}
+
+fn next_hop_url(current: &str, location: &str) -> std::result::Result<String, String> {
+    let base = reqwest::Url::parse(current).map_err(|e| format!("Invalid URL: {e}"))?;
+    let next = base
+        .join(location)
+        .map_err(|e| format!("invalid redirect target {location}: {e}"))?;
+    Ok(next.to_string())
+}
+
+async fn read_body_capped(mut resp: reqwest::Response) -> std::result::Result<String, String> {
+    let mut buf: Vec<u8> = Vec::new();
+    loop {
+        match resp.chunk().await {
+            Ok(Some(chunk)) => {
+                let room = WEB_FETCH_MAX_BODY_BYTES.saturating_sub(buf.len());
+                if room == 0 {
+                    break;
+                }
+                let take = chunk.len().min(room);
+                buf.extend_from_slice(&chunk[..take]);
+                if take < chunk.len() {
+                    break;
+                }
+            }
+            Ok(None) => break,
+            Err(e) => return Err(format!("Failed to fetch URL: {e}")),
+        }
     }
-    Ok(())
+    Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
+/// Fetch `url`, following redirects manually so every hop is re-validated AND
+/// pinned to the addresses that validation saw.
+async fn fetch_with_pinned_hops(url: &str) -> std::result::Result<String, String> {
+    let mut current = url.to_string();
+    for hop in 0..=WEB_FETCH_MAX_REDIRECTS {
+        let addrs = validate_hop(&current)
+            .await
+            .map_err(|reason| format!("URL blocked for security: {current} ({reason})"))?;
+        let client = pinned_hop_client(&current, &addrs)?;
+        let resp = client
+            .get(&current)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to fetch URL: {e}"))?;
+
+        if !resp.status().is_redirection() {
+            return read_body_capped(resp).await;
+        }
+        if hop == WEB_FETCH_MAX_REDIRECTS {
+            return Err(format!(
+                "Failed to fetch URL: too many redirects (limit: {WEB_FETCH_MAX_REDIRECTS})"
+            ));
+        }
+        let location = resp
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| format!("Failed to fetch URL: redirect from {current} had no Location"))?
+            .to_string();
+        current = next_hop_url(&current, &location)?;
+    }
+    Err(format!(
+        "Failed to fetch URL: too many redirects (limit: {WEB_FETCH_MAX_REDIRECTS})"
+    ))
 }
 
 pub(super) async fn resolve_and_validate_for_pinning(
@@ -301,61 +370,10 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
         });
     }
 
-    let pinned_addrs = match resolve_and_validate_for_pinning(url).await {
-        Ok(a) => a,
-        Err(reason) => {
-            return Ok(ToolResult {
-                tool_name: "web_fetch".to_string(),
-                success: false,
-                output: format!("URL blocked for security: {}", reason),
-            });
-        }
-    };
-
     print_tool_status("web_fetch", &format!("WebFetch({})", url));
 
-    let redirect_policy = reqwest::redirect::Policy::custom(|attempt| {
-        if attempt.previous().len() >= 5 {
-            return attempt.error("too many redirects (limit: 5)");
-        }
-        let url_str = attempt.url().as_str().to_string();
-        if let Err(reason) = validate_fetch_url(&url_str) {
-            return attempt.error(format!(
-                "redirect blocked by SSRF policy: {} ({})",
-                url_str, reason
-            ));
-        }
-        // validate_fetch_url does no DNS — it only rejects IP *literals*. The
-        // initial host is pinned to validated addresses, but a redirect target
-        // resolves normally, so `http://metadata.attacker.test` pointing at
-        // 169.254.169.254 sailed through. Resolve the hop before following it.
-        if let Err(reason) = redirect_target_resolves_publicly(attempt.url()) {
-            return attempt.error(format!(
-                "redirect blocked by SSRF policy: {} ({})",
-                url_str, reason
-            ));
-        }
-        attempt.follow()
-    });
-
-    let mut client_builder = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .redirect(redirect_policy);
-
-    if !pinned_addrs.is_empty() {
-        if let Some(host) = reqwest::Url::parse(url)
-            .ok()
-            .and_then(|u| u.host_str().map(|s| s.to_string()))
-        {
-            client_builder = client_builder.resolve_to_addrs(&host, &pinned_addrs);
-        }
-    }
-
-    let client = client_builder.build().unwrap_or_default();
-
-    match client.get(url.as_str()).send().await {
-        Ok(resp) => {
-            let body = resp.text().await.unwrap_or_default();
+    match fetch_with_pinned_hops(url).await {
+        Ok(body) => {
             let text = strip_html_tags(&body);
             let truncated = truncate_output_with_save("web_fetch", text);
             // AUDIT-FIX: H-8 — flag network-sourced content so the model does not treat it as trusted instructions.
@@ -373,10 +391,10 @@ pub(super) async fn execute_web_fetch(args: &HashMap<String, String>) -> Result<
                 output,
             })
         }
-        Err(e) => Ok(ToolResult {
+        Err(reason) => Ok(ToolResult {
             tool_name: "web_fetch".to_string(),
             success: false,
-            output: format!("Failed to fetch URL: {}", e),
+            output: reason,
         }),
     }
 }
@@ -444,36 +462,105 @@ pub(super) async fn execute_tool_search(args: &HashMap<String, String>) -> Resul
 mod tests {
     use super::*;
 
-    #[test]
-    fn a_redirect_to_a_literal_internal_ip_is_refused() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    async fn serve_once(response: Vec<u8>) -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut scratch = [0u8; 1024];
+                let _ = stream.read(&mut scratch).await;
+                let _ = stream.write_all(&response).await;
+                let _ = stream.flush().await;
+            }
+        });
+        port
+    }
+
+    #[tokio::test]
+    async fn a_redirect_hop_is_never_followed_by_the_client_itself() {
+        let secret_port = serve_once(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\nConnection: close\r\n\r\nSECRET".to_vec(),
+        )
+        .await;
+        let redirect_port = serve_once(
+            format!(
+                "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{secret_port}/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .into_bytes(),
+        )
+        .await;
+
+        let url = format!("http://127.0.0.1:{redirect_port}/");
+        let client = pinned_hop_client(&url, &[]).unwrap();
+        let resp = client.get(&url).send().await.unwrap();
+
+        assert_eq!(
+            resp.status().as_u16(),
+            302,
+            "reqwest followed the hop itself"
+        );
+        assert!(!resp.text().await.unwrap_or_default().contains("SECRET"));
+    }
+
+    #[tokio::test]
+    async fn a_hop_to_an_internal_target_is_refused_before_it_is_pinned() {
         for hostile in [
             "http://169.254.169.254/latest/meta-data/",
             "http://127.0.0.1:8080/admin",
             "http://10.0.0.5/",
             "http://[::1]/",
+            "http://[::ffff:169.254.169.254]/",
+            "http://[64:ff9b::169.254.169.254]/",
+            "http://[64:ff9b::7f00:1]/",
         ] {
-            let url = reqwest::Url::parse(hostile).unwrap();
             assert!(
-                redirect_target_resolves_publicly(&url).is_err(),
+                validate_hop(hostile).await.is_err(),
                 "{hostile} was allowed"
             );
         }
-    }
 
-    #[test]
-    fn a_redirect_to_a_public_literal_is_allowed() {
-        let url = reqwest::Url::parse("https://93.184.216.34/").unwrap();
-        assert!(redirect_target_resolves_publicly(&url).is_ok());
-    }
-
-    #[test]
-    fn a_hostname_that_resolves_to_loopback_is_refused() {
         // localhost is the one name guaranteed to resolve internally on any
-        // machine, so this exercises the DNS branch without a network.
-        let url = reqwest::Url::parse("http://localhost:9/").unwrap();
-        let refused = redirect_target_resolves_publicly(&url);
-        assert!(refused.is_err(), "localhost redirect was allowed");
+        // machine, so this exercises the resolve-and-pin branch without a network.
+        let refused = resolve_and_validate_for_pinning("http://localhost:9/").await;
+        assert!(refused.is_err(), "localhost hop was allowed");
         assert!(refused.unwrap_err().contains("internal IP"));
+        assert!(validate_hop("http://localhost:9/").await.is_err());
+    }
+
+    #[test]
+    fn a_relative_or_protocol_relative_location_resolves_to_the_checked_hop() {
+        assert_eq!(
+            next_hop_url("https://example.com/a/b", "../c").unwrap(),
+            "https://example.com/c"
+        );
+        let rebound = next_hop_url("https://example.com/a", "//169.254.169.254/latest").unwrap();
+        assert_eq!(rebound, "https://169.254.169.254/latest");
+        assert!(
+            validate_fetch_url(&rebound).is_err(),
+            "hop escaped validation"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_response_body_is_capped() {
+        let oversized = vec![b'a'; WEB_FETCH_MAX_BODY_BYTES + 1024];
+        let mut response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            oversized.len()
+        )
+        .into_bytes();
+        response.extend_from_slice(&oversized);
+        let port = serve_once(response).await;
+
+        let url = format!("http://127.0.0.1:{port}/");
+        let client = pinned_hop_client(&url, &[]).unwrap();
+        let resp = client.get(&url).send().await.unwrap();
+        let body = read_body_capped(resp).await.unwrap();
+
+        assert_eq!(body.len(), WEB_FETCH_MAX_BODY_BYTES);
     }
     use super::{tavily_search_body, validate_fetch_url};
 

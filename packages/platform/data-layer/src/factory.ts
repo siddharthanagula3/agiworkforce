@@ -27,7 +27,7 @@
  * | `AGI_REALTIME_PROVIDER`            | explicit only | Realtime     |
  * | `AGI_DATABASE_URL` / `DATABASE_URL`| —             | Neon DB      |
  * | `CLERK_JWT_KEY` / `CLERK_SECRET_KEY`| —            | Clerk auth   |
- * | `CLERK_AUTHORIZED_PARTIES`          | —             | Clerk auth   |
+ * | `CLERK_AUTHORIZED_PARTIES`          | app origin    | Clerk auth   |
  *
  * Defaults are fail-closed for anything that is not implemented on the
  * Clerk + Neon platform boundary.
@@ -140,6 +140,24 @@ function selectDatabaseProvider(raw: string | undefined): DatabaseProvider {
   );
 }
 
+function parseAuthorizedParties(raw: string | undefined): string[] | undefined {
+  const parties = (raw ?? '')
+    .split(',')
+    .map((party) => party.trim())
+    .filter(Boolean);
+  return parties.length > 0 ? parties : undefined;
+}
+
+function deploymentOrigin(): string | undefined {
+  const appUrl = readEnv('NEXT_PUBLIC_APP_URL')?.trim() || readEnv('AGI_APP_URL')?.trim();
+  if (!appUrl) return undefined;
+  try {
+    return new URL(appUrl).origin;
+  } catch {
+    return undefined;
+  }
+}
+
 const AUTH_PROVIDERS = ['auth0', 'clerk', 'cognito'] as const;
 
 export interface CreateAuthClientOptions {
@@ -159,10 +177,8 @@ export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapte
       const jwtKey = opts.clerkJwtKey ?? readEnv('CLERK_JWT_KEY');
       const authorizedParties =
         opts.clerkAuthorizedParties ??
-        readEnv('CLERK_AUTHORIZED_PARTIES')
-          ?.split(',')
-          .map((party) => party.trim())
-          .filter(Boolean);
+        parseAuthorizedParties(readEnv('CLERK_AUTHORIZED_PARTIES')) ??
+        parseAuthorizedParties(deploymentOrigin());
       return new ClerkAuthAdapter({ secretKey, jwtKey, authorizedParties });
     }
     case 'auth0':

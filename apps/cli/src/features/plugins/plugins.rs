@@ -649,6 +649,19 @@ impl PluginsManager {
         if let Err(error) = validate_plugin_name(&req.name) {
             return PluginInstallOutcome::Failed { error };
         }
+        if let PluginSource::Git { url, branch } = &req.source {
+            if let Err(error) = crate::marketplace::validate_git_clone_url(url) {
+                return PluginInstallOutcome::Failed {
+                    error: error.to_string(),
+                };
+            }
+            if branch.as_deref().is_some_and(|b| b.starts_with('-')) {
+                return PluginInstallOutcome::Failed {
+                    error: "refusing git branch that begins with '-' (argument injection)"
+                        .to_string(),
+                };
+            }
+        }
         let target = self.global_dir.join(&req.name);
         if !target.starts_with(&self.global_dir) {
             return PluginInstallOutcome::Failed {
@@ -679,7 +692,8 @@ impl PluginsManager {
                 if let Some(b) = branch {
                     cmd.args(["--branch", &b]);
                 }
-                cmd.arg(&url).arg(&target);
+                // `--` keeps git from reading the URL or the target path as options.
+                cmd.arg("--").arg(&url).arg(&target);
                 match cmd.output() {
                     Ok(o) if o.status.success() => Ok(()),
                     Ok(o) => Err(String::from_utf8_lossy(&o.stderr).to_string()),
@@ -1043,6 +1057,71 @@ mod tests {
         }
         assert!(!home.path().join("evil").exists());
         assert!(!home.path().join("plugins").exists());
+    }
+
+    fn git_install(url: &str, branch: Option<&str>) -> (tempfile::TempDir, PluginInstallOutcome) {
+        let home = tempfile::tempdir().unwrap();
+        let manager = PluginsManager {
+            global_dir: home.path().join("plugins"),
+            plugins: Vec::new(),
+        };
+        let outcome = manager.install(PluginInstallRequest {
+            source: PluginSource::Git {
+                url: url.to_string(),
+                branch: branch.map(str::to_string),
+            },
+            name: "safe-plugin".to_string(),
+            integrity: PluginIntegrity::UnsafeSkip,
+        });
+        (home, outcome)
+    }
+
+    #[test]
+    fn plugin_install_refuses_git_argument_injection_and_credential_urls() {
+        for url in [
+            "--upload-pack=/tmp/evil.git",
+            "ext::sh -c evil",
+            "file:///etc",
+            "https://user:token@example.com/acme/plugin.git",
+        ] {
+            let (home, outcome) = git_install(url, None);
+            match outcome {
+                PluginInstallOutcome::Failed { error } => assert!(
+                    error.contains("refusing git source")
+                        || error.contains("unsupported git source")
+                        || error.contains("credentials"),
+                    "{url}: {error}"
+                ),
+                _ => panic!("{url} should be refused"),
+            }
+            assert!(
+                !home.path().join("plugins").exists(),
+                "{url} reached the filesystem"
+            );
+        }
+    }
+
+    #[test]
+    fn plugin_install_refuses_dash_prefixed_git_branch() {
+        let (home, outcome) = git_install(
+            "https://127.0.0.1:1/acme/plugin.git",
+            Some("--upload-pack=/tmp/evil"),
+        );
+        match outcome {
+            PluginInstallOutcome::Failed { error } => {
+                assert!(error.contains("refusing git branch"), "{error}")
+            }
+            _ => panic!("dash-prefixed branch should be refused"),
+        }
+        assert!(!home.path().join("plugins").exists());
+    }
+
+    #[test]
+    fn dash_prefixed_source_is_not_treated_as_a_git_remote() {
+        assert!(!crate::is_git_plugin_source("--upload-pack=/tmp/evil.git"));
+        assert!(crate::is_git_plugin_source(
+            "https://github.com/acme/plugin.git"
+        ));
     }
 
     #[test]

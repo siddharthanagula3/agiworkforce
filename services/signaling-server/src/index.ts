@@ -1,4 +1,3 @@
-
 import 'dotenv/config';
 
 if (!process.env['NODE_ENV']) {
@@ -174,8 +173,8 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   next();
 });
 
-const allowedOrigins = (() => {
-  const configured = process.env['ALLOWED_ORIGINS'];
+export function resolveAllowedOrigins(env: NodeJS.ProcessEnv): string[] {
+  const configured = env['ALLOWED_ORIGINS'];
   if (configured) {
     return configured
       .split(',')
@@ -183,16 +182,51 @@ const allowedOrigins = (() => {
       .filter(Boolean);
   }
 
-  if (process.env['NODE_ENV'] === 'production') {
-    logger.error(
-      'ALLOWED_ORIGINS is not set. Refusing to fall back to localhost origins in production; ' +
-        'cross-origin requests will be rejected until it is configured.',
-    );
+  if (env['NODE_ENV'] === 'production') {
     return [];
   }
 
   return [...DEFAULT_ALLOWED_ORIGINS];
-})();
+}
+
+const allowedOrigins = resolveAllowedOrigins(process.env);
+
+if (allowedOrigins.length === 0) {
+  logger.error(
+    'ALLOWED_ORIGINS resolved to an empty allow-list (unset in production, or set to no usable ' +
+      'value). Every WebSocket connection presenting an Origin header is rejected, and only ' +
+      'clients presenting a valid x-signaling-internal-secret can connect, until it is configured.',
+  );
+}
+
+export type WsHandshakeDecision = { allowed: true } | { allowed: false; reason: string };
+
+export function evaluateWsHandshake(params: {
+  origin: unknown;
+  internalSecret: unknown;
+  allowedOrigins: readonly string[];
+  internalSecretExpected: string | undefined;
+}): WsHandshakeDecision {
+  const { origin, internalSecret, internalSecretExpected } = params;
+
+  if (typeof origin === 'string' && origin.length > 0) {
+    if (params.allowedOrigins.includes(origin)) return { allowed: true };
+    return {
+      allowed: false,
+      reason: params.allowedOrigins.length === 0 ? 'origin_not_configured' : 'forbidden_origin',
+    };
+  }
+
+  if (
+    !internalSecretExpected ||
+    typeof internalSecret !== 'string' ||
+    !constantTimeCompare(internalSecret, internalSecretExpected)
+  ) {
+    return { allowed: false, reason: 'origin_required' };
+  }
+
+  return { allowed: true };
+}
 
 app.use(
   cors({
@@ -659,31 +693,6 @@ app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
 });
 
 wss.on('connection', (socket, request) => {
-  const origin = request.headers['origin'];
-  if (allowedOrigins.length > 0) {
-    if (origin) {
-      if (!allowedOrigins.includes(origin)) {
-        socket.close(1008, 'forbidden_origin');
-        logger.warn({ origin }, 'WebSocket connection rejected: forbidden origin');
-        return;
-      }
-    } else {
-      const internalSecret = request.headers['x-signaling-internal-secret'];
-      if (
-        !SIGNALING_SECRET ||
-        typeof internalSecret !== 'string' ||
-        internalSecret !== SIGNALING_SECRET
-      ) {
-        socket.close(1008, 'origin_required');
-        logger.warn(
-          { ip: request.socket.remoteAddress },
-          'WebSocket no-Origin connection rejected: missing internal secret',
-        );
-        return;
-      }
-    }
-  }
-
   if (isShuttingDown) {
     socket.send(JSON.stringify({ type: 'error', error: 'server_shutting_down' }));
     socket.close(1001, 'server_shutting_down');
@@ -723,6 +732,22 @@ wss.on('connection', (socket, request) => {
       }),
     );
     socket.close(1008, 'rate_limit_exceeded');
+    return;
+  }
+
+  const handshake = evaluateWsHandshake({
+    origin: request.headers['origin'],
+    internalSecret: request.headers['x-signaling-internal-secret'],
+    allowedOrigins,
+    internalSecretExpected: SIGNALING_SECRET,
+  });
+  if (!handshake.allowed) {
+    logger.warn(
+      { ip, origin: request.headers['origin'], reason: handshake.reason },
+      'WebSocket connection rejected by origin policy',
+    );
+    metrics.recordError('ws_origin_rejected');
+    socket.close(1008, handshake.reason);
     return;
   }
 

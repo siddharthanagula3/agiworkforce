@@ -3,12 +3,13 @@
 import { useUser } from '@clerk/nextjs';
 
 /**
- * Whether the signed-in user holds the role the /admin console requires.
+ * Whether the signed-in user holds the organisation admin/owner role.
  *
- * Mirrors the check in `app/admin/layout.tsx`, which reads the same Clerk
- * `publicMetadata.role` server-side and redirects anyone else away. This is
- * only used to decide whether to *offer* the destination — the route's own
- * gate is the boundary, and it is unchanged.
+ * Mirrors the org-role half of `app/admin/layout.tsx`, which reads the same
+ * Clerk `publicMetadata.role` server-side and redirects anyone else away. It
+ * says nothing about platform-operator standing (an allowlist that never
+ * reaches the client), so it may only gate org-scoped destinations, and only
+ * as an offer — the route's own server-side gate is the boundary.
  */
 export function useIsWorkspaceAdmin(): boolean {
   const { user, isLoaded } = useUser();

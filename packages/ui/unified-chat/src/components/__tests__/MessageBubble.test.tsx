@@ -43,6 +43,27 @@ describe('safeHref', () => {
     expect(safeHref('vbscript:msgbox(1)')).toBeNull();
     expect(safeHref('file:///etc/passwd')).toBeNull();
   });
+
+  it('rejects protocol-relative and backslash-escaped URLs that resolve cross-origin', () => {
+    expect(safeHref('//evil.example.com/login')).toBeNull();
+    expect(safeHref('  //evil.example.com/login')).toBeNull();
+    expect(safeHref('///evil.example.com')).toBeNull();
+    expect(safeHref('/\\evil.example.com')).toBeNull();
+    expect(safeHref('\\\\evil.example.com')).toBeNull();
+    expect(safeHref('\\evil.example.com')).toBeNull();
+  });
+
+  it('rejects hrefs carrying control characters browsers strip', () => {
+    expect(safeHref('/\t/evil.example.com')).toBeNull();
+    expect(safeHref('/\n/evil.example.com')).toBeNull();
+    expect(safeHref('/foo\u0000/bar')).toBeNull();
+    expect(safeHref('https://example.com/\u007f')).toBeNull();
+  });
+
+  it('still allows single-slash paths and the root path', () => {
+    expect(safeHref('/')).toBe('/');
+    expect(safeHref('/a//b')).toBe('/a//b');
+  });
 });
 
 describe('MessageBubble link rendering', () => {
@@ -51,6 +72,13 @@ describe('MessageBubble link rendering', () => {
     expect(html).not.toMatch(/href=["']?javascript:/i);
     expect(html).not.toMatch(/<a\b[^>]*javascript:/i);
     expect(html).toContain('a');
+  });
+
+  it('renders [a](//evil.example.com) as plain text, not an anchor', () => {
+    const html = renderMessage('[Continue](//evil.example.com/login)');
+    expect(html).not.toMatch(/<a\b/i);
+    expect(html).not.toContain('evil.example.com');
+    expect(html).toContain('Continue');
   });
 
   it('renders [a](https://example.com) as a clickable anchor', () => {

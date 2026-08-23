@@ -11,7 +11,8 @@ use chrono::{DateTime, Utc};
 use image::RgbaImage;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
@@ -19,6 +20,177 @@ use tokio::sync::Mutex;
 use crate::automation::screen::capture_primary_screen;
 
 use super::types::{ComputerUseAction, ComputerUseTask, TaskOutcome, TaskProgress};
+use super::window_manager::{ActiveWindow, WindowCoordinator};
+
+/// Window/app name fragments that mark the foreground surface as one whose
+/// pixels routinely contain secrets. Mirrors the sensitive-window list in
+/// `safety.rs` and extends it with the credential surfaces a screen capture
+/// would leak verbatim.
+const SENSITIVE_SURFACE_KEYWORDS: &[&str] = &[
+    "password",
+    "passphrase",
+    "credential",
+    "keychain",
+    "keyring",
+    "sign in",
+    "signin",
+    "log in",
+    "login",
+    "authenticator",
+    "one-time",
+    "one time code",
+    "otp",
+    "2fa",
+    "two-factor",
+    "verification code",
+    "security code",
+    "secret",
+    "api key",
+    "private key",
+    "seed phrase",
+    "recovery phrase",
+    "wallet",
+    "bank",
+    "checkout",
+    "payment",
+    "credit card",
+    "1password",
+    "bitwarden",
+    "lastpass",
+    "dashlane",
+    "keeper",
+    "vault",
+    "security preferences",
+    "system preferences",
+    "control panel",
+    "task manager",
+    "terminal",
+    "cmd.exe",
+    "powershell",
+];
+
+fn is_sensitive_surface(app_name: &str, window_title: &str) -> bool {
+    let haystack = format!("{app_name} {window_title}").to_lowercase();
+    SENSITIVE_SURFACE_KEYWORDS
+        .iter()
+        .any(|keyword| haystack.contains(keyword))
+}
+
+/// A foreground window we cannot identify is treated like a sensitive one:
+/// the capture stays in memory rather than being written to disk.
+fn may_persist_capture(active: Option<&ActiveWindow>) -> bool {
+    match active {
+        Some(window) => !is_sensitive_surface(&window.app_name, &window.window_title),
+        None => false,
+    }
+}
+
+/// Per-user, app-private location for screen captures. Never the shared OS
+/// temp directory: captures can contain on-screen credentials.
+fn default_screenshot_dir() -> Option<PathBuf> {
+    let base = dirs::data_local_dir()
+        .or_else(dirs::data_dir)
+        .map(|dir| dir.join("agiworkforce"))
+        .or_else(|| dirs::home_dir().map(|home| home.join(".agiworkforce")))?;
+    Some(base.join("computer-use").join("screenshots"))
+}
+
+fn prepare_screenshot_dir(dir: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)
+            .with_context(|| format!("Failed to create screenshot dir {}", dir.display()))?;
+
+        let metadata = std::fs::symlink_metadata(dir)?;
+        if metadata.file_type().is_symlink() {
+            anyhow::bail!("Screenshot directory {} is a symlink", dir.display());
+        }
+
+        let mut permissions = metadata.permissions();
+        if permissions.mode() & 0o077 != 0 {
+            permissions.set_mode(0o700);
+            std::fs::set_permissions(dir, permissions)?;
+        }
+    }
+
+    #[cfg(not(unix))]
+    std::fs::create_dir_all(dir)
+        .with_context(|| format!("Failed to create screenshot dir {}", dir.display()))?;
+
+    Ok(())
+}
+
+fn write_screenshot(path: &Path, pixels: &RgbaImage) -> Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+
+    let file = options
+        .open(path)
+        .with_context(|| format!("Failed to create screenshot file {}", path.display()))?;
+    let mut writer = std::io::BufWriter::new(file);
+    pixels
+        .write_to(&mut writer, image::ImageFormat::Png)
+        .context("Failed to encode screenshot")?;
+    writer.flush().context("Failed to flush screenshot")?;
+    Ok(())
+}
+
+const LEGACY_TEMP_SCREENSHOT_DIR: &str = "agiworkforce_computer_use";
+
+/// Earlier builds wrote captures to the shared OS temp directory; those files
+/// outlive the upgrade, so remove them the first time a session is created.
+fn purge_legacy_temp_screenshots() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        purge_legacy_screenshot_dir(&std::env::temp_dir().join(LEGACY_TEMP_SCREENSHOT_DIR));
+    });
+}
+
+fn purge_legacy_screenshot_dir(dir: &Path) {
+    let Ok(metadata) = std::fs::symlink_metadata(dir) else {
+        return;
+    };
+    if !metadata.is_dir() {
+        return;
+    }
+
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "png") && entry.path().is_file() {
+            if let Err(err) = std::fs::remove_file(&path) {
+                tracing::warn!("Failed to purge legacy computer-use screenshot: {}", err);
+            }
+        }
+    }
+    let _ = std::fs::remove_dir(dir);
+}
+
+fn purge_screenshot_ref(slot: &mut Option<ScreenshotRef>) {
+    if !matches!(slot, Some(ScreenshotRef::OnDisk(_))) {
+        return;
+    }
+    if let Some(ScreenshotRef::OnDisk(path)) = slot.take() {
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => tracing::warn!("Failed to purge computer-use screenshot: {}", err),
+        }
+    }
+}
 
 /// Configuration for session behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,7 +216,7 @@ impl Default for SessionConfig {
         Self {
             max_screenshots_in_memory: 50,
             persist_screenshots: true,
-            screenshot_dir: Some(std::env::temp_dir().join("agiworkforce_computer_use")),
+            screenshot_dir: default_screenshot_dir(),
             max_action_history: 1000,
             emit_events: true,
             capture_before_action: true,
@@ -192,6 +364,8 @@ pub struct ComputerUseSession {
 impl ComputerUseSession {
     /// Creates a new session for a task.
     pub fn new(task: ComputerUseTask, config: SessionConfig) -> Self {
+        purge_legacy_temp_screenshots();
+
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             task,
@@ -309,13 +483,17 @@ impl ComputerUseSession {
 
         if self.config.persist_screenshots {
             if let Some(ref dir) = self.config.screenshot_dir {
-                std::fs::create_dir_all(dir)?;
+                if may_persist_capture(WindowCoordinator::get_active_window().as_ref()) {
+                    prepare_screenshot_dir(dir)?;
 
-                let filename = format!("{}_{}.png", self.id, suffix);
-                let path = dir.join(&filename);
+                    let path = dir.join(format!("{}_{}.png", self.id, suffix));
+                    write_screenshot(&path, &captured.pixels)?;
+                    return Ok(Some(ScreenshotRef::OnDisk(path)));
+                }
 
-                captured.pixels.save(&path)?;
-                return Ok(Some(ScreenshotRef::OnDisk(path)));
+                tracing::debug!(
+                    "Keeping computer-use capture in memory: foreground window is sensitive or unidentified"
+                );
             }
         }
 
@@ -349,6 +527,7 @@ impl ComputerUseSession {
     pub fn cancel(&mut self) {
         self.is_cancelled = true;
         self.ended_at = Some(Utc::now());
+        self.purge_persisted_screenshots();
         self.emit(SessionEvent::SessionCancelled {
             session_id: self.id.clone(),
         });
@@ -357,6 +536,7 @@ impl ComputerUseSession {
     /// Completes the session with an outcome.
     pub fn complete(&mut self, outcome: TaskOutcome) {
         self.ended_at = Some(Utc::now());
+        self.purge_persisted_screenshots();
         self.emit(SessionEvent::SessionCompleted {
             session_id: self.id.clone(),
             outcome,
@@ -462,6 +642,14 @@ impl ComputerUseSession {
             .collect()
     }
 
+    /// Deletes every persisted capture for this session and forgets its path.
+    pub fn purge_persisted_screenshots(&mut self) {
+        for snapshot in self.snapshots.iter_mut() {
+            purge_screenshot_ref(&mut snapshot.before_screenshot);
+            purge_screenshot_ref(&mut snapshot.after_screenshot);
+        }
+    }
+
     /// Cleans up session files.
     pub fn cleanup(&self) -> Result<()> {
         for path in self.screenshot_paths() {
@@ -554,6 +742,136 @@ mod tests {
             description: "Test task".to_string(),
             ..Default::default()
         }
+    }
+
+    fn sample_png(path: &std::path::Path) {
+        let pixels = RgbaImage::new(2, 2);
+        write_screenshot(path, &pixels).unwrap();
+    }
+
+    #[test]
+    fn default_screenshot_dir_is_app_private_not_shared_temp() {
+        let dir = SessionConfig::default()
+            .screenshot_dir
+            .expect("default screenshot dir");
+
+        assert!(!dir.starts_with(std::env::temp_dir()));
+        assert!(dir.ends_with(std::path::Path::new("computer-use").join("screenshots")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn screenshot_dir_and_files_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("nested").join("screenshots");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+
+        prepare_screenshot_dir(&dir).unwrap();
+        assert_eq!(
+            std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+
+        let path = dir.join("capture.png");
+        sample_png(&path);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert!(image::open(&path).is_ok());
+    }
+
+    #[test]
+    fn sensitive_or_unidentified_foreground_window_blocks_persistence() {
+        assert!(is_sensitive_surface("Safari", "Sign in - Example Bank"));
+        assert!(is_sensitive_surface("1Password", ""));
+        assert!(!is_sensitive_surface("Notes", "Grocery list"));
+
+        assert!(!may_persist_capture(None));
+        assert!(!may_persist_capture(Some(&ActiveWindow {
+            app_name: "Chrome".to_string(),
+            window_title: "Enter your password".to_string(),
+            bundle_id: None,
+        })));
+        assert!(may_persist_capture(Some(&ActiveWindow {
+            app_name: "Notes".to_string(),
+            window_title: "Grocery list".to_string(),
+            bundle_id: None,
+        })));
+    }
+
+    #[test]
+    fn legacy_temp_screenshot_dir_is_removed() {
+        let root = tempfile::tempdir().unwrap();
+        let legacy = root.path().join(LEGACY_TEMP_SCREENSHOT_DIR);
+        std::fs::create_dir_all(&legacy).unwrap();
+        let capture = legacy.join("session_before_0.png");
+        sample_png(&capture);
+
+        purge_legacy_screenshot_dir(&legacy);
+
+        assert!(!capture.exists());
+        assert!(!legacy.exists());
+    }
+
+    #[test]
+    fn ending_a_session_purges_persisted_screenshots() {
+        let root = tempfile::tempdir().unwrap();
+        let before_path = root.path().join("before.png");
+        let after_path = root.path().join("after.png");
+        sample_png(&before_path);
+        sample_png(&after_path);
+
+        let config = SessionConfig {
+            emit_events: false,
+            capture_before_action: false,
+            capture_after_action: false,
+            ..Default::default()
+        };
+        let mut session = ComputerUseSession::new(create_test_task(), config);
+        session.snapshots.push_back(ActionSnapshot {
+            id: "snapshot-1".to_string(),
+            timestamp: Utc::now(),
+            action: ComputerUseAction::Screenshot {
+                region: None,
+                save_path: None,
+            },
+            before_screenshot: Some(ScreenshotRef::OnDisk(before_path.clone())),
+            after_screenshot: Some(ScreenshotRef::InMemory(Arc::new(RgbaImage::new(1, 1)))),
+            success: true,
+            error: None,
+            duration_ms: 1,
+        });
+        session.snapshots.push_back(ActionSnapshot {
+            id: "snapshot-2".to_string(),
+            timestamp: Utc::now(),
+            action: ComputerUseAction::Screenshot {
+                region: None,
+                save_path: None,
+            },
+            before_screenshot: Some(ScreenshotRef::OnDisk(after_path.clone())),
+            after_screenshot: None,
+            success: true,
+            error: None,
+            duration_ms: 1,
+        });
+
+        session.complete(super::super::types::TaskOutcome::success(
+            2,
+            10,
+            "Done".to_string(),
+        ));
+
+        assert!(!before_path.exists());
+        assert!(!after_path.exists());
+        assert!(session.screenshot_paths().is_empty());
+        assert!(matches!(
+            session.snapshots[0].after_screenshot,
+            Some(ScreenshotRef::InMemory(_))
+        ));
     }
 
     #[test]

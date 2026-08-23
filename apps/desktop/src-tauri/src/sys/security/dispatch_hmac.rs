@@ -9,12 +9,14 @@
 //!
 //! # Trust boundary
 //!
-//! This layer does not defend against the signaling relay. The relay mints the
-//! pairing code and sees it again on the claim call and the register frame,
-//! and the session salt reaches it in register metadata, so it holds both KDF
-//! inputs below and can mint envelopes that verify in either direction. The
-//! out-of-band key or PAKE that would close it is SEC-16 in
-//! `docs/remediation/register.json`.
+//! This layer defends against the signaling relay. The keying material is
+//! `pairing_secret` — 32 random bytes the desktop generates locally and
+//! publishes only in the QR / pairing-link payload the phone reads optically.
+//! It is never sent to the relay, so the relay, a relay compromise, and a
+//! TLS-intercepting proxy all lack the IKM and cannot reproduce the session
+//! key or mint envelopes that verify in either direction. The pairing code and
+//! session salt are relay-visible and are mixed into the HKDF salt only to
+//! bind the key to one session; they are not sufficient on their own.
 //!
 //! # Wire format
 //!
@@ -24,22 +26,28 @@
 //!   "nonce":   "<base64 16 random bytes>",
 //!   "payload": <original control-message JSON>,
 //!   "ts":      <unix ms integer>,
-//!   "type":    "<action string, mirrors payload.action>"
+//!   "type":    "<action string, mirrors payload.action>",
+//!   "v":       3
 //! }
 //! ```
 //!
 //! Keys are alphabetically ordered. The HMAC covers
-//! `JSON.stringify({nonce, payload, ts, type})` — i.e. the envelope without
+//! `JSON.stringify({nonce, payload, ts, type, v})` — i.e. the envelope without
 //! the `hmac` field. Mobile uses `JSON.stringify` with insertion-order keys;
 //! we preserve compatibility by holding `payload` as a raw JSON value (no
 //! re-canonicalization on the receive path).
 //!
+//! `v` is refused unless it equals [`ENVELOPE_VERSION`]. A v2 peer derives its
+//! key from relay-visible material only, so it is rejected as
+//! [`VerifyError::ProtocolVersionUnsupported`] — an explicit "update required"
+//! rather than a confusing HMAC mismatch.
+//!
 //! # Session secret derivation (HKDF-SHA-256, RFC 5869)
 //!
 //! ```text
-//! IKM  = UTF-8(pairing_code)               // ≥8 uppercase alphanum
-//! Salt = UTF-8(session_salt)               // not secret; from signaling
-//! Info = UTF-8("dispatch-hmac-v2")
+//! IKM  = pairing_secret                          // 32 out-of-band random bytes
+//! Salt = UTF-8(pairing_code + ":" + session_salt) // relay-visible, binds the session
+//! Info = UTF-8("dispatch-hmac-v3")
 //! PRK  = HMAC-SHA-256(salt, IKM)           // extract
 //! OKM  = HMAC-SHA-256(PRK, Info || 0x01)   // single-block expand → 32 bytes
 //! ```
@@ -96,7 +104,14 @@ pub const DISPATCH_HMAC_REQUIRED_AFTER: &str = "2026-05-26T00:00:00.000Z";
 const DISPATCH_HMAC_REQUIRED_AFTER_MS: i64 = 1_779_753_600_000;
 
 /// HKDF info parameter — must match the mobile peer.
-const HKDF_INFO: &[u8] = b"dispatch-hmac-v2";
+const HKDF_INFO: &[u8] = b"dispatch-hmac-v3";
+
+/// Wire-protocol version carried in every envelope and covered by the HMAC.
+/// Mirrors `DISPATCH_ENVELOPE_VERSION` in `apps/mobile/lib/dispatchHmac.ts`.
+pub const ENVELOPE_VERSION: i64 = 3;
+
+/// Length of the out-of-band pairing secret, in bytes.
+pub const PAIRING_SECRET_LEN: usize = SESSION_KEY_LEN;
 
 /// Derived session-key length (bytes).
 pub const SESSION_KEY_LEN: usize = 32;
@@ -110,6 +125,8 @@ pub enum DeriveError {
     PairingCodeTooShort,
     #[error("session_salt must be non-empty")]
     SaltEmpty,
+    #[error("pairing_secret must be {} hex-encoded bytes", PAIRING_SECRET_LEN)]
+    PairingSecretInvalid,
 }
 
 /// Reasons a [`verify`] call may reject an envelope. Matches the
@@ -131,6 +148,9 @@ pub enum VerifyError {
     /// Computed HMAC did not match envelope's `hmac` field.
     #[error("hmac mismatch")]
     HmacMismatch,
+    /// Envelope `v` was absent or not [`ENVELOPE_VERSION`].
+    #[error("peer is on an unsupported dispatch protocol version")]
+    ProtocolVersionUnsupported,
     /// Envelope contained a malformed hex/base64 field.
     #[error("invalid encoding: {0}")]
     InvalidEncoding(String),
@@ -158,6 +178,7 @@ pub struct Envelope<'a> {
     pub ts: i64,
     #[serde(rename = "type")]
     pub msg_type: String,
+    pub v: i64,
 }
 
 /// An envelope without an `hmac` field — used for the transitional window
@@ -174,6 +195,8 @@ struct MaybeSignedEnvelope<'a> {
     ts: Option<i64>,
     #[serde(default, rename = "type")]
     msg_type: Option<String>,
+    #[serde(default)]
+    v: Option<i64>,
 }
 
 /// Sliding-window nonce cache. Wrapped in a struct so callers can pass it
@@ -212,10 +235,15 @@ impl NonceCache {
 }
 
 /// Derive the shared 32-byte session key via HKDF-SHA-256. Mirrors
-/// `apps/mobile/lib/dispatchHmac.ts:deriveDispatchSecret`.
+/// `apps/mobile/lib/dispatchHmac.ts:deriveDispatchSecret` byte for byte.
+///
+/// `pairing_secret_hex` is the out-of-band secret from the QR payload; without
+/// it the key would be derivable by the signaling relay, so an absent or
+/// malformed secret is a hard error rather than a fallback.
 pub fn derive_session_key(
     pairing_code: &str,
     session_salt: &str,
+    pairing_secret_hex: &str,
 ) -> Result<[u8; SESSION_KEY_LEN], DeriveError> {
     if pairing_code.len() < 8 {
         return Err(DeriveError::PairingCodeTooShort);
@@ -223,11 +251,13 @@ pub fn derive_session_key(
     if session_salt.is_empty() {
         return Err(DeriveError::SaltEmpty);
     }
+    let ikm = hex_decode_32(pairing_secret_hex).ok_or(DeriveError::PairingSecretInvalid)?;
 
     // HKDF-Extract: PRK = HMAC-SHA-256(salt, IKM)
-    let mut extract = HmacSha256::new_from_slice(session_salt.as_bytes())
+    let salt = format!("{pairing_code}:{session_salt}");
+    let mut extract = HmacSha256::new_from_slice(salt.as_bytes())
         .map_err(|e| DeriveError::HmacInit(e.to_string()))?;
-    extract.update(pairing_code.as_bytes());
+    extract.update(&ikm);
     let prk = extract.finalize().into_bytes();
 
     // HKDF-Expand single block: OKM = HMAC-SHA-256(PRK, info || 0x01)
@@ -243,9 +273,15 @@ pub fn derive_session_key(
 }
 
 /// Build the canonical signing input. Keys are emitted in alphabetical
-/// order: `nonce < payload < ts < type`. The `payload` is splat into the
+/// order: `nonce < payload < ts < type < v`. The `payload` is splat into the
 /// string verbatim — its original byte sequence determines the HMAC.
-fn canonical_signing_input(nonce: &str, payload: &RawValue, ts: i64, msg_type: &str) -> String {
+fn canonical_signing_input(
+    nonce: &str,
+    payload: &RawValue,
+    ts: i64,
+    msg_type: &str,
+    v: i64,
+) -> String {
     // serde_json::to_string for a String escapes JSON special chars correctly
     // (quotes, backslashes, control chars). We rely on that for nonce/type.
     let nonce_json =
@@ -253,11 +289,12 @@ fn canonical_signing_input(nonce: &str, payload: &RawValue, ts: i64, msg_type: &
     let type_json =
         serde_json::to_string(msg_type).expect("msg_type string must always serialize as JSON");
     format!(
-        "{{\"nonce\":{nonce},\"payload\":{payload},\"ts\":{ts},\"type\":{type_}}}",
+        "{{\"nonce\":{nonce},\"payload\":{payload},\"ts\":{ts},\"type\":{type_},\"v\":{v}}}",
         nonce = nonce_json,
         payload = payload.get(),
         ts = ts,
         type_ = type_json,
+        v = v,
     )
 }
 
@@ -306,6 +343,10 @@ pub fn verify_with_clock(
         return Err(VerifyError::UnsignedTransitional);
     }
 
+    if parsed.v != Some(ENVELOPE_VERSION) {
+        return Err(VerifyError::ProtocolVersionUnsupported);
+    }
+
     // Past this point all signed-envelope fields are required.
     let hmac = parsed.hmac.ok_or(VerifyError::Malformed)?;
     let nonce = parsed.nonce.ok_or(VerifyError::Malformed)?;
@@ -331,7 +372,7 @@ pub fn verify_with_clock(
         .ok_or_else(|| VerifyError::InvalidEncoding("hmac is not 64-char hex".into()))?;
 
     // Compute the expected HMAC over the canonical signing input.
-    let signing_input = canonical_signing_input(&nonce, payload, ts, &msg_type);
+    let signing_input = canonical_signing_input(&nonce, payload, ts, &msg_type, ENVELOPE_VERSION);
     let mut mac = HmacSha256::new_from_slice(session_key)
         .map_err(|_| VerifyError::InvalidEncoding("session_key length".into()))?;
     mac.update(signing_input.as_bytes());
@@ -375,7 +416,8 @@ pub fn sign_to_string_with_inputs<P: Serialize>(
     let payload_string = serde_json::to_string(payload)?;
     let payload_raw = RawValue::from_string(payload_string)?;
 
-    let signing_input = canonical_signing_input(nonce, &payload_raw, ts, msg_type);
+    let signing_input =
+        canonical_signing_input(nonce, &payload_raw, ts, msg_type, ENVELOPE_VERSION);
     let mut mac =
         HmacSha256::new_from_slice(session_key).expect("session_key length is fixed at 32 bytes");
     mac.update(signing_input.as_bytes());
@@ -386,12 +428,13 @@ pub fn sign_to_string_with_inputs<P: Serialize>(
     // form one-to-one. (Not required for HMAC integrity since payload is
     // raw, but matches mobile's wire layout.)
     let envelope = format!(
-        "{{\"hmac\":{hmac_json},\"nonce\":{nonce_json},\"payload\":{payload},\"ts\":{ts},\"type\":{type_json}}}",
+        "{{\"hmac\":{hmac_json},\"nonce\":{nonce_json},\"payload\":{payload},\"ts\":{ts},\"type\":{type_json},\"v\":{v}}}",
         hmac_json = serde_json::to_string(&hmac)?,
         nonce_json = serde_json::to_string(nonce)?,
         payload = payload_raw.get(),
         ts = ts,
         type_json = serde_json::to_string(msg_type)?,
+        v = ENVELOPE_VERSION,
     );
     Ok(envelope)
 }
@@ -421,43 +464,67 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    const TEST_SECRET: &str = "9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f9f";
+
     fn key_from(pairing: &str, salt: &str) -> [u8; 32] {
-        derive_session_key(pairing, salt).expect("derivation should succeed for valid inputs")
+        derive_session_key(pairing, salt, TEST_SECRET)
+            .expect("derivation should succeed for valid inputs")
     }
 
     // ----- Key derivation -----
 
     #[test]
     fn derive_produces_32_bytes() {
-        let key = derive_session_key("ABCD1234", "saltsalt").expect("derive ok");
+        let key = derive_session_key("ABCD1234", "saltsalt", TEST_SECRET).expect("derive ok");
         assert_eq!(key.len(), 32);
     }
 
     #[test]
     fn derive_is_deterministic() {
-        let k1 = derive_session_key("MYCODE99", "sessionA").unwrap();
-        let k2 = derive_session_key("MYCODE99", "sessionA").unwrap();
+        let k1 = derive_session_key("MYCODE99", "sessionA", TEST_SECRET).unwrap();
+        let k2 = derive_session_key("MYCODE99", "sessionA", TEST_SECRET).unwrap();
         assert_eq!(k1, k2);
     }
 
     #[test]
     fn derive_differs_on_pairing_code() {
-        let k1 = derive_session_key("AAAABBBB", "saltsalt").unwrap();
-        let k2 = derive_session_key("CCCCDDDD", "saltsalt").unwrap();
+        let k1 = derive_session_key("AAAABBBB", "saltsalt", TEST_SECRET).unwrap();
+        let k2 = derive_session_key("CCCCDDDD", "saltsalt", TEST_SECRET).unwrap();
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn derive_differs_on_session_salt() {
-        let k1 = derive_session_key("AAAABBBB", "salt1").unwrap();
-        let k2 = derive_session_key("AAAABBBB", "salt2").unwrap();
+        let k1 = derive_session_key("AAAABBBB", "salt1", TEST_SECRET).unwrap();
+        let k2 = derive_session_key("AAAABBBB", "salt2", TEST_SECRET).unwrap();
         assert_ne!(k1, k2);
+    }
+
+    #[test]
+    fn relay_visible_material_alone_does_not_determine_the_key() {
+        // The relay sees the pairing code and the session salt. It never sees
+        // the pairing secret, so holding both of the values it does see must
+        // not be enough to reproduce the key.
+        let relay_key = derive_session_key("AAAABBBB", "saltsalt", &"11".repeat(32)).unwrap();
+        let real_key = derive_session_key("AAAABBBB", "saltsalt", &"22".repeat(32)).unwrap();
+        assert_ne!(relay_key, real_key);
+    }
+
+    #[test]
+    fn derive_matches_the_mobile_vector() {
+        // Pinned against `deriveDispatchSecret` in apps/mobile/lib/dispatchHmac.ts —
+        // the same vector is asserted in apps/mobile/__tests__/dispatchHmac.test.ts.
+        let key = derive_session_key("ABCD1234WXYZ", "a1b2c3d4e5f60718", TEST_SECRET).unwrap();
+        assert_eq!(
+            hex_encode(&key),
+            "99d81f2ce90a7f72238227e608fd6a72795fc6fde038e9e5b9c5f9ec5b9ab6d3"
+        );
     }
 
     #[test]
     fn derive_rejects_short_pairing_code() {
         assert!(matches!(
-            derive_session_key("SHORT", "salt"),
+            derive_session_key("SHORT", "salt", TEST_SECRET),
             Err(DeriveError::PairingCodeTooShort)
         ));
     }
@@ -465,8 +532,24 @@ mod tests {
     #[test]
     fn derive_rejects_empty_salt() {
         assert!(matches!(
-            derive_session_key("ABCDEFGH", ""),
+            derive_session_key("ABCDEFGH", "", TEST_SECRET),
             Err(DeriveError::SaltEmpty)
+        ));
+    }
+
+    #[test]
+    fn derive_rejects_missing_or_malformed_pairing_secret() {
+        assert!(matches!(
+            derive_session_key("ABCDEFGH", "salt", ""),
+            Err(DeriveError::PairingSecretInvalid)
+        ));
+        assert!(matches!(
+            derive_session_key("ABCDEFGH", "salt", "zz"),
+            Err(DeriveError::PairingSecretInvalid)
+        ));
+        assert!(matches!(
+            derive_session_key("ABCDEFGH", "salt", &"9f".repeat(31)),
+            Err(DeriveError::PairingSecretInvalid)
         ));
     }
 
@@ -668,7 +751,7 @@ mod tests {
     fn verify_rejects_envelope_missing_nonce() {
         let key = key_from("ABCD1234", "saltsalt");
         let mut cache = NonceCache::new();
-        let raw = r#"{"hmac":"00","payload":{},"ts":1700000000000,"type":"ping"}"#;
+        let raw = r#"{"hmac":"00","payload":{},"ts":1700000000000,"type":"ping","v":3}"#;
         assert_eq!(
             verify_with_clock(raw, &key, &mut cache, 1_700_000_000_500),
             Err(VerifyError::Malformed)
@@ -679,9 +762,61 @@ mod tests {
     fn verify_rejects_invalid_hex_hmac() {
         let key = key_from("ABCD1234", "saltsalt");
         let mut cache = NonceCache::new();
-        let raw = r#"{"hmac":"zz","nonce":"AAAA","payload":{},"ts":1700000000000,"type":"ping"}"#;
+        let raw =
+            r#"{"hmac":"zz","nonce":"AAAA","payload":{},"ts":1700000000000,"type":"ping","v":3}"#;
         let res = verify_with_clock(raw, &key, &mut cache, 1_700_000_000_500);
         assert!(matches!(res, Err(VerifyError::InvalidEncoding(_))));
+    }
+
+    // -----  Protocol version  -----
+
+    #[test]
+    fn signed_envelope_carries_the_protocol_version() {
+        let key = key_from("ABCD1234", "saltsalt");
+        let envelope = sign_to_string_with_inputs(
+            &json!({}),
+            "ping",
+            &key,
+            "VERSION_NONCE_AAAAAAA",
+            1_700_000_000_000,
+        )
+        .unwrap();
+        assert!(envelope.contains("\"v\":3"));
+    }
+
+    #[test]
+    fn verify_rejects_envelope_without_protocol_version() {
+        // A v2 peer derives its key from relay-visible material only; reject it
+        // with an explicit update prompt rather than a bare hmac mismatch.
+        let key = key_from("ABCD1234", "saltsalt");
+        let mut cache = NonceCache::new();
+        let raw = format!(
+            r#"{{"hmac":"{}","nonce":"V2_NONCE_AAAAAAAAAAAA","payload":{{}},"ts":1700000000000,"type":"ping"}}"#,
+            "a".repeat(64)
+        );
+        assert_eq!(
+            verify_with_clock(&raw, &key, &mut cache, 1_700_000_000_500),
+            Err(VerifyError::ProtocolVersionUnsupported)
+        );
+    }
+
+    #[test]
+    fn verify_rejects_envelope_with_a_future_protocol_version() {
+        let key = key_from("ABCD1234", "saltsalt");
+        let mut cache = NonceCache::new();
+        let envelope = sign_to_string_with_inputs(
+            &json!({}),
+            "ping",
+            &key,
+            "V4_NONCE_AAAAAAAAAAAA",
+            1_700_000_000_000,
+        )
+        .unwrap()
+        .replace("\"v\":3", "\"v\":4");
+        assert_eq!(
+            verify_with_clock(&envelope, &key, &mut cache, 1_700_000_000_500),
+            Err(VerifyError::ProtocolVersionUnsupported)
+        );
     }
 
     // -----  Transitional mode  -----
@@ -717,11 +852,11 @@ mod tests {
     #[test]
     fn canonical_input_sorts_keys_alphabetically() {
         let payload = serde_json::value::RawValue::from_string("{}".into()).unwrap();
-        let s = canonical_signing_input("nonce_val", &payload, 12345, "type_val");
-        // nonce < payload < ts < type
+        let s = canonical_signing_input("nonce_val", &payload, 12345, "type_val", ENVELOPE_VERSION);
+        // nonce < payload < ts < type < v
         assert_eq!(
             s,
-            "{\"nonce\":\"nonce_val\",\"payload\":{},\"ts\":12345,\"type\":\"type_val\"}"
+            "{\"nonce\":\"nonce_val\",\"payload\":{},\"ts\":12345,\"type\":\"type_val\",\"v\":3}"
         );
     }
 
@@ -734,7 +869,7 @@ mod tests {
             "{\"z\":1,\"a\":2}".into(), // intentionally non-alphabetical
         )
         .unwrap();
-        let s = canonical_signing_input("n", &payload, 1, "t");
+        let s = canonical_signing_input("n", &payload, 1, "t", ENVELOPE_VERSION);
         assert!(s.contains("\"payload\":{\"z\":1,\"a\":2}"));
     }
 }

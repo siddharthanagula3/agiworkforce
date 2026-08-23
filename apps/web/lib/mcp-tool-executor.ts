@@ -132,7 +132,7 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
 
   _state.building = (async () => {
     try {
-      const { catalog, handles } = await buildMcpToolCatalog(configs);
+      const { catalog, handles } = await buildMcpToolCatalog(configs, MCP_EGRESS_POLICY);
 
       const old = Array.from(_state.handles.values());
       _state.handles = new Map();

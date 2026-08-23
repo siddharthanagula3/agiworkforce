@@ -6,28 +6,49 @@ import process from 'node:process';
 
 const root = process.cwd();
 
+const NON_SECRET =
+  /EXAMPLE|PLACEHOLDER|REDACTED|FAKE|FIXTURE|SYNTHETIC|DUMMY|SAMPLE|NOT[_-]?A?[_-]?REAL|NEVER[_-]?ISSUED|YOUR[_-]?(?:KEY|TOKEN|SECRET|PASSWORD)|<[a-z][a-z0-9-]*>/gi;
+
+const RESERVED_LABEL = new Set(['test', 'invalid', 'example', 'localhost', 'local']);
+const EXAMPLE_TLD = new Set(['com', 'net', 'org']);
+const DOC_IP = /^(?:192\.0\.2|198\.51\.100|203\.0\.113)\.\d{1,3}$/;
+
+// Group 1 is the issued secret material, captured open-ended so that anything a contributor writes
+// against the key is judged as part of it rather than falling outside the match. `floor` is the
+// shortest that material could be and still be a working key of the vendor, so material under it
+// cannot be a key at all. A pattern with no group carries no secret inside its own match, so only
+// a reviewed allowlist entry can exempt that.
+// AWS and Supabase material is matched wider than the vendor issues (letters of either case) so a
+// marker written between the prefix and the key is captured with it instead of ending the match
+// short of it. The alphabets without `-` and `_` cannot be widened that way — `xai-` and `ghp_`
+// begin ordinary kebab- and snake-case identifiers — so `xai-EXAMPLE-<key>` stays past what a
+// prefix-anchored pattern sees. That value no longer authenticates as written; one written verbatim
+// does, and is always reported, whatever a contributor writes around it.
 const PATTERNS = [
   { name: 'PEM private key', re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g },
-  { name: 'Anthropic API key', re: /sk-ant-(?!EXAMPLE|FAKE|TEST)[A-Za-z0-9_-]{20,}/g },
-  { name: 'OpenAI project key', re: /sk-proj-(?!EXAMPLE|FAKE|TEST)[A-Za-z0-9_-]{20,}/g },
-  { name: 'Groq API key', re: /gsk_[A-Za-z0-9]{48,}/g },
-  { name: 'xAI API key', re: /xai-[A-Za-z0-9]{20,}/g },
-  { name: 'Stripe live key', re: /(?:sk|rk)_live_[A-Za-z0-9_]{16,}/g },
-  { name: 'Slack token', re: /xox[baprs]-[A-Za-z0-9-]{12,}/g },
-  { name: 'GitHub fine-grained PAT', re: /github_pat_[A-Za-z0-9_]{22,}/g },
-  { name: 'GitHub token', re: /gh[pousr]_[A-Za-z0-9]{30,}/g },
-  { name: 'Google API key', re: /AIza[A-Za-z0-9_-]{35}/g },
-  { name: 'AWS access key id', re: /A(?:KIA|SIA)[A-Z0-9]{16}/g },
-  { name: 'Supabase personal access token', re: /sbp_[a-f0-9]{40}/g },
+  { name: 'Anthropic API key', re: /sk-ant-([A-Za-z0-9_-]{20,})/g, floor: 20 },
+  { name: 'OpenAI project key', re: /sk-proj-([A-Za-z0-9_-]{20,})/g, floor: 20 },
+  { name: 'Groq API key', re: /gsk_([A-Za-z0-9]{48,})/g, floor: 48 },
+  { name: 'xAI API key', re: /xai-([A-Za-z0-9]{20,})/g, floor: 20 },
+  { name: 'Stripe live key', re: /(?:sk|rk)_live_([A-Za-z0-9_]{16,})/g, floor: 24 },
+  { name: 'Slack token', re: /xox[baprs]-([A-Za-z0-9-]{12,})/g, floor: 24 },
+  { name: 'GitHub fine-grained PAT', re: /github_pat_([A-Za-z0-9_]{22,})/g, floor: 40 },
+  { name: 'GitHub token', re: /gh[pousr]_([A-Za-z0-9]{30,})/g, floor: 36 },
+  { name: 'Google API key', re: /AIza([A-Za-z0-9_-]{35,})/g, floor: 35 },
+  { name: 'AWS access key id', re: /A(?:KIA|SIA)([A-Za-z0-9]{16,})/g, floor: 16 },
+  { name: 'Supabase personal access token', re: /sbp_([A-Za-z0-9]{40,})/g, floor: 40 },
   {
     name: 'Postgres/Redis URL with password',
-    re: /\b(?:postgres|postgresql|rediss?|mongodb)(?:\+\w+)?:\/\/[^\s:@/]+:[^\s@/]{6,}@/gi,
+    connection: true,
+    re: /\b(?:postgres|postgresql|rediss?|mongodb)(?:\+\w+)?:\/\/[^\s:@/]+:[^\s@/]{6,}@[^\s"'`?#/\\,;)\]}<>]*/gi,
   },
   { name: 'Private key in JSON', re: /"private_key"\s*:\s*"-----BEGIN/g },
 ];
 
-const PLACEHOLDER =
-  /EXAMPLE|PLACEHOLDER|REDACTED|XXXXXX|000000|123456|your[_-]?key|dummy|sample|<[a-z-]+>/i;
+// Credentials vendors publish as their own example. Each is a fixed string that authenticates
+// nothing, and the comparison is whole-token equality, so no contributor-supplied text can steer a
+// live key into one.
+const DOCUMENTED = new Set(['AKIAIOSFODNN7EXAMPLE', 'ASIAIOSFODNN7EXAMPLE']);
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -44,7 +65,161 @@ const SKIP_DIRS = new Set([
 const SKIP_FILE =
   /\.(png|jpe?g|gif|webp|ico|icns|woff2?|ttf|otf|mp4|mp3|wav|pdf|zip|gz|node|wasm|lock)$/i;
 
-const SELF = new Set(['scripts/check-secrets.mjs', 'scripts/__tests__/check-secrets.test.mjs']);
+// Only the scanner itself: it has to spell out every credential shape it recognises. Its test file
+// is deliberately not exempt, so a credential pasted there is still caught.
+const SELF = new Set(['scripts/check-secrets.mjs']);
+
+// A stretch whose character codes step by a constant -1, 0 or +1 ignoring case — `abcdef`,
+// `XXXXXX`, `987654`, `AbCdEf` — is what people type when a value has to look like a key, and so
+// is any spelled-out marker word. Both are masked off the material as fake.
+const FILLER_RUN = 6;
+
+const PASSWORD_FLOOR = 8;
+
+const fold = (code) => (code >= 65 && code <= 90 ? code + 32 : code);
+const digit = (code) => code >= 48 && code <= 57;
+
+// Counting runs wrap round: `1234567890` and `0987654321` are each one sequence, and the digit the
+// wrap strands would otherwise be the one character standing between a fixture and the allowlist.
+function stepBetween(from, to) {
+  if (digit(from) && digit(to)) {
+    const forward = (to - from + 10) % 10;
+    if (forward === 0 || forward === 1) return forward;
+    return forward === 9 ? -1 : 2;
+  }
+  return fold(to) - fold(from);
+}
+
+function maskParts(value) {
+  const mask = new Array(value.length).fill(false);
+  NON_SECRET.lastIndex = 0;
+  for (let m = NON_SECRET.exec(value); m !== null; m = NON_SECRET.exec(value)) {
+    for (let i = m.index; i < m.index + m[0].length; i += 1) mask[i] = true;
+  }
+  const runs = [];
+  let start = 0;
+  while (start < value.length) {
+    let end = start + 1;
+    const step =
+      end < value.length ? stepBetween(value.charCodeAt(start), value.charCodeAt(end)) : NaN;
+    if (Math.abs(step) <= 1) {
+      end += 1;
+      while (
+        end < value.length &&
+        stepBetween(value.charCodeAt(end - 1), value.charCodeAt(end)) === step
+      ) {
+        end += 1;
+      }
+    }
+    if (end - start >= FILLER_RUN) {
+      for (let i = start; i < end; i += 1) mask[i] = true;
+      runs.push([start, end]);
+    }
+    start = end;
+  }
+  return { mask, runs };
+}
+
+// How much of the value could still be issued material. A marker word masks only the characters it
+// spells, so key material written beside one is counted in full. A counting run is not like that:
+// it is completed by arithmetic, so a few characters continuing a key's last character form a run
+// that masks the key's own tail along with them. Every run edge meeting material that is not itself
+// masked is therefore charged back FILLER_RUN - 1 characters — the most a contributor's filler can
+// hide there. Without that charge, one appended character exempts a live key of any format whose
+// floor is its exact length (AWS, Google, GitHub, Supabase).
+function realLength(value) {
+  const { mask, runs } = maskParts(value);
+  let real = 0;
+  for (let i = 0; i < mask.length; i += 1) if (!mask[i]) real += 1;
+  for (const [start, end] of runs) {
+    let hidden = 0;
+    if (start > 0 && !mask[start - 1]) hidden += FILLER_RUN - 1;
+    if (end < value.length && !mask[end]) hidden += FILLER_RUN - 1;
+    real += Math.min(end - start, hidden);
+  }
+  return real;
+}
+
+// Nothing at all outlives the mask: the value is spelled entirely out of markers and filler, so
+// there is no character left for a credential to be made of. Punctuation counts — a password of
+// nothing but symbols is unreadable, not fake.
+function fullyMasked(value) {
+  const { mask } = maskParts(value);
+  return value.length > 0 && mask.every(Boolean);
+}
+
+function connectionParts(span) {
+  const passwordStart = span.indexOf(':', span.indexOf('://') + 3) + 1;
+  const at = span.indexOf('@', passwordStart);
+  return {
+    password: span.slice(passwordStart, at),
+    host: span
+      .slice(at + 1)
+      .split(/[:/?#\\]/)[0]
+      .toLowerCase(),
+    // RFC 3986 requires an '@' inside userinfo to be percent-encoded. Left raw, `pass@realhost`
+    // and `pass` + `@realhost` are the same bytes, so a reserved host tacked on the end would
+    // vouch for a URL that still names the real server.
+    ambiguous: span.indexOf('@', at + 1) !== -1,
+  };
+}
+
+// Reserved names are stripped label by label: what is left has to be a bare label, so
+// `db.example.com` and `db.example.invalid` are documentation while `prod-db.internal.test` —
+// a routable name wearing a reserved suffix — is not.
+function documentationHost(host) {
+  if (DOC_IP.test(host)) return true;
+  const labels = host.split('.');
+  let reserved = false;
+  for (;;) {
+    const last = labels[labels.length - 1];
+    if (RESERVED_LABEL.has(last)) {
+      labels.pop();
+      reserved = true;
+      continue;
+    }
+    if (labels.length > 1 && EXAMPLE_TLD.has(last) && labels[labels.length - 2] === 'example') {
+      labels.length -= 2;
+      reserved = true;
+      continue;
+    }
+    break;
+  }
+  return reserved && labels.length <= 1;
+}
+
+function documentedFixture(pattern, match) {
+  if (pattern.connection) {
+    const { password, host, ambiguous } = connectionParts(match[0]);
+    if (fullyMasked(password)) return true;
+    if (ambiguous || !documentationHost(host)) return false;
+    // A reserved host proves the URL points nowhere, not that the password is fake, and a password
+    // is reused far more often than a hostname. Only one short enough to fail every password policy
+    // rides in on the host alone.
+    return realLength(password) < PASSWORD_FLOOR;
+  }
+  if (DOCUMENTED.has(match[0])) return true;
+  const material = match[1];
+  if (material === undefined) return false;
+  return realLength(material) < pattern.floor;
+}
+
+function lineStarts(src) {
+  const starts = [0];
+  for (let i = src.indexOf('\n'); i !== -1; i = src.indexOf('\n', i + 1)) starts.push(i + 1);
+  return starts;
+}
+
+function lineNumberAt(starts, index) {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= index) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo + 1;
+}
 
 function git(args) {
   try {
@@ -136,20 +311,29 @@ let scanned = 0;
 let exempted = 0;
 
 function scanSource(rel, src, { useAllowlist }) {
-  for (const { name, re } of PATTERNS) {
+  const starts = lineStarts(src);
+  for (const pattern of PATTERNS) {
+    const { name, re } = pattern;
     re.lastIndex = 0;
     let match;
     while ((match = re.exec(src)) !== null) {
-      const lineNo = src.slice(0, match.index).split('\n').length;
-      const line = src.split('\n')[lineNo - 1] ?? '';
-      if (PLACEHOLDER.test(line)) continue;
       const key = allowKey(rel, name);
       if (useAllowlist && allowed.has(key)) {
         allowed.set(key, true);
         exempted += 1;
         continue;
       }
-      findings.push({ rel, lineNo, name, hint: match[0].slice(0, 12) });
+      // Judged on the credential alone — the issued key material, or a connection string's
+      // password and target host. Reading the surrounding line, or any window that grows with the
+      // match, hands the decision to text the key's owner never had to touch: that is how a live
+      // key rode into main behind a trailing "// sample".
+      if (documentedFixture(pattern, match)) continue;
+      findings.push({
+        rel,
+        lineNo: lineNumberAt(starts, match.index),
+        name,
+        hint: match[0].slice(0, 12),
+      });
     }
   }
 }
@@ -197,9 +381,16 @@ if (findings.length > 0) {
     console.error(`  ${f.rel}:${f.lineNo}  ${f.name}  (starts "${f.hint}…")`);
   }
   console.error(
-    `\nIf a finding is a deliberate fixture, make the value unmistakably fake — add EXAMPLE,\n` +
-      `PLACEHOLDER or <your-key> to the line — rather than allowlisting the file. A fixture that\n` +
-      `still looks like a live credential misleads every future reader, which is the actual defect.\n` +
+    `\nIf a finding is a deliberate fixture, make the credential itself unmistakably fake: after the\n` +
+      `vendor prefix, every letter and digit has to be a marker (EXAMPLE, PLACEHOLDER, REDACTED,\n` +
+      `NOT_A_REAL, <your-key>) or counting filler at least ${FILLER_RUN} long (000000, abcdef, 987654).\n` +
+      `Filler that merely trails realistic material is discounted by as much as it could hide: it\n` +
+      `cannot be told apart from the key's own tail carried on a few characters further.\n` +
+      `Point connection strings at an RFC 2606 host such as db.example.com AND give them a password\n` +
+      `no real policy would accept. A marker written beside otherwise realistic material exempts\n` +
+      `nothing: text typed next to a key cannot be told apart from the key's own tail, and that is\n` +
+      `how a live key rode into main behind a trailing "// sample".\n` +
+      `If the value has to stay realistic, add a reviewed entry to ${ALLOWLIST_PATH}.\n` +
       `\nIf it is a real credential: it is already in git history. ROTATE IT FIRST, then remove it.\n`,
   );
   process.exit(1);

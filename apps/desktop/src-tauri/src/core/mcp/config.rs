@@ -27,6 +27,8 @@ pub enum ConfigDecryptionError {
     InvalidUtf8(std::string::FromUtf8Error),
     /// The decrypted plaintext failed post-decryption validation.
     ValidationFailed(String),
+    /// No encryption key could be derived, so the value was never opened.
+    KeyUnavailable(String),
 }
 
 impl fmt::Display for ConfigDecryptionError {
@@ -56,6 +58,9 @@ impl fmt::Display for ConfigDecryptionError {
             }
             ConfigDecryptionError::ValidationFailed(reason) => {
                 write!(f, "decrypted credential validation failed: {}", reason)
+            }
+            ConfigDecryptionError::KeyUnavailable(reason) => {
+                write!(f, "encryption key unavailable: {}", reason)
             }
         }
     }
@@ -89,6 +94,51 @@ fn validate_decrypted_credential(plaintext: &str) -> Result<(), ConfigDecryption
     Ok(())
 }
 
+/// A credential recovered from an MCP config file or the settings database.
+struct DecryptedCredential {
+    value: String,
+    /// The ciphertext opened only under a key older builds derived from machine
+    /// identifiers alone. Any local process can recompute that key, so the
+    /// value stays exposed until it is written back under the per-install key.
+    from_legacy_key: bool,
+}
+
+/// Decrypt one MCP payload under the per-install key, falling back to the keys
+/// a shipped build derived from machine identifiers alone.
+///
+/// `label` is how the payload appears in `machine_key::machine_only_payloads`;
+/// the re-wrap entry points clear the same label once the value is rewritten.
+fn decrypt_mcp_payload(
+    encrypted: &str,
+    label: &str,
+) -> Result<DecryptedCredential, ConfigDecryptionError> {
+    use crate::sys::security::machine_key::{self, KeyPurpose};
+    use crate::sys::security::machine_key_rewrap;
+    use base64::{engine::general_purpose, Engine as _};
+
+    let combined = general_purpose::STANDARD
+        .decode(encrypted)
+        .map_err(ConfigDecryptionError::InvalidBase64)?;
+    if combined.len() < 12 {
+        return Err(ConfigDecryptionError::CiphertextTooShort {
+            len: combined.len(),
+        });
+    }
+
+    let opened = machine_key::open_with_key_rotation(KeyPurpose::McpCredentials, label, |key| {
+        machine_key_rewrap::decrypt_combined(key, encrypted)
+    })
+    .map_err(|error| ConfigDecryptionError::KeyUnavailable(error.to_string()))?
+    .ok_or(ConfigDecryptionError::DecryptionFailed)?;
+
+    validate_decrypted_credential(&opened.value)?;
+
+    Ok(DecryptedCredential {
+        value: opened.value,
+        from_legacy_key: opened.rewrap_required,
+    })
+}
+
 const DEFAULT_CONFIG_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/mcp/default_servers.json"
@@ -119,13 +169,13 @@ fn maybe_encrypt_at_rest(value: &str) -> Option<String> {
     encrypt_mcp_credential(value).map(|ct| format!("{ENCRYPTED_AT_REST_PREFIX}{ct}>"))
 }
 
-/// Returns the decrypted plaintext for an `<enc:…>` value, or `None` if the value is
+/// Returns the decrypted credential for an `<enc:…>` value, or `None` if the value is
 /// not encrypted-at-rest (plaintext or a `<from_…>` placeholder are left untouched).
-fn maybe_decrypt_at_rest(value: &str) -> Option<String> {
+fn maybe_decrypt_at_rest(value: &str, label: &str) -> Option<DecryptedCredential> {
     let inner = value
         .strip_prefix(ENCRYPTED_AT_REST_PREFIX)?
         .strip_suffix('>')?;
-    decrypt_mcp_credential(inner).ok()
+    decrypt_mcp_payload(inner, label).ok()
 }
 
 fn map_http_transport_credentials<F: Fn(&str) -> Option<String>>(
@@ -160,8 +210,45 @@ fn encrypt_transport_credentials(config: &mut McpServersConfig) {
 }
 
 /// Decrypt at-rest-encrypted HTTP transport credentials in place (after loading).
-fn decrypt_transport_credentials(config: &mut McpServersConfig) {
-    map_http_transport_credentials(config, maybe_decrypt_at_rest);
+///
+/// Reports whether any credential opened only under a legacy machine-only key,
+/// so the caller can re-wrap the file those bytes came from.
+fn decrypt_transport_credentials(config: &mut McpServersConfig, label: &str) -> bool {
+    let from_legacy_key = std::cell::Cell::new(false);
+    map_http_transport_credentials(config, |value| {
+        let decrypted = maybe_decrypt_at_rest(value, label)?;
+        if decrypted.from_legacy_key {
+            from_legacy_key.set(true);
+        }
+        Some(decrypted.value)
+    });
+    from_legacy_key.get()
+}
+
+/// How a config file identifies itself while it still holds credentials wrapped
+/// under a legacy machine-only key. Must match the label
+/// `machine_key_rewrap::rewrap_encrypted_at_rest_file` clears.
+fn machine_only_label(path: &std::path::Path) -> String {
+    format!("file:{}", path.display())
+}
+
+/// Rewrite a config file whose credentials still open under a legacy
+/// machine-only key.
+///
+/// The startup sweep reaches only the app-level config and the project already
+/// open, so a config under any other project root is re-wrapped only here. It
+/// re-reads and replaces the file, so it must not run on the loading task.
+fn spawn_legacy_credential_rewrap(path: PathBuf) {
+    tokio::task::spawn_blocking(move || {
+        if let Err(error) =
+            crate::sys::security::machine_key_rewrap::rewrap_encrypted_at_rest_file(&path)
+        {
+            tracing::warn!(
+                "Could not re-wrap MCP credentials in {}: {error}",
+                path.display()
+            );
+        }
+    });
 }
 /// Project-level MCP config filename (compatible with Cursor/Claude workflows).
 pub const PROJECT_MCP_CONFIG_FILENAME: &str = ".mcp.json";
@@ -266,7 +353,9 @@ impl McpServersConfig {
         let contents = tokio::fs::read_to_string(path).await?;
         let mut config: Self = serde_json::from_str(&contents)?;
         // Decrypt any at-rest-encrypted HTTP transport credentials (<enc:…>).
-        decrypt_transport_credentials(&mut config);
+        if decrypt_transport_credentials(&mut config, &machine_only_label(path)) {
+            spawn_legacy_credential_rewrap(path.clone());
+        }
         Ok(config)
     }
 
@@ -1374,7 +1463,8 @@ async fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(Str
 /// Decrypt an OAuth token using machine-derived keys.
 ///
 /// Uses the same encryption scheme as MCP credentials (AES-256-GCM with
-/// machine-derived keys via KeyPurpose::McpCredentials).
+/// KeyPurpose::McpCredentials), including the read-back of tokens a shipped
+/// build wrapped under the legacy machine-only key.
 ///
 /// Returns a detailed [`ConfigDecryptionError`] on failure so callers can
 /// log actionable diagnostics instead of silently returning garbage data.
@@ -1382,39 +1472,7 @@ async fn refresh_oauth_token(provider: &str, refresh_token: &str) -> Result<(Str
 /// Visible to the sibling `oauth` module which uses the same decryption logic
 /// for loading persisted token sets.
 pub(super) fn decrypt_oauth_token(encrypted: &str) -> Result<String, ConfigDecryptionError> {
-    use crate::sys::security::machine_key::{derive_key, KeyPurpose};
-    use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
-    use base64::{engine::general_purpose, Engine as _};
-
-    let key = derive_key(KeyPurpose::McpCredentials);
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| ConfigDecryptionError::CipherInit)?;
-
-    // Decode from base64
-    let combined = general_purpose::STANDARD
-        .decode(encrypted)
-        .map_err(ConfigDecryptionError::InvalidBase64)?;
-
-    if combined.len() < 12 {
-        return Err(ConfigDecryptionError::CiphertextTooShort {
-            len: combined.len(),
-        });
-    }
-
-    // Split nonce and ciphertext
-    let (nonce_bytes, ciphertext) = combined.split_at(12);
-    let nonce = Nonce::from_slice(nonce_bytes);
-
-    // Decrypt
-    let plaintext_bytes = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|_| ConfigDecryptionError::DecryptionFailed)?;
-    let plaintext =
-        String::from_utf8(plaintext_bytes).map_err(ConfigDecryptionError::InvalidUtf8)?;
-
-    // Post-decryption validation: reject empty or corrupt-looking output
-    validate_decrypted_credential(&plaintext)?;
-
-    Ok(plaintext)
+    decrypt_mcp_payload(encrypted, "mcp:oauth-token").map(|decrypted| decrypted.value)
 }
 
 /// Encrypt an OAuth token using machine-derived keys
@@ -1448,44 +1506,13 @@ pub fn encrypt_oauth_token(plaintext: &str) -> Option<String> {
     Some(general_purpose::STANDARD.encode(combined))
 }
 
-/// Decrypt an MCP credential using machine-derived keys.
+/// Decrypt an MCP credential under the per-install key, or the legacy
+/// machine-only key an older build used to write it.
 ///
 /// Returns a detailed [`ConfigDecryptionError`] on failure so callers can
 /// log actionable diagnostics instead of silently returning garbage data.
 pub fn decrypt_mcp_credential(encrypted: &str) -> Result<String, ConfigDecryptionError> {
-    use crate::sys::security::machine_key::{derive_key, KeyPurpose};
-    use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
-    use base64::{engine::general_purpose, Engine as _};
-
-    let key = derive_key(KeyPurpose::McpCredentials);
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| ConfigDecryptionError::CipherInit)?;
-
-    // Decode from base64
-    let combined = general_purpose::STANDARD
-        .decode(encrypted)
-        .map_err(ConfigDecryptionError::InvalidBase64)?;
-
-    if combined.len() < 12 {
-        return Err(ConfigDecryptionError::CiphertextTooShort {
-            len: combined.len(),
-        });
-    }
-
-    // Split nonce and ciphertext
-    let (nonce_bytes, ciphertext) = combined.split_at(12);
-    let nonce = Nonce::from_slice(nonce_bytes);
-
-    // Decrypt
-    let plaintext_bytes = cipher
-        .decrypt(nonce, ciphertext)
-        .map_err(|_| ConfigDecryptionError::DecryptionFailed)?;
-    let plaintext =
-        String::from_utf8(plaintext_bytes).map_err(ConfigDecryptionError::InvalidUtf8)?;
-
-    // Post-decryption validation: reject empty or corrupt-looking output
-    validate_decrypted_credential(&plaintext)?;
-
-    Ok(plaintext)
+    decrypt_mcp_payload(encrypted, "mcp:credential").map(|decrypted| decrypted.value)
 }
 
 /// Encrypt an MCP credential using machine-derived keys
@@ -1714,9 +1741,11 @@ mod tests {
             !encrypted.contains(secret),
             "encrypted-at-rest value must not contain the plaintext secret"
         );
-        assert_eq!(
-            maybe_decrypt_at_rest(&encrypted).expect("should decrypt"),
-            secret
+        let decrypted = maybe_decrypt_at_rest(&encrypted, "test:mcp").expect("should decrypt");
+        assert_eq!(decrypted.value, secret);
+        assert!(
+            !decrypted.from_legacy_key,
+            "a value this build encrypted must not be reported as legacy"
         );
 
         // Placeholders / already-encrypted / empty are NOT re-encrypted.
@@ -1724,8 +1753,92 @@ mod tests {
         assert!(maybe_encrypt_at_rest(&encrypted).is_none());
         assert!(maybe_encrypt_at_rest("").is_none());
         // Plaintext / placeholders are NOT treated as encrypted on load.
-        assert!(maybe_decrypt_at_rest("plaintext-token").is_none());
-        assert!(maybe_decrypt_at_rest("<from_api_key:vercel>").is_none());
+        assert!(maybe_decrypt_at_rest("plaintext-token", "test:mcp").is_none());
+        assert!(maybe_decrypt_at_rest("<from_api_key:vercel>", "test:mcp").is_none());
+    }
+
+    fn legacy_mcp_key() -> [u8; 32] {
+        crate::sys::security::machine_key::legacy_machine_only_keys(
+            crate::sys::security::machine_key::KeyPurpose::McpCredentials,
+        )
+        .first()
+        .copied()
+        .expect("a legacy candidate always exists")
+    }
+
+    /// The re-wrap runs off the loading task, so the file changes shortly after
+    /// `from_file` returns.
+    async fn config_after_rewrap(path: &std::path::Path, legacy_ciphertext: &str) -> String {
+        for _ in 0..200 {
+            let current = std::fs::read_to_string(path).expect("read the project config");
+            if !current.contains(legacy_ciphertext) {
+                return current;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+        panic!("the legacy credential was never re-wrapped");
+    }
+
+    /// A shipped build encrypted this credential under a key derived from
+    /// machine identifiers alone, which any local process can recompute from a
+    /// stolen copy of the file. Loading it must still return the credential,
+    /// and must leave the file unreadable under that key.
+    ///
+    /// The startup sweep enumerates only the app-level config and the project
+    /// that is already open, so a project config under any other root is
+    /// re-wrapped only through this path.
+    #[tokio::test]
+    async fn a_project_config_written_by_an_older_build_is_read_and_rewrapped() {
+        use crate::sys::security::machine_key::{self, KeyPurpose};
+        use crate::sys::security::machine_key_rewrap;
+
+        let token = "sk-legacy-project-token";
+        let legacy_ciphertext =
+            machine_key_rewrap::encrypt_combined(&legacy_mcp_key(), token).expect("legacy encrypt");
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join(PROJECT_MCP_CONFIG_FILENAME);
+        std::fs::write(
+            &path,
+            format!(
+                "{{\"mcpServers\":{{\"vercel\":{{\"transport\":{{\"type\":\"http\",\
+                 \"url\":\"https://mcp.example.com\",\
+                 \"bearer_token\":\"{ENCRYPTED_AT_REST_PREFIX}{legacy_ciphertext}>\"}}}}}}}}"
+            ),
+        )
+        .expect("seed a legacy project config");
+
+        let config = McpServersConfig::from_file(&path)
+            .await
+            .expect("a config an older build wrote must still load");
+        let Some(TransportConfig::Http(http)) = config.mcp_servers["vercel"].transport.clone()
+        else {
+            panic!("the seeded server must keep its http transport");
+        };
+        assert_eq!(
+            http.bearer_token.as_deref(),
+            Some(token),
+            "a credential an older build encrypted must still decrypt"
+        );
+
+        let rewritten = config_after_rewrap(&path, &legacy_ciphertext).await;
+        let start = rewritten.find(ENCRYPTED_AT_REST_PREFIX).expect("marker")
+            + ENCRYPTED_AT_REST_PREFIX.len();
+        let end = rewritten[start..].find('>').expect("terminator") + start;
+        let rotated = &rewritten[start..end];
+
+        let current = machine_key::try_derive_key(KeyPurpose::McpCredentials)
+            .expect("install secret in tests");
+        assert_eq!(
+            machine_key_rewrap::decrypt_combined(&current, rotated).as_deref(),
+            Some(token),
+            "the re-wrapped credential must open under the per-install key"
+        );
+        assert_eq!(
+            machine_key_rewrap::decrypt_combined(&legacy_mcp_key(), rotated),
+            None,
+            "the re-wrapped credential must not open under the recomputable machine-only key"
+        );
     }
 
     // BASE-008: this was `#[ignore]`d with the note "pre-existing reasoned skip",

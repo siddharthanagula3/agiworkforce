@@ -253,10 +253,7 @@ impl ExtensionInstaller {
             message: "Finalizing installation...".to_string(),
         });
 
-        // Copy icon if present
-        if let Some(ref icon_path) = package.manifest.icon {
-            self.copy_icon(&install_path, icon_path)?;
-        }
+        self.copy_icon(&install_path, &package)?;
 
         self.emit_progress(InstallProgress {
             extension_id: extension_id.clone(),
@@ -489,14 +486,48 @@ impl ExtensionInstaller {
     }
 
     /// Copy the extension icon to a standard location
-    fn copy_icon(&self, install_path: &Path, icon_path: &str) -> ExtensionResult<()> {
-        let source = install_path.join(icon_path);
-        if source.exists() {
-            let dest = install_path.join("icon.png");
-            if source != dest {
-                std::fs::copy(&source, &dest)?;
-            }
+    ///
+    /// `manifest.icon` is attacker-controlled and, unlike ZIP entry names, is
+    /// not validated during parsing, so it is checked as a package-relative
+    /// path, required to name a file the package actually ships, and re-checked
+    /// against the canonical install root before any read.
+    fn copy_icon(&self, install_path: &Path, package: &ExtensionPackage) -> ExtensionResult<()> {
+        let Some(icon_path) = package.manifest.icon.as_deref() else {
+            return Ok(());
+        };
+
+        ExtensionPackage::validate_entry_path(icon_path)?;
+
+        if !package.contains_file(icon_path) {
+            tracing::warn!(
+                "Extension {} declares icon '{}' which is not in the package",
+                package.id(),
+                icon_path
+            );
+            return Ok(());
         }
+
+        let install_root = std::fs::canonicalize(install_path)?;
+        let Ok(source) = std::fs::canonicalize(install_root.join(icon_path)) else {
+            return Ok(());
+        };
+
+        if !source.starts_with(&install_root) {
+            return Err(ExtensionError::SecurityViolation(format!(
+                "Extension icon '{}' resolves outside the install directory",
+                icon_path
+            )));
+        }
+
+        if !source.is_file() {
+            return Ok(());
+        }
+
+        let dest = install_root.join("icon.png");
+        if source != dest {
+            std::fs::copy(&source, &dest)?;
+        }
+
         Ok(())
     }
 
@@ -614,6 +645,123 @@ mod tests {
 
         zip.finish().unwrap();
         package_path
+    }
+
+    fn create_package_with_icon(dir: &Path, icon: &str, ship_icon_file: bool) -> PathBuf {
+        let package_path = dir.join("icon-test.agiext");
+        let file = std::fs::File::create(&package_path).unwrap();
+        let mut zip = ZipWriter::new(file);
+
+        let manifest = format!(
+            r#"{{
+                "id": "icon-extension",
+                "name": "Icon Extension",
+                "version": "1.0.0",
+                "description": "Icon test extension",
+                "command": "node",
+                "args": ["server/index.js"],
+                "icon": {}
+            }}"#,
+            serde_json::to_string(icon).unwrap()
+        );
+
+        let options = SimpleFileOptions::default();
+        zip.start_file("manifest.json", options).unwrap();
+        zip.write_all(manifest.as_bytes()).unwrap();
+
+        zip.start_file("server/index.js", options).unwrap();
+        zip.write_all(b"console.log('hello');").unwrap();
+
+        if ship_icon_file {
+            zip.start_file("assets/icon.png", options).unwrap();
+            zip.write_all(b"PNGDATA").unwrap();
+        }
+
+        zip.finish().unwrap();
+        package_path
+    }
+
+    fn install_icon_package(
+        temp_dir: &Path,
+        icon: &str,
+        ship_icon_file: bool,
+    ) -> (ExtensionInstaller, ExtensionPackage, PathBuf) {
+        let package_path = create_package_with_icon(temp_dir, icon, ship_icon_file);
+        let installer = ExtensionInstaller::with_dir(temp_dir.join("extensions"));
+        let package = ExtensionPackage::from_file(&package_path).unwrap();
+        let install_path = installer.extract_package(&package_path, &package).unwrap();
+        (installer, package, install_path)
+    }
+
+    #[test]
+    fn test_copy_icon_rejects_absolute_manifest_icon() {
+        let temp_dir = tempdir().unwrap();
+        let secret = temp_dir.path().join("victim-secret.txt");
+        std::fs::write(&secret, b"PRIVATE KEY").unwrap();
+
+        let (installer, package, install_path) =
+            install_icon_package(temp_dir.path(), &secret.to_string_lossy(), false);
+
+        let err = installer.copy_icon(&install_path, &package).unwrap_err();
+        assert!(matches!(err, ExtensionError::SecurityViolation(_)));
+        assert!(!install_path.join("icon.png").exists());
+    }
+
+    #[test]
+    fn test_copy_icon_rejects_traversal_manifest_icon() {
+        let temp_dir = tempdir().unwrap();
+        std::fs::write(temp_dir.path().join("victim-secret.txt"), b"PRIVATE KEY").unwrap();
+
+        let (installer, package, install_path) =
+            install_icon_package(temp_dir.path(), "../../victim-secret.txt", false);
+
+        let err = installer.copy_icon(&install_path, &package).unwrap_err();
+        assert!(matches!(err, ExtensionError::SecurityViolation(_)));
+        assert!(!install_path.join("icon.png").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_copy_icon_rejects_icon_symlinked_outside_install_dir() {
+        let temp_dir = tempdir().unwrap();
+        let secret = temp_dir.path().join("victim-secret.txt");
+        std::fs::write(&secret, b"PRIVATE KEY").unwrap();
+
+        let (installer, package, install_path) =
+            install_icon_package(temp_dir.path(), "assets/icon.png", true);
+
+        let extracted = install_path.join("assets").join("icon.png");
+        std::fs::remove_file(&extracted).unwrap();
+        std::os::unix::fs::symlink(&secret, &extracted).unwrap();
+
+        let err = installer.copy_icon(&install_path, &package).unwrap_err();
+        assert!(matches!(err, ExtensionError::SecurityViolation(_)));
+        assert!(!install_path.join("icon.png").exists());
+    }
+
+    #[test]
+    fn test_copy_icon_copies_packaged_icon() {
+        let temp_dir = tempdir().unwrap();
+        let (installer, package, install_path) =
+            install_icon_package(temp_dir.path(), "assets/icon.png", true);
+
+        installer.copy_icon(&install_path, &package).unwrap();
+
+        assert_eq!(
+            std::fs::read(install_path.join("icon.png")).unwrap(),
+            b"PNGDATA"
+        );
+    }
+
+    #[test]
+    fn test_copy_icon_skips_icon_missing_from_package() {
+        let temp_dir = tempdir().unwrap();
+        let (installer, package, install_path) =
+            install_icon_package(temp_dir.path(), "assets/icon.png", false);
+
+        installer.copy_icon(&install_path, &package).unwrap();
+
+        assert!(!install_path.join("icon.png").exists());
     }
 
     #[test]

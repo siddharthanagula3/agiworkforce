@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::sys::commands::agi::{self, SpawnAgentRequest};
 use crate::sys::commands::chat::ChatSendMessageRequest;
-use crate::sys::commands::research::{ResearchModeInput, ResearchRequest};
+use crate::sys::commands::research::{ResearchModeInput, ResearchRequest, ResearchResponse};
 
 const MCP_SERVER_USER_ID: &str = "mcp-server";
 const DEFAULT_BASH_TIMEOUT_SECS: u64 = 30;
@@ -86,14 +86,7 @@ impl DesktopMcpServerExecutor {
         arguments: &HashMap<String, Value>,
         key: &str,
     ) -> Result<String, McpServerToolOutcome> {
-        let value = arguments
-            .get(key)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned);
-
-        value.ok_or_else(|| {
+        string_argument(arguments, key).ok_or_else(|| {
             self.outcome_from_error(format!("Missing required string argument '{}'.", key))
         })
     }
@@ -103,12 +96,7 @@ impl DesktopMcpServerExecutor {
         arguments: &HashMap<String, Value>,
         key: &str,
     ) -> Option<String> {
-        arguments
-            .get(key)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
+        string_argument(arguments, key)
     }
 
     fn optional_u64_argument(
@@ -499,48 +487,34 @@ impl DesktopMcpServerExecutor {
         &self,
         arguments: HashMap<String, Value>,
     ) -> Result<McpServerToolOutcome, String> {
-        let query = match self.require_string_argument(&arguments, "query") {
-            Ok(query) => query,
-            Err(outcome) => return Ok(outcome),
-        };
+        let research_state = self
+            .app_handle
+            .try_state::<crate::sys::commands::research::ResearchState>()
+            .ok_or_else(|| "ResearchState unavailable".to_string())?;
+        let llm_state = self
+            .app_handle
+            .try_state::<crate::sys::commands::LLMState>()
+            .ok_or_else(|| "LLMState unavailable".to_string())?;
+        let app_handle = self.app_handle.clone();
 
-        let depth = self
-            .optional_string_argument(&arguments, "depth")
-            .unwrap_or_else(|| "quick".to_string());
-        let mode = match depth.as_str() {
-            "quick" => ResearchModeInput::Quick,
-            "thorough" => ResearchModeInput::Deep,
-            _ => return Ok(self.outcome_from_error("depth must be either 'quick' or 'thorough'.")),
-        };
-
-        let response = crate::sys::commands::research_start(
-            self.app_handle.clone(),
-            self.app_handle
-                .try_state::<crate::sys::commands::research::ResearchState>()
-                .ok_or_else(|| "ResearchState unavailable".to_string())?,
-            self.app_handle
-                .try_state::<crate::sys::commands::LLMState>()
-                .ok_or_else(|| "LLMState unavailable".to_string())?,
-            ResearchRequest {
-                query,
-                mode,
-                config_overrides: None,
-                task_id: None,
+        research_outcome(
+            &arguments,
+            || self.validate_mcp_server_tool_policy("agi_research", &arguments),
+            move |query, mode| {
+                crate::sys::commands::research_start(
+                    app_handle,
+                    research_state,
+                    llm_state,
+                    ResearchRequest {
+                        query,
+                        mode,
+                        config_overrides: None,
+                        task_id: None,
+                    },
+                )
             },
         )
-        .await;
-
-        match response {
-            Ok(response) => {
-                let structured = self.serialization_value(&response);
-                let text = structured["summary"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string();
-                Ok(McpServerToolOutcome::success(text, Some(structured)))
-            }
-            Err(error) => Ok(self.outcome_from_error(error)),
-        }
+        .await
     }
 
     async fn execute_run_task(
@@ -637,6 +611,65 @@ impl DesktopMcpServerExecutor {
     }
 }
 
+fn string_argument(arguments: &HashMap<String, Value>, key: &str) -> Option<String> {
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+/// `guard` must be awaited before `start`: the embedded MCP bridge is reachable
+/// by any local process holding the bearer token, so a research run may only be
+/// launched after the ToolGuard policy check clears it.
+async fn research_outcome<Guard, GuardFuture, Start, StartFuture>(
+    arguments: &HashMap<String, Value>,
+    guard: Guard,
+    start: Start,
+) -> Result<McpServerToolOutcome, String>
+where
+    Guard: FnOnce() -> GuardFuture,
+    GuardFuture: std::future::Future<Output = Option<McpServerToolOutcome>>,
+    Start: FnOnce(String, ResearchModeInput) -> StartFuture,
+    StartFuture: std::future::Future<Output = Result<ResearchResponse, String>>,
+{
+    if let Some(outcome) = guard().await {
+        return Ok(outcome);
+    }
+
+    let Some(query) = string_argument(arguments, "query") else {
+        return Ok(McpServerToolOutcome::error(
+            "Missing required string argument 'query'.".to_string(),
+            None,
+        ));
+    };
+
+    let depth = string_argument(arguments, "depth").unwrap_or_else(|| "quick".to_string());
+    let mode = match depth.as_str() {
+        "quick" => ResearchModeInput::Quick,
+        "thorough" => ResearchModeInput::Deep,
+        _ => {
+            return Ok(McpServerToolOutcome::error(
+                "depth must be either 'quick' or 'thorough'.".to_string(),
+                None,
+            ))
+        }
+    };
+
+    match start(query, mode).await {
+        Ok(response) => {
+            let structured = serde_json::to_value(&response).unwrap_or_else(|_| json!({}));
+            let text = structured["summary"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            Ok(McpServerToolOutcome::success(text, Some(structured)))
+        }
+        Err(error) => Ok(McpServerToolOutcome::error(error, None)),
+    }
+}
+
 #[async_trait]
 impl McpServerExecutor for DesktopMcpServerExecutor {
     async fn execute_tool(
@@ -657,8 +690,67 @@ impl McpServerExecutor for DesktopMcpServerExecutor {
 
 #[cfg(test)]
 mod tests {
-    use super::McpServerToolOutcome;
-    use serde_json::json;
+    use super::{research_outcome, McpServerToolOutcome};
+    use crate::sys::commands::research::ResearchModeInput;
+    use serde_json::{json, Value};
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    fn research_arguments(depth: Option<&str>) -> HashMap<String, Value> {
+        let mut arguments = HashMap::new();
+        arguments.insert("query".to_string(), json!("who owns this machine"));
+        if let Some(depth) = depth {
+            arguments.insert("depth".to_string(), json!(depth));
+        }
+        arguments
+    }
+
+    #[tokio::test]
+    async fn research_does_not_start_when_tool_guard_denies() {
+        let started = AtomicBool::new(false);
+
+        let outcome = research_outcome(
+            &research_arguments(None),
+            || async {
+                Some(McpServerToolOutcome::error(
+                    "MCP tool 'agi_research' rejected by ToolGuard: unauthorized".to_string(),
+                    None,
+                ))
+            },
+            |_query, _mode| {
+                started.store(true, Ordering::SeqCst);
+                async { Err("research_start must not run".to_string()) }
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(!started.load(Ordering::SeqCst));
+        assert!(outcome.is_error);
+        assert!(outcome.text.contains("rejected by ToolGuard"));
+    }
+
+    #[tokio::test]
+    async fn research_starts_only_after_tool_guard_approval() {
+        let started = AtomicBool::new(false);
+
+        let outcome = research_outcome(
+            &research_arguments(Some("thorough")),
+            || async { None },
+            |query, mode| {
+                started.store(true, Ordering::SeqCst);
+                assert_eq!(query, "who owns this machine");
+                assert!(matches!(mode, ResearchModeInput::Deep));
+                async { Err("launched".to_string()) }
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(started.load(Ordering::SeqCst));
+        assert!(outcome.is_error);
+        assert_eq!(outcome.text, "launched");
+    }
 
     #[test]
     fn outcome_serializes_with_structured_content() {

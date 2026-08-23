@@ -23,6 +23,7 @@ import {
   getArtifactSandboxOrigin,
   type ArtifactRenderPayload,
 } from '../lib/artifact-sandbox';
+import { artifactDownloadFile } from '../lib/artifact-download';
 import { SCRIPTS_BLOCKED_NOTICE } from '../lib/artifact-preview-capability';
 import { useSameDocumentScriptSupport } from '../hooks/useSameDocumentScriptSupport';
 import { Button } from '@agiworkforce/ui';
@@ -406,24 +407,8 @@ export function ArtifactPanel({
 
   function handleDownload() {
     if (!artifact) return;
-    const ext =
-      artifact.type === 'html'
-        ? 'html'
-        : artifact.type === 'react'
-          ? 'tsx'
-          : artifact.type === 'markdown'
-            ? 'md'
-            : artifact.type === 'json'
-              ? 'json'
-              : artifact.type === 'svg'
-                ? 'svg'
-                : artifact.type === 'document'
-                  ? 'md'
-                  : (artifact.language ?? 'txt');
-    downloadBlob(
-      new Blob([artifact.content], { type: 'text/plain' }),
-      `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}.${ext}`,
-    );
+    const { blob, fileName } = artifactDownloadFile(artifact);
+    downloadBlob(blob, fileName);
   }
 
   const handlePublish = useCallback(async () => {

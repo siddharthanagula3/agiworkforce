@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use colored::Colorize;
 use dialoguer::Confirm;
 
 use crate::safety::{classify_command, CommandSafety};
@@ -143,7 +142,7 @@ pub(super) async fn execute_run_command(
                                 eprintln!(
                                     "  {} {}",
                                     ts::warning("Command:"),
-                                    describe_command(command).dimmed()
+                                    ts::muted(describe_command(command))
                                 );
                             }
                         }

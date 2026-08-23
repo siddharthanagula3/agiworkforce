@@ -280,6 +280,14 @@ const config = {
     './native/ios/withClerkModularHeaders.cjs',
     './native/android/withAGIAICore.cjs',
     './native/android/withAGIShareIntent.cjs',
+    // Emits the iOS NSPinnedDomains and Android network_security_config pin-sets
+    // derived from lib/pinning.ts. It emits nothing until that file provisions
+    // every required host AND sets PINNING_ROLLOUT to 'enforced', so it is inert
+    // today — but without it registered here the pins never reach a build and
+    // nothing checks any certificate. Registration also puts the pinning state
+    // inside the fingerprint runtimeVersion below, which is what stops an
+    // over-the-air update from claiming pinning a shipped binary does not have.
+    './native/withAGITlsPinning.cjs',
     ...(envIsTruthy('EXPO_ENABLE_DETOX') ? ['./native/android/withAGIDetox.cjs'] : []),
   ],
   runtimeVersion: {

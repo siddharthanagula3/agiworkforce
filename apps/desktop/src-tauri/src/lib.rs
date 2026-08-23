@@ -357,6 +357,37 @@ pub fn run() {
 
             tracing::info!("Database path: {:?}", db_path);
 
+            // Every locally stored secret is keyed from this per-install value.
+            // It must be loaded before the database opens, before migrations run,
+            // and before any service derives a key, or those keys would fall back
+            // to a derivation any local process can reproduce.
+            match crate::sys::security::machine_key::OsInstallSecretStore::for_bundle_identifier(
+                &app.config().identifier,
+            )
+            .and_then(|store| {
+                crate::sys::security::machine_key::load_or_create_install_secret(&store)
+            }) {
+                Ok(install_secret) => {
+                    crate::sys::security::machine_key::set_install_secret(&install_secret);
+                    tracing::info!("Per-install encryption secret loaded from secure storage");
+                    // File-backed stores whose readers derive one key and
+                    // decrypt with it directly would otherwise lose everything
+                    // a machine-key build wrote.
+                    use crate::sys::security::machine_key_rewrap;
+                    machine_key_rewrap::spawn_legacy_machine_only_file_rewrap();
+                }
+                Err(error) => {
+                    tracing::error!(
+                        "Failed to establish the per-install encryption secret: {error}"
+                    );
+                    startup_recovery.record(
+                        crate::sys::startup_recovery::StartupRecoveryInfo::database_initialization(),
+                    );
+                    crate::sys::startup_recovery::show_recovery_window(app.handle());
+                    return Ok(());
+                }
+            }
+
             let database_key_store =
                 match crate::data::db::key_management::OsDatabaseKeyStore::for_bundle_identifier(
                     &app.config().identifier,
@@ -448,6 +479,17 @@ pub fn run() {
             }
 
             tracing::info!("Database initialized at {:?}", db_path);
+
+            let machine_only_payloads =
+                crate::sys::security::machine_key::machine_only_payloads();
+            if !machine_only_payloads.is_empty() {
+                tracing::warn!(
+                    "{} stored payload(s) are still wrapped under the legacy machine-derived key \
+                     and stay reproducible by any local process until they are written again: {}",
+                    machine_only_payloads.len(),
+                    machine_only_payloads.join(", ")
+                );
+            }
 
             let db_conn_arc = Arc::new(Mutex::new(conn));
             app.manage(AppDatabase {

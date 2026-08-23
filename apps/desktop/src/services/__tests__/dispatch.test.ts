@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockInvoke = vi.fn<(cmd: string, args?: Record<string, unknown>) => Promise<unknown>>();
@@ -29,9 +28,21 @@ function makeRawEnvelope(overrides?: Partial<Record<string, unknown>>): string {
   });
 }
 
+const PAIRING_SECRET = '9f'.repeat(32);
+
+function makeRawEnvelopeWithoutVersion(): string {
+  return JSON.stringify({
+    hmac: 'a'.repeat(64),
+    nonce: 'AAAA==',
+    payload: { action: 'ping' },
+    ts: Date.now(),
+    type: 'ping',
+  });
+}
+
 async function setupSession(): Promise<void> {
   mockInvoke.mockResolvedValueOnce('a'.repeat(64));
-  await initDispatchSession('ABCD1234', 'deadbeef01234567');
+  await initDispatchSession('ABCD1234', 'deadbeef01234567', PAIRING_SECRET);
 }
 
 describe('extractDispatchSalt', () => {
@@ -72,12 +83,13 @@ describe('initDispatchSession', () => {
     mockInvoke.mockReset();
   });
 
-  it('calls dispatch_hmac_init with correct args', async () => {
+  it('keys the native session on the out-of-band pairing secret, not just relay-visible inputs', async () => {
     mockInvoke.mockResolvedValueOnce('key_hex');
-    const result = await initDispatchSession('ABCD1234', 'salthex');
+    const result = await initDispatchSession('ABCD1234', 'salthex', PAIRING_SECRET);
     expect(mockInvoke).toHaveBeenCalledWith('dispatch_hmac_init', {
       pairingCode: 'ABCD1234',
       sessionSalt: 'salthex',
+      pairingSecret: PAIRING_SECRET,
     });
     expect(result).toBe('key_hex');
   });
@@ -85,7 +97,7 @@ describe('initDispatchSession', () => {
   it('marks session as active after init', async () => {
     mockInvoke.mockResolvedValueOnce('key_hex');
     expect(isDispatchSessionActive()).toBe(false);
-    await initDispatchSession('ABCD1234', 'salthex');
+    await initDispatchSession('ABCD1234', 'salthex', PAIRING_SECRET);
     expect(isDispatchSessionActive()).toBe(true);
   });
 
@@ -93,7 +105,7 @@ describe('initDispatchSession', () => {
     mockInvoke.mockResolvedValueOnce('key_hex');
     const onVersionMismatch = vi.fn();
     setDispatchCallbacks({ onVersionMismatch });
-    await initDispatchSession('ABCD1234', 'salthex', '1.2.9');
+    await initDispatchSession('ABCD1234', 'salthex', PAIRING_SECRET, '1.2.9');
     expect(onVersionMismatch).toHaveBeenCalledWith('1.2.9', '1.3.0');
     setDispatchCallbacks({ onVersionMismatch: undefined });
   });
@@ -102,9 +114,29 @@ describe('initDispatchSession', () => {
     mockInvoke.mockResolvedValueOnce('key_hex');
     const onVersionMismatch = vi.fn();
     setDispatchCallbacks({ onVersionMismatch });
-    await initDispatchSession('ABCD1234', 'salthex', '1.3.0');
+    await initDispatchSession('ABCD1234', 'salthex', PAIRING_SECRET, '1.3.0');
     expect(onVersionMismatch).not.toHaveBeenCalled();
     setDispatchCallbacks({ onVersionMismatch: undefined });
+  });
+});
+
+describe('dispatch protocol version', () => {
+  beforeEach(async () => {
+    await resetDispatchSession();
+    mockInvoke.mockReset();
+    await setupSession();
+  });
+
+  it('surfaces update_required for an envelope from a peer on the old protocol', async () => {
+    const onProtocolVersionUnsupported = vi.fn();
+    setDispatchCallbacks({ onProtocolVersionUnsupported });
+    mockInvoke.mockRejectedValueOnce('update_required');
+
+    const result = await verifyInbound({ rawJson: makeRawEnvelopeWithoutVersion() });
+
+    expect(result).toEqual({ ok: false, reason: 'update_required' });
+    expect(onProtocolVersionUnsupported).toHaveBeenCalledOnce();
+    setDispatchCallbacks({ onProtocolVersionUnsupported: undefined });
   });
 });
 
@@ -220,12 +252,13 @@ describe('rotateDispatchKey', () => {
     const onKeyRotated = vi.fn();
     setDispatchCallbacks({ onKeyRotated });
 
-    await rotateDispatchKey('ABCD1234', rotateKeyRequest);
+    await rotateDispatchKey('ABCD1234', PAIRING_SECRET, rotateKeyRequest);
 
     expect(rotateKeyRequest).toHaveBeenCalledOnce();
     expect(mockInvoke).toHaveBeenCalledWith('dispatch_hmac_init', {
       pairingCode: 'ABCD1234',
       sessionSalt: 'newsalt',
+      pairingSecret: PAIRING_SECRET,
     });
     expect(onKeyRotated).toHaveBeenCalledWith(newKeyHex);
     setDispatchCallbacks({ onKeyRotated: undefined });
@@ -235,7 +268,9 @@ describe('rotateDispatchKey', () => {
     vi.useFakeTimers();
     const rotateKeyRequest = vi.fn().mockRejectedValue(new Error('network'));
 
-    const rotatePromise = rotateDispatchKey('ABCD1234', rotateKeyRequest).catch((e: unknown) => e);
+    const rotatePromise = rotateDispatchKey('ABCD1234', PAIRING_SECRET, rotateKeyRequest).catch(
+      (e: unknown) => e,
+    );
     await vi.runAllTimersAsync();
     const result = await rotatePromise;
     expect(result).toBeInstanceOf(Error);
@@ -292,11 +327,12 @@ describe('resetDispatchSession', () => {
       return Promise.reject(new Error(`Unexpected command: ${command}`));
     });
 
-    const setupPromise = initDispatchSession('ABCD1234', 'stale-salt');
+    const setupPromise = initDispatchSession('ABCD1234', 'stale-salt', PAIRING_SECRET);
     await vi.waitFor(() =>
       expect(mockInvoke).toHaveBeenCalledWith('dispatch_hmac_init', {
         pairingCode: 'ABCD1234',
         sessionSalt: 'stale-salt',
+        pairingSecret: PAIRING_SECRET,
       }),
     );
     const resetPromise = resetDispatchSession();

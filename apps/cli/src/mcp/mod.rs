@@ -941,20 +941,32 @@ impl McpManager {
                             }
                         }
                         if !quiet {
-                            eprintln!("  MCP server '{}': {} tools discovered", name, count);
+                            eprintln!(
+                                "  MCP server '{}': {} tools discovered",
+                                crate::terminal_text::sanitize_terminal_text(name),
+                                count
+                            );
                         }
                         self.connections.insert(name.clone(), conn);
                     }
                     Err(e) => {
                         if !quiet {
-                            eprintln!("  MCP server '{}': failed to list tools: {}", name, e);
+                            eprintln!(
+                                "  MCP server '{}': failed to list tools: {}",
+                                crate::terminal_text::sanitize_terminal_text(name),
+                                crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                            );
                         }
                         let _ = conn.shutdown().await;
                     }
                 },
                 Err(e) => {
                     if !quiet {
-                        eprintln!("  MCP server '{}': failed to connect: {}", name, e);
+                        eprintln!(
+                            "  MCP server '{}': failed to connect: {}",
+                            crate::terminal_text::sanitize_terminal_text(name),
+                            crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                        );
                     }
                 }
             }
@@ -1120,7 +1132,11 @@ impl McpManager {
     pub async fn shutdown_all(&mut self) {
         for (name, mut conn) in self.connections.drain() {
             if let Err(e) = conn.shutdown().await {
-                eprintln!("Warning: failed to shut down MCP server '{}': {}", name, e);
+                eprintln!(
+                    "Warning: failed to shut down MCP server '{}': {}",
+                    crate::terminal_text::sanitize_terminal_text(&name),
+                    crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                );
             }
         }
     }

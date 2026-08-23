@@ -1,16 +1,17 @@
 //! Secure secret management for JWT and other cryptographic keys
 //!
 //! This module provides a secure way to generate, store, and retrieve secrets
-//! using machine-derived encryption keys and SQLite storage.
+//! using the per-install encryption key and SQLite storage.
 //!
 //! # Security Features
 //! - Cryptographically secure random secret generation
-//! - Machine-derived encryption keys (no keyring permission prompts)
+//! - Keys derived from the per-install secret held by the OS credential service
 //! - Database storage with AES-256-GCM encryption
+//! - Rows written by older builds are re-wrapped on first read
 //! - Automatic secret rotation support
 //! - No secrets logged or exposed in error messages
 
-use super::encryption::{decrypt_secret, encrypt_secret, EncryptedSecret};
+use super::encryption::{decrypt_secret_with_key, encrypt_secret, EncryptedSecret};
 use super::machine_key::{self, KeyPurpose};
 use base64::{engine::general_purpose, Engine as _};
 use rand::RngCore;
@@ -131,16 +132,8 @@ impl SecretManager {
 
     /// Store secret in database with AES-256-GCM encryption
     fn store_secret_in_database(&self, key: &str, secret: &str) -> Result<(), SecretError> {
-        // Get encryption key from machine-derived keys
-        let encryption_key = self.get_db_encryption_key();
-
-        // Encrypt the secret
-        let encrypted =
-            encrypt_secret(&encryption_key, secret).map_err(SecretError::EncryptionError)?;
-
-        // Serialize the encrypted secret to JSON
-        let encrypted_json = serde_json::to_string(&encrypted)
-            .map_err(|e| SecretError::EncryptionError(format!("Failed to serialize: {}", e)))?;
+        let encryption_key = self.get_db_encryption_key()?;
+        let encrypted_json = Self::wrap_secret(&encryption_key, secret)?;
 
         let conn = self.db_conn.lock().map_err(|_| {
             SecretError::EncryptionError("Database lock corrupted — mutex poisoned".into())
@@ -152,7 +145,19 @@ impl SecretManager {
         )
         .map_err(SecretError::DatabaseStoreError)?;
 
+        machine_key::clear_machine_only_payload(&Self::payload_label(key));
         Ok(())
+    }
+
+    fn wrap_secret(encryption_key: &[u8], secret: &str) -> Result<String, SecretError> {
+        let encrypted =
+            encrypt_secret(encryption_key, secret).map_err(SecretError::EncryptionError)?;
+        serde_json::to_string(&encrypted)
+            .map_err(|e| SecretError::EncryptionError(format!("Failed to serialize: {}", e)))
+    }
+
+    fn payload_label(key: &str) -> String {
+        format!("settings:{key}")
     }
 
     /// Store an arbitrary application secret in encrypted storage.
@@ -178,18 +183,42 @@ impl SecretManager {
             return Err(SecretError::SecretNotFound);
         }
 
-        // Drop the lock before getting the encryption key
+        // Drop the lock before deriving the key or re-wrapping the row.
         drop(conn);
 
-        // Get the database encryption key
-        let encryption_key = self.get_db_encryption_key();
-
-        // Deserialize the encrypted secret from JSON
         let encrypted: EncryptedSecret = serde_json::from_str(&encrypted_json)
             .map_err(|e| SecretError::EncryptionError(format!("Failed to deserialize: {}", e)))?;
 
-        // Decrypt the secret
-        decrypt_secret(&encryption_key, &encrypted).map_err(SecretError::EncryptionError)
+        let label = Self::payload_label(key);
+        let opened = machine_key::open_with_key_rotation(
+            KeyPurpose::DatabaseEncryption,
+            &label,
+            |candidate| decrypt_secret_with_key(candidate, &encrypted).ok(),
+        )
+        .map_err(|error| SecretError::EncryptionError(error.to_string()))?
+        .ok_or_else(|| {
+            SecretError::EncryptionError("Stored secret could not be decrypted".to_string())
+        })?;
+
+        if opened.rewrap_required {
+            self.rewrap_secret(key, &opened.value);
+        }
+
+        Ok(opened.value)
+    }
+
+    /// Replace a row an older build wrapped under the machine-only key.
+    ///
+    /// A failed re-wrap must not lose the secret: the legacy row stays readable
+    /// and stays reported by `machine_key::has_machine_only_secrets`, so the
+    /// next read retries.
+    fn rewrap_secret(&self, key: &str, secret: &str) {
+        match self.store_secret_in_database(key, secret) {
+            Ok(()) => tracing::info!("Re-wrapped '{key}' under the per-install encryption key"),
+            Err(error) => tracing::warn!(
+                "Could not re-wrap '{key}' under the per-install encryption key: {error}"
+            ),
+        }
     }
 
     /// Retrieve an application secret from encrypted storage.
@@ -214,9 +243,14 @@ impl SecretManager {
         Ok(exists == 1)
     }
 
-    /// Get the database encryption key derived from machine identifiers
-    fn get_db_encryption_key(&self) -> Vec<u8> {
-        machine_key::derive_key(KeyPurpose::DatabaseEncryption)
+    /// Get the database encryption key derived from the per-install secret.
+    ///
+    /// F12: fails closed. Without the secret held by the OS credential service
+    /// there is no key another local process could not recompute, so no secret
+    /// is written at all.
+    fn get_db_encryption_key(&self) -> Result<Vec<u8>, SecretError> {
+        machine_key::try_derive_key(KeyPurpose::DatabaseEncryption)
+            .map_err(|error| SecretError::EncryptionError(error.to_string()))
     }
 
     /// Get or create a secondary encryption key (stored encrypted in database)
@@ -401,6 +435,60 @@ mod tests {
         // Should return the same key on second call
         let key2 = manager.get_or_create_secondary_key().unwrap();
         assert_eq!(key1, key2);
+    }
+
+    /// F12: a row an older build wrapped under the machine-only key stays
+    /// readable and is re-wrapped under the per-install key on first read, so
+    /// it stops being decryptable by any local process.
+    #[test]
+    fn legacy_machine_only_row_is_rewrapped_on_read() {
+        use crate::sys::security::encryption::decrypt_secret_with_key;
+
+        let manager = create_test_manager();
+        let legacy_key = machine_key::legacy_machine_only_keys(KeyPurpose::DatabaseEncryption)
+            .first()
+            .copied()
+            .expect("a legacy candidate always exists");
+        let legacy_row =
+            SecretManager::wrap_secret(&legacy_key, "legacy-api-key").expect("legacy wrap");
+
+        manager
+            .db_conn
+            .lock()
+            .expect("database lock")
+            .execute(
+                "INSERT OR REPLACE INTO settings (key, value, encrypted) VALUES (?1, ?2, 1)",
+                rusqlite::params!["perplexity_api_key", legacy_row],
+            )
+            .expect("seed legacy row");
+
+        assert_eq!(
+            manager.get_secret("perplexity_api_key").expect("read"),
+            "legacy-api-key"
+        );
+
+        let stored: String = manager
+            .db_conn
+            .lock()
+            .expect("database lock")
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                rusqlite::params!["perplexity_api_key"],
+                |row| row.get(0),
+            )
+            .expect("read back row");
+        let stored: EncryptedSecret = serde_json::from_str(&stored).expect("stored ciphertext");
+
+        assert!(
+            decrypt_secret_with_key(&legacy_key, &stored).is_err(),
+            "the machine-only key must no longer open the stored secret"
+        );
+        let current =
+            machine_key::try_derive_key(KeyPurpose::DatabaseEncryption).expect("install secret");
+        assert_eq!(
+            decrypt_secret_with_key(&current, &stored).expect("current key opens the row"),
+            "legacy-api-key"
+        );
     }
 
     #[test]

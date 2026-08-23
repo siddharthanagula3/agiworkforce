@@ -5,6 +5,10 @@ import { assertAccountActive } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { hasAdminConsoleAccess } from '@/features/admin/lib/admin-console-access';
+import {
+  PLATFORM_ADMIN_ENV_VAR,
+  isPlatformAdmin,
+} from '@/features/admin/lib/platform-admin-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,10 +21,17 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   await requireCurrentTermsAcceptance(userId, '/admin');
 
-  const client = await clerkClient();
-  const user = await client.users.getUser(userId as string);
-  if (!hasAdminConsoleAccess(user.publicMetadata)) {
-    redirect('/');
+  // Two populations share this segment: a platform operator, who holds no org
+  // role at all and owns the console at `/admin`, and an org admin/owner, whose
+  // self-service role earns only the org-scoped pages under it (directory
+  // sync). Demanding the org role here would lock the operator out of their own
+  // console, so the segment admits either and each page gates itself.
+  if (!isPlatformAdmin(userId, process.env[PLATFORM_ADMIN_ENV_VAR])) {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId as string);
+    if (!hasAdminConsoleAccess(user.publicMetadata)) {
+      redirect('/');
+    }
   }
 
   let accountActive = true;

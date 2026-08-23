@@ -2,11 +2,16 @@
 //!
 //! Ported from the desktop transport's `validate_mcp_server_url` (Wave 5 stage
 //! d2) so the SSRF posture survives the transport swap onto this crate.
-//! Enforcement is opt-in via [`crate::McpTimeouts::validate_urls`] — the CLI
-//! keeps its original behavior (LAN MCP servers reachable) unless a host turns
-//! the knob on.
+//! Transport bringup enforcement is opt-in via
+//! [`crate::McpTimeouts::validate_urls`] — the CLI keeps its original behavior
+//! (LAN MCP servers reachable) unless a host turns the knob on. The OAuth flow
+//! is not opt-in: every URL it fetches is named by the remote server, so
+//! [`resolve_validated_endpoint`] runs there unconditionally, anchored on the
+//! server URL the user configured so a remote party can never widen its own
+//! reach into this machine.
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 /// Validate an MCP server URL to prevent SSRF against private networks.
 ///
@@ -78,13 +83,15 @@ pub fn validate_server_url(url: &str) -> Result<()> {
 /// allowed only for local MCP servers, so credentials cannot transit a network
 /// unencrypted).
 pub fn enforce_https_for_remote(url: &str) -> Result<()> {
-    if !url.starts_with("http://") {
-        return Ok(());
-    }
     let parsed = match reqwest::Url::parse(url) {
         Ok(p) => p,
         Err(e) => bail!("Invalid MCP server URL: {e}"),
     };
+    // Scheme comparison must be case-insensitive: `HTTP://evil.example.com/`
+    // is cleartext but does not match a literal `http://` prefix test.
+    if !parsed.scheme().eq_ignore_ascii_case("http") {
+        return Ok(());
+    }
     let host = parsed.host_str().unwrap_or("");
     if !host_is_loopback(host) {
         bail!(
@@ -96,14 +103,310 @@ pub fn enforce_https_for_remote(url: &str) -> Result<()> {
 
 /// True when `host` names the local machine.
 fn host_is_loopback(host: &str) -> bool {
-    host == "localhost"
-        || host == "127.0.0.1"
-        || host == "::1"
-        || host == "[::1]"
-        || host
-            .parse::<std::net::Ipv4Addr>()
-            .map(|v4| v4.is_loopback())
+    let bare = bare_host(host);
+    bare == "localhost"
+        || bare
+            .parse::<IpAddr>()
+            .map(|ip| ip.is_loopback())
             .unwrap_or(false)
+}
+
+/// `Url::host_str` keeps the brackets on IPv6 literals; every address parse and
+/// every `resolve_to_addrs` key needs them gone.
+fn bare_host(host: &str) -> String {
+    host.strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host)
+        .to_string()
+}
+
+/// A URL that passed SSRF validation together with the addresses its host
+/// resolved to at validation time.
+#[derive(Debug, Clone)]
+pub struct ValidatedEndpoint {
+    pub url: reqwest::Url,
+    /// Host without IPv6 brackets, as `reqwest::ClientBuilder::resolve_to_addrs`
+    /// expects it.
+    pub host: String,
+    pub addrs: Vec<SocketAddr>,
+}
+
+/// Cap on metadata/token response bodies read from an endpoint whose URL came
+/// from a remote party.
+pub const MAX_METADATA_BODY_BYTES: usize = 256 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AddrClass {
+    Public,
+    Loopback,
+    SiteLocal(&'static str),
+    Forbidden(&'static str),
+}
+
+/// Validate `url`, pin its host to the addresses it resolves to right now, and
+/// refuse any address that reaches further into this machine's networks than
+/// `anchor` already does.
+///
+/// [`validate_server_url`] only inspects the literal host text, so a hostname
+/// that resolves to 127.0.0.1, 10.0.0.0/8 or 169.254.169.254 sails through it.
+/// Any caller that fetches a URL supplied by a remote party must resolve the
+/// name first, reject every address the remote party has no business naming,
+/// and hand the surviving addresses to `reqwest::ClientBuilder::resolve_to_addrs`
+/// — otherwise a second lookup can rebind the name to an internal target
+/// between the check and the connect.
+///
+/// `anchor` is the trust root: the URL the *user* configured (the MCP server,
+/// or the record cached from a flow against it). A remote server may name its
+/// own authorization server, but it must not be able to name
+/// `http://127.0.0.1:9200/` and have this process fetch it. Loopback is
+/// unlocked only when `anchor` literally names the local machine — never by
+/// resolution, which a rebind could steer — and RFC 1918 / CGNAT / ULA targets
+/// only when `anchor` is itself reached at such an address.
+pub async fn resolve_validated_endpoint(url: &str, anchor: &str) -> Result<ValidatedEndpoint> {
+    validate_server_url(url)?;
+    enforce_https_for_remote(url)?;
+
+    let parsed = reqwest::Url::parse(url).map_err(|e| anyhow!("Invalid MCP server URL: {e}"))?;
+    let scheme = parsed.scheme().to_ascii_lowercase();
+    if scheme != "http" && scheme != "https" {
+        bail!("SSRF protection: scheme '{scheme}' is not allowed for MCP/OAuth endpoints");
+    }
+
+    let host = parsed.host_str().unwrap_or_default().to_string();
+    if host.is_empty() {
+        bail!("SSRF protection: URL '{url}' has no host");
+    }
+    let port = parsed
+        .port_or_known_default()
+        .ok_or_else(|| anyhow!("SSRF protection: URL '{url}' has no usable port"))?;
+
+    let bare = bare_host(&host);
+
+    let addrs: Vec<SocketAddr> = match bare.parse::<IpAddr>() {
+        Ok(ip) => vec![SocketAddr::new(ip, port)],
+        Err(_) => tokio::net::lookup_host((bare.as_str(), port))
+            .await
+            .with_context(|| format!("resolve host '{bare}'"))?
+            .collect(),
+    };
+    if addrs.is_empty() {
+        bail!("SSRF protection: host '{bare}' did not resolve to any address");
+    }
+
+    for addr in &addrs {
+        ensure_addr_reachable(&bare, addr.ip(), anchor).await?;
+    }
+
+    Ok(ValidatedEndpoint {
+        url: parsed,
+        host: bare,
+        addrs,
+    })
+}
+
+/// Validate a URL that is handed to the user's browser instead of being fetched
+/// here.
+///
+/// DNS pinning would prove nothing (the browser resolves the name itself), but
+/// the scheme does: anything other than http(s) turns the host's "open this
+/// URL" call into a command surface. The loopback rule is the same as
+/// [`resolve_validated_endpoint`]'s — a public authorization server must not be
+/// able to drive the browser at services listening on this machine.
+pub fn validate_browser_endpoint(url: &str, anchor: &str) -> Result<()> {
+    let parsed =
+        reqwest::Url::parse(url).map_err(|e| anyhow!("Invalid OAuth authorization URL: {e}"))?;
+    let scheme = parsed.scheme().to_ascii_lowercase();
+    if scheme != "http" && scheme != "https" {
+        bail!("SSRF protection: scheme '{scheme}' is not allowed for an OAuth authorization URL");
+    }
+    validate_server_url(url)?;
+    enforce_https_for_remote(url)?;
+
+    let host = bare_host(parsed.host_str().unwrap_or_default());
+    if host_is_loopback(&host) && !anchor_is_local(anchor) {
+        bail!(
+            "SSRF protection: authorization URL host '{host}' names this machine, which an MCP server at '{anchor}' may not do"
+        );
+    }
+    Ok(())
+}
+
+/// Reject a resolved address the party that named it has no business reaching.
+async fn ensure_addr_reachable(host: &str, ip: IpAddr, anchor: &str) -> Result<()> {
+    let ip = unmap_ipv4(ip);
+    let denial = match classify_addr(ip) {
+        AddrClass::Public => return Ok(()),
+        AddrClass::Loopback => {
+            if anchor_is_local(anchor) {
+                return Ok(());
+            }
+            "loopback"
+        }
+        AddrClass::SiteLocal(kind) => {
+            if anchor_is_local(anchor) || anchor_is_site_local(anchor).await {
+                return Ok(());
+            }
+            kind
+        }
+        AddrClass::Forbidden(kind) => kind,
+    };
+    bail!(
+        "SSRF protection: host '{host}' resolves to {denial} address {ip}, which is not allowed for remote MCP servers"
+    )
+}
+
+/// True when the user pointed this client at the local machine by name, so the
+/// endpoints that deployment advertises may stay on loopback. Deliberately
+/// text-only: resolution is what a rebind attacks.
+fn anchor_is_local(anchor: &str) -> bool {
+    reqwest::Url::parse(anchor)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(bare_host))
+        .map(|host| host_is_loopback(&host))
+        .unwrap_or(false)
+}
+
+/// True when the MCP server the user configured is itself reached at an RFC
+/// 1918 / CGNAT / ULA address, which is what makes an on-prem authorization
+/// server on the same network legitimate. A rebind cannot abuse this: cleartext
+/// to a non-loopback host is already refused, so the fetch is HTTPS and the
+/// certificate still has to match the name.
+async fn anchor_is_site_local(anchor: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(anchor) else {
+        return false;
+    };
+    let Some(host) = parsed.host_str().map(bare_host) else {
+        return false;
+    };
+    let site_local = |ip: IpAddr| matches!(classify_addr(unmap_ipv4(ip)), AddrClass::SiteLocal(_));
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return site_local(ip);
+    }
+    let Some(port) = parsed.port_or_known_default() else {
+        return false;
+    };
+    match tokio::net::lookup_host((host.as_str(), port)).await {
+        Ok(mut addrs) => addrs.any(|addr| site_local(addr.ip())),
+        Err(_) => false,
+    }
+}
+
+fn unmap_ipv4(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) => v6
+            .to_ipv4_mapped()
+            .map(IpAddr::V4)
+            .unwrap_or(IpAddr::V6(v6)),
+        v4 => v4,
+    }
+}
+
+fn classify_addr(ip: IpAddr) -> AddrClass {
+    match ip {
+        IpAddr::V4(v4) => classify_ipv4(v4),
+        IpAddr::V6(v6) => classify_ipv6(v6),
+    }
+}
+
+fn classify_ipv4(v4: Ipv4Addr) -> AddrClass {
+    let o = v4.octets();
+    if v4.is_loopback() {
+        return AddrClass::Loopback;
+    }
+    if v4.is_private() {
+        return AddrClass::SiteLocal("private");
+    }
+    if o[0] == 100 && (64..=127).contains(&o[1]) {
+        return AddrClass::SiteLocal("carrier-grade NAT");
+    }
+    if v4.is_link_local() {
+        return AddrClass::Forbidden("link-local");
+    }
+    if v4.is_unspecified() {
+        return AddrClass::Forbidden("unspecified");
+    }
+    if v4.is_broadcast() {
+        return AddrClass::Forbidden("broadcast");
+    }
+    if v4.is_documentation() {
+        return AddrClass::Forbidden("documentation");
+    }
+    if v4.is_multicast() {
+        return AddrClass::Forbidden("multicast");
+    }
+    if o[0] == 192 && o[1] == 0 && o[2] == 0 {
+        return AddrClass::Forbidden("IETF protocol assignment");
+    }
+    if o[0] == 198 && (o[1] == 18 || o[1] == 19) {
+        return AddrClass::Forbidden("benchmarking");
+    }
+    if o[0] >= 240 {
+        return AddrClass::Forbidden("reserved");
+    }
+    AddrClass::Public
+}
+
+fn classify_ipv6(v6: Ipv6Addr) -> AddrClass {
+    let s = v6.segments();
+    if v6.is_loopback() {
+        return AddrClass::Loopback;
+    }
+    if (s[0] & 0xfe00) == 0xfc00 {
+        return AddrClass::SiteLocal("unique-local");
+    }
+    if v6.is_unspecified() {
+        return AddrClass::Forbidden("unspecified");
+    }
+    if v6.is_multicast() {
+        return AddrClass::Forbidden("multicast");
+    }
+    if (s[0] & 0xffc0) == 0xfe80 {
+        return AddrClass::Forbidden("link-local");
+    }
+    // 64:ff9b::/96 embeds an IPv4 address the v6 rules above would not inspect.
+    if s[0] == 0x0064 && s[1] == 0xff9b {
+        return AddrClass::Forbidden("IPv4/IPv6 translation");
+    }
+    if s[0] == 0x2001 && s[1] == 0x0db8 {
+        return AddrClass::Forbidden("documentation");
+    }
+    AddrClass::Public
+}
+
+/// Read a response body with a hard size cap so a hostile endpoint cannot
+/// stream an unbounded body into memory.
+pub async fn read_body_capped(mut resp: reqwest::Response, what: &str) -> Result<Vec<u8>> {
+    let mut out: Vec<u8> = Vec::new();
+    while let Some(chunk) = resp
+        .chunk()
+        .await
+        .with_context(|| format!("read {what} response body"))?
+    {
+        if out.len() + chunk.len() > MAX_METADATA_BODY_BYTES {
+            bail!(
+                "{what} response body exceeds {MAX_METADATA_BODY_BYTES} bytes — refusing to buffer it"
+            );
+        }
+        out.extend_from_slice(&chunk);
+    }
+    Ok(out)
+}
+
+/// Refuse a URL whose origin differs from the pinned one, so a poisoned cache
+/// or a re-discovered endpoint cannot redirect credentials to another host.
+pub fn enforce_same_origin(expected: &str, candidate: &str, what: &str) -> Result<()> {
+    let expected_url =
+        reqwest::Url::parse(expected).with_context(|| format!("parse pinned {what} URL"))?;
+    let candidate_url =
+        reqwest::Url::parse(candidate).with_context(|| format!("parse {what} URL"))?;
+    if expected_url.origin() != candidate_url.origin() {
+        bail!(
+            "{what} origin {} does not match the pinned origin {} — refusing to use it",
+            candidate_url.origin().ascii_serialization(),
+            expected_url.origin().ascii_serialization()
+        );
+    }
+    Ok(())
 }
 
 /// Decide whether a transport may skip TLS certificate verification.
@@ -238,6 +541,205 @@ mod tests {
     fn https_enforcement_blocks_cleartext_remote() {
         let err = enforce_https_for_remote("http://mcp.example.com/").unwrap_err();
         assert!(format!("{err:#}").contains("must use HTTPS"));
+    }
+
+    #[test]
+    fn https_enforcement_is_case_insensitive_about_the_scheme() {
+        let err = enforce_https_for_remote("HTTP://mcp.example.com/").unwrap_err();
+        assert!(format!("{err:#}").contains("must use HTTPS"));
+    }
+
+    const LOCAL_SERVER: &str = "http://127.0.0.1:3000/mcp";
+    const REMOTE_SERVER: &str = "https://mcp.example.com/mcp";
+
+    #[tokio::test]
+    async fn resolved_endpoint_keeps_literal_loopback_for_a_local_server() {
+        let endpoint = resolve_validated_endpoint("http://127.0.0.1:8080/token", LOCAL_SERVER)
+            .await
+            .expect("literal loopback should stay reachable for a loopback MCP server");
+        assert_eq!(endpoint.host, "127.0.0.1");
+        assert_eq!(endpoint.addrs, vec!["127.0.0.1:8080".parse().unwrap()]);
+    }
+
+    #[tokio::test]
+    async fn resolved_endpoint_refuses_loopback_named_by_a_remote_server() {
+        for target in [
+            "http://127.0.0.1:9200/_cat/indices",
+            "http://localhost:11434/api/tags",
+            "http://[::1]:2375/containers/json",
+        ] {
+            let err = resolve_validated_endpoint(target, REMOTE_SERVER)
+                .await
+                .unwrap_err();
+            let msg = format!("{err:#}");
+            assert!(msg.contains("SSRF protection"), "{target}: {msg}");
+            assert!(msg.contains("loopback"), "{target}: {msg}");
+        }
+    }
+
+    #[tokio::test]
+    async fn resolved_endpoint_allows_localhost_by_name_for_a_local_server() {
+        let endpoint = resolve_validated_endpoint("http://localhost:8080/token", LOCAL_SERVER)
+            .await
+            .expect("localhost should stay reachable");
+        assert!(endpoint.addrs.iter().all(|a| a.ip().is_loopback()));
+        assert!(endpoint.addrs.iter().all(|a| a.port() == 8080));
+    }
+
+    #[tokio::test]
+    async fn resolved_endpoint_blocks_link_local_metadata_service() {
+        let err =
+            resolve_validated_endpoint("http://169.254.169.254/latest/meta-data/", LOCAL_SERVER)
+                .await
+                .unwrap_err();
+        assert!(format!("{err:#}").contains("SSRF protection"));
+    }
+
+    #[tokio::test]
+    async fn resolved_endpoint_blocks_cleartext_remote_before_any_lookup() {
+        let err = resolve_validated_endpoint("http://as.example.com/token", REMOTE_SERVER)
+            .await
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("must use HTTPS"));
+    }
+
+    #[tokio::test]
+    async fn resolved_endpoint_blocks_non_http_schemes() {
+        let err = resolve_validated_endpoint("file:///etc/passwd", LOCAL_SERVER)
+            .await
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("is not allowed"));
+    }
+
+    #[tokio::test]
+    async fn resolution_rejects_a_name_that_lands_on_the_local_machine() {
+        let err = ensure_addr_reachable(
+            "evil.example.com",
+            "127.0.0.1".parse().unwrap(),
+            REMOTE_SERVER,
+        )
+        .await
+        .unwrap_err();
+        assert!(format!("{err:#}").contains("loopback"));
+        assert!(
+            ensure_addr_reachable("localhost", "127.0.0.1".parse().unwrap(), LOCAL_SERVER)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn resolution_rejects_private_and_obfuscated_addresses() {
+        for (ip, needle) in [
+            ("10.1.2.3", "private"),
+            ("169.254.169.254", "link-local"),
+            ("100.64.0.1", "carrier-grade NAT"),
+            ("198.18.0.1", "benchmarking"),
+            ("::ffff:10.1.2.3", "private"),
+            ("fd00::1", "unique-local"),
+            ("64:ff9b::a01:203", "IPv4/IPv6 translation"),
+        ] {
+            let err = ensure_addr_reachable("evil.example.com", ip.parse().unwrap(), REMOTE_SERVER)
+                .await
+                .unwrap_err();
+            let msg = format!("{err:#}");
+            assert!(msg.contains(needle), "{ip}: unexpected error: {msg}");
+        }
+        assert!(
+            ensure_addr_reachable("mcp.example.com", "8.8.8.8".parse().unwrap(), REMOTE_SERVER)
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn site_local_targets_need_a_site_local_server() {
+        assert!(
+            ensure_addr_reachable(
+                "as.corp.example",
+                "10.1.2.4".parse().unwrap(),
+                REMOTE_SERVER
+            )
+            .await
+            .is_err(),
+            "a public MCP server must not reach RFC 1918"
+        );
+        assert!(
+            ensure_addr_reachable(
+                "as.corp.example",
+                "10.1.2.4".parse().unwrap(),
+                "https://10.1.2.3/mcp"
+            )
+            .await
+            .is_ok(),
+            "an on-prem MCP server keeps its on-prem authorization server"
+        );
+        assert!(
+            ensure_addr_reachable(
+                "as.corp.example",
+                "127.0.0.1".parse().unwrap(),
+                "https://10.1.2.3/mcp"
+            )
+            .await
+            .is_err(),
+            "an on-prem server still may not reach this machine"
+        );
+    }
+
+    #[test]
+    fn browser_endpoint_refuses_non_web_schemes() {
+        for url in [
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "data:text/html,<script>1</script>",
+        ] {
+            let err = validate_browser_endpoint(url, REMOTE_SERVER)
+                .expect_err("a non-web scheme must never reach a browser");
+            assert!(format!("{err:#}").contains("is not allowed"), "{url}");
+        }
+    }
+
+    #[test]
+    fn browser_endpoint_refuses_loopback_from_a_remote_server() {
+        let err = validate_browser_endpoint("http://127.0.0.1:9200/authorize", REMOTE_SERVER)
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("names this machine"));
+        assert!(
+            validate_browser_endpoint("http://127.0.0.1:9200/authorize", LOCAL_SERVER).is_ok(),
+            "a loopback deployment keeps its loopback authorize endpoint"
+        );
+        assert!(
+            validate_browser_endpoint("https://as.example.com/authorize", REMOTE_SERVER).is_ok()
+        );
+    }
+
+    #[test]
+    fn same_origin_pin_rejects_a_host_swap() {
+        assert!(
+            enforce_same_origin(
+                "https://as.example.com/token",
+                "https://as.example.com/oauth/token",
+                "token endpoint"
+            )
+            .is_ok()
+        );
+        let err = enforce_same_origin(
+            "https://as.example.com/token",
+            "https://evil.example.com/token",
+            "token endpoint",
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("does not match the pinned origin"), "{msg}");
+        assert!(
+            enforce_same_origin(
+                "https://as.example.com/token",
+                "http://as.example.com/token",
+                "token endpoint"
+            )
+            .is_err(),
+            "a scheme downgrade is an origin change"
+        );
     }
 
     #[test]

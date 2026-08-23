@@ -6,6 +6,71 @@ const MAX_QUERY_ROWS: usize = 1000;
 /// Maximum SQL query length to prevent abuse
 const MAX_QUERY_LENGTH: usize = 10_000;
 
+/// Tables the LLM `db_query` tool may read, and the only tables a `db_execute`
+/// subquery may select from.
+///
+/// SEV-DESK-10 fix: `settings` removed. The settings table holds encrypted API
+/// key blobs (provider keys, BYOK material) and OAuth tokens — even though the
+/// values are encrypted, returning them to the LLM means they cross the
+/// user→provider trust boundary (the provider sees the ciphertext plus adjacent
+/// metadata, expanding leak surface). The LLM has no legitimate need to read
+/// settings.
+///
+/// F26 fix: `command_history` removed for the same reason. Every interactive
+/// terminal command is persisted there (features/terminal/session_manager.rs),
+/// and its `scrub_secrets` filter is pattern-based and therefore incomplete — a
+/// bare pasted token, or any credential shape the regexes miss, lands in the
+/// table verbatim. Allowlisting it let `SELECT command FROM command_history`
+/// hand the model live credentials, which it then forwards to a BYOK or managed
+/// cloud provider. No product feature reads this table through db_query;
+/// session-scoped history has its own IPC command.
+///
+/// Sensitive tables (users, auth_sessions, api_keys, master_password, …) were
+/// never on this list.
+const ALLOWED_QUERY_TABLES: &[&str] = &[
+    "conversations",
+    "messages",
+    "automation_history",
+    "overlay_events",
+    "context_items",
+    "workflow_definitions",
+    "workflow_executions",
+    "workflow_execution_logs",
+    "published_workflows",
+    "workflow_clones",
+    "workflow_ratings",
+    "workflow_favorites",
+    "workflow_comments",
+    "scheduled_jobs",
+    "job_executions",
+    "browser_sessions",
+    "browser_tabs",
+    "browser_automation_history",
+    "calendar_accounts",
+    "mcp_servers",
+    "mcp_tools_cache",
+    "projects",
+    "project_settings",
+    "project_memories",
+    "user_memory",
+    "daily_logs",
+    "agent_templates",
+    "template_installs",
+    "analytics_snapshots",
+    "user_milestones",
+    "metrics_daily_cache",
+    "realtime_metrics",
+    "automation_benchmarks",
+    "process_benchmarks",
+    "roi_configurations",
+    "background_agents",
+    "agi_tasks",
+    "agi_task_checkpoints",
+    "conversation_branches",
+    "autonomous_sessions",
+    "autonomous_task_logs",
+];
+
 /// Tokenize an UPPERCASED SQL string for table-allowlist checking.
 ///
 /// WHY NOT `split_whitespace()`. The allowlist used to split on whitespace and
@@ -17,79 +82,641 @@ const MAX_QUERY_LENGTH: usize = 10_000;
 ///     SELECT * FROM"settings"          -> token `FROM"SETTINGS"`
 ///     SELECT * FROM/*c*/users          -> token `FROM/*C*/USERS`
 ///
-/// The tool is reachable by indirect prompt injection, and the tables it then
-/// exposes are `auth_sessions` (access and refresh tokens in plaintext),
-/// `users` (password hashes) and `settings` (encrypted key blobs). A guard that
-/// silently does nothing on unusual-but-valid input is worse than no guard,
-/// because the code above it reads as protected.
+/// WHY NOTHING IS CLASSIFIED OR DROPPED HERE. Earlier rounds decided, while
+/// lexing, whether a quoted run stood where a table name belongs, and ERASED it
+/// when they decided it did not. Every bypass since has been a way to fool that
+/// decision. The last one hid a clause-ending keyword inside a nested subquery:
 ///
-/// This strips comments, then treats every character that cannot appear in an
-/// identifier as a separator. `SELECT*FROM X` becomes `SELECT FROM X`, so the
-/// keyword is found and the table after it is checked.
+///     SELECT c.command FROM messages m JOIN messages n
+///       ON n.id = (SELECT max(id) FROM messages WHERE id > 0),
+///          'command_history' c
 ///
-/// A qualified name like `main.auth_sessions` becomes two tokens, so the token
-/// after `FROM` is `MAIN`, which is not in any allowlist and is rejected. That
-/// is deliberate: fail closed on a shape the allowlist was never written to
-/// understand.
-fn sql_identifier_tokens(query_upper: &str) -> Vec<String> {
-    // Strip /* block */ comments.
-    let mut without_block = String::with_capacity(query_upper.len());
-    let bytes: Vec<char> = query_upper.chars().collect();
+/// The inner `WHERE` cleared the "still inside a FROM clause" flag while SQLite
+/// was still reading the OUTER table list, so the comma after it looked like an
+/// ordinary value comma and `'command_history'` was erased from the stream.
+/// Nothing downstream can match a name that is no longer there: the engine
+/// returned the terminal history, and the same shape against `users`,
+/// `auth_sessions` and `settings` returned a password hash, a refresh token and
+/// the encrypted key blob the SEV-DESK-10 exclusion exists for.
+///
+/// So this drops nothing. Every bare word, and the whole contents of every
+/// quoted run in all four forms whatever position it sits in, reaches the token
+/// stream tagged with the parenthesis depth it appeared at. What a token MEANS
+/// is left to the guards, and the guard that draws the boundary
+/// (`first_forbidden_mention`) reads no position at all.
+fn sql_identifier_tokens(query_upper: &str) -> Vec<SqlToken> {
+    let mut tokens: Vec<SqlToken> = Vec::new();
+    let mut depth: usize = 0;
+
+    for piece in sql_pieces(query_upper) {
+        match piece {
+            SqlPiece::OpenParen => depth += 1,
+            SqlPiece::CloseParen => depth = depth.saturating_sub(1),
+            SqlPiece::Comma => tokens.push(SqlToken::comma(depth)),
+            SqlPiece::Word(word) => tokens.push(SqlToken::word(word, depth)),
+            SqlPiece::Quoted(text) => tokens.push(SqlToken::name(quoted_name(text), depth)),
+        }
+    }
+
+    tokens
+}
+
+/// Stands in for a table reference that carries no identifier at all
+/// (`FROM ''`). It is in no allowlist, so the scanners refuse it instead of
+/// reading past it to an alias.
+const UNRESOLVED_IDENTIFIER: &str = "?";
+
+/// SQLite takes the WHOLE contents of a quoted run as one name, so the guards
+/// compare the whole run too. Splitting it into words made `'%SETTINGS%'` carry
+/// the name `SETTINGS`, which is a value, not the table.
+fn quoted_name(text: String) -> String {
+    if text.is_empty() {
+        UNRESOLVED_IDENTIFIER.to_string()
+    } else {
+        text
+    }
+}
+
+/// A token plus the two properties the guards must not lose.
+///
+/// KIND. Quoting decides whether SQLite can read a run as a KEYWORD. `"where"`,
+/// `[where]` and `` `where` `` are identifiers and are legal table aliases,
+/// while a bare `where` cannot be an alias and ends the FROM clause. Collapsing
+/// both into the same bare string let a quoted alias impersonate a
+/// clause-ending keyword and hide the comma that followed it.
+///
+/// DEPTH. A `WHERE`, `GROUP` or `LIMIT` inside a subquery belongs to that
+/// subquery. Reading one as the end of the ENCLOSING FROM clause is what let a
+/// comma-separated table list hide behind an ON constraint.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SqlToken {
+    text: String,
+    kind: TokenKind,
+    depth: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TokenKind {
+    /// Bare text: the only kind that can be a keyword.
+    Word,
+    /// Came out of a quoted run, so it names something and is never a keyword.
+    Name,
+    Comma,
+}
+
+impl SqlToken {
+    fn word(text: impl Into<String>, depth: usize) -> Self {
+        Self {
+            text: text.into(),
+            kind: TokenKind::Word,
+            depth,
+        }
+    }
+
+    fn name(text: impl Into<String>, depth: usize) -> Self {
+        Self {
+            text: text.into(),
+            kind: TokenKind::Name,
+            depth,
+        }
+    }
+
+    fn comma(depth: usize) -> Self {
+        Self {
+            text: ",".to_string(),
+            kind: TokenKind::Comma,
+            depth,
+        }
+    }
+
+    fn keyword(&self, keyword: &str) -> bool {
+        self.kind == TokenKind::Word && self.text == keyword
+    }
+
+    fn is_comma(&self) -> bool {
+        self.kind == TokenKind::Comma
+    }
+
+    fn ends_from_clause(&self) -> bool {
+        self.kind == TokenKind::Word && FROM_CLAUSE_END.contains(&self.text.as_str())
+    }
+
+    /// The name this token can denote, or `None` for punctuation.
+    fn as_name(&self) -> Option<&str> {
+        match self.kind {
+            TokenKind::Comma => None,
+            _ => Some(&self.text),
+        }
+    }
+}
+
+/// A lexed run of SQL.
+///
+/// The four quoting forms collapse into ONE variant deliberately: `'x'`, `"x"`,
+/// `[x]` and `` `x` `` all name the table when they stand where SQLite expects
+/// one, and deciding which runs stand there — during lexing, with no parser —
+/// is the judgement that kept failing open. Lexing the forms rather than
+/// scanning for characters is also what keeps an apostrophe INSIDE one of them
+/// from starting a literal: `SELECT command AS [x'] FROM command_history`
+/// desynchronized a character scanner for the rest of the query, erasing the
+/// FROM clause so no table check ran at all.
+enum SqlPiece {
+    Word(String),
+    Comma,
+    OpenParen,
+    CloseParen,
+    Quoted(String),
+}
+
+fn sql_pieces(query_upper: &str) -> Vec<SqlPiece> {
+    let chars: Vec<char> = query_upper.chars().collect();
+    let mut pieces: Vec<SqlPiece> = Vec::new();
     let mut i = 0;
-    // NOT a depth counter. SQLite does not nest block comments: it terminates
-    // at the FIRST `*/`. A counter diverges from the engine on
-    //
-    //     SELECT * FROM /* a /* b */ auth_sessions
-    //
-    // where the engine ends the comment at the single `*/` and runs against
-    // `auth_sessions`, while a nesting tokenizer stays inside the comment and
-    // swallows the table name. The scanner then sees `[SELECT, FROM]`, finds
-    // nothing after `FROM`, and performs NO allowlist check — the original bug
-    // class exactly: hide the name from the scanner, leave it live for the
-    // engine. Found by an independent review that executed the query against a
-    // real sqlite3 binary rather than reasoning about it.
-    let mut in_comment = false;
-    while i < bytes.len() {
-        if !in_comment && i + 1 < bytes.len() && bytes[i] == '/' && bytes[i + 1] == '*' {
-            in_comment = true;
+
+    while i < chars.len() {
+        let c = chars[i];
+
+        if c == '/' && chars.get(i + 1) == Some(&'*') {
+            // NOT a depth counter. SQLite does not nest block comments: it
+            // terminates at the FIRST `*/`. A counter diverges from the engine on
+            //
+            //     SELECT * FROM /* a /* b */ auth_sessions
+            //
+            // where the engine ends the comment at the single `*/` and runs
+            // against `auth_sessions`, while a nesting tokenizer stays inside the
+            // comment and swallows the table name — the scanner then finds nothing
+            // after `FROM`. Found by an independent review that executed the query
+            // against a real sqlite3 binary rather than reasoning about it.
             i += 2;
+            while i < chars.len() && !(chars[i] == '*' && chars.get(i + 1) == Some(&'/')) {
+                i += 1;
+            }
+            i = i.saturating_add(2).min(chars.len());
             continue;
         }
-        if in_comment && i + 1 < bytes.len() && bytes[i] == '*' && bytes[i + 1] == '/' {
-            in_comment = false;
-            i += 2;
-            without_block.push(' ');
+
+        if c == '-' && chars.get(i + 1) == Some(&'-') {
+            while i < chars.len() && chars[i] != '\n' {
+                i += 1;
+            }
             continue;
         }
-        if !in_comment {
-            without_block.push(bytes[i]);
+
+        if c == '\'' || c == '"' || c == '`' {
+            let (text, next) = quoted_run(&chars, i, c);
+            pieces.push(SqlPiece::Quoted(text));
+            i = next;
+            continue;
         }
+
+        if c == '[' {
+            // Bracket quoting has no escape: the run ends at the first `]`.
+            let start = i + 1;
+            let mut end = start;
+            while end < chars.len() && chars[end] != ']' {
+                end += 1;
+            }
+            pieces.push(SqlPiece::Quoted(chars[start..end].iter().collect()));
+            i = end.saturating_add(1).min(chars.len());
+            continue;
+        }
+
+        if c == ',' {
+            // The comma SURVIVES as its own token. `FROM messages, command_history c`
+            // is a cross join: the second table is read exactly as if it had been
+            // named after FROM, but the scanner only ever reads the token that
+            // follows the keyword. Erasing the comma made that second table
+            // invisible to the allowlist while leaving it live for the engine.
+            pieces.push(SqlPiece::Comma);
+            i += 1;
+            continue;
+        }
+
+        if c == '(' {
+            pieces.push(SqlPiece::OpenParen);
+            i += 1;
+            continue;
+        }
+
+        if c == ')' {
+            pieces.push(SqlPiece::CloseParen);
+            i += 1;
+            continue;
+        }
+
+        if c.is_alphanumeric() || c == '_' {
+            let start = i;
+            // `$` is an identifier character to SQLite, so a name carrying one is
+            // a single token here too rather than two halves that match nothing.
+            while i < chars.len()
+                && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '$')
+            {
+                i += 1;
+            }
+            pieces.push(SqlPiece::Word(chars[start..i].iter().collect()));
+            continue;
+        }
+
         i += 1;
     }
 
-    // Strip `--` line comments.
-    let without_line: String = without_block
-        .lines()
-        .map(|line| match line.find("--") {
-            Some(at) => &line[..at],
-            None => line,
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
+    pieces
+}
 
-    without_line
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '_' {
-                c
-            } else {
-                ' '
+/// Consume a `quote`-delimited run, in which a doubled quote is an escaped
+/// quote rather than the close. An unterminated run consumes the rest of the
+/// input, so nothing after it can be read as a table reference.
+fn quoted_run(chars: &[char], open: usize, quote: char) -> (String, usize) {
+    let mut text = String::new();
+    let mut i = open + 1;
+
+    while i < chars.len() {
+        if chars[i] == quote {
+            if chars.get(i + 1) == Some(&quote) {
+                text.push(quote);
+                i += 2;
+                continue;
             }
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .map(str::to_string)
-        .collect()
+            return (text, i + 1);
+        }
+        text.push(chars[i]);
+        i += 1;
+    }
+
+    (text, chars.len())
+}
+
+/// Why a query is refused by the FROM/JOIN scan.
+enum TableRefusal {
+    NotAllowed(String),
+    ImplicitJoin,
+}
+
+const IMPLICIT_JOIN_REFUSAL: &str = "Comma-separated table lists are not permitted; use an explicit JOIN so every table is checked against the allowlist.";
+
+impl TableRefusal {
+    fn message(&self, in_subquery: bool) -> String {
+        match self {
+            TableRefusal::NotAllowed(table) if in_subquery => {
+                format!("Access to table '{}' is not permitted in subquery.", table)
+            }
+            TableRefusal::NotAllowed(table) => {
+                format!("Access to table '{}' is not permitted.", table)
+            }
+            TableRefusal::ImplicitJoin => IMPLICIT_JOIN_REFUSAL.to_string(),
+        }
+    }
+}
+
+/// Check every table the query can reach through FROM or JOIN.
+///
+/// One scanner, used by both db_query and db_execute: the two used to carry
+/// separate copies of this loop and drifted apart, which is how a stale
+/// allowlist survived in the write path.
+///
+/// A comma inside the FROM clause is refused rather than parsed. After
+/// tokenization `FROM messages, command_history c` and `FROM messages c` are
+/// the same shape, so the members of a table list cannot be told apart from
+/// aliases; refusing the list is the only reading that fails closed.
+///
+/// The clause is delimited BY DEPTH, which is the fix for the last bypass. It
+/// ends at a clause-ending keyword standing at the FROM's own parenthesis
+/// depth, or where a closing parenthesis takes the scan out of the enclosing
+/// query — never at a `WHERE`/`GROUP`/`LIMIT` belonging to a subquery, which is
+/// what `FROM a JOIN b ON b.id = (SELECT max(id) FROM c WHERE id > 0), 'x' y`
+/// used to end the scan on while SQLite was still reading the outer table list.
+/// Commas in the select list, in `IN (...)`, in `ORDER BY a, b` and in a
+/// scalar subquery are all outside the clause and untouched. A comma in an ON
+/// predicate or a `USING (a, b)` is inside it and is refused; that is a
+/// rewrite, not a lost capability.
+fn scan_table_refs(tokens: &[SqlToken], allowed: impl Fn(&str) -> bool) -> Option<TableRefusal> {
+    for (i, token) in tokens.iter().enumerate() {
+        if !token.keyword("FROM") && !token.keyword("JOIN") {
+            continue;
+        }
+
+        // FAIL CLOSED on an unresolvable target. Previously an absent or empty
+        // identifier after FROM/JOIN skipped the allowlist check entirely -- so
+        // any divergence between this tokenizer and the SQL engine became a
+        // BYPASS rather than a denial. Rejecting instead caps the blast radius
+        // of the whole class: a future tokenizer bug can at worst refuse a
+        // legitimate query, never admit a forbidden table.
+        let table = tokens
+            .get(i + 1)
+            .and_then(SqlToken::as_name)
+            .unwrap_or_default();
+        if table.is_empty() || !allowed(&table.to_lowercase()) {
+            return Some(TableRefusal::NotAllowed(table.to_string()));
+        }
+
+        let depth = token.depth;
+        let inside_clause =
+            |t: &SqlToken| t.depth >= depth && !(t.depth == depth && t.ends_from_clause());
+        if tokens[i + 1..]
+            .iter()
+            .take_while(|t| inside_clause(t))
+            .any(|t| t.is_comma())
+        {
+            return Some(TableRefusal::ImplicitJoin);
+        }
+    }
+
+    None
+}
+
+/// Keywords that end a FROM clause, so the comma scan may stop at them.
+///
+/// Only keywords SQLite REFUSES as a table alias belong here. It accepts
+/// `offset` and `window` as aliases (checked against sqlite3 3.50.6), so listing
+/// them let `FROM messages offset, command_history c` end the scan before the
+/// comma while the engine still read both tables. Every keyword below was
+/// re-checked against sqlite3 3.50.6: each is a syntax error in the alias
+/// position. Only `SqlToken::ends_from_clause` consults this list, it requires
+/// an unquoted token — `"where"` is an identifier, not a keyword — and
+/// `scan_table_refs` additionally requires the token to stand at the FROM's own
+/// parenthesis depth.
+const FROM_CLAUSE_END: &[&str] = &[
+    "WHERE",
+    "GROUP",
+    "HAVING",
+    "ORDER",
+    "LIMIT",
+    "UNION",
+    "INTERSECT",
+    "EXCEPT",
+    "RETURNING",
+    "VALUES",
+    "SET",
+];
+
+/// The containment boundary: refuse the query if it so much as names an
+/// existing non-allowlisted table, wherever that name appears.
+///
+/// This check reads no structure — no clause, no position, no depth — because
+/// misjudging structure is what every bypass so far has exploited. A table can
+/// only be read if the SQL names it (ATTACH, WITH, comments and semicolons are
+/// refused before this point), and `sql_identifier_tokens` keeps every name the
+/// query carries, so a syntax that hides `command_history` from the FROM/JOIN
+/// scan still cannot hide it from here.
+///
+/// The price is a refusal when a VALUE spells a forbidden table EXACTLY
+/// (`WHERE title = 'settings'`). SQLite really does read a bare string as a
+/// table name in several positions, and telling those apart by position is the
+/// judgement that kept failing open; a self-describing refusal the model can
+/// rephrase around is the cheap side of that trade. A value that merely
+/// CONTAINS the name (`LIKE '%settings%'`) is a different string and passes, as
+/// do names no table in the database carries — columns, aliases, ordinary text.
+fn first_forbidden_mention(
+    conn: &rusqlite::Connection,
+    tokens: &[SqlToken],
+    allowed: impl Fn(&str) -> bool,
+) -> std::result::Result<Option<String>, String> {
+    let mut stmt = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')")
+        .map_err(|e| format!("Schema lookup error: {}", e))?;
+    let existing: std::collections::HashSet<String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Schema lookup error: {}", e))?
+        .filter_map(|name| name.ok())
+        .map(|name| name.to_lowercase())
+        .collect();
+
+    Ok(tokens.iter().find_map(|token| {
+        let name = token.as_name()?;
+        let lowered = name.to_lowercase();
+        if existing.contains(&lowered) && !allowed(&lowered) {
+            Some(name.to_string())
+        } else {
+            None
+        }
+    }))
+}
+
+/// Tables `db_execute` may write to. A write may also SELECT from anything
+/// `db_query` may read, so the write scans take the union — the two lists used
+/// to be re-typed at each call site and drifted apart.
+const ALLOWED_WRITE_TABLES: &[&str] = &[
+    "conversations",
+    "messages",
+    "user_memory",
+    "daily_logs",
+    "workflow_executions",
+    "workflow_execution_logs",
+    "background_agents",
+    "agi_tasks",
+    "agi_task_checkpoints",
+    "scheduled_jobs",
+    "job_executions",
+    "automation_history",
+];
+
+fn query_table_allowed(table: &str) -> bool {
+    ALLOWED_QUERY_TABLES.contains(&table)
+}
+
+fn write_table_allowed(table: &str) -> bool {
+    ALLOWED_WRITE_TABLES.contains(&table) || ALLOWED_QUERY_TABLES.contains(&table)
+}
+
+/// Operations refused inside a `db_query`. Matched as a WORD, never a substring:
+/// `created_at`, `updated_at` and `deleted_at` are ordinary columns of the
+/// allowlisted tables, and a substring scan refused every query naming one.
+const BLOCKED_QUERY_KEYWORDS: &[&str] = &[
+    "DROP",
+    "TRUNCATE",
+    "DELETE",
+    "ALTER",
+    "CREATE",
+    "INSERT",
+    "UPDATE",
+    "GRANT",
+    "REVOKE",
+    "ATTACH",
+    "DETACH",
+    "PRAGMA",
+    "LOAD_EXTENSION",
+];
+
+/// The same list for `db_execute`, minus the three statements it exists to run,
+/// plus `WITH` — a CTE can name a table the FROM/JOIN scan never reaches.
+const BLOCKED_WRITE_KEYWORDS: &[&str] = &[
+    "DROP",
+    "TRUNCATE",
+    "ALTER",
+    "CREATE",
+    "GRANT",
+    "REVOKE",
+    "ATTACH",
+    "DETACH",
+    "PRAGMA",
+    "LOAD_EXTENSION",
+    "WITH",
+];
+
+/// The whole `db_query` refusal chain, in the order the tool applies it, with
+/// `conn` supplying the schema backstop when a database is available.
+///
+/// It sits outside the tool so a test can replay the REAL chain against a real
+/// database. Every bypass this file has shipped was a divergence between what a
+/// guard read and what SQLite reads, and a test that re-implements the chain
+/// cannot see one — `guard_verdict_matches_sqlite` executes whatever this
+/// function admits and fails if a forbidden row comes back.
+fn db_query_refusal(query: &str, conn: Option<&rusqlite::Connection>) -> Option<String> {
+    if query.len() > MAX_QUERY_LENGTH {
+        tracing::warn!(
+            "[SECURITY] db_query rejected: query exceeds max length ({} > {})",
+            query.len(),
+            MAX_QUERY_LENGTH
+        );
+        return Some(format!(
+            "Query too long ({} chars). Maximum allowed: {} chars.",
+            query.len(),
+            MAX_QUERY_LENGTH
+        ));
+    }
+
+    let query_upper = query.trim().to_uppercase();
+    let tokens = sql_identifier_tokens(&query_upper);
+
+    if !query_upper.starts_with("SELECT") {
+        return Some(
+            "db_query only supports SELECT statements. Use db_execute for modifications."
+                .to_string(),
+        );
+    }
+
+    if tokens.iter().any(|t| t.keyword("WITH")) {
+        return Some("CTE (WITH) queries are not supported for security reasons. Please rewrite without WITH clauses.".to_string());
+    }
+
+    if query.contains(';') {
+        return Some("Multiple SQL statements (semicolons) are not allowed.".to_string());
+    }
+
+    if query.contains("--") || query.contains("/*") {
+        return Some("SQL comments are not allowed in queries.".to_string());
+    }
+
+    for keyword in BLOCKED_QUERY_KEYWORDS {
+        if tokens.iter().any(|t| t.keyword(keyword)) {
+            return Some(format!(
+                "SQL operation '{}' is not allowed in db_query.",
+                keyword
+            ));
+        }
+    }
+
+    if let Some(refusal) = scan_table_refs(&tokens, query_table_allowed) {
+        return Some(refusal.message(false));
+    }
+
+    if let Some(conn) = conn {
+        match first_forbidden_mention(conn, &tokens, query_table_allowed) {
+            Ok(Some(table)) => {
+                return Some(format!("Access to table '{}' is not permitted.", table))
+            }
+            Ok(None) => {}
+            Err(e) => return Some(e),
+        }
+    }
+
+    None
+}
+
+/// The `db_execute` chain, same contract as `db_query_refusal`. Both paths share
+/// the tokenizer, the FROM/JOIN scan and the schema backstop: the write path is
+/// a read path with an extra step, and a bypass of one has always been a bypass
+/// of the other — a write may SELECT a forbidden table into an allowlisted one
+/// the model can then read normally.
+fn db_execute_refusal(query: &str, conn: Option<&rusqlite::Connection>) -> Option<String> {
+    if query.len() > MAX_QUERY_LENGTH {
+        tracing::warn!(
+            "[SECURITY] db_execute rejected: query exceeds max length ({} > {})",
+            query.len(),
+            MAX_QUERY_LENGTH
+        );
+        return Some(format!(
+            "Query too long ({} chars). Maximum allowed: {} chars.",
+            query.len(),
+            MAX_QUERY_LENGTH
+        ));
+    }
+
+    if query.contains(';') {
+        return Some("Multiple SQL statements (semicolons) are not allowed.".to_string());
+    }
+
+    if query.contains("--") || query.contains("/*") {
+        return Some("SQL comments are not allowed in queries.".to_string());
+    }
+
+    let query_upper = query.trim().to_uppercase();
+    let tokens = sql_identifier_tokens(&query_upper);
+
+    let is_modification = query_upper.starts_with("INSERT")
+        || query_upper.starts_with("UPDATE")
+        || query_upper.starts_with("DELETE");
+    if !is_modification {
+        return Some("db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.".to_string());
+    }
+
+    for keyword in BLOCKED_WRITE_KEYWORDS {
+        if tokens.iter().any(|t| t.keyword(keyword)) {
+            return Some(format!(
+                "SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.",
+                keyword
+            ));
+        }
+    }
+
+    let target = if query_upper.starts_with("INSERT") {
+        tokens
+            .iter()
+            .position(|t| t.keyword("INTO"))
+            .and_then(|p| tokens.get(p + 1))
+    } else if query_upper.starts_with("UPDATE") {
+        tokens.get(1)
+    } else {
+        tokens
+            .iter()
+            .position(|t| t.keyword("FROM"))
+            .and_then(|p| tokens.get(p + 1))
+    };
+    // FAIL CLOSED on a target this tokenizer cannot resolve: skipping the check
+    // whenever the name came out empty is the same skip-instead-of-refuse shape
+    // that every bypass so far has attacked.
+    let target = target.and_then(SqlToken::as_name).unwrap_or_default();
+    if !ALLOWED_WRITE_TABLES.contains(&target.to_lowercase().as_str()) {
+        return Some(format!(
+            "Write access to table '{}' is not permitted.",
+            target
+        ));
+    }
+
+    if let Some(refusal) = scan_table_refs(&tokens, write_table_allowed) {
+        return Some(refusal.message(true));
+    }
+
+    if let Some(conn) = conn {
+        match first_forbidden_mention(conn, &tokens, write_table_allowed) {
+            Ok(Some(table)) => {
+                return Some(format!("Access to table '{}' is not permitted.", table))
+            }
+            Ok(None) => {}
+            Err(e) => return Some(e),
+        }
+    }
+
+    None
+}
+
+fn refusal_result(message: String) -> ToolResult {
+    ToolResult {
+        success: false,
+        data: json!({ "error": message.clone(), "success": false }),
+        error: Some(message),
+        metadata: HashMap::new(),
+    }
 }
 
 impl ToolExecutor {
@@ -102,190 +729,26 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing query parameter"))?;
 
-        // SECURITY: Enforce query length limit
-        if query.len() > MAX_QUERY_LENGTH {
-            tracing::warn!(
-                "[SECURITY] db_query rejected: query exceeds max length ({} > {})",
-                query.len(),
-                MAX_QUERY_LENGTH
-            );
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": format!("Query too long ({} chars). Maximum allowed: {} chars.", query.len(), MAX_QUERY_LENGTH), "success": false }),
-                error: Some(format!(
-                    "Query too long ({} chars). Maximum allowed: {} chars.",
-                    query.len(),
-                    MAX_QUERY_LENGTH
-                )),
-                metadata: HashMap::new(),
-            });
-        }
+        let Some(app) = self.app_handle.as_ref() else {
+            // The guards still run without a database so a hostile query is
+            // refused as such rather than reported as an unavailable database.
+            return Ok(refusal_result(
+                db_query_refusal(query, None)
+                    .unwrap_or_else(|| "Database not available".to_string()),
+            ));
+        };
 
-        // Validate it's a SELECT query only (read-only)
-        let query_upper = query.trim().to_uppercase();
-        if !query_upper.starts_with("SELECT") {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": "db_query only supports SELECT statements. Use db_execute for modifications.", "success": false }),
-                error: Some(
-                    "db_query only supports SELECT statements. Use db_execute for modifications."
-                        .to_string(),
-                ),
-                metadata: HashMap::new(),
-            });
-        }
+        use crate::sys::commands::chat::AppDatabase;
+        use tauri::Manager;
 
-        // SECURITY: Block CTE (WITH) queries — they can bypass table allowlist validation
-        // by hiding table references inside CTE definitions.
-        if query_upper.contains("WITH") {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": "CTE (WITH) queries are not supported for security reasons. Please rewrite without WITH clauses.", "success": false }),
-                error: Some("CTE (WITH) queries are not supported for security reasons. Please rewrite without WITH clauses.".to_string()),
-                metadata: HashMap::new(),
-            });
-        }
+        let db = app.state::<AppDatabase>();
+        let conn = match db.conn.lock() {
+            Ok(c) => c,
+            Err(e) => return Ok(refusal_result(format!("Database lock error: {}", e))),
+        };
 
-        // SECURITY: Block stacked queries (multiple statements via semicolons)
-        // and SQL comment injection that could bypass keyword filters
-        if query.contains(';') {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": "Multiple SQL statements (semicolons) are not allowed.", "success": false }),
-                error: Some("Multiple SQL statements (semicolons) are not allowed.".to_string()),
-                metadata: HashMap::new(),
-            });
-        }
-        if query.contains("--") || query.contains("/*") {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": "SQL comments are not allowed in queries.", "success": false }),
-                error: Some("SQL comments are not allowed in queries.".to_string()),
-                metadata: HashMap::new(),
-            });
-        }
-
-        // Block dangerous operations even in SELECT (like subqueries with mutations)
-        let blocked_keywords = [
-            "DROP",
-            "TRUNCATE",
-            "DELETE",
-            "ALTER",
-            "CREATE",
-            "INSERT",
-            "UPDATE",
-            "GRANT",
-            "REVOKE",
-            "ATTACH",
-            "DETACH",
-            "PRAGMA",
-            "LOAD_EXTENSION",
-        ];
-        for keyword in &blocked_keywords {
-            if query_upper.contains(keyword) {
-                return Ok(ToolResult {
-                    success: false,
-                    data: json!({ "error": format!("SQL operation '{}' is not allowed in db_query.", keyword), "success": false }),
-                    error: Some(format!(
-                        "SQL operation '{}' is not allowed in db_query.",
-                        keyword
-                    )),
-                    metadata: HashMap::new(),
-                });
-            }
-        }
-
-        // SECURITY: Table allowlist — LLM may only SELECT from non-sensitive tables.
-        // Sensitive tables (users, auth_sessions, api_keys, master_password, etc.) are excluded.
-        // SEV-DESK-10 fix: `settings` removed. The settings table holds encrypted
-        // API key blobs (provider keys, BYOK material) and OAuth tokens — even
-        // though the values are encrypted, returning them to the LLM means
-        // they cross the user→provider trust boundary (the LLM provider sees
-        // the ciphertext + adjacent metadata, expanding leak surface). The LLM
-        // has no legitimate need to read settings.
-        const ALLOWED_QUERY_TABLES: &[&str] = &[
-            "conversations",
-            "messages",
-            "automation_history",
-            "overlay_events",
-            "command_history",
-            "context_items",
-            "workflow_definitions",
-            "workflow_executions",
-            "workflow_execution_logs",
-            "published_workflows",
-            "workflow_clones",
-            "workflow_ratings",
-            "workflow_favorites",
-            "workflow_comments",
-            "scheduled_jobs",
-            "job_executions",
-            "browser_sessions",
-            "browser_tabs",
-            "browser_automation_history",
-            "calendar_accounts",
-            "mcp_servers",
-            "mcp_tools_cache",
-            "projects",
-            "project_settings",
-            "project_memories",
-            "user_memory",
-            "daily_logs",
-            "agent_templates",
-            "template_installs",
-            "analytics_snapshots",
-            "user_milestones",
-            "metrics_daily_cache",
-            "realtime_metrics",
-            "automation_benchmarks",
-            "process_benchmarks",
-            "roi_configurations",
-            "background_agents",
-            "agi_tasks",
-            "agi_task_checkpoints",
-            "conversation_branches",
-            "autonomous_sessions",
-            "autonomous_task_logs",
-        ];
-        // Extract FROM and JOIN table references and validate each against the allowlist.
-        {
-            let tokens: Vec<String> = sql_identifier_tokens(&query_upper);
-            let mut i = 0;
-            while i < tokens.len() {
-                if tokens[i] == "FROM" || tokens[i] == "JOIN" {
-                    // FAIL CLOSED on an unresolvable target. Previously an
-                    // absent or empty identifier after FROM/JOIN skipped the
-                    // allowlist check entirely — so any divergence between this
-                    // tokenizer and the SQL engine became a BYPASS rather than a
-                    // denial. Rejecting instead caps the blast radius of the
-                    // whole class: a future tokenizer bug can at worst refuse a
-                    // legitimate query, never admit a forbidden table.
-                    let table_name = tokens
-                        .get(i + 1)
-                        .map(|t| {
-                            t.trim_matches(|c: char| !c.is_alphanumeric() && c != '_')
-                                .to_string()
-                        })
-                        .unwrap_or_default();
-                    {
-                        let table_name = table_name.as_str();
-                        if table_name.is_empty()
-                            || !ALLOWED_QUERY_TABLES.contains(&table_name.to_lowercase().as_str())
-                        {
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Access to table '{}' is not permitted.", table_name), "success": false }),
-                                error: Some(format!(
-                                    "Access to table '{}' is not permitted.",
-                                    table_name
-                                )),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    }
-                }
-                i += 1;
-            }
+        if let Some(message) = db_query_refusal(query, Some(&conn)) {
+            return Ok(refusal_result(message));
         }
 
         // SECURITY: Audit log for AI-constructed queries.
@@ -307,110 +770,84 @@ impl ToolExecutor {
             trimmed_query
         );
 
-        if let Some(ref app) = self.app_handle {
-            use crate::sys::commands::chat::AppDatabase;
-            use tauri::Manager;
+        // Execute query and collect results - using a closure to manage lifetimes
+        let query_result: Result<(Vec<String>, Vec<serde_json::Value>, bool), String> = (|| {
+            let mut stmt = conn
+                .prepare(query)
+                .map_err(|e| format!("Query preparation error: {}", e))?;
+            let column_names: Vec<String> =
+                stmt.column_names().iter().map(|s| s.to_string()).collect();
 
-            let db = app.state::<AppDatabase>();
-            let conn = match db.conn.lock() {
-                Ok(c) => c,
-                Err(e) => {
-                    let err_msg = format!("Database lock error: {}", e);
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::new(),
-                    });
+            let mut rows_iter = stmt
+                .query([])
+                .map_err(|e| format!("Query execution error: {}", e))?;
+            let mut rows: Vec<serde_json::Value> = Vec::new();
+            let mut truncated = false;
+
+            while let Some(row) = rows_iter
+                .next()
+                .map_err(|e| format!("Row fetch error: {}", e))?
+            {
+                // SECURITY: Enforce row limit to prevent data exfiltration
+                if rows.len() >= MAX_QUERY_ROWS {
+                    truncated = true;
+                    break;
                 }
-            };
 
-            // Execute query and collect results - using a closure to manage lifetimes
-            let query_result: Result<(Vec<String>, Vec<serde_json::Value>, bool), String> =
-                (|| {
-                    let mut stmt = conn
-                        .prepare(query)
-                        .map_err(|e| format!("Query preparation error: {}", e))?;
-                    let column_names: Vec<String> =
-                        stmt.column_names().iter().map(|s| s.to_string()).collect();
-
-                    let mut rows_iter = stmt
-                        .query([])
-                        .map_err(|e| format!("Query execution error: {}", e))?;
-                    let mut rows: Vec<serde_json::Value> = Vec::new();
-                    let mut truncated = false;
-
-                    while let Some(row) = rows_iter
-                        .next()
-                        .map_err(|e| format!("Row fetch error: {}", e))?
-                    {
-                        // SECURITY: Enforce row limit to prevent data exfiltration
-                        if rows.len() >= MAX_QUERY_ROWS {
-                            truncated = true;
-                            break;
-                        }
-
-                        let mut obj = serde_json::Map::new();
-                        for (idx, col_name) in column_names.iter().enumerate() {
-                            let value: rusqlite::types::Value = row
-                                .get(idx)
-                                .map_err(|e| format!("Column read error: {}", e))?;
-                            obj.insert(
-                                col_name.clone(),
-                                match value {
-                                    rusqlite::types::Value::Null => json!(null),
-                                    rusqlite::types::Value::Integer(n) => json!(n),
-                                    rusqlite::types::Value::Real(f) => json!(f),
-                                    rusqlite::types::Value::Text(s) => json!(s),
-                                    rusqlite::types::Value::Blob(b) => {
-                                        json!(format!("<blob {} bytes>", b.len()))
-                                    }
-                                },
-                            );
-                        }
-                        rows.push(serde_json::Value::Object(obj));
-                    }
-
-                    Ok((column_names, rows, truncated))
-                })();
-
-            match query_result {
-                Ok((column_names, rows, truncated)) => {
-                    let row_count = rows.len();
-                    if truncated {
-                        tracing::warn!(
-                            "[SECURITY][db_query] Result truncated to {} rows (limit: {})",
-                            row_count,
-                            MAX_QUERY_ROWS
-                        );
-                    }
-                    Ok(ToolResult {
-                        success: true,
-                        data: json!({
-                            "columns": column_names,
-                            "rows": rows,
-                            "row_count": row_count,
-                            "truncated": truncated,
-                            "max_rows": MAX_QUERY_ROWS
-                        }),
-                        error: None,
-                        metadata: HashMap::from([("query".to_string(), json!(query))]),
-                    })
+                let mut obj = serde_json::Map::new();
+                for (idx, col_name) in column_names.iter().enumerate() {
+                    let value: rusqlite::types::Value = row
+                        .get(idx)
+                        .map_err(|e| format!("Column read error: {}", e))?;
+                    obj.insert(
+                        col_name.clone(),
+                        match value {
+                            rusqlite::types::Value::Null => json!(null),
+                            rusqlite::types::Value::Integer(n) => json!(n),
+                            rusqlite::types::Value::Real(f) => json!(f),
+                            rusqlite::types::Value::Text(s) => json!(s),
+                            rusqlite::types::Value::Blob(b) => {
+                                json!(format!("<blob {} bytes>", b.len()))
+                            }
+                        },
+                    );
                 }
-                Err(e) => Ok(ToolResult {
-                    success: false,
-                    data: json!({ "error": e.clone(), "success": false }),
-                    error: Some(e),
-                    metadata: HashMap::from([("query".to_string(), json!(query))]),
-                }),
+                rows.push(serde_json::Value::Object(obj));
             }
-        } else {
-            Ok(ToolResult {
+
+            Ok((column_names, rows, truncated))
+        })(
+        );
+
+        match query_result {
+            Ok((column_names, rows, truncated)) => {
+                let row_count = rows.len();
+                if truncated {
+                    tracing::warn!(
+                        "[SECURITY][db_query] Result truncated to {} rows (limit: {})",
+                        row_count,
+                        MAX_QUERY_ROWS
+                    );
+                }
+                Ok(ToolResult {
+                    success: true,
+                    data: json!({
+                        "columns": column_names,
+                        "rows": rows,
+                        "row_count": row_count,
+                        "truncated": truncated,
+                        "max_rows": MAX_QUERY_ROWS
+                    }),
+                    error: None,
+                    metadata: HashMap::from([("query".to_string(), json!(query))]),
+                })
+            }
+            Err(e) => Ok(ToolResult {
                 success: false,
-                data: json!({ "error": "Database not available", "success": false }),
-                error: Some("Database not available".to_string()),
-                metadata: HashMap::new(),
-            })
+                data: json!({ "error": e.clone(), "success": false }),
+                error: Some(e),
+                metadata: HashMap::from([("query".to_string(), json!(query))]),
+            }),
         }
     }
 
@@ -423,222 +860,24 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("Missing query parameter"))?;
 
-        // SECURITY: Enforce query length limit
-        if query.len() > MAX_QUERY_LENGTH {
-            tracing::warn!(
-                "[SECURITY] db_execute rejected: query exceeds max length ({} > {})",
-                query.len(),
-                MAX_QUERY_LENGTH
-            );
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": format!("Query too long ({} chars). Maximum allowed: {} chars.", query.len(), MAX_QUERY_LENGTH), "success": false }),
-                error: Some(format!(
-                    "Query too long ({} chars). Maximum allowed: {} chars.",
-                    query.len(),
-                    MAX_QUERY_LENGTH
-                )),
-                metadata: HashMap::new(),
-            });
-        }
+        let Some(app) = self.app_handle.as_ref() else {
+            return Ok(refusal_result(
+                db_execute_refusal(query, None)
+                    .unwrap_or_else(|| "Database not available".to_string()),
+            ));
+        };
 
-        // SECURITY: Block stacked queries and SQL comment injection
-        if query.contains(';') {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": "Multiple SQL statements (semicolons) are not allowed.", "success": false }),
-                error: Some("Multiple SQL statements (semicolons) are not allowed.".to_string()),
-                metadata: HashMap::new(),
-            });
-        }
-        if query.contains("--") || query.contains("/*") {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": "SQL comments are not allowed in queries.", "success": false }),
-                error: Some("SQL comments are not allowed in queries.".to_string()),
-                metadata: HashMap::new(),
-            });
-        }
+        use crate::sys::commands::chat::AppDatabase;
+        use tauri::Manager;
 
-        // Validate it's a modification query (INSERT, UPDATE, DELETE)
-        let query_upper = query.trim().to_uppercase();
-        let is_modification = query_upper.starts_with("INSERT")
-            || query_upper.starts_with("UPDATE")
-            || query_upper.starts_with("DELETE");
+        let db = app.state::<AppDatabase>();
+        let conn = match db.conn.lock() {
+            Ok(c) => c,
+            Err(e) => return Ok(refusal_result(format!("Database lock error: {}", e))),
+        };
 
-        if !is_modification {
-            return Ok(ToolResult {
-                success: false,
-                data: json!({ "error": "db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.", "success": false }),
-                error: Some("db_execute only supports INSERT, UPDATE, or DELETE statements. Use db_query for SELECT.".to_string()),
-                metadata: HashMap::new(),
-            });
-        }
-
-        // Block dangerous DDL operations and CTEs (which can bypass table allowlist)
-        let blocked_keywords = [
-            "DROP",
-            "TRUNCATE",
-            "ALTER",
-            "CREATE",
-            "GRANT",
-            "REVOKE",
-            "ATTACH",
-            "DETACH",
-            "PRAGMA",
-            "LOAD_EXTENSION",
-            "WITH",
-        ];
-        for keyword in &blocked_keywords {
-            if query_upper.contains(keyword) {
-                return Ok(ToolResult {
-                    success: false,
-                    data: json!({ "error": format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword), "success": false }),
-                    error: Some(format!("SQL operation '{}' is not allowed. Only INSERT, UPDATE, DELETE are permitted.", keyword)),
-                    metadata: HashMap::new(),
-                });
-            }
-        }
-
-        // SECURITY: Table allowlist for write operations — very narrow set.
-        const ALLOWED_WRITE_TABLES: &[&str] = &[
-            "conversations",
-            "messages",
-            "user_memory",
-            "daily_logs",
-            "workflow_executions",
-            "workflow_execution_logs",
-            "background_agents",
-            "agi_tasks",
-            "agi_task_checkpoints",
-            "scheduled_jobs",
-            "job_executions",
-            "automation_history",
-        ];
-        {
-            let tokens: Vec<String> = sql_identifier_tokens(&query_upper);
-            // For INSERT: "INSERT INTO table_name"
-            // For UPDATE: "UPDATE table_name"
-            // For DELETE: "DELETE FROM table_name"
-            let table_name_opt = if query_upper.starts_with("INSERT") {
-                tokens
-                    .iter()
-                    .position(|t| t == "INTO")
-                    .and_then(|p| tokens.get(p + 1))
-            } else if query_upper.starts_with("UPDATE") {
-                tokens.get(1)
-            } else if query_upper.starts_with("DELETE") {
-                tokens
-                    .iter()
-                    .position(|t| t == "FROM")
-                    .and_then(|p| tokens.get(p + 1))
-            } else {
-                None
-            };
-            if let Some(table_token) = table_name_opt {
-                let table_name =
-                    table_token.trim_matches(|c: char| !c.is_alphanumeric() && c != '_');
-                if !table_name.is_empty()
-                    && !ALLOWED_WRITE_TABLES.contains(&table_name.to_lowercase().as_str())
-                {
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": format!("Write access to table '{}' is not permitted.", table_name), "success": false }),
-                        error: Some(format!(
-                            "Write access to table '{}' is not permitted.",
-                            table_name
-                        )),
-                        metadata: HashMap::new(),
-                    });
-                }
-            }
-
-            // SECURITY: Also validate FROM/JOIN table references in embedded SELECT subqueries.
-            // Write queries like "INSERT INTO t SELECT ... FROM sensitive_table" can exfiltrate data.
-            // Re-use the same ALLOWED_QUERY_TABLES allowlist from execute_db_query_tool.
-            const ALLOWED_QUERY_TABLES: &[&str] = &[
-                "conversations",
-                "messages",
-                "settings",
-                "automation_history",
-                "overlay_events",
-                "command_history",
-                "context_items",
-                "workflow_definitions",
-                "workflow_executions",
-                "workflow_execution_logs",
-                "published_workflows",
-                "workflow_clones",
-                "workflow_ratings",
-                "workflow_favorites",
-                "workflow_comments",
-                "scheduled_jobs",
-                "job_executions",
-                "browser_sessions",
-                "browser_tabs",
-                "browser_automation_history",
-                "calendar_accounts",
-                "mcp_servers",
-                "mcp_tools_cache",
-                "projects",
-                "project_settings",
-                "project_memories",
-                "user_memory",
-                "daily_logs",
-                "agent_templates",
-                "template_installs",
-                "analytics_snapshots",
-                "user_milestones",
-                "metrics_daily_cache",
-                "realtime_metrics",
-                "automation_benchmarks",
-                "process_benchmarks",
-                "roi_configurations",
-                "background_agents",
-                "agi_tasks",
-                "agi_task_checkpoints",
-                "conversation_branches",
-                "autonomous_sessions",
-                "autonomous_task_logs",
-            ];
-            let mut i = 0;
-            while i < tokens.len() {
-                if tokens[i] == "FROM" || tokens[i] == "JOIN" {
-                    // FAIL CLOSED on an unresolvable target. Previously an
-                    // absent or empty identifier after FROM/JOIN skipped the
-                    // allowlist check entirely — so any divergence between this
-                    // tokenizer and the SQL engine became a BYPASS rather than a
-                    // denial. Rejecting instead caps the blast radius of the
-                    // whole class: a future tokenizer bug can at worst refuse a
-                    // legitimate query, never admit a forbidden table.
-                    let table_name = tokens
-                        .get(i + 1)
-                        .map(|t| {
-                            t.trim_matches(|c: char| !c.is_alphanumeric() && c != '_')
-                                .to_string()
-                        })
-                        .unwrap_or_default();
-                    {
-                        let table_name = table_name.as_str();
-                        if table_name.is_empty()
-                            || (!ALLOWED_WRITE_TABLES.contains(&table_name.to_lowercase().as_str())
-                                && !ALLOWED_QUERY_TABLES
-                                    .contains(&table_name.to_lowercase().as_str()))
-                        {
-                            return Ok(ToolResult {
-                                success: false,
-                                data: json!({ "error": format!("Access to table '{}' is not permitted in subquery.", table_name), "success": false }),
-                                error: Some(format!(
-                                    "Access to table '{}' is not permitted in subquery.",
-                                    table_name
-                                )),
-                                metadata: HashMap::new(),
-                            });
-                        }
-                    }
-                }
-                i += 1;
-            }
+        if let Some(message) = db_execute_refusal(query, Some(&conn)) {
+            return Ok(refusal_result(message));
         }
 
         // SECURITY: Audit log for AI-constructed mutations (elevated risk)
@@ -647,48 +886,22 @@ impl ToolExecutor {
             query
         );
 
-        if let Some(ref app) = self.app_handle {
-            use crate::sys::commands::chat::AppDatabase;
-            use tauri::Manager;
-
-            let db = app.state::<AppDatabase>();
-            let conn = match db.conn.lock() {
-                Ok(c) => c,
-                Err(e) => {
-                    let err_msg = format!("Database lock error: {}", e);
-                    return Ok(ToolResult {
-                        success: false,
-                        data: json!({ "error": err_msg.clone(), "success": false }),
-                        error: Some(err_msg),
-                        metadata: HashMap::new(),
-                    });
-                }
-            };
-
-            match conn.execute(query, []) {
-                Ok(rows_affected) => Ok(ToolResult {
-                    success: true,
-                    data: json!({
-                        "rows_affected": rows_affected,
-                        "query": query
-                    }),
-                    error: None,
-                    metadata: HashMap::from([("query".to_string(), json!(query))]),
+        match conn.execute(query, []) {
+            Ok(rows_affected) => Ok(ToolResult {
+                success: true,
+                data: json!({
+                    "rows_affected": rows_affected,
+                    "query": query
                 }),
-                Err(e) => Ok(ToolResult {
-                    success: false,
-                    data: json!({ "error": format!("Query execution error: {}", e), "success": false }),
-                    error: Some(format!("Query execution error: {}", e)),
-                    metadata: HashMap::from([("query".to_string(), json!(query))]),
-                }),
-            }
-        } else {
-            Ok(ToolResult {
+                error: None,
+                metadata: HashMap::from([("query".to_string(), json!(query))]),
+            }),
+            Err(e) => Ok(ToolResult {
                 success: false,
-                data: json!({ "error": "Database not available", "success": false }),
-                error: Some("Database not available".to_string()),
-                metadata: HashMap::new(),
-            })
+                data: json!({ "error": format!("Query execution error: {}", e), "success": false }),
+                error: Some(format!("Query execution error: {}", e)),
+                metadata: HashMap::from([("query".to_string(), json!(query))]),
+            }),
         }
     }
 
@@ -851,15 +1064,23 @@ impl ToolExecutor {
 
 #[cfg(test)]
 mod sql_tokenizer_tests {
-    use super::sql_identifier_tokens;
+    use super::{sql_identifier_tokens, SqlToken, TokenKind};
 
     fn table_after_keyword(query: &str, keyword: &str) -> Option<String> {
         let tokens = sql_identifier_tokens(&query.to_uppercase());
         tokens
             .iter()
-            .position(|t| t == keyword)
+            .position(|t| t.keyword(keyword))
             .and_then(|p| tokens.get(p + 1))
-            .cloned()
+            .and_then(SqlToken::as_name)
+            .map(str::to_string)
+    }
+
+    fn token_texts(query: &str) -> Vec<String> {
+        sql_identifier_tokens(&query.to_uppercase())
+            .iter()
+            .map(|t| t.text.clone())
+            .collect()
     }
 
     /// The bypasses. Each of these used to produce a token that never equalled
@@ -951,11 +1172,1039 @@ mod sql_tokenizer_tests {
         );
     }
 
+    /// The comma bypass. `SELECT c.command FROM messages, command_history c` is
+    /// a cross join, so SQLite reads command_history exactly as if it had been
+    /// named after FROM — but the scanner only reads the token that follows the
+    /// keyword, and the old tokenizer erased the comma, leaving the second
+    /// table invisible to the allowlist and live for the engine. Verified by an
+    /// independent reviewer against a real sqlite3 database: the direct form was
+    /// refused, the comma form returned the history row.
+    #[test]
+    fn a_comma_survives_tokenization_so_a_table_list_is_visible() {
+        assert_eq!(
+            token_texts("SELECT C.COMMAND FROM MESSAGES, COMMAND_HISTORY C"),
+            vec![
+                "SELECT",
+                "C",
+                "COMMAND",
+                "FROM",
+                "MESSAGES",
+                ",",
+                "COMMAND_HISTORY",
+                "C"
+            ]
+        );
+    }
+
+    /// A quoted run is kept WHOLE and wherever it stands. Erasing the runs a
+    /// lexer judged to be values is how `'command_history'` vanished from the
+    /// stream once a nested `WHERE` fooled that judgement; keeping the whole run
+    /// rather than the words inside it is what stops `'%SETTINGS%'` — a value,
+    /// not the table — from spelling a table name.
+    #[test]
+    fn a_quoted_run_is_kept_whole_and_is_never_erased() {
+        assert_eq!(
+            token_texts("SELECT ID FROM MESSAGES WHERE CONTENT LIKE '%SETTINGS%'"),
+            vec![
+                "SELECT",
+                "ID",
+                "FROM",
+                "MESSAGES",
+                "WHERE",
+                "CONTENT",
+                "LIKE",
+                "%SETTINGS%"
+            ]
+        );
+        assert_eq!(
+            table_after_keyword(
+                "SELECT * FROM messages WHERE a = 'it''s from users'",
+                "FROM"
+            ),
+            Some("MESSAGES".to_string())
+        );
+    }
+
     #[test]
     fn newlines_and_tabs_are_still_separators() {
         assert_eq!(
             table_after_keyword("SELECT *\n\tFROM\n\tconversations", "FROM"),
             Some("CONVERSATIONS".to_string())
+        );
+    }
+
+    /// SQLite accepts a quoted string where a table name belongs — `'x'`,
+    /// `"x"`, `[x]` and `` `x` `` all NAME the table there. Erasing a literal's
+    /// contents therefore hid the table from the FROM/JOIN scan and from the
+    /// schema backstop while leaving it live for the engine: an independent
+    /// reviewer ran `FROM 'command_history' messages` against sqlite3 3.50.6
+    /// and got the history row back, and `FROM 'users' conversations` returned
+    /// a password hash — the exclusions the allowlist exists for.
+    #[test]
+    fn a_quoted_table_name_is_read_as_an_identifier() {
+        for sql in [
+            "SELECT messages.command FROM 'command_history' messages LIMIT 20",
+            "SELECT command FROM \"command_history\"",
+            "SELECT command FROM [command_history]",
+            "SELECT command FROM `command_history`",
+            "SELECT * FROM ('command_history')",
+        ] {
+            assert_eq!(
+                table_after_keyword(sql, "FROM"),
+                Some("COMMAND_HISTORY".to_string()),
+                "expected {:?} to resolve to the quoted table",
+                sql
+            );
+        }
+
+        assert_eq!(
+            table_after_keyword(
+                "SELECT h.command FROM messages m JOIN 'command_history' h ON 1=1",
+                "JOIN"
+            ),
+            Some("COMMAND_HISTORY".to_string())
+        );
+        assert_eq!(
+            table_after_keyword("INSERT INTO 'users' (messages) VALUES ('x')", "INTO"),
+            Some("USERS".to_string())
+        );
+        assert_eq!(
+            token_texts("UPDATE 'USERS' SET PASSWORD_HASH = 'X'")
+                .get(1)
+                .cloned(),
+            Some("USERS".to_string())
+        );
+    }
+
+    /// The tokenizer no longer judges where a literal sits, so one in a value
+    /// position reaches the stream too and the schema check gets to see it.
+    /// That judgement is precisely what four bypasses in a row attacked.
+    #[test]
+    fn a_literal_in_a_value_position_reaches_the_token_stream() {
+        assert_eq!(
+            token_texts("SELECT ID FROM CONVERSATIONS WHERE TITLE IN ('USERS', 'SETTINGS')"),
+            vec![
+                "SELECT",
+                "ID",
+                "FROM",
+                "CONVERSATIONS",
+                "WHERE",
+                "TITLE",
+                "IN",
+                "USERS",
+                ",",
+                "SETTINGS"
+            ]
+        );
+        assert_eq!(
+            token_texts("SELECT ID, 'USERS' FROM CONVERSATIONS"),
+            vec!["SELECT", "ID", ",", "USERS", "FROM", "CONVERSATIONS"]
+        );
+    }
+
+    /// A quoted run can never be a keyword, whatever it spells. SQLite reads
+    /// `"where"` as an identifier — a legal table alias — so treating it as the
+    /// WHERE keyword ended the FROM-clause scan early and hid the comma that
+    /// followed, which is the whole of the round-3 bypass.
+    #[test]
+    fn a_quoted_run_is_a_name_and_never_a_keyword() {
+        let tokens =
+            sql_identifier_tokens("SELECT C.COMMAND FROM MESSAGES \"WHERE\", 'COMMAND_HISTORY' C");
+
+        let alias = tokens
+            .iter()
+            .find(|t| t.text == "WHERE")
+            .expect("the quoted alias is kept as a token");
+        assert_eq!(alias.kind, TokenKind::Name);
+        assert!(!alias.ends_from_clause());
+        assert!(!alias.keyword("WHERE"));
+
+        assert!(
+            tokens.iter().any(|t| t.text == "COMMAND_HISTORY"),
+            "the table named after the comma must reach the token stream: {:?}",
+            tokens
+        );
+    }
+
+    /// `expr IN <table-name>` is a table reference in SQLite (`'x' IN 'audit'`
+    /// runs against the table, verified against sqlite3 3.50.6), while
+    /// `IN ('audit')` is an ordinary value list — and a parenthesis was the only
+    /// thing telling them apart. Both keep the name now: a guard that has to be
+    /// right about that to stay closed is a guard that fails OPEN when it is
+    /// wrong, and being wrong is the whole history of this file.
+    #[test]
+    fn a_literal_after_in_keeps_its_name_with_or_without_a_value_list() {
+        assert!(
+            token_texts("SELECT ID FROM MESSAGES WHERE X IN 'COMMAND_HISTORY'")
+                .contains(&"COMMAND_HISTORY".to_string())
+        );
+        assert!(
+            token_texts("SELECT ID FROM MESSAGES WHERE X IN ('COMMAND_HISTORY')")
+                .contains(&"COMMAND_HISTORY".to_string())
+        );
+    }
+
+    /// The round-4 bypass, at the tokenizer. A clause-ending keyword inside a
+    /// subquery belongs to THAT subquery: reading the `WHERE` of an ON
+    /// constraint as the end of the enclosing FROM clause hid the comma that
+    /// followed it, and with the comma the second table of a cross join.
+    /// Verified by an independent reviewer against sqlite3 3.50.6, which
+    /// returned the terminal history for this query.
+    #[test]
+    fn a_nested_clause_keyword_belongs_to_its_own_subquery() {
+        let tokens = sql_identifier_tokens(
+            "SELECT C.COMMAND FROM MESSAGES M JOIN MESSAGES N ON N.ID = (SELECT MAX(ID) FROM MESSAGES WHERE ID > 0), 'COMMAND_HISTORY' C LIMIT 5",
+        );
+
+        let nested_where = tokens
+            .iter()
+            .find(|t| t.text == "WHERE")
+            .expect("the subquery keeps its WHERE");
+        assert_eq!(nested_where.depth, 1);
+
+        let comma = tokens
+            .iter()
+            .find(|t| t.is_comma())
+            .expect("the outer table list keeps its comma");
+        assert_eq!(comma.depth, 0);
+
+        assert!(
+            tokens.iter().any(|t| t.text == "COMMAND_HISTORY"),
+            "the table named after the comma must reach the token stream: {:?}",
+            tokens
+        );
+    }
+
+    /// An apostrophe inside a quoted IDENTIFIER is content, not the start of a
+    /// literal. A character scan desynchronized on it and erased everything
+    /// after — including the FROM clause — so NO table check ran at all, while
+    /// sqlite3 returned command_history for the same query.
+    #[test]
+    fn an_apostrophe_inside_a_quoted_identifier_does_not_erase_the_query() {
+        for sql in [
+            "SELECT command AS [x'] FROM command_history",
+            "SELECT command AS `y'` FROM command_history",
+            "SELECT command AS \"z'\" FROM command_history",
+        ] {
+            assert_eq!(
+                table_after_keyword(sql, "FROM"),
+                Some("COMMAND_HISTORY".to_string()),
+                "expected {:?} to still expose its FROM clause",
+                sql
+            );
+        }
+    }
+
+    /// A table reference carrying no identifier resolves to a name no allowlist
+    /// holds, so the scanners refuse instead of reading past it to the alias.
+    #[test]
+    fn an_empty_quoted_table_reference_resolves_to_nothing_usable() {
+        assert_eq!(
+            table_after_keyword("SELECT * FROM '' messages", "FROM"),
+            Some("?".to_string())
+        );
+    }
+}
+
+#[cfg(test)]
+mod query_allowlist_tests {
+    use super::*;
+    use crate::core::agi::tools::ToolRegistry;
+    use std::sync::Arc;
+
+    fn executor() -> ToolExecutor {
+        ToolExecutor::new(Arc::new(ToolRegistry::new().expect("registry")))
+    }
+
+    fn query(sql: &str) -> HashMap<String, Value> {
+        let mut args = HashMap::new();
+        args.insert("query".to_string(), json!(sql));
+        args
+    }
+
+    /// F26: terminal history is written by SessionManager::send_input and its
+    /// secret scrubber is pattern-based, so the table can hold live credentials.
+    /// The tool is reachable by indirect prompt injection and its output goes to
+    /// the configured provider, so the read must be refused outright.
+    #[tokio::test]
+    async fn db_query_refuses_command_history() {
+        let result = executor()
+            .execute_db_query_tool(&query("SELECT command FROM command_history"))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Access to table 'COMMAND_HISTORY' is not permitted"));
+    }
+
+    #[tokio::test]
+    async fn db_query_refuses_settings() {
+        let result = executor()
+            .execute_db_query_tool(&query("SELECT value FROM settings"))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Access to table 'SETTINGS' is not permitted"));
+    }
+
+    /// A db_execute subquery used a second, stale copy of the allowlist that
+    /// still carried both tables; both paths now read the one const.
+    #[tokio::test]
+    async fn db_execute_subquery_refuses_command_history() {
+        let result = executor()
+            .execute_db_execute_tool(&query(
+                "INSERT INTO messages (content) SELECT command FROM command_history",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result.error.unwrap_or_default().contains("not permitted"));
+    }
+
+    /// F26 residual: the allowlist removal only holds if the enforcement sees
+    /// every table. A comma-separated table list put command_history back in
+    /// reach of the model with one character; the direct form was refused while
+    /// this one was allowed.
+    #[tokio::test]
+    async fn db_query_refuses_command_history_through_a_comma_join() {
+        let result = executor()
+            .execute_db_query_tool(&query(
+                "SELECT c.command FROM messages, command_history c LIMIT 20",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Comma-separated table lists are not permitted"));
+    }
+
+    #[tokio::test]
+    async fn db_execute_subquery_refuses_a_comma_joined_table() {
+        let result = executor()
+            .execute_db_execute_tool(&query(
+                "INSERT INTO messages (content) SELECT c.command FROM messages, command_history c",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Comma-separated table lists are not permitted"));
+    }
+
+    /// `offset` and `window` are keywords SQLite accepts as table aliases, so
+    /// ending the clause scan on them let the comma — and the table after it —
+    /// slip past while the engine still read both tables.
+    #[tokio::test]
+    async fn db_query_refuses_a_comma_list_hidden_behind_a_keyword_alias() {
+        for sql in [
+            "SELECT c.command FROM messages offset, command_history c",
+            "SELECT c.command FROM messages window, command_history c",
+        ] {
+            let result = executor()
+                .execute_db_query_tool(&query(sql))
+                .await
+                .expect("guard returns a tool result, not an error");
+
+            assert!(!result.success);
+            assert!(
+                result
+                    .error
+                    .unwrap_or_default()
+                    .contains("Comma-separated table lists are not permitted"),
+                "expected {:?} to be refused",
+                sql
+            );
+        }
+    }
+
+    /// F26 residual, round 4. Removing `offset`/`window` from the clause-end
+    /// list was necessary but not sufficient: QUOTING re-admits every reserved
+    /// keyword as an alias, and the tokenizer used to strip the quotes and push
+    /// the bare word, so `FROM messages "where",` ended the clause scan before
+    /// the comma and the implicit-join refusal never fired. The literal naming
+    /// the second table was erased in the same pass, so the schema backstop had
+    /// nothing to match either — the guard saw one allowlisted table while
+    /// sqlite3 3.50.6 read a two-table cross join and returned the rows:
+    /// `SELECT c.command FROM messages "where", 'command_history' c` returned a
+    /// live bearer token, `... , 'users' u` a password hash, and `... ,
+    /// 'settings' s` the SEV-DESK-10 blob the exclusion exists for.
+    #[tokio::test]
+    async fn db_query_refuses_a_comma_list_hidden_behind_a_quoted_alias() {
+        for sql in [
+            "SELECT c.command FROM messages \"where\", 'command_history' c LIMIT 20",
+            "SELECT c.command FROM messages [group], 'command_history' c",
+            "SELECT c.command FROM messages `limit`, 'command_history' c",
+            "SELECT c.command FROM messages AS \"limit\", 'command_history' c",
+            "SELECT * FROM messages \"where\", 'command_history'",
+            "SELECT c.command FROM messages \"where\", \"command_history\" c",
+            "SELECT u.password_hash FROM messages \"where\", 'users' u",
+            "SELECT s.v FROM conversations \"limit\", 'settings' s",
+            "SELECT c.command FROM messages 'where', 'command_history' c",
+            "SELECT c.command FROM (messages, 'command_history' c)",
+        ] {
+            let result = executor()
+                .execute_db_query_tool(&query(sql))
+                .await
+                .expect("guard returns a tool result, not an error");
+
+            assert!(!result.success, "expected {:?} to be refused", sql);
+            assert!(
+                result
+                    .error
+                    .unwrap_or_default()
+                    .contains("Comma-separated table lists are not permitted"),
+                "expected {:?} to be refused as a table list",
+                sql
+            );
+        }
+    }
+
+    /// The write path shares the tokenizer, so the same quoted alias let the
+    /// model copy the history into an allowlisted table and read it back.
+    #[tokio::test]
+    async fn db_execute_refuses_a_comma_list_hidden_behind_a_quoted_alias() {
+        let result = executor()
+            .execute_db_execute_tool(&query(
+                "INSERT INTO messages (content) SELECT c.command FROM messages \"where\", 'command_history' c",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Comma-separated table lists are not permitted"));
+    }
+
+    /// F26 residual, round 5 — the shape the round-4 guard still allowed. A
+    /// clause-ending keyword placed inside a NESTED subquery (the `WHERE` of an
+    /// ON constraint, or a `GROUP BY`) cleared the tokenizer's single
+    /// non-nesting "inside a FROM clause" flag while SQLite was still reading
+    /// the OUTER table list. The comma that followed was then read as a value
+    /// comma, so the literal naming the second table was erased from the stream
+    /// and neither the implicit-join refusal nor the schema backstop had
+    /// anything to match. An independent reviewer ran these against sqlite3
+    /// 3.50.6 on a seeded database: the first returned a live bearer token from
+    /// the terminal history, and the `users`, `settings` and `auth_sessions`
+    /// variants returned a password hash, an encrypted key blob and a refresh
+    /// token — the exclusions the allowlist exists for.
+    #[tokio::test]
+    async fn db_query_refuses_a_comma_list_hidden_behind_a_nested_clause_keyword() {
+        for sql in [
+            "SELECT c.command FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'command_history' c LIMIT 5",
+            "SELECT c.command FROM messages m JOIN messages n ON n.id IN (SELECT id FROM messages GROUP BY id), 'command_history' c",
+            "SELECT u.password_hash FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'users' u",
+            "SELECT s.value FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'settings' s",
+            "SELECT a.token FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages GROUP BY id), 'auth_sessions' a",
+        ] {
+            let result = executor()
+                .execute_db_query_tool(&query(sql))
+                .await
+                .expect("guard returns a tool result, not an error");
+
+            assert!(!result.success, "expected {:?} to be refused", sql);
+            assert!(
+                result
+                    .error
+                    .unwrap_or_default()
+                    .contains("Comma-separated table lists are not permitted"),
+                "expected {:?} to be refused as a table list",
+                sql
+            );
+        }
+    }
+
+    /// The write path shares the scanner, so the same shape let the model copy
+    /// the history — or a password hash — into an allowlisted table and read it
+    /// back with an ordinary SELECT.
+    #[tokio::test]
+    async fn db_execute_refuses_a_comma_list_hidden_behind_a_nested_clause_keyword() {
+        for sql in [
+            "INSERT INTO messages (content) SELECT c.command FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'command_history' c",
+            "INSERT INTO messages (content) SELECT u.password_hash FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'users' u",
+        ] {
+            let result = executor()
+                .execute_db_execute_tool(&query(sql))
+                .await
+                .expect("guard returns a tool result, not an error");
+
+            assert!(!result.success, "expected {:?} to be refused", sql);
+            assert!(
+                result
+                    .error
+                    .unwrap_or_default()
+                    .contains("Comma-separated table lists are not permitted"),
+                "expected {:?} to be refused as a table list",
+                sql
+            );
+        }
+    }
+
+    /// Every shape this bypass has taken, in one net. The assertion is
+    /// deliberately vague about WHICH guard refuses and exact about the
+    /// outcome: no hostile shape may reach the engine. With no Tauri app handle
+    /// an ALLOWED query stops at "Database not available", so that message is
+    /// the tell that a guard let one through.
+    #[tokio::test]
+    async fn no_known_table_hiding_shape_reaches_the_database() {
+        for sql in [
+            "SELECT command FROM command_history",
+            "SELECT*FROM command_history",
+            "SELECT * FROM main.command_history",
+            "SELECT * FROM sqlite_master",
+            "SELECT * FROM 'command_history'",
+            "SELECT * FROM [command_history]",
+            "SELECT * FROM ('command_history')",
+            "SELECT command AS [x'] FROM command_history",
+            "SELECT c.command FROM messages, command_history c",
+            "SELECT c.command FROM messages offset, command_history c",
+            "SELECT c.command FROM messages \"where\", 'command_history' c",
+            "SELECT c.command FROM messages [group], 'command_history' c",
+            "SELECT id FROM messages WHERE id IN (SELECT id FROM 'command_history')",
+            "SELECT * FROM pragma_table_info('users')",
+            "SELECT c.command FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'command_history' c LIMIT 5",
+            "SELECT c.command FROM messages m JOIN messages n ON n.id IN (SELECT id FROM messages GROUP BY id), 'command_history' c",
+            "SELECT c.command FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id IN (SELECT id FROM messages WHERE id > 0)), 'command_history' c",
+            "SELECT c.command FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages \"where\" WHERE id > 0), 'command_history' c",
+            "SELECT u.password_hash FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'users' u",
+            "SELECT * FROM messages m JOIN (SELECT id FROM messages) x ON 1 = 1, 'auth_sessions' a",
+        ] {
+            let result = executor()
+                .execute_db_query_tool(&query(sql))
+                .await
+                .expect("guard returns a tool result, not an error");
+
+            assert!(!result.success, "expected {:?} to be refused", sql);
+            let error = result.error.unwrap_or_default();
+            assert!(
+                !error.contains("Database not available"),
+                "{:?} reached the database: {}",
+                sql,
+                error
+            );
+        }
+    }
+
+    /// A pragma table-valued function reaches the schema of any table named in
+    /// its argument, and the blocked-keyword scan does not see it because
+    /// `pragma_table_info` is one word. The FROM allowlist does.
+    #[tokio::test]
+    async fn db_query_refuses_a_pragma_table_function() {
+        let result = executor()
+            .execute_db_query_tool(&query("SELECT * FROM pragma_table_info('command_history')"))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Access to table 'PRAGMA_TABLE_INFO' is not permitted"));
+    }
+
+    /// A scalar subquery sits inside the select list, not the FROM clause, so
+    /// the comma beside it is ordinary SQL. Delimiting the clause by depth is
+    /// what tells the two apart; the previous scan refused this.
+    #[tokio::test]
+    async fn db_query_still_allows_a_scalar_subquery_beside_a_select_list_comma() {
+        let result = executor()
+            .execute_db_query_tool(&query(
+                "SELECT id, (SELECT count(*) FROM messages), title FROM conversations LIMIT 5",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Database not available"));
+    }
+
+    /// The blocked-operation scan matches a WORD. As a substring it refused
+    /// every query naming `created_at`, `updated_at` or `deleted_at` — the
+    /// timestamp columns of the very tables this tool exists to read, and of the
+    /// rows db_execute exists to write.
+    #[tokio::test]
+    async fn blocked_operations_match_a_word_and_not_a_column_name() {
+        let readable = executor()
+            .execute_db_query_tool(&query(
+                "SELECT id FROM conversations WHERE created_at > 0 AND deleted_at IS NULL ORDER BY updated_at",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+        assert!(readable
+            .error
+            .unwrap_or_default()
+            .contains("Database not available"));
+
+        let writable = executor()
+            .execute_db_execute_tool(&query(
+                "INSERT INTO messages (content, created_at) VALUES ('hello', 0)",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+        assert!(writable
+            .error
+            .unwrap_or_default()
+            .contains("Database not available"));
+
+        let ddl = executor()
+            .execute_db_query_tool(&query("SELECT id FROM conversations UNION SELECT 1 PRAGMA"))
+            .await
+            .expect("guard returns a tool result, not an error");
+        assert!(!ddl.success);
+        assert!(ddl
+            .error
+            .unwrap_or_default()
+            .contains("SQL operation 'PRAGMA' is not allowed"));
+    }
+
+    /// The refusal must be scoped to the FROM clause: commas in the select
+    /// list, in function arguments, in `IN (...)` and in `ORDER BY` are
+    /// ordinary SQL and must still reach the database.
+    #[tokio::test]
+    async fn db_query_still_allows_commas_outside_the_from_clause() {
+        let result = executor()
+            .execute_db_query_tool(&query(
+                "SELECT id, substr(title, 1, 5) FROM conversations WHERE id IN (1, 2) ORDER BY id, title LIMIT 5",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Database not available"));
+    }
+
+    /// The second layer, checked against the schema the engine actually has:
+    /// it does not care where the name appears, so a syntax that hides a table
+    /// from the positional scan still cannot hide it from the token stream.
+    #[test]
+    fn the_schema_check_flags_a_forbidden_table_wherever_it_is_named() {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE messages (id INTEGER, content TEXT);
+             CREATE TABLE command_history (command TEXT);",
+        )
+        .expect("schema");
+
+        let hostile = sql_identifier_tokens("SELECT C.COMMAND FROM MESSAGES, COMMAND_HISTORY C");
+        assert_eq!(
+            first_forbidden_mention(&conn, &hostile, |table| ALLOWED_QUERY_TABLES
+                .contains(&table))
+            .expect("schema lookup"),
+            Some("COMMAND_HISTORY".to_string())
+        );
+
+        let quoted =
+            sql_identifier_tokens("SELECT MESSAGES.COMMAND FROM 'COMMAND_HISTORY' MESSAGES");
+        assert_eq!(
+            first_forbidden_mention(&conn, &quoted, |table| ALLOWED_QUERY_TABLES
+                .contains(&table))
+            .expect("schema lookup"),
+            Some("COMMAND_HISTORY".to_string())
+        );
+
+        // The second half of the round-3 bypass: the literal naming the second
+        // table of a comma list was erased, so the backstop had nothing to match
+        // even though SQLite read it as the table.
+        let quoted_alias = sql_identifier_tokens(
+            "SELECT C.COMMAND FROM MESSAGES \"WHERE\", 'COMMAND_HISTORY' C LIMIT 20",
+        );
+        assert_eq!(
+            first_forbidden_mention(&conn, &quoted_alias, |table| ALLOWED_QUERY_TABLES
+                .contains(&table))
+            .expect("schema lookup"),
+            Some("COMMAND_HISTORY".to_string())
+        );
+
+        // Round 4. The clause-ending keyword moved INSIDE a subquery, which
+        // cleared the tokenizer's "inside a FROM clause" flag while SQLite was
+        // still reading the outer table list -- so the comma read as a value
+        // comma and the literal after it was erased again. sqlite3 3.50.6
+        // returned the history row for exactly this query.
+        let nested_clause_keyword = sql_identifier_tokens(
+            "SELECT C.COMMAND FROM MESSAGES M JOIN MESSAGES N ON N.ID = (SELECT MAX(ID) FROM MESSAGES WHERE ID > 0), 'COMMAND_HISTORY' C LIMIT 5",
+        );
+        assert_eq!(
+            first_forbidden_mention(&conn, &nested_clause_keyword, |table| ALLOWED_QUERY_TABLES
+                .contains(&table))
+            .expect("schema lookup"),
+            Some("COMMAND_HISTORY".to_string())
+        );
+
+        let in_operand =
+            sql_identifier_tokens("SELECT ID FROM MESSAGES WHERE X IN 'COMMAND_HISTORY'");
+        assert_eq!(
+            first_forbidden_mention(&conn, &in_operand, |table| ALLOWED_QUERY_TABLES
+                .contains(&table))
+            .expect("schema lookup"),
+            Some("COMMAND_HISTORY".to_string())
+        );
+
+        let ordinary =
+            sql_identifier_tokens("SELECT ID FROM MESSAGES WHERE CONTENT LIKE '%COMMAND_HISTORY%'");
+        assert_eq!(
+            first_forbidden_mention(&conn, &ordinary, |table| ALLOWED_QUERY_TABLES
+                .contains(&table))
+            .expect("schema lookup"),
+            None
+        );
+
+        // The cost of reading no position: a value that spells a forbidden
+        // table EXACTLY is refused, because `x IN 'command_history'` really is a
+        // table reference in SQLite and only position tells the two apart. The
+        // refusal names the table, so the model can rephrase.
+        let value_list = sql_identifier_tokens(
+            "SELECT ID FROM MESSAGES WHERE TITLE IN ('COMMAND_HISTORY', 'USERS')",
+        );
+        assert_eq!(
+            first_forbidden_mention(&conn, &value_list, |table| ALLOWED_QUERY_TABLES
+                .contains(&table))
+            .expect("schema lookup"),
+            Some("COMMAND_HISTORY".to_string())
+        );
+    }
+
+    /// F26 residual, round 3: removing the table from the allowlist only holds
+    /// while the guards can see the name. SQLite reads a quoted string in a
+    /// table position as the table, so `FROM 'command_history' messages` read
+    /// the removed table — and the same shape defeated the sensitive-table
+    /// exclusions, returning a password hash for
+    /// `SELECT conversations.password_hash FROM 'users' conversations` against a
+    /// real sqlite database.
+    #[tokio::test]
+    async fn db_query_refuses_a_table_named_by_a_quoted_string() {
+        for (sql, table) in [
+            (
+                "SELECT messages.command FROM 'command_history' messages LIMIT 20",
+                "COMMAND_HISTORY",
+            ),
+            (
+                "SELECT conversations.password_hash FROM 'users' conversations",
+                "USERS",
+            ),
+            ("SELECT messages.value FROM 'settings' messages", "SETTINGS"),
+            ("SELECT command FROM \"command_history\"", "COMMAND_HISTORY"),
+            ("SELECT command FROM [command_history]", "COMMAND_HISTORY"),
+            ("SELECT command FROM `command_history`", "COMMAND_HISTORY"),
+            ("SELECT * FROM ('command_history')", "COMMAND_HISTORY"),
+            (
+                "SELECT h.command FROM messages h JOIN 'command_history' c ON 1=1",
+                "COMMAND_HISTORY",
+            ),
+            (
+                "SELECT id FROM messages WHERE id IN (SELECT id FROM 'command_history')",
+                "COMMAND_HISTORY",
+            ),
+        ] {
+            let result = executor()
+                .execute_db_query_tool(&query(sql))
+                .await
+                .expect("guard returns a tool result, not an error");
+
+            assert!(!result.success, "expected {:?} to be refused", sql);
+            assert!(
+                result
+                    .error
+                    .unwrap_or_default()
+                    .contains(&format!("Access to table '{}' is not permitted", table)),
+                "expected {:?} to be refused for {}",
+                sql,
+                table
+            );
+        }
+    }
+
+    /// The quoted-identifier form of the same class: an apostrophe inside
+    /// `[...]` desynchronized the character scan, erasing the FROM clause so no
+    /// table check ran while the engine still read command_history.
+    #[tokio::test]
+    async fn db_query_refuses_a_from_clause_hidden_behind_a_quoted_identifier() {
+        let result = executor()
+            .execute_db_query_tool(&query("SELECT command AS [x'] FROM command_history"))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Access to table 'COMMAND_HISTORY' is not permitted"));
+    }
+
+    /// The write path shares the tokenizer, so the same shape let the model copy
+    /// history into an allowlisted table and read it back from there.
+    #[tokio::test]
+    async fn db_execute_refuses_a_quoted_table_in_a_subquery() {
+        let result = executor()
+            .execute_db_execute_tool(&query(
+                "INSERT INTO messages (content) SELECT messages.command FROM 'command_history' messages",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Access to table 'COMMAND_HISTORY' is not permitted in subquery"));
+    }
+
+    /// And the write TARGET itself: quoting it moved the name out of the token
+    /// the check reads, so `INSERT INTO 'users' (messages)` was checked against
+    /// the column list instead of the table.
+    #[tokio::test]
+    async fn db_execute_refuses_a_quoted_write_target() {
+        for sql in [
+            "INSERT INTO 'users' (messages) VALUES ('x')",
+            "UPDATE 'users' SET password_hash = 'x'",
+            "DELETE FROM 'users' WHERE id = 1",
+        ] {
+            let result = executor()
+                .execute_db_execute_tool(&query(sql))
+                .await
+                .expect("guard returns a tool result, not an error");
+
+            assert!(!result.success, "expected {:?} to be refused", sql);
+            assert!(
+                result
+                    .error
+                    .unwrap_or_default()
+                    .contains("'USERS' is not permitted"),
+                "expected {:?} to be refused for USERS",
+                sql
+            );
+        }
+    }
+
+    /// The boundary refuses a value only when it spells a forbidden table
+    /// EXACTLY. A value that merely contains the name is a different string and
+    /// still reaches the database, so ordinary text filters keep working.
+    #[tokio::test]
+    async fn db_query_still_allows_a_literal_that_merely_contains_a_table_name() {
+        let result = executor()
+            .execute_db_query_tool(&query(
+                "SELECT id FROM conversations WHERE title LIKE '%users%' AND id IN (1, 2)",
+            ))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Database not available"));
+    }
+
+    #[tokio::test]
+    async fn db_query_still_allows_an_ordinary_table() {
+        let result = executor()
+            .execute_db_query_tool(&query("SELECT id FROM conversations"))
+            .await
+            .expect("guard returns a tool result, not an error");
+
+        // No Tauri app handle in a unit test, so the allowlist passes and the
+        // call stops at the database lookup instead of the guard.
+        assert!(!result.success);
+        assert!(result
+            .error
+            .unwrap_or_default()
+            .contains("Database not available"));
+    }
+}
+
+/// The guard checked against the engine it is guarding.
+///
+/// Every bypass this file has shipped was a divergence between what a guard read
+/// and what SQLite reads, and each was caught only when a reviewer replayed the
+/// SQL against a real database by hand. These tests do that in CI: each payload
+/// must first prove it really reads a forbidden table (otherwise it pins
+/// nothing), and only then is the production refusal chain required to refuse
+/// it. A future tokenizer change that admits one fails here with the credential
+/// SQLite handed back, instead of shipping.
+#[cfg(test)]
+mod guard_vs_sqlite_tests {
+    use super::{db_execute_refusal, db_query_refusal};
+
+    const CANARIES: &[&str] = &[
+        "CANARY-BEARER-sk-live-9931",
+        "CANARY-PASSWORD-HASH",
+        "CANARY-SETTINGS-BLOB",
+        "CANARY-REFRESH-TOKEN",
+    ];
+
+    /// The tables the allowlist admits, plus the four it exists to exclude:
+    /// terminal history (F26), password hashes, the encrypted provider-key blob
+    /// (SEV-DESK-10) and session tokens.
+    fn seeded_db() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE messages (id INTEGER PRIMARY KEY, content TEXT, created_at INTEGER);
+             CREATE TABLE conversations (id INTEGER PRIMARY KEY, title TEXT);
+             CREATE TABLE command_history (id INTEGER PRIMARY KEY, command TEXT, session_id TEXT);
+             CREATE TABLE users (id INTEGER PRIMARY KEY, password_hash TEXT);
+             CREATE TABLE settings (key TEXT, value TEXT);
+             CREATE TABLE auth_sessions (id INTEGER PRIMARY KEY, token TEXT);
+             INSERT INTO messages VALUES (1, 'hello', 0);
+             INSERT INTO conversations VALUES (1, 'chat');
+             INSERT INTO command_history VALUES (1, 'curl -H Authorization CANARY-BEARER-sk-live-9931', 's');
+             INSERT INTO users VALUES (1, 'CANARY-PASSWORD-HASH');
+             INSERT INTO settings VALUES ('provider_key', 'CANARY-SETTINGS-BLOB');
+             INSERT INTO auth_sessions VALUES (1, 'CANARY-REFRESH-TOKEN');",
+        )
+        .expect("schema");
+        conn
+    }
+
+    fn canary_returned_by(conn: &rusqlite::Connection, sql: &str) -> Option<String> {
+        let mut stmt = match conn.prepare(sql) {
+            Ok(stmt) => stmt,
+            Err(_) => return None,
+        };
+        let columns = stmt.column_count();
+        let mut rows = match stmt.query([]) {
+            Ok(rows) => rows,
+            Err(_) => return None,
+        };
+
+        while let Ok(Some(row)) = rows.next() {
+            for column in 0..columns {
+                if let Ok(rusqlite::types::Value::Text(text)) =
+                    row.get::<_, rusqlite::types::Value>(column)
+                {
+                    if let Some(canary) = CANARIES.iter().find(|canary| text.contains(**canary)) {
+                        return Some((*canary).to_string());
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Shapes verified against sqlite3 3.50.6 to return the seeded credential.
+    const READS_A_FORBIDDEN_TABLE: &[&str] = &[
+        "SELECT command FROM command_history",
+        "SELECT*FROM command_history",
+        "SELECT c.command FROM messages, command_history c LIMIT 20",
+        "SELECT messages.command FROM 'command_history' messages LIMIT 20",
+        "SELECT command FROM [command_history]",
+        "SELECT * FROM ('command_history')",
+        "SELECT command AS [x'] FROM command_history",
+        "SELECT (SELECT command FROM command_history LIMIT 1) FROM messages",
+        "SELECT c.command FROM messages offset, command_history c",
+        "SELECT c.command FROM messages window, command_history c",
+        "SELECT c.command FROM messages filter, 'command_history' c",
+        "SELECT c.command FROM messages \"where\", 'command_history' c LIMIT 20",
+        "SELECT c.command FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'command_history' c LIMIT 5",
+        "SELECT c.command FROM messages m JOIN messages n ON n.id IN (SELECT id FROM messages GROUP BY id), 'command_history' c",
+        "SELECT c.command FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages \"where\" WHERE id > 0), 'command_history' c",
+        "SELECT u.password_hash FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'users' u",
+        "SELECT s.value FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'settings' s",
+        "SELECT a.token FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages GROUP BY id), 'auth_sessions' a",
+        "SELECT * FROM messages m JOIN (SELECT id FROM messages) x ON 1 = 1, 'auth_sessions' a",
+    ];
+
+    /// The write path stages the same rows into an allowlisted table the model
+    /// then reads with an ordinary SELECT, so it needs the same net.
+    const COPIES_A_FORBIDDEN_TABLE: &[&str] = &[
+        "INSERT INTO messages (content) SELECT command FROM command_history",
+        "INSERT INTO messages (content) SELECT c.command FROM messages, command_history c",
+        "INSERT INTO messages (content) SELECT messages.command FROM 'command_history' messages",
+        "INSERT INTO messages (content) SELECT c.command FROM messages \"where\", 'command_history' c",
+        "INSERT INTO messages (content) SELECT c.command FROM messages filter, 'command_history' c",
+        "INSERT INTO messages (content) SELECT c.command FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'command_history' c",
+        "INSERT INTO messages (content) SELECT u.password_hash FROM messages m JOIN messages n ON n.id = (SELECT max(id) FROM messages WHERE id > 0), 'users' u",
+        "UPDATE messages SET content = (SELECT command FROM command_history LIMIT 1)",
+    ];
+
+    #[test]
+    fn every_read_that_returns_a_credential_is_refused() {
+        let conn = seeded_db();
+
+        for sql in READS_A_FORBIDDEN_TABLE {
+            let canary = canary_returned_by(&conn, sql).unwrap_or_else(|| {
+                panic!(
+                    "{:?} no longer reads a forbidden table, so it pins nothing — fix the payload",
+                    sql
+                )
+            });
+            assert!(
+                db_query_refusal(sql, Some(&conn)).is_some(),
+                "the guard admitted {:?}, which returns {} from sqlite",
+                sql,
+                canary
+            );
+        }
+    }
+
+    #[test]
+    fn every_write_that_stages_a_credential_is_refused() {
+        for sql in COPIES_A_FORBIDDEN_TABLE {
+            let live = seeded_db();
+            live.execute(sql, [])
+                .unwrap_or_else(|e| panic!("{:?} is not live SQL: {}", sql, e));
+            let staged = canary_returned_by(&live, "SELECT content FROM messages")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{:?} no longer copies a forbidden table, so it pins nothing — fix the payload",
+                        sql
+                    )
+                });
+
+            let guarded = seeded_db();
+            assert!(
+                db_execute_refusal(sql, Some(&guarded)).is_some(),
+                "the guard admitted {:?}, which stages {} into messages",
+                sql,
+                staged
+            );
+        }
+    }
+
+    /// The other half of the boundary: the queries the tool exists to serve must
+    /// still reach the engine, or a refusal that fails closed on everything
+    /// would pass the tests above while breaking the product.
+    #[test]
+    fn ordinary_queries_still_run() {
+        let conn = seeded_db();
+
+        for sql in [
+            "SELECT id, content FROM messages WHERE created_at > 0 ORDER BY id LIMIT 5",
+            "SELECT m.id, c.title FROM messages m JOIN conversations c ON c.id = m.id",
+            "SELECT id, (SELECT count(*) FROM messages), title FROM conversations",
+            "SELECT id, substr(content, 1, 5) FROM messages WHERE id IN (1, 2) ORDER BY id, content",
+        ] {
+            assert_eq!(db_query_refusal(sql, Some(&conn)), None, "refused {:?}", sql);
+            conn.prepare(sql)
+                .unwrap_or_else(|e| panic!("{:?} is not valid SQL: {}", sql, e));
+        }
+
+        assert_eq!(
+            db_execute_refusal(
+                "INSERT INTO messages (content, created_at) VALUES ('hello', 0)",
+                Some(&conn)
+            ),
+            None
         );
     }
 }

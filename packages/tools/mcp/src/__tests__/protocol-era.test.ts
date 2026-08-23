@@ -103,7 +103,7 @@ describe('MCP 2026-07-28 pivot — input_required results', () => {
     expect(block.text).toMatch(/did not complete/);
   });
 
-  it('passes a normal complete result through untouched', async () => {
+  it('returns a normal complete result inside the untrusted-result fence', async () => {
     installEraMock({
       discoverResult: { protocolVersions: ['2026-07-28'] },
       inputRequired: false,
@@ -115,6 +115,10 @@ describe('MCP 2026-07-28 pivot — input_required results', () => {
     const result = await handle.callTool('read_file', {});
 
     expect(result.isError).toBeUndefined();
-    expect(result.content).toEqual([{ type: 'text', text: 'ok' }]);
+    expect(result.content).toHaveLength(1);
+    const block = result.content[0] as { type: string; text: string };
+    expect(block.type).toBe('text');
+    expect(block.text).toMatch(/^<mcp_tool_result untrusted="true"/);
+    expect(block.text).toContain('ok');
   });
 });

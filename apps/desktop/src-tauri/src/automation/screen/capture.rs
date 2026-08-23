@@ -62,6 +62,48 @@ pub struct CapturedRegion {
     pub display: ScreenInfo,
 }
 
+const MAX_BITMAP_DIMENSION: u32 = 32_768;
+const MAX_BITMAP_BUFFER_BYTES: u64 = 1 << 30;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BitmapExtent {
+    width: u32,
+    height: u32,
+    buffer_len: usize,
+}
+
+// Dimensions can come from an attacker-controlled BITMAPINFOHEADER, so the byte count must be
+// computed in u64 and bounded before it sizes the buffer GetDIBits writes into.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn bitmap_extent(width: i32, height: i32) -> Result<BitmapExtent> {
+    if width <= 0 || height == 0 {
+        return Err(anyhow!("Invalid bitmap dimensions {width}x{height}"));
+    }
+
+    let width = width as u32;
+    let height = height.unsigned_abs();
+
+    if width > MAX_BITMAP_DIMENSION || height > MAX_BITMAP_DIMENSION {
+        return Err(anyhow!(
+            "Bitmap dimensions {width}x{height} exceed the {MAX_BITMAP_DIMENSION} pixel limit"
+        ));
+    }
+
+    let buffer_len = u64::from(width)
+        .checked_mul(u64::from(height))
+        .and_then(|pixels| pixels.checked_mul(4))
+        .filter(|bytes| *bytes <= MAX_BITMAP_BUFFER_BYTES)
+        .ok_or_else(|| {
+            anyhow!("Bitmap {width}x{height} needs more than {MAX_BITMAP_BUFFER_BYTES} bytes")
+        })? as usize;
+
+    Ok(BitmapExtent {
+        width,
+        height,
+        buffer_len,
+    })
+}
+
 pub fn capture_primary_screen() -> Result<CapturedImage> {
     let _xcap_lock = lock_xcap()?;
     let monitors = Monitor::all().context("Failed to enumerate displays")?;
@@ -299,12 +341,13 @@ pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
         let mut rect = RECT::default();
         GetWindowRect(hwnd, &mut rect).context("Failed to get window rect")?;
 
-        let width = (rect.right - rect.left) as u32;
-        let height = (rect.bottom - rect.top) as u32;
-
-        if width == 0 || height == 0 {
-            return Err(anyhow!("Invalid window dimensions"));
-        }
+        let extent = bitmap_extent(
+            rect.right.saturating_sub(rect.left),
+            rect.bottom.saturating_sub(rect.top),
+        )
+        .context("Invalid window dimensions")?;
+        let width = extent.width;
+        let height = extent.height;
 
         let window_dc = GetDC(hwnd);
         if window_dc.is_invalid() {
@@ -368,7 +411,7 @@ pub fn capture_window(hwnd: isize) -> Result<CapturedImage> {
             }; 1],
         };
 
-        let mut buffer = vec![0u8; (width * height * 4) as usize];
+        let mut buffer = vec![0u8; extent.buffer_len];
 
         let result = GetDIBits(
             mem_dc,
@@ -505,22 +548,24 @@ pub fn paste_from_clipboard() -> Result<CapturedImage> {
             return Err(anyhow!("Failed to get bitmap info"));
         }
 
-        let width = bmi.bmiHeader.biWidth as u32;
-        let height = bmi.bmiHeader.biHeight.unsigned_abs();
-
-        if width == 0 || height == 0 {
-            SelectObject(mem_dc, old_bitmap);
-            let _ = DeleteDC(mem_dc);
-            ReleaseDC(HWND(0), screen_dc);
-            CloseClipboard().ok();
-            return Err(anyhow!("Invalid bitmap dimensions"));
-        }
+        let extent = match bitmap_extent(bmi.bmiHeader.biWidth, bmi.bmiHeader.biHeight) {
+            Ok(extent) => extent,
+            Err(error) => {
+                SelectObject(mem_dc, old_bitmap);
+                let _ = DeleteDC(mem_dc);
+                ReleaseDC(HWND(0), screen_dc);
+                CloseClipboard().ok();
+                return Err(error);
+            }
+        };
+        let width = extent.width;
+        let height = extent.height;
 
         bmi.bmiHeader.biHeight = -(height as i32);
         bmi.bmiHeader.biCompression = BI_RGB.0;
         bmi.bmiHeader.biBitCount = 32;
 
-        let mut buffer = vec![0u8; (width * height * 4) as usize];
+        let mut buffer = vec![0u8; extent.buffer_len];
 
         let result = GetDIBits(
             mem_dc,
@@ -565,4 +610,55 @@ pub fn paste_from_clipboard() -> Result<CapturedImage> {
 #[cfg(not(windows))]
 pub fn paste_from_clipboard() -> Result<CapturedImage> {
     Err(anyhow!("Clipboard paste is only supported on Windows"))
+}
+
+#[cfg(test)]
+mod bitmap_extent_tests {
+    use super::{bitmap_extent, MAX_BITMAP_BUFFER_BYTES, MAX_BITMAP_DIMENSION};
+
+    #[test]
+    fn computes_rgba_buffer_length() {
+        let extent = bitmap_extent(1920, -1080).expect("valid dimensions");
+        assert_eq!(extent.width, 1920);
+        assert_eq!(extent.height, 1080);
+        assert_eq!(extent.buffer_len, 1920 * 1080 * 4);
+    }
+
+    #[test]
+    fn rejects_dimensions_whose_byte_count_wraps_u32() {
+        let width: u32 = 65_536;
+        let height: u32 = 65_536;
+        assert_eq!(
+            width.wrapping_mul(height).wrapping_mul(4),
+            0,
+            "the unchecked u32 product must wrap for this to be a regression test"
+        );
+        assert!(bitmap_extent(width as i32, height as i32).is_err());
+    }
+
+    #[test]
+    fn rejects_dimensions_past_the_pixel_cap() {
+        let over = MAX_BITMAP_DIMENSION as i32 + 1;
+        assert!(bitmap_extent(over, 8).is_err());
+        assert!(bitmap_extent(8, over).is_err());
+        assert!(bitmap_extent(8, -over).is_err());
+    }
+
+    #[test]
+    fn rejects_buffers_larger_than_the_byte_cap() {
+        let side = MAX_BITMAP_DIMENSION as i32;
+        assert!(
+            u64::from(MAX_BITMAP_DIMENSION) * u64::from(MAX_BITMAP_DIMENSION) * 4
+                > MAX_BITMAP_BUFFER_BYTES
+        );
+        assert!(bitmap_extent(side, side).is_err());
+    }
+
+    #[test]
+    fn rejects_empty_and_negative_widths() {
+        assert!(bitmap_extent(0, 16).is_err());
+        assert!(bitmap_extent(16, 0).is_err());
+        assert!(bitmap_extent(-16, 16).is_err());
+        assert!(bitmap_extent(16, i32::MIN).is_err());
+    }
 }

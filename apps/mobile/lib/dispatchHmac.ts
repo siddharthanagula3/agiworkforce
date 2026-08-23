@@ -5,7 +5,7 @@ import {
   DISPATCH_NONCE_CACHE_TTL_MS,
   type DispatchEnvelope,
   type DispatchSessionState,
-  type DispatchVerifyResult,
+  type DispatchVerifyFailureReason,
 } from '@agiworkforce/types';
 
 // Constants — re-exported from the canonical contract in @agiworkforce/types
@@ -13,6 +13,20 @@ import {
 const MAX_MESSAGE_AGE_MS = DISPATCH_MAX_MESSAGE_AGE_MS;
 
 const NONCE_CACHE_TTL_MS = DISPATCH_NONCE_CACHE_TTL_MS;
+
+/**
+ * Wire-protocol version carried in every envelope and covered by the HMAC.
+ *
+ * v3 is the first version whose session key is derived from the out-of-band
+ * pairing secret, so a v2 peer is not merely older — it is a peer whose key
+ * the signaling relay can reproduce. Envelopes at any other version are
+ * refused outright rather than falling through to a confusing HMAC mismatch.
+ */
+export const DISPATCH_ENVELOPE_VERSION = 3;
+
+const HKDF_INFO = 'dispatch-hmac-v3';
+
+const PAIRING_SECRET_PATTERN = /^[0-9a-fA-F]{64}$/;
 
 /**
  * Historical ISO 8601 date after which unsigned messages are rejected.
@@ -26,10 +40,10 @@ export const DISPATCH_HMAC_REQUIRED_AFTER = CANONICAL_DISPATCH_HMAC_REQUIRED_AFT
  * The signed envelope that travels over the data channel / signaling relay.
  * Keys are always in alphabetical order when the HMAC is computed.
  *
- * @deprecated Import {@link DispatchEnvelope} from `@agiworkforce/types` directly.
- * This alias is preserved for backwards compatibility with existing mobile code.
+ * Carries `v` — the wire-protocol version — in addition to the canonical
+ * `@agiworkforce/types` envelope fields.
  */
-export type SignedEnvelope = DispatchEnvelope;
+export type SignedEnvelope = DispatchEnvelope & { v: number };
 
 /**
  * Session state threaded through the session by the caller.
@@ -38,8 +52,9 @@ export type SignedEnvelope = DispatchEnvelope;
  */
 export type HmacSessionState = DispatchSessionState;
 
-/** Verification result — alias of canonical {@link DispatchVerifyResult}. */
-export type VerifyResult = DispatchVerifyResult;
+export type VerifyFailureReason = DispatchVerifyFailureReason | 'protocol_version_unsupported';
+
+export type VerifyResult = { ok: true } | { ok: false; reason: VerifyFailureReason };
 
 const BLOCK_SIZE = 64;
 
@@ -124,29 +139,37 @@ async function hkdfExpand(prk: Uint8Array, infoBytes: Uint8Array): Promise<Uint8
  * Derive the shared HMAC session key for a Dispatch connection.
  *
  * Uses proper HKDF-SHA-256 (RFC 5869, single-block expand):
- *   PRK = HMAC-SHA-256(salt=UTF8(sessionSalt), IKM=UTF8(pairingCode))
- *   OKM = HMAC-SHA-256(PRK, UTF8("dispatch-hmac-v2") ∥ 0x01)
+ *   PRK = HMAC-SHA-256(salt=UTF8(pairingCode + ":" + sessionSalt), IKM=pairingSecret)
+ *   OKM = HMAC-SHA-256(PRK, UTF8("dispatch-hmac-v3") ∥ 0x01)
  *
- * Threat model: this key authenticates the peer against anyone who reaches the
- * data channel without the pairing transcript. It does not defend against the
- * signaling relay. The relay mints the pairing code and receives it again on
- * POST /pairings/{code}/claim and in the register frame, and the salt travels
- * to it in register metadata, so the relay — or a relay compromise, or a
- * TLS-intercepting proxy while `PINNING_ENFORCED` is false — holds both KDF
- * inputs and can mint envelopes that verify in either direction. Closing that
- * needs an out-of-band key or a PAKE: SEC-16 in docs/remediation/register.json.
+ * Threat model: the keying material is the 32-byte `pairingSecret` the desktop
+ * generates locally and hands over out of band, in the QR / pairing-link
+ * payload only. It is never sent to the signaling relay — not in the claim
+ * call, not in the register frame, not in session metadata — so the relay, a
+ * relay compromise, and a TLS-intercepting proxy all lack the IKM and cannot
+ * reproduce this key or mint envelopes that verify in either direction. The
+ * pairing code and session salt are still mixed into the HKDF salt to bind the
+ * key to one session, but they are relay-visible and are not sufficient alone.
  *
- * @param pairingCode - 12-char alphanumeric pairing code (pre-shared key, AUDIT-FIX: H-12).
- * @param sessionSalt - Random per-session salt (not secret; sent in metadata)
+ * Mirrored byte-for-byte by `derive_session_key` in
+ * `apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs`.
+ *
+ * @param pairingCode - 12-char alphanumeric pairing code (relay-visible)
+ * @param sessionSalt - Random per-session salt (relay-visible; sent in metadata)
+ * @param pairingSecret - 64-char hex of the 32 out-of-band random bytes
  * @returns hex-encoded 32-byte derived key
  */
 export async function deriveDispatchSecret(
   pairingCode: string,
   sessionSalt: string,
+  pairingSecret: string,
 ): Promise<string> {
-  const ikm = utf8Encode(pairingCode);
-  const salt = utf8Encode(sessionSalt);
-  const info = utf8Encode('dispatch-hmac-v2');
+  if (!PAIRING_SECRET_PATTERN.test(pairingSecret)) {
+    throw new Error('dispatch pairing secret must be 64 hex characters');
+  }
+  const ikm = fromHex(pairingSecret.toLowerCase());
+  const salt = utf8Encode(`${pairingCode}:${sessionSalt}`);
+  const info = utf8Encode(HKDF_INFO);
 
   const prk = await hkdfExtract(salt, ikm);
   const okm = await hkdfExpand(prk, info);
@@ -172,8 +195,14 @@ function canonicalizeJson(value: unknown): unknown {
   return sorted;
 }
 
-function canonicalSigningInput(type: string, payload: unknown, ts: number, nonce: string): string {
-  return JSON.stringify(canonicalizeJson({ nonce, payload, ts, type }));
+function canonicalSigningInput(
+  type: string,
+  payload: unknown,
+  ts: number,
+  nonce: string,
+  v: number,
+): string {
+  return JSON.stringify(canonicalizeJson({ nonce, payload, ts, type, v }));
 }
 
 /**
@@ -194,13 +223,13 @@ export async function signMessage(
   const nonce = btoa(String.fromCharCode(...nonceBytes));
   const ts = Date.now();
 
-  const signingInput = canonicalSigningInput(type, payload, ts, nonce);
+  const signingInput = canonicalSigningInput(type, payload, ts, nonce, DISPATCH_ENVELOPE_VERSION);
   const keyBytes = fromHex(state.secret);
   const msgBytes = utf8Encode(signingInput);
   const macBytes = await hmacSha256(keyBytes, msgBytes);
   const hmac = toHex(macBytes);
 
-  return { hmac, nonce, payload, ts, type };
+  return { hmac, nonce, payload, ts, type, v: DISPATCH_ENVELOPE_VERSION };
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -227,9 +256,10 @@ function pruneNonceCache(nonceCache: Map<string, number>, now: number): void {
  * Rejection reasons (checked in order):
  *  1. `malformed`           — not a valid SignedEnvelope shape
  *  2. `unsigned_transitional` — no hmac field; fail-closed
- *  3. `timestamp_expired`   — |now - ts| > MAX_MESSAGE_AGE_MS
- *  4. `nonce_replay`        — nonce seen in the NONCE_CACHE_TTL_MS window
- *  5. `hmac_mismatch`       — HMAC does not match (constant-time compare)
+ *  3. `protocol_version_unsupported` — `v` is not DISPATCH_ENVELOPE_VERSION
+ *  4. `timestamp_expired`   — |now - ts| > MAX_MESSAGE_AGE_MS
+ *  5. `nonce_replay`        — nonce seen in the NONCE_CACHE_TTL_MS window
+ *  6. `hmac_mismatch`       — HMAC does not match (constant-time compare)
  *
  * On success, the nonce is added to the cache.
  *
@@ -249,6 +279,10 @@ export async function verifyMessage(state: HmacSessionState, msg: unknown): Prom
 
   if (!hasHmac) {
     return { ok: false, reason: 'unsigned_transitional' };
+  }
+
+  if (m['v'] !== DISPATCH_ENVELOPE_VERSION) {
+    return { ok: false, reason: 'protocol_version_unsupported' };
   }
 
   if (!hasNonce || !hasTs || !hasType) {
@@ -272,7 +306,7 @@ export async function verifyMessage(state: HmacSessionState, msg: unknown): Prom
     return { ok: false, reason: 'nonce_replay' };
   }
 
-  const signingInput = canonicalSigningInput(type, payload, ts, nonce);
+  const signingInput = canonicalSigningInput(type, payload, ts, nonce, DISPATCH_ENVELOPE_VERSION);
   const keyBytes = fromHex(state.secret);
   const msgBytes = utf8Encode(signingInput);
   const expectedBytes = await hmacSha256(keyBytes, msgBytes);

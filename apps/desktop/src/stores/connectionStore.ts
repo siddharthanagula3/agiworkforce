@@ -50,7 +50,6 @@ interface PairingResponse {
   code: string;
   expiresAt: number;
   expiresIn: number;
-  qrData: string;
   signaling: {
     httpUrl: string;
     wsUrl: string;
@@ -61,16 +60,51 @@ interface PairingResponse {
   };
 }
 
+const PAIRING_SECRET_BYTES = 32;
+
+/**
+ * 32 random bytes that key the dispatch control channel. Generated here and
+ * published only in the QR / pairing-link payload the phone reads optically —
+ * it is deliberately never sent to the signaling relay, which is the party the
+ * envelope HMAC has to defend against.
+ */
+function generatePairingSecret(): string {
+  const bytes = new Uint8Array(PAIRING_SECRET_BYTES);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * `agiw3:` marks a payload that carries the out-of-band secret; a build that
+ * predates it can only render `agiw:`, so the phone can tell the two apart
+ * without trusting anything the relay chose. The pair token is deliberately
+ * left out — the phone claims its own from the relay — which keeps the payload
+ * inside the length the phone's manual-entry field accepts, so "copy the
+ * pairing link and paste it" stays a working path for a phone with no camera.
+ */
+function buildPairingPayload(code: string, secret: string): string {
+  return `agiw3:${code}:${secret}`;
+}
+
 let signalingClient: SignalingClient | null = null;
 let peerConnection: RTCPeerConnection | null = null;
 let localStream: MediaStream | null = null;
 let controlChannel: RTCDataChannel | null = null;
 let pairingAbortController: AbortController | null = null;
+let activePairingSecret: string | null = null;
 let connectionGeneration = 0;
 let peerControlGeneration = 0;
 let activeManagedBoundary: ManagedCloudBoundary | null = null;
 
 export const MOBILE_COMPANION_SESSION_ENDED_EVENT = 'mobile-companion:session-ended';
+
+/**
+ * Shown when the phone signs on a dispatch protocol this build refuses. Every
+ * frame from that peer is dropped, so without this the pairing looks connected
+ * and silently does nothing.
+ */
+export const MOBILE_DISPATCH_UPDATE_REQUIRED =
+  'This phone is running an older AGI Workforce build and cannot secure the connection. Update the app on your phone, then scan a new pairing QR.';
 
 function isCurrentManagedGeneration(generation: number, boundary: ManagedCloudBoundary): boolean {
   if (generation !== connectionGeneration || activeManagedBoundary !== boundary) {
@@ -119,7 +153,6 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
   const code = value['code'];
   const expiresAt = value['expiresAt'];
   const expiresIn = value['expiresIn'];
-  const qrData = value['qrData'];
   const httpUrl = value['signaling']['httpUrl'];
   const wsUrl = value['signaling']['wsUrl'];
   const desktopToken = value['pairTokens']['desktop'];
@@ -132,8 +165,6 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
     !Number.isFinite(expiresAt) ||
     typeof expiresIn !== 'number' ||
     !Number.isFinite(expiresIn) ||
-    typeof qrData !== 'string' ||
-    qrData.length > 16_384 ||
     !hasAllowedUrlProtocol(httpUrl, ['http:', 'https:']) ||
     !hasAllowedUrlProtocol(wsUrl, ['ws:', 'wss:']) ||
     typeof desktopToken !== 'string' ||
@@ -150,7 +181,6 @@ function parsePairingResponse(value: unknown): PairingResponse | null {
     code,
     expiresAt,
     expiresIn,
-    qrData,
     signaling: { httpUrl, wsUrl },
     pairTokens: { desktop: desktopToken, mobile: mobileToken },
   };
@@ -280,6 +310,9 @@ async function handleMobileControlPayload(
   if (!isCurrentSession()) return;
   if (!verifyResult.ok) {
     console.warn('[mobile-companion] rejected control message:', verifyResult.reason);
+    if (verifyResult.reason === 'update_required') {
+      useConnectionStore.setState({ error: MOBILE_DISPATCH_UPDATE_REQUIRED });
+    }
     return;
   }
 
@@ -355,6 +388,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
       const resetConnection = () => {
         connectionGeneration += 1;
         activeManagedBoundary = null;
+        activePairingSecret = null;
         retirePeerControlSession();
 
         if (pairingAbortController) {
@@ -418,16 +452,24 @@ export const useConnectionStore = create<MobileCompanionState>()(
             const saltInfo = extractDispatchSalt(event.metadata);
             if (saltInfo) {
               const pairingCode = get().pairingCode;
-              if (pairingCode) {
+              const pairingSecret = activePairingSecret;
+              if (pairingCode && pairingSecret) {
                 try {
-                  await initDispatchSession(pairingCode, saltInfo.salt, saltInfo.version);
+                  await initDispatchSession(
+                    pairingCode,
+                    saltInfo.salt,
+                    pairingSecret,
+                    saltInfo.version,
+                  );
                   if (!isCurrentPeerSession()) return;
                 } catch (error) {
                   if (!isCurrentPeerSession()) return;
                   console.warn('[dispatch] session init failed:', error);
                 }
               } else {
-                console.warn('[dispatch] peer_ready received but pairingCode is null');
+                console.warn(
+                  '[dispatch] peer_ready received without a pairing code and out-of-band secret',
+                );
               }
             } else {
               console.warn(
@@ -680,6 +722,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
           if (!payload) {
             throw new Error('The pairing service returned an invalid response.');
           }
+          const pairingSecret = generatePairingSecret();
 
           const nextSignalingClient = new SignalingClient({
             wsUrl: payload.signaling.wsUrl,
@@ -707,11 +750,12 @@ export const useConnectionStore = create<MobileCompanionState>()(
           }
           signalingClient = nextSignalingClient;
 
+          activePairingSecret = pairingSecret;
           set({
             status: 'waiting',
             pairingCode: payload.code,
             expiresAt: payload.expiresAt,
-            qrData: payload.qrData,
+            qrData: buildPairingPayload(payload.code, pairingSecret),
             wsUrl: payload.signaling.wsUrl,
             peerConnected: false,
             stream: null,

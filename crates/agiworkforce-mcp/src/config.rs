@@ -72,12 +72,28 @@ impl TransportConfig {
             TransportConfig::SseLegacy { .. } => "sse-legacy",
         }
     }
+
+    /// The URL the *user* configured for a remote transport, if any.
+    ///
+    /// This is the trust root for anything a server later names: a POST
+    /// endpoint the server pushes over SSE is only usable while it stays on
+    /// this origin, because the credential headers below were configured for
+    /// this server and no other.
+    pub fn remote_url(&self) -> Option<&str> {
+        match self {
+            TransportConfig::Stdio { .. } => None,
+            TransportConfig::Sse { url, .. } | TransportConfig::Http { url, .. } => Some(url),
+            TransportConfig::SseLegacy { base_url, .. } => Some(base_url),
+        }
+    }
 }
 
 /// Per-operation timeouts + framing limits + network hardening knobs for one
-/// MCP connection. All hardening knobs default to the original CLI behavior
-/// (off), so `McpTimeouts::default()` is behavior-neutral for existing hosts;
-/// desktop turns them on for remote transports.
+/// MCP connection. The knobs that only widen what this process will *reach*
+/// (`validate_urls`) default to the original CLI behavior so LAN MCP servers
+/// stay usable; the knobs that bound what a remote server can make this
+/// process *allocate* (`max_frame_bytes`, `max_response_bytes`) have a
+/// built-in ceiling that applies even when a host leaves them unset.
 #[derive(Debug, Clone)]
 pub struct McpTimeouts {
     /// Timeout for the initialize handshake (default: 30s).
@@ -88,11 +104,11 @@ pub struct McpTimeouts {
     pub call_tool: Duration,
     /// Timeout for health-check pings (default: 5s).
     pub health_check: Duration,
-    /// Optional cap on a single accumulated SSE/HTTP frame, in bytes. `None`
-    /// (the default) is unbounded, matching the original CLI behavior exactly.
-    /// Hosts that want hardening (desktop) can set a ceiling; when a frame's
-    /// buffer exceeds it before a frame boundary, the read fails instead of
-    /// growing without bound.
+    /// Cap on a single accumulated SSE/HTTP frame, in bytes. `None` applies
+    /// [`DEFAULT_MAX_FRAME_BYTES`]; there is no unbounded setting, because the
+    /// bytes are streamed by the remote server and a host that never set this
+    /// knob would otherwise buffer them until the process dies. Read it through
+    /// [`McpTimeouts::frame_cap`], never as a raw `Option`.
     pub max_frame_bytes: Option<usize>,
     /// When `true`, remote transport URLs (`Sse`, `Http`, `SseLegacy`) are
     /// validated against SSRF at connect time via
@@ -104,10 +120,11 @@ pub struct McpTimeouts {
     /// (`danger_accept_invalid_certs`). Default `true` — verify certificates.
     /// Mirrors the desktop `HttpSseConfig::verify_ssl` knob.
     pub verify_tls: bool,
-    /// Optional cap on an inline HTTP response body, enforced via
-    /// `Content-Length` before the body is read (a malicious server cannot
-    /// exhaust memory with one giant response). `None` (default) is unbounded,
-    /// matching the original CLI behavior. Desktop sets 50 MB.
+    /// Cap on an inline HTTP response body, enforced while the body is read
+    /// (`Content-Length` only short-circuits it — a chunked response carries no
+    /// length to trust). `None` applies [`DEFAULT_MAX_RESPONSE_BYTES`]; as with
+    /// the frame cap there is no unbounded setting. Read it through
+    /// [`McpTimeouts::response_cap`].
     pub max_response_bytes: Option<u64>,
     /// Optional TCP connect timeout on the remote-transport reqwest client.
     /// `None` (default) leaves reqwest's default (no connect cap — CLI parity).
@@ -119,6 +136,28 @@ pub struct McpTimeouts {
     /// streams are unaffected — every chunk/heartbeat resets the timer. `None`
     /// (default) is unbounded (CLI parity). Desktop sets 60s.
     pub sse_read_timeout: Option<Duration>,
+}
+
+/// Ceiling applied to one accumulated SSE frame when a host leaves
+/// [`McpTimeouts::max_frame_bytes`] unset. Matches the desktop inline-response
+/// ceiling so a legitimate large tool result still fits in a single frame.
+pub const DEFAULT_MAX_FRAME_BYTES: usize = 50_000_000;
+
+/// Ceiling applied to an inline HTTP/SSE response body when a host leaves
+/// [`McpTimeouts::max_response_bytes`] unset (the desktop 50 MB ceiling).
+pub const DEFAULT_MAX_RESPONSE_BYTES: u64 = 50_000_000;
+
+impl McpTimeouts {
+    /// The frame ceiling to enforce, whatever the host configured.
+    pub fn frame_cap(&self) -> usize {
+        self.max_frame_bytes.unwrap_or(DEFAULT_MAX_FRAME_BYTES)
+    }
+
+    /// The response-body ceiling to enforce, whatever the host configured.
+    pub fn response_cap(&self) -> u64 {
+        self.max_response_bytes
+            .unwrap_or(DEFAULT_MAX_RESPONSE_BYTES)
+    }
 }
 
 impl Default for McpTimeouts {
@@ -135,5 +174,58 @@ impl Default for McpTimeouts {
             connect_timeout: None,
             sse_read_timeout: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unset_byte_caps_still_have_a_ceiling() {
+        let t = McpTimeouts::default();
+        assert_eq!(t.max_frame_bytes, None);
+        assert_eq!(t.frame_cap(), DEFAULT_MAX_FRAME_BYTES);
+        assert_eq!(t.response_cap(), DEFAULT_MAX_RESPONSE_BYTES);
+    }
+
+    #[test]
+    fn host_configured_byte_caps_win() {
+        let t = McpTimeouts {
+            max_frame_bytes: Some(1024),
+            max_response_bytes: Some(2048),
+            ..McpTimeouts::default()
+        };
+        assert_eq!(t.frame_cap(), 1024);
+        assert_eq!(t.response_cap(), 2048);
+    }
+
+    #[test]
+    fn remote_url_names_the_configured_server() {
+        assert_eq!(
+            TransportConfig::Sse {
+                url: "https://mcp.example.com/sse".to_string(),
+                headers: HashMap::new(),
+            }
+            .remote_url(),
+            Some("https://mcp.example.com/sse")
+        );
+        assert_eq!(
+            TransportConfig::SseLegacy {
+                base_url: "https://mcp.example.com".to_string(),
+                headers: HashMap::new(),
+            }
+            .remote_url(),
+            Some("https://mcp.example.com")
+        );
+        assert_eq!(
+            TransportConfig::Stdio {
+                command: "server".to_string(),
+                args: Vec::new(),
+                env: HashMap::new(),
+            }
+            .remote_url(),
+            None
+        );
     }
 }

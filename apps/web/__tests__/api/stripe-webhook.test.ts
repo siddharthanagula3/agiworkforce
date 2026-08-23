@@ -546,6 +546,154 @@ describe('Stripe Webhook Security Tests', () => {
     });
   });
 
+  describe('Billing owner handoff', () => {
+    const futureIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    function stubEntitledStoreOwner(storeRow: Record<string, unknown>) {
+      const executedSql: string[] = [];
+      mockQuery.mockImplementation((sql: string) => {
+        executedSql.push(sql);
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        if (sql.includes('apple_original_transaction_id')) {
+          return Promise.resolve([
+            {
+              plan_tier: 'pro',
+              status: 'active',
+              stripe_subscription_id: null,
+              apple_original_transaction_id: null,
+              google_purchase_token: null,
+              current_period_end: futureIso,
+              ...storeRow,
+            },
+          ]);
+        }
+        if (sql.includes('from subscriptions where stripe_subscription_id = $1')) {
+          return Promise.resolve([]);
+        }
+        if (sql.includes('profiles')) {
+          return Promise.resolve([{ id: 'user_123' }]);
+        }
+        if (sql.includes('subscriptions')) {
+          return Promise.resolve([{ id: 'sub_db_123', user_id: 'user_123' }]);
+        }
+        return Promise.resolve([]);
+      });
+      return executedSql;
+    }
+
+    function signedRequest(payload: string) {
+      const { signature } = generateStripeSignature(payload, mockEnv.STRIPE_WEBHOOK_SECRET);
+      return new NextRequest('http://localhost/api/stripe-webhook', {
+        method: 'POST',
+        body: payload,
+        headers: {
+          'content-type': 'application/json',
+          'stripe-signature': signature,
+        },
+      });
+    }
+
+    it('refuses a checkout session that would stack Stripe on an entitled Apple subscription', async () => {
+      const executedSql = stubEntitledStoreOwner({
+        apple_original_transaction_id: 'apple-tx-1',
+      });
+
+      const { POST } = await import('@/app/api/stripe-webhook/route');
+
+      const response = await POST(
+        signedRequest(
+          JSON.stringify({
+            id: 'evt_checkout_stacked_apple',
+            type: 'checkout.session.completed',
+            data: {
+              object: {
+                id: 'cs_test_stacked',
+                customer: 'cus_test_123',
+                subscription: 'sub_test_123',
+                metadata: { user_id: 'user_123', plan_tier: 'pro' },
+                line_items: { data: [{ price: { id: 'price_test' } }] },
+              },
+            },
+          }),
+        ),
+      );
+
+      expect(response.status).toBe(500);
+      expect(executedSql.some((sql) => sql.includes('insert into subscriptions'))).toBe(false);
+      expect(mockAllocateCredits).not.toHaveBeenCalled();
+      expect(mockExecute).toHaveBeenCalledWith('select mark_stripe_event_failed($1, $2)', [
+        'evt_checkout_stacked_apple',
+        'This account already has a subscription managed by another billing provider.',
+      ]);
+    });
+
+    it('refuses a new Stripe subscription that would stack on an entitled Google subscription', async () => {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const executedSql = stubEntitledStoreOwner({ google_purchase_token: 'play-token-1' });
+
+      const { POST } = await import('@/app/api/stripe-webhook/route');
+
+      const response = await POST(
+        signedRequest(
+          JSON.stringify({
+            id: 'evt_subscription_stacked_google',
+            type: 'customer.subscription.updated',
+            created: nowSeconds,
+            data: {
+              object: {
+                id: 'sub_test_stacked',
+                customer: 'cus_test_123',
+                status: 'active',
+                metadata: { user_id: 'user_123', plan_tier: 'pro' },
+                items: { data: [{ price: { id: 'price_test' } }] },
+                current_period_start: nowSeconds,
+                current_period_end: nowSeconds + 30 * 24 * 60 * 60,
+                cancel_at_period_end: false,
+                canceled_at: null,
+              },
+            },
+          }),
+        ),
+      );
+
+      expect(response.status).toBe(500);
+      expect(executedSql.some((sql) => sql.includes('insert into subscriptions'))).toBe(false);
+      expect(mockAllocateCredits).not.toHaveBeenCalled();
+    });
+
+    it('still provisions Stripe once the store subscription is no longer entitled', async () => {
+      const executedSql = stubEntitledStoreOwner({
+        apple_original_transaction_id: 'apple-tx-1',
+        status: 'expired',
+      });
+
+      const { POST } = await import('@/app/api/stripe-webhook/route');
+
+      const response = await POST(
+        signedRequest(
+          JSON.stringify({
+            id: 'evt_checkout_after_apple_expiry',
+            type: 'checkout.session.completed',
+            data: {
+              object: {
+                id: 'cs_test_handoff',
+                customer: 'cus_test_123',
+                subscription: 'sub_test_123',
+                metadata: { user_id: 'user_123', plan_tier: 'pro' },
+                line_items: { data: [{ price: { id: 'price_test' } }] },
+              },
+            },
+          }),
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      expect(executedSql.some((sql) => sql.includes('insert into subscriptions'))).toBe(true);
+    });
+  });
+
   describe('Security Audit Logging', () => {
     it('should log invalid signature attempts', async () => {
       const { logInvalidSignature } = await import('@/lib/security-audit');

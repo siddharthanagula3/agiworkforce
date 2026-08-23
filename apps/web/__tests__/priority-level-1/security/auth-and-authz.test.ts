@@ -1,4 +1,3 @@
-
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -19,6 +18,9 @@ vi.mock('@/lib/server/neon-db', () => ({
     query: vi.fn().mockResolvedValue([{ account_status: 'active' }]),
   }),
 }));
+
+process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+delete process.env['CLERK_AUTHORIZED_PARTIES'];
 
 import { getClerkAuthUser } from '@/lib/api-auth';
 
@@ -51,7 +53,29 @@ describe('L1 Security - Auth & Authorization', () => {
     expect(result.email).toBe('b@example.com');
     expect(mockVerifyToken).toHaveBeenCalledWith('valid.jwt.token', {
       secretKey: 'sk_test_clerk',
+      authorizedParties: ['https://app.agiworkforce.test'],
     });
+  });
+
+  test('SECURITY: bearer verification is bound to the deployment origin when CLERK_AUTHORIZED_PARTIES is unset', async () => {
+    mockVerifyToken.mockResolvedValue({ sub: 'bearer-user-3' });
+    await getClerkAuthUser(makeRequest('Bearer valid.jwt.token'));
+    const options = mockVerifyToken.mock.calls[0]?.[1] as { authorizedParties?: string[] };
+    expect(options.authorizedParties).toEqual(['https://app.agiworkforce.test']);
+  });
+
+  test('SECURITY: bearer token is rejected when no authorized party can be resolved', async () => {
+    const savedAppUrl = process.env['NEXT_PUBLIC_APP_URL'];
+    delete process.env['NEXT_PUBLIC_APP_URL'];
+    try {
+      mockVerifyToken.mockResolvedValue({ sub: 'bearer-user-4' });
+      await expect(getClerkAuthUser(makeRequest('Bearer valid.jwt.token'))).rejects.toMatchObject({
+        statusCode: 401,
+      });
+      expect(mockVerifyToken).not.toHaveBeenCalled();
+    } finally {
+      process.env['NEXT_PUBLIC_APP_URL'] = savedAppUrl;
+    }
   });
 
   test('SECURITY: expired/invalid Bearer token is rejected (401), not honored', async () => {

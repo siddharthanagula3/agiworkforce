@@ -241,6 +241,10 @@ function ownerSql(
   };
 }
 
+function cloudCodeQuotaLockKey(owner: CloudCodeOwner): string {
+  return `${owner.organizationId ?? '-'}:${owner.userId}`;
+}
+
 export async function listCloudCodeSessions(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
@@ -397,58 +401,76 @@ export async function createCloudCodeSession(
   planTier: string,
 ): Promise<CloudCodeSession> {
   const validated = validateCreateCloudCodeSession(input);
-  const existing = await findByRequestId(db, owner, validated.requestId);
-  if (existing) {
-    if (!sameCreateRequest(existing, validated)) {
-      throw new CloudCodeConflictError('requestId was already used with different session details');
-    }
-    return mapCloudCodeSession(existing);
-  }
 
-  const maxSessions = getPlanMaxSandboxes(planTier);
-  if (maxSessions <= 0) {
-    throw new CloudCodeLimitError('Your plan does not include managed Code sessions', maxSessions);
-  }
-
-  const scoped = ownerSql(owner, 1);
-  const activeRows = await db.query<{ count: string | number }>(
-    `select count(*) as count
-       from cloud_code_sessions
-      where ${scoped.clause}
-        and state in ('provisioning', 'ready', 'running')`,
-    scoped.params,
-  );
-  if (Number(activeRows[0]?.count ?? 0) >= maxSessions) {
-    throw new CloudCodeLimitError(
-      `Your plan allows ${maxSessions} active Code session${maxSessions === 1 ? '' : 's'}`,
-      maxSessions,
-    );
-  }
-
-  let row: SessionRow;
+  let claimed: { row: SessionRow; reused: boolean };
   try {
-    const inserted = await db.query<SessionRow>(
-      `insert into cloud_code_sessions (
-         user_id, organization_id, request_id, title, repository_url,
-         network_access, state, workspace_path
-       ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7)
-       returning *`,
-      [
-        owner.userId,
-        owner.organizationId,
-        validated.requestId,
-        validated.title,
-        validated.repositoryUrl,
-        validated.networkAccess,
-        validated.workspacePath,
-      ],
-    );
-    row = inserted[0]!;
+    claimed = await db.transaction(async (tx) => {
+      await tx.query(
+        `select pg_advisory_xact_lock(hashtextextended('agi:cloud-code-sessions:' || $1, 0))`,
+        [cloudCodeQuotaLockKey(owner)],
+      );
+
+      const existing = await findByRequestId(tx, owner, validated.requestId);
+      if (existing) {
+        if (!sameCreateRequest(existing, validated)) {
+          throw new CloudCodeConflictError(
+            'requestId was already used with different session details',
+          );
+        }
+        return { row: existing, reused: true };
+      }
+
+      const maxSessions = getPlanMaxSandboxes(planTier);
+      if (maxSessions <= 0) {
+        throw new CloudCodeLimitError(
+          'Your plan does not include managed Code sessions',
+          maxSessions,
+        );
+      }
+
+      const scoped = ownerSql(owner, 1);
+      const activeRows = await tx.query<{ count: string | number }>(
+        `select count(*) as count
+           from cloud_code_sessions
+          where ${scoped.clause}
+            and state in ('provisioning', 'ready', 'running')`,
+        scoped.params,
+      );
+      if (Number(activeRows[0]?.count ?? 0) >= maxSessions) {
+        throw new CloudCodeLimitError(
+          `Your plan allows ${maxSessions} active Code session${maxSessions === 1 ? '' : 's'}`,
+          maxSessions,
+        );
+      }
+
+      const inserted = await tx.query<SessionRow>(
+        `insert into cloud_code_sessions (
+           user_id, organization_id, request_id, title, repository_url,
+           network_access, state, workspace_path
+         ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7)
+         returning *`,
+        [
+          owner.userId,
+          owner.organizationId,
+          validated.requestId,
+          validated.title,
+          validated.repositoryUrl,
+          validated.networkAccess,
+          validated.workspacePath,
+        ],
+      );
+      return { row: inserted[0]!, reused: false };
+    });
   } catch (error) {
+    if (error instanceof CloudCodeConflictError || error instanceof CloudCodeLimitError)
+      throw error;
     const raced = await findByRequestId(db, owner, validated.requestId);
     if (raced && sameCreateRequest(raced, validated)) return mapCloudCodeSession(raced);
     throw error;
   }
+
+  if (claimed.reused) return mapCloudCodeSession(claimed.row);
+  const row = claimed.row;
 
   const sessionId = row.id;
   const scope = managedCloudCodeSessionScope(

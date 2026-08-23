@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { withErrorHandler } from '@/lib/error-handler';
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { withRateLimit } from '@/lib/rate-limit';
 import { readOpenDataRightsRequests } from '@/lib/server/data-rights-requests';
 
@@ -11,7 +11,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  await requireAdmin(request);
+  await requirePlatformAdmin(request);
 
   const requests = await readOpenDataRightsRequests();
 

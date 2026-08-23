@@ -114,6 +114,40 @@ describe('secret redaction parity with the Rust CLI', () => {
     );
   });
 
+  it('redacts snake_case secret fields the \\b word boundary never reached', () => {
+    const hmacKey = 'a1b2c3d4'.repeat(8);
+    const handshake = JSON.stringify({ type: 'connect', session_secret: hmacKey, id: 'req-1' });
+
+    expect(redactSecrets(handshake)).not.toContain(hmacKey);
+    expect(scanSecrets(handshake).map((finding) => finding.ruleId)).toContain(
+      'compound-named-secret',
+    );
+    expect(redactSecrets('AGI_SESSION_SECRET=0123456789abcdef')).not.toContain('0123456789abcdef');
+    expect(redactSecrets('device_token=abcdefghij12')).not.toContain('abcdefghij12');
+    expect(redactSecrets('{"pairing_key": "abcdefghij123456"}')).not.toContain('abcdefghij123456');
+    expect(redactSecrets('{"refresh_tokens": "abcdefghij123456"}')).not.toContain(
+      'abcdefghij123456',
+    );
+  });
+
+  it('leaves compound field names that only address data, never a credential', () => {
+    const structural = [
+      '{"idempotency_key":"order-2026-08-21-0007"}',
+      '{"partition_key":"tenant-000123456"}',
+      '{"object_key":"uploads/2026/report.pdf"}',
+      '{"cache_key":"home-page-v3-locale-en"}',
+      '{"row_key":"customer#000123456"}',
+      '{"public_key":"MFkwEwYHKoZIzj0CAQYIKoZ"}',
+      '{"primary_key":"orders_pkey_00012345"}',
+      '{"sort_key":"created_at_desc_000001"}',
+    ];
+
+    for (const text of structural) {
+      expect(redactSecrets(text)).toBe(text);
+      expect(scanSecrets(text)).toEqual([]);
+    }
+  });
+
   it('does not re-redact a placeholder an earlier rule already substituted', () => {
     expect(redactSecrets('OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456')).toBe(
       'OPENAI_API_KEY=[REDACTED_API_KEY]',

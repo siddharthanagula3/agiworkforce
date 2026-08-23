@@ -14,7 +14,7 @@
 //! │    src/main.rs  (+42 / -3 lines)                                             │
 //! │                                                                              │
 //! │  [ Yes ]  [ No ]  [ Allow Session ]  [ Always Allow ]  [ Deny All ]          │
-//! │     ↑                                                                        │
+//! │             ↑                                                                │
 //! │  ←/→ or h/l to move   Enter to confirm   Esc = No                           │
 //! └──────────────────────────────────────────────────────────────────────────────┘
 //! ```
@@ -31,6 +31,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
 use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_warning};
 
@@ -85,12 +86,16 @@ const CHOICES: [ApprovalChoice; 5] = [
     ApprovalChoice::DenyAll,
 ];
 
+/// The overlay gates shell exec and file writes, so the preselected button is
+/// the denying one: confirming without reading must never grant the call.
+const DEFAULT_CURSOR: usize = 1;
+const _: () = assert!(matches!(CHOICES[DEFAULT_CURSOR], ApprovalChoice::No));
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 /// All mutable state owned by the host `TuiApp`.
-#[derive(Default)]
 pub struct ApprovalOverlayState {
     /// True while the overlay is intercepting key events.
     pub visible: bool,
@@ -99,17 +104,38 @@ pub struct ApprovalOverlayState {
     /// Optional detail lines (file path, diff stat, command preview, …).
     pub detail: Vec<String>,
     /// Index into `CHOICES` (0 = Yes, 1 = No, 2 = Allow Session, 3 = Always Allow, 4 = Deny All).
+    /// Starts on `No` so an unread prompt cannot be granted by a reflexive Enter.
     pub cursor: usize,
     /// Set once the user confirms; `None` while the overlay is active.
     pub result: Option<ApprovalChoice>,
 }
 
+impl Default for ApprovalOverlayState {
+    fn default() -> Self {
+        Self {
+            visible: false,
+            prompt: String::new(),
+            detail: Vec::new(),
+            cursor: DEFAULT_CURSOR,
+            result: None,
+        }
+    }
+}
+
 impl ApprovalOverlayState {
     /// Open the overlay with a fresh prompt. Clears any previous result.
+    ///
+    /// The prompt and detail lines quote the tool name, path, and argument
+    /// preview the model supplied. They are stripped of terminal escapes here
+    /// so neither render path can let a crafted argument repaint the consent
+    /// text the operator is about to answer.
     pub fn open(&mut self, prompt: impl Into<String>, detail: Vec<String>) {
-        self.prompt = prompt.into();
-        self.detail = detail;
-        self.cursor = 0; // default to Yes
+        self.prompt = sanitize_terminal_text(&prompt.into()).into_owned();
+        self.detail = detail
+            .into_iter()
+            .map(|line| sanitize_terminal_text(&line).into_owned())
+            .collect();
+        self.cursor = DEFAULT_CURSOR;
         self.result = None;
         self.visible = true;
     }
@@ -390,22 +416,86 @@ mod tests {
         terminal
     }
 
+    /// The prompt and detail quote model-supplied tool arguments directly
+    /// above the consent buttons, so an escape there could repaint the
+    /// decision the operator is answering.
+    #[test]
+    fn open_strips_terminal_escapes_from_prompt_and_detail() {
+        let mut state = ApprovalOverlayState::default();
+        state.open(
+            "Allow run_command\u{1b}[2J to run:",
+            vec!["rm -rf /\u{1b}]52;c;cm0gLXJmIC8=\u{7}  (safe)".to_string()],
+        );
+
+        assert_eq!(state.prompt, "Allow run_command to run:");
+        assert_eq!(state.detail[0], "rm -rf /  (safe)");
+
+        let text = state.render_text();
+        assert!(!text.contains('\u{1b}'), "escape survived: {text:?}");
+        assert!(
+            !text.contains("52;c"),
+            "clipboard payload survived: {text:?}"
+        );
+
+        let terminal = draw_overlay(&state, 90, 14);
+        let painted: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(
+            !painted.contains('\u{1b}'),
+            "escape reached the frame buffer"
+        );
+    }
+
     #[test]
     fn default_state_is_invisible_and_unresolved() {
         let s = ApprovalOverlayState::default();
         assert!(!s.visible);
+        assert_eq!(s.cursor, ApprovalChoice::No.index());
         assert!(s.result.is_none());
         assert!(!s.is_done());
         assert!(!s.is_resolved());
     }
 
     #[test]
-    fn open_sets_visible_and_defaults_to_yes() {
+    fn open_defaults_cursor_to_no() {
         let s = open_overlay();
         assert!(s.visible);
-        assert_eq!(s.cursor, 0); // Yes
+        assert_eq!(
+            s.cursor,
+            ApprovalChoice::No.index(),
+            "a freshly opened approval prompt must preselect No, not Yes"
+        );
         assert!(s.result.is_none());
         assert!(!s.is_done());
+    }
+
+    #[test]
+    fn enter_without_moving_the_cursor_denies_the_tool_call() {
+        let mut s = open_overlay();
+        let action = s.handle_key(KeyAction::Enter);
+        assert_eq!(action, ViewAction::Submit(ApprovalChoice::No.index()));
+        assert_eq!(
+            s.result,
+            Some(ApprovalChoice::No),
+            "a reflexive Enter on an unread prompt must deny, matching the Esc fail-safe"
+        );
+        assert!(!s.visible);
+        assert!(s.is_done());
+    }
+
+    #[test]
+    fn reopening_resets_a_moved_cursor_back_to_no() {
+        let mut s = open_overlay();
+        s.handle_key(KeyAction::Right);
+        s.handle_key(KeyAction::Right);
+        s.open("Allow bash to run:", vec!["rm -rf /tmp/x".to_string()]);
+        assert_eq!(s.cursor, ApprovalChoice::No.index());
+        assert!(s.result.is_none());
     }
 
     #[test]
@@ -421,9 +511,9 @@ mod tests {
     fn right_arrow_advances_cursor() {
         let mut s = open_overlay();
         assert_eq!(s.handle_key(KeyAction::Right), ViewAction::Continue);
-        assert_eq!(s.cursor, 1); // No
+        assert_eq!(s.cursor, ApprovalChoice::AllowSession.index());
         assert_eq!(s.handle_key(KeyAction::Right), ViewAction::Continue);
-        assert_eq!(s.cursor, 2); // Always Allow
+        assert_eq!(s.cursor, ApprovalChoice::AlwaysAllow.index());
     }
 
     #[test]
@@ -438,7 +528,9 @@ mod tests {
     #[test]
     fn left_arrow_stops_at_first_button() {
         let mut s = open_overlay();
-        s.handle_key(KeyAction::Left);
+        for _ in 0..10 {
+            s.handle_key(KeyAction::Left);
+        }
         assert_eq!(s.cursor, 0);
     }
 
@@ -448,16 +540,16 @@ mod tests {
         for _ in 0..CHOICES.len() {
             s.handle_key(KeyAction::Tab);
         }
-        assert_eq!(s.cursor, 0); // back to start
+        assert_eq!(s.cursor, ApprovalChoice::No.index()); // back to start
     }
 
     #[test]
     fn enter_submits_current_choice() {
         let mut s = open_overlay();
-        s.handle_key(KeyAction::Right); // move to No
+        s.handle_key(KeyAction::Left); // move to Yes
         let action = s.handle_key(KeyAction::Enter);
-        assert_eq!(action, ViewAction::Submit(1));
-        assert_eq!(s.result, Some(ApprovalChoice::No));
+        assert_eq!(action, ViewAction::Submit(ApprovalChoice::Yes.index()));
+        assert_eq!(s.result, Some(ApprovalChoice::Yes));
         assert!(!s.visible);
         assert!(s.is_done());
     }
@@ -475,7 +567,6 @@ mod tests {
     #[test]
     fn y_shortcut_resolves_yes_immediately() {
         let mut s = open_overlay();
-        s.handle_key(KeyAction::Right); // move cursor away from Yes first
         let action = s.handle_key(KeyAction::Char('y'));
         assert_eq!(action, ViewAction::Submit(0));
         assert_eq!(s.result, Some(ApprovalChoice::Yes));
@@ -582,9 +673,9 @@ mod tests {
     fn h_l_vim_keys_move_cursor() {
         let mut s = open_overlay();
         s.handle_key(KeyAction::Char('l'));
-        assert_eq!(s.cursor, 1);
+        assert_eq!(s.cursor, ApprovalChoice::AllowSession.index());
         s.handle_key(KeyAction::Char('h'));
-        assert_eq!(s.cursor, 0);
+        assert_eq!(s.cursor, ApprovalChoice::No.index());
     }
 
     #[test]

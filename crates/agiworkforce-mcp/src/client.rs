@@ -501,8 +501,13 @@ impl McpClient {
         let server_name = self.server_name.clone();
         let hooks = self.hooks.clone();
         let elicitation_handler = Arc::clone(&hooks.elicitation);
-        let max_frame = self.timeouts.max_frame_bytes;
-        let max_response = self.timeouts.max_response_bytes;
+        let max_frame = self.timeouts.frame_cap();
+        let max_response = self.timeouts.response_cap();
+        // The POST endpoint of an SSE transport can be replaced at connect time
+        // by a hint the *server* pushed, and the headers below are credentials
+        // the host configured for the server the user named. Re-check the
+        // origin at the sink so no future path can widen it.
+        let configured_url = self.transport_config.remote_url().map(str::to_string);
 
         match &mut self.inner {
             TransportConn::Stdio { child } => {
@@ -599,6 +604,18 @@ impl McpClient {
                 rx,
                 session_id,
             } => {
+                if let Some(configured) = configured_url.as_deref() {
+                    crate::security::enforce_same_origin(
+                        configured,
+                        post_url.as_str(),
+                        "SSE POST endpoint",
+                    )
+                    .with_context(|| {
+                        format!(
+                            "[{server_name}] refusing to send configured MCP headers to a foreign origin on '{method_name}'"
+                        )
+                    })?;
+                }
                 let mut req_builder = client
                     .post(post_url.as_str())
                     .header("Content-Type", "application/json")
@@ -616,24 +633,20 @@ impl McpClient {
                     .with_context(|| format!("[{server_name}] SSE: POST '{method_name}' failed"))?;
                 if !resp.status().is_success() {
                     let status = resp.status();
-                    let body = resp.text().await.unwrap_or_default();
+                    let body = http::read_text_capped(resp).await;
                     bail!("[{server_name}] SSE: POST '{method_name}' returned {status} — {body}");
                 }
 
                 // Some servers return the JSON-RPC response inline in the POST
-                // body; others send it through the SSE stream. Try inline first.
-                // Optional hardening (desktop parity): reject an oversized
-                // inline body via Content-Length before reading it.
-                if let Some(cap) = max_response {
-                    if let Some(len) = resp.content_length() {
-                        if len > cap {
-                            bail!(
-                                "[{server_name}] SSE: response too large ({len} bytes, max {cap} bytes) on '{method_name}'"
-                            );
-                        }
-                    }
-                }
-                let inline_body = resp.text().await.unwrap_or_default();
+                // body; others send it through the SSE stream. Try inline first,
+                // under a hard size cap so a hostile server cannot exhaust
+                // memory with one giant reply (or a chunked endless one).
+                let inline_bytes = http::read_body_capped(resp, max_response)
+                    .await
+                    .with_context(|| {
+                        format!("[{server_name}] SSE: POST '{method_name}' response")
+                    })?;
+                let inline_body = String::from_utf8_lossy(&inline_bytes).into_owned();
                 if !inline_body.trim().is_empty() {
                     if let Ok(value) = serde_json::from_str::<serde_json::Value>(&inline_body) {
                         if let Some(matched) =
@@ -797,6 +810,7 @@ impl McpClient {
         });
         let server_name = self.server_name.clone();
         let token_store = Arc::clone(&self.hooks.token_store);
+        let configured_url = self.transport_config.remote_url().map(str::to_string);
 
         match &mut self.inner {
             TransportConn::Stdio { child } => {
@@ -817,6 +831,18 @@ impl McpClient {
                 session_id,
                 ..
             } => {
+                if let Some(configured) = configured_url.as_deref() {
+                    crate::security::enforce_same_origin(
+                        configured,
+                        post_url.as_str(),
+                        "SSE POST endpoint",
+                    )
+                    .with_context(|| {
+                        format!(
+                            "[{server_name}] refusing to send configured MCP headers to a foreign origin on '{method}'"
+                        )
+                    })?;
+                }
                 let mut req_builder = client
                     .post(post_url.as_str())
                     .header("Content-Type", "application/json")
@@ -840,6 +866,16 @@ impl McpClient {
                 oauth,
                 ..
             } => {
+                // Same sink guard `send_once` applies to requests: the bearer
+                // and the configured headers below are credentials, and nothing
+                // else on this path re-checks the scheme.
+                if let Err(e) = http::refuse_cleartext_credentials(
+                    url.as_str(),
+                    oauth.is_some() || http::headers_carry_credentials(headers),
+                ) {
+                    eprintln!("[{server_name}] HTTP: notification '{method}' not sent: {e:#}");
+                    return Ok(());
+                }
                 let mut req_builder = client
                     .post(url.as_str())
                     .header("Content-Type", "application/json")
@@ -1055,6 +1091,91 @@ fn kill_process_gracefully_sync(child: &mut Child) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::elicitation::AutoDeclineHandler;
+    use crate::hooks::{ClientInfo, DenyBrowserAuthorizer, InMemoryTokenStore, noop_log};
+
+    fn test_hooks() -> ClientHooks {
+        ClientHooks {
+            token_store: Arc::new(InMemoryTokenStore::new()),
+            elicitation: Arc::new(AutoDeclineHandler),
+            browser: Arc::new(DenyBrowserAuthorizer),
+            client_info: ClientInfo {
+                name: "unit-test".to_string(),
+                version: "0.0.0".to_string(),
+            },
+            on_log: noop_log(),
+        }
+    }
+
+    fn auth_header() -> HashMap<String, String> {
+        HashMap::from([("Authorization".to_string(), "Bearer s3cret".to_string())])
+    }
+
+    // -----------------------------------------------------------------------
+    // Credentials never transit a cleartext remote connection
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn http_bringup_refuses_cleartext_credentials() {
+        // Http bringup is lazy (no I/O), so the refusal must land at connect.
+        let err = match McpClient::connect_without_handshake(
+            "cleartext-http",
+            TransportConfig::Http {
+                url: "http://mcp.example.com/".to_string(),
+                headers: auth_header(),
+                oauth: None,
+            },
+            McpTimeouts::default(),
+            test_hooks(),
+        )
+        .await
+        {
+            Ok(_) => panic!("cleartext credentials must be refused"),
+            Err(e) => e,
+        };
+        let msg = format!("{:#}", err.as_anyhow());
+        assert!(msg.contains("must use HTTPS"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn legacy_sse_bringup_refuses_cleartext_credentials() {
+        let err = match McpClient::connect_without_handshake(
+            "cleartext-legacy",
+            TransportConfig::SseLegacy {
+                base_url: "http://mcp.example.com/".to_string(),
+                headers: auth_header(),
+            },
+            McpTimeouts::default(),
+            test_hooks(),
+        )
+        .await
+        {
+            Ok(_) => panic!("cleartext credentials must be refused"),
+            Err(e) => e,
+        };
+        let msg = format!("{:#}", err.as_anyhow());
+        assert!(msg.contains("must use HTTPS"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn sse_bringup_refuses_cleartext_credentials_before_any_request() {
+        let err = match McpClient::connect_without_handshake(
+            "cleartext-sse",
+            TransportConfig::Sse {
+                url: "http://mcp.example.com/sse".to_string(),
+                headers: auth_header(),
+            },
+            McpTimeouts::default(),
+            test_hooks(),
+        )
+        .await
+        {
+            Ok(_) => panic!("cleartext credentials must be refused"),
+            Err(e) => e,
+        };
+        let msg = format!("{:#}", err.as_anyhow());
+        assert!(msg.contains("must use HTTPS"), "unexpected error: {msg}");
+    }
 
     // -----------------------------------------------------------------------
     // Connection-error detection

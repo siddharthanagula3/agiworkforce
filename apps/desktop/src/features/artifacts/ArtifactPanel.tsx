@@ -1,4 +1,3 @@
-
 import { formatDistanceToNow } from 'date-fns';
 import {
   Archive,
@@ -49,6 +48,7 @@ import {
   type ArtifactVersion,
   type RenderedArtifact,
 } from '@/stores/artifactStore';
+import { spreadsheetSafeExport } from '@agiworkforce/unified-chat';
 import { ArtifactTypeIcon, getArtifactFileExtension } from '@/lib/artifactUtils';
 import { artifactToSummary } from '@/lib/messageArtifactPanel';
 import { ArtifactRendererView } from './ArtifactRendererView';
@@ -66,6 +66,17 @@ interface ArtifactPanelProps {
 }
 
 type InnerTab = 'preview' | 'code' | 'versions';
+
+// every write of artifact.content to disk goes through here: a `spreadsheet` artifact
+// is named .csv and handleOpenInSystemApp hands it straight to the OS spreadsheet app
+function artifactDownloadFile(artifact: Artifact): { blob: Blob; filename: string } {
+  const extension = getArtifactFileExtension(artifact.artifact_type);
+  const { body, mimeType } = spreadsheetSafeExport(artifact.content, extension);
+  return {
+    blob: new Blob([body], { type: mimeType }),
+    filename: `${artifact.title}.${extension}`,
+  };
+}
 
 export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPanelProps) {
   const {
@@ -219,11 +230,11 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     try {
       const artifact = await getArtifact(renderedArtifact.id);
       if (!artifact) return;
-      const blob = new Blob([artifact.content], { type: 'text/plain' });
+      const { blob, filename } = artifactDownloadFile(artifact);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${artifact.title}.${getArtifactFileExtension(artifact.artifact_type)}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -381,12 +392,10 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     try {
       const artifact = await getArtifact(renderedArtifact.id);
       if (!artifact) return;
-      const ext = getArtifactFileExtension(artifact.artifact_type);
-      const blob = new Blob([artifact.content], { type: 'text/plain' });
+      const { blob, filename } = artifactDownloadFile(artifact);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const filename = `${artifact.title}.${ext}`;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
@@ -411,11 +420,11 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
       try {
         const artifact = await getArtifact(summary.id);
         if (!artifact) continue;
-        const blob = new Blob([artifact.content], { type: 'text/plain' });
+        const { blob, filename } = artifactDownloadFile(artifact);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${artifact.title}.${getArtifactFileExtension(artifact.artifact_type)}`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -658,6 +667,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                               size="icon"
                               className="h-7 w-7"
                               onClick={handleDownload}
+                              aria-label="Download artifact"
                             >
                               <Download className="h-3.5 w-3.5" />
                             </Button>
@@ -671,6 +681,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                               size="icon"
                               className="h-7 w-7"
                               onClick={() => void handleOpenInSystemApp()}
+                              aria-label="Open in system app"
                             >
                               <ExternalLink className="h-3.5 w-3.5" />
                             </Button>

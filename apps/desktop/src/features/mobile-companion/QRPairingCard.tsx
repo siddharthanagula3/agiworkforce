@@ -80,11 +80,11 @@ export function QRPairingCard() {
       ? `${pairingCode.slice(0, 4)} ${pairingCode.slice(4, 8)} ${pairingCode.slice(8, 12)}`
       : pairingCode;
 
-  const handleCopyCode = async () => {
-    if (!pairingCode) return;
-    const succeeded = await copyToClipboard(pairingCode, {
-      successMessage: 'Pairing code copied',
-      errorMessage: 'Could not copy the pairing code',
+  const handleCopyLink = async () => {
+    if (!qrData) return;
+    const succeeded = await copyToClipboard(qrData, {
+      successMessage: 'Pairing link copied',
+      errorMessage: 'Could not copy the pairing link',
     });
     if (!succeeded) return;
 
@@ -115,7 +115,7 @@ export function QRPairingCard() {
         <ol className="list-inside list-decimal space-y-1 text-xs text-slate-600">
           <li>Open {MOBILE_REMOTE_SCREEN_LABEL} on your phone</li>
           <li>Select Scan QR Code</li>
-          <li>Scan the QR or choose Enter code manually</li>
+          <li>Scan the QR, or copy the pairing link and paste it into Enter code manually</li>
         </ol>
 
         <div className="relative flex h-52 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50">
@@ -168,8 +168,9 @@ export function QRPairingCard() {
               </p>
               <button
                 type="button"
-                onClick={() => void handleCopyCode()}
-                aria-label={copied ? 'Pairing code copied' : 'Copy pairing code'}
+                onClick={() => void handleCopyLink()}
+                disabled={!qrData}
+                aria-label={copied ? 'Pairing link copied' : 'Copy pairing link'}
                 className="rounded-md p-2 text-slate-500 transition-colors hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
               >
                 {copied ? (
@@ -180,7 +181,8 @@ export function QRPairingCard() {
               </button>
             </div>
             <p className="mt-2 text-center text-xs leading-4 text-slate-500">
-              On your phone, choose Enter code manually and type this 12-character code.
+              Check this code matches your phone. Pairing needs the full link — scan the QR, or copy
+              the pairing link and paste it into Enter code manually.
             </p>
             {expiresMessage && (
               <p className="mt-1 text-center text-xs text-slate-500">Expires {expiresMessage}</p>

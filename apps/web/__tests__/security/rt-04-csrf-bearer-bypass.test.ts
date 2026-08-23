@@ -17,6 +17,8 @@ vi.mock('@clerk/nextjs/server', () => ({
 process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
 process.env['CSRF_SECRET'] = 'test-csrf-secret-32chars-minimum!!';
 process.env['JWT_SECRET'] = 'test-developer-jwt-secret-at-least-32-bytes';
+process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+delete process.env['CLERK_AUTHORIZED_PARTIES'];
 
 import { requireCsrfToken, validateCsrfFromRequest, isBearerTokenValid } from '@/lib/csrf';
 
@@ -92,27 +94,42 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
       expect(mockVerifyToken).not.toHaveBeenCalled();
     });
 
-    it('passes CLERK_AUTHORIZED_PARTIES to verifyToken so a foreign-origin token is rejected', async () => {
-      vi.stubEnv(
-        'CLERK_AUTHORIZED_PARTIES',
-        'https://agiworkforce.com, https://app.agiworkforce.com',
-      );
+    it('binds Clerk verification to the deployment origin when CLERK_AUTHORIZED_PARTIES is unset', async () => {
+      mockVerifyToken.mockResolvedValue({ sub: 'user_123' });
+      const token = 'valid.jwt.token.with.sufficient.length.for.bearer.minimum';
+      await isBearerTokenValid(`Bearer ${token}`);
+      expect(mockVerifyToken).toHaveBeenCalledWith(token, {
+        secretKey: 'test-clerk-secret-key',
+        authorizedParties: ['https://app.agiworkforce.test'],
+      });
+    });
+
+    it('uses the configured allowlist when CLERK_AUTHORIZED_PARTIES is set', async () => {
+      process.env['CLERK_AUTHORIZED_PARTIES'] = 'https://app.example.com';
       try {
-        mockVerifyToken.mockResolvedValue({ sub: 'user_1' });
-
-        const result = await isBearerTokenValid(
-          'Bearer clerk-session-token-abcdefghijklmnopqrstuvwxyz',
-        );
-
-        expect(result).toBe(true);
-        expect(mockVerifyToken).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            authorizedParties: ['https://agiworkforce.com', 'https://app.agiworkforce.com'],
-          }),
-        );
+        mockVerifyToken.mockResolvedValue({ sub: 'user_123' });
+        const token = 'valid.jwt.token.with.sufficient.length.for.bearer.minimum';
+        await isBearerTokenValid(`Bearer ${token}`);
+        expect(mockVerifyToken).toHaveBeenCalledWith(token, {
+          secretKey: 'test-clerk-secret-key',
+          authorizedParties: ['https://app.example.com'],
+        });
       } finally {
-        vi.unstubAllEnvs();
+        delete process.env['CLERK_AUTHORIZED_PARTIES'];
+      }
+    });
+
+    it('rejects a Clerk token outright when no authorized party can be resolved', async () => {
+      delete process.env['NEXT_PUBLIC_APP_URL'];
+      try {
+        mockVerifyToken.mockResolvedValue({ sub: 'user_123' });
+        const result = await isBearerTokenValid(
+          'Bearer valid.jwt.token.with.sufficient.length.for.bearer.minimum',
+        );
+        expect(result).toBe(false);
+        expect(mockVerifyToken).not.toHaveBeenCalled();
+      } finally {
+        process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
       }
     });
   });

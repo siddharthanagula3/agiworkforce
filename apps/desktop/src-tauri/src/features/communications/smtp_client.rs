@@ -43,16 +43,25 @@ impl SmtpClient {
         password: &str,
         use_tls: bool,
     ) -> Result<Self> {
+        if !use_tls {
+            return Err(Error::Generic(
+                "Non-TLS SMTP connections are not supported for security reasons".to_string(),
+            ));
+        }
+
         info!("Configuring SMTP transport for {}", host);
 
         let credentials = Credentials::new(email.to_string(), password.to_string());
         let timeout = Some(Duration::from_secs(30));
 
-        let builder = if use_tls {
-            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
-                .map_err(|err| Error::Generic(format!("Failed to configure STARTTLS: {}", err)))?
-        } else {
-            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
+        let builder = match tls_mode_for_port(port) {
+            SmtpTlsMode::Implicit => {
+                AsyncSmtpTransport::<Tokio1Executor>::relay(host).map_err(|err| {
+                    Error::Generic(format!("Failed to configure implicit SMTP TLS: {}", err))
+                })?
+            }
+            SmtpTlsMode::StartTls => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
+                .map_err(|err| Error::Generic(format!("Failed to configure STARTTLS: {}", err)))?,
         };
 
         let transport = builder
@@ -124,6 +133,22 @@ impl SmtpClient {
     }
 }
 
+const IMPLICIT_TLS_PORT: u16 = 465;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SmtpTlsMode {
+    Implicit,
+    StartTls,
+}
+
+fn tls_mode_for_port(port: u16) -> SmtpTlsMode {
+    if port == IMPLICIT_TLS_PORT {
+        SmtpTlsMode::Implicit
+    } else {
+        SmtpTlsMode::StartTls
+    }
+}
+
 fn mailbox_from_address(address: &EmailAddress) -> Result<Mailbox> {
     let parsed = address.email.parse().map_err(|err| {
         Error::EmailSend(format!(
@@ -176,4 +201,44 @@ fn extract_message_id(response: lettre::transport::smtp::response::Response) -> 
         .next()
         .map(|msg| msg.to_string())
         .unwrap_or_else(|| Uuid::new_v4().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn new_rejects_plaintext_smtp() {
+        let result = SmtpClient::new(
+            "smtp.invalid.test",
+            2525,
+            "user@example.com",
+            "hunter2",
+            false,
+        )
+        .await;
+
+        let err = match result {
+            Ok(_) => panic!("plaintext SMTP must be refused"),
+            Err(err) => err,
+        };
+
+        assert!(
+            err.to_string()
+                .contains("Non-TLS SMTP connections are not supported for security reasons"),
+            "unexpected error: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn implicit_tls_is_used_for_the_smtps_port() {
+        assert_eq!(tls_mode_for_port(465), SmtpTlsMode::Implicit);
+    }
+
+    #[test]
+    fn starttls_is_used_for_submission_ports() {
+        assert_eq!(tls_mode_for_port(587), SmtpTlsMode::StartTls);
+        assert_eq!(tls_mode_for_port(25), SmtpTlsMode::StartTls);
+    }
 }

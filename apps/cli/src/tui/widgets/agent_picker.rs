@@ -20,6 +20,7 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 
 use super::i18n::{keys, t, t_args};
 use crate::agents::AgentDefinition;
+use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
 use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light};
 
@@ -258,8 +259,8 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
             let name_col = 18usize;
             let scope_col = 9usize;
             let desc_budget = (area.width as usize).saturating_sub(name_col + scope_col + 7);
-            let name_short = pad_to_cols(&agent.name, name_col);
-            let desc_short = pad_to_cols(desc, desc_budget);
+            let name_short = pad_to_cols(sanitize_terminal_text(&agent.name).as_ref(), name_col);
+            let desc_short = pad_to_cols(sanitize_terminal_text(desc).as_ref(), desc_budget);
 
             let text = format!(
                 " {} {}  {}  [{}]",
@@ -303,7 +304,11 @@ fn render_detail(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
             .max_turns
             .map(|n| format!("  max_turns: {n}"))
             .unwrap_or_default();
-        let line = format!(" model: {}   tools: {}{}", model, tools, max_turns);
+        let line = sanitize_terminal_text(&format!(
+            " model: {}   tools: {}{}",
+            model, tools, max_turns
+        ))
+        .into_owned();
         frame.render_widget(
             Paragraph::new(Span::styled(line, Style::default().fg(ui_muted()))),
             area,

@@ -22,7 +22,7 @@ describe('QRPairingCard', () => {
       status: 'waiting',
       pairingCode: 'ABCD1234WXYZ',
       expiresAt: null,
-      qrData: 'agi://pair/ABCD1234WXYZ',
+      qrData: `agiw3:ABCD1234WXYZ:${'9f'.repeat(32)}`,
       error: null,
       peerConnected: false,
       requestPairingCode,
@@ -30,29 +30,25 @@ describe('QRPairingCard', () => {
     });
   });
 
-  it('names the real Mobile path and supports manual-code copy', async () => {
+  it('names the real Mobile path and copies the full pairing link, not the bare code', async () => {
     render(<QRPairingCard />);
 
     expect(screen.getByText(/AGI Workforce/)).toHaveTextContent(
       `AGI Workforce → ${MOBILE_REMOTE_SCREEN_LABEL}`,
     );
     expect(screen.getByText('Select Scan QR Code')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'On your phone, choose Enter code manually and type this 12-character code.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Pairing needs the full link/)).toBeInTheDocument();
     expect(screen.getByText('ABCD 1234 WXYZ')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy pairing code' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy pairing link' }));
 
     await waitFor(() => {
-      expect(copyToClipboard).toHaveBeenCalledWith('ABCD1234WXYZ', {
-        successMessage: 'Pairing code copied',
-        errorMessage: 'Could not copy the pairing code',
+      expect(copyToClipboard).toHaveBeenCalledWith(`agiw3:ABCD1234WXYZ:${'9f'.repeat(32)}`, {
+        successMessage: 'Pairing link copied',
+        errorMessage: 'Could not copy the pairing link',
       });
     });
-    expect(screen.getByRole('button', { name: 'Pairing code copied' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pairing link copied' })).toBeInTheDocument();
   });
 
   it('refreshes and opens an enlarged QR without inventing another pairing target', async () => {

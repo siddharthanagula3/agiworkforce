@@ -26,6 +26,7 @@ import {
 import { ToolCallCard } from './ToolCallCard';
 import { AgentActivityTimeline, hasCanonicalToolActivity } from './AgentActivityTimeline';
 import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
+import { artifactDownloadFile } from '../lib/artifact-download';
 import { getStreamErrorMessage } from '../lib/continue-generation';
 import { useHostBridge } from '../lib/hostBridge';
 import type {
@@ -94,10 +95,22 @@ export function StreamingThinkingStatus() {
   );
 }
 
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
 export function safeHref(url: string): string | null {
   const trimmed = url.trim();
+  // browsers strip embedded control characters, so '/<TAB>/evil.com' resolves cross-origin
+  if (hasControlCharacter(trimmed)) return null;
   if (/^(https?:|mailto:|tel:)/i.test(trimmed)) return trimmed;
-  if (/^[/#]/.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('#')) return trimmed;
+  // a same-app path is exactly one leading '/'; '//host' and '/\host' are cross-origin
+  if (/^\/(?![/\\])/.test(trimmed)) return trimmed;
   return null;
 }
 
@@ -665,27 +678,11 @@ export function MessageBubble({
   }
 
   function handleDownloadArtifact(artifact: Artifact) {
-    const ext =
-      artifact.type === 'html'
-        ? 'html'
-        : artifact.type === 'react'
-          ? 'tsx'
-          : artifact.type === 'markdown'
-            ? 'md'
-            : artifact.type === 'json'
-              ? 'json'
-              : artifact.type === 'svg'
-                ? 'svg'
-                : artifact.type === 'document'
-                  ? 'md'
-                  : artifact.type === 'image'
-                    ? 'png'
-                    : (artifact.language ?? 'txt');
-    const blob = new Blob([artifact.content], { type: 'text/plain' });
+    const { blob, fileName } = artifactDownloadFile(artifact);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}.${ext}`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
   }

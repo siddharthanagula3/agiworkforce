@@ -343,6 +343,28 @@ pub fn chat_get_conversation_stats(
     })
 }
 
+/// Resolve which account the sync engines may read and write locally.
+///
+/// The webview argument is a hint only: the effective account is the subject
+/// proven by the access token that authenticates the push, so a caller cannot
+/// scope local rows to an account whose bearer it does not hold.
+fn authorized_sync_account(
+    requested_user_id: Option<&str>,
+    session_subject: Option<String>,
+) -> Result<String, String> {
+    let session_subject = session_subject.ok_or_else(|| {
+        "Cloud sync requires a signed-in AGI Cloud account. Please sign in.".to_string()
+    })?;
+    match requested_user_id.map(str::trim) {
+        Some("") => Err("User ID cannot be empty".to_string()),
+        Some(requested) if requested != session_subject => Err(
+            "Cloud sync was requested for an account that is not signed in on this device."
+                .to_string(),
+        ),
+        _ => Ok(session_subject),
+    }
+}
+
 /// Manually trigger a delta sync (push + pull) of cloud conversations and
 /// messages. Returns an error if cloud sync is disabled or authentication
 /// is not available. Repoints the old bulk_sync stub at the new sync_now engine.
@@ -350,12 +372,8 @@ pub fn chat_get_conversation_stats(
 pub async fn sync_conversations_to_cloud(
     db: State<'_, AppDatabase>,
     settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
-    user_id: String,
+    user_id: Option<String>,
 ) -> Result<cloud_sync::BulkSyncResult, String> {
-    if user_id.is_empty() {
-        return Err("User ID cannot be empty".to_string());
-    }
-
     // Egress gate: check chat storage preference (managed-only).
     {
         let s = settings_state.settings.lock().await;
@@ -374,6 +392,10 @@ pub async fn sync_conversations_to_cloud(
     // Auth: get bearer token and base URL (managed-cloud path).
     let token = crate::sys::account::get_access_token()?;
     let base_url = crate::sys::account::get_api_base_url();
+    let user_id = authorized_sync_account(
+        user_id.as_deref(),
+        crate::sys::account::current_account_subject(),
+    )?;
 
     let outcome = cloud_sync::sync_now(&db, &user_id, &token, &base_url).await?;
 
@@ -411,4 +433,51 @@ pub async fn sync_conversations_to_cloud(
         messages_synced: outcome.messages_pushed + outcome.messages_pulled,
         messages_failed: 0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::authorized_sync_account;
+
+    #[test]
+    fn cloud_sync_rejects_a_user_id_the_signed_in_session_does_not_own() {
+        let error = authorized_sync_account(Some("account-a"), Some("account-b".to_string()))
+            .expect_err("a webview-supplied account must not override the token subject");
+
+        assert!(
+            error.contains("not signed in"),
+            "unexpected cross-account error: {error}"
+        );
+    }
+
+    #[test]
+    fn cloud_sync_requires_a_signed_in_account_subject() {
+        let error = authorized_sync_account(Some("account-a"), None)
+            .expect_err("sync must fail closed without a proven account subject");
+
+        assert!(
+            error.contains("signed-in"),
+            "unexpected signed-out error: {error}"
+        );
+    }
+
+    #[test]
+    fn cloud_sync_scopes_to_the_token_subject_when_the_caller_omits_one() {
+        assert_eq!(
+            authorized_sync_account(None, Some("account-b".to_string())),
+            Ok("account-b".to_string())
+        );
+        assert_eq!(
+            authorized_sync_account(Some("  account-b  "), Some("account-b".to_string())),
+            Ok("account-b".to_string())
+        );
+    }
+
+    #[test]
+    fn cloud_sync_still_rejects_an_empty_user_id() {
+        assert_eq!(
+            authorized_sync_account(Some("   "), Some("account-b".to_string())),
+            Err("User ID cannot be empty".to_string())
+        );
+    }
 }

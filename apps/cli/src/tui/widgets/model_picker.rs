@@ -23,6 +23,7 @@ use crate::design_system::{
     capability_for_model, capability_label, provider_display, AccessMode, Effort, ProviderId,
 };
 use crate::model_catalog::Model;
+use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::terminal_palette::{ui_accent, ui_muted};
 use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
@@ -490,7 +491,13 @@ fn render_list(
                 };
                 let ctx_k = model.context_window / 1000;
 
-                let text = format_model_row(area.width, bullet, &model.id, tier_label, ctx_k);
+                let text = format_model_row(
+                    area.width,
+                    bullet,
+                    sanitize_terminal_text(&model.id).as_ref(),
+                    tier_label,
+                    ctx_k,
+                );
 
                 let style = if is_cursor {
                     Style::default()

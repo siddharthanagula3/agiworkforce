@@ -20,10 +20,9 @@ async function clerkSessionIdFromBearer(token: string, userId: string): Promise<
 
   try {
     const { verifyToken } = await import('@clerk/backend');
-    const authorizedParties = getClerkAuthorizedParties();
     const claims = await verifyToken(token, {
       secretKey,
-      ...(authorizedParties.length > 0 ? { authorizedParties } : {}),
+      authorizedParties: getClerkAuthorizedParties(),
     });
     if (claims.sub !== userId) return null;
     const sid = (claims as Record<string, unknown>)['sid'];
