@@ -14,6 +14,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
@@ -369,6 +370,16 @@ async function handleTranscriptions(request: NextRequest) {
       ? requestedModel
       : defaultModel;
   const model = selectedModel.apiModelId ?? selectedModel.id;
+
+  // Checked on the RESOLVED catalog model, not on `model` above, which is the
+  // provider-facing id. The policy is written against catalog ids.
+  const modelPolicyResponse = await buildModelPolicyGateResponse(
+    userId,
+    request,
+    { provider: String(selectedModel.provider), modelId: selectedModel.id },
+    { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  );
+  if (modelPolicyResponse) return modelPolicyResponse;
 
   const forwardForm = new FormData();
   forwardForm.append('file', file);
