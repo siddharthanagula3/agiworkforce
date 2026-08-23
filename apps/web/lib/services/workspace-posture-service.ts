@@ -514,6 +514,16 @@ export async function readWorkspacePosture(
       title: 'Audit',
       signals: [
         {
+          id: 'usage',
+          label: 'Usage and spend',
+          value: 'Readable by owners and admins',
+          state: 'ok',
+          enforcement: 'enforced',
+          detail:
+            'Managed cloud spend by member, model, and provider. Volume and cost only — this surface never carries what anyone asked the model. There is no spend limit or hard cap yet: it reports consumption, it does not stop it.',
+          href: '/workspace/usage',
+        },
+        {
           id: 'audit-trail',
           label: 'Audit events (30 days)',
           value: auditEvents === 0 ? 'None recorded' : String(auditEvents),

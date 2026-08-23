@@ -11,6 +11,7 @@ import {
   Boxes,
   ScrollText,
   Gavel,
+  BarChart3,
   CreditCard,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -88,6 +89,12 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
         label: 'Data',
         icon: Gavel,
         hint: 'Legal holds and retention sweeps',
+      },
+      {
+        href: '/workspace/usage',
+        label: 'Usage',
+        icon: BarChart3,
+        hint: 'Spend by member, model, provider',
       },
       {
         href: '/workspace/billing',
