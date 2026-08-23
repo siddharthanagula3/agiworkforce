@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 import { __resetIpHashKeyForTests, hashIpAddress } from '@/lib/server/ip-hash';
 
 const NEON_DIR = path.resolve(import.meta.dirname, '../db/neon');
-const UP_FILENAME = '0131_release_download_ip_pepper.sql';
+const UP_FILENAME = '0136_release_download_ip_pepper.sql';
 const up = fs.readFileSync(path.join(NEON_DIR, UP_FILENAME), 'utf8');
 const down = fs.readFileSync(
   path.join(NEON_DIR, 'down', UP_FILENAME.replace(/\.sql$/u, '.down.sql')),

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Reversal: 0131_release_download_ip_pepper.sql
+-- Reversal: 0136_release_download_ip_pepper.sql
 --
 -- Restores the 0020_functions.sql definition of record_release_download: it
 -- takes the raw client IP again and hashes it with the fixed literal salt
@@ -66,6 +66,6 @@ end;
 $$;
 
 delete from public.schema_migrations
-where filename = '0131_release_download_ip_pepper.sql';
+where filename = '0136_release_download_ip_pepper.sql';
 
 commit;
