@@ -12,6 +12,7 @@ import {
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
@@ -139,6 +140,11 @@ async function handleToolApproval(request: NextRequest) {
     getSecurityHeaders(),
   );
   if (policyGateResponse) return policyGateResponse;
+
+  // The workspace budget, checked before any credit is reserved so a turn
+  // that a spend cap will refuse never spends anything first.
+  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
+  if (spendGateResponse) return spendGateResponse;
 
   let resumeFields;
   try {

@@ -13,6 +13,7 @@ import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveAuthenticatedSurface } from './lib/request-surface';
 import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
@@ -285,6 +286,11 @@ async function dispatchChatCompletions(
     getSecurityHeaders(),
   );
   if (policyGateResponse) return policyGateResponse;
+
+  // The workspace budget, checked before any credit is reserved so a turn
+  // that a spend cap will refuse never spends anything first.
+  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
+  if (spendGateResponse) return spendGateResponse;
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
   const processResult = await processRequest(request, authResult);

@@ -76,6 +76,38 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 Spend caps — eventual on purpose, and said so
+
+`organization_spend_limits` (0142) refuses metered turns once a workspace passes
+a calendar-month cap it chose to enforce. Four decisions worth not re-opening:
+
+- **Enforcement is EVENTUAL, not exact.** Summing month-to-date spend on every
+  turn would put an aggregate scan on the hot path, so the decision is cached
+  for `SPEND_CACHE_TTL_MS` and a workspace can overshoot by roughly one window
+  of spend. The console says so in those words, and the posture badge repeats
+  it. A cap presented as exact when it is not is the same class of lie as a
+  retention window nothing sweeps.
+- **`notify` never refuses.** It exists so a finance owner can watch a budget
+  before deciding to enforce it. The posture reports a notify-only cap as a
+  STATED position, not an enforced control.
+- **`block` is never a default.** The column default is `off`, and blocking is
+  the one mode that stops people working.
+- **Ungoverned on failure.** A billing lookup failing is an infrastructure
+  fault; refusing every member's work over it is worse than briefly
+  overshooting.
+
+The cap and the month-to-date sum are read in ONE query. Two round trips would
+double the latency added to every governed turn and could disagree if a write
+landed between them. Raising a cap invalidates the cached decision so a
+workspace is freed at once rather than a window later.
+
+`spend-limit-coverage.test.ts` asserts every metered route asks, AND that it
+asks before reserving credit — a turn a cap will refuse must not spend first and
+be refunded.
+
+**SPENDLIMIT-01 — OPEN, never observed refusing a live turn.** 29 tests with a
+mocked adapter. Needs the same seeded workspace as CONSOLE-01.
+
 ## 2026-08-23 Connector governance — one enforcement point, on purpose
 
 `organization_connector_policies` (0141) is applied inside

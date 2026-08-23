@@ -61,6 +61,11 @@ interface CountRow {
   count: string | number | null;
 }
 
+interface SpendLimitRow {
+  monthly_cap_cents: number;
+  enforcement: 'off' | 'notify' | 'block';
+}
+
 interface ConnectorPolicyCountsRow {
   allowed_connectors: number;
   blocked_connectors: number;
@@ -135,6 +140,7 @@ export async function readWorkspacePosture(
     sharedConnectorRows,
     auditRows,
     holdRows,
+    spendLimitRows,
     connectorPolicyRows,
     modelPolicyRows,
     policy,
@@ -216,6 +222,13 @@ export async function readWorkspacePosture(
         where organization_id = $1 and released_at is null`,
       [organizationId],
     ),
+    db.query<SpendLimitRow>(
+      `select monthly_cap_cents, enforcement
+         from public.organization_spend_limits
+        where organization_id = $1
+        limit 1`,
+      [organizationId],
+    ),
     db.query<ConnectorPolicyCountsRow>(
       `select cardinality(allowed_connectors) as allowed_connectors,
               cardinality(blocked_connectors) as blocked_connectors,
@@ -262,6 +275,7 @@ export async function readWorkspacePosture(
   const sharedConnectors = toCount(sharedConnectorRows[0]);
   const auditEvents = toCount(auditRows[0]);
   const activeHolds = toCount(holdRows[0]);
+  const spendLimit = spendLimitRows[0] ?? null;
   const connectorPolicy = connectorPolicyRows[0] ?? null;
   const connectorRules = connectorPolicy
     ? connectorPolicy.allowed_connectors +
@@ -558,7 +572,31 @@ export async function readWorkspacePosture(
           state: 'ok',
           enforcement: 'enforced',
           detail:
-            'Managed cloud spend by member, model, and provider. Volume and cost only — this surface never carries what anyone asked the model. There is no spend limit or hard cap yet: it reports consumption, it does not stop it.',
+            'Managed cloud spend by member, model, and provider. Volume and cost only — this surface never carries what anyone asked the model.',
+          href: '/workspace/usage',
+        },
+        {
+          id: 'spend-limit',
+          label: 'Spend limit',
+          value:
+            spendLimit === null
+              ? 'None'
+              : spendLimit.enforcement === 'block'
+                ? `$${(spendLimit.monthly_cap_cents / 100).toFixed(2)} a month, enforced`
+                : `$${(spendLimit.monthly_cap_cents / 100).toFixed(2)} a month, ${spendLimit.enforcement}`,
+          state: spendLimit === null ? 'attention' : 'ok',
+          enforcement:
+            spendLimit === null
+              ? 'unconfigured'
+              : spendLimit.enforcement === 'block'
+                ? 'enforced'
+                : 'stated',
+          detail:
+            spendLimit === null
+              ? 'No monthly cap is set, so nothing stops this workspace spending. Usage is reported but not bounded.'
+              : spendLimit.enforcement === 'block'
+                ? 'Managed turns are refused once the calendar-month cap is reached. Enforcement is eventual rather than exact: the decision is cached briefly, so the workspace can overshoot by roughly a minute of spend.'
+                : 'The cap is recorded and crossing it is reported, but no turn is refused. Switch enforcement to blocking if the budget is meant to bind.',
           href: '/workspace/usage',
         },
         {

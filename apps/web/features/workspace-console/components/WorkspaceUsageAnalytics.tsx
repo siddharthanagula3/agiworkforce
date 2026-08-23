@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { BarChart3 } from 'lucide-react';
 
+import { WorkspaceSpendLimit } from './WorkspaceSpendLimit';
 import {
   useWorkspaceUsage,
   type UsageBreakdownRow,
@@ -293,10 +294,7 @@ export function WorkspaceUsageAnalytics() {
         </>
       )}
 
-      <p className="px-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-        There is no spend limit or hard cap yet. This reports what a workspace consumed; it does not
-        stop it consuming more.
-      </p>
+      <WorkspaceSpendLimit />
     </div>
   );
 }
