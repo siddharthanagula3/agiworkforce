@@ -8,7 +8,12 @@ const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkfo
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirectTo?: string; next?: string; surface?: string }>;
+  searchParams: Promise<{
+    redirectTo?: string;
+    next?: string;
+    surface?: string;
+    authRetry?: string;
+  }>;
 }) {
   const params = await searchParams;
   const redirectTo = getSafeRedirectUrl(params.redirectTo ?? params.next, getAppUrl(), '/');
@@ -18,9 +23,13 @@ export default async function LoginPage({
     : '/signup';
 
   const signUpCompleteUrl = `/signup/complete?redirectTo=${encodeURIComponent(redirectTo)}`;
+  // Carried through so /login/complete knows a stale session was already
+  // cleared once. Without it, a session the server keeps rejecting would send
+  // the user around the /login <-> /login/complete cycle indefinitely.
+  const authRetry = params.authRetry === '1';
   const loginCompleteUrl = `/login/complete?redirectTo=${encodeURIComponent(redirectTo)}${
     isDesktopSurface ? '&surface=desktop' : ''
-  }`;
+  }${authRetry ? '&authRetry=1' : ''}`;
 
   return (
     <AuthShell
