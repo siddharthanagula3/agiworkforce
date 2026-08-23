@@ -76,6 +76,38 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 Audit streaming — the cursor rule is the whole design
+
+`organization_audit_destinations` (0143) POSTs new audit events to a customer's
+SIEM, drained by cron every ten minutes.
+
+- **A failed delivery HOLDS the cursor.** Events are retried rather than
+  dropped. A receiver can deduplicate on the event id; it cannot recover what
+  never arrived. Do not "fix" a retry storm by advancing the cursor on failure.
+- **The cursor is (created_at, id), never a timestamp alone.** created_at is not
+  unique and a burst sharing a millisecond is exactly what a busy workspace
+  produces, so a timestamp-only cursor silently skips or repeats those rows.
+  The table CHECK refuses half a cursor for the same reason.
+- **Drained, never written inline.** Delivering during an audited action would
+  couple every policy change to a customer endpoint being up, and slow the
+  action being audited. An unreachable SIEM must never stop a policy change.
+- **The endpoint is re-validated on EVERY send**, not only when saved: a
+  destination saved months ago may point at a hostname that now resolves inward.
+  Delivery goes through `pinnedPublicFetch` so a rebind between validation and
+  send cannot redirect it.
+- **The signature covers the timestamp**, so a captured delivery cannot be
+  replayed later with a fresh header. Receivers should reject a timestamp
+  outside their tolerance.
+
+A dead endpoint is SKIPPED after `AUDIT_STREAM_FAILURE_CEILING` consecutive
+failures, not disabled — an administrator's configuration is not ours to switch
+off, and the console shows the failure count so they can see why nothing
+arrives.
+
+**AUDITSTREAM-01 — OPEN, never delivered to a real endpoint.** 16 tests with a
+stubbed fetch. Needs the same seeded workspace as CONSOLE-01, plus any HTTPS
+receiver.
+
 ## 2026-08-23 The Windows release ships remote-databases, and the audit file said it did not
 
 `.cargo/audit.toml` suppressed four vulnerability-class advisories (two

@@ -63,6 +63,10 @@
     {
       "path": "/api/cron/enforce-workspace-retention",
       "schedule": "20 4 * * *"
+    },
+    {
+      "path": "/api/cron/drain-audit-streams",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
