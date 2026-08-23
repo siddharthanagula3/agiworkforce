@@ -57,6 +57,13 @@ CREATE TRIGGER set_organization_spend_limits_updated_at
 
 -- The month-to-date sum runs on every governed turn. Without this it degrades
 -- to a scan of every managed request the workspace has ever made.
+--
+-- APPLY NOTE: this indexes a HOT table. The migration runner wraps each file in
+-- a transaction with `lock_timeout = 10s` and `statement_timeout = 120s`, so a
+-- contended build fails the deploy loudly rather than holding writes open — but
+-- once the lock is taken the build can block writes to this table for up to two
+-- minutes. On a large table, apply during a quiet window. `CONCURRENTLY` is not
+-- available here because it cannot run inside the runner's transaction.
 CREATE INDEX IF NOT EXISTS idx_managed_usage_requests_org_month
   ON public.managed_usage_requests (organization_id, created_at)
   WHERE organization_id IS NOT NULL AND status = 'completed';

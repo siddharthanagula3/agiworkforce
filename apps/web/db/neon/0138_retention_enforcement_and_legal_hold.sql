@@ -173,6 +173,13 @@ CREATE POLICY retention_sweeps_admin_read
 -- The sweep filters conversations by organization and last activity. Without
 -- this it degrades to a sequential scan of every conversation in the system
 -- once per organization per night.
+--
+-- APPLY NOTE: this indexes a HOT table. The migration runner wraps each file in
+-- a transaction with `lock_timeout = 10s` and `statement_timeout = 120s`, so a
+-- contended build fails the deploy loudly rather than holding writes open — but
+-- once the lock is taken the build can block writes to this table for up to two
+-- minutes. On a large table, apply during a quiet window. `CONCURRENTLY` is not
+-- available here because it cannot run inside the runner's transaction.
 CREATE INDEX IF NOT EXISTS idx_web_conversations_org_updated
   ON public.web_conversations (organization_id, updated_at)
   WHERE organization_id IS NOT NULL;
