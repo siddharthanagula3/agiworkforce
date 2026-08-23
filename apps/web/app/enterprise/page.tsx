@@ -17,7 +17,7 @@ export const metadata = buildMetadata({
  * is the same defect /trust was rewritten to remove (it promised "claims with
  * dates" and rendered none). Change this when you change a row.
  */
-const STATUS_AS_OF = '15 August 2026';
+const STATUS_AS_OF = '23 August 2026';
 
 export default function EnterprisePage() {
   return (
@@ -96,7 +96,7 @@ export default function EnterprisePage() {
           rows={[
             {
               k: 'Status',
-              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan — your org's owner configures both directly once that entitlement is on the account. Org audit events are recorded, but self-serve audit read and export are not available yet; we supply audit extracts on request under contract. Data retention windows and dedicated capacity remain contract-scoped commitments, not self-serve toggles; we state dates for those in writing during procurement.`,
+              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan — your org's owner configures both directly once that entitlement is on the account. Org audit events are recorded to an append-only table, and your owner or admin can now read and filter them in the product and download the range as JSONL. Data retention windows and dedicated capacity remain contract-scoped commitments, not self-serve toggles; we state dates for those in writing during procurement.`,
             },
             {
               k: 'SSO',
@@ -108,7 +108,7 @@ export default function EnterprisePage() {
             },
             {
               k: 'Audit',
-              v: 'Partially implemented. Administrative and identity events are recorded to an append-only org audit table, but there is no self-serve read or export surface today — we supply extracts on request under contract. We will tell you precisely which events are captured rather than implying full coverage.',
+              v: 'Implemented, with a stated limit. Administrative and identity events are recorded to an append-only table that the application role cannot update or delete. An owner or admin reads and filters them at /settings/team and exports the filtered range as JSONL; the export, and any refusal of one, is itself recorded. The limit worth knowing before you buy: coverage is administrative and identity events, not every action in the product, and we will tell you precisely which are captured rather than implying full coverage. There is no SIEM stream yet.',
             },
             {
               k: 'Retention',

@@ -35,13 +35,14 @@ a one-field patch can never materialize a row that silently disables the rest.
   `api` rather than denying untagged callers. The UI says so in the panel copy.
   `allow_managed_compute` and `allowed_privacy_modes` are the controls that bind
   regardless of client. Do not relabel these as enforcement.
-- **ORGPOLICY-03 — OPEN, three policy fields are recorded but not enforced.**
-  `retentionDays` (needs the Wave 3 retention engine),
-  `requireLocalToByokPreview` (Desktop owns the Local→BYOK transition; the web
-  policy endpoint serves the obligation but no Desktop client reads it yet), and
-  `auditExportEnabled` (no export path exists — Wave 3). The evaluator returns
-  all three as obligations today so the consumers have something to read. The
-  settings panel labels the retention field as recording intent.
+- **ORGPOLICY-03 — PARTIALLY CLOSED 2026-08-23.** `auditExportEnabled` is now
+  enforced: it gates `GET /api/settings/organization/audit/export`, and a
+  refusal is written to the trail. Still recorded-but-unenforced:
+  `retentionDays` (nothing sweeps on it) and `requireLocalToByokPreview`
+  (Desktop owns that transition; the web endpoint serves the obligation but no
+  Desktop client reads it yet). Retention is shown in the settings panel as a
+  stated position rather than a control, so it cannot read as a setting that
+  decides something.
 
 ## 2026-08-23 Branch audit: what the ahead/behind counters hide
 
