@@ -212,6 +212,7 @@ export interface AuditEventDetail {
   sessionId?: string;
   subjectRef?: string;
   scopes?: string[];
+  changedKeys?: string[];
   count?: number;
   reason?: string;
   status?: string;
@@ -247,6 +248,7 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'sessionId',
   'subjectRef',
   'scopes',
+  'changedKeys',
   'count',
   'reason',
   'status',

@@ -6,6 +6,43 @@ Last updated: 2026-08-22
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+## 2026-08-22 Workspace policy plane — landed, with three named gaps
+
+Wave 1 of `docs/plans/teams-enterprise-2026-08-22.md`. `organization_admin_policies`
+was an inert table with zero consumers; it is now read and written by
+`/api/settings/organization/policy`, edited in the Team settings section, and
+enforced on every managed-compute route through
+`buildOrganizationPolicyGateResponse`. Each policy write emits an
+`admin_policy_changed` event that reaches `enterprise_audit_events`.
+
+Semantics worth not re-litigating: an organization with NO policy row is
+ungoverned, not governed-by-the-column-defaults. Inheriting `0076`'s restrictive
+defaults (`allow_managed_compute false`) on absence would have switched managed
+compute off for every existing organization the moment this shipped. `PATCH`
+therefore merges onto the current effective policy and writes a complete row, so
+a one-field patch can never materialize a row that silently disables the rest.
+
+- **ORGPOLICY-01 — OPEN, not verified against a live workspace.** Every layer is
+  unit-tested (94 tests across the evaluator, gate, gate response, and route) and
+  the deny path returns a 403 with a stable code, but no managed turn has been
+  observed being denied against a real Neon organization with a saved policy.
+  That is the exit criterion this wave set for itself and it is not met. Needs a
+  seeded org, a member, and a watched request.
+- **ORGPOLICY-02 — OPEN by design, per-surface sync is not a security boundary.**
+  `chat_sync_surfaces` and `allow_*_cloud_sync` resolve from the client-supplied
+  `x-agi-surface` hint, so they govern the clients an organization deploys, not
+  what an attacker can reach. `surfaceIsSyncable` returns true for `unknown` and
+  `api` rather than denying untagged callers. The UI says so in the panel copy.
+  `allow_managed_compute` and `allowed_privacy_modes` are the controls that bind
+  regardless of client. Do not relabel these as enforcement.
+- **ORGPOLICY-03 — OPEN, three policy fields are recorded but not enforced.**
+  `retentionDays` (needs the Wave 3 retention engine),
+  `requireLocalToByokPreview` (Desktop owns the Local→BYOK transition; the web
+  policy endpoint serves the obligation but no Desktop client reads it yet), and
+  `auditExportEnabled` (no export path exists — Wave 3). The evaluator returns
+  all three as obligations today so the consumers have something to read. The
+  settings panel labels the retention field as recording intent.
+
 ## 2026-08-21 `apps/extension-vscode` test suite: vacuous tests
 
 An audit of all 95 files under `apps/extension-vscode/src/__tests__` found 141

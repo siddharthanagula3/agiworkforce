@@ -31,7 +31,11 @@ import {
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import {
+  buildManagedComputeGateResponse,
+  buildOrganizationPolicyGateResponse,
+} from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isVideoStorageConfigured } from '@/lib/server/media-storage';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
@@ -698,6 +702,22 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     },
   );
   if (managedGateResponse) return managedGateResponse;
+
+  const policyGateResponse = await buildOrganizationPolicyGateResponse(
+    userId,
+    request,
+    {
+      provider: 'managed-media',
+      model: 'video-generation',
+      feature: 'media_video_generation',
+      surface: resolveCloudChatSurface(request),
+    },
+    {
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  );
+  if (policyGateResponse) return policyGateResponse;
 
   const subscription = await SubscriptionService.getSubscription(userId);
 

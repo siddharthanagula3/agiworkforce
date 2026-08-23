@@ -15,7 +15,11 @@ import {
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import {
+  buildManagedComputeGateResponse,
+  buildOrganizationPolicyGateResponse,
+} from '@/lib/managed-compute-gate';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -169,6 +173,19 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
     { ...getCorsHeaders(request), ...getSecurityHeaders() },
   );
   if (managedGateResponse) return managedGateResponse;
+
+  const policyGateResponse = await buildOrganizationPolicyGateResponse(
+    userId,
+    request,
+    {
+      provider: model.provider,
+      model: model.id,
+      feature: 'embeddings',
+      surface: resolveCloudChatSurface(request),
+    },
+    { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  );
+  if (policyGateResponse) return policyGateResponse;
   const estimatedTokens = estimateTokens(inputs);
 
   let reservation: ManagedUsageRequestReservation;
