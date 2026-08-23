@@ -101,12 +101,14 @@ wearing the same badge. Do not remove it to simplify the type.
   mistake that shipped once in the managed-compute gate, and that broke 48 tests
   here before it was caught.
 
-**MODELPOLICY-01 — OPEN, only the chat-completions path is covered.** Media
-generation (`/api/media/image/generate`, `/api/media/video/generate`),
-embeddings, transcriptions, and the provider probe resolve models without asking
-this evaluator. A workspace that blocks a provider still blocks it for chat, but
-an image request on that provider goes through. Wire the remaining routes before
-describing model governance as complete to a customer.
+**MODELPOLICY-01 — CLOSED 2026-08-23.** All five model-serving routes now ask
+the evaluator on the RESOLVED model: chat completions (in the request
+processor), embeddings, transcriptions, image generation, and video generation.
+`lib/services/__tests__/model-policy-coverage.test.ts` reads the route sources
+and fails if a new model-serving route ships without the gate, if the chat check
+drifts back above the resolution line, or if a call site passes a
+provider-facing `apiModelId` where the catalog id belongs. Do not add a route to
+an exemption list there without writing the reason beside it.
 
 **MODELPOLICY-02 — OPEN, never observed denying a live turn.** 37 tests across
 the evaluator, gate, and route, all with a mocked adapter. Same blocker as

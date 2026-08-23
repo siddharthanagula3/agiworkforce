@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
+import { evaluateModelAccessForRequest } from '@/lib/services/model-policy-gate';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import type { PolicySurface } from '@/lib/services/organization-policy-evaluator';
@@ -128,6 +129,44 @@ export async function buildOrganizationPolicyGateResponse(
         organization_id: decision.organizationId ?? 'unscoped',
         checked_at: new Date().toISOString(),
         allowed: false,
+      },
+    },
+    { status: 403, headers },
+  );
+}
+
+/**
+ * Refuses a request whose resolved model the workspace does not permit.
+ *
+ * Separate from `buildOrganizationPolicyGateResponse` because the two answer at
+ * different moments. The policy gate runs on admission, before a model exists;
+ * this one runs once the route has picked the model it will actually call, and
+ * only that second point can catch a model reached through routing or a
+ * provider default rather than by name.
+ *
+ * Returns null when allowed, so a call site reads the same way as the other
+ * gates in this file.
+ */
+export async function buildModelPolicyGateResponse(
+  userId: string,
+  request: NextRequest,
+  model: { provider: string | null; modelId: string | null },
+  headers?: HeadersInit,
+): Promise<NextResponse | null> {
+  const decision = await evaluateModelAccessForRequest(userId, model, request);
+  if (decision.allowed) return null;
+
+  logger.warn(
+    { userId, provider: model.provider, model: model.modelId, code: decision.code },
+    '[model-policy] request refused by workspace model policy',
+  );
+
+  return NextResponse.json(
+    {
+      error: {
+        message: decision.reason,
+        type: 'invalid_request_error',
+        code: decision.code,
       },
     },
     { status: 403, headers },
