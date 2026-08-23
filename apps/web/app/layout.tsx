@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
-import Script from 'next/script';
+import { THEME_INIT_SCRIPT } from '@/shared/components/seo/theme-init-script';
 import './globals.css';
 import Providers from './providers';
 import { AnalyticsConsentGate } from '@shared/components/AnalyticsConsentGate';
@@ -141,21 +141,27 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Site-wide structured data: Organization, WebSite (no SearchAction),
-            and SoftwareApplication. Nonce-carried for the strict CSP. */}
-        <JsonLd data={[organizationSchema(), webSiteSchema(), softwareApplicationSchema()]} />
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        <Script
-          id="agi-theme-bootstrap"
-          src="/theme-init.js"
-          async
-          strategy="beforeInteractive"
-          nonce={nonce}
-        />
+        {/*
+         * No explicit <head> element here on purpose. The App Router owns the
+         * document head, and a literal <head> in the root layout made the
+         * server stream its children into the BODY instead — landing on top of
+         * SkipLinks and failing hydration for the whole tree on every page.
+         *
+         * First child of <body> so it still executes before any page content is
+         * parsed, which is what keeps the first paint from using the wrong
+         * theme. Inline and blocking on purpose: an external or async script
+         * paints first and flips after.
+         */}
+        {/* THEME_INIT_SCRIPT is a build-time constant with no interpolation and no
+            request-derived input, and a <script> body cannot be text-rendered.
+            llm-guardrail-allow: constant script body, nonce-gated by the CSP. */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* Site-wide structured data: Organization, WebSite (no SearchAction),
+            and SoftwareApplication. Nonce-carried for the strict CSP. */}
+        <JsonLd data={[organizationSchema(), webSiteSchema(), softwareApplicationSchema()]} />
         {/*
          * DPDP consent gating — Clerk's own product telemetry is switched off.
          *
