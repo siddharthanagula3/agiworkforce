@@ -76,6 +76,27 @@ The `enforcement` field on every posture signal (`enforced` / `stated` /
 — stored and swept by nothing — from rendering beside managed-compute admission
 wearing the same badge. Do not remove it to simplify the type.
 
+## 2026-08-23 External sharing — two states, and why not three
+
+`external_sharing_enabled` (0140) refuses NEW anonymous public links on both
+paths that mint them: `/api/share` (a chat transcript) and
+`/api/artifacts/publish`. `lib/services/__tests__/external-sharing-coverage.test.ts`
+reads both sources and also asserts the gate runs BEFORE the write — a gate
+after the insert has already published the link.
+
+Two decisions worth not re-litigating:
+
+- **Only new links are refused.** A link published last week stays reachable
+  when an administrator switches sharing off today. Revoking published content
+  is a different decision with different consequences — a member who shared a
+  document with a customer should not have it break because a setting changed.
+  The policy copy, the settings panel, and the denial message all say so.
+- **There is no "approved domains only" middle state**, and one must not be
+  added as a checkbox. A public share link is anonymous; there is no recipient
+  identity at fetch time to check a domain against, so the control would decide
+  nothing. Domain scoping needs authenticated recipients first, which is a
+  different feature.
+
 ## 2026-08-23 Model governance — where the check lives is the design
 
 `organization_model_policies` (0139) with one evaluator,

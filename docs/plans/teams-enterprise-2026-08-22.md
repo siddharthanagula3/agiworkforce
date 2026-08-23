@@ -393,6 +393,7 @@ policy denial holds identically on every one.
 | Usage and cost analytics      | Both                       | INERT, ledger unread            | 6    |
 | Central billing and seats     | Both                       | PARTIAL, live prices missing    | 6    |
 | IP allowlist / device policy  | Enterprise on both         | ABSENT                          | 7    |
+| External sharing control      | Both                       | SHIPPED, enforced on both paths | 3    |
 | Policy across Local + BYOK    | Neither                    | ABSENT                          | 1    |
 | Trust-transition governance   | Neither                    | PARTIAL, consent without policy | 1    |
 
