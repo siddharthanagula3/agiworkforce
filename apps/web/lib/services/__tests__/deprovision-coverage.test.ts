@@ -1,6 +1,23 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+
+/**
+ * Resolves the app root by looking for a marker, not from `process.cwd()`.
+ *
+ * A coverage guard that resolves from the working directory fails with a wall
+ * of unreadable-file errors the moment vitest is invoked from the repo root
+ * instead of the app — noise that says nothing about the thing being guarded.
+ */
+function appRoot(): string {
+  const direct = process.cwd();
+  if (existsSync(join(direct, 'db/neon'))) return direct;
+  const nested = join(direct, 'apps/web');
+  if (existsSync(join(nested, 'db/neon'))) return nested;
+  throw new Error(`Could not locate apps/web from ${direct}`);
+}
+
+const APP_ROOT = appRoot();
 
 /**
  * Every path that removes a member must revoke their credentials.
@@ -21,7 +38,7 @@ const REMOVAL_PATHS = [
 ] as const;
 
 function source(relative: string): string {
-  return readFileSync(join(process.cwd(), relative), 'utf8');
+  return readFileSync(join(APP_ROOT, relative), 'utf8');
 }
 
 describe('deprovision covers every removal path', () => {
