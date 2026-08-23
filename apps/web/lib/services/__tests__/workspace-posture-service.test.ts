@@ -123,7 +123,7 @@ describe('readWorkspacePosture', () => {
     const h = harness();
     const posture = await readWorkspacePosture(h.db, ORG);
 
-    for (const id of ['sso-required', 'deprovision', 'siem']) {
+    for (const id of ['sso-required', 'siem']) {
       const s = signal(posture.groups, id);
       expect(s.value).toBe('Not available');
       expect(s.enforcement).toBe('unconfigured');

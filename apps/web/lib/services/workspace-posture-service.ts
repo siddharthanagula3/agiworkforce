@@ -347,12 +347,13 @@ export async function readWorkspacePosture(
         },
         {
           id: 'deprovision',
-          label: 'Deprovision revokes sessions',
-          value: 'Not available',
-          state: 'off',
-          enforcement: 'unconfigured',
+          label: 'Deprovision revokes credentials',
+          value: 'Enforced',
+          state: 'ok',
+          enforcement: 'enforced',
           detail:
-            'Deactivating a user at the IdP removes their membership. It does not yet revoke live sessions or device tokens on Desktop, Mobile, CLI, VS Code, or Chrome.',
+            'Removing a member — by hand or from your IdP — revokes their live sessions, device refresh tokens, and API keys, not just their membership row. Anything that could not be reached is recorded on the event rather than swallowed. Their personal account survives; only its credentials are cut.',
+          href: '/workspace/people',
         },
       ],
     },

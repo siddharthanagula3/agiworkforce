@@ -125,7 +125,10 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `/workspace`. See CONSOLE-01 for what is still unverified.
 - SSO sign-in affordance, org-level SSO enforcement, break-glass path.
   `/login/page.tsx` mounts a bare Clerk `<SignIn>`.
-- Session and device-token revocation on deprovision.
+- ~~Session and device-token revocation on deprovision.~~ **SHIPPED
+  2026-08-23 (Wave 5).** `lib/services/deprovision-service.ts`, wired into
+  member removal and both SCIM removal paths. Revokes Clerk sessions, device
+  refresh tokens, and API keys; never deletes the account.
 - ~~Legal hold.~~ **SHIPPED 2026-08-23 (Wave 3).** `legal_holds` (0138),
   placed and released at `/workspace/data`, suspends retention for its subject.
 - ~~Retention enforcement. `retention_days` is stored and never read.~~
@@ -385,7 +388,7 @@ policy denial holds identically on every one.
 | SSO (SAML/OIDC)               | Both                       | SHIPPED, unverified live        | 5    |
 | Domain verification           | Both                       | SHIPPED                         | —    |
 | SCIM provisioning             | Enterprise on both         | SHIPPED                         | —    |
-| Deprovision revokes sessions  | Both                       | ABSENT                          | 5    |
+| Deprovision revokes sessions  | Both                       | SHIPPED, both paths, unrun live | 5    |
 | Shared projects               | Both                       | PARTIAL, invisible in UI        | 4    |
 | Shared project conversations  | Both                       | ABSENT                          | 4    |
 | Shared agents/skills/prompts  | Both                       | ABSENT                          | 4    |
