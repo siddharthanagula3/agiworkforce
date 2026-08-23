@@ -1867,3 +1867,76 @@ export function useUpdateWorkspacePolicy(): UseMutationResult<
     onError: (error: Error) => toast.error(error.message),
   });
 }
+
+// ── Enterprise audit trail ─────────────────────────────────────────────────
+
+export interface AuditEventView {
+  id: string;
+  organizationId: string;
+  actorUserId: string | null;
+  surface: string;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  outcome: 'success' | 'failure' | 'denied';
+  severity: 'info' | 'warning' | 'critical';
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AuditQuery {
+  action?: string;
+  outcome?: '' | 'success' | 'failure' | 'denied';
+  severity?: '' | 'info' | 'warning' | 'critical';
+  from?: string;
+  to?: string;
+}
+
+export interface AuditPageResult {
+  organizationId: string;
+  events: AuditEventView[];
+  nextCursor: { createdAt: string; id: string } | null;
+  facets?: { actions: string[]; resourceTypes: string[]; actors: string[] };
+}
+
+export function auditQueryToParams(query: AuditQuery): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (typeof value === 'string' && value !== '') params.set(key, value);
+  }
+  return params;
+}
+
+const ORG_AUDIT_QUERY_KEY = ['settings', 'organization', 'audit'] as const;
+
+/**
+ * The workspace audit trail. `null` means the caller is not an owner/admin of
+ * an entitled organization — a 403, which is a legitimate state for a personal
+ * account or a plain member rather than an error worth a red banner.
+ */
+export function useWorkspaceAudit(
+  query: AuditQuery,
+): UseQueryResult<AuditPageResult | null, Error> {
+  return useQuery<AuditPageResult | null, Error>({
+    queryKey: [...ORG_AUDIT_QUERY_KEY, query],
+    queryFn: async (): Promise<AuditPageResult | null> => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const params = auditQueryToParams(query);
+      params.set('facets', 'true');
+
+      const res = await fetch(`/api/settings/organization/audit?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.status === 403) return null;
+      if (!res.ok) throw new Error(await readApiError(res));
+
+      return (await res.json()) as AuditPageResult;
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    meta: { errorMessage: 'Failed to load the audit trail' },
+  });
+}

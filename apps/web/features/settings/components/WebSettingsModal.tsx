@@ -55,6 +55,7 @@ import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
 import { TeamSection } from '../sections/TeamSection';
 import { OrganizationSharingSection } from '../sections/OrganizationSharingSection';
+import { WorkspaceAuditSection } from '../sections/WorkspaceAuditSection';
 import { WorkspacePolicySection } from '../sections/WorkspacePolicySection';
 import { SecuritySection } from '../sections/SecuritySection';
 import { SafetySection } from '../sections/SafetySection';
@@ -917,6 +918,7 @@ export function WebSettingsModal({
         <TeamSection />
         <WorkspacePolicySection />
         <OrganizationSharingSection />
+        <WorkspaceAuditSection />
       </div>
     ),
     security: <SecuritySection />,
