@@ -12,6 +12,7 @@ import {
   type ArchivedConversationSummary,
 } from '../services/conversation-data-service';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
+import { toUserMessage } from '@/lib/user-error-message';
 
 function formatUpdatedAt(value: string): string {
   const date = new Date(value);
@@ -65,7 +66,7 @@ export function ArchivedChatsSection() {
       setHasMore(page.hasMore);
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
-      setError(caught instanceof Error ? caught.message : 'Failed to load archived chats');
+      setError(toUserMessage(caught, 'Failed to load archived chats'));
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -92,7 +93,7 @@ export function ArchivedChatsSection() {
       setNextOffset(page.nextOffset);
       setHasMore(page.hasMore);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to load more archived chats');
+      setError(toUserMessage(caught, 'Failed to load more archived chats'));
     } finally {
       setLoadingMore(false);
     }
@@ -108,7 +109,7 @@ export function ArchivedChatsSection() {
       updateConversationInStore(conversation.id, { isArchived: false });
       setNotice(`Restored “${conversation.title}”.`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to restore archived chat');
+      setError(toUserMessage(caught, 'Failed to restore archived chat'));
     } finally {
       setActionId(null);
     }
@@ -133,7 +134,7 @@ export function ArchivedChatsSection() {
       if (activeConversationId === conversation.id) router.replace('/chat');
       setNotice(`Deleted “${conversation.title}”.`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to delete archived chat');
+      setError(toUserMessage(caught, 'Failed to delete archived chat'));
     } finally {
       setActionId(null);
     }
@@ -167,7 +168,7 @@ export function ArchivedChatsSection() {
           : `Deleted ${affectedCount} archived chats.`,
       );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to delete archived chats');
+      setError(toUserMessage(caught, 'Failed to delete archived chats'));
     } finally {
       setActionId(null);
     }

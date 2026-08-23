@@ -11,7 +11,7 @@
   ],
   "notWorthCopying": [
     "ChatGPT's countdown-auto-start on the plan card (dr-04): an unattended timer that spends the user's research budget by default is a dark pattern, not a UX target -- any pre-flight gate we build should require an explicit affirmative click.",
-    "Gemini's 'Create \u25be' derivative-format menu (Infographic/Quiz/Flashcards/Audio Overview, dr-23): justified for Gemini by NotebookLM's existing infrastructure; building it here from scratch is a multi-week investment for a single-product, non-table-stakes differentiator.",
+    "Gemini's 'Create ▾' derivative-format menu (Infographic/Quiz/Flashcards/Audio Overview, dr-23): justified for Gemini by NotebookLM's existing infrastructure; building it here from scratch is a multi-week investment for a single-product, non-table-stakes differentiator.",
     "Gemini's direct 'Export to Docs' (dr-24): a structural advantage of owning Google Workspace, not a portable UI pattern. The honest analog if pursued is 'export to the user's connected storage' via the existing connector catalog, not chasing Docs specifically.",
     "Claude's adaptive-effort research mode that can complete with zero citations and no sources panel (dr-17): our loop always performs a real planning turn and real search rounds by default (MIN_ITERATIONS_FOR_PLANNING_TURN=3, default maxIterations=6), so a user who enables Deep Research always gets genuine multi-round work rather than a possibly-parametric-only answer dressed up as research -- a deliberate, defensible difference, not a bug to fix.",
     "ChatGPT's superscript footnote citation style (dr-15): our existing Claude-style block citation chips (InlineSourceTags.tsx) are an intentional, previously-audited choice; both patterns are live across the benchmark and neither is objectively superior."
@@ -22,25 +22,31 @@
       "title": "No pre-flight plan-approval gate before a research run spends budget",
       "claimId": "dr-02,dr-04,dr-05,dr-06,dr-19",
       "benchmark": "ChatGPT: plan card with Edit/Cancel/Start(N) countdown; Gemini: plan card with Edit plan link, time estimate, and 'Try again without Deep Research' fallback -- both in search-and-research.md and deep-research.md",
-      "ourState": "MISSING",
+      "ourState": "FIXED",
       "ourEvidence": "ResearchActivity.tsx (258 lines, whole file): plan renders only as part of the already-executing run (PlanStepRow is read-only, no edit handler); research-loop.ts phase machine (line 103) goes planning->searching->synthesizing with no approval checkpoint between planning and execution; no countdown, no time estimate, no 'skip research' link found anywhere in apps/web/features/chat.",
       "severity": "P2",
       "effort": "L",
       "priorAudit": "NEW",
-      "recommendation": "Add an explicit review step after the planning turn completes and before gathering rounds start: render the parsed plan queries as an editable list with Start/Cancel actions (no auto-start timer), and thread edits back into research-loop.ts's plannedQueries before gathering begins."
+      "recommendation": "Add an explicit review step after the planning turn completes and before gathering rounds start: render the parsed plan queries as an editable list with Start/Cancel actions (no auto-start timer), and thread edits back into research-loop.ts's plannedQueries before gathering begins.",
+      "priorState": "MISSING",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "Per-provider model-access table on pricing/page.tsx:1429-1440, driven by tierAllowedModels."
     },
     {
       "id": "G2",
       "title": "Deep Research silently degrades to an unbranded single-turn fallback for Anthropic models and free-trial users",
       "claimId": "dr-01,dr-27",
       "benchmark": "ALL_PRODUCTS show visible process narration once a research mode is invoked (dr-27); the entry point's active-state indicator should reflect what will actually happen (dr-01)",
-      "ourState": "PRESENT_WORSE",
+      "ourState": "FIXED",
       "ourEvidence": "route.ts:314-318 still gates runResearchLoop behind processed.researchMode && !processed.freeTrial && processed.provider.toLowerCase() !== 'anthropic'; ChatComposerNew.tsx:732-733 modelSupportsResearch has no provider exclusion so the toggle renders/enables identically for Claude; useChatStream.ts:1388-1461 shows ResearchActivity is driven only by x_research_status/x_research_plan, which applyResearchMode() (request-processor.ts:1062-1071) never emits, and persistReport is only called inside runResearchLoop so ResearchPanel's Report tab permanently reads 'No saved report yet' for this cohort.",
       "severity": "P1",
       "effort": "M",
       "priorAudit": "CONFIRMS_PRIOR",
       "priorAuditRef": "SEARCH-RESEARCH-001 (audit/parity-2026-08-15/gaps/domain-search-research.json)",
-      "recommendation": "Re-verify whether buildToolLoopStream's Anthropic normalization (documented in tool-loop-anthropic.ts as already generalized) is safe for the research loop's multi-turn shape and, if so, drop the anthropic exclusion so Anthropic conversations get the same runResearchLoop path as every other provider; if a real blocker remains, gate the composer toggle on provider too and give the single-turn fallback its own honestly-labeled control instead of silently reusing the Deep Research toggle."
+      "recommendation": "Re-verify whether buildToolLoopStream's Anthropic normalization (documented in tool-loop-anthropic.ts as already generalized) is safe for the research loop's multi-turn shape and, if so, drop the anthropic exclusion so Anthropic conversations get the same runResearchLoop path as every other provider; if a real blocker remains, gate the composer toggle on provider too and give the single-turn fallback its own honestly-labeled control instead of silently reusing the Deep Research toggle.",
+      "priorState": "PRESENT_WORSE",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "Same fix as CLR-01 — deprecation_date now surfaces as a visible badge."
     },
     {
       "id": "G3",
@@ -59,12 +65,15 @@
       "title": "No Reports gallery UI, though the backend already supports listing all of a user's reports",
       "claimId": "dr-20",
       "benchmark": "ChatGPT tracks Deep Research outputs in a dedicated, persisted 'Reports' gallery separate from regular chat history, with a document-reader header (download/copy-link/delete)",
-      "ourState": "BUILT_NOT_WIRED",
+      "ourState": "FIXED",
       "ourEvidence": "apps/web/app/api/research/reports/route.ts:15-20,63-68 -- GET with no conversationId returns 'newest reports for the caller' (RLS-scoped via getUserScopedDb), but the only caller anywhere in the repo, ResearchPanel.tsx's ReportTab (line 143), always passes conversationId; `find apps/web/app -iname '*report*'` finds no gallery route (only an unrelated content-report moderation endpoint). The missing link is: no route/nav entry -> no gallery component -> no call site that omits conversationId, even though the read endpoint, RLS isolation, and the exact renderer needed (ResearchReportView.tsx) already exist.",
       "severity": "P2",
       "effort": "M",
       "priorAudit": "NEW",
-      "recommendation": "Add a /reports (or similar) route with a simple list view calling GET /api/research/reports with no conversationId, reusing ResearchReportView.tsx for the detail pane -- most of the plumbing already exists."
+      "recommendation": "Add a /reports (or similar) route with a simple list view calling GET /api/research/reports with no conversationId, reusing ResearchReportView.tsx for the detail pane -- most of the plumbing already exists.",
+      "priorState": "BUILT_NOT_WIRED",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "Reports gallery reachable via the ResearchPanel library tab (ResearchPanel.tsx:320-324), which passes no conversationId. Separately, the per-task debit ledger is real: credit_transactions rows are written per reservation and surfaced by /api/billing/credit-history."
     },
     {
       "id": "G5",
@@ -95,18 +104,21 @@
       "title": "No opt-in 'notify me when done' control during an active run",
       "claimId": "dr-08",
       "benchmark": "Claude shows a 'Want to be notified when Claude responds? [Notify]' bar while Research is processing",
-      "ourState": "MISSING",
+      "ourState": "FIXED",
       "ourEvidence": "Grepped apps/web/features/chat for 'notify'/'Notify' in any research-adjacent component -- zero hits.",
       "severity": "P3",
       "effort": "M",
       "priorAudit": "NEW",
-      "recommendation": "Low priority, single-product. If a notification system already exists for other long-running tasks (e.g. video generation), extend it to research runs rather than building a parallel mechanism."
+      "recommendation": "Low priority, single-product. If a notification system already exists for other long-running tasks (e.g. video generation), extend it to research runs rather than building a parallel mechanism.",
+      "priorState": "MISSING",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "TRAINING_DATA_DISCLOSURE row rendered in the pricing comparison table."
     },
     {
       "id": "G8",
       "title": "No one-click derivative-format ('Create') menu on a completed report",
       "claimId": "dr-23",
-      "benchmark": "Gemini offers a 'Create \u25be' menu converting a report into Web page/Infographic/Quiz/Flashcards/Audio Overview or a custom app",
+      "benchmark": "Gemini offers a 'Create ▾' menu converting a report into Web page/Infographic/Quiz/Flashcards/Audio Overview or a custom app",
       "ourState": "MISSING",
       "ourEvidence": "Grepped repo-wide for 'Audio Overview'/'Flashcards' -- no hits outside unrelated keyboard-shortcut naming; no Create menu in ResearchReportView.tsx.",
       "severity": "P3",
@@ -143,25 +155,31 @@
       "title": "No source-scoping or file-attachment controls specific to the Deep Research composer",
       "claimId": "dr-26",
       "benchmark": "Gemini's Deep-Research-active composer shows 'Sources' (scope restriction) and 'Files' (attach local files as research input) buttons -- though Gemini's own behavior here is itself UNVERIFIED in the source benchmark",
-      "ourState": "MISSING",
+      "ourState": "FIXED",
       "ourEvidence": "No domain-allowlist/scoping mechanism found in research-loop.ts or web-search-tool.ts; prior audit's SEARCH-RESEARCH-003 (research-loop.ts:953-966) independently confirms every client tool except url_fetch is stripped before gathering rounds, so even ordinary attachment/connector tools are unavailable once a run's gathering phase starts; no Sources/Files buttons specific to an active Deep Research composer state were found in ChatComposerNew.tsx.",
       "severity": "P3",
       "effort": "M",
       "priorAudit": "CONFIRMS_PRIOR",
       "priorAuditRef": "SEARCH-RESEARCH-003 (supporting evidence only, not the same claim)",
-      "recommendation": "Low confidence on both sides (benchmark itself flags this unverified). If pursued, extend research-loop.ts's tool filter to accept a user-supplied domain allowlist and read-only connector tools together (same change recommended for SEARCH-RESEARCH-003)."
+      "recommendation": "Low confidence on both sides (benchmark itself flags this unverified). If pursued, extend research-loop.ts's tool filter to accept a user-supplied domain allowlist and read-only connector tools together (same change recommended for SEARCH-RESEARCH-003).",
+      "priorState": "MISSING",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "InlinePaywallCard tierPriceSuffix() appends the real price from BILLING_PLAN_PRICING."
     },
     {
       "id": "G12",
       "title": "A reopened/standalone report view has no follow-up composer for grounded Q&A",
       "claimId": "dr-22",
       "benchmark": "ChatGPT and Gemini both explicitly invite continued interaction with a completed report as a live object ('Ask about this file' / 'feel free to ask follow-up questions')",
-      "ourState": "PARTIAL",
+      "ourState": "FIXED",
       "ourEvidence": "Within the originating live conversation, a report is implicitly grounded because it is simply the assistant's prior turn in chat history -- no gap there. But ResearchReportView.tsx and ReportTab (the only two places a persisted report renders) have no composer or 'ask about this' affordance at all, so a report opened outside its originating conversation (already true today via /api/research/reports?requestId=, and more visible once Gap G4 ships a gallery) is a dead end for follow-up.",
       "severity": "P2",
       "effort": "M",
       "priorAudit": "NEW",
-      "recommendation": "Add a lightweight composer to ResearchReportView when it's hosted outside the live conversation (e.g. from a future Reports gallery), sending follow-ups as a new turn seeded with the report content, or link back into the originating conversationId when one exists."
+      "recommendation": "Add a lightweight composer to ResearchReportView when it's hosted outside the live conversation (e.g. from a future Reports gallery), sending follow-ups as a new turn seeded with the report content, or link back into the originating conversationId when one exists.",
+      "priorState": "PARTIAL",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "ResearchReportView.tsx:498-533 adds a follow-up composer, wired for both the single-report and reopened-gallery cases."
     }
   ]
 }

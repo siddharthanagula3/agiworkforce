@@ -31,6 +31,8 @@ interface RefreshTokenRow {
   expires_at: string;
   used_at: string | null;
   revoked_at: string | null;
+  device_id: string | null;
+  device_name: string | null;
   owner_missing: boolean;
   owner_deletion_scheduled_for: string | null;
   owner_terms_version: string | null;
@@ -71,6 +73,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
   const result = await db.transaction<RotationResult>(async (tx) => {
     const rows = await tx.query<RefreshTokenRow>(
       `SELECT t.id, t.family_id, t.user_id, t.user_email, t.expires_at, t.used_at, t.revoked_at,
+              t.device_id, t.device_name,
               p.id IS NULL AS owner_missing,
               p.deletion_scheduled_for AS owner_deletion_scheduled_for,
               p.terms_version AS owner_terms_version,
@@ -127,8 +130,8 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
     });
     const inserted = await tx.query<{ id: string }>(
       `INSERT INTO device_refresh_tokens
-         (family_id, user_id, user_email, token_hash, expires_at)
-       VALUES ($1, $2, $3, $4, $5)
+         (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
       [
         current.family_id,
@@ -136,6 +139,8 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
         current.user_email,
         nextCredential.tokenHash,
         nextCredential.expiresAt,
+        current.device_id,
+        current.device_name,
       ],
     );
     const nextId = inserted[0]?.id;

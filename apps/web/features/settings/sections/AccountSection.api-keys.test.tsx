@@ -32,6 +32,7 @@ vi.mock('../components/Settings/ApiKeys', () => ({
 // integration, including a QueryClientProvider). Stub the hook here so
 // mounting AccountSection doesn't require a QueryClient.
 vi.mock('../hooks/use-settings-queries', () => ({
+  useOrganizationOverview: () => ({ data: undefined }),
   useDeleteAccount: () => ({
     mutate: vi.fn(),
     reset: vi.fn(),

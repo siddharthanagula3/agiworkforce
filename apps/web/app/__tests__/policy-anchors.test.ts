@@ -17,7 +17,7 @@ function declaredSections(source: string): string[] {
   const block = /const SECTIONS = \[([\s\S]*?)\] as const;/.exec(source);
   const body = block?.[1];
   if (!body) return [];
-  return [...body.matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
+  return [...body.matchAll(/'([^']+)'/g)].map((m) => decodeEntities(m[1] as string));
 }
 
 function renderedIds(source: string): string[] {
@@ -26,10 +26,36 @@ function renderedIds(source: string): string[] {
   );
 }
 
+/**
+ * The two sides of this comparison are written differently and render the same.
+ *
+ * A contents entry is a plain JS string, so React escapes it — 73f8bf27e had to
+ * change those arrays from '&middot;' to a literal separator because the entity
+ * was reaching the page as text. An eyebrow is JSX text, where the entity IS
+ * decoded, so '&middot;' there is correct and renders identically.
+ *
+ * Comparing raw source therefore reports a mismatch between two spellings of
+ * the same rendered character. Decoding first compares what the user sees.
+ */
+const HTML_ENTITIES: Readonly<Record<string, string>> = {
+  '&middot;': '\u00b7',
+  '&rsquo;': '\u2019',
+  '&lsquo;': '\u2018',
+  '&ldquo;': '\u201c',
+  '&rdquo;': '\u201d',
+  '&mdash;': '\u2014',
+  '&ndash;': '\u2013',
+  '&amp;': '&',
+};
+
+function decodeEntities(text: string): string {
+  return text.replace(/&[a-z]+;/g, (entity) => HTML_ENTITIES[entity] ?? entity);
+}
+
 function renderedEyebrows(source: string): string[] {
   return [...source.matchAll(/<p className="agi-section-eyebrow">\s*([\s\S]*?)\s*<\/p>/g)]
-    .map((m) => (m[1] as string).replace(/\s+/g, ' ').trim())
-    .filter((text) => /^\d{1,2} &middot;/.test(text));
+    .map((m) => decodeEntities((m[1] as string).replace(/\s+/g, ' ').trim()))
+    .filter((text) => /^\d{1,2} \u00b7/.test(text));
 }
 
 describe('policy anchors', () => {

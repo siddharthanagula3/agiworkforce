@@ -6,6 +6,10 @@ import type { ApprovalMode, ResumeApproval } from '@/app/api/llm/v1/chat/complet
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ManagedUsageRequestReservation } from '@/lib/services/managed-usage-request-service';
 import { TOOL_APPROVAL_POLICIES, type ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
+import type {
+  ConnectorToolPermissionEntry,
+  ConnectorToolPermissions,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 
 const MessageSchema = z
   .object({
@@ -106,6 +110,7 @@ export interface CloudAgentWorkflowInput {
   mcpTools: WebMcpToolDef[];
   approvalMode: ApprovalMode;
   toolApprovalPolicy?: ToolApprovalPolicy;
+  connectorPermissions?: ConnectorToolPermissionEntry[];
   continuation?: {
     eventSessionId: string;
     eventTurnId: string;
@@ -164,6 +169,15 @@ const CloudAgentWorkflowInputSchema = z
     mcpTools: z.array(McpToolSchema),
     approvalMode: z.enum(['auto', 'manual']),
     toolApprovalPolicy: z.enum(TOOL_APPROVAL_POLICIES).optional(),
+    connectorPermissions: z
+      .array(
+        z.object({
+          connectorId: z.string().min(1),
+          toolName: z.string().min(1),
+          level: z.enum(['allow', 'ask', 'deny']),
+        }),
+      )
+      .optional(),
     continuation: ContinuationSchema.optional(),
     predecessorApproval: PredecessorApprovalSchema.optional(),
   })
@@ -189,6 +203,7 @@ export function buildCloudAgentWorkflowInput(input: {
   mcpTools: WebMcpToolDef[];
   approvalMode: ApprovalMode;
   toolApprovalPolicy?: ToolApprovalPolicy;
+  connectorPermissions?: ConnectorToolPermissions;
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
 }): CloudAgentWorkflowInput {
@@ -207,6 +222,7 @@ export function buildCloudAgentWorkflowInput(input: {
     mcpTools: input.mcpTools,
     approvalMode: input.approvalMode,
     toolApprovalPolicy: input.toolApprovalPolicy,
+    connectorPermissions: input.connectorPermissions?.entries,
     continuation: input.continuation,
     predecessorApproval: input.predecessorApproval,
   };

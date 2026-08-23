@@ -250,6 +250,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 10 admin security actions per minute
     failClosed: true, // Security-sensitive: block if Redis fails
   },
+  'admin-operator': {
+    limit: 30,
+    window: '1 m', // Operator dashboard polls a few views; the write path is rare
+    failClosed: true, // Reads the whole customer base and can reset usage
+  },
   'share-create': {
     limit: 5,
     window: '1 m', // 5 share creations per minute (prevents share spam)
@@ -344,6 +349,13 @@ export const rateLimitConfigs = {
     limit: 60,
     window: '1 m',
     failClosed: false,
+  },
+  // Unauthenticated public form: fail closed, so a limiter outage cannot turn
+  // the intake table into an open write endpoint.
+  'beta-apply': {
+    limit: 5,
+    window: '10 m',
+    failClosed: true,
   },
   'settings-sessions-list': {
     limit: 60,

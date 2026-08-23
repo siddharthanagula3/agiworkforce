@@ -23,7 +23,7 @@
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:9e3f0f9458d7e9ff812979166dd7a4e7b1c7b63ee258efcd1bcc6ad5913ab6f8"
+      "computedHash": "sha256-tree-v1:c2001d48e29675009103092e17801daa63ffc615c6eaef9f6c8257fcd764e9f3"
     },
     "document-creation": {
       "path": ".agents/skills/document-creation",
@@ -64,15 +64,15 @@
       "path": ".agents/skills/skill-creator",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
-      "declaredVersion": "0.1.0-draft",
-      "computedHash": "sha256-tree-v1:075a30fe07641a1c9fb72c7aac5daa490bf2ed052ba0e4681fa22b11a68c4dfe"
+      "declaredVersion": "1.0.0",
+      "computedHash": "sha256-tree-v1:3e808a8f26f6cda032bdaf26b09241b468c1c4ef525cf251f253d94a1a2e8fa2"
     },
     "systematic-debugging": {
       "path": ".agents/skills/systematic-debugging",
       "source": "AGI Workforce repository",
       "sourceType": "first-party",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:adcfb280542bce507d8a0d8d4f49d0188f2cff3b6ab0201e177bf0ace0de0700"
+      "computedHash": "sha256-tree-v1:7058bc70a85ac1e7aa7ad8b92f967e2a40aeb57d5ae0b4f7d9c301237d77d225"
     }
   }
 }

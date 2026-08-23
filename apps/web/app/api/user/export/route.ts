@@ -222,6 +222,28 @@ const projectKnowledgeFileExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+/**
+ * Metadata, not bytes. The export is a JSON download and inlining media would
+ * make it unusable; `storage_url` is the durable location the user can fetch
+ * each file from, which is what makes this an access answer rather than a list
+ * of things they cannot reach.
+ */
+const mediaAssetExportSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  mime_type: z.string(),
+  byte_size: z.number().int().nonnegative().nullable(),
+  storage_url: z.string(),
+  prompt: z.string().nullable(),
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  source_surface: z.string().nullable(),
+  created_at: timestampSchema,
+  deleted_at: timestampSchema.nullable(),
+});
+
 const memoryExportSchema = z.object({
   id: z.string(),
   content: z.string(),
@@ -521,6 +543,24 @@ async function collectUserData(
     userId: user.id,
   });
   exportData['project_knowledge_files'] = projectKnowledgeFiles;
+
+  // Files the user uploaded and media generated for them. Absent from this
+  // export until 2026-08-21, while account erasure has always deleted them —
+  // so the product could destroy this category of personal data on request but
+  // could not show it, which is half of a data-subject access right.
+  const mediaAssets = await queryExportRows({
+    db,
+    sql: `select id, kind, mime_type, byte_size, storage_url, prompt, provider, model,
+                 width, height, source_surface, created_at, deleted_at
+          from public.media_assets
+          where user_id = $1
+          order by created_at asc`,
+    values: [user.id],
+    schema: mediaAssetExportSchema,
+    section: 'media_assets',
+    userId: user.id,
+  });
+  exportData['media_assets'] = mediaAssets;
 
   const memories = await queryExportRows({
     db,

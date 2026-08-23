@@ -6,6 +6,7 @@ import {
   getModelProviderInfo,
   buildGroupedQuickPickItems,
   isModelReachableForTier,
+  MODEL_CONTEXT_LIMITS,
   UNKNOWN_PROVIDER_BRAND_COLOR,
 } from '../model-picker/modelConstants';
 import {
@@ -54,6 +55,7 @@ import {
   parsePlanVisualization,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
+import { getTokenCounter } from '../../data/tokenCounter';
 import {
   CREDIT_BALANCE_LABEL,
   daysUntilReset,
@@ -202,6 +204,10 @@ export type ExtToWebviewMessage =
       payload: { effort: DeveloperReasoningEffort; supportsEffort: boolean };
     }
   | { type: 'usageMeter'; payload: UsageMeterWebviewPayload }
+  | {
+      type: 'contextUsage';
+      payload: { usedTokens: number; contextWindow?: number };
+    }
   | {
       type: 'progressUpdate';
       payload: {
@@ -2334,6 +2340,15 @@ export class ChatStateManager {
         type: 'done',
         payload: { model: resolvedModel, providerLabel, brandColor },
       });
+      const contextWindow = catalogContextWindow(resolvedModel);
+      this._post({
+        type: 'contextUsage',
+        payload: {
+          usedTokens: event.inputTokens + event.outputTokens,
+          ...(contextWindow === undefined ? {} : { contextWindow }),
+        },
+      });
+      getTokenCounter().addMeasuredUsage(resolvedModel, event.inputTokens, event.outputTokens);
       this._conversationTreeProvider?.refresh();
       complete();
       return;
@@ -2377,6 +2392,11 @@ export class ChatStateManager {
       active.complete();
     }
   }
+}
+
+function catalogContextWindow(model: string): number | undefined {
+  if (isAutoRoutingModel(model)) return undefined;
+  return MODEL_CONTEXT_LIMITS[model];
 }
 
 function resumeStatusError(thread: ThreadSummary): string | undefined {

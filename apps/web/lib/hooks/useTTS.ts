@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSettingsStore, VOICE_SPEED_RATES } from '@shared/stores/web-settings-store';
 
 const VOICE_STORAGE_KEY = 'agi:tts-voice-uri';
 
@@ -128,7 +129,12 @@ export function useTTS(): UseTTSReturn {
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.rate = 1.05;
+      // Read at speak time from the store rather than captured: the settings
+      // picker and the read-aloud button mount separate useTTS instances, and a
+      // captured value would leave one of them speaking at the old rate.
+      utterance.rate =
+        VOICE_SPEED_RATES[useSettingsStore.getState().voiceSpeed ?? 'normal'] ??
+        VOICE_SPEED_RATES.normal;
       utterance.pitch = 1;
       utterance.volume = 1;
       if (selectedVoice) {

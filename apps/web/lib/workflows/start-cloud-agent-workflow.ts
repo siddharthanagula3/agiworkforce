@@ -13,6 +13,7 @@ import {
   buildCloudAgentWorkflowInput,
   type CloudAgentWorkflowInput,
 } from './cloud-agent-workflow-input';
+import type { ConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 
 export interface StartCloudAgentWorkflowExecutionInput {
   db: DatabaseAdapter;
@@ -22,6 +23,7 @@ export interface StartCloudAgentWorkflowExecutionInput {
   mcpTools: WebMcpToolDef[];
   approvalMode: ApprovalMode;
   toolApprovalPolicy?: ToolApprovalPolicy;
+  connectorPermissions?: ConnectorToolPermissions;
   continuation?: CloudAgentWorkflowInput['continuation'];
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
 }

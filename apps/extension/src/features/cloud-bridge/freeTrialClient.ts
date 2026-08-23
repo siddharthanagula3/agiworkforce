@@ -878,6 +878,23 @@ export async function* streamFreeChat(
       return;
     }
 
+    // A 200 that is not an event stream is the signed-out case: the gateway
+    // answers a redirect to the sign-in page, fetch follows it, and the body is
+    // HTML. Parsing that as SSE produced "Malformed response from AGI Cloud",
+    // which named the wrong culprit and hid the real one.
+    const responseContentType = response.headers.get('content-type') ?? '';
+    if (!responseContentType.toLowerCase().includes('text/event-stream')) {
+      const looksLikeSignInPage = responseContentType.toLowerCase().includes('text/html');
+      yield {
+        type: 'error',
+        message: looksLikeSignInPage
+          ? 'Your AGI Cloud session has expired. Sign in again from the side panel to continue.'
+          : `AGI Cloud replied with ${responseContentType || 'an unknown content type'} instead of a response stream.`,
+        code: looksLikeSignInPage ? 'auth_required' : 'protocol_error',
+      };
+      return;
+    }
+
     let runReference: ManagedCloudAgentRunReference | undefined;
     try {
       const runHandle = readManagedCloudAgentRunHandle(response);

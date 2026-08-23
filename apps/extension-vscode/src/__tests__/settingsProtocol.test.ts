@@ -15,6 +15,7 @@ const validValues: MutableConfigValues = {
   hoverEnabled: false,
   codeLensEnabled: false,
   autoApplyFixes: false,
+  'memory.enabled': true,
   'inlineCompletions.enabled': false,
   'inlineCompletions.debounceMs': 300,
   'inlineCompletions.maxLength': 500,

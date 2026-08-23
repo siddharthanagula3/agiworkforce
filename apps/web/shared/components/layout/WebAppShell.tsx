@@ -42,6 +42,7 @@ import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
@@ -58,6 +59,11 @@ import { getBillingPlanPricing } from '@agiworkforce/types';
 import { accountInitial, resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
+import { toUserMessage } from '@/lib/user-error-message';
+
+// A fresh [] each render changes the identity every time and defeats the
+// memoization below, which is what the exhaustive-deps warning was pointing at.
+const EMPTY_NAV_IDS: string[] = [];
 
 interface WebAppShellProps {
   children: React.ReactNode;
@@ -237,7 +243,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
         await webManagedCloudProjects.deleteProject(projectId);
         removeProjectFromStore(projectId);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to delete project');
+        toast.error(toUserMessage(error, 'Failed to delete project'));
       }
     },
     [confirmDestructive, removeProjectFromStore, storeProjects],
@@ -247,6 +253,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
   // ONE rail definition, shared with WebChatPage — see `app-nav-items.ts` for
   // why (the two hand-maintained copies had drifted and this shell was the only
   // one exposing Tasks).
+  const hiddenNavIds = useSettingsStore((state) => state.hiddenNavIds) ?? EMPTY_NAV_IDS;
+
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () =>
       buildAppNavItems({
@@ -258,8 +266,9 @@ export function WebAppShell({ children }: WebAppShellProps) {
         // whatever page the shell was wrapping.
         onOpenCustomize: () => openSettings('general'),
         isAdmin: isWorkspaceAdmin,
+        hiddenIds: hiddenNavIds,
       }),
-    [isWorkspaceAdmin, openSettings, pathname, router],
+    [hiddenNavIds, isWorkspaceAdmin, openSettings, pathname, router],
   );
 
   // ---- Account footer ----
@@ -438,7 +447,11 @@ export function WebAppShell({ children }: WebAppShellProps) {
         />
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div
+        className="flex min-h-0 min-w-0 flex-1 flex-col"
+        aria-hidden={isNarrowViewport && mobileNavOpen ? true : undefined}
+        inert={isNarrowViewport && mobileNavOpen ? true : undefined}
+      >
         {isNarrowViewport && (
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2">
             <button
@@ -477,7 +490,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
             tabIndex={-1}
             className="relative z-10 h-full w-[280px] max-w-[85vw] overflow-hidden bg-[hsl(var(--background))] shadow-xl outline-none"
           >
-            <Sidebar {...sharedSidebarProps} collapsed={false} isMobile />
+            <Sidebar {...sharedSidebarProps} collapsed={false} />
           </div>
         </div>
       )}

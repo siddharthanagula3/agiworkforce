@@ -11,6 +11,9 @@ vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: vi.fn(async () => 'csrf-token'),
 }));
 
+const getTokenMock = vi.fn(async () => 'session-token');
+vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: getTokenMock }) }));
+
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
 vi.mock('../sections/AccountSection', () => ({ AccountSection: () => null }));
 vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
@@ -60,6 +63,7 @@ function stubFetch({
   pluginFailuresBeforeSuccess = 0,
   available = [] as string[],
   connectorFailuresBeforeSuccess = 0,
+  connectorFailureStatus = 503,
   skillFailuresBeforeSuccess = 0,
 } = {}) {
   let connectorRequests = 0;
@@ -105,7 +109,7 @@ function stubFetch({
       connectorRequests += 1;
       return {
         ok: !shouldFail,
-        status: shouldFail ? 503 : 200,
+        status: shouldFail ? connectorFailureStatus : 200,
         json: async () => ({ connectors, available }),
       } as Response;
     }
@@ -212,6 +216,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
           headers: {
             'Content-Type': 'application/json',
             'x-csrf-token': 'csrf-token',
+            Authorization: 'Bearer session-token',
           },
           body: JSON.stringify({
             name: 'My MCP',
@@ -252,6 +257,52 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByText('GitHub Automation')).toBeTruthy();
     expect(screen.getAllByText('Coming later').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /install github automation/i })).toBeNull();
+  });
+
+  it('reaches per-tool connector permissions from the settings connector detail', async () => {
+    stubFetch({
+      connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }],
+      available: ['notion'],
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    const table = await screen.findByRole('table');
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(within(table).getByText('Notion'));
+
+    // The control only appears for a connector the user actually connected,
+    // because there are no tools to govern until then.
+    const trigger = await screen.findByText('Tool permissions');
+    expect(trigger).toBeTruthy();
+  });
+
+  it('names an expired session instead of blaming the network when connectors 401', async () => {
+    stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 401 });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    expect(
+      await screen.findByText(
+        'Your session expired. Reload the page to sign back in, then reopen Connectors.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+    ).toBeNull();
+  });
+
+  it('sends the Clerk bearer token with the connector directory requests', async () => {
+    const fetchMock = stubFetch({});
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    await screen.findByText('Connect your first tool');
+    for (const path of ['/api/connectors', '/api/github/installations', '/api/connectors/custom']) {
+      expect(fetchMock).toHaveBeenCalledWith(
+        path,
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: 'Bearer session-token' }),
+        }),
+      );
+    }
   });
 
   it('shows a skills loading failure and retries instead of presenting an empty environment', async () => {

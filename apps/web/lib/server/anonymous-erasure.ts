@@ -3,6 +3,7 @@ import 'server-only';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { hashConsentSubjectEmail } from '@/lib/server/consent-records';
+import { emailPseudonymCandidates } from '@/lib/server/email-pseudonym';
 import { normalizeWaitlistEmail } from '@/lib/server/waitlist-email';
 
 export type AnonymousSubjectKey = 'email' | 'emailSha256';
@@ -48,21 +49,23 @@ export async function eraseAnonymousSubjectByEmail(email: string): Promise<Anony
   const tables: AnonymousErasureReport['tables'] = {};
 
   for (const { table, column, key } of ANONYMOUS_SUBJECT_TABLES) {
-    const value = key === 'email' ? normalizedEmail : emailSha256;
+    // Hashed subjects match every pseudonym the row could have been written under, so rows
+    // stored before the pepper was introduced are still erased.
+    const values = key === 'email' ? [normalizedEmail] : emailPseudonymCandidates(normalizedEmail);
     try {
       const retained = await db.query<{ retained: number }>(
         `select count(*)::int as retained
            from public.${table}
           where user_id is not null
-            and lower(${column}) = $1`,
-        [value],
+            and lower(${column}) = any($1::text[])`,
+        [values],
       );
       const purged = await db.query<{ id: string }>(
         `delete from public.${table}
           where user_id is null
-            and lower(${column}) = $1
+            and lower(${column}) = any($1::text[])
         returning id`,
-        [value],
+        [values],
       );
       tables[table] = {
         deleted: purged.length,

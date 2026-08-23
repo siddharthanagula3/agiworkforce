@@ -6,7 +6,6 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { getNeonDb } from '@/lib/server/neon-db';
 import {
   ScheduleConflictError,
   ScheduleLimitError,
@@ -82,9 +81,11 @@ async function handleCreateSchedule(request: NextRequest) {
 
   try {
     const subscription = await SubscriptionService.getSubscription(db, userId);
-    await assertScheduleQuota(getNeonDb(), userId, subscription?.plan_tier);
-
-    const schedule = await createSchedule(db, userId, body as unknown as ScheduleInput);
+    const schedule = await db.transaction(async (tx) => {
+      await tx.execute('select pg_advisory_xact_lock(hashtext($1))', [`scheduled_tasks:${userId}`]);
+      await assertScheduleQuota(tx, userId, subscription?.plan_tier);
+      return createSchedule(tx, userId, body as unknown as ScheduleInput);
+    });
     return NextResponse.json({ schedule }, { status: 201 });
   } catch (error) {
     rethrowScheduleError(error);

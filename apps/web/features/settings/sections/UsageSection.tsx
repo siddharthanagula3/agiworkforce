@@ -43,11 +43,20 @@ function UsageBar({
   percent,
   value,
   detail,
+  unknown = false,
 }: {
   label: string;
   percent: number;
   value: string;
   detail: string;
+  /**
+   * No figure could be read from the server. Rendering the computed number
+   * here would claim a FULL allowance, because an absent percentage
+   * normalises to 0 used and the bar shows `100 - 0`. A usage meter that
+   * fails optimistic is worse than one that admits it does not know: the
+   * user plans around headroom they may not have.
+   */
+  unknown?: boolean;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -55,7 +64,7 @@ function UsageBar({
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
       >
         <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
-        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{value}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{unknown ? 'Unavailable' : value}</span>
       </div>
       {/*
         Colour tracks the SAME severity ladder every other surface uses
@@ -64,8 +73,8 @@ function UsageBar({
         being cut off saw exactly what a user at 5% saw.
       */}
       <Progress
-        value={percent}
-        aria-label={`${label} usage`}
+        value={unknown ? 0 : percent}
+        aria-label={unknown ? `${label} usage unavailable` : `${label} usage`}
         className="h-2"
         indicatorClassName={
           getUsageUrgency(percent) === 'critical'
@@ -76,7 +85,9 @@ function UsageBar({
         }
         style={{ background: 'var(--bg-hover, rgba(255,255,255,0.08))' }}
       />
-      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{detail}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+        {unknown ? 'Could not read your usage. Retry to load it.' : detail}
+      </span>
     </div>
   );
 }
@@ -100,6 +111,10 @@ export function UsageSection() {
   const billingTier = useBillingStore((s) => s.subscription?.tier);
   const rawTier = usage?.plan_tier ?? billingTier ?? 'free';
   const planName = getBillingPlanPricing(rawTier).label;
+  // A missing payload normalises to 0 used, which renders as a FULL allowance.
+  // Gate every bar on having actually read a figure rather than letting the
+  // fallback speak for the server.
+  const usageUnknown = !usage;
   const usedPercent = normalizeUsagePercentage(usage?.usage_percentage);
   const sessionUsedPercent = normalizeUsagePercentage(usage?.session_usage_percentage);
   const weeklyUsedPercent = normalizeUsagePercentage(usage?.weekly_usage_percentage);
@@ -197,18 +212,21 @@ export function UsageSection() {
             so the same limit was unrecognisable between surfaces.
           */}
           <UsageBar
+            unknown={usageUnknown}
             label={managedUsageBucketLabel('session')}
             percent={sessionUsedPercent}
             value={formatUsageRemaining(100 - sessionUsedPercent)}
             detail={usageDetail(100 - sessionUsedPercent, usage?.session_reset_at ?? null, nowMs)}
           />
           <UsageBar
+            unknown={usageUnknown}
             label={managedUsageBucketLabel('weekly')}
             percent={weeklyUsedPercent}
             value={formatUsageRemaining(100 - weeklyUsedPercent)}
             detail={usageDetail(100 - weeklyUsedPercent, usage?.weekly_reset_at ?? null, nowMs)}
           />
           <UsageBar
+            unknown={usageUnknown}
             label={managedUsageBucketLabel('weeklyFlagship')}
             percent={flagshipWeeklyUsedPercent}
             value={formatUsageRemaining(100 - flagshipWeeklyUsedPercent)}
@@ -219,6 +237,7 @@ export function UsageSection() {
             )}
           />
           <UsageBar
+            unknown={usageUnknown}
             label={managedUsageBucketLabel('period')}
             percent={usedPercent}
             value={formatUsageRemaining(100 - usedPercent)}

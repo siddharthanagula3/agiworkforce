@@ -4,11 +4,13 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { CATALOG_AS_OF, MARKETING, SURFACE_STATUS } from '../../lib/marketing-constants';
 import {
+  FOUNDER_NAME,
+  FOUNDER_ROLE,
   CONTACT_EMAIL,
   GOVERNING_LAW,
   LEGAL_ENTITY,
   LEGAL_ENTITY_DESCRIPTOR,
-  NOTICE_ADDRESS,
+  REGISTERED_AGENT_ADDRESS,
   contactMailto,
 } from '../../lib/legal-constants';
 
@@ -55,9 +57,9 @@ const PRODUCT_FACTS: { k: string; v: string }[] = [
 
 const COMPANY_FACTS: { k: string; v: string }[] = [
   { k: 'Legal entity', v: `${LEGAL_ENTITY}, ${LEGAL_ENTITY_DESCRIPTOR}` },
-  { k: 'Notice address', v: NOTICE_ADDRESS },
+  { k: 'Registered agent', v: REGISTERED_AGENT_ADDRESS },
   { k: 'Governing law', v: GOVERNING_LAW.replace(/^the /, '') },
-  { k: 'Founder', v: 'Siddhartha Nagula' },
+  { k: 'Founder', v: `${FOUNDER_NAME}, ${FOUNDER_ROLE}` },
   { k: 'Ownership', v: 'Independent and privately held. No outside funding is announced.' },
   { k: 'Press contact', v: CONTACT_EMAIL },
 ];

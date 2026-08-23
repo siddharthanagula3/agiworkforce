@@ -7,7 +7,7 @@ import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 export const metadata = buildMetadata({
   title: 'Subprocessors',
   description:
-    'Third parties that process customer data on AGI&rsquo;s behalf, with their purpose and region.',
+    'Third parties that process customer data on AGI’s behalf, with their purpose and region.',
   path: '/subprocessors',
 });
 

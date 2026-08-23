@@ -39,6 +39,7 @@ export const SETTINGS_COMMANDS = [
   'restartLocalRuntime',
   'openConfigDocs',
   'openInstructionDocs',
+  'openMemory',
 ] as const;
 
 export type SettingsCommand = (typeof SETTINGS_COMMANDS)[number];
@@ -67,6 +68,7 @@ const settingValueSchemas = {
   hoverEnabled: z.boolean(),
   codeLensEnabled: z.boolean(),
   autoApplyFixes: z.boolean(),
+  'memory.enabled': z.boolean(),
   'inlineCompletions.enabled': z.boolean(),
   'inlineCompletions.debounceMs': z.number().int().min(50).max(2000),
   'inlineCompletions.maxLength': z.number().int().min(50).max(5000),

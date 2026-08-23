@@ -1,4 +1,7 @@
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 
@@ -155,5 +158,26 @@ describe('generatedFileFromLibraryItem', () => {
     expect(file.sourceSurface).toBe('web');
     expect(file.uri).toBe('/api/files/22222222-2222-4222-8222-222222222222');
     expect(file.fileName).toBe('report.pdf');
+  });
+});
+
+// The shared LibraryView reads native export off the transport, so dropping
+// the field here silently removes Export as PDF/Word from the Library while
+// every component test keeps passing. Assert the wiring, not just the widget.
+describe('library transport declares native export', () => {
+  const source = readFileSync(path.join(__dirname, '..', 'LibraryView.tsx'), 'utf8');
+
+  it('passes an exportNative implementation', () => {
+    expect(source).toMatch(/exportNative:/);
+    expect(source).toMatch(/exportDocument\(/);
+  });
+
+  it('declares only the formats web can actually produce', () => {
+    const formats = /nativeExportFormats:\s*\[([^\]]+)\]/.exec(source);
+    expect(formats, 'nativeExportFormats not declared').not.toBeNull();
+    expect(formats![1]).toContain("'pdf'");
+    expect(formats![1]).toContain("'word'");
+    // There is no xlsx writer on web; advertising it would fail after the pick.
+    expect(formats![1]).not.toContain("'excel'");
   });
 });

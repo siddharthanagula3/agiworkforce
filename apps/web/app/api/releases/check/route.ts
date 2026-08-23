@@ -18,6 +18,7 @@ import {
   selectSignedDesktopUpdaterAsset,
   type DesktopReleasePlatform,
 } from '@/lib/releases/github-desktop-releases';
+import { isTrustedReleaseAssetUrl } from '@/lib/releases/trusted-release-asset-url';
 
 const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
 
@@ -47,6 +48,24 @@ interface ReleaseRecord {
   pub_date: string;
   file_size_bytes: number | null;
   is_critical: boolean;
+  source: 'database' | 'github';
+}
+
+// The GitHub fallback points at this app's own updater endpoint, which the asset-host allowlist
+// deliberately does not cover; only operator-supplied `releases` rows need host validation.
+function resolveDownloadUrl(
+  latest: ReleaseRecord,
+  platform: Platform,
+  channel: DesktopReleaseChannel,
+): string | null {
+  if (latest.source === 'github' || isTrustedReleaseAssetUrl(latest.download_url)) {
+    return latest.download_url;
+  }
+  logger.warn(
+    { platform, channel, downloadUrl: latest.download_url },
+    'Release row download_url is not on the trusted asset allowlist; withholding it from the update check',
+  );
+  return null;
 }
 
 function isUpdateAvailable(currentVersion: string, latestVersion: string): boolean {
@@ -79,7 +98,7 @@ async function getLatestRelease(
       return null;
     }
 
-    return rows[0] as ReleaseRecord;
+    return { ...(rows[0] as ReleaseRecord), source: 'database' };
   } catch (error) {
     logger.error({ error, platform }, 'Failed to fetch latest release');
     return null;
@@ -102,6 +121,7 @@ async function getLatestReleaseFromGitHub(
     pub_date: release.publishedAt,
     file_size_bytes: updaterAsset.binary.size,
     is_critical: false,
+    source: 'github',
   };
 }
 
@@ -171,7 +191,7 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
     response.is_critical = latest.is_critical;
 
     if (updateAvailable) {
-      response.download_url = latest.download_url;
+      response.download_url = resolveDownloadUrl(latest, platform, channel);
       response.release_notes = latest.notes;
       response.pub_date = latest.pub_date;
       response.file_size_bytes = latest.file_size_bytes;
@@ -244,7 +264,7 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
     response.is_critical = latest.is_critical;
 
     if (updateAvailable) {
-      response.download_url = latest.download_url;
+      response.download_url = resolveDownloadUrl(latest, platform, channel);
       response.release_notes = latest.notes;
       response.pub_date = latest.pub_date;
       response.file_size_bytes = latest.file_size_bytes;

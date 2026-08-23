@@ -813,8 +813,10 @@ function synthesisDirective(sources: SourceAggregator, cutShortReason: string | 
     : '';
   return (
     'Synthesis phase: write the final research report now, based on your research notes above.' +
-    ' Structure it with a brief executive summary, clearly labeled sections, and a numbered Sources list.' +
+    ' Structure it with a brief executive summary and clearly labeled sections.' +
     ' Inline-cite every factual claim with a bracketed number, e.g. [1], matching the numbered source list below when present.' +
+    ' Do not end with a Sources or References list and never paste a raw URL into the report:' +
+    ' the app renders the numbered sources beside the report from the numbers you cite.' +
     ' Do not include the markers or your raw notes in the report.' +
     cutShort +
     sourceList
@@ -1439,6 +1441,7 @@ export async function* runResearchLoop(
             }),
           );
           await persistRun('failed', '', msg);
+          yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
           yield encoder.encode(sseDone());
           return;
         }
@@ -1545,6 +1548,7 @@ export async function* runResearchLoop(
             ? `Every provider call failed: ${lastTurnError}`
             : 'The model returned an empty report.',
         );
+        yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
         yield encoder.encode(sseDone());
         return;
       }
@@ -1576,6 +1580,7 @@ export async function* runResearchLoop(
       const cumulative = sources.toSearchResultsEvent(responseModel);
       if (cumulative) yield encoder.encode(cumulative);
       await persistRun('failed', '', msg);
+      yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
       yield encoder.encode(sseDone());
       return;
     }
@@ -1584,6 +1589,7 @@ export async function* runResearchLoop(
     const cumulative = sources.toSearchResultsEvent(responseModel);
     if (cumulative) yield encoder.encode(cumulative);
     yield status('complete', 'Research complete');
+    yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'end-turn' }));
     yield encoder.encode(sseDone());
   } finally {
     // Abrupt teardown (client abort finalizes the generator mid-yield) skips

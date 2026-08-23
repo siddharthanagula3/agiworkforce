@@ -20,7 +20,6 @@ import {
   Plus,
   Search,
   Settings,
-  Sparkles,
   SquarePen,
   Trash2,
   Upload,
@@ -51,7 +50,6 @@ export interface SidebarProps extends SessionItemHandlers {
   className?: string;
   collapsed?: boolean;
   width?: number;
-  isMobile?: boolean;
   isSimpleMode?: boolean;
 
   mode?: SidebarMode;
@@ -62,9 +60,6 @@ export interface SidebarProps extends SessionItemHandlers {
   onToggleCollapse?: () => void;
   onSelectProjectFilter?: (projectId: string | null) => void;
   onOpenSearch?: () => void;
-  onOpenProjects?: () => void;
-  onOpenSkills?: () => void;
-  onModeClick?: () => void;
   onOpenUsage?: () => void;
 
   onProjectOpen?: (projectId: string) => void;
@@ -96,7 +91,6 @@ export function Sidebar(props: SidebarProps) {
     className,
     collapsed = false,
     width = 260,
-    isMobile: _isMobile = false,
     isSimpleMode = false,
     mode = 'local',
     budgetPercent = 0,
@@ -105,9 +99,6 @@ export function Sidebar(props: SidebarProps) {
     onToggleCollapse,
     onSelectProjectFilter,
     onOpenSearch,
-    onOpenProjects,
-    onOpenSkills,
-    onModeClick,
     onOpenUsage,
     onProjectOpen,
     onProjectNewChat,
@@ -420,27 +411,7 @@ export function Sidebar(props: SidebarProps) {
     );
   }, []);
 
-  const resolvedNavItems = useMemo<SidebarNavItem[]>(() => {
-    if (navItems) return navItems;
-    const items: SidebarNavItem[] = [];
-    if (onOpenProjects) {
-      items.push({
-        id: 'projects',
-        label: t('sidebar.projects', 'Projects'),
-        icon: FolderOpen,
-        onClick: onOpenProjects,
-      });
-    }
-    if (onOpenSkills) {
-      items.push({
-        id: 'skills',
-        label: t('sidebar.skills', 'Skills'),
-        icon: Sparkles,
-        onClick: onOpenSkills,
-      });
-    }
-    return items;
-  }, [navItems, onOpenProjects, onOpenSkills, t]);
+  const resolvedNavItems = navItems ?? EMPTY_NAV_ITEMS;
 
   if (collapsed) {
     return (
@@ -461,20 +432,15 @@ export function Sidebar(props: SidebarProps) {
             icon={Search}
             onClick={handleOpenSearch}
           />
-          {onOpenProjects && (
+          {resolvedNavItems.map((item) => (
             <RailButton
-              label={t('sidebar.projects', 'Projects')}
-              icon={FolderOpen}
-              onClick={onOpenProjects}
+              key={item.id}
+              label={item.label}
+              icon={item.icon}
+              isActive={item.isActive}
+              onClick={item.onClick}
             />
-          )}
-          {onOpenSkills && (
-            <RailButton
-              label={t('sidebar.skills', 'Skills')}
-              icon={Sparkles}
-              onClick={onOpenSkills}
-            />
-          )}
+          ))}
           <div
             title={mode === 'local' ? t('sidebar.local', 'Local') : t('sidebar.cloud', 'Cloud')}
             className={cn(
@@ -994,25 +960,6 @@ export function Sidebar(props: SidebarProps) {
           )}
           <div className="flex items-center gap-1.5 overflow-hidden">
             <div className="min-w-0 flex-1 overflow-hidden">{footerSlot}</div>
-            {onModeClick && (
-              <button
-                type="button"
-                onClick={onModeClick}
-                title={
-                  mode === 'local'
-                    ? t('sidebar.localMode', 'Local mode')
-                    : t('sidebar.cloudMode', 'Cloud mode')
-                }
-                className={cn(
-                  'shrink-0 cursor-pointer rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors',
-                  mode === 'local'
-                    ? 'bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/30'
-                    : 'bg-blue-500/20 text-blue-500 hover:bg-blue-500/30',
-                )}
-              >
-                {mode === 'local' ? t('sidebar.local', 'Local') : t('sidebar.cloud', 'Cloud')}
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -1024,10 +971,12 @@ function RailButton({
   label,
   icon: Icon,
   onClick,
+  isActive = false,
 }: {
   label: string;
   icon: SidebarNavItem['icon'];
   onClick?: () => void;
+  isActive?: boolean;
 }) {
   return (
     <button
@@ -1035,12 +984,20 @@ function RailButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="flex h-9 w-9 items-center justify-center rounded-lg text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(
+        'flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+        isActive
+          ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+          : 'text-[hsl(var(--muted-foreground))]',
+      )}
     >
       <Icon className="h-4 w-4" />
     </button>
   );
 }
+
+const EMPTY_NAV_ITEMS: SidebarNavItem[] = [];
 
 const PROJECT_CHATS_SHOW_LIMIT = 5;
 

@@ -235,6 +235,14 @@ describe('transcription cost model', () => {
     expect(estimateAudioSeconds(80_000, 'audio/wav')).toBe(10);
   });
 
+  it('grants the uncompressed byte rate only when the magic bytes agree with the declared type', () => {
+    const wavHead = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]);
+    const mp3Head = new Uint8Array([0x49, 0x44, 0x33, 0x04, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(estimateAudioSeconds(80_000, 'audio/wav', wavHead)).toBe(10);
+    expect(estimateAudioSeconds(80_000, 'audio/wav', mp3Head)).toBe(40);
+    expect(estimateAudioSeconds(80_000, 'audio/mpeg', wavHead)).toBe(40);
+  });
+
   it('prefers provider tokens, then provider duration, then the size-derived bound', () => {
     expect(
       settleTranscriptionTokens({ usage: { input_tokens: 10, output_tokens: 3 } }, 99),

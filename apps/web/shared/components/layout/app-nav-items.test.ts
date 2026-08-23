@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from './app-nav-items';
 
@@ -46,5 +49,34 @@ describe('app rail · admin destination', () => {
     const ordinary = build(false).map((item) => item.id);
     const asAdmin = build(true).map((item) => item.id);
     expect(asAdmin.filter((id) => id !== 'admin')).toEqual(ordinary);
+  });
+});
+
+// A rail entry whose href has no page behind it is a 404 with an icon, and a
+// shipped screen with no rail entry is unreachable without typing the URL.
+// /skills was the latter: indexed, linked from marketing, the target of two
+// redirects, and absent from the rail. Both directions are asserted here.
+describe('app rail · every destination resolves to a real route', () => {
+  const APP_DIR = path.resolve(__dirname, '../../../app');
+
+  const pageFor = (href: string) => {
+    const segments = href.replace(/^\//, '').split('/');
+    return ['page.tsx', 'page.ts'].some((basename) =>
+      existsSync(path.join(APP_DIR, ...segments, basename)),
+    );
+  };
+
+  const routed = APP_NAV_DESTINATIONS.filter((d) => typeof d.href === 'string');
+
+  it('covers the destinations that navigate somewhere', () => {
+    expect(routed.length).toBeGreaterThan(5);
+  });
+
+  it.each(routed.map((d) => [d.id, d.href as string]))('%s -> %s exists', (_id, href) => {
+    expect(pageFor(href), `${href} has no page.tsx`).toBe(true);
+  });
+
+  it('offers Skills, which was reachable only by URL', () => {
+    expect(APP_NAV_DESTINATIONS.map((d) => d.id)).toContain('skills');
   });
 });

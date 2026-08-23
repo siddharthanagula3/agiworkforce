@@ -173,7 +173,7 @@
   "checkoutFailed": "Failed to start checkout. Please try again.",
   "perSeatPricingSub": "per seat, per month",
   "perSeatPrice": "{{price}}/seat/mo",
-  "perSeatPriceAnnual": "{{price}}/seat/yr",
+  "perSeatPriceAnnual": "{{price}}/seat/mo",
   "seatCountLabel": "Seats",
   "changeSeatsCta": "Update seats",
   "audienceLabel": "Billing audience",

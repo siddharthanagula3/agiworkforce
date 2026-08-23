@@ -176,6 +176,7 @@ describe('account-wide default tool approval policy', () => {
         mcpTools: [CONNECTOR_TOOL],
         toolApprovalPolicy: 'auto_approve_read_only',
         connectorPermissions: {
+          entries: [],
           levelFor: (qualifiedName: string) =>
             qualifiedName === 'search_maps' ? 'ask' : undefined,
           levelForConnectorTool: () => undefined,

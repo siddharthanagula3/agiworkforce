@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
@@ -36,6 +37,9 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
   if (rateLimitResponse) return rateLimitResponse;
 
   const authUser = await getClerkAuthUser(request);
+  if (authUser.surfaceClass === 'developer') {
+    throw createError.forbidden('Approving a device requires an interactive sign-in.');
+  }
 
   let body: unknown;
   try {
@@ -112,6 +116,23 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     return NextResponse.json(
       { success: true, approved: false, status: 'denied' },
       { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  // Enforced on APPROVAL, not on code issuance: starting the flow is
+  // unauthenticated, so there is no account to consult until a human approves.
+  // No approval means no token, which is the whole grant.
+  if (!(await isDeviceCodeSignInEnabled(authUser.userId))) {
+    logger.info({ userId: authUser.userId }, 'Device approval refused: device sign-in is off');
+    return NextResponse.json(
+      {
+        error: {
+          code: 'DEVICE_SIGNIN_DISABLED',
+          message:
+            'Device sign-in is turned off for this account. Turn it back on in Settings › Security to approve a device.',
+        },
+      },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 

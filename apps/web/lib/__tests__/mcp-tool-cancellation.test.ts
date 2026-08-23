@@ -14,6 +14,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: (...args: unknown[]) => assertPublicHostnameMock(...args),
+  pinnedPublicFetch: vi.fn(),
 }));
 vi.mock('@agiworkforce/mcp', () => ({
   buildMcpToolCatalog: (...args: unknown[]) => buildMcpToolCatalogMock(...args),

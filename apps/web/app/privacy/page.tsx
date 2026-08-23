@@ -106,18 +106,18 @@ export const metadata = buildMetadata({
  * describe a document that is not there.
  */
 const SECTIONS = [
-  '00 &middot; The mode decides the answer',
-  '01 &middot; What we collect',
-  '02 &middot; What we do not collect',
-  '03 &middot; How we use it, and on what basis',
-  '04 &middot; Sharing',
-  '05 &middot; Retention',
-  '06 &middot; What you can change yourself',
-  '07 &middot; Your rights, and how to use them',
-  '08 &middot; International transfers',
-  '09 &middot; Children',
-  '10 &middot; Changes',
-  '11 &middot; Contact',
+  '00 · The mode decides the answer',
+  '01 · What we collect',
+  '02 · What we do not collect',
+  '03 · How we use it, and on what basis',
+  '04 · Sharing',
+  '05 · Retention',
+  '06 · What you can change yourself',
+  '07 · Your rights, and how to use them',
+  '08 · International transfers',
+  '09 · Children',
+  '10 · Changes',
+  '11 · Contact',
 ] as const;
 
 export default function PrivacyPage() {
@@ -143,7 +143,7 @@ export default function PrivacyPage() {
         />
 
         <section className="agi-section" id="s-00">
-          <p className="agi-section-eyebrow">00 &middot; The mode decides the answer</p>
+          <p className="agi-section-eyebrow">00 · The mode decides the answer</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Most privacy policies have one answer. This product has three, because Local, BYOK and
             Managed Cloud are separate trust boundaries and your data goes to genuinely different
@@ -203,7 +203,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-01">
-          <p className="agi-section-eyebrow">01 &middot; What we collect</p>
+          <p className="agi-section-eyebrow">01 · What we collect</p>
           <table className="agi-ledger">
             <thead>
               <tr>
@@ -364,11 +364,11 @@ export default function PrivacyPage() {
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
             <strong>Why this table grew on {POLICY_LAST_UPDATED.privacy}.</strong> A review compared
             it against every write path in the product and found the six categories above missing:
-            feedback and its diagnostic logs, content reports and support transcripts, search
-            history and memories, profile fields, the early-access list, device tokens and download
-            records, and directory-provisioned identities. All of it was already being collected;
-            this page had not kept up. If you add a collection point and do not add a row here, that
-            is the defect this paragraph exists to prevent.
+            the things you send us on purpose (feedback with its diagnostic logs, content reports
+            and support transcripts), search history and memories, profile fields, the early-access
+            list, device tokens and download records, and directory-provisioned identities. All of
+            it was already being collected; this page had not kept up. If you add a collection point
+            and do not add a row here, that is the defect this paragraph exists to prevent.
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
             <strong>Hosted AI providers we may route requests to (Managed Cloud):</strong>{' '}
@@ -439,7 +439,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-02">
-          <p className="agi-section-eyebrow">02 &middot; What we do not collect</p>
+          <p className="agi-section-eyebrow">02 · What we do not collect</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
               <h3 className="agi-reason-h">Training data</h3>
@@ -478,7 +478,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-03">
-          <p className="agi-section-eyebrow">03 &middot; How we use it, and on what basis</p>
+          <p className="agi-section-eyebrow">03 · How we use it, and on what basis</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             One row per purpose, rather than a sentence listing four bases and leaving you to work
             out which applies to what. Where a row says <em>legitimate interests</em>, it also says
@@ -609,7 +609,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-04">
-          <p className="agi-section-eyebrow">04 &middot; Sharing</p>
+          <p className="agi-section-eyebrow">04 · Sharing</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We share data only with the subprocessors listed at{' '}
             <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
@@ -623,7 +623,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-05">
-          <p className="agi-section-eyebrow">05 &middot; Retention</p>
+          <p className="agi-section-eyebrow">05 · Retention</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Every row below is a job or a mechanism that exists in the product, with the ones we do
             not control named as such. We would rather publish a shorter schedule that is true than
@@ -727,9 +727,13 @@ export default function PrivacyPage() {
                 <td style={{ verticalAlign: 'top' }}>Security audit log</td>
                 <td style={{ verticalAlign: 'top' }}>90 days.</td>
                 <td>
-                  A database routine deletes entries older than 90 days.{' '}
-                  <strong>It is run by an administrator, not on a schedule</strong>, so treat 90
-                  days as the policy rather than an automatic guarantee.
+                  A database routine deletes entries older than 90 days, run by a{' '}
+                  <strong>scheduled job every night</strong> —{' '}
+                  <code>/api/cron/purge-security-audit-logs</code> at 02:30 UTC, registered in{' '}
+                  <code>vercel.json</code>. This entry previously said the routine was run by an
+                  administrator rather than on a schedule; that stopped being true when the cron was
+                  added, and the policy is corrected here rather than left understating what
+                  happens.
                 </td>
               </tr>
               <tr>
@@ -831,7 +835,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-06">
-          <p className="agi-section-eyebrow">06 &middot; What you can change yourself</p>
+          <p className="agi-section-eyebrow">06 · What you can change yourself</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Controls that exist in the product right now, separated from the statutory rights in the
             next section on purpose. A right you have to write in and ask for is not the same thing
@@ -930,7 +934,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-07">
-          <p className="agi-section-eyebrow">07 &middot; Your rights, and how to use them</p>
+          <p className="agi-section-eyebrow">07 · Your rights, and how to use them</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Depending on where you live and subject to applicable exceptions, privacy laws such as
             the GDPR, UK GDPR, and CCPA may give you rights of access, correction, deletion,
@@ -987,7 +991,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-08">
-          <p className="agi-section-eyebrow">08 &middot; International transfers</p>
+          <p className="agi-section-eyebrow">08 · International transfers</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI data is hosted in the United States.{' '}
             <strong>We do not offer EU or UK data residency</strong>, so European customers&rsquo;
@@ -1006,7 +1010,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-09">
-          <p className="agi-section-eyebrow">09 &middot; Children</p>
+          <p className="agi-section-eyebrow">09 · Children</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI accounts are for people aged 18 and over; 13- to 17-year-olds may use it only under
             an account opened and supervised by a parent, guardian or school, as set out in section
@@ -1021,7 +1025,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-10">
-          <p className="agi-section-eyebrow">10 &middot; Changes</p>
+          <p className="agi-section-eyebrow">10 · Changes</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We may update this policy. The current version is always at this URL with the revision
             date at the top, and material changes are recorded on{' '}
@@ -1034,7 +1038,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section" id="s-11">
-          <p className="agi-section-eyebrow">11 &middot; Contact</p>
+          <p className="agi-section-eyebrow">11 · Contact</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             {LEGAL_ENTITY}, {NOTICE_ADDRESS}. Email{' '}
             <a href={contactMailto(CONTACT_SUBJECTS.privacy)} style={{ color: 'var(--agi-ink)' }}>

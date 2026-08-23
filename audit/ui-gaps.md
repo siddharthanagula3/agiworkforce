@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: f495ef48ac098d39e6f5dfe1a1f1c99a9221cf35aceba4aec5f0cf50efaac861 -->
+<!-- ui-gaps-csv-sha256: 4a325915245a76e6ff66c8ee41834050b0e5bbd95289dd09bbe5e48ba42d216e -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,24 +21,24 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 0 P1, 154 P2, 43 P3.
+- Unresolved: 0 P0, 0 P1, 126 P2, 40 P3.
 
-| Surface          | Gaps |
-| ---------------- | ---: |
-| mobile           |  114 |
-| desktop          |  142 |
-| web              |   43 |
-| extension        |    5 |
-| extension-vscode |   37 |
+| Surface | Gaps |
+| --- | ---: |
+| mobile | 114 |
+| desktop | 142 |
+| web | 43 |
+| extension | 5 |
+| extension-vscode | 37 |
 
-| Status      | Gaps |
-| ----------- | ---: |
-| Open        |  197 |
-| In Progress |    0 |
-| Blocked     |    0 |
-| Deferred    |    0 |
-| Done        |   71 |
-| Not Planned |   73 |
+| Status | Gaps |
+| --- | ---: |
+| Open | 166 |
+| In Progress | 0 |
+| Blocked | 0 |
+| Deferred | 0 |
+| Done | 90 |
+| Not Planned | 85 |
 
 ## P0
 
@@ -799,7 +799,7 @@ Mobile now boots the shared i18next runtime before the navigator appears and exp
 
 **Evidence**
 
-apps/mobile/src/i18n/index.ts owns device-language detection, preference validation, encrypted-MMKV read/write, the shared @agiworkforce/i18n corpus, and safe restoration. app/\_layout.tsx awaits restoration after MMKV initialization so the first navigable frame uses the chosen language. settings/general/index.tsx renders the translated General, Language, and Storage labels plus active native language; settings/app-language/index.tsx renders the searchable Match device and 12-locale radio list. The authenticated drawer registers the hidden route and navigation types include it. app-language-settings.test.tsx verifies General navigation, default selection, explicit choice, and native-name search; mobile-i18n.test.ts verifies corpus translation, persistence, device fallback, and invalid-value handling.
+apps/mobile/src/i18n/index.ts owns device-language detection, preference validation, encrypted-MMKV read/write, the shared @agiworkforce/i18n corpus, and safe restoration. app/_layout.tsx awaits restoration after MMKV initialization so the first navigable frame uses the chosen language. settings/general/index.tsx renders the translated General, Language, and Storage labels plus active native language; settings/app-language/index.tsx renders the searchable Match device and 12-locale radio list. The authenticated drawer registers the hidden route and navigation types include it. app-language-settings.test.tsx verifies General navigation, default selection, explicit choice, and native-name search; mobile-i18n.test.ts verifies corpus translation, persistence, device fallback, and invalid-value handling.
 
 **Suggested fix**
 
@@ -3304,11 +3304,11 @@ Replace the slider with a radio list of the model's supportedEfforts (label + on
 
 **Gap**
 
-Reference's Code tab shows a 'Devices' label and a card listing recently connected devices (or 'No recently connected devices') above the sessions list, letting the user see which desktop/mobile devices have been used for remote code sessions. agiworkforce's Code screen goes straight from the header into the session list/empty state with no device-awareness section.
+NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/code-sessions/index.tsx) was deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). There is no standalone Code screen left to add a Devices section to; only a leftover test filename (__tests__/artifacts-code-sessions.test.tsx) still references 'code-sessions', and it tests an artifacts gallery screen, not a Code screen. Do not treat this row as verified-open until re-audited against whatever, if anything, replaced device-awareness inside Companion. Original complaint, preserved verbatim: Reference's Code tab shows a 'Devices' label and a card listing recently connected devices (or 'No recently connected devices') above the sessions list, letting the user see which desktop/mobile devices have been used for remote code sessions. agiworkforce's Code screen went straight from the header into the session list/empty state with no device-awareness section, before that screen was removed entirely.
 
 **Evidence**
 
-apps/mobile/src/features/code-sessions/index.tsx — screen renders header then ScrollView with CodeSessionSection/CodeSessionsEmptyState only; searched for 'Devices' and 'recently connected' — no match anywhere in that directory.
+STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/__tests__/artifacts-code-sessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
 
 **Suggested fix**
 
@@ -3320,7 +3320,7 @@ Add a 'Devices' section above the session list, sourced from the same connection
 
 ### GAP-144 — No Dispatch intro/marketing screen offering QR pairing vs. email-link pairing
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-screen
 - **Reference:** Claude · iOS · Dispatch intro screen
@@ -3331,7 +3331,7 @@ Reference shows a first-run explainer ('Reach your desktop from your pocket') wi
 
 **Evidence**
 
-apps/mobile/app/(app)/dispatch/index.tsx (PairingPrompt only offers 'Scan QR Code'); apps/mobile/app/(app)/companion/index.tsx (DisconnectedView only offers 'Scan QR Code'). Searched for 'Email' and 'safely'/'safety' pairing copy in both files — no match.
+SHIPPED, verified 2026-08-21, predates this CSV's 2026-08-11 last edit: commit 00309f240 (2026-08-01, 'gate dispatch behind a setup checklist') added apps/mobile/src/features/companion/components/DesktopSetupChecklistView.tsx, shown before first pairing (gated by hasSeenDispatchSetup in companion/index.tsx). It has a value-prop heading ('Set up Dispatch on desktop first'), a 3-step checklist, a 'Done -- continue to pairing' CTA, an 'Email me the desktop app link' button (lines ~126-137, mailto: via buildDesktopLinkMailto), and renders PairingRiskDisclosure.tsx (same commit) which has a security disclaimer and a 'Learn how to use this safely' link (lines 38-46) opening https://agiworkforce.com/security. This satisfies the two-pairing-path + safety-disclaimer pattern the row asks for; old evidence paths (dispatch/index.tsx) no longer exist.
 
 **Suggested fix**
 
@@ -3557,15 +3557,15 @@ Consider rendering VoiceConversationScreen as a semi-transparent overlay above t
 
 **Gap**
 
-Codex's remote composer shows the active model+effort as a tappable chip, opening first a quick paged picker then an Advanced sheet with Model, Intelligence, and Speed dropdowns. agiworkforce has a comparable Model+Effort picker (ModelPickerSheet) but it is wired only into the main chat tab; the Dispatch screen and Code Session screen composers have no model/effort affordance at all, so users cannot choose which model runs a dispatched task or coding session from mobile.
+Codex's remote composer shows the active model+effort as a tappable chip, opening first a quick paged picker then an Advanced sheet with Model, Intelligence, and Speed dropdowns. agiworkforce has a comparable Model+Effort picker (ModelPickerSheet) but it is wired only into the main chat tab; the Dispatch composer has no model/effort affordance at all, so users cannot choose which model runs a dispatched task from mobile. UPDATED 2026-08-21: the 'code-session composer' half of this row is moot -- that screen was deleted 2026-07-30 in c21de5707, see GAP-171. Only the Dispatch-composer half remains open, re-sited below.
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx (full model+effort UI, imported only in apps/mobile/app/(app)/(tabs)/chat.tsx:22); apps/mobile/app/(app)/dispatch/index.tsx and apps/mobile/src/features/code-sessions/index.tsx do not import model-picker
+Re-sited 2026-08-21: apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx (full 168-line file, current home of the Dispatch composer) has no model or effort UI; its sendDispatchTask({ prompt }) call carries no model/effort field. apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx (full model+effort UI) is still imported only by chat-surface screens (app/(app)/(tabs)/chat.tsx, app/(app)/chat/[id].tsx, app/(public)/onboarding.tsx, models.tsx, ScheduleForm.tsx, compare/index.tsx) -- not by DispatchTaskComposer.tsx. Old evidence path apps/mobile/app/(app)/dispatch/index.tsx no longer exists (deleted in c21de5707); apps/mobile/src/features/code-sessions/index.tsx also no longer exists.
 
 **Suggested fix**
 
-Surface a model/effort chip in the Dispatch header and the Code Session composer that opens the existing ModelPickerSheet, scoped to that dispatch thread or code session.
+Surface a model/effort chip in DispatchTaskComposer.tsx (apps/mobile/src/features/companion/components/) that opens the existing ModelPickerSheet, scoped to the dispatch task being composed. Drop the code-session-composer half of this fix -- that screen no longer exists (see GAP-171).
 
 **Reference screenshot(s)**
 
@@ -3580,11 +3580,11 @@ Surface a model/effort chip in the Dispatch header and the Code Session composer
 
 **Gap**
 
-Reference drawer lists Chats, Projects, Artifacts, Code, Dispatch, and Cowork as primary top-level destinations. agiworkforce's DrawerContent.PRIMARY_ITEMS only includes Projects, Artifacts, Library, Tasks, and Schedules — Code (apps/mobile/app/(app)/code/index.tsx) and Dispatch (apps/mobile/app/(app)/dispatch/index.tsx) are fully built screens with no drawer entry point, making them undiscoverable without a deep link.
+NEEDS RE-SITING (verified 2026-08-21): the files this row cites (apps/mobile/app/(app)/code/index.tsx, apps/mobile/app/(app)/dispatch/index.tsx) were deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). Code/Dispatch functionality now lives inside the unified Companion screen (apps/mobile/app/(app)/companion/index.tsx, apps/mobile/src/features/companion/). Do not treat this row as verified-open or closed until it is re-audited against Companion's current IA. Original complaint, preserved verbatim: Reference drawer lists Chats, Projects, Artifacts, Code, Dispatch, and Cowork as primary top-level destinations. agiworkforce's DrawerContent.PRIMARY_ITEMS only included Projects, Artifacts, Library, Tasks, and Schedules -- Code and Dispatch were fully built screens with no drawer entry point, making them undiscoverable without a deep link, before both screens were removed.
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS array (lines 57-90) — no 'code' or 'dispatch' key. grep for "'/(app)/code" and "'/(app)/dispatch" across apps/mobile/src and app shows only internal redirects/back-navigation, not a drawer entry.
+STALE -- cited paths do not exist: apps/mobile/app/(app)/code/index.tsx and apps/mobile/app/(app)/dispatch/index.tsx were deleted in c21de5707 (2026-07-30). Current DrawerContent.tsx PRIMARY_ITEMS type union (lines 56-107) is 'chats'|'projects'|'library'|'skills'|'schedules'|'remote' -- there is no separate Code/Dispatch destination because there is no separate screen; both are folded into 'remote' -> apps/mobile/app/(app)/companion/index.tsx. Whether a within-Companion discoverability gap remains (e.g. for DispatchTaskComposer) needs a fresh audit pass, not reuse of this evidence.
 
 **Suggested fix**
 
@@ -3665,7 +3665,7 @@ Add a 'Product updates' notification category (with its own preference key) so u
 
 ### GAP-159 — Pairing failure screen shows one generic error line, not a troubleshooting checklist
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-copy
 - **Reference:** Claude · iOS · Pairing failed troubleshooting checklist
@@ -3676,7 +3676,7 @@ Reference's pairing-failed state gives a structured, numbered 3-item checklist t
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/ConnectionStateViews.tsx — ErrorView renders `{error ?? 'Unable to connect to the desktop.'}` with no itemized checklist.
+SHIPPED, verified 2026-08-21, predates this CSV's 2026-08-11 last edit: commit 363a0a633 (2026-08-01, 'theme the dispatch surfaces and bound pairing with a watchdog') rewrote ErrorView in apps/mobile/src/features/companion/components/ConnectionStateViews.tsx (current lines ~178-230) to render 'A few things to check on your computer:' followed by a 3-item PairingChecklist ('Dispatch is turned on in Desktop -> Settings -> Connections', signed-in-as-email, 'Desktop is open and up to date') before the Try Again button -- matching this row's own suggested fix almost verbatim.
 
 **Suggested fix**
 
@@ -3768,7 +3768,7 @@ ChatGPT iOS's Remote/Codex pairing screen, once connected to a desktop, shows a 
 
 **Evidence**
 
-grep 'folder|project|Projects' in apps/mobile/src/features/companion/components/DesktopInfoCard.tsx and AgentDashboard.tsx returned no matches; only PairingStatus.tsx, StatusBanners.tsx, ConnectionStateViews.tsx, QRScanner.tsx exist for the companion flow.
+grep 'folder|project|Projects' in apps/mobile/src/features/companion/components/DesktopInfoCard.tsx and AgentDashboard.tsx returned no matches; only PairingStatus.tsx, StatusBanners.tsx, ConnectionStateViews.tsx, QRScanner.tsx exist for the companion flow. Re-verified 2026-08-21 against current code: grepped DesktopInfoCard.tsx, AgentDashboard.tsx, and DispatchTaskComposer.tsx (companion feature, current home of this flow) for folder|workspace|repo -- zero matches. Still open, evidence paths still accurate.
 
 **Suggested fix**
 
@@ -3803,7 +3803,7 @@ Add a persisted listArrangement preference ('project' | 'chronological' | 'chats
 
 ### GAP-165 — No 'email me a download link' path when the desktop app is not installed
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-control
 - **Reference:** Codex · iOS · Remote setup intro
@@ -3814,7 +3814,7 @@ The reference offers a secondary CTA that emails the desktop download link, hand
 
 **Evidence**
 
-grep -i 'email me a download|download link' across apps/mobile — no matches; apps/web/app/download/page.tsx exists as the target
+SHIPPED, verified 2026-08-21, predates this CSV's 2026-08-11 last edit: commit 00309f240 (2026-08-01) added apps/mobile/src/features/companion/components/DesktopSetupChecklistView.tsx with an 'Email me the desktop app link' Pressable (lines ~126-137) calling handleEmailDesktopLink -> buildDesktopLinkMailto(accountEmail), which opens a mailto: prefilled with subject/body linking to DESKTOP_DOWNLOAD_URL = 'https://agiworkforce.com/download', with an in-app fallback alert if no mail app is configured.
 
 **Suggested fix**
 
@@ -3833,15 +3833,15 @@ Add a secondary button on the pairing intro that posts to an email-download-link
 
 **Gap**
 
-The reference splits setup into intro -> get pairing code -> scan/enter, each with a back chevron and one instruction per screen, so a user who loses their place can step back. agiworkforce presents one dense DisconnectedView and then swaps straight to the camera; from the scanner the only exits are close and manual entry, with no way back to the instructions.
+The reference splits setup into intro -> get pairing code -> scan/enter, each with a back chevron and one instruction per screen, so a user who loses their place can step back. UPDATED 2026-08-21: this is now only partially true. Since commit 00309f240 (2026-08-01), first-time pairing is a real multi-screen flow -- DesktopSetupChecklistView (one-time intro + checklist) -> DisconnectedView (pair CTA) -> QRScanner (camera, with its own manual-entry sub-step and a 'Close scanner' exit back to DisconnectedView) -- not the single dense screen this row originally described. The residual gap is narrower: there is no back-chevron from DisconnectedView to the one-time setup checklist once hasSeenDispatchSetup flips true (it's a persisted one-way gate, not a revisitable wizard step), and the screen header's back button exits Companion entirely rather than stepping back one screen.
 
 **Evidence**
 
-apps/mobile/app/(app)/companion/index.tsx (renders DisconnectedView or QRScanner based on state); apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:36-75; QRScanner.tsx:259-267 (top bar has close + flash only)
+Re-sited 2026-08-21: apps/mobile/app/(app)/companion/index.tsx (state machine: DesktopSetupChecklistView | DisconnectedView | QRScanner, gated by useDispatchSetupStore's persisted hasSeenDispatchSetup); apps/mobile/src/features/companion/components/DesktopSetupChecklistView.tsx (one-time step); ConnectionStateViews.tsx DisconnectedView; QRScanner.tsx (close returns to DisconnectedView; manual-entry sub-step has its own 'Back to QR Scanner'). No revisit path from DisconnectedView back to DesktopSetupChecklistView once seen.
 
 **Suggested fix**
 
-Introduce a 3-step pairing stack under app/(app)/companion/setup with back navigation, moving the 'where to find the code on desktop' guidance to its own step ending in an 'I have a pairing code' CTA.
+Narrow scope: add a way to re-open the one-time setup checklist from DisconnectedView (e.g. a 'Show setup steps again' link) instead of building a full 3-step back-navigable wizard from scratch -- most of that structure already exists.
 
 **Reference screenshot(s)**
 
@@ -3948,11 +3948,11 @@ Add a mode-indicator chip in the task/chat header or composer that opens a botto
 
 **Gap**
 
-The reference session menu offers Pin (keep a session at top of the list), Rename, Archive, plus direct navigation to 'Changes' (diff view) and 'Files' (file browser) for that session. agiworkforce's CodeSessionMoreMenu offers Copy branch, Share, Rename, and Archive — no Pin action, and no way to jump to a changes/diff view or a file browser for the session; Rename is also a dead end on mobile ('Mobile can preview this session. Rename it from AGI Desktop.').
+NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/code-sessions/components/CodeSessionMoreMenu.tsx) was deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11), same root cause as GAP-143 and GAP-155. There is no Code Session screen or menu left on mobile at all. Original complaint, preserved verbatim: The reference session menu offers Pin (keep a session at top of the list), Rename, Archive, plus direct navigation to 'Changes' (diff view) and 'Files' (file browser) for that session. agiworkforce's CodeSessionMoreMenu offered Copy branch, Share, Rename, and Archive -- no Pin action, and no way to jump to a changes/diff view or a file browser for the session; Rename was also a dead end on mobile, before the whole screen was removed.
 
 **Evidence**
 
-apps/mobile/src/features/code-sessions/components/CodeSessionMoreMenu.tsx:54-74 (menu rows: Copy branch, Share, Rename, Archive only); apps/mobile/src/features/code-sessions/index.tsx:266-272 (renameSession shows an Alert redirecting to desktop instead of renaming)
+STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/components/CodeSessionMoreMenu.tsx was deleted in c21de5707 (2026-07-30), confirmed via `git log --all --diff-filter=D`. No replacement session-menu concept exists anywhere in apps/mobile/src/features/companion/.
 
 **Suggested fix**
 
@@ -4132,15 +4132,15 @@ Add an 'Automatically use → Web search' switch in General (or make the Capabil
 
 **Gap**
 
-The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '**default**' project key with no UI), so users must re-set it repeatedly.
+The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '__default__' project key with no UI), so users must re-set it repeatedly.
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('**default**')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('__default__')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
 
 **Suggested fix**
 
-Add an 'Intelligence' row in General bound to the existing agentControlStore '**default**' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
+Add an 'Intelligence' row in General bound to the existing agentControlStore '__default__' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
 
 **Reference screenshot(s)**
 
@@ -4205,7 +4205,7 @@ The reference lets users make voice the default launch surface ('Start ChatGPT w
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx; apps/mobile/app/(app)/(tabs)/chat.tsx (voice overlay opened only via handleOpenVoiceMode); grep 'start with voice|launch.\*voice' — no match
+apps/mobile/src/features/settings/voice/index.tsx; apps/mobile/app/(app)/(tabs)/chat.tsx (voice overlay opened only via handleOpenVoiceMode); grep 'start with voice|launch.*voice' — no match
 
 **Suggested fix**
 
@@ -4286,7 +4286,7 @@ Surface Clerk's phone-number identity as a row in the Account group with add/ver
 
 ### GAP-186 — Settings root Billing row shows a generic 'Cloud'/'Sign in' tag, not the actual plan
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-control
 - **Reference:** Claude · iOS · Settings root — Billing row plan value
@@ -4297,7 +4297,7 @@ Reference's Settings root shows the user's real subscription tier inline next to
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx lines 301 (`cloudAccessTag = ... isClerkSignedIn ? 'Cloud' : 'Sign in'`) and 466-471 (billing row `tag: cloudAccessTag`).
+apps/mobile/src/features/settings/index.tsx lines 301 (`cloudAccessTag = ... isClerkSignedIn ? 'Cloud' : 'Sign in'`) and 466-471 (billing row `tag: cloudAccessTag`). SHIPPED, verified 2026-08-21: commit 1e4c47b89 (2026-08-16) removed the duplicate generic-tag Billing row; the surviving 'Subscription' row at settings/index.tsx:420-424 (added 2026-07-26, commit 1171788f78) shows `value: accountValue ?? getBillingPlanPricing(billingTier).label` -- the real plan name, not a generic tag. In-code comment at settings/index.tsx:418-419 documents the change: 'Sole entry point to cloud-billing. A duplicate Cloud > Billing row reached the same screen behind a generic tag instead of the plan.'
 
 **Suggested fix**
 
@@ -4309,7 +4309,7 @@ Pass the resolved plan/tier label (already available via useTierStore, used else
 
 ### GAP-187 — 'Shared links' settings screen exists but has no entry point from Settings
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
 - **Reference:** Claude · iOS · Settings root → Shared links entry point
@@ -4320,7 +4320,7 @@ The reference exposes 'Shared links' as a top-level row in Settings → Account.
 
 **Evidence**
 
-grep for "settings/shared-links'" across apps/mobile/src and apps/mobile/app returns zero navigation call sites; apps/mobile/src/features/settings/index.tsx has no 'Shared links' row (searched for 'Shared links' and 'shared-links' — no match).
+grep for "settings/shared-links'" across apps/mobile/src and apps/mobile/app returns zero navigation call sites; apps/mobile/src/features/settings/index.tsx has no 'Shared links' row (searched for 'Shared links' and 'shared-links' -- no match). SHIPPED, verified 2026-08-21: commit 5f5d904ef (2026-07-30, 'expose existing settings destinations') added a 'Shared Links' row at settings/index.tsx:428-433 (key 'account-shared-links') that navigates to '/(app)/settings/shared-links'. This predates the CSV's own last edit (2026-08-11).
 
 **Suggested fix**
 
@@ -4385,15 +4385,15 @@ Promote Storage to the Device group, add a 'Remote control' row routing to /(app
 
 **Gap**
 
-The reference exposes Plugins as a top-level sidebar destination and again under 'Customize ChatGPT' in settings. agiworkforce has plugin/skill management on web (/plugins, /settings/skills) and desktop (settings tabs Plugins and Skills) but nothing on mobile — the settings file even records that the entries were removed because the screens were never built, leaving a capability gap rather than just a nav gap.
+The reference exposes Plugins as a top-level sidebar destination and again under 'Customize ChatGPT' in settings. agiworkforce has plugin/skill management on web (/plugins, /settings/skills) and desktop (settings tabs Plugins and Skills) but nothing equivalent on mobile. UPDATED 2026-08-21: the Skills half of this gap shipped 2026-08-16 (commit dfcac1635) -- DrawerContent.tsx PRIMARY_ITEMS restored a 'skills' entry (line 93) routing to the existing Clerk-gated Managed Cloud catalog, and settings/index.tsx:596-597 records a deliberate decision not to duplicate it as a settings row. The residual, still-open gap is narrower: mobile has no plugin install/marketplace/enable UI at all, and per GAP-001's own fix note that is intentionally blocked pending a separate owner-scoped backend plugin lifecycle -- a founder/backend decision, not a UI wire.
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx lines 489-492 (MOB-6 comment removing Skills/Plugins entries); grep -i 'plugin' across apps/mobile matches only that comment; apps/mobile/src/features/skills contains store.ts/service.ts but no screens
+apps/mobile/src/features/drawer/components/DrawerContent.tsx lines 56-107 (PRIMARY_ITEMS includes a 'skills' entry, restored per an in-code comment dated around the 2026-08-13 consolidation); apps/mobile/src/features/settings/index.tsx lines 596-597 ('Plugins remains unshipped on Mobile... Skills now has a supported top-level Cloud catalog in the drawer and is intentionally not duplicated'); apps/mobile/src/features/skills/ contains store.ts/service.ts/SkillsScreen.tsx but no install/marketplace/enable UI anywhere in apps/mobile.
 
 **Suggested fix**
 
-Build app/(app)/plugins backed by the existing skills store/service (installed list, marketplace tab, per-plugin enable and permission summary), then restore the drawer PRIMARY_ITEMS entry and the settings 'Customize' row.
+Skills nav gap is resolved; do not rebuild it. Remaining work is a mobile plugin install/marketplace surface (installed list, marketplace tab, per-plugin enable, permission summary) backed by the existing skills store/service -- but only once the owner-scoped backend plugin lifecycle referenced in GAP-001 exists. Track as backend-blocked, not a frontend wire.
 
 **Reference screenshot(s)**
 
@@ -4569,15 +4569,15 @@ Add Mobile simulators and Pull requests sections to AgiCode settings with the fo
 
 **Gap**
 
-Claude's Code usage dashboard shows Sessions, Messages, Total tokens, Active days, Current streak, Longest streak, Peak hour, Favorite model, a calendar-style activity heatmap, and a fun comparison stat ('You've used ~7982x more tokens than The Great Gatsby'). agiworkforce's UsageDashboard.tsx only shows token-budget, per-model cost, and monthly cost-tracking sections — none of the engagement/gamification stats or the heatmap exist.
+Claude's Code usage dashboard shows Sessions, Messages, Total tokens, Active days, Current streak, Longest streak, Peak hour, Favorite model, a calendar-style activity heatmap, and a fun comparison stat. UPDATED 2026-08-21: still open for desktop, but materially cheaper than 'build from scratch' for part of it. A shared cross-app API contract already computes active-days, most-active-day and peak-hour: apps/web/features/settings/sections/ReflectSection.tsx calls a MANAGED_CLOUD_REFLECT_PATH endpoint via the shared @agiworkforce/cloud-contracts package (ManagedCloudReflectRecapSchema), rendering totalConversations/activeDays/mostActiveDay/peakHour. Desktop authenticates against the same managed-cloud backend and could call the identical shared-package endpoint; it currently does not. Current streak/longest streak, favorite model and the calendar heatmap are NOT covered by this endpoint's known fields and would still need new backend work -- only the active-days and peak-hour half of the ask is a near-free port.
 
 **Evidence**
 
-apps/desktop/src/features/settings/UsageDashboard.tsx (full file reviewed — Current session / Model limits / Cost tracking sections only); searched 'streak', 'heatmap', 'peak hour', 'favorite model' across apps/desktop/src — no matches
+apps/web/features/settings/sections/ReflectSection.tsx lines ~5-9 (imports MANAGED_CLOUD_REFLECT_PATH, ManagedCloudReflectRecapSchema from @agiworkforce/cloud-contracts) and ~219-237 (renders totalConversations/activeDays/mostActiveDay/peakHour). Grepped apps/desktop/src for 'reflect'/'MANAGED_CLOUD_REFLECT_PATH' -- zero call sites. The only 'streak' match anywhere in the desktop app is apps/desktop/src/features/agi/IterationProgressPanel.tsx's 'Failure Streak' label -- an agent-execution retry concept, unrelated to usage engagement, and a false-positive risk for anyone re-grepping this row.
 
 **Suggested fix**
 
-Add an 'Overview' sub-tab to UsageDashboard.tsx with session/message counts, streak tracking (requires persisting daily-active-usage history), a peak-hour/favorite-model computation, and a small heatmap grid component (reusable for both desktop and web).
+Call the existing MANAGED_CLOUD_REFLECT_PATH endpoint (@agiworkforce/cloud-contracts) from UsageDashboard.tsx to get active-days/most-active-day/peak-hour for free, matching web's ReflectSection. Current/longest streak, favorite model, and the calendar heatmap still need new backend aggregation -- scope those as a separate, smaller follow-up.
 
 **Reference screenshot(s)**
 
@@ -4665,7 +4665,7 @@ The reference Context section, when empty, shows a stacked-cards illustration, t
 
 **Evidence**
 
-searched 'Track tools'/'referenced files' across apps — no match; nearest is apps/desktop/src/features/context-handoff/SelectedContextReview.tsx and CloudFolderAttachSheet.tsx, neither of which is mounted in the chat rail
+Re-verified 2026-08-21: grepped 'Track tools'/'referenced files' across the whole repo -- no match. apps/desktop/src/features/context-handoff/SelectedContextReview.tsx and CloudFolderAttachSheet.tsx still exist but are not mounted as a chat-rail Context section with this explainer copy or header actions. Conclusion unchanged.
 
 **Suggested fix**
 
@@ -4684,15 +4684,15 @@ Ship the Context section with an empty state carrying that explainer line plus t
 
 **Gap**
 
-Claude's right rail has three collapsible sections — Progress (numbered step list with check/in-progress/pending circle states and a 'See task progress for longer tasks' hint), Outputs (thumbnail-style gallery captioned 'View and open files created during this task'), and Context (folder/connector chips). AGIW's closest analog, ArtifactsPanel.tsx, is a full tabbed code/artifact editor without a lightweight numbered-step progress checklist or an outputs-only summary view.
+Claude's right rail has three collapsible sections -- Progress (numbered step list with check/in-progress/pending circle states), Outputs (thumbnail-style gallery), and Context (folder/connector chips). UPDATED 2026-08-21: this has ALREADY SHIPPED, but on web, not desktop. apps/web/features/chat/components/work-session/WorkSessionPanel.tsx is a complete match -- Progress <ol> with a StatusIcon per item (CheckCircle2/Circle/CircleAlert/Loader2), an Outputs file-card list, and a Context section, each behind a collapsible SectionHeader with a count. It is wired into apps/web/features/chat/pages/WebChatPage.tsx only; grepped all of apps/desktop/src for 'WorkSessionPanel' -- zero usages. For desktop specifically the gap is still open, but the correct fix is now porting an existing, tested component, not building one from scratch.
 
 **Evidence**
 
-apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx (tab-based artifact editor, EmptyState 'No artifacts yet'); grep for 'Outputs'/'Progress' across apps/web/features and apps/desktop/src found no matching step-checklist or outputs-gallery component.
+apps/web/features/chat/components/work-session/WorkSessionPanel.tsx lines ~571-661 (Progress/Outputs/Context SectionHeaders); apps/web/features/chat/pages/WebChatPage.tsx (sole consumer). apps/desktop/src has no import of WorkSessionPanel and no equivalent component; ArtifactsPanel.tsx (apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx) remains the tab-based editor with no step-checklist or outputs-only view, and desktop has nothing at all in this space.
 
 **Suggested fix**
 
-Add a compact right-rail 'Progress' component rendering a numbered list of plan steps with check/spinner/empty-circle status icons (sourced from the agent's plan/todo state if one exists), and a lightweight 'Outputs' section listing/thumbnailing files created during the current task, separate from the full ArtifactsPanel editor.
+Port apps/web/features/chat/components/work-session/WorkSessionPanel.tsx (or extract a shared version) into the desktop chat shell instead of building a new right-rail component -- the Progress/Outputs/Context sections, status icons and empty states this row asks for already exist and are tested on web.
 
 **Reference screenshot(s)**
 
@@ -4799,15 +4799,15 @@ Add a 'Default permissions' preset selector (e.g. Always ask / Allow low-risk ac
 
 **Gap**
 
-The reference distinguishes three states at once: a non-blocking partial-error banner with a Retry action ('Some pull requests couldn’t be loaded'), a list empty state ('No pull requests found'), and a detail-pane placeholder ('Select pull request to view'). agiworkforce's comparable list panels do not model partial failure — when a source fails the panel either shows nothing or a whole-panel error, losing the rows that did load.
+The reference distinguishes three states at once: a non-blocking partial-error banner with a Retry action, a list empty state, and a detail-pane placeholder. agiworkforce's comparable list panels do not model partial failure. UPDATED 2026-08-21: verified as a concrete, reproducible bug, not just a missing pattern. AgiWorkProjects.tsx's render is an exclusive if/else-if chain (error ? banner-only : loading ? spinner : empty ? empty-state : list). When error is set and projects.length > 0, the error banner's own copy says 'Showing the last loaded project list' -- but the ternary branch structure means the project list is never actually rendered alongside it; the user sees only the banner. The UI is asserting a fallback behavior it does not implement.
 
 **Evidence**
 
-apps/desktop/src/features/v3/AgiWorkProjects.tsx / AgiWorkArtifacts.tsx / AgiWorkScheduled.tsx (single loading/empty rendering, no partial-failure banner); no PR panel exists to compare against
+apps/desktop/src/features/v3/AgiWorkProjects.tsx lines 324-354 (the error/loading/empty/list ternary chain; the misleading 'Showing the last loaded project list' copy is at ~330-333, inside the error-only branch). apps/desktop/src/features/v3/AgiWorkArtifacts.tsx and AgiWorkScheduled.tsx were not checked line-for-line but share the same v3 list-panel pattern; no PR panel exists to compare against.
 
 **Suggested fix**
 
-Introduce a shared ListPanelStates wrapper providing partial-error banner with retry, empty state, and detail-pane placeholder, and adopt it in the existing Projects/Artifacts/Scheduled panels as well as any new PR panel.
+In AgiWorkProjects.tsx, decouple the error banner from the list: render the partial-error banner ABOVE the project grid (not instead of it) whenever projects.length > 0, so the 'last loaded list' claim in the copy becomes true, and reserve the full-panel error state for the projects.length === 0 case.
 
 **Reference screenshot(s)**
 
@@ -4895,7 +4895,7 @@ The reference prints each tool's accelerator on its launcher row (Review ^⇧G, 
 
 **Evidence**
 
-apps/desktop/src/constants/shortcuts.ts (ids: new-chat, clear, copy-last, voice-input, settings, search, navigate-_, model-select, toggle-sidebar, minimize, fullscreen, zoom-_; no panel tools)
+Re-verified 2026-08-21 against the current registry (the 2026-08-09 commit be38f2cf4 collapsed three drifting shortcut arrays into one, so the file this row originally cited no longer exists in that shape): apps/desktop/src/constants/shortcuts.ts now has only RENDERER_SHORTCUTS (search, command-palette, model-select, toggle-sidebar, minimize) plus GLOBAL_SHORTCUTS (quick-summon, quick-capture, floating-window) -- still nothing for terminal, browser, files or review. Terminal.tsx, ArtifactPanel.tsx and features/browser/ all still exist with no shortcut definitions. Conclusion unchanged, evidence re-sited.
 
 **Suggested fix**
 
@@ -4918,7 +4918,7 @@ Sites, Scheduled tasks and Plugins each open with a full-width search field ('Se
 
 **Evidence**
 
-apps/desktop/src/features/v3/AgiWorkScheduled.tsx:78-90 (h1 + 'Schedule new' button only); apps/desktop/src/features/v3/AgiWorkArtifacts.tsx:60-79 (title, subtitle, refresh button; listPersistedArtifacts is called with a 50-item cap and no query)
+Re-verified 2026-08-21, lines shifted slightly: apps/desktop/src/features/v3/AgiWorkScheduled.tsx lines ~78-90 (h1 + 'Schedule new' button only, no search input, no subtitle). apps/desktop/src/features/v3/AgiWorkArtifacts.tsx lines ~60-79 (h1, subtitle via t('agiWork.artifacts.subtitle'), refresh button; no search input). Conclusion unchanged.
 
 **Suggested fix**
 
@@ -4987,7 +4987,7 @@ Reference models browsing permission as a default ('Always ask') plus per-site o
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines 336-346; apps/desktop/src/features/browser/\* (BrowserViewer, BrowserActionLog) has no permission UI; grep -i 'always ask|per-site|cookies' across those dirs — no match
+apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines 336-346; apps/desktop/src/features/browser/* (BrowserViewer, BrowserActionLog) has no permission UI; grep -i 'always ask|per-site|cookies' across those dirs — no match
 
 **Suggested fix**
 
@@ -5006,15 +5006,15 @@ Replace the comma-separated field with a policy row (Always ask / Allow listed /
 
 **Gap**
 
-The reference lets the user choose which effort levels appear in model controls ('Available reasoning efforts → 5 selected', with the caveat 'Availability varies by model') and whether the top tier shows in the picker slider. agiworkforce derives effort chips purely from catalog supportedEfforts with no user-level filter, so users who never use minimal/xhigh/max still scroll past them on every model switch.
+The reference lets the user choose which effort levels appear in model controls ('Available reasoning efforts -> 5 selected', with the caveat 'Availability varies by model') and whether the top tier shows in the picker slider. UPDATED 2026-08-21: this row's original detail described WEB's behavior (ComposerFooter.tsx's unfiltered effortChipsFor) under a row filed as agiSurface=desktop -- a surface mix-up, not evidence about desktop at all. Corrected: desktop has no reasoning-effort picker UI anywhere -- clicking the model selector opens the Settings dialog instead of an in-composer control, and neither the Capabilities nor ModelsKeys settings tabs expose an effort concept. The underlying gap is real and is a strict superset of the original ask: there is nothing to filter because there is no effort control to filter yet.
 
 **Evidence**
 
-apps/web/features/chat/components/Composer/ComposerFooter.tsx:109-111 (effortChipsFor returns r.supportedEfforts unfiltered), :92-100 (EFFORT_CHIP_LABEL: none/minimal/low/medium/high/xhigh/max); grepped 'availableEfforts|allowedEfforts|enabledEfforts' across apps — no match
+Re-verified 2026-08-21: original evidence cited only apps/web/features/chat/components/Composer/ComposerFooter.tsx, a web file, for a desktop-filed row. Desktop's own code: grepped 'Effort' (any case) across every .tsx file in apps/desktop/src -- zero matches. apps/desktop/src/App.tsx line ~1823 (onModelSelectorClick opens the Settings dialog: 'capabilities' tab on Managed Cloud, 'models-keys' tab locally) confirms there is no in-composer model+effort popover at all. apps/desktop/src/features/settings/tabs/Capabilities/index.tsx and tabs/ModelsKeys/ -- grepped 'effort' (case-insensitive) in both -- zero matches.
 
 **Suggested fix**
 
-Add a user preference holding an allowed-effort set, intersect it with each model's supportedEfforts when building effortChips (never letting the intersection go empty — fall back to the model default), and render it as a multi-select in settings.
+Before adding an allow-list preference, desktop needs an actual effort-selection control -- there is currently nothing to filter. Either build one (reusing web's supportedEfforts/EFFORT_CHIP_LABEL catalog data as the source of truth) or, if desktop intentionally delegates all model/effort configuration to Settings, document that as the deliberate design and re-scope this row to 'no effort control anywhere on desktop', the more accurate framing of what is actually missing.
 
 **Reference screenshot(s)**
 
@@ -5029,15 +5029,15 @@ Add a user preference holding an allowed-effort set, intersect it with each mode
 
 **Gap**
 
-The reference frames these settings as a view over a real config file: a 'User config ⌄' scope selector and an 'Open config.toml ↗' link so power users can see and edit the source of truth. agiworkforce reads and displays comparable dotfiles (DotfileSettings: CLI Configuration, MCP Servers, Instructions, Memories; InstructionFilesSettings: File/Source/Status/Found) but offers no scope switch on the execution settings and no way to open the backing file.
+The reference frames these settings as a view over a real config file: a 'User config ⌄' scope selector and an 'Open config.toml ↗' link. UPDATED 2026-08-21: the 'open the backing file' half of this row shipped -- DotfileSettings.tsx now has an OpenFolderButton next to config.toml, mcp.json, per-MCP-tool paths, the skills directory, individual skill paths, INSTRUCTIONS.md and raw_memories.md, each calling fileOpenWithDefaultApp. The 'scope selector' half (a 'User config' vs other-scope switch) is still genuinely missing -- there is nothing resembling a scope concept anywhere in the file.
 
 **Evidence**
 
-apps/desktop/src/features/settings/DotfileSettings.tsx (read-only inventory: CLI Configuration, Configuration, Ecosystem, Instructions, MCP Servers, Memories, Skills); apps/desktop/src/features/settings/InstructionFilesSettings.tsx (File/Source/Status/Found/Not found columns, no open action); grepped 'Open config' across apps/desktop — no match
+apps/desktop/src/features/settings/DotfileSettings.tsx: OpenFolderButton component (defined ~line 41, using fileOpenWithDefaultApp) is used at lines 166 (config.toml), 279 (mcp.json), 429 (per-tool path), 483 (skills dir), 505 (per-skill path), 572 (INSTRUCTIONS.md), 651 (raw_memories.md), and 686. Grepped 'scope' / "'User'" / "'Project'" in the same file -- zero matches, confirming no scope selector exists.
 
 **Suggested fix**
 
-Add a user/project scope selector to Agent Execution settings mirroring CustomInstructionsSettings' Global/Project split, and add an 'Open file' action per row in DotfileSettings and InstructionFilesSettings using the same reveal helper proposed for asset paths.
+Narrow scope: only a 'User config ⌄' scope selector remains to build; the open-file action pattern already exists throughout this file via OpenFolderButton and should be reused, not reinvented, for any new scoped-config row.
 
 **Reference screenshot(s)**
 
@@ -5056,7 +5056,7 @@ The reference shows a device card with a manual refresh icon and a proper empty 
 
 **Evidence**
 
-apps/desktop/src/stores/connectionStore.ts (single MobileCompanionState session, no device roster); apps/desktop/src/features/mobile-companion/\* contains no device list component
+apps/desktop/src/stores/connectionStore.ts (single MobileCompanionState session, no device roster); apps/desktop/src/features/mobile-companion/* contains no device list component
 
 **Suggested fix**
 
@@ -5075,15 +5075,15 @@ Persist paired devices (name, platform, last-seen, pairing time) and render them
 
 **Gap**
 
-Reference offers 'Keep this Mac awake — Prevent sleep when computer is plugged in and remote access is enabled', which is what makes remote control reliable in practice. agiworkforce has no sleep-inhibition setting anywhere on desktop, so a phone-initiated session silently dies when the laptop sleeps.
+Reference offers 'Keep this Mac awake -- Prevent sleep when computer is plugged in and remote access is enabled', which is what makes remote control reliable in practice. UPDATED 2026-08-21: still open, but the fix is far smaller than 'no sleep-inhibition setting anywhere on desktop' suggested. NOTE: GAP-220, GAP-221 and GAP-240 are three near-duplicate rows describing the same 'Keep this Mac awake ... remote access is enabled' feature request, independently authored with different grep terms, none of which found the real primitive (see evidence). Worth merging into one row.
 
 **Evidence**
 
-grep -i 'keep.\*awake|prevent sleep|while locked' across apps/desktop/src — no match
+Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let _sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
 
 **Suggested fix**
 
-Add a power-management toggle in the Connections tab wired to a Tauri sleep-inhibit command, active only while a remote session is live and the machine is on AC, with copy stating both conditions.
+Do not build new sleep-inhibition logic. Wrap the existing SleepPrevention::enable() guard (apps/desktop/src-tauri/src/sys/power.rs) around the Companion/remote-session-connected lifecycle instead of only background_agent.rs, expose a toggle in Settings gated on 'remote access enabled', and reuse the existing macOS/Windows guard as-is.
 
 **Reference screenshot(s)**
 
@@ -5098,15 +5098,15 @@ Add a power-management toggle in the Connections tab wired to a Tauri sleep-inhi
 
 **Gap**
 
-The reference pairs remote control with a 'Keep this Mac awake — Prevent sleep when computer is plugged in and remote access is enabled' toggle, because a sleeping host silently breaks every remote session. agiworkforce has no sleep-prevention concept: searching for keep-awake, prevent sleep, caffeinate and wake lock across apps/desktop/src returns nothing.
+The reference pairs remote control with a 'Keep this Mac awake -- Prevent sleep when computer is plugged in and remote access is enabled' toggle, because a sleeping host silently breaks every remote session. UPDATED 2026-08-21: still open, but the fix is far smaller than 'agiworkforce has no sleep-prevention concept' suggested. NOTE: GAP-220, GAP-221 and GAP-240 are three near-duplicate rows describing the same 'Keep this Mac awake ... remote access is enabled' feature request, independently authored with different grep terms, none of which found the real primitive (see evidence). Worth merging into one row.
 
 **Evidence**
 
-grep -i 'keep.?awake|prevent sleep|caffeinate|wake ?lock' apps/desktop/src — no matches
+Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let _sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
 
 **Suggested fix**
 
-Add a keepAwakeWhileRemote preference that invokes a Tauri power-management command while a companion session is live, and place it under an 'Other settings' block on the Connections tab with the same explanatory subtitle.
+Do not build new sleep-inhibition logic. Wrap the existing SleepPrevention::enable() guard (apps/desktop/src-tauri/src/sys/power.rs) around the Companion/remote-session-connected lifecycle instead of only background_agent.rs, expose a toggle in Settings gated on 'remote access enabled', and reuse the existing macOS/Windows guard as-is.
 
 **Reference screenshot(s)**
 
@@ -5148,7 +5148,7 @@ The reference has 'Open source licenses · Third-party notices for bundled depen
 
 **Evidence**
 
-grepped 'Open source licenses|third-party notices|licenses' across apps/desktop/src — no match; web has /legal, /terms, /privacy routes but the desktop settings rail has no legal/about destination
+Re-verified 2026-08-21 with alternate terms (About, Legal, Attribution, Acknowledgements, NOTICE, not just 'licenses'): apps/desktop/src/features/settings/tabs/ contains Account, Agents, AgiCode, AgiInChrome, Appearance, Billing, Capabilities, Connections, Connectors, Cowork, Developer, Extensions, General, Memory, ModelsKeys, Notifications, Plugins, Privacy, Usage, Voice -- no About/Legal tab. No generated license manifest exists anywhere under apps/desktop (mobile has an equivalent at apps/mobile/src/features/legal/licenses.generated.ts; desktop has no counterpart). Conclusion unchanged.
 
 **Suggested fix**
 
@@ -5160,22 +5160,22 @@ Generate a NOTICE/licenses bundle at build time (license-checker + cargo-about) 
 
 ### GAP-224 — Quick-query overlay hotkey is hardcoded and absent from settings
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > General — Popout Window
 
 **Gap**
 
-The reference exposes 'Popout Window hotkey' as an editable global shortcut with an explicit off state ('Leave unset to keep it off'), plus 'Default to projectless chat'. agiworkforce's quick-query overlay — its popout equivalent — documents a hardcoded Cmd+Shift+Space / Ctrl+Shift+Space binding that appears nowhere in settings, so it cannot be changed or disabled even though it registers a system-wide hotkey. The separate 'Global Hotkey' setting in General controls a different action (raising the main window).
+CORRECTED 2026-08-21: NOT a gap. Earlier verification (this row, same day) concluded the quick-query hotkey preference system was fully built but 'completely unwired -- zero UI callers.' That was wrong: it grepped for the store method name (applyQuickQueryPreferences in windowStore.ts/shortcutStore.ts) and missed that the live UI reaches the same capability through a different path -- settings persistence -- which the grep never touched. The real chain runs end to end: features/settings/tabs/General/index.tsx's 'Global Hotkey' card (Switch + combo input, labelled 'Open AGI Workforce from anywhere' but functionally the quick-query binding) -> setGlobalHotkeyEnabled/setGlobalHotkeyCombo (settingsStore.ts) -> saveSettings sends globalHotkeyPreferences via invoke('settings_save') -> Rust settings_save calls apply_quick_query_hotkey_preferences before persisting to disk, and rolls the OS registration back if the disk write fails -> shortcuts.rs transitions the OS-level registration -> the registered callback emits both 'shortcut_action' (always) and, for this specific action, 'global-hotkey-triggered' -> App.tsx's 'global-hotkey-triggered' listener opens Quick Query, gated on globalHotkeyPreferences.enabled. The App.tsx `case 'quick_query': break;` this row's original evidence called a no-op is deliberate, not dead: the Rust side emits BOTH events on every trigger, so handling 'quick_query' in the shortcut_action listener too would open Quick Query twice. shortcuts.rs has a same-shaped comment three lines below recording the identical double-emit reasoning for floating_window. Lesson for future audits: an empty switch arm can be load-bearing, and grepping for one plumbing path's method names does not prove a second, working path does not exist -- check UI event handlers for what they actually wire to, not just for the specific function names a first read expects.
 
 **Evidence**
 
-apps/desktop/src/features/quick-query/index.tsx:4-6 ('appears when the user presses the global hotkey (Cmd+Shift+Space on macOS, Ctrl+Shift+Space on Windows/Linux)'); apps/desktop/src/features/settings/GeneralSettings.tsx:65-97 (Global Hotkey group applies to opening the app, not quick query)
+apps/desktop/src/features/settings/tabs/General/index.tsx lines ~277-310 (Global Hotkey Switch + combo input). apps/desktop/src/stores/settingsStore.ts lines ~790-808 (setGlobalHotkeyEnabled/setGlobalHotkeyCombo) and ~1669-1708 (saveSettings sends globalHotkeyPreferences via invoke('settings_save')). apps/desktop/src-tauri/src/sys/commands/settings.rs lines ~568-625 (settings_save calls apply_quick_query_hotkey_preferences before persist_settings_snapshot, with rollback on failure). apps/desktop/src-tauri/src/sys/commands/shortcuts.rs lines ~301-366 (transition_quick_query_registration) and ~386-418 (on_shortcut callback emits both 'shortcut_action' and, for quick_query, 'global-hotkey-triggered'; the sibling comment documents the same pattern for floating_window). apps/desktop/src/App.tsx lines ~1221-1228 ('global-hotkey-triggered' listener opens Quick Query) and ~1307-1308 (deliberate no-op case).
 
 **Suggested fix**
 
-Add a quickQueryHotkey preference next to the existing global hotkey field, with the same accelerator validation and an explicit unset/off state, and register/unregister the Tauri global shortcut from that preference instead of a constant.
+None -- already fully wired. If anything, the 'Global Hotkey' label in tabs/General/index.tsx is confusing (it reads as the main-window-raise action but is actually the quick-query binding); a copy fix, not a functionality gap.
 
 **Reference screenshot(s)**
 
@@ -5190,11 +5190,11 @@ Add a quickQueryHotkey preference next to the existing global hotkey field, with
 
 **Gap**
 
-The reference makes essentially every app action a bindable target: Commit or push, Create PR, Open folder (⌘O), Force reload skills, Go to skills, Import from other AI apps, MCP (configure servers), Personality, Feedback, Log out, Manage scheduled tasks, Keyboard shortcuts itself. agiworkforce's shortcut catalogue is 21 entries across chat/navigation/model/agent/tools/window and covers none of these, even though every one of the corresponding surfaces exists (GitCommitDialog, useFolderSelection.selectFolder, MCPServerSettings, FeedbackDialog, scheduler, memory-import).
+The reference makes essentially every app action a bindable target: Commit or push, Create PR, Open folder (⌘O), Force reload skills, Go to skills, Import from other AI apps, MCP, Personality, Feedback, Log out, Manage scheduled tasks, Keyboard shortcuts itself. UPDATED 2026-08-21: this row's own evidence (a 21-entry, six-category shortcut catalogue) describes a version of the file that predates the 2026-08-09 registry rewrite (commit be38f2cf4) and no longer exists. The current registry is smaller still (9-10 entries, 4 categories: navigation/model/editing/window) and covers none of the listed actions either -- the complaint holds, arguably more so, just against a different file shape. Note: a mouse-driven 'Open folder' action now exists via OpenFolderButton throughout DotfileSettings.tsx and CustomAgentsList.tsx (see GAP-218, GAP-229) -- but there is still no keyboard shortcut for it or any of the other listed actions.
 
 **Evidence**
 
-apps/desktop/src/constants/shortcuts.ts:28-235 (21 definitions), :240-247 (six categories, no git/app-action category); apps/desktop/src/features/git/GitCommitDialog.tsx and features/settings/MCPServerSettings.tsx exist but are unreachable by keyboard
+apps/desktop/src/constants/shortcuts.ts (current: RENDERER_SHORTCUTS + GLOBAL_SHORTCUTS, 9-10 entries, categories navigation/model/editing/window only -- no git/app-action category, confirmed by grepping every 'category:' line in the file). apps/desktop/src/features/git/GitCommitDialog.tsx and features/settings/MCPServerSettings.tsx still exist and are still unreachable by keyboard.
 
 **Suggested fix**
 
@@ -5217,7 +5217,7 @@ The reference reserves nine generic 'Environment action 1-9' rows ('Run the envi
 
 **Evidence**
 
-apps/desktop/src/constants/shortcuts.ts DEFAULT_SHORTCUTS is a static array with no slot entries; apps/web/features/settings/components/CustomCommandsSettings.tsx and apps/desktop/src/features/workflows/WorkflowBuilder.tsx have no keybinding field
+Re-verified 2026-08-21: apps/desktop/src/constants/shortcuts.ts DEFAULT_SHORTCUTS is still a static compile-time array (now 9-10 entries post the 2026-08-09 registry rewrite, down from the ~21 this row's era described) with no generic slot mechanism. apps/web/features/settings/components/CustomCommandsSettings.tsx and apps/desktop/src/features/workflows/WorkflowBuilder.tsx still have no keybinding field. Conclusion unchanged.
 
 **Suggested fix**
 
@@ -5240,7 +5240,7 @@ The reference binds Open terminal (^`), Toggle bottom panel (⌘J), Toggle brows
 
 **Evidence**
 
-apps/desktop/src/constants/shortcuts.ts window category contains toggle-sidebar, minimize, fullscreen, zoom-in/out/reset only; apps/desktop/src/features/terminal/Terminal.tsx, features/artifacts/ArtifactPanel.tsx and features/browser/ exist with no shortcut definitions
+Re-verified 2026-08-21: apps/desktop/src/constants/shortcuts.ts window category now contains only toggle-sidebar and minimize (fullscreen/zoom were deliberately removed in the 2026-08-09 rewrite as native-menu-owned, per that file's own header comment). apps/desktop/src/features/terminal/Terminal.tsx, features/artifacts/ArtifactPanel.tsx and features/browser/BrowserViewer.tsx all still exist and still have no shortcut definitions anywhere. Conclusion unchanged, coverage if anything narrower than before.
 
 **Suggested fix**
 
@@ -5282,15 +5282,15 @@ Derive support from the model catalog's capability metadata and render a banner 
 
 **Gap**
 
-The reference pairs the custom-assets path (/Users/…/.codex/pets) with an 'Open folder ↗' link that reveals it in Finder. agiworkforce shows several user-extensible paths as plain <code> spans — CustomAgentsList prints ~/.claude/agents/ and .claude/agents/ and explicitly instructs 'AGI reads these Markdown files with YAML frontmatter and can edit them manually' — but ships no reveal/open action anywhere in the desktop app, so the user must copy the path by hand into Finder or a terminal.
+The reference pairs the custom-assets path with an 'Open folder ↗' link. UPDATED 2026-08-21: PARTIALLY SHIPPED. The global compatibility path (~/.claude/agents/) now has a working 'Open the global agents folder' button, shipped 2026-08-16 (commit 1e4c47b89), after this CSV's own 2026-08-11 last edit. The project-relative path (.claude/agents/, relative to working directory) still has no such action -- plausibly because it has no single resolvable absolute path without a known project root.
 
 **Evidence**
 
-apps/desktop/src/features/settings/CustomAgentsList.tsx:276-287 (Agent storage paths as <code>, manual-edit instruction); grepped 'Open folder|Reveal|revealItemInDir|shell.open' across apps/desktop/src — only window.open/noopener hits, no filesystem reveal
+apps/desktop/src/features/settings/CustomAgentsList.tsx lines ~179-189 (handleOpenGlobalAgentsFolder, calling fileOpenWithDefaultApp on `${home}/.claude/agents`) and ~276-296 (the wired 'Open the global agents folder' button next to the Global compatibility path). Lines ~301-306 (Project compatibility path '.claude/agents/') have no equivalent button. Old evidence ('grepped Open folder|Reveal|revealItemInDir|shell.open -- only window.open hits') was a false negative from too-narrow search terms: the real API is fileOpenWithDefaultApp (apps/desktop/src/api/fileOps.ts), which those terms missed.
 
 **Suggested fix**
 
-Add a small PathRow component (mono path + copy button + 'Open folder' using Tauri's opener/revealItemInDir plugin) and use it everywhere a path is displayed — CustomAgentsList, DotfileSettings, InstructionFilesSettings, Privacy data-storage location and the artifacts local publish result.
+Add the same OpenFolderButton/fileOpenWithDefaultApp pattern already used for the global path to the project-relative path row, resolving it against the active project's working directory rather than home.
 
 **Reference screenshot(s)**
 
@@ -5351,11 +5351,11 @@ Add a Profile tab to desktop settings reusing the Reflect recap endpoint: identi
 
 **Gap**
 
-The reference separates 'Hold-to-dictate hotkey' (hold anywhere on desktop to dictate at the cursor) from 'Toggle dictation hotkey' (press once to start, again to stop), adds a 'Keep dictation bar visible' reminder toggle, and provides a 'Recent dictations' card so transcribed text can be recovered when it lands somewhere unexpected. agiworkforce exposes a single hotkey from a fixed Select whose help text is hold-only, and keeps no dictation history — a long dictation that misroutes is simply lost.
+DATA QUALITY NOTE (2026-08-21): this row's title ('No user-assignable shortcut slots for custom commands or workflows') does not match its own detail text below, which is entirely about dictation hotkey modes -- it duplicates GAP-246 and appears to be a copy/merge error in the registry, not a distinct gap. Original detail, preserved: The reference separates 'Hold-to-dictate hotkey' (hold anywhere on desktop to dictate at the cursor) from 'Toggle dictation hotkey' (press once to start, again to stop), adds a 'Keep dictation bar visible' reminder toggle, and provides a 'Recent dictations' card so transcribed text can be recovered when it lands somewhere unexpected. agiworkforce exposes a single hotkey from a fixed Select whose help text is hold-only, and keeps no dictation history.
 
 **Evidence**
 
-apps/desktop/src/features/settings/VoiceSettings.tsx:252-267 (single 'Dictation Hotkey' Select, 'Hold this key to record — release to transcribe'); grepped 'recent dictation|recentDictation|transcript history' across apps — no match
+Re-verified 2026-08-21 (content matches GAP-246, see that row): apps/desktop/src/features/settings/VoiceSettings.tsx lines ~251-265 (single 'Dictation Hotkey' Select, 'Hold this key to record -- release to transcribe.'); grepped 'recent dictation|recentDictation|transcript history' across apps -- no match. Treat as a duplicate of GAP-246 pending a registry cleanup that fixes the title/detail mismatch.
 
 **Suggested fix**
 
@@ -5447,7 +5447,7 @@ Reference dedicates a screen to appshots: a double-⌘ capture hotkey, an 'Appsh
 
 **Evidence**
 
-apps/desktop/src/features/screen-capture/ScreenCaptureButton.tsx:199-220 ('Screen capture', 'Capture Window'), apps/desktop/src/features/screen-capture/OCRViewer.tsx; searched 'appshot', 'screenshot hotkey' and 'capture window' in apps/desktop/src/features/settings — no settings surface exists
+Re-verified 2026-08-21: apps/desktop/src/features/screen-capture/ScreenCaptureButton.tsx still shows 'Screen capture' / 'Capture Window' with no configuration; grepped 'appshot|screenshot hotkey|capture window' across apps/desktop/src/features/settings -- no settings surface exists (only an unrelated mock reference in a KeybindingsSettings test file). Conclusion unchanged.
 
 **Suggested fix**
 
@@ -5493,7 +5493,7 @@ Reference has a 'Picture in picture' group with 'Always hide picture in picture 
 
 **Evidence**
 
-apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.\*overlay' across apps/desktop/src — no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
+apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.*overlay' across apps/desktop/src — no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
 
 **Suggested fix**
 
@@ -5535,15 +5535,15 @@ Render a 'Control' group at the top of ComputerUseSettings with an 'Any app' mas
 
 **Gap**
 
-Reference offers 'Keep this Mac awake — prevent sleep when the computer is plugged in and remote access is enabled', which is what makes phone-driven remote sessions reliable. agiworkforce has no sleep-prevention preference, so a paired phone silently loses the host when the machine sleeps.
+Reference offers 'Keep this Mac awake -- prevent sleep when the computer is plugged in and remote access is enabled', which is what makes phone-driven remote sessions reliable. UPDATED 2026-08-21: still open, but the fix is far smaller than 'agiworkforce has no sleep-prevention preference' suggested. NOTE: GAP-220, GAP-221 and GAP-240 are three near-duplicate rows describing the same 'Keep this Mac awake ... remote access is enabled' feature request, independently authored with different grep terms, none of which found the real primitive (see evidence). Worth merging into one row.
 
 **Evidence**
 
-searched 'keep.\*awake', 'prevent sleep' and 'power' across apps/desktop/src — no match; apps/desktop/src/features/settings/GeneralSettings.tsx only covers window preferences and system resources
+Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let _sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
 
 **Suggested fix**
 
-Add a 'Keep this computer awake' toggle in Connections that holds a Tauri power-save-blocker while a remote session is enabled and the device is on AC, with copy stating the AC condition.
+Do not build new sleep-inhibition logic. Wrap the existing SleepPrevention::enable() guard (apps/desktop/src-tauri/src/sys/power.rs) around the Companion/remote-session-connected lifecycle instead of only background_agent.rs, expose a toggle in Settings gated on 'remote access enabled', and reuse the existing macOS/Windows guard as-is.
 
 **Reference screenshot(s)**
 
@@ -5608,7 +5608,7 @@ Reference dedicates ⌘1..⌘9 to the nine visible chat slots so users can jump 
 
 **Evidence**
 
-apps/desktop/src/constants/shortcuts.ts (navigation category has no digit bindings) — searched 'go to chat', 'Digit', and "'1'" across apps/desktop/src/hooks, /constants and /features/chat with no match
+Re-verified 2026-08-21: apps/desktop/src/constants/shortcuts.ts has no digit bindings in either RENDERER_SHORTCUTS or GLOBAL_SHORTCUTS; grepped 'go to chat', 'Digit', and single digit keys across apps/desktop/src/hooks, /constants and /features/chat -- no match. Conclusion unchanged.
 
 **Suggested fix**
 
@@ -5620,22 +5620,22 @@ Add nine 'chat.gotoSlot{N}' shortcuts (Cmd+1..9) that resolve to the Nth visible
 
 ### GAP-244 — No composer-scoped shortcuts for project picker, send message or start dictation
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Keyboard shortcuts (composer)
 
 **Gap**
 
-Reference binds composer actions: Open project picker (⌥⇧⌘O), Start dictation (^⇧D), Toggle voice mode (^⇧V) and Send message. agiworkforce's composer has a project picker and a voice input button but neither is reachable from the shortcut catalog, and there is no rebindable send action.
+CORRECTED 2026-08-21: wrong on both premises. Earlier verification (this row, same day) claimed voice_input was 'a live, Rust-registered global hotkey with a real handler in App.tsx' that was merely missing from the TS shortcut registry. Deeper tracing shows voice_input is declared with is_global: false in shortcuts.rs's with_defaults(), and every OS-registration site in that file is gated on is_global -- so this entry is never handed to the OS and never fires; it is vestigial, not live. Separately, voice dictation already has a real, working, rebindable hotkey through an entirely different mechanism: hooks/useVoiceHotkey.ts (mounted in App.tsx), backed by a four-choice user setting (caps_lock / ctrl+space / ctrl+shift+v / alt-option, defined in voice.ts) editable in VoiceSettings.tsx, and advertised in the Keyboard Shortcuts overlay via voiceInlineSection(). It is not unrebindable and not invisible -- the original row's premise that no such control exists was false, not stale. Adding the TS-registry row originally recommended would have created a second, non-functional control alongside the real one, and actively misled a user into thinking there were two independent bindings. The composer-scoped project-picker/send-message half of the original row is unaffected by this correction and remains genuinely open.
 
 **Evidence**
 
-apps/desktop/src/features/v3/DesktopShellV3.tsx:232,443 (composerProjectPicker), apps/desktop/src/constants/shortcuts.ts (only 'voice-input' Cmd+Shift+V exists; no project-picker/send/dictation entries)
+apps/desktop/src-tauri/src/sys/commands/shortcuts.rs lines ~80-89 (voice_input Shortcut literal, is_global: false) and every registration call site gated on `shortcut.is_global` (lines ~486, ~518, ~524, ~553, ~597, ~606). apps/desktop/src/hooks/useVoiceHotkey.ts (real hook), mounted at apps/desktop/src/App.tsx line ~286. apps/desktop/src/features/settings/VoiceSettings.tsx line ~87 (hotkey Select, four choices). apps/desktop/src/features/chat/KeyboardShortcutsOverlay.tsx lines ~60-70 (voiceInlineSection maps caps_lock/ctrl+space/ctrl+shift+v/default to a displayed shortcut row).
 
 **Suggested fix**
 
-Add composer category shortcuts 'composer.projectPicker', 'composer.send', 'composer.startDictation' and 'composer.toggleVoiceMode', dispatched through the existing composer store handlers in DesktopShellV3.
+Residual is vestigial Rust only: remove the voice_input entry from with_defaults() and the dead `case 'voice_input':` arm in App.tsx's shortcut_action listener, as one paired cleanup, once someone can run a cargo build to verify the removal compiles clean. Do not re-add a TS registry row for it -- the real binding already exists via useVoiceHotkey.
 
 **Reference screenshot(s)**
 
@@ -5677,7 +5677,7 @@ Reference exposes two separate system-wide hotkeys: 'Hold-to-dictate' and 'Toggl
 
 **Evidence**
 
-apps/desktop/src/features/settings/VoiceSettings.tsx:252-267 (HOTKEY_OPTIONS Select + 'Hold this key to record — release to transcribe.'), apps/desktop/src/features/voice/VoiceMode.tsx:312 (spacebar push-to-talk only)
+Re-verified 2026-08-21, line numbers hold: apps/desktop/src/features/settings/VoiceSettings.tsx lines ~251-265 (HOTKEY_OPTIONS Select + 'Hold this key to record -- release to transcribe.'), features/voice/VoiceMode.tsx (spacebar push-to-talk only). Conclusion unchanged.
 
 **Suggested fix**
 
@@ -5700,7 +5700,7 @@ In the reference 'Open command menu' lists two bindings, each independently edit
 
 **Evidence**
 
-apps/desktop/src/features/settings/KeybindingsSettings.tsx:34-44,220-242 (single-string resolve and setCustomKeybinding), apps/desktop/src/constants/shortcuts.ts serializeCombo/parseCombo operate on one combo
+Re-verified 2026-08-21: apps/desktop/src/features/settings/KeybindingsSettings.tsx and constants/shortcuts.ts resolveBinding/customKeybindings still resolve exactly one combo per shortcut id (Record<string, string>); serializeCombo/parseCombo still operate on a single combo string. Conclusion unchanged.
 
 **Suggested fix**
 
@@ -5815,7 +5815,7 @@ The reference assigns ⌘1…⌘6 to the pinned item and the visible project cha
 
 **Evidence**
 
-apps/desktop/src/constants/shortcuts.ts (no conversation-index shortcuts); apps/desktop/src/features/v3/ConversationRow.tsx / Sidebar.tsx render no combo hints
+Re-verified 2026-08-21: apps/desktop/src/constants/shortcuts.ts has no conversation-index shortcuts; apps/desktop/src/features/v3/ConversationRow.tsx and Sidebar.tsx render no combo hints on rows. Conclusion unchanged.
 
 **Suggested fix**
 
@@ -5896,14 +5896,14 @@ Completed. Keep starters attached to executable Desktop owners, preserve the use
 
 ### GAP-256 — Payment methods and plan cancellation are Stripe-portal redirects, not inline controls
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Billing — Payment methods + Cancel plan
 
 **Gap**
 
-Reference shows an inline payment-methods list (card brand icon, last4, Default badge, per-card overflow menu, Add new) and an inline 'Cancel plan' row with reassurance copy ('you'll keep full access until the end of your billing period') and a Cancel button. agiworkforce's BillingSection shows only a single default-card summary and routes every payment/cancel action through an external 'Manage billing' Stripe portal link.
+Closed 2026-08-21 as a deliberate architecture choice, with the real half shipped. Inline card management means handling card entry in our own UI; the Stripe Customer Portal keeps card data out of this application entirely. The genuinely missing half — no cancel path at all — shipped today: Billing has a Cancel plan button deep-linking into the portal cancellation flow scoped to the stored subscription, answering 409 with the routes that still work when a portal has cancellation disabled.
 
 **Evidence**
 
@@ -5919,14 +5919,14 @@ Either build inline payment-method list + cancel-plan UI using Stripe's Payment 
 
 ### GAP-257 — Connector catalog has no New/Community/Trending badges, popularity ranking, or verified indicator
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-copy
 - **Reference:** Claude · web · Connector directory (New/Community/Trending badges, #N popular ranking, verified checkmark)
 
 **Gap**
 
-Reference connector cards show status badges (New, Community, Trending), a popularity rank ('#2 popular'), and a verified checkmark next to official connectors. agiworkforce's static connector catalog (connectors.ts) has no such fields.
+Closed 2026-08-21 on the rule the connectors panel already states in its own header: no download counts or popularity numbers anywhere, because there are no real metrics. A ranking invented from nothing is the fake-availability defect this goal exists to remove. The genuine discovery need was met by the role-based Suggested-for row shipped today (GAP-269).
 
 **Evidence**
 
@@ -5942,14 +5942,14 @@ Add badge/rank/verified fields to the Connector type and data, and render them o
 
 ### GAP-258 — Sidebar nav items cannot be shown/hidden by the user
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** Claude · web · Customize sidebar modal (toggle which nav items show)
 
 **Gap**
 
-Claude lets users open a 'Customize sidebar' modal from the 'More' menu with checkboxes to show/hide Artifacts, Routines, Dispatch, and Customize in the left rail. agiworkforce's WebSidebar.tsx has a fixed, non-configurable item list ('customize' nav item instead routes to a persona/instructions page, not a visibility-toggle modal).
+Closed 2026-08-21. The rail carries nine destinations, so this matters more here than in the reference. Settings > General gains a Sidebar items row of per-destination switches; buildAppNavItems filters on the persisted hidden list. Chat is marked non-hideable at the source, so no stored or hand-edited value can leave a rail with no route back to conversations.
 
 **Evidence**
 
@@ -5965,14 +5965,14 @@ Add a 'Customize sidebar' modal (checkbox list of optional nav items: Artifacts,
 
 ### GAP-259 — 'Improve the model for everyone' and 'Location' toggles intentionally removed as dead controls
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Data controls — Improve the model / Location
 
 **Gap**
 
-Reference has toggles for opting into model-training data sharing and for location-aware responses. agiworkforce's PrivacySection.tsx has an explicit code comment explaining both were removed because they persisted but had zero consumers (no training pipeline to gate, no location collection to gate) — a switch that saves but changes nothing was judged worse than no switch.
+Already resolved correctly; re-adding would reverse it. PrivacySection states in place that locationMetadata and improveModelTraining "persisted correctly but had zero consumers anywhere — a switch that saves but changes nothing is a dead control", and to restore them only once a consumer ships. Verified 2026-08-21.
 
 **Evidence**
 
@@ -5995,7 +5995,7 @@ Build the underlying location-context and training-opt-in pipelines, then re-add
 
 **Gap**
 
-Reference seeds every account's Projects list with an 'Example project' card ('How to use Claude') that doubles as an interactive onboarding guide the user can chat with. agiworkforce's Projects page has no onboarding/example project seeding logic — new accounts start with an empty Projects list.
+Needs a founder decision, 2026-08-21. Buildable — projects, instructions and knowledge files all exist — but it means creating a row in a real account at signup the user did not ask for, and writes to production per signup. Recorded in FoundersAssistance.md rather than shipped unilaterally.
 
 **Evidence**
 
@@ -6011,14 +6011,14 @@ On first account creation, seed a 'How to use AGI' example project (with a proje
 
 ### GAP-261 — Web Personalization lacks style/tone + characteristics controls that mobile already has
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Personalization — Base style/tone + Characteristics
 
 **Gap**
 
-Reference shows a 'Base style and tone' dropdown plus four 'Characteristics' dropdowns (Warm, Enthusiastic, Headers & Lists, Emoji). agiworkforce's mobile app already implements this (StylePresetSelector + 4 response-style sliders), but apps/web/features/settings/sections/GeneralSection.tsx only exposes a single free-text 'Instructions for AGI' box — the structured style controls were never ported to web.
+INVERTED then closed 2026-08-21. Chasing this found the real defect: mobile ships the style preset and four sliders, they sync under the "personalization" namespace, and NOTHING on the server read that namespace — every slider a mobile user moved was stored and discarded. Read path wired first (buildCustomInstructionsPreamble now emits a <response_style> block); web then gained the same controls, writing the SAME namespace, so the surfaces cannot diverge.
 
 **Evidence**
 
@@ -6034,14 +6034,14 @@ Port the mobile StylePresetSelector and the four characteristic sliders (or equi
 
 ### GAP-262 — No 'Fast answers' or 'Suggested prompts' toggles on any surface
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Personalization — Fast answers / Suggested prompts
 
 **Gap**
 
-Reference has two behavior toggles below Characteristics: 'Fast answers' (allow general-knowledge fast responses that skip memory/personalization) and 'Suggested prompts' (generate suggestions based on searching connected plugins). Neither concept exists anywhere in agiworkforce.
+Resolved 2026-08-21 against an existing founder decision. Suggestion chips were REMOVED from every surface on 2026-08-06 by founder direction — GreetingBanner records it — so re-adding them would reverse a deliberate product call. "Fast answers" has no server-side counterpart either. One real find while checking: GreetingBanner still declared an onSendMessage prop it stopped reading, and TWO callers threaded a handler into it; prop and both pass-throughs removed.
 
 **Evidence**
 
@@ -6080,14 +6080,14 @@ If/when a recording feature ships, add a 'Record mode' subsection under Memory w
 
 ### GAP-264 — Scheduled tasks empty state has no suggested-template gallery to drive adoption
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-copy
 - **Reference:** Claude · web · Scheduled tasks empty state with suggested templates
 
 **Gap**
 
-Claude's empty Scheduled Tasks page shows six ready-to-use template cards (Weekly review, Meeting prep, Inbox triage, Content ideas, Daily briefing, Monitor a topic) each with a description and default cadence, letting first-time users create a schedule in one click. agiworkforce's SchedulesPage.tsx shows only a generic dashed-border empty state with an icon, 'No schedules yet' heading, one sentence of copy, and a single 'Create Your First Schedule' button — no templates.
+Closed 2026-08-21. The empty Schedules page now offers six template cards, each with a description and a plain-English cadence. A card opens the SAME create dialog with the draft pre-filled — it seeds the form, it does not create a schedule. Tests pin that every template sets only keys the draft has, never inherits the one-shot default, and that the one placeholder prompt is visibly marked.
 
 **Evidence**
 
@@ -6126,14 +6126,14 @@ Add an Advanced Security subsection to Settings > Security with: an enrollment f
 
 ### GAP-266 — No public @username/handle field anywhere in account settings
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings > Account
 
 **Gap**
 
-ChatGPT's Account panel has an editable 'Username' row (@agiautomationllc) alongside Name and Email, used to identify the user publicly (e.g. on shared GPTs). AGIW's AccountSection.tsx exposes Name/Email editing via GeneralSection/Profile but has no username/handle concept at all in the data model or UI.
+Closed 2026-08-21: the surface these identify a user ON does not exist. Skills and plugins are not user-publishable here, and shared sessions and published artifacts render no author on the public page. A public handle would collect identity data with nowhere to display it. If user-published skills ever ship, the identity question belongs to that work.
 
 **Evidence**
 
@@ -6149,14 +6149,14 @@ Add a Username field to AccountSection (or GeneralSection/Profile) with availabi
 
 ### GAP-267 — No public creator/builder profile screen for shared Skills/Plugins
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Settings > Account > GPT builder profile
 
 **Gap**
 
-ChatGPT lets a user configure a public 'GPT builder profile' shown to users of their published GPTs: a name-visibility toggle, Links section (website domain, LinkedIn, GitHub each with Add), and a feedback-email opt-in. AGIW has a Skills/Plugins marketplace (features/skills, features/plugins, /settings/skills) but no equivalent author-facing public profile screen.
+Closed 2026-08-21: same as GAP-266 — no public creator surface exists. Building a creator profile would stand up a public-exposure surface ahead of any need for one.
 
 **Evidence**
 
@@ -6179,11 +6179,11 @@ Add a 'Creator profile' section under Settings > Skills (or a new top-level sect
 
 **Gap**
 
-Claude surfaces a 'Claude in Chrome' settings page inside the main web Settings modal with a master enable toggle and a 'Site permissions' section (default policy for all sites, applying to both the extension and desktop in-app browser). agiworkforce has a separate Chrome extension app (apps/extension) but no corresponding page inside apps/web Settings to centrally manage its enablement or default site-access policy.
+Blocked on a sync channel, verified 2026-08-21. The extension already has working site permissions (site-allowlist.ts, site-permission-policy.ts) but they live in chrome.storage, and cloud-bridge syncs conversations only. A web page written today would set values the extension never reads — a page that claims to block a site and does not is worse than no page.
 
 **Evidence**
 
-Searched apps/web for 'Enable Claude in Chrome', 'site permission', 'default policy' style copy — no matches; settings nav list has no 'Chrome'/extension entry (see apps/web/app/settings/\* directory listing).
+Searched apps/web for 'Enable Claude in Chrome', 'site permission', 'default policy' style copy — no matches; settings nav list has no 'Chrome'/extension entry (see apps/web/app/settings/* directory listing).
 
 **Suggested fix**
 
@@ -6195,14 +6195,14 @@ Add a Settings > Browser Extension page in apps/web that surfaces an enable/disa
 
 ### GAP-269 — Connectors settings lacks a 'Popular' quick-connect row and a Type (Desktop/Web) column
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · visual-polish
 - **Reference:** Claude · web · Settings > Connectors (Popular cards + Type/Status table)
 
 **Gap**
 
-Reference tops the Connectors list with three large 'Popular' quick-connect cards (Gmail, Google Drive, Slack) above a table that includes a Type column (Desktop vs Web) alongside Status (checkmark / dash / Connect button). agiworkforce's ConnectorsPage.tsx uses a master-detail list with status filters (All/Connected/Ready/Coming soon) but no Popular hero row and no Type column.
+Partly stale, now closed 2026-08-21. The Connector | Type | Status table and the filter already existed, and custom MCP servers already surface as Type "Custom". The missing quick-connect row now sits above the directory, sourced from the work description General settings collects. Labelled "Suggested", never "Popular" — there are no install counts and an invented ranking would be a fake metric.
 
 **Evidence**
 
@@ -6229,7 +6229,7 @@ The reference screenshot is captured on claude.ai (web) yet shows the exact list
 
 **Evidence**
 
-grep -i 'installed on your computer|desktop.\*extension' under apps/web — no relevant settings-page match (only marketing copy pages)
+grep -i 'installed on your computer|desktop.*extension' under apps/web — no relevant settings-page match (only marketing copy pages)
 
 **Suggested fix**
 
@@ -6241,14 +6241,14 @@ Sync installed-extension state from desktop to the account backend and render a 
 
 ### GAP-271 — Keyboard shortcuts are read-only — no per-shortcut toggle, remap, or Restore defaults
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings > Keyboard
 
 **Gap**
 
-ChatGPT has a full 'Keyboard' item in the Settings nav where every shortcut can be individually enabled/disabled via a toggle switch, remapped by clicking the key combo and typing new keys, and reset via a 'Restore defaults' button. AGIW's KeyboardShortcutsDialog.tsx is a static, non-interactive reference list opened via Cmd+/, not reachable from the Settings modal nav (WebSettingsModal.tsx section list has no 'keyboard' entry).
+Partly closed 2026-08-21. Per-shortcut enable/disable and Restore defaults ship, and they are real: the matcher in use-keyboard-shortcuts was a hardcoded list PARALLEL to KEYBOARD_SHORTCUT_DOCS, so a switch over the documented list would have been decorative. It is now driven by the registry and skips disabled ids. Remapping is NOT shipped and is tracked rather than half-built.
 
 **Evidence**
 
@@ -6264,14 +6264,14 @@ Add a Keyboard section to the settings modal nav that reuses the shortcut regist
 
 ### GAP-272 — Skills settings data model lacks 'last updated' and 'author' metadata, and no Browse/Add actions
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** Claude · web · Settings > Skills (table: Skill / Last updated / Author)
 
 **Gap**
 
-Reference's Skills settings list shows a table with Skill name, Last updated date, and Author (e.g., Anthropic) columns, plus a top-right Browse button and an Add dropdown for creating/installing new skills. agiworkforce's /api/skills-backed state in WebSettingsModal.tsx maps each skill to only {id, name, description, source, tab} — no lastUpdated or author field — and wires no Browse or Add handler for the skills section.
+Closed 2026-08-21 with one deliberate substitution. Browse already existed and an Author column already rendered. The reference third column is "Last updated" — the skills source exposes no modified time and a date from load time would be fiction. Every bundled SKILL.md carries a real frontmatter version (all 9 do), so a Version column ships instead, optional the whole way, rendering an em dash when a bundle declares none.
 
 **Evidence**
 
@@ -6287,14 +6287,14 @@ Extend the /api/skills response and the SettingsSkill mapping to include lastUpd
 
 ### GAP-273 — Web settings nav is missing Storage, Safety and Parental controls that mobile ships
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-ia
 - **Reference:** ChatGPT · web · Settings modal navigation
 
 **Gap**
 
-Reference nav runs General, Notifications, Personalization, Plugins, Voice, Billing, Usage, Data controls, Cloud browser, Storage, Safety, Security and login, Parental controls, Trusted contact, Account. agiworkforce web has no storage, safety or parental-controls destination even though the mobile app implements all three, so the same account exposes different safety controls per surface.
+Resolved 2026-08-21 by checking all three claims. SAFETY is stale — SafetySection ships and is in the nav. STORAGE: the only quota-enforced storage is project knowledge and its meter shipped today. PARENTAL CONTROLS should not be ported: mobile’s screen is informational and reports device-local isMinorMode()/ageGate state that exists nowhere in apps/web; a web screen describing that mechanism would be a claim about a protection the web surface does not have.
 
 **Evidence**
 
@@ -6310,14 +6310,14 @@ Add web settings sections for Storage (per-type usage + clear), Safety and Paren
 
 ### GAP-274 — Plugin catalogue is a 4-entry preview that installs nothing
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
 - **Reference:** Codex · VS Code extension · Settings — Plugins list, framework/template entries
 
 **Gap**
 
-Reference's list runs to 22 installable plugins spanning capabilities (Documents, PDF, Sites), connectors (GitHub, Google Drive, Vercel) and framework/template packs (Build iOS/macOS/MCP/Web Apps, Expo, Default templates, Codex Browser Recorder), each enabled in place. agiworkforce's marketplace is honest about its state but is four demo entries on a page that says installation is not open and 'Nothing here installs yet', so there is no path from browsing to using a plugin on any surface.
+CODE CLAIM IS STALE — verified against production 2026-08-21. Installing works and matters: installWebPlugin runs and listEnabledPluginIdsForUser gates real skill availability in the request-processor, tool-loop and /api/skills; production holds 1 real installation. What is true is that plugin_registry_entries has only 4 rows, so the catalogue LOOKS like a dead preview. Content gap, not engineering — recorded in FoundersAssistance.md.
 
 **Evidence**
 
@@ -6333,14 +6333,14 @@ Prioritise an installable first-party set (documents/PDF/spreadsheets/presentati
 
 ### GAP-275 — Web General lacks contrast and accent-color controls that mobile already ships
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings › General
 
 **Gap**
 
-Reference General offers Appearance, Contrast and Accent color alongside Language. agiworkforce web offers only a theme switch and display language; a high-contrast component exists in the codebase but is mounted nowhere, and accent colour is mobile-only — so accessibility and personalisation regress when a user moves from phone to web.
+STALE — verified 2026-08-21: GeneralSection renders both AccentColorRow and HighContrastRow, and AppearancePreferences stamps data-accent and data-contrast. Web has had these controls; the record predates them.
 
 **Evidence**
 
@@ -6356,18 +6356,18 @@ Add Contrast (System / More contrast) and Accent color rows to GeneralSection, w
 
 ### GAP-276 — No account-level intelligence/effort defaults with usage-cost warning copy
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings › General
 
 **Gap**
 
-Reference exposes 'Higher intelligence' (auto-escalate on complex questions) and 'Enable Ultra effort' with the warning that it runs multiple agents in parallel and consumes usage limits faster, plus 'Enable Dictation'. agiworkforce only lets a user pick reasoning effort per message in the composer flyout; there is no persisted default and no cost warning.
+Closed 2026-08-21 for the parts that are real. An account-level default effort already persists and now splits by entitlement. The missing half was cost copy: effort raises ANTHROPIC_THINKING_BUDGET from 4096 to 65536, a real 16x ceiling, and nothing said so. The row now states it as a CEILING — "think up to 16x longer" — not a spend. Auto-escalation and parallel-agent mode are NOT built: neither exists server-side.
 
 **Evidence**
 
-apps/web/features/chat/components/Composer/**tests**/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings — no match
+apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings — no match
 
 **Suggested fix**
 
@@ -6379,14 +6379,14 @@ Add General rows for default reasoning effort / auto-escalation and an optional 
 
 ### GAP-277 — Notification preferences are grouped by channel instead of by event with a channel picker
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-ia
 - **Reference:** ChatGPT · web · Settings › Notifications
 
 **Gap**
 
-Reference uses one row per event with a right-aligned channel dropdown, which scales as channels are added. agiworkforce groups by channel first ('Browser notifications' heading) with boolean switches, so the same event would need duplicate switches once email and push land.
+STALE — verified 2026-08-21. NotificationsSection is already event-first: an EVENTS array of one entry per event, each with its own channels array rendered as per-channel switches. Every key also has a real consumer, so no switch is decorative.
 
 **Evidence**
 
@@ -6409,7 +6409,7 @@ Restructure the section as event-first rows with a multi-select channel control 
 
 **Gap**
 
-Reference ends with a Tasks row carrying an inline 'Manage tasks' link into the tasks surface, and a Usage row promising notification when limits reset. agiworkforce has tasks, schedules and usage limits but no notification category for either and no cross-link from settings into the managing surface.
+Blocked on a delivery path, verified 2026-08-21. Every notification key that ships has a real consumer; a usage-limit-reset category would have none — nothing watches the rolling windows and fires on reset. Shipping the switch first would be a preference nothing reads.
 
 **Evidence**
 
@@ -6425,14 +6425,14 @@ Add 'Tasks & schedules' and 'Usage limits' notification rows, each with an inlin
 
 ### GAP-279 — No account-level cloud storage quota screen (Files/Images breakdown)
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Storage — account quota by Files/Images
 
 **Gap**
 
-Reference shows total storage used vs. a plan quota (e.g. '161 MB of 100 GB used') with drill-in rows for Files (size + count) and Images (size + count) to help users free up space. agiworkforce has a mobile Storage Manager, but it manages on-device downloaded model weights and app cache — a different scope — with no equivalent for cloud-account file/image storage on web or desktop.
+Closed 2026-08-21 for the storage that is actually capped. Project knowledge has an account-wide byte limit (Free 100 MB, Pro 1 GB) enforced on upload and previously invisible until it refused you. The GET now returns account usedBytes/limitBytes and the panel shows "X of Y storage used", ambering past 90%. The meter query is scoped identically to the cap query so it cannot show headroom the upload will refuse. A per-type Files/Images breakdown is NOT shipped: media_assets has no enforced quota.
 
 **Evidence**
 
@@ -6455,7 +6455,7 @@ Add a Settings > Storage page (web) showing total uploaded-attachment storage vs
 
 **Gap**
 
-Reference shows a Credits balance with a 'Buy credits' button and an 'Automatic recharge' toggle to top up usage beyond the plan allowance. agiworkforce's CreditAlertModal explicitly documents a 'locked product rule: no credit top-ups, ever' and only nudges users to upgrade tier, even though Stripe top-up webhook handling exists server-side (handleCreditTopUp).
+Premise is STALE, verified 2026-08-21. The CreditAlertModal this cites, and its "no credit top-ups, ever" text, no longer exist. Self-serve purchase SHIPS via startTopUpCheckout. What remains is AUTOMATIC RECHARGE, which has no server-side counterpart — recorded in FoundersAssistance.md as needing a decision, because it is a standing authorisation to charge a saved card while the user is absent.
 
 **Evidence**
 
@@ -6471,7 +6471,7 @@ If the product decision changes, add a 'Buy credits' button + amount picker and 
 
 ### GAP-281 — No reasoning-effort/speed slider exposed in the extension composer
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** extension · missing-control
 - **Reference:** ChatGPT · Chrome extension · Composer Advanced effort flyout
@@ -6482,7 +6482,7 @@ ChatGPT's composer has an 'Advanced' flyout (lightning-bolt icon) that reveals a
 
 **Evidence**
 
-grep for 'effort', 'reasoning', 'Advanced' in apps/extension/src/side_panel.ts — only unrelated code comments matched ('reasoning' in a translation-layer comment); no UI slider or flyout exists.
+SHIPPED, verified 2026-08-21, predates this CSV's 2026-08-11 last edit by nine days: commit 7548314e7 (2026-08-02, 'fix: close developer surface cloud authority loops') added a complete reasoning-effort control to the extension composer. apps/extension/src/side_panel.ts lines ~9343-9420 build an #sp-effort-control: a button (#sp-effort-btn) opening a popover dialog (#sp-effort-popover, role=dialog) containing a real <input type="range"> slider (#sp-effort-slider) with live value label, scale endpoints, description text and full ARIA wiring, driven by getManagedEffortControlState(). Line ~9460 mounts it directly in the composer bar (composerBarEnd.appendChild(effortControl)). The original evidence's grep for 'effort'/'reasoning'/'Advanced' missing this was a search error, not staleness -- the feature already existed when the CSV was written.
 
 **Suggested fix**
 
@@ -6501,15 +6501,15 @@ Add an 'Advanced' popover to the composer bar (next to the autonomy chip) with a
 
 **Gap**
 
-Reference isolates full CDP access behind a 'Developer mode' section marked 'Elevated risk', default off, with copy explaining CDP lets the model inspect and control sensitive browser internals. agiworkforce's extension attaches the debugger and drives pages over CDP with no user-facing switch and no risk disclosure anywhere in its options page.
+Reference isolates full CDP access behind a 'Developer mode' section marked 'Elevated risk', default off, with copy explaining CDP lets the model inspect and control sensitive browser internals. UPDATED 2026-08-21: the 'no risk disclosure anywhere' half of this row's evidence is no longer accurate -- the Permissions section now has a 'Browser control boundary' row with real explanatory copy, and access is gated by a per-site approved-sites list the user must opt into once per site, with 'ask before acting' on by default. What is still genuinely missing is the reference's specific pattern: a single, explicitly labelled 'Developer mode: Elevated risk' toggle, default off, rather than prose plus a site allowlist.
 
 **Evidence**
 
-apps/extension/src/features/computer-use/cdpDriver.ts and agentLoop.ts:17-23,49 (all actions go through CDP attach/detach); apps/extension/src/options.ts section titles are Permissions, Account, Autofill Profile, Computer Use — Cloud Auth, Keyboard Shortcuts — no CDP/developer-mode toggle
+apps/extension/src/options.ts lines ~1056-1069 (permSection's 'Browser control boundary' row: 'Computer use uses Chrome DevTools Protocol (CDP) only after you start a run on an approved site that you have separately granted full browser control, once, in the approved-sites list below... AGI does not expose an unrestricted CDP developer mode.'), followed by createSitePermissionPolicySection (the approved-sites list). No 'Elevated risk' badge or dedicated Developer-mode toggle exists anywhere in the file.
 
 **Suggested fix**
 
-Add a default-off 'Developer mode: full CDP access' toggle in the extension options (and mirror it in desktop Browser settings) with an elevated-risk badge and one-sentence explanation; keep the agent on the restricted action set until it is enabled.
+Narrow scope: disclosure copy and a site-scoped access gate already exist. What remains is purely presentational -- add an 'Elevated risk' badge to the existing Browser control boundary row (or promote the approved-sites list into a labelled 'Developer mode' subsection) so the risk framing matches the reference, rather than building new gating logic from scratch.
 
 **Reference screenshot(s)**
 
@@ -6524,15 +6524,15 @@ Add a default-off 'Developer mode: full CDP access' toggle in the extension opti
 
 **Gap**
 
-ChatGPT's side panel puts recent tasks directly under a 'New task' dropdown with an inline 'Search recent tasks' box, visible in one click. AGIW's equivalent (drawerHistoryList) is nested inside the overflow drawer: the user must open the drawer, then click a separate 'History' row to expand the list, and there is no search/filter input for the history entries.
+ChatGPT's side panel puts recent tasks directly under a 'New task' dropdown with an inline 'Search recent tasks' box, visible in one click. UPDATED 2026-08-21: the 'no search/filter input' half of this row shipped, predating this CSV's 2026-08-11 last edit by nine days -- there is now a real, wired 'Search recent chats' input that filters the history list live, with distinct empty states ('No saved conversations' vs 'No matching conversations'). The 'two clicks deep' half is unchanged: the search input and history list are still nested inside the same overflow drawer (chatActionsSection -> drawerHistoryBtn -> drawerHistoryList/drawerHistorySearch), so reaching either still requires opening the drawer first, unlike the reference's one-click 'New task' dropdown.
 
 **Evidence**
 
-apps/extension/src/side_panel.ts lines ~4990-5075 (drawerHistoryBtn toggles drawerHistoryList inside the drawer; no search input element for history).
+Search shipped in commit 7548314e7 (2026-08-02). apps/extension/src/side_panel.ts lines ~6269-6283 (drawerHistorySearch input, type=search, placeholder 'Search recent chats', wired via filterConversations(entries, drawerHistorySearch.value) in renderDrawerHistory, lines ~6285-6294). Lines ~6261-6421 confirm drawerHistoryBtn/drawerHistoryList/drawerHistorySearch are all children of chatActionsSection inside the drawer body, unchanged nesting from the original row.
 
 **Suggested fix**
 
-Promote conversation history to a single-click dropdown anchored to the panel's task-title area (like the 'New task ⌄' pattern), and add a lightweight text filter input above the list for searching by title.
+Narrow scope: search/filter is done. What remains is purely structural -- surface drawerHistoryList/drawerHistorySearch (or a subset) directly under a top-level 'New task'-style control instead of requiring the overflow drawer to be opened first.
 
 **Reference screenshot(s)**
 
@@ -6551,7 +6551,7 @@ Claude's command menu offers a working 'Rewind' action to roll back the conversa
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:719-722 (rewindLast() always returns the 'unavailable' message); apps/extension-vscode/src/core/commandSetup.ts action sheet (lines 862-901) has no 'Rewind' entry
+Re-verified 2026-08-21, conclusion unchanged, line renumbered: apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts lines ~1407-1410 (rewindLast() still unconditionally posts 'Rewind is unavailable until the local runtime exposes turn rollback.'); still no 'Rewind' entry anywhere in core/commandSetup.ts's action sheet.
 
 **Suggested fix**
 
@@ -6570,15 +6570,15 @@ Either wire rewindLast() to actual turn-rollback support in the local runtime, o
 
 **Gap**
 
-Claude's command menu surfaces a 'Thinking' toggle and a 'Switch models when a message is flagged' toggle alongside model/effort. agiworkforce has an agentThinking config flag in config.ts but it is not exposed in the QuickPick actions menu, and there is no flagged-message model-switch setting anywhere in the extension.
+Claude's command menu surfaces a 'Thinking' toggle and a 'Switch models when a message is flagged' toggle alongside model/effort. UPDATED 2026-08-21: the 'Thinking' half is PARTIALLY SHIPPED. A full branded Settings webview panel (added 2026-07-30, commit 56cdb7d2, before this CSV's 2026-08-11 last edit) now has a real 'Extended thinking' toggle bound to agiWorkforce.agent.thinking -- so the setting is exposed, just via a dedicated Settings panel rather than the QuickPick actions menu this row specifically checked. The 'switch models when a message is flagged' half is still genuinely absent -- no 'flagged' concept exists anywhere in the extension.
 
 **Evidence**
 
-apps/extension-vscode/src/platform/config.ts:28,78-79 (agentThinking exists as a raw setting only); apps/extension-vscode/src/core/commandSetup.ts action items list (Context/Model separators) has no Thinking or flagged-switch entry
+apps/extension-vscode/src/features/settings/settingsWebviewContent.ts line ~1167 (data-setting="agent.thinking") and line ~1824 ('agent.thinking': 'Extended thinking'); apps/extension-vscode/src/platform/config.ts MutableConfigValues (the file's own doc comment: 'every setting key the extension actually reads is in ONE file') confirms agent.thinking is a real, mutable, user-facing setting. Grepped 'flagged' across apps/extension-vscode/src -- zero matches for any flagged-message switch concept.
 
 **Suggested fix**
 
-Add 'Thinking: On/Off' and 'Switch models when flagged' items to the actions QuickPick in commandSetup.ts, wired to Config.agentThinking() and a new flagged-switch setting.
+Narrow scope: only the flagged-message model-switch setting remains to build. Do not rebuild Thinking exposure -- add it to the QuickPick action sheet only if the product wants both surfaces, not because it is missing.
 
 **Reference screenshot(s)**
 
@@ -6597,7 +6597,7 @@ Reference keeps a 'Chats' list at the top of the same panel — three most recen
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1814-1818 (historyBtn -> postMessage openHistory) and ChatStateManager.ts:355 (executes agi-workforce.showSessionsHistory). Thread data already available via apps/extension-vscode/src/features/trees/conversationTreeProvider.ts (listThreads with title, updatedAt, status).
+Re-verified 2026-08-21, conclusion unchanged, line renumbered: apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts lines ~687-688 (case 'openHistory' still executes vscode.commands.executeCommand('agi-workforce.showSessionsHistory') as a separate command, not an in-panel thread list). Thread data remains available via apps/extension-vscode/src/features/trees/conversationTreeProvider.ts.
 
 **Suggested fix**
 
@@ -6620,7 +6620,7 @@ Claude's VS Code extension has a persistent left sidebar listing sessions with L
 
 **Evidence**
 
-apps/extension-vscode/src/features/trees/conversationTreeProvider.ts (native TreeDataProvider, different paradigm); grep for 'New session'/'Search sessions'/'Local'+'Web' tabs in webviewContent.ts found none
+Re-verified 2026-08-21, conclusion unchanged: apps/extension-vscode/src/features/trees/conversationTreeProvider.ts is still a native TreeDataProvider, a different paradigm from an in-webview session browser. Grepped webviewContent.ts for 'New session'/'Search sessions'/Local+Web session tabs -- the only 'Local'/'Web' hits are unrelated runtime-boundary labels (line ~2299, 'unbounded' -> 'Local'), not a session browser.
 
 **Suggested fix**
 
@@ -6639,11 +6639,11 @@ Either enrich the TreeView with search/filter and a visible 'New session' action
 
 **Gap**
 
-Reference splits the + menu into 'Add' (Files and folders, Goal, Plan mode) and 'Plugins' (Documents, PDF, Spreadsheets, Presentations, Template Creator, Sites, Build iOS Apps), each with an icon and a one-line description, so installed capabilities are invocable from the composer. agiworkforce's + menu is Workspace files / Plan mode / Tools and actions, and the extension has no plugin or skill concept at all.
+Reference splits the + menu into 'Add' (Files and folders, Goal, Plan mode) and 'Plugins' (Documents, PDF, Spreadsheets, Presentations, Template Creator, Sites, Build iOS Apps). UPDATED 2026-08-21: the + menu's third item changed from 'Tools and actions' to 'Browse the web' (a web-search toggle) at some point after this row was written -- but the core complaint is unchanged: the menu is still exactly three items (Workspace files / Browse the web / Plan mode), still no plugin or skill concept anywhere in the extension.
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1288-1320 (plusMenu markup, three items). Searched apps/extension-vscode/src for 'plugin|skill' — only an icon mapping at webviewContent.ts:2457 ('skill' -> $(book)) and a runtime event category at integrations/localRuntimeClient.ts:147.
+apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts lines ~1902-1930 (plusMenu markup: 'Workspace files', 'Browse the web', 'Plan mode' -- three items, re-sited from the original 'Tools and actions' citation). Grepped 'plugin|skill' across apps/extension-vscode/src -- still only the icon mapping ('skill' -> $(book)) and an unrelated runtime event category.
 
 **Suggested fix**
 
@@ -6666,7 +6666,7 @@ Reference offers 'Goal — Set a goal to keep pursuing' alongside Plan mode, giv
 
 **Evidence**
 
-Searched apps/extension-vscode/src for '\bgoal\b' — matches are documentation comments only (platform/surface.ts:8, features/chat-participant/chatParticipant.ts:14, core/commandSetup.ts:1173). Plus menu markup at webviewContent.ts:1288-1320 has no such item.
+Re-verified 2026-08-21 with a broader \bgoal\b search across the whole extension source tree -- zero matches at all, including the 'unrelated comments about the /goal sync contract' this row's own evidence cited (those comments were removed by the 2026-08-16 'strip explanatory comments from source' commit). Menu markup in webviewContent.ts still has no such item. Conclusion unchanged, no persistent Goal concept exists anywhere.
 
 **Suggested fix**
 
@@ -6685,11 +6685,11 @@ Add a 'Goal' item to the plus menu that stores a workspace-scoped objective (alo
 
 **Gap**
 
-Claude Code exposes a native VS Code checkbox setting ('claudeCode.useTerminal': Launch Claude in the terminal instead of the native UI), discoverable via VS Code's own Settings search. agiworkforce's config.ts has no useTerminal-equivalent key, and no package.json contributes.configuration block was found in this checkout to expose any settings to VS Code's native Settings UI at all.
+Claude Code exposes a native VS Code checkbox setting ('claudeCode.useTerminal'). UPDATED 2026-08-21: the core claim (no useTerminal-equivalent key) still holds, but this row's supporting evidence was WRONG, not just stale -- apps/extension-vscode/package.json exists and always did; the original 'no package.json found' claim was a search error. The file has a full contributes.configuration block with 20 real settings (model, agent.mode/effort/thinking, composer.followUpBehavior, desktopBridge.*, inlineCompletions.*, telemetry, etc.), all genuinely discoverable via VS Code's native Settings search -- the extension is not missing settings-UI infrastructure, it is missing this one specific key.
 
 **Evidence**
 
-apps/extension-vscode/src/platform/config.ts DEFAULTS object (no useTerminal key); no package.json found under apps/extension-vscode (searched with find -iname package.json)
+apps/extension-vscode/package.json exists (confirmed via `find apps/extension-vscode -maxdepth 1 -iname package.json`) with contributes.configuration.properties listing 20 agiWorkforce.* settings. Grepped every property name plus apps/extension-vscode/src/platform/config.ts's MutableConfigValues (the file's own doc comment: the single source of truth for every mutable setting the extension reads) -- neither contains a useTerminal-equivalent key.
 
 **Suggested fix**
 
@@ -6712,7 +6712,7 @@ Reference surfaces a dismissible hero card announcing a new model with guidance 
 
 **Evidence**
 
-Searched apps/extension-vscode/src and apps/desktop/src/features/updates for "whats new|what's new|announcement|release notes|new model" — only apps/desktop/src/features/updates/UpdateDialog.tsx:26 (app version release notes).
+Re-verified 2026-08-21 with a broader search ("what's new", 'announcement', 'release notes', 'new model') across apps/extension-vscode/src -- no genuine matches (only an unrelated ModelMetrics/ModelMetricsPanel class name false-positive on 'model'). apps/desktop/src/features/updates/UpdateDialog.tsx remains the only release-notes UI in the product. Conclusion unchanged.
 
 **Suggested fix**
 
@@ -6735,7 +6735,7 @@ Reference opens reasoning effort as an inline popover anchored to the composer, 
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1964-1970 (modeChip/effortChip post openModePicker/openEffortPicker) vs the inline '#modelPopover' at webviewContent.ts:1301; handlers at ChatStateManager.ts:371-379; QuickPick items at core/commandSetup.ts:934-960.
+Re-sited 2026-08-21 per the earlier verification (webviewContent.ts was refactored since that pass, hence this update): the separate model/effort chips this row originally cited are now one consolidated 'controlsSummary' button (apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts line ~1979, click handler ~3297-3300) that posts 'openActionSheet' -> apps/extension-vscode/src/core/commandSetup.ts line ~812 opens a native vscode.QuickPick with text items like 'Effort: ${cap(currentEffort)}'. Conclusion unchanged: effort/mode selection still leaves the webview via a native QuickPick, current value still shown only as label text, no checkmark UI -- unlike the inline model popover pattern this row asks for.
 
 **Suggested fix**
 
@@ -6747,22 +6747,22 @@ Reuse the existing model-popover component for mode and effort: render the four 
 
 ### GAP-293 — No queue-vs-steer choice for messages sent while a turn is running
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-control
 - **Reference:** Codex · VS Code extension · Settings — Composer, Follow-up behavior
 
 **Gap**
 
-Reference exposes 'Follow-up behavior: Queue | Steer' with copy explaining that Cmd+Enter does the opposite for a single message, so a user can decide whether typing mid-run interrupts the agent or lines up behind it. agiworkforce already implements a persisted send queue in the extension but surfaces no control or per-message override, so the behaviour is invisible and unchangeable.
+Reference exposes 'Follow-up behavior: Queue | Steer' with copy explaining that Cmd+Enter does the opposite for a single message. UPDATED 2026-08-21: ALREADY SHIPPED, and predates this CSV's own 2026-08-11 last edit by nine days. agiWorkforce.composer.followUpBehavior is a real, contributed, documented setting (enum queue/steer, with enumDescriptions matching this row's description almost verbatim, including the Cmd/Ctrl+Enter single-message override), fully wired end to end: read by config.ts, validated by settingsProtocol.ts, rendered as a labelled row in the Settings panel ('Active-turn send'), and consumed live in the composer -- the send button's label and tooltip switch between 'Queue'/'Steer' based on it, and Cmd/Ctrl+Enter inverts it for one message exactly as described.
 
 **Evidence**
 
-apps/extension-vscode/src/data/sendQueue.ts:1-45 (workspaceState-backed 'next'/'later' lanes via createMessageQueue) with no corresponding UI; searched webviewContent.ts for queue/steer controls — none. Interrupt path exists at ChatStateManager.ts (\_interruptActiveTurn).
+Shipped 2026-08-02, commit 7548314e7 ('fix: close developer surface cloud authority loops'). apps/extension-vscode/package.json contributes.configuration: agiWorkforce.composer.followUpBehavior (enum ['queue','steer'], default 'queue', enumDescriptions). apps/extension-vscode/src/platform/config.ts:172 (composerFollowUpBehavior() accessor). apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts lines ~2773-2787 (actionLabel/title switch between Queue/Steer, Cmd/Ctrl+Enter inverts). apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts lines ~1602,1623 (followUpBehavior consumed in real send-queue logic).
 
 **Suggested fix**
 
-Add an agiWorkforce.composer.followUpBehavior setting ('queue' | 'steer') wired to the existing sendQueue lanes and the interrupt path, show the active mode as a small label in the composer while a turn is streaming, and honour Cmd/Ctrl+Enter as the one-message inversion.
+None needed -- already shipped end to end. If a dedicated in-composer indicator (not just Settings-panel + send-button label) is desired, that is a polish request, not a gap.
 
 **Reference screenshot(s)**
 
@@ -6781,7 +6781,7 @@ Reference lets the user choose when Enter sends versus inserts a newline ('Send 
 
 **Evidence**
 
-apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:1796 (keydown: Enter && !shiftKey sends), :1312 (static hint '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline'), :1320 (title 'Send (Enter)'). No 'sendShortcut'-style key exists in src/platform/config.ts DEFAULTS.
+Re-verified 2026-08-21, conclusion unchanged: apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts keydown handler still hardcodes Enter-to-send/Shift+Enter-for-newline with static hint text. apps/extension-vscode/src/platform/config.ts's MutableConfigValues -- the definitive list of every mutable setting the extension reads -- has no sendShortcut-style key.
 
 **Suggested fix**
 
@@ -6804,7 +6804,7 @@ Reference offers a 'Show context window usage' toggle that puts remaining contex
 
 **Evidence**
 
-apps/extension-vscode/src/data/contextBudget.ts:1-30 (model context window + mode budget) and src/data/tokenCounter.ts:180-232 (status bar + showTokenBreakdown QuickPick). Searched webviewContent.ts for context-window/percent indicators in the composer — none.
+Re-sited 2026-08-21, conclusion unchanged and reinforced: apps/extension-vscode/src/data/contextBudget.ts still computes a model-aware context budget with nothing rendering it in the composer. apps/extension-vscode/src/platform/config.ts's MutableConfigValues -- the extension's complete settings inventory -- confirms there is still no agiWorkforce.composer.showContextUsage-style toggle; the only surfacing remains the status-bar item and the token-breakdown QuickPick in data/tokenCounter.ts.
 
 **Suggested fix**
 
@@ -6827,7 +6827,7 @@ Reference exposes three memory controls: 'Enable memories' (generate new memorie
 
 **Evidence**
 
-apps/extension-vscode/src/memory/memoryStore.ts:1-40 (globalState store, injected as turn context) and core/commandSetup.ts:1176-1230 (add / list / forget-all QuickPick). Searched apps/extension-vscode/src for 'memory.enabled|memoryEnabled|autoMemory' — zero matches.
+Re-verified 2026-08-21, conclusion unchanged, line renumbered: apps/extension-vscode/src/memory/memoryStore.ts (157 lines, still a globalState-backed fact store with no enabled/tool-assisted flags) and core/commandSetup.ts line ~1104 ('$(add) Add a memory fact' QuickPick, still the only management surface). apps/extension-vscode/src/platform/config.ts's MutableConfigValues has no memory.enabled/memoryEnabled/autoMemory key -- confirmed absent from the extension's complete settings inventory, not just from an isolated grep.
 
 **Suggested fix**
 
@@ -6846,15 +6846,15 @@ Add agiWorkforce.memory.enabled and agiWorkforce.memory.fromToolAssisted setting
 
 **Gap**
 
-Reference shows 'Credits balance / Your remaining credits' with the current balance and a 'Buy credits' button next to the plan card. agiworkforce has a real credit service and balance endpoint on web plus credit state in the desktop stores, but the VS Code extension shows only session token counts and an estimated cost — a developer burning credits in the IDE cannot see the balance or top up without leaving.
+Reference shows 'Credits balance / Your remaining credits' with the current balance and a 'Buy credits' button. UPDATED 2026-08-21: the balance-display half is ALREADY SHIPPED, 6 days after this CSV's 2026-08-11 last edit. The usage meter panel now renders a real credit-balance row (label + formatted balance + spendability note) whenever the account is on a managed plan with credits. There is still no dedicated 'Buy credits' action -- the only CTA is a general 'Upgrade' / 'Manage billing' button shown when usage is low, which is not the same as a standing top-up control next to the balance.
 
 **Evidence**
 
-apps/web/lib/services/credit-service.ts and apps/web/app/api/llm/v1/credits/balance/route.ts exist; apps/desktop/src/stores/billing/usageSlice.ts and features/settings/AccountSettings.tsx consume credits. Searched apps/extension-vscode/src for 'credit' — only '$(credit-card) Est. cost' labels at data/tokenCounter.ts:198 and core/commandSetup.ts:1379.
+Shipped 2026-08-17, commit ff2c0811e. apps/extension-vscode/src/data/usageMeter.ts (creditBalanceCents/overageEnabled threaded through buildManagedMeter). apps/extension-vscode/src/utils/api.ts:681 (parses credit_balance_cents from the API). apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts lines ~368-373 (buildUsageMeterCredits, formatCreditBalance). apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts lines ~2445-2458 (creditBalance span, textContent = credits.balanceLabel, appended to a real usage-bucket row in the meter panel). No 'Buy credits'/'buy_credits'/'top up' string anywhere in the extension -- only the generic upgradeBtn (dataset.action: 'upgrade'|'account'|'billing').
 
 **Suggested fix**
 
-Extend fetchTierInfo (src/utils/api.ts) to return the credit balance from the existing balance endpoint, add a 'Credits: $X' row to the account QuickPick and the Usage & billing settings section, and give it a 'Buy credits' action that opens the web billing flow with the surface tagged.
+Narrow scope: only a dedicated top-up affordance remains. The balance display, API parsing and formatting are already built and should be reused, not rebuilt.
 
 **Reference screenshot(s)**
 
@@ -6869,15 +6869,15 @@ Extend fetchTierInfo (src/utils/api.ts) to return the credit balance from the ex
 
 **Gap**
 
-Reference breaks usage into 'General usage limits' and per-model sections (each with a labelled bar, percent left and a 'Resets <date>' line) plus a 'Usage limit resets' list with a 'No resets available' empty state. agiworkforce's extension renders one percentage bar and a 'resets in Xd' string, so a user throttled on one model cannot tell which limit was hit or when it lifts.
+Reference breaks usage into 'General usage limits' and per-model sections (each with a labelled bar, percent left and a 'Resets <date>' line) plus a 'Usage limit resets' list with a 'No resets available' empty state. UPDATED 2026-08-21: MOSTLY SHIPPED, same 2026-08-17 commit as GAP-297. The extension now renders a per-bucket usage list (each row: label, remaining, 'resetsIn' or a 'No reset pending' fallback), a highlighted row for the currently-binding (limiting) bucket, and an explicit empty state ('Per-limit breakdown unavailable') when no bucket data is available -- structurally matching the reference's bar+reset+empty-state pattern. One real gap remains: the buckets are usage-category buckets (e.g. chat/agent/completions), not literally per-model-name sections the way the reference lists them.
 
 **Evidence**
 
-apps/extension-vscode/src/data/usageMeter.ts:55-120 (single usagePercentage + one resetsAt) and features/sidebar-webview/ChatStateManager.ts:161 ('resets in Xd'); account QuickPick shows one 'Cloud usage: N% used' row at core/commandSetup.ts:1384-1392.
+apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts lines ~355 (USAGE_BUCKETS_EMPTY_LABEL = 'Per-limit breakdown unavailable') and ~405-410 (buckets, bucketsEmptyLabel construction). apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts lines ~2410-2445 (renderUsageBuckets: empty-state branch, per-row label/remaining/reset, binding-row highlight class). apps/extension-vscode/src/data/usageMeter.ts (selectBindingUsageBucket, MANAGED_USAGE_BUCKET_ORDER -- confirms buckets are usage categories, not model names).
 
 **Suggested fix**
 
-Extend the tier/usage payload to a per-model limit array and render one labelled bar per limit with an absolute reset date, plus an explicit empty state when no limits or resets are returned, in both the usage banner and the settings panel.
+Narrow scope: the bar+reset+empty-state structure this row asked for is built. If literally per-model sections (not per-usage-category) are still wanted, that is the only remaining piece, and depends on whether the billing model tracks usage per model at all.
 
 **Reference screenshot(s)**
 
@@ -6885,18 +6885,18 @@ Extend the tier/usage payload to a per-model limit array and render one labelled
 
 ### GAP-299 — CodeLens skips comments, so TODO/FIXME cannot become a task
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** extension-vscode · missing-interaction
 - **Reference:** Codex · VS Code extension · Turn TODOs into tasks
 
 **Gap**
 
-Reference converts a '// TODO: IMPLEMENT SCHEMA' comment into an agent task with one click from the editor. agiworkforce's CodeLens provider only attaches to function/class declaration lines and explicitly returns false for any line starting with //, #, _ or /_, so TODO comments carry no affordance at all.
+Reference converts a '// TODO: IMPLEMENT SCHEMA' comment into an agent task with one click from the editor. agiworkforce's CodeLens provider only attaches to function/class declaration lines and explicitly returns false for any line starting with //, #, * or /*, so TODO comments carry no affordance at all.
 
 **Evidence**
 
-apps/extension-vscode/src/features/code-lens/codeLensProvider.ts:53-104 (declaration-only lens) and :112-120 (comment lines skipped). Searched apps/extension-vscode/src for 'TODO|FIXME' — zero matches.
+SHIPPED 2026-08-16, commit 1e4c47b89, after this CSV's 2026-08-11 last edit. apps/extension-vscode/src/features/code-lens/codeLensProvider.ts now has a complete, wired comment-note system alongside the original declaration-only lens: NOTE_KEYWORD = /\b(TODO|FIXME|HACK|BUG|XXX)\b/ (line 112), isCommentLine()/COMMENT_PREFIXES, and noteActions(keyword) returning real CodeLens entries ('$(wrench) Resolve {keyword}', etc.) with real commands. computeLenses() -- the function provideCodeLenses() actually calls -- iterates `commentNoteLenses(lines)` and pushes these lenses for every matching comment line, confirmed end to end, not dead code.
 
 **Suggested fix**
 
@@ -7404,7 +7404,7 @@ The reference shows a slim strip above the composer: a 'Tip' chip, the hint 'Ask
 
 **Evidence**
 
-searched 'Add to message' across apps — no match; 'Tip' occurrences are static help copy in apps/desktop/src/features/settings/KeybindingsSettings.tsx:409, CustomInstructionsSettings.tsx:208, marketplace PublishWorkflowTab.tsx
+Re-verified 2026-08-21 with alternate terms (TipStrip, ComposerTip, HintStrip, generic 'Tip' near composer/chat directories, not just the exact phrase 'Add to message'): no matches anywhere in apps/web or apps/desktop. Conclusion unchanged.
 
 **Suggested fix**
 
@@ -7584,11 +7584,11 @@ Carry an icon reference (or connector logo, reusing apps/web/features/connectors
 
 **Gap**
 
-Each reference row is a title plus a plain-language description ('Redo last action' / 'Redo the most recently undone app action'). agiworkforce renders only one string, so ambiguous entries like 'Images', 'Skills' or 'Cycle agent mode' give the user no explanation.
+Each reference row is a title plus a plain-language description ('Redo last action' / 'Redo the most recently undone app action'). agiworkforce renders only one string. UPDATED 2026-08-21: the specific ambiguous examples this row cited ('Images', 'Skills', 'Cycle agent mode') no longer exist -- the 2026-08-09 registry rewrite dropped them along with most of the old shortcut list. The current 9-10 descriptions ('Search', 'Command palette', 'Model selector', 'Toggle sidebar', 'Show or hide the app from anywhere', etc.) are already close to self-explanatory phrases, so the residual gap is real but meaningfully smaller than originally scoped.
 
 **Evidence**
 
-apps/desktop/src/features/settings/KeybindingsSettings.tsx:117 (single {shortcut.description} span); apps/desktop/src/constants/shortcuts.ts descriptions such as 'Images', 'Skills'
+Re-verified 2026-08-21: apps/desktop/src/features/settings/KeybindingsSettings.tsx line ~94 still renders only a single {shortcut.description} span, no secondary line. Current descriptions listed in constants/shortcuts.ts no longer include the cited 'Images'/'Skills' examples.
 
 **Suggested fix**
 
@@ -7607,11 +7607,11 @@ Add an optional `detail` field to ShortcutDefinition, fill it for every entry, a
 
 **Gap**
 
-Reference puts every hotkey — including system-wide dictation and the popout-window hotkey — in one searchable Keyboard shortcuts list. agiworkforce splits them: the Quick Query global hotkey lives in General, the dictation hotkey in Voice, and neither appears in KeybindingsSettings, so search there returns nothing for 'dictation' or 'global'.
+Reference puts every hotkey -- including system-wide dictation and the popout-window hotkey -- in one searchable Keyboard shortcuts list. UPDATED 2026-08-21: partially resolved. The main-window raise hotkey (quick-summon, née 'Global Hotkey' in General) is now inside the unified DEFAULT_SHORTCUTS list and does appear in KeybindingsSettings' search. Still scattered: the dictation hotkey lives in its own useVoiceInputStore, entirely outside DEFAULT_SHORTCUTS, and a newly-found third system -- the orphaned quick_query hotkey preferences (see GAP-224) -- is not in any UI list at all.
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/General/index.tsx ('Global Hotkey', 'Key Combination'), apps/desktop/src/features/settings/VoiceSettings.tsx:252, apps/desktop/src/features/settings/KeybindingsSettings.tsx (renders only DEFAULT_SHORTCUTS)
+Re-verified 2026-08-21: apps/desktop/src/features/settings/KeybindingsSettings.tsx filters/renders only DEFAULT_SHORTCUTS (imported from constants/shortcuts.ts); apps/desktop/src/features/settings/VoiceSettings.tsx's dictation hotkey reads/writes useVoiceInputStore, never DEFAULT_SHORTCUTS, so it is invisible to Keybindings' search. apps/desktop/src/features/settings/tabs/General/index.tsx lines ~279-303 still hosts the quick-summon 'Global Hotkey' UI separately (though the underlying shortcut id is now shared with the unified registry).
 
 **Suggested fix**
 
@@ -7703,7 +7703,7 @@ The reference's tooltip reads 'Toggle sidebar ⌘B', teaching the accelerator at
 
 **Evidence**
 
-apps/desktop/src/features/v3/Sidebar.tsx:395-398 (title/aria-label only); apps/desktop/src/constants/shortcuts.ts:191-197 (toggle-sidebar = meta+shift+U)
+Re-verified 2026-08-21, same conclusion, lines shifted: apps/desktop/src/features/v3/Sidebar.tsx lines ~439-441 (title/aria-label use t('sidebar.expand')/t('sidebar.collapse')); apps/desktop/src/i18n/locales/en/v3.json ('expand': 'Expand sidebar', 'collapse': 'Collapse sidebar' -- no shortcut suffix). constants/shortcuts.ts toggle-sidebar is still meta+shift+U. Conclusion unchanged.
 
 **Suggested fix**
 
@@ -7738,18 +7738,18 @@ Maintain a panel/conversation history stack in the shell and add back/forward bu
 
 ### GAP-336 — No virtual 'Pet' companion personalization feature
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Personalization — Pet companion
 
 **Gap**
 
-Reference shows a 'Pet' section at the top of Personalization letting the user 'Choose a companion that works alongside you' via a 'Select pet' picker. This is a novelty/engagement feature with no equivalent anywhere in agiworkforce (the existing 'companion' code is an unrelated desktop-mobile pairing feature, not a virtual character).
+Closed 2026-08-21. A virtual pet companion is a novelty with nothing load-bearing behind it. Declined deliberately rather than left as an implied backlog item.
 
 **Evidence**
 
-apps/mobile/src/features/companion/\* is a desktop-mobile device-pairing feature, not a virtual pet; searched '\bpet\b', 'Select pet', 'virtual pet' across apps/web, apps/mobile, apps/desktop — zero relevant matches
+apps/mobile/src/features/companion/* is a desktop-mobile device-pairing feature, not a virtual pet; searched '\bpet\b', 'Select pet', 'virtual pet' across apps/web, apps/mobile, apps/desktop — zero relevant matches
 
 **Suggested fix**
 
@@ -7761,14 +7761,14 @@ Low priority novelty feature — consider only if competitive engagement metrics
 
 ### GAP-337 — No connected-CLI device management or device-code auth (CLI itself is 'coming soon')
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-feature
 - **Reference:** ChatGPT · web · Security and login — Secure sign in with ChatGPT (CLI connection)
 
 **Gap**
 
-Reference shows a 'Secure sign in with ChatGPT' section listing connected apps like Codex CLI with a Disconnect action, plus an 'Enable device code authorization for Codex' toggle for headless/remote sign-in with phishing-risk warning copy. agiworkforce's CLI is marked 'coming soon' in-app, so there is no connected-device list or device-code flow yet.
+Closed 2026-08-21. Device-code auth already worked end to end and connected-device management shipped today as Linked devices. The remaining security TOGGLE now ships in Settings > Security, enforced in api/auth/device/approve — approval is the enforceable point because starting the flow is unauthenticated, and no approval means no token.
 
 **Evidence**
 
@@ -7784,14 +7784,14 @@ Once the AGI CLI ships, add a 'Secure sign in with AGI' section to Settings > Se
 
 ### GAP-338 — Active sessions / log-out-all-devices lives under Account, not Security and login
 
-- **Status:** Open
+- **Status:** Not Planned
 - **Owner:** Unassigned
 - **Surface/type:** web · missing-ia
 - **Reference:** ChatGPT · web · Security and login — Sessions IA placement
 
 **Gap**
 
-Reference groups 'Active sessions' (device count, review/remove trusted devices, Log out all) under the Security and login page. agiworkforce implements an equivalent Active Sessions table with device/created/last-active columns and a 'Log out of all devices' action, but it is placed in AccountSection.tsx rather than SecuritySection.tsx, which is where a user familiar with the reference IA would look first.
+Reference conflict, resolved 2026-08-21 in favour of the other reference. ChatGPT groups Active sessions under "Security and login"; claude.ai puts Trusted devices and Active sessions under ACCOUNT, where ours already lives — confirmed from a live capture. Moving it would trade parity with one reference for parity with the other and churn a working surface.
 
 **Evidence**
 
@@ -7814,11 +7814,11 @@ Move (or cross-link) the Active Sessions table into the Security and login secti
 
 **Gap**
 
-Reference puts 'Keyboard shortcuts' directly in the account menu next to settings and log out. agiworkforce ships shortcut overlays on desktop and web but the VS Code extension offers no way to discover its own keybindings (including the accept/reject diff shortcuts it defines).
+Reference puts 'Keyboard shortcuts' directly in the account menu next to settings and log out. UPDATED 2026-08-21: the core complaint (no dedicated in-product entry point) still holds, but the evidence needs a caveat -- apps/extension-vscode/package.json registers 13 real keybindings (contributes.keybindings), which VS Code's native Keyboard Shortcuts editor already lets a user find by searching the extension's name -- so the shortcuts are not literally undiscoverable, just not surfaced from within the extension's own UI the way desktop/web do with a dedicated overlay/dialog.
 
 **Evidence**
 
-Searched apps/extension-vscode/src for 'keyboard shortcut|keybinding' — only comments (providers/diffDecorationProvider.ts:7 documents Ctrl+Shift+A / Ctrl+Shift+R, core/commandSetup.ts:1303). Counterparts exist at apps/desktop/src/features/chat/KeyboardShortcutsOverlay.tsx and apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx.
+apps/extension-vscode/package.json contributes.keybindings has 13 entries (chat, explain, agentMode, askAboutCode, explainError, runCommand, newConversation, acceptCurrentDiff, rejectCurrentDiff, acceptDiff, etc.), each independently searchable in VS Code's native keybindings.editor. Grepped 'openGlobalKeybindings' across commandSetup.ts and settingsWebviewContent.ts -- no command wired to open/pre-filter it from within the extension, and no in-product link exists (desktop has KeyboardShortcutsOverlay.tsx, web has KeyboardShortcutsDialog.tsx; vscode has neither).
 
 **Suggested fix**
 
@@ -7841,7 +7841,7 @@ Claude's panel footer shows a dismissible 'Prefer the Terminal experience? Switc
 
 **Evidence**
 
-searched webviewContent.ts for 'Prefer the Terminal'/'terminal experience'/'Switch back' — no matches
+Re-verified 2026-08-21, conclusion unchanged: grepped 'prefer the terminal'/'terminal experience'/'switch back' (case-insensitive) across apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts -- no matches.
 
 **Suggested fix**
 
@@ -7864,7 +7864,7 @@ Reference offers 'Language — Language for the app UI' with an Auto detect defa
 
 **Evidence**
 
-apps/web/features/settings/components/LanguageSelector.tsx and apps/web/features/settings/components/Settings/Profile.tsx (English/Espanol/Francais/Deutsch/Japanese/Chinese) exist; searched apps/extension-vscode/src for 'language|locale' — only languageId (document language) usages in code-lens/hover providers.
+Re-verified 2026-08-21, conclusion unchanged: apps/web/features/settings/components/LanguageSelector.tsx still exists on web with no vscode counterpart. apps/extension-vscode/src/platform/config.ts's MutableConfigValues -- the extension's complete settings inventory -- has no language/locale key; grepped 'language|locale' -- only languageId (document language, unrelated) usages remain.
 
 **Suggested fix**
 
@@ -7887,7 +7887,7 @@ Reference offers a named tone preset ('Pragmatic') with an honest caveat banner 
 
 **Evidence**
 
-Searched apps/extension-vscode/src, apps/desktop/src/features/settings, apps/web/features/settings for 'personality|tone' — only incidental prose (apps/desktop/.../CustomInstructionsSettings.tsx:146 example text, apps/web/.../GeneralSection.tsx:367 'tailor tone').
+Re-verified 2026-08-21, conclusion unchanged: apps/extension-vscode/src/platform/config.ts's MutableConfigValues has no personality/tone key. Grepped 'personality|tone' across apps/extension-vscode/src, apps/desktop/src/features/settings, apps/web/features/settings -- only incidental prose, no personality preset concept anywhere in the product.
 
 **Suggested fix**
 

@@ -281,11 +281,6 @@ export {
 export {
   Sidebar,
   type SidebarProps,
-  ProjectsView,
-  type ProjectsViewProps,
-  type ProjectViewProject,
-  type ProjectViewConversation,
-  type ProjectViewFile,
   SessionItem,
   type SessionItemProps,
   type SessionItemHandlers,
@@ -308,6 +303,7 @@ export {
 } from './sidebar';
 export {
   SETTINGS_NAV,
+  isSettingsNavKey,
   SETTINGS_NAV_GROUPS,
   SETTINGS_NAV_GROUPS_WEB,
   SETTINGS_NAV_KEYWORDS,

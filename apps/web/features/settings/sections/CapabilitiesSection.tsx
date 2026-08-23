@@ -10,12 +10,14 @@ import {
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type CapabilitiesSettings = {
   memory: boolean;
   generateFromHistory: boolean;
   allowToolAssistedGeneration: boolean;
   searchPastChats: boolean;
+  cloudCodeExecution: boolean;
 };
 
 const NAMESPACE = 'capabilities';
@@ -25,6 +27,10 @@ const DEFAULT_SETTINGS: CapabilitiesSettings = {
   generateFromHistory: true,
   allowToolAssistedGeneration: false,
   searchPastChats: false,
+  // Matches the server default in code-execution-policy.ts. Defaulting to off
+  // here would show every existing user a switch claiming a capability they
+  // still have is disabled.
+  cloudCodeExecution: true,
 };
 
 export function CapabilitiesSection() {
@@ -45,7 +51,7 @@ export function CapabilitiesSection() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : 'Failed to load settings');
+          setLoadError(toUserMessage(error, 'Failed to load settings'));
         }
       });
     return () => {
@@ -62,7 +68,7 @@ export function CapabilitiesSection() {
       resetMemoryCapabilityCache();
       setSavedAt(Date.now());
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save settings');
+      setSaveError(toUserMessage(error, 'Failed to save settings'));
     } finally {
       setSaving(false);
     }
@@ -179,6 +185,23 @@ export function CapabilitiesSection() {
             return here once the import backend ships.
           */}
         </div>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+          Code execution
+        </h3>
+
+        {row(
+          'Cloud code execution and file creation',
+          'Lets AGI run code and build files in a sandbox to answer you. Turning it off refuses those tools server-side, so a chat can no longer run code even if it asks to.',
+          <Switch
+            aria-label="Cloud code execution and file creation"
+            checked={settings.cloudCodeExecution}
+            disabled={loadError !== null}
+            onCheckedChange={(value) => setBoolean('cloudCodeExecution', value)}
+          />,
+        )}
       </section>
 
       <ToolApprovalDefaultsPanel />

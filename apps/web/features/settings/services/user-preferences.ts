@@ -171,7 +171,7 @@ export interface UserProfile {
   id: string;
   email?: string;
   name?: string;
-  avatar_url?: string;
+  avatar_url?: string | null;
   phone?: string;
   bio?: string;
   timezone?: string;
@@ -407,23 +407,51 @@ function generateBackupCodes(): string[] {
   return codes;
 }
 
-async function hashBackupCode(code: string): Promise<string> {
-  const normalizedCode = code.replace(/[-\s]/g, '').toUpperCase();
+const KEYED_BACKUP_CODE_PREFIX = 'h1.';
 
-  const encoder = new TextEncoder();
-  const data = encoder.encode(normalizedCode);
-  const hash = await crypto.subtle.digest('SHA-256', data);
+function normalizeBackupCode(code: string): string {
+  return code.replace(/[-\s]/g, '').toUpperCase();
+}
 
-  return Array.from(new Uint8Array(hash))
+function toHex(bytes: ArrayBuffer): string {
+  return Array.from(new Uint8Array(bytes))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 }
 
+async function legacyBackupCodeDigest(code: string): Promise<string> {
+  const data = new TextEncoder().encode(normalizeBackupCode(code));
+  return toHex(await crypto.subtle.digest('SHA-256', data));
+}
+
+// An 8-character code has ~40 bits of entropy, so an unkeyed digest is reversible offline by
+// anyone who reads the table; keying it under the TOTP key removes that attack.
+async function hashBackupCode(code: string): Promise<string> {
+  const pepper = typeof process !== 'undefined' ? process.env['TOTP_ENCRYPTION_KEY'] : undefined;
+  if (!pepper) return legacyBackupCodeDigest(code);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(pepper) as unknown as ArrayBuffer,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(normalizeBackupCode(code)),
+  );
+  return `${KEYED_BACKUP_CODE_PREFIX}${toHex(signature)}`;
+}
+
 async function verifyBackupCode(code: string, hashedCodes: string[]): Promise<number> {
-  const inputHash = await hashBackupCode(code);
+  const keyedHash = await hashBackupCode(code);
+  const legacyHash = await legacyBackupCodeDigest(code);
 
   for (let i = 0; i < hashedCodes.length; i++) {
-    if (constantTimeCompare(inputHash, hashedCodes[i]!)) {
+    const stored = hashedCodes[i]!;
+    const candidate = stored.startsWith(KEYED_BACKUP_CODE_PREFIX) ? keyedHash : legacyHash;
+    if (constantTimeCompare(candidate, stored)) {
       return i;
     }
   }

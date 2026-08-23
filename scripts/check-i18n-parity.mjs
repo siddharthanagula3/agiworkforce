@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const LOCALE_ROOTS = ['packages/ui/i18n/locales'];
 const REFERENCE_LOCALE = 'en';
@@ -78,6 +79,77 @@ for (const root of LOCALE_ROOTS) {
       );
     }
   }
+}
+
+/*
+ * Untranslated-by-default ratchet.
+ *
+ * Parity above compares locales to EACH OTHER, so a key that exists in none of
+ * them is perfectly consistent — and 254 such keys ship today, rendering
+ * English in every language because their `t()` call carries an inline English
+ * default. The check passed green while the sidebar, composer and model picker
+ * were English-only for a user who chose Japanese.
+ *
+ * This does not translate anything. It stops the number growing: a NEW `t()`
+ * key with an inline default and no catalogue entry fails here. Lowering the
+ * baseline is the work; raising it needs a deliberate edit.
+ */
+const UNTRANSLATED_DEFAULT_BASELINE = 254;
+
+function catalogueHas(catalogues, key) {
+  const [namespace, rest] = key.includes(':') ? key.split(/:(.*)/s) : [null, key];
+  const search = namespace ? [catalogues[namespace]].filter(Boolean) : Object.values(catalogues);
+  return search.some((bundle) => {
+    let node = bundle;
+    for (const part of rest.split('.')) {
+      if (node === null || typeof node !== 'object' || !(part in node)) return false;
+      node = node[part];
+    }
+    return typeof node === 'string';
+  });
+}
+
+function keysWithInlineDefaultAndNoEntry() {
+  const referenceDir = join(LOCALE_ROOTS[0], REFERENCE_LOCALE);
+  const catalogues = {};
+  for (const file of readdirSync(referenceDir).filter((f) => f.endsWith('.json'))) {
+    catalogues[file.slice(0, -5)] = JSON.parse(readFileSync(join(referenceDir, file), 'utf8'));
+  }
+
+  let sources = '';
+  try {
+    sources = execFileSync(
+      'grep',
+      ['-rh', '--include=*.ts', '--include=*.tsx', '-e', "t('", 'apps/web', 'packages/ui'],
+      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    );
+  } catch {
+    return null;
+  }
+
+  const keys = new Set();
+  for (const match of sources.matchAll(/\bt\(\s*'([a-zA-Z0-9_.:-]+)'\s*,/g)) {
+    keys.add(match[1]);
+  }
+  return [...keys].filter((key) => !catalogueHas(catalogues, key)).sort();
+}
+
+const untranslated = keysWithInlineDefaultAndNoEntry();
+if (untranslated === null) {
+  console.warn('i18n: could not scan sources for inline defaults; ratchet skipped.');
+} else if (untranslated.length > UNTRANSLATED_DEFAULT_BASELINE) {
+  const overBy = untranslated.length - UNTRANSLATED_DEFAULT_BASELINE;
+  report(
+    `${untranslated.length} t() keys carry an inline English default with no catalogue entry ` +
+      `(baseline ${UNTRANSLATED_DEFAULT_BASELINE}, ${overBy} new). ` +
+      'A key with only an inline default renders English in every locale. ' +
+      `Add it to ${REFERENCE_LOCALE}/*.json and translate it, or lower the baseline deliberately.`,
+  );
+} else if (untranslated.length < UNTRANSLATED_DEFAULT_BASELINE) {
+  console.log(
+    `i18n: ${UNTRANSLATED_DEFAULT_BASELINE - untranslated.length} fewer untranslated default(s) ` +
+      `than the baseline — lower UNTRANSLATED_DEFAULT_BASELINE to ${untranslated.length}.`,
+  );
 }
 
 if (failures > 0) {

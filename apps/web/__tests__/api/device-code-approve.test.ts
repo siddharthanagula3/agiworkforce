@@ -14,6 +14,12 @@ vi.mock('@/lib/csrf', () => ({
 }));
 
 const mockHasAcceptedCurrentTerms = vi.hoisted(() => vi.fn(async () => true));
+// Policy has its own suite (lib/server/__tests__/device-signin-policy.test.ts).
+// Mocked here so this file keeps testing the approval flow rather than also
+// simulating a settings read.
+vi.mock('@/lib/server/device-signin-policy', () => ({
+  isDeviceCodeSignInEnabled: vi.fn(async () => true),
+}));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: mockHasAcceptedCurrentTerms,
 }));

@@ -52,6 +52,11 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
+  getClerkAuthorizedParties: () =>
+    (process.env['CLERK_AUTHORIZED_PARTIES'] ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
 }));
 
 import { GET, POST } from '../route';
@@ -80,6 +85,26 @@ beforeEach(() => {
   mockExecute.mockResolvedValue(undefined);
   mockLogSecurityEvent.mockResolvedValue(undefined);
   mockBanUser.mockResolvedValue(undefined);
+});
+
+describe('GET /api/admin/security — token audience', () => {
+  it('verifies the bearer token against the configured authorized parties', async () => {
+    vi.stubEnv(
+      'CLERK_AUTHORIZED_PARTIES',
+      'https://agiworkforce.com, https://app.agiworkforce.com',
+    );
+    try {
+      await GET(adminRequest('https://app.test/api/admin/security', 'GET'));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    expect(mockVerifyToken).toHaveBeenCalledWith(
+      'test-admin-token',
+      expect.objectContaining({
+        authorizedParties: ['https://agiworkforce.com', 'https://app.agiworkforce.com'],
+      }),
+    );
+  });
 });
 
 describe('GET /api/admin/security — suspended admin', () => {

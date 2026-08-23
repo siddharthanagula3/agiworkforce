@@ -1,20 +1,20 @@
 {
   "domain": "Connectors, plugins, skills, MCP & custom assistants",
-  "summary": "Web has a genuinely strong implementation here: a real unified Directory-browse UI matching Claude's design, a live self-serve \"paste URL / inspect tools / add\" MCP connector flow that matches or exceeds Manus's beta feature, a plugin architecture that truly decomposes into skills+connectors on both list and detail views, per-tool granular approval (ahead of both ChatGPT's and Claude's single toggles), and both slash-command and @-mention skill invocation in the composer simultaneously. The real gaps cluster in four places: skill auto-invoke exists as working Rust code but has zero call sites (confirms a prior-audit P1); connectors/plugins have no in-composer per-message attachment the way skills do (a deliberate, documented choice, but still a half-ship against the majority benchmark); two of three delete paths (custom connectors, plugins) bypass the confirmation dialog the third path (catalog connectors) correctly uses; and an entire cluster of claims (skill authoring, star ratings, install counts, custom-assistant objects) is missing because the underlying primitive doesn't exist yet, not because of a wiring bug. Several benchmark behaviors \u2014 fabricated-looking download counts, Gemini's two-parallel-systems Gems page, an unmoderated public storefront before a review/signing policy exists \u2014 are things this codebase has already reasoned its way out of and should not copy.",
+  "summary": "Web has a genuinely strong implementation here: a real unified Directory-browse UI matching Claude's design, a live self-serve \"paste URL / inspect tools / add\" MCP connector flow that matches or exceeds Manus's beta feature, a plugin architecture that truly decomposes into skills+connectors on both list and detail views, per-tool granular approval (ahead of both ChatGPT's and Claude's single toggles), and both slash-command and @-mention skill invocation in the composer simultaneously. The real gaps cluster in four places: skill auto-invoke exists as working Rust code but has zero call sites (confirms a prior-audit P1); connectors/plugins have no in-composer per-message attachment the way skills do (a deliberate, documented choice, but still a half-ship against the majority benchmark); two of three delete paths (custom connectors, plugins) bypass the confirmation dialog the third path (catalog connectors) correctly uses; and an entire cluster of claims (skill authoring, star ratings, install counts, custom-assistant objects) is missing because the underlying primitive doesn't exist yet, not because of a wiring bug. Several benchmark behaviors — fabricated-looking download counts, Gemini's two-parallel-systems Gems page, an unmoderated public storefront before a review/signing policy exists — are things this codebase has already reasoned its way out of and should not copy.",
   "strengths": [
-    "Unified Directory-browse modal (packages/ui/ui/src/settings-modal/SettingsModal.tsx:444-826, DirectoryBrowse) reached from Skills/Connectors/Plugins panes \u2014 matches Claude's own referenced Directory design, with search/sort/filter, and an explicit code comment refusing to fabricate download counts or partner cards.",
-    "Composer supports BOTH slash-command (ChatComposerNew.tsx:1264-1324, SlashCommandMenu.tsx:104-134) and @-mention (ChatComposerNew.tsx:2191-2229) skill invocation simultaneously, with live filtering \u2014 no single benchmarked competitor is documented having both.",
-    "Real, live, self-serve MCP connector authoring: paste a URL + optional token, 'Inspect tools' really connects and lists advertised tools, then 'Add connector' persists it (apps/web/features/connectors/pages/ConnectorsPage.tsx:101-354, backed by apps/web/app/api/mcp/route.ts and apps/web/app/api/connectors/custom/route.ts) \u2014 matches or exceeds Manus's beta 'Add MCP by URL'.",
-    "Plugin architecture genuinely decomposes into declared skills + required connectors at both the catalog-list level (inline skill chips, apps/web/app/plugins/page.tsx:163-171) and the detail level (apps/web/app/plugins/[id]/page.tsx:199-245), backed by real DB columns (apps/web/db/neon/0096_plugin_registry.sql) \u2014 more visible at the list level than Claude's count-column approach.",
-    "Per-tool granular approval model (Always allow / Ask / Block) persisted in apps/web/features/connectors/stores/tool-permissions-store.ts and enforced server-side in apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2751-2813, with a dedicated public disclosure page at apps/web/app/agent-permissions/page.tsx \u2014 more granular than ChatGPT's or Claude's single toggle.",
+    "Unified Directory-browse modal (packages/ui/ui/src/settings-modal/SettingsModal.tsx:444-826, DirectoryBrowse) reached from Skills/Connectors/Plugins panes — matches Claude's own referenced Directory design, with search/sort/filter, and an explicit code comment refusing to fabricate download counts or partner cards.",
+    "Composer supports BOTH slash-command (ChatComposerNew.tsx:1264-1324, SlashCommandMenu.tsx:104-134) and @-mention (ChatComposerNew.tsx:2191-2229) skill invocation simultaneously, with live filtering — no single benchmarked competitor is documented having both.",
+    "Real, live, self-serve MCP connector authoring: paste a URL + optional token, 'Inspect tools' really connects and lists advertised tools, then 'Add connector' persists it (apps/web/features/connectors/pages/ConnectorsPage.tsx:101-354, backed by apps/web/app/api/mcp/route.ts and apps/web/app/api/connectors/custom/route.ts) — matches or exceeds Manus's beta 'Add MCP by URL'.",
+    "Plugin architecture genuinely decomposes into declared skills + required connectors at both the catalog-list level (inline skill chips, apps/web/app/plugins/page.tsx:163-171) and the detail level (apps/web/app/plugins/[id]/page.tsx:199-245), backed by real DB columns (apps/web/db/neon/0096_plugin_registry.sql) — more visible at the list level than Claude's count-column approach.",
+    "Per-tool granular approval model (Always allow / Ask / Block) persisted in apps/web/features/connectors/stores/tool-permissions-store.ts and enforced server-side in apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2751-2813, with a dedicated public disclosure page at apps/web/app/agent-permissions/page.tsx — more granular than ChatGPT's or Claude's single toggle.",
     "Connectors auto-invoke without per-message selection: every connected connector's tools load into every chat turn automatically (apps/web/app/api/llm/v1/chat/completions/route.ts:419-466, loadUserConnectorToolCatalog), gated only by the per-tool permission verdict.",
     "Repeated, deliberate product-honesty discipline: refusing fabricated install/download counts (0096_plugin_registry.sql:12-14), refusing to show a Connect button known to fail (SettingsConnector.canConnect/statusLabel in packages/ui/ui/src/settings-modal/types.ts), refusing a fake per-conversation connector toggle (ChatComposerNew.tsx:2740-2745)."
   ],
   "notWorthCopying": [
-    "Claude's precise-looking download/install counts (1.2M-2.2M etc.) with no stated audit methodology \u2014 this codebase has already reasoned against this exact pattern in apps/web/db/neon/0096_plugin_registry.sql's own comment ('a column invites a fabricated number'); cloning it without real telemetry would be a regression against our own honesty rule.",
-    "Gemini's two simultaneously-live, differently-branded custom-assistant systems ('My Gems' vs 'Gems from Labs') on one page \u2014 the benchmark's own evidence frames this as confusing, and this repo has already independently found and is remediating the identical anti-pattern twice (DEAD-CODE-003's superseded parallel MCP UI, SHELL-NAV-IA-002's Connections/Connectors naming collision). Don't introduce a third instance by cloning Gems' structure.",
-    "ChatGPT's single blanket 'Allow low-risk actions' toggle as an aspirational target \u2014 it is strictly less granular than the per-tool verdict system (Always allow/Ask/Block) already shipped here; if anything this is a case where the benchmark should converge toward us.",
-    "Rushing to open an unmoderated, star-rated public storefront (GPT Store style) before this repo's own signing/review policy exists \u2014 0096_plugin_registry.sql already encodes why not to (plugin_registry_entries_unsigned_until_policy: 'there is no signing key, no verifier, and no review process'), and a dedicated supply-chain vetting tool (tools/skill-vetting/) exists specifically to gate this before launch."
+    "Claude's precise-looking download/install counts (1.2M-2.2M etc.) with no stated audit methodology — this codebase has already reasoned against this exact pattern in apps/web/db/neon/0096_plugin_registry.sql's own comment ('a column invites a fabricated number'); cloning it without real telemetry would be a regression against our own honesty rule.",
+    "Gemini's two simultaneously-live, differently-branded custom-assistant systems ('My Gems' vs 'Gems from Labs') on one page — the benchmark's own evidence frames this as confusing, and this repo has already independently found and is remediating the identical anti-pattern twice (DEAD-CODE-003's superseded parallel MCP UI, SHELL-NAV-IA-002's Connections/Connectors naming collision). Don't introduce a third instance by cloning Gems' structure.",
+    "ChatGPT's single blanket 'Allow low-risk actions' toggle as an aspirational target — it is strictly less granular than the per-tool verdict system (Always allow/Ask/Block) already shipped here; if anything this is a case where the benchmark should converge toward us.",
+    "Rushing to open an unmoderated, star-rated public storefront (GPT Store style) before this repo's own signing/review policy exists — 0096_plugin_registry.sql already encodes why not to (plugin_registry_entries_unsigned_until_policy: 'there is no signing key, no verifier, and no review process'), and a dedicated supply-chain vetting tool (tools/skill-vetting/) exists specifically to gate this before launch."
   ],
   "gaps": [
     {
@@ -22,13 +22,16 @@
       "title": "Skill auto-invoke matcher exists but has zero call sites in any chat UI",
       "claimId": "connectors-04",
       "benchmark": "ChatGPT/Claude/Gemini all auto-select a relevant skill/connector without explicit per-message invocation (01-chatgpt/plugins-apps-skills.md; 02-claude/settings.md; 03-gemini/connected-apps-and-settings.md)",
-      "ourState": "BUILT_NOT_WIRED",
+      "ourState": "FIXED",
       "ourEvidence": "apps/desktop/src-tauri/src/sys/commands/skills.rs:342-414 implements a real tokenizing skill_match_for_message; exposed to the frontend as matchForMessage in apps/desktop/src/stores/skillMarketplaceStore.ts:247,348-354; grep of apps/desktop/src for 'matchForMessage' finds only the interface + implementation, zero call sites in features/chat or features/v3. Web's request-processor.ts:316-329,461-473 requires an explicit client-supplied skill_name with no server-side relevance scoring at all.",
       "severity": "P1",
       "effort": "M",
       "priorAudit": "CONFIRMS_PRIOR",
       "priorAuditRef": "EXTENSIBILITY-004",
-      "recommendation": "Wire the existing matchForMessage call into the desktop chat composer (surface top matches as dismissible chips before send) as the smallest end-to-end slice, per EXTENSIBILITY-004's own recommendation; connectors already satisfy this claim's auto-invoke requirement (route.ts:419-466), so this closes the one remaining half."
+      "recommendation": "Wire the existing matchForMessage call into the desktop chat composer (surface top matches as dismissible chips before send) as the smallest end-to-end slice, per EXTENSIBILITY-004's own recommendation; connectors already satisfy this claim's auto-invoke requirement (route.ts:419-466), so this closes the one remaining half.",
+      "priorState": "BUILT_NOT_WIRED",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "Desktop suggestLocalSkills wired at DesktopShellV3.tsx:220-230 into ChatInput suggestion chips."
     },
     {
       "id": "CPS-02",
@@ -40,7 +43,7 @@
       "severity": "P1",
       "effort": "L",
       "priorAudit": "NEW",
-      "recommendation": "If per-message connector scoping is intentionally out of scope given the always-on architecture, that's defensible \u2014 but it should be stated as a product decision, not left implicit. If genuine per-message connector/plugin selection is wanted, it requires backend support for scoping a connector to a single turn, which does not exist today (per the code's own comment) \u2014 this is real design work, not a UI fix."
+      "recommendation": "If per-message connector scoping is intentionally out of scope given the always-on architecture, that's defensible — but it should be stated as a product decision, not left implicit. If genuine per-message connector/plugin selection is wanted, it requires backend support for scoping a connector to a single turn, which does not exist today (per the code's own comment) — this is real design work, not a UI fix."
     },
     {
       "id": "CPS-03",
@@ -52,7 +55,7 @@
       "severity": "P2",
       "effort": "S",
       "priorAudit": "NEW",
-      "recommendation": "Wrap the custom-connector 'Remove' button and the Plugins panel's 'Remove' button in the same confirm-Dialog pattern ConnectorsPage.tsx already built and shipped for catalog connectors one component away \u2014 this is a small, low-risk fix reusing existing UI."
+      "recommendation": "Wrap the custom-connector 'Remove' button and the Plugins panel's 'Remove' button in the same confirm-Dialog pattern ConnectorsPage.tsx already built and shipped for catalog connectors one component away — this is a small, low-risk fix reusing existing UI."
     },
     {
       "id": "CPS-04",
@@ -72,7 +75,7 @@
       "claimId": "connectors-13",
       "benchmark": "Gemini (upload icon on Skills page) and Manus ('Upload a Skill' / 'Import Skill from GitHub') both let a user import an external skill artifact (03-gemini/connected-apps-and-settings.md; 07-manus/02-plugins-connectors-skills.md)",
       "ourState": "MISSING",
-      "ourEvidence": "Same grep sweep as CPS-04 found no upload or GitHub-import UI. The only inbound-skill-adjacent path found is the Cloud-catalog downloadHref flow already flagged by the prior audit (EXTENSIBILITY-005, apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx:907-950) \u2014 but that is a one-way OUTBOUND file save to Downloads with no import-back-in step, the opposite direction from this claim.",
+      "ourEvidence": "Same grep sweep as CPS-04 found no upload or GitHub-import UI. The only inbound-skill-adjacent path found is the Cloud-catalog downloadHref flow already flagged by the prior audit (EXTENSIBILITY-005, apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx:907-950) — but that is a one-way OUTBOUND file save to Downloads with no import-back-in step, the opposite direction from this claim.",
       "severity": "P2",
       "effort": "M",
       "priorAudit": "NEW",
@@ -84,7 +87,7 @@
       "claimId": "connectors-05",
       "benchmark": "ChatGPT (Settings -> Personalization -> Advanced) and Claude (Capabilities tab) both expose a settings toggle literally controlling proactive connector search (01-chatgpt/plugins-apps-skills.md; 02-claude/settings.md)",
       "ourState": "MISSING",
-      "ourEvidence": "Grepped apps/web and apps/desktop for 'Connector search', connectorSearch, 'Tool access mode', 'Load tools when needed' \u2014 no matches. Connectors are always auto-searched per connectors-04's PRESENT half, with no way to disable that behavior short of disconnecting the connector or blocking a specific tool.",
+      "ourEvidence": "Grepped apps/web and apps/desktop for 'Connector search', connectorSearch, 'Tool access mode', 'Load tools when needed' — no matches. Connectors are always auto-searched per connectors-04's PRESENT half, with no way to disable that behavior short of disconnecting the connector or blocking a specific tool.",
       "severity": "P2",
       "effort": "S",
       "priorAudit": "NEW",
@@ -92,11 +95,11 @@
     },
     {
       "id": "CPS-07",
-      "title": "Plugin registry ships zero installable entries \u2014 the storefront and decomposition UI have nothing live behind them",
+      "title": "Plugin registry ships zero installable entries — the storefront and decomposition UI have nothing live behind them",
       "claimId": "connectors-28",
       "benchmark": "ChatGPT and Claude both confirmed to have genuinely working, non-decorative connector/plugin backends (01-chatgpt/plugins-apps-skills.md; 02-claude/settings.md)",
       "ourState": "PARTIAL",
-      "ourEvidence": "apps/web/db/neon/0096_plugin_registry.sql's plugin_registry_entries_published_needs_artifact constraint requires a real manifest_url for status='published'; apps/web/app/plugins/page.tsx's own doc comment states 'every row is preview' today, meaning no plugin is currently installable in this deployment, first- or third-party. Connectors and Skills ARE confirmed live-functional (ConnectorsPage.tsx MCP inspect-and-add flow; route.ts:419-466 tool loop; request-processor.ts skill forcing) \u2014 only Plugins specifically are non-functional today.",
+      "ourEvidence": "apps/web/db/neon/0096_plugin_registry.sql's plugin_registry_entries_published_needs_artifact constraint requires a real manifest_url for status='published'; apps/web/app/plugins/page.tsx's own doc comment states 'every row is preview' today, meaning no plugin is currently installable in this deployment, first- or third-party. Connectors and Skills ARE confirmed live-functional (ConnectorsPage.tsx MCP inspect-and-add flow; route.ts:419-466 tool loop; request-processor.ts skill forcing) — only Plugins specifically are non-functional today.",
       "severity": "P1",
       "effort": "L",
       "priorAudit": "NEW",
@@ -107,13 +110,16 @@
       "title": "Mobile Skills screen remains unreachable from any nav entry point",
       "claimId": "connectors-01",
       "benchmark": "ChatGPT iOS has a first-class Skills tab reachable from the sidebar drawer (01-chatgpt/plugins-apps-skills.md via cross-product-comparison)",
-      "ourState": "BUILT_NOT_WIRED",
+      "ourState": "FIXED",
       "ourEvidence": "apps/mobile/src/features/drawer/components/DrawerContent.tsx's PRIMARY_ITEMS array has no Skills row (removed by commit 1e858a7f1); apps/mobile/src/features/skills/SkillsScreen.tsx (655 lines) is a complete, tested implementation registered at apps/mobile/app/(app)/skills/index.tsx but reachable from nowhere in the app. Web and Desktop both correctly surface Skills as a top-level settings item (packages/ui/ui/src/settings-nav.ts:299).",
       "severity": "P1",
       "effort": "S",
       "priorAudit": "CONFIRMS_PRIOR",
       "priorAuditRef": "EXTENSIBILITY-001 / SHELL-NAV-IA-003",
-      "recommendation": "Restore a Skills row in DrawerContent.tsx's PRIMARY_ITEMS (small, low-risk fix reusing existing tested code) \u2014 already the prior audit's exact recommendation, re-confirmed here as this claim's mobile-surface instance."
+      "recommendation": "Restore a Skills row in DrawerContent.tsx's PRIMARY_ITEMS (small, low-risk fix reusing existing tested code) — already the prior audit's exact recommendation, re-confirmed here as this claim's mobile-surface instance.",
+      "priorState": "BUILT_NOT_WIRED",
+      "verifiedOn": "2026-08-20",
+      "verifiedEvidence": "Mobile Skills nav restored in DrawerContent.tsx:93-99, gated on FEATURES.skills."
     },
     {
       "id": "CPS-09",
@@ -125,7 +131,7 @@
       "severity": "P3",
       "effort": "L",
       "priorAudit": "NEW",
-      "recommendation": "Lowest priority in this domain (single-product Manus differentiator) \u2014 would require a new request-templating/auth-storage/execution subsystem independent of the existing MCP path; only worth pursuing if user demand for non-MCP API integration is demonstrated."
+      "recommendation": "Lowest priority in this domain (single-product Manus differentiator) — would require a new request-templating/auth-storage/execution subsystem independent of the existing MCP path; only worth pursuing if user demand for non-MCP API integration is demonstrated."
     },
     {
       "id": "CPS-10",
@@ -137,7 +143,7 @@
       "severity": "P3",
       "effort": "S",
       "priorAudit": "NEW",
-      "recommendation": "Thread plugin_id/plugin_name through from plugin_registry_entries.declared_skills into the skill catalog service and SkillItem, then render it as a small label in the slash/@ suggestion row \u2014 this also unblocks connectors-19's narration-copy gap, which is currently impossible without this data."
+      "recommendation": "Thread plugin_id/plugin_name through from plugin_registry_entries.declared_skills into the skill catalog service and SkillItem, then render it as a small label in the slash/@ suggestion row — this also unblocks connectors-19's narration-copy gap, which is currently impossible without this data."
     },
     {
       "id": "CPS-11",
@@ -157,7 +163,7 @@
       "claimId": "connectors-21",
       "benchmark": "Manus has a peer 'Data sources' category alongside Connectors and Skills (07-manus/02-plugins-connectors-skills.md)",
       "ourState": "MISSING",
-      "ourEvidence": "apps/web/features/connectors/data/connectors.ts categories (grep -o \"category: '[^']*'\" | sort -u): AI, Cloud, Communication, CRM, Data, Design, Developer, Exclusive, Finance, Healthcare, Marketing, Productivity, Social, Storage \u2014 all sub-filters within one flat 'Connectors' bucket in DirectoryBrowse's category select, not a peer top-level taxonomy entry.",
+      "ourEvidence": "apps/web/features/connectors/data/connectors.ts categories (grep -o \"category: '[^']*'\" | sort -u): AI, Cloud, Communication, CRM, Data, Design, Developer, Exclusive, Finance, Healthcare, Marketing, Productivity, Social, Storage — all sub-filters within one flat 'Connectors' bucket in DirectoryBrowse's category select, not a peer top-level taxonomy entry.",
       "severity": "P3",
       "effort": "L",
       "priorAudit": "NEW",
@@ -173,7 +179,7 @@
       "severity": "P3",
       "effort": "S",
       "priorAudit": "NEW",
-      "recommendation": "Add an optional examplePrompt field to the connector data model and render it on the DirectoryBrowse card when present \u2014 low-risk, additive."
+      "recommendation": "Add an optional examplePrompt field to the connector data model and render it on the DirectoryBrowse card when present — low-risk, additive."
     },
     {
       "id": "CPS-14",
@@ -193,7 +199,7 @@
       "claimId": "connectors-16",
       "benchmark": "ChatGPT's GPT Store shows a star rating per listing (04-cross-product-comparison/05-connectors-plugins-skills.md)",
       "ourState": "MISSING",
-      "ourEvidence": "No custom-assistant-object route or feature found anywhere in apps/web (grepped for custom-assistant, CustomGPT; browsed apps/web/app for an assistant-builder route). The gap is one level below the rating widget itself \u2014 there is no object in the product for a rating to attach to.",
+      "ourEvidence": "No custom-assistant-object route or feature found anywhere in apps/web (grepped for custom-assistant, CustomGPT; browsed apps/web/app for an assistant-builder route). The gap is one level below the rating widget itself — there is no object in the product for a rating to attach to.",
       "severity": "P3",
       "effort": "L",
       "priorAudit": "NEW",
@@ -205,11 +211,11 @@
       "claimId": "connectors-25",
       "benchmark": "ChatGPT's GPT Store has category tabs (Top Picks, Research & Analysis, etc.) and named third-party listings (04-cross-product-comparison/05-connectors-plugins-skills.md)",
       "ourState": "PARTIAL",
-      "ourEvidence": "apps/web/app/plugins/page.tsx is a public, unauthenticated marketing-layout page (Header + MarketingFooter), satisfying 'reachable without first creating one' \u2014 but category is rendered as plain text per row (page.tsx:159), not a filterable tab nav, and the page's own doc comment confirms every row is status='preview' (nothing installable), overlapping with CPS-07.",
+      "ourEvidence": "apps/web/app/plugins/page.tsx is a public, unauthenticated marketing-layout page (Header + MarketingFooter), satisfying 'reachable without first creating one' — but category is rendered as plain text per row (page.tsx:159), not a filterable tab nav, and the page's own doc comment confirms every row is status='preview' (nothing installable), overlapping with CPS-07.",
       "severity": "P3",
       "effort": "M",
       "priorAudit": "NEW",
-      "recommendation": "Add category-tab filtering to the existing public /plugins page once CPS-07 (at least one real installable plugin) is addressed \u2014 building the browsing chrome before there's anything to install is low value on its own."
+      "recommendation": "Add category-tab filtering to the existing public /plugins page once CPS-07 (at least one real installable plugin) is addressed — building the browsing chrome before there's anything to install is low value on its own."
     },
     {
       "id": "CPS-17",
@@ -233,7 +239,7 @@
       "severity": "P3",
       "effort": "L",
       "priorAudit": "NEW",
-      "recommendation": "Single-product Claude differentiator; would require a real sandbox network-policy engine plus UI, not a small fix \u2014 only worth prioritizing if a concrete egress-abuse incident in the E2B sandbox path motivates it."
+      "recommendation": "Single-product Claude differentiator; would require a real sandbox network-policy engine plus UI, not a small fix — only worth prioritizing if a concrete egress-abuse incident in the E2B sandbox path motivates it."
     }
   ]
 }

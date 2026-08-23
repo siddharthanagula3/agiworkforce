@@ -7,7 +7,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn() },
 }));
 
-import { verifyCronRequest } from './cron-auth';
+import { resetCronAuthThrottleForTests, verifyCronRequest } from './cron-auth';
 
 function request(host = 'agiworkforce.com', authorization?: string): Request {
   return new Request(`https://${host}/api/cron/test`, {
@@ -20,6 +20,7 @@ function request(host = 'agiworkforce.com', authorization?: string): Request {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  resetCronAuthThrottleForTests();
 });
 
 describe('verifyCronRequest', () => {
@@ -35,6 +36,19 @@ describe('verifyCronRequest', () => {
     expect(verifyCronRequest(request('agiworkforce.com', 'Bearer cron-secrey'))).toBe(false);
     expect(verifyCronRequest(request('agiworkforce.com', 'Bearer c'))).toBe(false);
     expect(verifyCronRequest(request('agiworkforce.com', 'cron-secret'))).toBe(false);
+  });
+
+  it('throttles a client after repeated wrong secrets, even once it guesses right', () => {
+    vi.stubEnv('CRON_SECRET', 'cron-secret');
+    const from = (ip: string, authorization: string) =>
+      new Request('https://agiworkforce.com/api/cron/test', {
+        headers: { host: 'agiworkforce.com', authorization, 'x-forwarded-for': ip },
+      });
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect(verifyCronRequest(from('203.0.113.7', `Bearer guess-${attempt}`))).toBe(false);
+    }
+    expect(verifyCronRequest(from('203.0.113.7', 'Bearer cron-secret'))).toBe(false);
+    expect(verifyCronRequest(from('198.51.100.2', 'Bearer cron-secret'))).toBe(true);
   });
 
   // Constant-time comparison is not observable from the return value, so the guard is on the source.

@@ -9,7 +9,11 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import type { UserMemoryRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
-type MemoryRow = UserMemoryRow & { pinned: boolean };
+type MemoryRow = UserMemoryRow & {
+  pinned: boolean;
+  project_id?: string | null;
+  project_name?: string | null;
+};
 
 async function handleGetMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
@@ -27,10 +31,13 @@ async function handleGetMemories(request: NextRequest) {
   let data: MemoryRow[];
   try {
     data = await db.query<MemoryRow>(
-      `select id, content, category, source, pinned, created_at, updated_at
-       from user_memories
-       where user_id = $1 and is_deleted = false
-       order by pinned desc, updated_at desc
+      `select m.id, m.content, m.category, m.source, m.pinned, m.created_at, m.updated_at,
+              to_jsonb(m)->>'project_id' as project_id,
+              p.name as project_name
+       from user_memories m
+       left join user_projects p on p.id::text = to_jsonb(m)->>'project_id'
+       where m.user_id = $1 and m.is_deleted = false
+       order by m.pinned desc, m.updated_at desc
        limit $2 offset $3`,
       [userId, limit, offset],
     );
@@ -46,6 +53,10 @@ async function handleGetMemories(request: NextRequest) {
       category: m.category,
       source: m.source,
       pinned: m.pinned,
+      // Null = global. A fact confined to a project must be labelled, or it
+      // reads as applying everywhere when it does not.
+      projectId: m.project_id ?? null,
+      projectName: m.project_name ?? null,
       createdAt: m.created_at,
       updatedAt: m.updated_at,
     })),

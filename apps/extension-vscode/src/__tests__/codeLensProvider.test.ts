@@ -1,241 +1,129 @@
+import { describe, it, expect, vi } from 'vitest';
+import * as vscode from 'vscode';
+import { AgiCodeLensProvider } from '../features/code-lens/codeLensProvider';
 
-import { describe, it, expect } from 'vitest';
+const token = { isCancellationRequested: false } as vscode.CancellationToken;
 
-function isFunctionOrClassLine(line: string, languageId: string): boolean {
-  const trimmed = line.trimStart();
+let documentSeq = 0;
 
-  if (
-    trimmed === '' ||
-    trimmed.startsWith('//') ||
-    trimmed.startsWith('#') ||
-    trimmed.startsWith('*') ||
-    trimmed.startsWith('/*')
-  ) {
-    return false;
-  }
-  if (
-    trimmed.startsWith('import ') ||
-    trimmed.startsWith('from ') ||
-    trimmed.startsWith('require(')
-  ) {
-    return false;
-  }
-
-  switch (languageId) {
-    case 'typescript':
-    case 'typescriptreact':
-    case 'javascript':
-    case 'javascriptreact':
-      return (
-        /^(export\s+)?(default\s+)?(async\s+)?function\s+\w/.test(trimmed) ||
-        /^(export\s+)?(default\s+)?class\s+\w/.test(trimmed) ||
-        /^(export\s+)?(const|let)\s+\w+\s*=\s*(async\s+)?\(/.test(trimmed) ||
-        /^(public|private|protected|static|async)\s+(async\s+)?\w+\s*\(/.test(trimmed)
-      );
-
-    case 'python':
-      return /^(async\s+)?def\s+\w/.test(trimmed) || /^class\s+\w/.test(trimmed);
-
-    case 'go':
-      return /^func\s+/.test(trimmed) || /^type\s+\w+\s+struct\s*\{/.test(trimmed);
-
-    case 'rust':
-      return (
-        /^(pub\s+)?(async\s+)?fn\s+\w/.test(trimmed) ||
-        /^(pub\s+)?struct\s+\w/.test(trimmed) ||
-        /^(pub\s+)?enum\s+\w/.test(trimmed) ||
-        /^impl\s+/.test(trimmed)
-      );
-
-    case 'java':
-    case 'kotlin':
-      return (
-        /^(public|private|protected|static|abstract|final|override)\s+.*\w+\s*\(/.test(trimmed) ||
-        /^(public\s+|private\s+|protected\s+)?(abstract\s+|final\s+)?class\s+\w/.test(trimmed) ||
-        /^(public\s+|private\s+|protected\s+)?interface\s+\w/.test(trimmed)
-      );
-
-    case 'ruby':
-      return (
-        /^def\s+\w/.test(trimmed) || /^class\s+\w/.test(trimmed) || /^module\s+\w/.test(trimmed)
-      );
-
-    case 'php':
-      return (
-        /^(public|private|protected|static)?\s*(function)\s+\w/.test(trimmed) ||
-        /^(abstract\s+|final\s+)?class\s+\w/.test(trimmed)
-      );
-
-    case 'c':
-    case 'cpp':
-    case 'csharp':
-      return (
-        /^(public|private|protected|static|virtual|override|async)?\s*\w+[\w<>, ]*\s+\w+\s*\(/.test(
-          trimmed,
-        ) || /^(class|struct|enum)\s+\w/.test(trimmed)
-      );
-
-    case 'swift':
-      return /^(public\s+|private\s+|internal\s+|open\s+)?(class|struct|enum|func|protocol)\s+\w/.test(
-        trimmed,
-      );
-
-    default:
-      return (
-        /^(export\s+)?(async\s+)?function\s+\w/.test(trimmed) ||
-        /^(export\s+)?class\s+\w/.test(trimmed) ||
-        /^def\s+\w/.test(trimmed) ||
-        /^func\s+/.test(trimmed)
-      );
-  }
+function documentOf(lines: string[], languageId: string): vscode.TextDocument {
+  documentSeq += 1;
+  return {
+    uri: vscode.Uri.file(`/workspace/src/fixture-${documentSeq}.txt`),
+    languageId,
+    version: 1,
+    getText: () => lines.join('\n'),
+  } as unknown as vscode.TextDocument;
 }
 
-interface MockLens {
-  lineIndex: number;
-  title: string;
-  command: string;
+function lensesFor(lines: string[], languageId: string): vscode.CodeLens[] {
+  return new AgiCodeLensProvider().provideCodeLenses(documentOf(lines, languageId), token);
 }
 
-function computeLenses(lines: string[], languageId: string): MockLens[] {
-  const lenses: MockLens[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
-    if (isFunctionOrClassLine(line, languageId)) {
-      lenses.push({ lineIndex: i, title: '$(hubot) Ask AI', command: 'agi-workforce.explain' });
-      lenses.push({
-        lineIndex: i,
-        title: '$(beaker) Tests',
-        command: 'agi-workforce.generateTests',
-      });
-      lenses.push({ lineIndex: i, title: '$(edit) Refactor', command: 'agi-workforce.refactor' });
-      lenses.push({ lineIndex: i, title: '$(book) Docs', command: 'agi-workforce.docs' });
-    }
-  }
-  return lenses;
+function isDeclaration(line: string, languageId: string): boolean {
+  return lensesFor([line], languageId).length > 0;
 }
 
-describe('isFunctionOrClassLine — TypeScript', () => {
+describe('code lenses — TypeScript declarations', () => {
   const lang = 'typescript';
 
-  it('matches exported async function', () => {
-    expect(isFunctionOrClassLine('export async function fetchData() {', lang)).toBe(true);
+  it('lenses an exported async function', () => {
+    expect(isDeclaration('export async function fetchData() {', lang)).toBe(true);
   });
 
-  it('matches plain function', () => {
-    expect(isFunctionOrClassLine('function parseResult(raw: string): Result {', lang)).toBe(true);
+  it('lenses a plain function', () => {
+    expect(isDeclaration('function parseResult(raw: string): Result {', lang)).toBe(true);
   });
 
-  it('matches class declaration', () => {
-    expect(isFunctionOrClassLine('export class MyService {', lang)).toBe(true);
+  it('lenses a class declaration', () => {
+    expect(isDeclaration('export class MyService {', lang)).toBe(true);
   });
 
-  it('matches arrow function const', () => {
-    expect(isFunctionOrClassLine('export const handler = async (req: Request) => {', lang)).toBe(
-      true,
-    );
+  it('lenses an arrow-function const', () => {
+    expect(isDeclaration('export const handler = async (req: Request) => {', lang)).toBe(true);
   });
 
-  it('matches class method', () => {
-    expect(isFunctionOrClassLine('  public async handleRequest(', lang)).toBe(true);
+  it('lenses a class method', () => {
+    expect(isDeclaration('  public async handleRequest(', lang)).toBe(true);
   });
 
-  it('rejects import statement', () => {
-    expect(isFunctionOrClassLine("import { foo } from 'bar';", lang)).toBe(false);
+  it('leaves import statements alone', () => {
+    expect(isDeclaration("import { foo } from 'bar';", lang)).toBe(false);
   });
 
-  it('rejects comment line', () => {
-    expect(isFunctionOrClassLine('// This is a comment', lang)).toBe(false);
+  it('leaves comments alone', () => {
+    expect(isDeclaration('// This is a comment', lang)).toBe(false);
+    expect(isDeclaration('/* start */  function fake', lang)).toBe(false);
   });
 
-  it('rejects empty line', () => {
-    expect(isFunctionOrClassLine('', lang)).toBe(false);
-    expect(isFunctionOrClassLine('   ', lang)).toBe(false);
-  });
-
-  it('rejects block comment opener', () => {
-    expect(isFunctionOrClassLine('/* start */  function fake', lang)).toBe(false);
+  it('leaves blank lines alone', () => {
+    expect(isDeclaration('', lang)).toBe(false);
+    expect(isDeclaration('   ', lang)).toBe(false);
   });
 });
 
-describe('isFunctionOrClassLine — Python', () => {
+describe('code lenses — Python declarations', () => {
   const lang = 'python';
 
-  it('matches def', () => {
-    expect(isFunctionOrClassLine('def calculate(x, y):', lang)).toBe(true);
+  it('lenses def and async def', () => {
+    expect(isDeclaration('def calculate(x, y):', lang)).toBe(true);
+    expect(isDeclaration('async def fetch_data():', lang)).toBe(true);
   });
 
-  it('matches async def', () => {
-    expect(isFunctionOrClassLine('async def fetch_data():', lang)).toBe(true);
+  it('lenses a class', () => {
+    expect(isDeclaration('class MyModel(BaseModel):', lang)).toBe(true);
   });
 
-  it('matches class', () => {
-    expect(isFunctionOrClassLine('class MyModel(BaseModel):', lang)).toBe(true);
-  });
-
-  it('rejects non-function line', () => {
-    expect(isFunctionOrClassLine('x = 42', lang)).toBe(false);
+  it('leaves assignments alone', () => {
+    expect(isDeclaration('x = 42', lang)).toBe(false);
   });
 });
 
-describe('isFunctionOrClassLine — Go', () => {
+describe('code lenses — Go declarations', () => {
   const lang = 'go';
 
-  it('matches func', () => {
-    expect(isFunctionOrClassLine('func NewServer(port int) *Server {', lang)).toBe(true);
+  it('lenses func', () => {
+    expect(isDeclaration('func NewServer(port int) *Server {', lang)).toBe(true);
   });
 
-  it('matches struct type', () => {
-    expect(isFunctionOrClassLine('type Server struct {', lang)).toBe(true);
+  it('lenses a struct type', () => {
+    expect(isDeclaration('type Server struct {', lang)).toBe(true);
   });
 
-  it('rejects regular assignment', () => {
-    expect(isFunctionOrClassLine('x := 42', lang)).toBe(false);
+  it('leaves short assignments alone', () => {
+    expect(isDeclaration('x := 42', lang)).toBe(false);
   });
 });
 
-describe('isFunctionOrClassLine — Rust', () => {
+describe('code lenses — Rust declarations', () => {
   const lang = 'rust';
 
-  it('matches pub fn', () => {
-    expect(isFunctionOrClassLine('pub fn process(input: &str) -> Result<(), Error> {', lang)).toBe(
-      true,
-    );
+  it('lenses pub fn and bare fn', () => {
+    expect(isDeclaration('pub fn process(input: &str) -> Result<(), Error> {', lang)).toBe(true);
+    expect(isDeclaration('fn helper() {', lang)).toBe(true);
   });
 
-  it('matches fn (no pub)', () => {
-    expect(isFunctionOrClassLine('fn helper() {', lang)).toBe(true);
+  it('lenses impl blocks and pub structs', () => {
+    expect(isDeclaration('impl MyStruct {', lang)).toBe(true);
+    expect(isDeclaration('pub struct Config {', lang)).toBe(true);
   });
 
-  it('matches impl block', () => {
-    expect(isFunctionOrClassLine('impl MyStruct {', lang)).toBe(true);
-  });
-
-  it('matches pub struct', () => {
-    expect(isFunctionOrClassLine('pub struct Config {', lang)).toBe(true);
-  });
-
-  it('rejects let binding', () => {
-    expect(isFunctionOrClassLine('let x = 42;', lang)).toBe(false);
+  it('leaves let bindings alone', () => {
+    expect(isDeclaration('let x = 42;', lang)).toBe(false);
   });
 });
 
-describe('isFunctionOrClassLine — Ruby', () => {
+describe('code lenses — Ruby declarations', () => {
   const lang = 'ruby';
 
-  it('matches def', () => {
-    expect(isFunctionOrClassLine('def initialize(name)', lang)).toBe(true);
-  });
-
-  it('matches class', () => {
-    expect(isFunctionOrClassLine('class UserService', lang)).toBe(true);
-  });
-
-  it('matches module', () => {
-    expect(isFunctionOrClassLine('module Helpers', lang)).toBe(true);
+  it('lenses def, class and module', () => {
+    expect(isDeclaration('def initialize(name)', lang)).toBe(true);
+    expect(isDeclaration('class UserService', lang)).toBe(true);
+    expect(isDeclaration('module Helpers', lang)).toBe(true);
   });
 });
 
-describe('computeLenses lens set', () => {
+describe('code lenses — the lens set on a declaration', () => {
   const lines = [
     'export async function fetchUsers(): Promise<User[]> {',
     '  const result = await db.query();',
@@ -243,86 +131,96 @@ describe('computeLenses lens set', () => {
     '}',
   ];
 
-  it('emits 4 lenses per matched function line', () => {
-    const lenses = computeLenses(lines, 'typescript');
-    expect(lenses).toHaveLength(4);
-  });
-
-  it('always includes Ask AI lens', () => {
-    const lenses = computeLenses(lines, 'typescript');
-    expect(lenses.some((l) => l.command === 'agi-workforce.explain')).toBe(true);
-  });
-
-  it('always includes Tests lens', () => {
-    const lenses = computeLenses(lines, 'typescript');
-    expect(lenses.some((l) => l.command === 'agi-workforce.generateTests')).toBe(true);
-  });
-
-  it('always includes Refactor lens', () => {
-    const lenses = computeLenses(lines, 'typescript');
-    const refactor = lenses.find((l) => l.command === 'agi-workforce.refactor');
-    expect(refactor).toBeDefined();
-    expect(refactor?.title).toBe('$(edit) Refactor');
-  });
-
-  it('always includes Docs lens', () => {
-    const lenses = computeLenses(lines, 'typescript');
-    expect(lenses.some((l) => l.command === 'agi-workforce.docs')).toBe(true);
-  });
-
-  it('all lenses are anchored to the declaration line (index 0)', () => {
-    const lenses = computeLenses(lines, 'typescript');
-    expect(lenses.every((l) => l.lineIndex === 0)).toBe(true);
-  });
-
-  it('emits no lenses for comment-only content', () => {
-    const commentLines = ['// just a comment', '/* another */', '', '  '];
-    const lenses = computeLenses(commentLines, 'typescript');
-    expect(lenses).toHaveLength(0);
-  });
-
-  it('emits lenses for each of N matched declarations', () => {
-    const multiLines = [
-      'function foo() {',
-      '  return 1;',
-      '}',
-      'function bar() {',
-      '  return 2;',
-      '}',
-    ];
-    const lenses = computeLenses(multiLines, 'typescript');
-    expect(lenses).toHaveLength(8);
-  });
-
-  it('lens order: Ask AI → Tests → Refactor → Docs', () => {
-    const lenses = computeLenses(lines, 'typescript');
-    const commands = lenses.map((l) => l.command);
-    expect(commands).toEqual([
+  it('offers Ask AI, Tests, Refactor and Docs in that order', () => {
+    expect(lensesFor(lines, 'typescript').map((lens) => lens.command?.command)).toEqual([
       'agi-workforce.explain',
       'agi-workforce.generateTests',
       'agi-workforce.refactor',
       'agi-workforce.docs',
     ]);
   });
-});
 
-describe('computeLenses — Python source', () => {
-  const pyLines = [
-    'class DataProcessor:',
-    '    def __init__(self, config):',
-    '        self.config = config',
-    '    async def process(self, data):',
-    '        return data',
-  ];
-
-  it('detects class and both def lines', () => {
-    const lenses = computeLenses(pyLines, 'python');
-    const lineIndices = [...new Set(lenses.map((l) => l.lineIndex))];
-    expect(lineIndices).toEqual([0, 1, 3]);
+  it('labels each lens for the editor gutter', () => {
+    expect(lensesFor(lines, 'typescript').map((lens) => lens.command?.title)).toEqual([
+      '$(hubot) Ask AI',
+      '$(beaker) Tests',
+      '$(edit) Refactor',
+      '$(book) Docs',
+    ]);
   });
 
-  it('emits 4 lenses per Python declaration', () => {
-    const lenses = computeLenses(pyLines, 'python');
+  it('gives every lens a tooltip naming the product', () => {
+    for (const lens of lensesFor(lines, 'typescript')) {
+      expect(lens.command?.tooltip, lens.command?.command).toMatch(/AGI Workforce/);
+    }
+  });
+
+  it('anchors every lens to the declaration line', () => {
+    for (const lens of lensesFor(lines, 'typescript')) {
+      expect((lens.range.start as vscode.Position).line).toBe(0);
+    }
+  });
+
+  it('passes each command the whole declaration body, not just its first line', () => {
+    for (const lens of lensesFor(lines, 'typescript')) {
+      const [target] = (lens.command?.arguments ?? []) as vscode.Range[];
+      expect(target, lens.command?.command).toBeDefined();
+      expect((target.start as vscode.Position).line).toBe(0);
+      expect((target.end as vscode.Position).line).toBe(3);
+    }
+  });
+
+  it('offers nothing on comment-only content', () => {
+    expect(lensesFor(['// just a comment', '/* another */', '', '  '], 'typescript')).toEqual([]);
+  });
+
+  it('offers a full set per declaration in a multi-declaration file', () => {
+    const lenses = lensesFor(
+      ['function foo() {', '  return 1;', '}', 'function bar() {', '  return 2;', '}'],
+      'typescript',
+    );
+
+    expect(lenses).toHaveLength(8);
+    expect([
+      ...new Set(lenses.map((lens) => (lens.range.start as vscode.Position).line)),
+    ]).toEqual([0, 3]);
+  });
+
+  it('lenses Python class and def lines, four apiece', () => {
+    const lenses = lensesFor(
+      [
+        'class DataProcessor:',
+        '    def __init__(self, config):',
+        '        self.config = config',
+        '    async def process(self, data):',
+        '        return data',
+      ],
+      'python',
+    );
+
+    expect([
+      ...new Set(lenses.map((lens) => (lens.range.start as vscode.Position).line)),
+    ]).toEqual([0, 1, 3]);
     expect(lenses).toHaveLength(12);
+  });
+});
+
+describe('code lenses — recomputation', () => {
+  it('reuses the cached lenses until the document version changes', () => {
+    const provider = new AgiCodeLensProvider();
+    const lines = ['function foo() {', '  return 1;', '}'];
+    const uri = vscode.Uri.file('/workspace/src/cached.ts');
+    const getText = vi.fn(() => lines.join('\n'));
+    const document = { uri, languageId: 'typescript', version: 1, getText };
+
+    provider.provideCodeLenses(document as unknown as vscode.TextDocument, token);
+    provider.provideCodeLenses(document as unknown as vscode.TextDocument, token);
+    expect(getText).toHaveBeenCalledTimes(1);
+
+    provider.provideCodeLenses(
+      { ...document, version: 2 } as unknown as vscode.TextDocument,
+      token,
+    );
+    expect(getText).toHaveBeenCalledTimes(2);
   });
 });

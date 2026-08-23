@@ -109,15 +109,35 @@ function resolveReturnPath(value: unknown): string {
   return value;
 }
 
+/**
+ * Whether to drop the user straight into the portal's cancellation flow rather
+ * than its landing page. Stripe rejects this with an invalid_request_error when
+ * the portal configuration has cancellation switched off, which is the only way
+ * to learn that from the API — the configuration itself is a dashboard setting.
+ */
+function resolveFlow(value: unknown): 'cancel' | null {
+  return value === 'cancel' ? 'cancel' : null;
+}
+
+function isCancellationDisabled(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const record = error as Record<string, unknown>;
+  const message = String(record['message'] ?? '');
+  return (
+    record['type'] === 'StripeInvalidRequestError' &&
+    /cancel|flow_data|not enabled|configuration/i.test(message)
+  );
+}
+
 async function handlePortal(request: NextRequest) {
   const { userId, email: userEmail } = await getClerkAuthUser(request);
-  const returnPath = resolveReturnPath(
-    await request
-      .clone()
-      .json()
-      .then((body: { returnPath?: unknown }) => body?.returnPath)
-      .catch(() => undefined),
-  );
+  const body = await request
+    .clone()
+    .json()
+    .then((parsed: { returnPath?: unknown; flow?: unknown }) => parsed)
+    .catch(() => ({}) as { returnPath?: unknown; flow?: unknown });
+  const returnPath = resolveReturnPath(body?.returnPath);
+  const flow = resolveFlow(body?.flow);
 
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) {
@@ -362,10 +382,35 @@ async function handlePortal(request: NextRequest) {
   const origin = getValidatedOrigin(request);
 
   try {
-    const session = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: `${origin}${returnPath}`,
-    });
+    let session;
+    try {
+      session = await stripe.billingPortal.sessions.create({
+        customer: stripeCustomerId,
+        return_url: `${origin}${returnPath}`,
+        ...(flow === 'cancel' && subscription.stripe_subscription_id
+          ? {
+              flow_data: {
+                type: 'subscription_cancel' as const,
+                subscription_cancel: { subscription: subscription.stripe_subscription_id },
+              },
+            }
+          : {}),
+      });
+    } catch (error) {
+      if (flow !== 'cancel' || !isCancellationDisabled(error)) throw error;
+      logger.warn(
+        { userId, customerId: stripeCustomerId },
+        'Portal configuration has cancellation disabled; cannot deep-link cancel',
+      );
+      return NextResponse.json(
+        {
+          error: 'cancellation_unavailable',
+          message:
+            'Cancellation is not enabled in the billing portal, so we could not take you straight there. Open Manage billing, or contact support and we will cancel it for you.',
+        },
+        { status: 409 },
+      );
+    }
 
     logger.info(
       {

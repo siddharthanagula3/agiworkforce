@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@agiworkforce/ui';
+import { toUserMessage } from '@/lib/user-error-message';
 
 /**
  * Published artifacts management (CAP-015 slice 4).
@@ -69,7 +70,7 @@ export function PublishedArtifactsSection() {
       setArtifacts(await listPublishedArtifacts(signal));
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
-      setError(caught instanceof Error ? caught.message : 'Failed to load published artifacts');
+      setError(toUserMessage(caught, 'Failed to load published artifacts'));
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -107,7 +108,7 @@ export function PublishedArtifactsSection() {
       setNotice(`Unpublished “${label}”. The link no longer works.`);
       setArtifactToUnpublish(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to unpublish artifact');
+      setError(toUserMessage(caught, 'Failed to unpublish artifact'));
     } finally {
       setActionToken(null);
     }

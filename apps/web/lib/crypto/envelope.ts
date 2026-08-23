@@ -1,4 +1,3 @@
-
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 export const ENVELOPE_VERSION = 'v1';
@@ -29,6 +28,7 @@ export interface OpenedEnvelope {
   plaintext: string;
   keyId: string;
   layout: EnvelopeLayout;
+  contextBound: boolean;
 }
 
 function decodeKeyMaterial(raw: string, encoding: KeyEncoding, label: string): Buffer {
@@ -185,23 +185,51 @@ function decode(
   };
 }
 
-function decrypt(key: EnvelopeKey, parts: ReturnType<typeof decode>): string {
+function decrypt(
+  key: EnvelopeKey,
+  parts: ReturnType<typeof decode>,
+  context: string | undefined,
+): string {
   const decipher = createDecipheriv(ALGORITHM, key.material, parts.iv, {
     authTagLength: AUTH_TAG_LENGTH,
   });
+  if (context !== undefined) decipher.setAAD(Buffer.from(context, 'utf8'));
   decipher.setAuthTag(parts.tag);
   return Buffer.concat([decipher.update(parts.ciphertext), decipher.final()]).toString('utf8');
+}
+
+// A context-bound open also accepts a ciphertext sealed before contexts existed, and reports
+// that through `contextBound` so the caller can re-seal it; a ciphertext sealed under a
+// DIFFERENT context never opens.
+function decryptWithContext(
+  key: EnvelopeKey,
+  parts: ReturnType<typeof decode>,
+  context: string | undefined,
+): { plaintext: string; contextBound: boolean } {
+  if (context === undefined)
+    return { plaintext: decrypt(key, parts, undefined), contextBound: false };
+  try {
+    return { plaintext: decrypt(key, parts, context), contextBound: true };
+  } catch (boundError) {
+    try {
+      return { plaintext: decrypt(key, parts, undefined), contextBound: false };
+    } catch {
+      throw boundError;
+    }
+  }
 }
 
 export function sealEnvelope(
   ring: KeyRing,
   plaintext: string,
   layout: EnvelopeLayout = 'versioned',
+  context?: string,
 ): string {
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, ring.active.material, iv, {
     authTagLength: AUTH_TAG_LENGTH,
   });
+  if (context !== undefined) cipher.setAAD(Buffer.from(context, 'utf8'));
   const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
   return encode(iv, ciphertext, cipher.getAuthTag(), layout, ring.active.id);
 }
@@ -210,17 +238,22 @@ export function openEnvelope(
   ring: KeyRing,
   value: string,
   legacyLayout: Exclude<EnvelopeLayout, 'versioned'>,
+  context?: string,
 ): OpenedEnvelope {
   const keyId = envelopeKeyId(value);
   if (keyId !== null) {
     const key = resolveKey(ring, keyId);
-    return { plaintext: decrypt(key, decode(value, 'versioned')), keyId, layout: 'versioned' };
+    return {
+      ...decryptWithContext(key, decode(value, 'versioned'), context),
+      keyId,
+      layout: 'versioned',
+    };
   }
 
   const parts = decode(value, legacyLayout);
   for (const key of [ring.active, ...ring.retired]) {
     try {
-      return { plaintext: decrypt(key, parts), keyId: key.id, layout: legacyLayout };
+      return { ...decryptWithContext(key, parts, context), keyId: key.id, layout: legacyLayout };
     } catch {
       // Auth-tag failure means the wrong key; try the next one in the ring.
     }

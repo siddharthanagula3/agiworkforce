@@ -48,58 +48,6 @@ describe('tier resolver ordering', () => {
   });
 });
 
-const ENDPOINT_ALLOWED_HOSTS = new Set([
-  'api.agiworkforce.com',
-  'agiworkforce.com',
-  'agiworkforce-api.vercel.app',
-]);
-
-const isValidApiEndpoint = (url: string): boolean => {
-  try {
-    const parsed = new URL(url);
-    const isHttps = parsed.protocol === 'https:';
-    const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
-    if (!isHttps && !isLocalhost) return false;
-    if (!isLocalhost && !ENDPOINT_ALLOWED_HOSTS.has(parsed.hostname)) return false;
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-describe('endpoint validation', () => {
-  it('allows known HTTPS API endpoints', () => {
-    expect(isValidApiEndpoint('https://api.agiworkforce.com/v1/chat')).toBe(true);
-  });
-
-  it('allows localhost for local development', () => {
-    expect(isValidApiEndpoint('http://localhost:8787/v1/chat')).toBe(true);
-  });
-
-  it('allows 127.0.0.1 for local development', () => {
-    expect(isValidApiEndpoint('http://127.0.0.1:8787/v1/chat')).toBe(true);
-  });
-
-  it('CRITICAL: rejects HTTP to non-localhost (MITM risk)', () => {
-    expect(isValidApiEndpoint('http://api.agiworkforce.com/v1/chat')).toBe(false);
-  });
-
-  it('CRITICAL: rejects unknown HTTPS hosts (data exfiltration)', () => {
-    expect(isValidApiEndpoint('https://evil.com/capture')).toBe(false);
-    expect(isValidApiEndpoint('https://attacker.agiworkforce.com.evil.com/')).toBe(false);
-  });
-
-  it('CRITICAL: rejects invalid URLs', () => {
-    expect(isValidApiEndpoint('not-a-url')).toBe(false);
-    expect(isValidApiEndpoint('')).toBe(false);
-  });
-
-  it('CRITICAL: rejects javascript: and data: schemes', () => {
-    expect(isValidApiEndpoint('javascript:alert(1)')).toBe(false);
-    expect(isValidApiEndpoint('data:text/html,<script>alert(1)</script>')).toBe(false);
-  });
-});
-
 describe('vscode extension trust-boundary gates', () => {
   it('CRITICAL: byok default never over-grants to managed-cloud features', () => {
     const defaultTier = 'byok';
