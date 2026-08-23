@@ -1,0 +1,122 @@
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { Client } from 'pg';
+
+vi.mock('server-only', () => ({}));
+
+const URL = 'postgresql://postgres:test@127.0.0.1:55433/agitest';
+let client: Client;
+let ORG = '';
+
+const db = {
+  query: async <T>(sql: string, params?: unknown[]): Promise<T[]> =>
+    (await client.query(sql, params as never[])).rows as T[],
+  execute: async (sql: string, params?: unknown[]): Promise<number> =>
+    (await client.query(sql, params as never[])).rowCount ?? 0,
+} as never;
+
+beforeAll(async () => {
+  client = new Client({ connectionString: URL });
+  await client.connect();
+  ORG = (
+    await client.query(
+      `select organization_id from public.organization_members where role='owner' limit 1`,
+    )
+  ).rows[0]?.organization_id;
+  expect(ORG).toBeTruthy();
+});
+afterAll(async () => client?.end());
+
+async function counts() {
+  const c = await client.query(
+    `select (select count(*)::int from public.web_conversations where organization_id=$1) as conversations,
+            (select count(*)::int from public.web_messages m
+               join public.web_conversations c on c.id=m.conversation_id
+              where c.organization_id=$1) as messages`,
+    [ORG],
+  );
+  return c.rows[0] as { conversations: number; messages: number };
+}
+
+describe('the retention sweep against real rows', () => {
+  // Seeds its own fixture: the sweep consumes what it deletes, so a test that
+  // relies on rows seeded elsewhere passes once and then reports nothing_due.
+  beforeAll(async () => {
+    await client.query(`delete from public.web_conversations where organization_id = $1`, [ORG]);
+    await client.query(
+      `insert into public.web_conversations (user_id, organization_id, title, created_at, updated_at)
+       values ($2, $1, 'Stale A', now() - interval '60 days', now() - interval '40 days'),
+              ($2, $1, 'Stale B', now() - interval '90 days', now() - interval '50 days'),
+              ($2, $1, 'Active C', now() - interval '90 days', now())`,
+      [ORG, 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v'],
+    );
+    await client.query(
+      `insert into public.web_messages (conversation_id, role, content)
+       select id, 'user', 'seeded' from public.web_conversations where organization_id = $1`,
+      [ORG],
+    );
+    // Backdated AFTER the messages, because `update_conversation_on_message`
+    // bumps the parent's updated_at on insert. That trigger is correct — a
+    // conversation someone just posted to is not dormant — but it means a
+    // fixture that seeds messages last silently un-stales every row it made.
+    await client.query(
+      `update public.web_conversations
+          set updated_at = case title
+                             when 'Stale A' then now() - interval '40 days'
+                             when 'Stale B' then now() - interval '50 days'
+                             else now()
+                           end
+        where organization_id = $1`,
+      [ORG],
+    );
+    await client.query(
+      `update public.organization_admin_policies
+          set retention_days = 30, retention_enforced = true
+        where organization_id = $1`,
+      [ORG],
+    );
+    await client.query(
+      `update public.legal_holds set released_at = now(), released_by_user_id = 'test'
+        where organization_id = $1 and released_at is null`,
+      [ORG],
+    );
+  });
+
+  it('deletes only conversations past the window, and cascades their messages', async () => {
+    const { sweepOrganizationRetention, isSwept } = await import('../retention-service');
+
+    const before = await counts();
+    expect(before.conversations).toBe(3);
+    expect(before.messages).toBe(3);
+
+    const result = await sweepOrganizationRetention(db, ORG);
+    expect(result.outcome).toBe('deleted');
+    expect(isSwept(result) && result.conversationsDeleted).toBe(2);
+
+    const after = await counts();
+    // Retention runs from last activity, so the conversation touched today
+    // survives despite being created 90 days ago.
+    expect(after.conversations, 'the active conversation must survive').toBe(1);
+    // Its message survives with it; the other two went with their parents.
+    expect(after.messages, 'messages must cascade with their conversation').toBe(1);
+
+    const survivor = await client.query(
+      `select title from public.web_conversations where organization_id = $1`,
+      [ORG],
+    );
+    expect(survivor.rows[0].title).toBe('Active C');
+  });
+
+  it('is idempotent: a second sweep finds nothing left to do', async () => {
+    const { sweepOrganizationRetention } = await import('../retention-service');
+    expect((await sweepOrganizationRetention(db, ORG)).outcome).toBe('nothing_due');
+  });
+
+  it('wrote evidence rows an admin can read', async () => {
+    const { listRetentionSweeps } = await import('../retention-service');
+    const sweeps = await listRetentionSweeps(db, ORG);
+
+    const deleted = sweeps.find((s) => s.outcome === 'deleted' && s.conversationsDeleted === 2);
+    expect(deleted, 'the deleting sweep must be recorded with its count').toBeDefined();
+    expect(deleted?.dryRun).toBe(false);
+  });
+});
