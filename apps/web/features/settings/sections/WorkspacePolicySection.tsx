@@ -108,6 +108,30 @@ function Toggle({
   );
 }
 
+/**
+ * A capability the workspace does not control yet. Rendered as text rather than
+ * a disabled input so it cannot read as "a switch someone turned off" — the
+ * setting does not exist, the position does.
+ */
+function StatedPosition({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        color: 'var(--text-3)',
+        border: '1px solid var(--settings-border)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '3px 8px',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function Row({
   title,
   description,
@@ -341,36 +365,26 @@ export function WorkspacePolicySection() {
         </div>
       </div>
 
+      {/*
+       * Audit export and retention are deliberately NOT editable here.
+       *
+       * Both would be settings that decide nothing: there is no audit read or
+       * export route to gate, and nothing reads the retention window. Shipping
+       * live toggles for them would tell an owner their workspace is governed
+       * in ways it is not — and /enterprise states in writing that neither is a
+       * shipped control. They appear as stated positions, not switches, until
+       * the enforcement lands.
+       */}
       <Row
         title="Audit export"
-        description="Whether an owner or admin may export this workspace's audit trail."
-        control={
-          <Toggle
-            label="Allow audit export"
-            checked={draft.auditExportEnabled}
-            disabled={!canEdit}
-            onChange={(next) => patch({ auditExportEnabled: next })}
-          />
-        }
+        description="Not available as a self-serve control. Audit events are recorded to an append-only trail; extracts are supplied on request under contract."
+        control={<StatedPosition>Contract-scoped</StatedPosition>}
       />
 
       <Row
         title="Retention window"
-        description="How long workspace content is kept, in days. Enforcement ships with the audit and retention work; today this records your intent."
-        control={
-          <input
-            type="number"
-            aria-label="Retention window in days"
-            min={1}
-            max={3650}
-            value={draft.retentionDays}
-            disabled={!canEdit}
-            onChange={(event) =>
-              patch({ retentionDays: Number.parseInt(event.target.value, 10) || 1 })
-            }
-            style={{ ...buttonStyle, width: 96, textAlign: 'right' }}
-          />
-        }
+        description="Follows the published platform retention schedule in the privacy policy. Per-workspace windows are a contract-scoped commitment, not a shipped control."
+        control={<StatedPosition>Platform schedule</StatedPosition>}
       />
 
       <div

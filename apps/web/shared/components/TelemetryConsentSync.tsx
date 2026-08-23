@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
 
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { hasTelemetryConsent, setTelemetryConsentCache } from '@/lib/sentry-shared';
@@ -20,13 +21,21 @@ const NAMESPACE = 'privacy';
  * Mounted at the app root so the mirror is corrected on first visit instead of
  * on first visit TO SETTINGS.
  *
+ * Signed-in only. There is no account-side consent for a signed-out visitor to
+ * mirror, so firing this on the public marketing pages fetched an authenticated
+ * endpoint that could only ever answer 401 — twice per visit under StrictMode —
+ * and printed those failures to the console of every anonymous visitor.
+ *
  * KNOWN LIMIT, deliberately not papered over: Sentry has already initialised by
  * the time this runs, so a correction takes effect from the next load. Closing
  * that gap needs the consent rendered into the document server-side, before any
  * client code runs. Tracked as WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01.
  */
 export function TelemetryConsentSync() {
+  const { isLoaded, isSignedIn } = useAuth();
+
   useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
     let cancelled = false;
 
     void fetchPreferenceNamespace<{ shareTelemetry?: boolean }>(NAMESPACE, {})
@@ -47,7 +56,7 @@ export function TelemetryConsentSync() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
   return null;
 }
