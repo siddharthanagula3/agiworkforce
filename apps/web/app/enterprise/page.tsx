@@ -7,7 +7,7 @@ import { FinalCta, FlagshipHero } from '@/features/marketing/components/Flagship
 export const metadata = buildMetadata({
   title: 'Enterprise: evaluate without exposing your data',
   description:
-    'Run AGI fully local or on your own provider keys, so no conversation content reaches our infrastructure. Identity, audit, and retention controls are contract-scoped, with build status stated honestly.',
+    'Run AGI fully local or on your own provider keys, so no conversation content reaches our infrastructure. Identity, audit, and retention controls are administered by your own workspace owner, with build status stated honestly.',
   path: '/enterprise',
 });
 
@@ -29,7 +29,7 @@ export default function EnterprisePage() {
           eyebrow="AGI for enterprise"
           titleLines={['Pass the security review', 'before you spend anything.']}
           em="before you spend anything."
-          lede="Most AI tools require you to accept their data boundary to evaluate them at all. AGI does not: run it fully local, or on your own provider keys, and no conversation content reaches our infrastructure — so the hardest question in your review is answered by architecture rather than by a promise. Identity, audit, and retention controls are scoped on a contract, and this page states plainly which of them are built and which are commitments."
+          lede="Most AI tools require you to accept their data boundary to evaluate them at all. AGI does not: run it fully local, or on your own provider keys, and no conversation content reaches our infrastructure — so the hardest question in your review is answered by architecture rather than by a promise. Identity, audit, and retention are administered by your own workspace owner, and this page states plainly which controls are built and which are commitments."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/trust', label: 'See Trust & Compliance' },
@@ -82,13 +82,24 @@ export default function EnterprisePage() {
           `/organizations/:orgId/audit-events` read and `/export` endpoints
           lived in the Express gateway that was deleted on 2026-08-17, and
           nothing in apps/web replaced them — /api/settings/audit-logs reads
-          `security_audit_logs`, a different table. So the row must say events
-          are captured and export is unavailable, and must NOT claim the read
-          path is live. Org-configurable RETENTION WINDOWS also remain
-          unbuilt — that row is unchanged. Calling shipped, gated controls "roadmap" is the same
-          honesty bug as overclaiming them; this page must not repeat it in
-          either direction, so re-verify each row here against the code
-          before editing.
+          `security_audit_logs`, a different table.
+
+          2026-08-23: both of those gaps are now closed and the rows changed
+          again. The audit read and JSONL export landed
+          (/api/settings/organization/audit and /audit/export), gated on the
+          `audit_export` policy resource, with every export and every refusal
+          written back to the trail. Org-configurable retention landed with it
+          (0138): `retention_enforced` is opt-in per workspace, the nightly
+          sweep at /api/cron/enforce-workspace-retention deletes conversations
+          past the window, legal holds suspend it, and the sweep FAILS CLOSED —
+          if the hold set cannot be read it deletes nothing and records the
+          refusal. The retention row may now describe a control, but only
+          because one exists; do not restore the old "you set them" phrasing,
+          which implied enforcement was unconditional rather than opt-in.
+
+          Calling shipped, gated controls "roadmap" is the same honesty bug as
+          overclaiming them; this page must not repeat it in either direction,
+          so re-verify each row here against the code before editing.
         */}
         <LedgerSection
           eyebrow="What an enterprise contract covers"
@@ -96,7 +107,7 @@ export default function EnterprisePage() {
           rows={[
             {
               k: 'Status',
-              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan — your org's owner configures both directly once that entitlement is on the account. Org audit events are recorded to an append-only table, and your owner or admin can now read and filter them in the product and download the range as JSONL. Data retention windows and dedicated capacity remain contract-scoped commitments, not self-serve toggles; we state dates for those in writing during procurement.`,
+              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan — your org's owner configures both directly once that entitlement is on the account. Org audit events are recorded to an append-only table, and your owner or admin can now read and filter them in the product and download the range as JSONL. Your owner can now set a retention window per workspace and switch enforcement on, which runs a nightly sweep that permanently deletes conversations past the window, withholds anything under legal hold, and records every run so the deletion is evidenceable. Legal holds are placed and released in the product. Dedicated capacity remains a contract-scoped commitment, not a self-serve toggle; we state dates for that in writing during procurement.`,
             },
             {
               k: 'SSO',
@@ -112,7 +123,7 @@ export default function EnterprisePage() {
             },
             {
               k: 'Retention',
-              v: 'There is no per-organization retention setting today — retention follows the published platform schedule in the privacy policy. Organization-configurable windows are a contract-scoped commitment, not a shipped control.',
+              v: 'Your workspace owner sets a retention window between 1 and 3650 days and decides whether it is enforced. Until enforcement is on, the window is a recorded position and nothing is deleted — the product labels it that way rather than implying deletion. With it on, a nightly sweep permanently deletes workspace conversations with no activity for the window, skips any subject under legal hold, and refuses to delete at all if it cannot read the hold set. Each run is recorded with what it removed and what it withheld.',
             },
             {
               k: 'BYOK posture',

@@ -81,6 +81,7 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     allowChromeCloudSync: policy.allowChromeCloudSync,
     auditExportEnabled: policy.auditExportEnabled,
     retentionDays: policy.retentionDays,
+    retentionEnforced: policy.retentionEnforced,
   };
 }
 
@@ -105,30 +106,6 @@ function Toggle({
       onChange={(event) => onChange(event.target.checked)}
       style={{ width: 16, height: 16, cursor: disabled ? 'not-allowed' : 'pointer' }}
     />
-  );
-}
-
-/**
- * A capability the workspace does not control yet. Rendered as text rather than
- * a disabled input so it cannot read as "a switch someone turned off" — the
- * setting does not exist, the position does.
- */
-function StatedPosition({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      style={{
-        fontSize: 11,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        color: 'var(--text-3)',
-        border: '1px solid var(--settings-border)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '3px 8px',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -317,7 +294,7 @@ export function WorkspacePolicySection() {
 
       <Row
         title="Preview before Local leaves the device"
-        description="Members must review the exact payload before a Local chat continues on your own provider keys."
+        description="Members must review the exact payload before a Local chat continues on your own provider keys. The server states this requirement on every decision; the Desktop client that owns the transition does not read it yet, so today it binds policy rather than the client."
         control={
           <Toggle
             label="Require a preview before Local moves to your own keys"
@@ -365,27 +342,89 @@ export function WorkspacePolicySection() {
         </div>
       </div>
 
-      {/*
-       * Audit export and retention are deliberately NOT editable here.
-       *
-       * Both would be settings that decide nothing: there is no audit read or
-       * export route to gate, and nothing reads the retention window. Shipping
-       * live toggles for them would tell an owner their workspace is governed
-       * in ways it is not — and /enterprise states in writing that neither is a
-       * shipped control. They appear as stated positions, not switches, until
-       * the enforcement lands.
-       */}
       <Row
         title="Audit export"
-        description="Not available as a self-serve control. Audit events are recorded to an append-only trail; extracts are supplied on request under contract."
-        control={<StatedPosition>Contract-scoped</StatedPosition>}
+        description="Lets owners and admins download this workspace's audit trail as JSONL. Every export, and every refusal, is itself written to the trail."
+        control={
+          <Toggle
+            checked={draft.auditExportEnabled}
+            disabled={!canEdit}
+            label="Allow audit export"
+            onChange={(next) => setDraft({ ...draft, auditExportEnabled: next })}
+          />
+        }
       />
 
       <Row
         title="Retention window"
-        description="Follows the published platform retention schedule in the privacy policy. Per-workspace windows are a contract-scoped commitment, not a shipped control."
-        control={<StatedPosition>Platform schedule</StatedPosition>}
+        description="How long a workspace conversation is kept after its last activity. Measured from last activity, not from when it was created."
+        control={
+          <input
+            type="number"
+            min={1}
+            max={3650}
+            value={draft.retentionDays}
+            disabled={!canEdit}
+            aria-label="Retention window in days"
+            onChange={(event) => {
+              const next = Number.parseInt(event.target.value, 10);
+              if (Number.isFinite(next)) setDraft({ ...draft, retentionDays: next });
+            }}
+            style={{
+              width: 84,
+              minHeight: 30,
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-base)',
+              color: 'var(--text-1)',
+              fontSize: 12,
+              padding: '4px 8px',
+            }}
+          />
+        }
       />
+
+      {/*
+       * The window and its enforcement are separate rows on purpose. Recording
+       * a retention position is reversible; switching on the sweep permanently
+       * deletes conversations. Collapsing them into one control would make an
+       * owner adjusting a number the same gesture as authorising deletion.
+       */}
+      <Row
+        title="Enforce retention"
+        description={
+          draft.retentionEnforced
+            ? `A nightly sweep permanently deletes workspace conversations with no activity for ${draft.retentionDays} days. Conversations under legal hold are withheld. Every sweep is recorded.`
+            : 'Off. The window above is recorded as this workspace\u2019s position and nothing is deleted. Turning this on starts permanent deletion and cannot recover what it removes.'
+        }
+        control={
+          <Toggle
+            checked={draft.retentionEnforced}
+            disabled={!canEdit}
+            label="Enforce the retention window"
+            onChange={(next) => setDraft({ ...draft, retentionEnforced: next })}
+          />
+        }
+      />
+
+      {draft.retentionEnforced && !overview.policy.retentionEnforced ? (
+        <div
+          style={{
+            margin: '0 20px 4px',
+            padding: '10px 12px',
+            border: '1px solid currentColor',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--settings-destructive-foreground)',
+            fontSize: 12,
+            lineHeight: 1.6,
+          }}
+          role="status"
+        >
+          Saving this starts permanently deleting workspace conversations older than{' '}
+          {draft.retentionDays} days. Deletion is not recoverable. Place a legal hold first if any
+          records are subject to one.
+        </div>
+      ) : null}
 
       <div
         style={{

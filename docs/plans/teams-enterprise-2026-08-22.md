@@ -120,8 +120,13 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
 - SSO sign-in affordance, org-level SSO enforcement, break-glass path.
   `/login/page.tsx` mounts a bare Clerk `<SignIn>`.
 - Session and device-token revocation on deprovision.
-- Legal hold. `legal_hold` does not appear anywhere in the repository.
-- Retention enforcement. `retention_days` is stored and never read.
+- ~~Legal hold.~~ **SHIPPED 2026-08-23 (Wave 3).** `legal_holds` (0138),
+  placed and released at `/workspace/data`, suspends retention for its subject.
+- ~~Retention enforcement. `retention_days` is stored and never read.~~
+  **SHIPPED 2026-08-23 (Wave 3).** Opt-in per workspace via
+  `retention_enforced`; nightly sweep at
+  `/api/cron/enforce-workspace-retention`; fails closed when holds cannot be
+  read. See RETENTION-01 for what is still unproven.
 - Compliance/audit export and SIEM streaming.
 - Admin adoption, value, and cost reporting.
 - IP allowlist, tenant restrictions, managed device policy (MDM/plist/registry).
@@ -287,6 +292,36 @@ to render any authenticated page locally.
 resource, policy decision, and outcome; a held record survives a retention
 sweep.
 
+### Wave 3 — Audit and compliance backbone — PARTIALLY LANDED
+
+- **Audit read API — LANDED 2026-08-23.** Keyset pagination over
+  `(created_at DESC, id DESC)` with actor, action, resource, outcome, severity
+  and date filters.
+- **JSONL export — LANDED 2026-08-23.** Gated on the `audit_export` policy
+  resource; every export and every refusal is written back to the trail.
+- **Retention enforcement — LANDED 2026-08-23.** `0138` adds
+  `retention_enforced` (opt-in, defaults false), `legal_holds`, and
+  `organization_retention_sweeps`. `lib/services/retention-service.ts` sweeps
+  from `updated_at`, excludes held subjects, and FAILS CLOSED when the hold set
+  cannot be read. `/api/cron/enforce-workspace-retention` runs nightly at 04:20
+  and accepts `?dryRun=1`. Administered at `/workspace/data`; the workspace
+  posture badge follows the workspace's own opt-in rather than a constant.
+- **Legal hold — LANDED 2026-08-23.** Organization-wide or per-member, with
+  release recorded at critical severity. Both tables are SELECT-only for the
+  application role.
+- **SIEM streaming — STILL ABSENT.** Pull the JSONL export on a schedule until
+  a webhook or log drain exists.
+- **One writer for `audit_logs` and `enterprise_audit_events` — STILL OPEN.**
+
+**Exit:** a privileged action is reconstructable from the export with actor,
+resource, policy decision, and outcome; a held record survives a retention
+sweep.
+
+**Exit status: half met.** The first clause holds and is verified. The second is
+unit-tested across 24 tests but has never been observed against a live database
+— tracked as RETENTION-01. Do not describe retention as proven to a customer
+until a dry run has been watched against a seeded workspace.
+
 ### Wave 4 — Sharing that reads as sharing (5 agents)
 
 - Render shared state in the projects UI: badge, owner, access level, working
@@ -352,7 +387,7 @@ policy denial holds identically on every one.
 | Central admin console         | Both                       | SHIPPED, unverified as owner    | 2    |
 | Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |
 | Compliance export / SIEM      | Enterprise on both         | ABSENT                          | 3    |
-| Custom retention + legal hold | Enterprise on both         | ABSENT                          | 3    |
+| Custom retention + legal hold | Enterprise on both         | SHIPPED, opt-in, unrun live     | 3    |
 | Usage and cost analytics      | Both                       | INERT, ledger unread            | 6    |
 | Central billing and seats     | Both                       | PARTIAL, live prices missing    | 6    |
 | IP allowlist / device policy  | Enterprise on both         | ABSENT                          | 7    |

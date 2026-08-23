@@ -9,6 +9,7 @@ import {
   KeyRound,
   SlidersHorizontal,
   ScrollText,
+  Gavel,
   CreditCard,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -75,6 +76,12 @@ const SECTIONS: { title: string; links: ConsoleLink[] }[] = [
     title: 'Records',
     links: [
       { href: '/workspace/audit', label: 'Audit', icon: ScrollText, hint: 'Trail and export' },
+      {
+        href: '/workspace/data',
+        label: 'Data',
+        icon: Gavel,
+        hint: 'Legal holds and retention sweeps',
+      },
       {
         href: '/workspace/billing',
         label: 'Billing',

@@ -34,6 +34,14 @@ describe('enterprise contracts', () => {
     expect(policy.requireLocalToByokPreview).toBe(true);
   });
 
+  it('never starts deleting anything on its own', () => {
+    // retentionEnforced is the one field in this policy whose default has an
+    // irreversible consequence. If it ever ships true, every workspace that
+    // has not chosen a retention window begins permanently deleting
+    // conversations on the shipped 365-day default.
+    expect(DEFAULT_ENTERPRISE_ADMIN_POLICY.retentionEnforced).toBe(false);
+  });
+
   it('distinguishes organization admins from normal members', () => {
     expect(isOrganizationAdminRole('owner')).toBe(true);
     expect(isOrganizationAdminRole('admin')).toBe(true);
