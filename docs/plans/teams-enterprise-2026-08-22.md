@@ -115,7 +115,8 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
 
 ### ABSENT
 
-- Customer-facing admin console.
+- ~~Customer-facing admin console.~~ **SHIPPED 2026-08-23 (Wave 2)** at
+  `/workspace`. See CONSOLE-01 for what is still unverified.
 - SSO sign-in affordance, org-level SSO enforcement, break-glass path.
   `/login/page.tsx` mounts a bare Clerk `<SignIn>`.
 - Session and device-token revocation on deprovision.
@@ -214,18 +215,61 @@ in an observed network request, and the denial lands in
 live Neon organization. Tracked as ORGPOLICY-01. This is the first thing to do
 when a seeded workspace is available.
 
-### Wave 2 — Workspace admin console (4 agents)
+### Wave 2 — Workspace admin console — LANDED 2026-08-23
 
-- Console route with Overview, People, Sharing, Identity, Policy, Usage, Audit,
-  Data.
-- Decompose `TeamSection` and `OrganizationSharingSection` into console pages;
-  settings keeps a pointer, not a duplicate.
-- Move SSO and directory-sync administration from operator-gated `/admin` into
-  the customer console, keeping the `enterprise_controls` gate.
-- Empty, loading, error, and permission-denied states for every panel.
+Shipped in this pass at `/workspace`, kept deliberately distinct from `/admin`
+(the platform operator console, gated on Clerk `publicMetadata` that no customer
+holds). Seven routes: Overview, Members, Identity, Policy, Sharing, Audit,
+Billing.
+
+- `app/workspace/layout.tsx` — resolves role server-side and renders one of
+  three named states rather than an empty frame: personal scope, non-admin
+  denial, and membership-read failure, which is deliberately NOT collapsed into
+  the personal-scope state (that would tell an administrator their organization
+  had vanished).
+- `lib/services/workspace-posture-service.ts` — reads the live configuration of
+  one workspace across identity, provisioning, access, AI controls, data, and
+  audit. Every signal carries an `enforcement` field of `enforced` /
+  `stated` / `unconfigured`, so a recorded value can never wear the same badge
+  as a runtime control. `retentionDays` and per-surface sync are `stated`;
+  managed compute and privacy modes are `enforced`.
+- `GET /api/settings/organization/posture` — owner/admin gated, rate limited,
+  entitlement checked. The posture enumerates how a workspace authenticates and
+  shares, so the role check is a real gate rather than a UI hint.
+- `features/workspace-console/` — nav, shell, posture dashboard, identity
+  panels, billing summary.
+- Settings keeps a pointer, not a duplicate: the Team panel used to stack
+  `TeamSection` + policy + sharing + audit (~78KB of admin UI behind one scroll
+  with no addressable sections). Policy, sharing, and audit moved to the
+  console; membership stays in settings because a plain member legitimately
+  needs it.
+- SSO and directory-sync administration moved from operator-gated `/admin` to
+  the customer console. Their APIs were always org-scoped and
+  `enterprise_controls`-gated, so this moves the UI to the population the
+  authorization was already written for.
+- 52 unit tests plus a four-case Playwright suite.
 
 **Exit:** an owner completes every administrative task from one place; a member
 hitting the same route sees a correct denial, not a broken page.
+
+**Exit status: PARTIALLY met.** Verified in a real browser against a live Clerk
+session (`e2e/workspace-console.spec.ts`, 4/4 passing): all seven routes render
+a named state, an anonymous visitor is gated with the destination preserved, the
+posture API returns 403 to a caller who administers nothing, and the reachable
+page carries zero serious or critical axe violations. NOT verified: the console
+as an actual workspace owner. The QA account is on `max_15x`, which correctly
+refuses workspace creation with `SUBSCRIPTION_REQUIRED`, so the posture
+dashboard has never been rendered against a real organization. Tracked as
+CONSOLE-01 in `known-flaws.md`.
+
+**Local verification prerequisite, recorded because it silently blocked this for
+weeks:** server-side `auth()` verifies the session's authorized party against
+`CLERK_AUTHORIZED_PARTIES`, which falls back to `NEXT_PUBLIC_APP_URL`'s origin
+(`lib/clerk-authorized-parties.ts`). Against a localhost dev server that
+fallback is the production origin, so EVERY protected page redirects to sign-in
+no matter how valid the browser session is — which reads exactly like broken
+auth. Start the dev server with `CLERK_AUTHORIZED_PARTIES=http://localhost:3000`
+to render any authenticated page locally.
 
 ### Wave 3 — Audit and compliance backbone (5 agents)
 
@@ -305,8 +349,8 @@ policy denial holds identically on every one.
 | Shared project conversations  | Both                       | ABSENT                          | 4    |
 | Shared agents/skills/prompts  | Both                       | ABSENT                          | 4    |
 | Admin connector policy        | Both                       | INERT, contract only            | 1, 4 |
-| Central admin console         | Both                       | ABSENT                          | 2    |
-| Audit log read                | Both                       | INERT, write-only               | 3    |
+| Central admin console         | Both                       | SHIPPED, unverified as owner    | 2    |
+| Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |
 | Compliance export / SIEM      | Enterprise on both         | ABSENT                          | 3    |
 | Custom retention + legal hold | Enterprise on both         | ABSENT                          | 3    |
 | Usage and cost analytics      | Both                       | INERT, ledger unread            | 6    |

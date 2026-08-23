@@ -179,10 +179,10 @@ const POSTURE: { item: string; state: string; detail: string; asOf: string }[] =
   },
   {
     item: 'Database row-level isolation',
-    state: 'Partial — 22 of 170 hosted API route files',
+    state: 'Partial — 35 of 139 database-backed hosted API route files',
     detail:
-      'Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. Every other hosted route enforces ownership in application code only. The exact figure and the covered surfaces are on /security.',
-    asOf: '2026-08-05',
+      'Counted against the 139 route files that reach the database; the other 97 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 104 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. How that owner-connection path is expected to behave is described on /security.',
+    asOf: '2026-08-23',
   },
   {
     item: 'Authentication and CSRF',

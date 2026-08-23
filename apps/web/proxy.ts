@@ -99,6 +99,7 @@ const isProtectedAppRoute = createRouteMatcher([
   '/billing(.*)',
   '/upgrade(.*)',
   '/admin(.*)',
+  '/workspace(.*)',
 ]);
 
 const isPublicApiRoute = createRouteMatcher([
@@ -120,6 +121,7 @@ const isClerkSessionRoute = createRouteMatcher([
   '/billing(.*)',
   '/upgrade(.*)',
   '/admin(.*)',
+  '/workspace(.*)',
   '/api/(.*)',
 ]);
 
