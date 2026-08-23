@@ -55,6 +55,7 @@ import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
 import { TeamSection } from '../sections/TeamSection';
 import { OrganizationSharingSection } from '../sections/OrganizationSharingSection';
+import { WorkspacePolicySection } from '../sections/WorkspacePolicySection';
 import { SecuritySection } from '../sections/SecuritySection';
 import { SafetySection } from '../sections/SafetySection';
 import { PrivacySection } from '../sections/PrivacySection';
@@ -386,61 +387,64 @@ export function WebSettingsModal({
     setCustomConnectors(parsed.data.connectors);
   }, [authedHeaders]);
 
-  const loadConnectors = useCallback(async (signal?: AbortSignal) => {
-    setConnectorsLoading(true);
-    setConnectorsError(null);
-    try {
-      const requestOptions = {
-        credentials: 'include' as const,
-        headers: await authedHeaders(),
-        ...(signal ? { signal } : {}),
-      };
-      const [connectorsResponse, installationsResponse, customResponse] = await Promise.all([
-        fetch('/api/connectors', requestOptions),
-        fetch('/api/github/installations', requestOptions),
-        fetch('/api/connectors/custom', requestOptions),
-      ]);
-      if (!connectorsResponse.ok || !installationsResponse.ok || !customResponse.ok) {
-        const status = [connectorsResponse, installationsResponse, customResponse].find(
-          (response) => !response.ok,
-        )?.status;
-        throw new ConnectorLoadError(status === 401 || status === 403 ? 'signed-out' : 'request');
+  const loadConnectors = useCallback(
+    async (signal?: AbortSignal) => {
+      setConnectorsLoading(true);
+      setConnectorsError(null);
+      try {
+        const requestOptions = {
+          credentials: 'include' as const,
+          headers: await authedHeaders(),
+          ...(signal ? { signal } : {}),
+        };
+        const [connectorsResponse, installationsResponse, customResponse] = await Promise.all([
+          fetch('/api/connectors', requestOptions),
+          fetch('/api/github/installations', requestOptions),
+          fetch('/api/connectors/custom', requestOptions),
+        ]);
+        if (!connectorsResponse.ok || !installationsResponse.ok || !customResponse.ok) {
+          const status = [connectorsResponse, installationsResponse, customResponse].find(
+            (response) => !response.ok,
+          )?.status;
+          throw new ConnectorLoadError(status === 401 || status === 403 ? 'signed-out' : 'request');
+        }
+        const [connectorsJson, installationsJson, customJson] = await Promise.all([
+          connectorsResponse.json(),
+          installationsResponse.json(),
+          customResponse.json(),
+        ]);
+        const connectorsResult = ConnectorsResponseSchema.safeParse(connectorsJson);
+        const installationsResult = GitHubInstallationsResponseSchema.safeParse(installationsJson);
+        const customResult = CustomConnectorsResponseSchema.safeParse(customJson);
+        if (!connectorsResult.success || !installationsResult.success || !customResult.success) {
+          throw new ConnectorLoadError('invalid-data');
+        }
+        if (signal?.aborted) return;
+        setConnectedConnectors(connectorsResult.data.connectors);
+        setAvailableIds(connectorsResult.data.available ?? []);
+        setExpiredConnectorIds(
+          connectorsResult.data.connectors
+            .filter((connector) => connector.needsReauthorization)
+            .map((connector) => connector.connectorId),
+        );
+        setGithubInstallations(installationsResult.data.installations);
+        setCustomConnectors(customResult.data.connectors);
+      } catch (error) {
+        if (signal?.aborted) return;
+        const kind = error instanceof ConnectorLoadError ? error.kind : 'request';
+        setConnectorsError(
+          kind === 'signed-out'
+            ? 'Your session expired. Reload the page to sign back in, then reopen Connectors.'
+            : kind === 'invalid-data'
+              ? 'Connectors returned data this page could not read. Try again, or contact support if it persists.'
+              : 'Connectors could not be loaded. Check your connection and try again.',
+        );
+      } finally {
+        if (!signal?.aborted) setConnectorsLoading(false);
       }
-      const [connectorsJson, installationsJson, customJson] = await Promise.all([
-        connectorsResponse.json(),
-        installationsResponse.json(),
-        customResponse.json(),
-      ]);
-      const connectorsResult = ConnectorsResponseSchema.safeParse(connectorsJson);
-      const installationsResult = GitHubInstallationsResponseSchema.safeParse(installationsJson);
-      const customResult = CustomConnectorsResponseSchema.safeParse(customJson);
-      if (!connectorsResult.success || !installationsResult.success || !customResult.success) {
-        throw new ConnectorLoadError('invalid-data');
-      }
-      if (signal?.aborted) return;
-      setConnectedConnectors(connectorsResult.data.connectors);
-      setAvailableIds(connectorsResult.data.available ?? []);
-      setExpiredConnectorIds(
-        connectorsResult.data.connectors
-          .filter((connector) => connector.needsReauthorization)
-          .map((connector) => connector.connectorId),
-      );
-      setGithubInstallations(installationsResult.data.installations);
-      setCustomConnectors(customResult.data.connectors);
-    } catch (error) {
-      if (signal?.aborted) return;
-      const kind = error instanceof ConnectorLoadError ? error.kind : 'request';
-      setConnectorsError(
-        kind === 'signed-out'
-          ? 'Your session expired. Reload the page to sign back in, then reopen Connectors.'
-          : kind === 'invalid-data'
-            ? 'Connectors returned data this page could not read. Try again, or contact support if it persists.'
-            : 'Connectors could not be loaded. Check your connection and try again.',
-      );
-    } finally {
-      if (!signal?.aborted) setConnectorsLoading(false);
-    }
-  }, [authedHeaders]);
+    },
+    [authedHeaders],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -503,44 +507,47 @@ export function WebSettingsModal({
     return rows;
   }, [connectedConnectors, githubInstallations, customConnectors]);
 
-  const connectConnector = useCallback(async (id: string) => {
-    // Web has no working per-provider authorization flow yet, so the catalog
-    // is mapped with canConnect: false and the shared panel never invokes
-    // this. Kept non-optimistic for when a real flow lands: POST first, only
-    // reflect state the server confirmed, surface failures to the panel.
-    const connector = SETTINGS_CONNECTORS.find((c) => c.id === id);
-    if (!connector) return;
-    const csrfToken = await getCsrfToken();
-    const res = await fetch('/api/connectors', {
-      method: 'POST',
-      headers: await authedHeaders({
-        'Content-Type': 'application/json',
-        'x-csrf-token': csrfToken,
-      }),
-      credentials: 'include',
-      body: JSON.stringify({ connectorId: id, authType: connector.authType }),
-    });
-    if (!res.ok) {
-      // GitHub connects through the App install flow: the server answers POST
-      // with 409 + installStartPath. Follow it instead of surfacing an error.
-      const body = (await res
-        .clone()
-        .json()
-        .catch(() => null)) as { error?: string; installStartPath?: string } | null;
-      if (res.status === 409 && body?.installStartPath && typeof window !== 'undefined') {
-        window.location.href = body.installStartPath;
-        return;
+  const connectConnector = useCallback(
+    async (id: string) => {
+      // Web has no working per-provider authorization flow yet, so the catalog
+      // is mapped with canConnect: false and the shared panel never invokes
+      // this. Kept non-optimistic for when a real flow lands: POST first, only
+      // reflect state the server confirmed, surface failures to the panel.
+      const connector = SETTINGS_CONNECTORS.find((c) => c.id === id);
+      if (!connector) return;
+      const csrfToken = await getCsrfToken();
+      const res = await fetch('/api/connectors', {
+        method: 'POST',
+        headers: await authedHeaders({
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        }),
+        credentials: 'include',
+        body: JSON.stringify({ connectorId: id, authType: connector.authType }),
+      });
+      if (!res.ok) {
+        // GitHub connects through the App install flow: the server answers POST
+        // with 409 + installStartPath. Follow it instead of surfacing an error.
+        const body = (await res
+          .clone()
+          .json()
+          .catch(() => null)) as { error?: string; installStartPath?: string } | null;
+        if (res.status === 409 && body?.installStartPath && typeof window !== 'undefined') {
+          window.location.href = body.installStartPath;
+          return;
+        }
+        throw new Error(body?.error ?? `Could not connect ${connector.name}.`);
       }
-      throw new Error(body?.error ?? `Could not connect ${connector.name}.`);
-    }
-    const json = (await res.json()) as {
-      connector: { connectorId: string; connectedAt?: string };
-    };
-    setConnectedConnectors((prev) => [
-      ...prev.filter((c) => c.connectorId !== id),
-      { connectorId: json.connector.connectorId, connectedAt: json.connector.connectedAt },
-    ]);
-  }, [authedHeaders]);
+      const json = (await res.json()) as {
+        connector: { connectorId: string; connectedAt?: string };
+      };
+      setConnectedConnectors((prev) => [
+        ...prev.filter((c) => c.connectorId !== id),
+        { connectorId: json.connector.connectorId, connectedAt: json.connector.connectedAt },
+      ]);
+    },
+    [authedHeaders],
+  );
 
   const disconnectConnector = useCallback(
     async (id: string) => {
@@ -908,6 +915,7 @@ export function WebSettingsModal({
     team: (
       <div style={{ display: 'grid', gap: 16 }}>
         <TeamSection />
+        <WorkspacePolicySection />
         <OrganizationSharingSection />
       </div>
     ),
