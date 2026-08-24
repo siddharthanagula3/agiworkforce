@@ -95,9 +95,9 @@ export async function fetchPublishableKeyFromVercel({
     const entryTargets = Array.isArray(entry.target) ? entry.target : [entry.target];
     if (!entryTargets.includes(target)) continue;
     if (typeof entry.value !== 'string' || !entry.value.trim()) continue;
-    if (entry.decrypted !== true) {
+    if (entry.decrypted === false) {
       throw new UndecryptedVercelValueError(
-        `Vercel returned an undecryptable value for ${PUBLISHABLE_KEY_NAME} (sensitive env var, or the token lacks decrypt scope): its "decrypted" field is not true, so the value field is ciphertext, not the key`,
+        `Vercel returned an undecryptable value for ${PUBLISHABLE_KEY_NAME} (sensitive env var, or the token lacks decrypt scope): its "decrypted" field is false, so the value field is ciphertext, not the key`,
       );
     }
     return entry.value.trim();
@@ -156,7 +156,6 @@ async function resolvePublishableKey(env, target, fetchImpl) {
       });
       if (key) return key;
     } catch (error) {
-      if (!(error instanceof UndecryptedVercelValueError)) throw error;
       failures.push(error.message);
     }
   }

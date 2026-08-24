@@ -339,15 +339,23 @@ dashboard and update the repository secret.
 unproven: its `inspect-production` job calls
 `GET /v10/projects/{id}/env?decrypt=true` with the same `VERCEL_TOKEN`, and
 Vercel was returning the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` entry's `value` as
-ciphertext (its `decrypted` field was not `true`) rather than failing the
-request outright — a narrower symptom of a token that cannot decrypt, alongside
-the pull failure above. `scripts/check-clerk-bot-protection.mjs` now checks
-that field before trusting `value`, and falls back to reading the publishable
-key straight off the served production page (it is `NEXT_PUBLIC_`, so it ships
-in the client HTML) when Vercel cannot decrypt it. That workflow no longer
-needs decrypt capability from the token at all — it only needed the key, not
-the ability to read secrets — so its 7/7 failure streak is fixed independently
-of whoever reissues `VERCEL_TOKEN` for this deploy path.
+ciphertext (`decrypted: false`) rather than failing the request outright — a
+narrower symptom of a token that cannot decrypt, alongside the pull failure
+above. `scripts/check-clerk-bot-protection.mjs` now checks that field before
+trusting `value` (only `decrypted === false` is rejected; a plain-type entry
+that omits the field entirely, per Vercel's own docs, is trusted as real
+plaintext), and for `--target production` it falls back to reading the
+publishable key straight off the served production page (it is `NEXT_PUBLIC_`,
+so it ships in the client HTML) whenever the Vercel call fails for _any_
+reason — ciphertext, a 401/403 from an invalid token, or a network error —
+not only the ciphertext case. That means the production check no longer
+depends on `VERCEL_TOKEN` working at all: even if DEPLOY-01's token turns out
+to be fully dead rather than merely under-scoped, this workflow still resolves
+the key from the production page and its 7/7 failure streak is fixed
+independently of whoever reissues `VERCEL_TOKEN` for that deploy path. This
+does not fix DEPLOY-01 itself — `vercel pull` has no such fallback — and
+`--target preview`/`--target development` still depend on a working,
+decrypt-capable token with no fallback of their own.
 
 ## 2026-08-24 RLS hid the owner's subscription from every other administrator
 

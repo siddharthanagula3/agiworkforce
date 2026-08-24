@@ -205,6 +205,29 @@ test('a Vercel entry Vercel could not decrypt is rejected instead of treated as 
   );
 });
 
+test('a plain-type Vercel entry with no decrypted field is trusted as real plaintext', async () => {
+  const fetchImpl = async () =>
+    jsonResponse({
+      envs: [
+        {
+          key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+          type: 'plain',
+          value: FAKE_PUBLISHABLE_KEY,
+          target: ['production'],
+        },
+      ],
+    });
+
+  const key = await fetchPublishableKeyFromVercel({
+    token: 'token',
+    projectId: 'prj',
+    target: 'production',
+    fetchImpl,
+  });
+
+  assert.equal(key, FAKE_PUBLISHABLE_KEY);
+});
+
 test('extractPublishableKeyFromHtml finds the key in a realistic production page', () => {
   assert.equal(
     extractPublishableKeyFromHtml(REALISTIC_PRODUCTION_HTML_FIXTURE),
@@ -267,6 +290,26 @@ test('run falls back to the production page when Vercel cannot decrypt the value
   assert.ok(requested.some((url) => url.startsWith('https://api.vercel.com/')));
   assert.ok(requested.includes('https://agiworkforce.com'));
   assert.ok(requested.some((url) => url.startsWith(`https://${FAKE_HOST}/v1/environment`)));
+});
+
+test('run falls back to the production page when the Vercel call itself fails, not only on undecrypted ciphertext', async () => {
+  const requested = [];
+  const fetchImpl = async (url) => {
+    requested.push(url);
+    if (url.startsWith('https://api.vercel.com/')) {
+      return { ok: false, status: 401, json: async () => ({}) };
+    }
+    if (url === 'https://agiworkforce.com') {
+      return htmlResponse(REALISTIC_PRODUCTION_HTML_FIXTURE);
+    }
+    return jsonResponse(environmentWith({ captchaEnabled: true }));
+  };
+
+  const code = await run([], { VERCEL_TOKEN: 'token', VERCEL_PROJECT_ID: 'prj' }, { fetchImpl });
+
+  assert.equal(code, 0);
+  assert.ok(requested.some((url) => url.startsWith('https://api.vercel.com/')));
+  assert.ok(requested.includes('https://agiworkforce.com'));
 });
 
 test('run reports both failures accurately when Vercel cannot decrypt and the production page has no key', async () => {
