@@ -188,6 +188,8 @@ export interface PluginRegistryEntry {
   requiredConnectors: string[];
   capabilities: PluginCapability[];
   permissions: string[];
+  /** "Try asking" directory copy. Display-only strings, never sent to a model. */
+  examplePrompts: string[];
   versions: PluginVersionRef[];
   distribution: PluginDistribution | null;
   integrity: PluginIntegrity;
