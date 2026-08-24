@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { withRateLimitMock, getNeonDbMock, listMock, getEntryMock } = vi.hoisted(() => ({
-  withRateLimitMock: vi.fn(),
-  getNeonDbMock: vi.fn(),
-  listMock: vi.fn(),
-  getEntryMock: vi.fn(),
-}));
+const { withRateLimitMock, getNeonDbMock, listMock, getEntryMock, countInstallsMock } = vi.hoisted(
+  () => ({
+    withRateLimitMock: vi.fn(),
+    getNeonDbMock: vi.fn(),
+    listMock: vi.fn(),
+    getEntryMock: vi.fn(),
+    countInstallsMock: vi.fn(),
+  }),
+);
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: withRateLimitMock }));
@@ -21,6 +24,15 @@ vi.mock('@/lib/services/plugin-registry-service', async () => {
     ...actual,
     listPluginRegistryEntries: listMock,
     getPluginRegistryEntry: getEntryMock,
+  };
+});
+vi.mock('@/lib/services/plugin-installation-service', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/services/plugin-installation-service')>(
+    '@/lib/services/plugin-installation-service',
+  );
+  return {
+    ...actual,
+    countPluginInstallations: countInstallsMock,
   };
 });
 
@@ -60,6 +72,7 @@ beforeEach(() => {
   getNeonDbMock.mockReturnValue({ query: vi.fn() });
   listMock.mockResolvedValue({ entries: [ENTRY], total: 1 });
   getEntryMock.mockResolvedValue({ entry: ENTRY, manifest: null });
+  countInstallsMock.mockResolvedValue(new Map());
 });
 
 describe('GET /api/plugins', () => {
@@ -74,6 +87,30 @@ describe('GET /api/plugins', () => {
   it('is publicly cacheable', async () => {
     const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
     expect(response.headers.get('cache-control')).toContain('public');
+  });
+
+  it('merges the real install count onto each entry, defaulting to zero', async () => {
+    countInstallsMock.mockResolvedValue(new Map([['github-automation', 7]]));
+    const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    const body = await response.json();
+    expect(body.entries[0].installCount).toBe(7);
+
+    countInstallsMock.mockResolvedValue(new Map());
+    const empty = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    expect((await empty.json()).entries[0].installCount).toBe(0);
+  });
+
+  it('never leaks a user id through the install count', async () => {
+    countInstallsMock.mockResolvedValue(new Map([['github-automation', 1]]));
+    const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    const body = await response.json();
+    expect(JSON.stringify(body)).not.toMatch(/user[_-]?id/i);
+  });
+
+  it('reports 503 when the install count aggregate fails, same as a catalogue failure', async () => {
+    countInstallsMock.mockRejectedValue(new Error('connection refused'));
+    const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    expect(response.status).toBe(503);
   });
 
   it('passes validated filters through to the service', async () => {

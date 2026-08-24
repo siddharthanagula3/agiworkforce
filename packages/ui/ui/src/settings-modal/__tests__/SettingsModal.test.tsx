@@ -538,8 +538,58 @@ describe('Connectors pane (table)', () => {
     expect(namesInOrder()).toEqual(['Engineering Pack', 'Writing Pack']);
   });
 
-  it('renders a category chip on a plugin card', () => {
+  it('offers Most popular only once at least one entry carries a real install count', () => {
     renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG });
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+    fireEvent.click(
+      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
+        name: 'Plugins',
+      }),
+    );
+    expect(
+      within(screen.getByRole('combobox', { name: 'Sort by' })).queryByText('Most popular'),
+    ).toBeNull();
+  });
+
+  it('sorts the plugin catalogue by install count once real counts are wired', () => {
+    renderModal(
+      {},
+      {
+        pluginCatalog: [
+          { ...MULTI_PLUGIN_CATALOG[0]!, installCount: 5 },
+          { ...MULTI_PLUGIN_CATALOG[1]!, installCount: 90 },
+        ],
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+    fireEvent.click(
+      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
+        name: 'Plugins',
+      }),
+    );
+
+    const grid = document.getElementById('settings-directory-plugins')!;
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort by' }), {
+      target: { value: 'popular' },
+    });
+    const namesInOrder = Array.from(grid.querySelectorAll('span.truncate')).map(
+      (el) => el.textContent,
+    );
+    expect(namesInOrder).toEqual(['Writing Pack', 'Engineering Pack']);
+  });
+
+  it('renders a category chip and install count on a plugin card', () => {
+    renderModal(
+      {},
+      {
+        pluginCatalog: [
+          { ...MULTI_PLUGIN_CATALOG[0]!, installCount: 42 },
+          MULTI_PLUGIN_CATALOG[1]!,
+        ],
+      },
+    );
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
     fireEvent.click(
@@ -551,6 +601,7 @@ describe('Connectors pane (table)', () => {
     const grid = within(document.getElementById('settings-directory-plugins')!);
     expect(grid.getByText('Developer')).toBeTruthy();
     expect(grid.getByText('Productivity')).toBeTruthy();
+    expect(grid.getByText('42 installs')).toBeTruthy();
   });
 
   it('shows bundled skills, connectors, and try-asking prompts before installing', () => {
