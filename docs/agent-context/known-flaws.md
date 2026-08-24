@@ -306,6 +306,29 @@ carries a regression test that fails if any timestamp is passed as a cursor
 parameter. Unit tests could not have caught this — they mock the adapter, and a
 mock hands back whatever string the test wrote.
 
+## 2026-08-24 Six desktop tests fail on a local macOS checkout and pass in CI
+
+**Not a defect, and not worth chasing again.** `cargo test --lib mcp_oauth` and
+`core::agi::reflection::tests::test_failure_categorization` fail on a local
+macOS working copy with:
+
+    open settings db: "encrypted database key did not match or the file is
+    corrupt ... file is not a database"
+
+They fail single-threaded too, so it is not the `std::env::set_var` race the
+shape suggests. They fail identically on `origin/main` with and without the
+`remote-databases` feature set, so they are not caused by any dependency bump.
+And CI's `Rust desktop and CLI (default features)` job passes them — confirmed
+green on #427.
+
+The cause is local state: the SQLCipher key is Keychain-backed on macOS and
+`~/Library/Application Support/agiworkforce/agiworkforce.db` persists between
+runs, so a fresh temp database is opened with a key that does not match it. A
+Linux CI runner has neither.
+
+If you see these six locally, they are telling you about your machine. Verify a
+desktop change with `cargo check`/`clippy` plus the CI result, not this suite.
+
 ## 2026-08-24 SCIM authentication verified against production
 
 **SCIMAUTH-01 — VERIFIED, no defect.** Checked because an unauthenticated
