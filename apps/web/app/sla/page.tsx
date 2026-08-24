@@ -135,7 +135,7 @@ export default function SlaPage() {
           </h2>
           <p className="agi-fl-section-lede">
             Plan names match the billing catalogue. Plan pricing is on{' '}
-            <Link href="/pricing" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/pricing" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               /pricing
             </Link>
             ; it is not restated here so there is only one source of truth for it.
@@ -169,7 +169,10 @@ export default function SlaPage() {
             Once paid plans reach general availability, the intended policy is a service credit
             equal to 10% of the monthly fee for each 0.1% below the uptime target in that month,
             capped at 50% of the monthly fee. To claim, email{' '}
-            <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
+            <a
+              href="mailto:contact@agiworkforce.com"
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               contact@agiworkforce.com
             </a>{' '}
             within 30 days of the incident. Final credit terms would be confirmed in your plan

@@ -435,11 +435,14 @@ export default function SecurityPage() {
           </h2>
           <p className="agi-fl-section-lede">
             Named third parties and their regions are listed on{' '}
-            <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
+            <Link
+              href="/subprocessors"
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               /subprocessors
             </Link>
             . Processing terms are on{' '}
-            <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/dpa" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               /dpa
             </Link>
             .
@@ -615,7 +618,10 @@ export default function SecurityPage() {
           </h2>
           <p className="agi-fl-section-lede">
             Email{' '}
-            <a href={contactMailto(CONTACT_SUBJECTS.security)} style={{ color: 'var(--agi-ink)' }}>
+            <a
+              href={contactMailto(CONTACT_SUBJECTS.security)}
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               {CONTACT_EMAIL}
             </a>{' '}
             with <strong>{CONTACT_SUBJECTS.security}</strong> in the subject line. This is the

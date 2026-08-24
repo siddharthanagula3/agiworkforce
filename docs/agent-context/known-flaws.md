@@ -306,6 +306,147 @@ carries a regression test that fails if any timestamp is passed as a cursor
 parameter. Unit tests could not have caught this — they mock the adapter, and a
 mock hands back whatever string the test wrote.
 
+## 2026-08-24 The production deploy cannot authenticate to Vercel
+
+**DEPLOY-01 — BLOCKED_BY_HUMAN.** `deploy-production.yml` now clears every gate
+it owns and fails on the first step that talks to Vercel:
+
+    vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+    Error: Could not retrieve Project Settings.
+
+Everything before it is green, including `Verify the production schema ledger
+without mutation` — the 0087 checksum drift that blocked this for the whole of
+2026-08-24 is fixed and the gate passes.
+
+The identifiers are NOT the problem. Checked against the Vercel API:
+`prj_vDA7A5nZakjYscIsc47JyGqek3Ea` on `team_QAqU2q6NTV4xxn971rfTy1F4`, which is
+exactly what `apps/web/.vercel/project.json` records and the only team on the
+account. So the failure is one of the three GitHub secrets — `VERCEL_TOKEN`
+expired, revoked, or scoped to another account; or `VERCEL_ORG_ID` /
+`VERCEL_PROJECT_ID` holding something other than the two ids above.
+
+No run of this workflow has succeeded in its last forty. Production is
+therefore being promoted some other way, and the automated path has never
+worked. That matters more than the immediate failure: the rollback step, the
+serving-path verification, and the migration-state recording all live in this
+workflow, so whatever is promoting production today is doing it without them.
+
+An agent cannot fix this — it needs someone to reissue the token in the Vercel
+dashboard and update the repository secret.
+
+## 2026-08-24 RLS hid the owner's subscription from every other administrator
+
+**ENTITLEMENT-01 — FIXED.** A user who IS an admin of an Enterprise workspace
+was shown "You do not administer this workspace", and
+`/api/settings/organization/posture` answered `403 SUBSCRIPTION_REQUIRED` with
+`currentPlan: "free"` — on a workspace holding a valid enterprise subscription.
+
+`resolveOrganizationEntitlementPlan` resolves from the OWNER's `subscriptions`
+row. All ten organization routes called it on `getUserScopedDb`, and
+`public.subscriptions` has RLS forced, so a scoped connection sees only the
+caller's own row: the join returned NULL and the plan collapsed to `free`.
+Confirmed directly against Postgres on BOTH branches of that join — with and
+without an organization `stripe_subscription_id` — where the owner resolves
+`enterprise` and the admin resolves NULL.
+
+Blast radius was the entire administration surface: posture, policy,
+model-policy, connector-policy, spend-limit, legal-holds, usage-analytics,
+audit, audit/export, audit/destination. The OWNER was never affected, which is
+exactly why it survived: every live verification in this session had been run as
+the owner, and an owner can always see their own row.
+
+Fixed by resolving entitlement on the privileged connection. Entitlement is an
+organization-level fact rather than the caller's own data, and membership is
+still established on the scoped connection first — both call sites pass an
+organization id taken from the caller's own membership, and
+`requireTeamAdminAccess` asserts membership before asking.
+
+**Why the suite was green.** Unit tests mock the adapter, and a mock always
+"sees" the owner's row, so RLS never applies. Worse, the existing E2E asserted
+`posture must not serve a non-administrator` → 403 and PASSED — it had encoded
+the broken behaviour as the expectation. The new guard is structural: it asserts
+the function takes an organization id ALONE, because a `db` parameter is what
+lets a scoped adapter back in.
+
+This is the same shape as the 0144 grant defect: protection that reads correctly
+until something runs as a real, non-privileged caller.
+
+## 2026-08-24 Six desktop tests fail on a local macOS checkout and pass in CI
+
+**Not a defect, and not worth chasing again.** `cargo test --lib mcp_oauth` and
+`core::agi::reflection::tests::test_failure_categorization` fail on a local
+macOS working copy with:
+
+    open settings db: "encrypted database key did not match or the file is
+    corrupt ... file is not a database"
+
+They fail single-threaded too, so it is not the `std::env::set_var` race the
+shape suggests. They fail identically on `origin/main` with and without the
+`remote-databases` feature set, so they are not caused by any dependency bump.
+And CI's `Rust desktop and CLI (default features)` job passes them — confirmed
+green on #427.
+
+The cause is local state: the SQLCipher key is Keychain-backed on macOS and
+`~/Library/Application Support/agiworkforce/agiworkforce.db` persists between
+runs, so a fresh temp database is opened with a key that does not match it. A
+Linux CI runner has neither.
+
+If you see these six locally, they are telling you about your machine. Verify a
+desktop change with `cargo check`/`clippy` plus the CI result, not this suite.
+
+## 2026-08-24 SCIM authentication verified against production
+
+**SCIMAUTH-01 — VERIFIED, no defect.** Checked because an unauthenticated
+directory-provisioning endpoint would be the worst hole on the enterprise
+surface. Observed live on agiworkforce.com: `/api/scim/v2/Users`, `/Groups` and
+`/ServiceProviderConfig` all answer 401 with no credential, and 401 to a bogus
+bearer token.
+
+The implementation is stronger than a token compare. Every route goes through
+`withScim`, which rate-limits and then calls `authenticateScimRequest` BEFORE
+the handler, so a handler cannot run unauthenticated. The token is looked up by
+prefix with `revoked_at is null and (expires_at is null or expires_at > now())`
+in the SQL rather than in JS; the prefix is compared with `timingSafeEqual`; and
+the secret is verified with `argon2.verify` against a stored hash, so the
+comparison is constant-time by construction and the raw token is never stored.
+Every error path returns null or throws 401 — including a failed entitlement
+lookup, which logs "failing closed" and resolves to an unentitled plan. A
+disabled connection returns 403 rather than 401, which is the right distinction.
+
+Recorded so the next audit does not re-derive it. If those files change, re-run
+the live check rather than trusting this paragraph.
+
+## 2026-08-24 Three-vendor enterprise comparison, checked live rather than from screenshots
+
+The reference corpus at `/Users/siddhartha/Desktop/references_for_agi` was
+captured 2026-08-07 and has no xAI material at all. Checked against live
+sources; four capability rows added (CAP-063..066) and CAP-017 restated.
+
+What the corpus did not have, and what changed:
+
+- **Grok was entirely absent.** xAI sells Business at a published per-seat price
+  with SOC 2 Type II, RBAC, seat management and consolidated billing, and
+  Enterprise adds custom SSO, SCIM, custom RBAC, and an **Enterprise Vault**: a
+  data plane isolated from the consumer environment with application-level
+  encryption and customer-managed keys. It also documents a **team-wide zero
+  data retention** option against a 30-day encrypted default.
+- **Claude's live pricing lists two rows the screenshots did not**: IP
+  allowlisting and network-level access control, and it words role-based access
+  as "fine grained permissioning".
+- **All three sell a compliance API**, and OpenAI's is a Compliance Logs
+  Platform of immutable time-windowed JSONL aimed at SIEM, eDiscovery and DLP.
+  Ours is an on-demand JSONL download. The gap is immutability and coverage,
+  not the existence of an export.
+
+Two honest notes on method. openai.com, x.ai and help.openai.com all answer 403
+to automated fetches, so the OpenAI and xAI rows rest on the captured
+screenshots plus search summaries rather than a primary fetch — treat them as
+good but not first-hand, and re-check before quoting one to a customer. And the
+comparison is about what can be _sold_: Local and BYOK answer the isolation
+question more strongly than any vendor tier by keeping content off our
+infrastructure, but that is architecture, not an administrable control, and a
+procurement checklist asks for the control.
+
 ## 2026-08-24 No Windows or macOS installer exists, and the feature set the Windows job builds could not compile
 
 **DISTRIBUTION-01 — ROOT CAUSE FIXED, RELEASE STILL UNPROVEN.**
