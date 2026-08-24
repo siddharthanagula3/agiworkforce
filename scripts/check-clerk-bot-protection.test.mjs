@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  UndecryptedVercelValueError,
   botProtectionFailures,
+  extractPublishableKeyFromHtml,
+  fetchPublishableKeyFromProductionSite,
   fetchPublishableKeyFromVercel,
   frontendApiHost,
   readBotProtection,
@@ -23,6 +26,23 @@ const environmentWith = ({ captchaEnabled, siteKey = 'captcha-site-key', mode = 
 });
 
 const jsonResponse = (body) => ({ ok: true, status: 200, json: async () => body });
+const htmlResponse = (html) => ({ ok: true, status: 200, text: async () => html });
+
+const REALISTIC_PRODUCTION_HTML_FIXTURE = `<!DOCTYPE html><html><head>
+<script data-clerk-js-script="true" async crossorigin="anonymous" data-clerk-publishable-key="${FAKE_PUBLISHABLE_KEY}"></script>
+</head><body><script>self.__next_f.push([1,"...\\"publishableKey\\":\\"${FAKE_PUBLISHABLE_KEY}\\",\\"__internal_clerkJSUrl\\":\\"$undefined\\"..."])</script></body></html>`;
+
+async function withCapturedStderr(fn) {
+  const original = console.error;
+  const lines = [];
+  console.error = (...args) => lines.push(args.join(' '));
+  try {
+    await fn();
+  } finally {
+    console.error = original;
+  }
+  return lines;
+}
 
 test('the frontend API host is decoded from the publishable key', () => {
   assert.equal(frontendApiHost(FAKE_PUBLISHABLE_KEY), FAKE_HOST);
@@ -124,6 +144,7 @@ test('run reads the production publishable key from Vercel when it is not in the
             key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
             value: FAKE_PUBLISHABLE_KEY,
             target: ['production'],
+            decrypted: true,
           },
         ],
       });
@@ -158,4 +179,173 @@ test('a preview-only publishable key is not mistaken for the production one', as
   });
 
   assert.equal(key, '');
+});
+
+test('a Vercel entry Vercel could not decrypt is rejected instead of treated as the key', async () => {
+  const fetchImpl = async () =>
+    jsonResponse({
+      envs: [
+        {
+          key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+          value: 'ENC[still-ciphertext]',
+          target: ['production'],
+          decrypted: false,
+        },
+      ],
+    });
+
+  await assert.rejects(
+    fetchPublishableKeyFromVercel({
+      token: 'token',
+      projectId: 'prj',
+      target: 'production',
+      fetchImpl,
+    }),
+    UndecryptedVercelValueError,
+  );
+});
+
+test('a plain-type Vercel entry with no decrypted field is trusted as real plaintext', async () => {
+  const fetchImpl = async () =>
+    jsonResponse({
+      envs: [
+        {
+          key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+          type: 'plain',
+          value: FAKE_PUBLISHABLE_KEY,
+          target: ['production'],
+        },
+      ],
+    });
+
+  const key = await fetchPublishableKeyFromVercel({
+    token: 'token',
+    projectId: 'prj',
+    target: 'production',
+    fetchImpl,
+  });
+
+  assert.equal(key, FAKE_PUBLISHABLE_KEY);
+});
+
+test('extractPublishableKeyFromHtml finds the key in a realistic production page', () => {
+  assert.equal(
+    extractPublishableKeyFromHtml(REALISTIC_PRODUCTION_HTML_FIXTURE),
+    FAKE_PUBLISHABLE_KEY,
+  );
+  assert.equal(extractPublishableKeyFromHtml('<html><body>no key here</body></html>'), '');
+  assert.equal(extractPublishableKeyFromHtml(undefined), '');
+});
+
+test('extractPublishableKeyFromHtml prefers the anchored clerk key over an earlier pk_ token', () => {
+  const decoyed = `<script src="https://third-party.example/pk_live_REVPWURFQ09Z"></script>${REALISTIC_PRODUCTION_HTML_FIXTURE}`;
+  assert.equal(extractPublishableKeyFromHtml(decoyed), FAKE_PUBLISHABLE_KEY);
+  assert.equal(
+    extractPublishableKeyFromHtml(
+      '<script src="https://third-party.example/pk_live_REVPWURFQ09Z"></script>',
+    ),
+    'pk_live_REVPWURFQ09Z',
+  );
+});
+
+test('fetchPublishableKeyFromProductionSite extracts the key from the served page', async () => {
+  const requested = [];
+  const fetchImpl = async (url) => {
+    requested.push(url);
+    return htmlResponse(REALISTIC_PRODUCTION_HTML_FIXTURE);
+  };
+
+  const key = await fetchPublishableKeyFromProductionSite({
+    productionUrl: 'https://agiworkforce.com',
+    fetchImpl,
+  });
+
+  assert.equal(key, FAKE_PUBLISHABLE_KEY);
+  assert.deepEqual(requested, ['https://agiworkforce.com']);
+});
+
+test('fetchPublishableKeyFromProductionSite fails accurately when the page has no key', async () => {
+  const fetchImpl = async () => htmlResponse('<html><body>nothing to see</body></html>');
+
+  await assert.rejects(
+    fetchPublishableKeyFromProductionSite({ productionUrl: 'https://agiworkforce.com', fetchImpl }),
+    /no NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY found on the production page/u,
+  );
+});
+
+test('run falls back to the production page when Vercel cannot decrypt the value, and still passes with a good instance', async () => {
+  const requested = [];
+  const fetchImpl = async (url) => {
+    requested.push(url);
+    if (url.startsWith('https://api.vercel.com/')) {
+      return jsonResponse({
+        envs: [
+          {
+            key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+            value: 'ENC[still-ciphertext]',
+            target: ['production'],
+            decrypted: false,
+          },
+        ],
+      });
+    }
+    if (url === 'https://agiworkforce.com') {
+      return htmlResponse(REALISTIC_PRODUCTION_HTML_FIXTURE);
+    }
+    return jsonResponse(environmentWith({ captchaEnabled: true }));
+  };
+
+  const code = await run([], { VERCEL_TOKEN: 'token', VERCEL_PROJECT_ID: 'prj' }, { fetchImpl });
+
+  assert.equal(code, 0);
+  assert.ok(requested.some((url) => url.startsWith('https://api.vercel.com/')));
+  assert.ok(requested.some((url) => url === 'https://agiworkforce.com'));
+  assert.ok(requested.some((url) => url.startsWith(`https://${FAKE_HOST}/v1/environment`)));
+});
+
+test('run falls back to the production page when the Vercel call itself fails, not only on undecrypted ciphertext', async () => {
+  const requested = [];
+  const fetchImpl = async (url) => {
+    requested.push(url);
+    if (url.startsWith('https://api.vercel.com/')) {
+      return { ok: false, status: 401, json: async () => ({}) };
+    }
+    if (url === 'https://agiworkforce.com') {
+      return htmlResponse(REALISTIC_PRODUCTION_HTML_FIXTURE);
+    }
+    return jsonResponse(environmentWith({ captchaEnabled: true }));
+  };
+
+  const code = await run([], { VERCEL_TOKEN: 'token', VERCEL_PROJECT_ID: 'prj' }, { fetchImpl });
+
+  assert.equal(code, 0);
+  assert.ok(requested.some((url) => url.startsWith('https://api.vercel.com/')));
+  assert.ok(requested.some((url) => url === 'https://agiworkforce.com'));
+});
+
+test('run reports both failures accurately when Vercel cannot decrypt and the production page has no key', async () => {
+  const fetchImpl = async (url) => {
+    if (url.startsWith('https://api.vercel.com/')) {
+      return jsonResponse({
+        envs: [
+          {
+            key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+            value: 'ENC[still-ciphertext]',
+            target: ['production'],
+            decrypted: false,
+          },
+        ],
+      });
+    }
+    return htmlResponse('<html><body>nothing to see</body></html>');
+  };
+
+  const lines = await withCapturedStderr(async () => {
+    const code = await run([], { VERCEL_TOKEN: 'token', VERCEL_PROJECT_ID: 'prj' }, { fetchImpl });
+    assert.equal(code, 1);
+  });
+
+  const reported = lines.join('\n');
+  assert.match(reported, /undecryptable value/u);
+  assert.match(reported, /no NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY found on the production page/u);
 });
