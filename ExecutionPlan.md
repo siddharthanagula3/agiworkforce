@@ -3949,6 +3949,22 @@ from slice 1 are closed: `sidebar.noConversations` now resolves in the `chat`
 namespace it is actually read from, and `composer.queueHint`'s multi-line
 `t(` call is now visible to the scan.
 
+**Slice 2 punctuation regression fixed — 2026-08-24.** Review caught every
+genuinely new sentence-final Hindi string across the four touched files
+(`chat.json`, `common.json`, `models.json`, `settings.json`) using a Latin
+period instead of the catalogue's established Devanagari danda `।` —
+`auth.json`/`errors.json`/pre-existing `chat.json` strings are 27/27 `।`, 0
+`.`. The terminology harvest that correctly avoided `v3.json` for key
+namespacing apparently still consulted it (the only real-namespace-adjacent
+file that uses `.`) for punctuation register. Retranslated the 16
+sentence-final strings plus one internal sentence boundary in
+`goalHandoff.offer` (17 replacements total, punctuation only, zero key or
+placeholder changes) to end clauses with `।`. No such punctuation-consistency
+script exists in the repo to correct — the claim that one ran was wrong, not
+just its source file. `check:i18n-parity` re-run clean at baseline 0;
+`@agiworkforce/ui` and `@agiworkforce/unified-chat` suites re-run clean
+(133 and 1248 tests).
+
 ### i18n ratchet: the untranslated-default count can no longer grow — 2026-08-21
 
 Translating 254 strings into 11 languages is a founder decision, but stopping

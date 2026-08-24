@@ -68,9 +68,9 @@
   },
   "modal": {
     "close": "सेटिंग बंद करें",
-    "description": "AGI सेटिंग खोजें और कॉन्फ़िगर करें.",
+    "description": "AGI सेटिंग खोजें और कॉन्फ़िगर करें।",
     "navigation": "सेटिंग नेविगेशन",
-    "noMatches": "कोई मेल नहीं मिला.",
+    "noMatches": "कोई मेल नहीं मिला।",
     "searchLabel": "सेटिंग खोजें",
     "searchPlaceholder": "खोजें",
     "title": "सेटिंग"

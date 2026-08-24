@@ -103,11 +103,11 @@
   "loadingMessage": "संदेश लोड हो रहा है",
   "loadingRow": "पंक्ति लोड हो रही है",
   "nextSlide": "अगली स्लाइड",
-  "noResultsFound": "कोई परिणाम नहीं मिला.",
+  "noResultsFound": "कोई परिणाम नहीं मिला।",
   "pageOf": "{{total}} में से पृष्ठ {{page}}",
   "pagination": "पेज नेविगेशन",
   "previous": "पिछला",
   "previousSlide": "पिछली स्लाइड",
   "rowsPerPage": "प्रति पृष्ठ पंक्तियाँ",
-  "rowsSelected": "{{total}} में से {{selected}} पंक्ति(याँ) चयनित."
+  "rowsSelected": "{{total}} में से {{selected}} पंक्ति(याँ) चयनित।"
 }
