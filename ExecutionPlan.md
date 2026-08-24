@@ -2299,7 +2299,7 @@ runs) and cancelling is self-serve. The two `profiles` columns were sufficient
 as they stood; no migration was needed. Tests: 6 server-route tests on the
 cancel endpoint (happy path, nothing pending, expired window, missing
 columns, unauthenticated, CSRF/rate-limit rejection, caller-scoped params), 6
-on the status GET, 6 UI tests (pending render, expired-window render with no
+on the status GET, 5 UI tests (pending render, expired-window render with no
 cancel control, successful cancel restoring the trigger, failure path leaving
 the account scheduled, nothing-pending render), and the `delete-account-copy`
 suite was rewritten to pin the new invariant (self-serve copy, endpoint

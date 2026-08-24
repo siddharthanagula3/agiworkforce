@@ -440,6 +440,7 @@ export function AccountSection() {
             <button
               type="button"
               data-testid="delete-account-trigger"
+              disabled={deletionStatus.isLoading}
               onClick={() => {
                 setDeleteConfirmInput('');
                 deleteAccountMutation.reset();
