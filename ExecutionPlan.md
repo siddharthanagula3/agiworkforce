@@ -3889,6 +3889,32 @@ keys, then failed to account for inline defaults and reported 232. Neither was
 real. The answer only came from reading how `t()` is actually called and how the
 catalogue is actually shaped.
 
+**Slice 1 (sidebar + selector + composer) landed — 2026-08-24.** By the time
+this slice started the live count had already drifted from 254 to 230 (some
+other work resolved 24 stray keys outside these three surfaces). The ratchet's
+own scan, not a manual grep, was used as the inventory: 56 sidebar + 36
+selector + 34 composer = 126 keys, all resolving to `useUiTranslation('chat')`
+(sidebar, composer) or `useUiTranslation('models')` (selector), so the real
+catalogue location is `sidebar`/`composer` in `chat.json` and `selector` in
+`models.json` — not the unrelated `v3.json` `sidebar` object, which is a
+different i18next namespace `t()` never reads for these keys. All 126 keys now
+carry real translations (not machine-translated placeholders) in all 12
+locales, verified by rendering `Sidebar`/`SendButton`/`ModelSelector` against
+the real catalogue bundles in a non-English locale. Baseline dropped 254 → 104.
+Remaining, unchanged by this slice:
+
+    stream 14 · bubble 12 · research 11 · stats 9 · header 9 · interface 8
+    modal 7 · list 5 · goalHandoff 3 · projects 2 · 24 further singleton keys
+
+Two related ratchet blind spots surfaced during this slice, left unfixed as
+out of scope: `sidebar.noConversations` is not in the 254/104 count because
+`v3.json` happens to define a same-named key in a namespace the component
+never reads, so the ratchet's namespace-less `catalogueHas()` treats it as
+covered — it likely still renders English in production. And
+`composer.queueHint` in `SendButton.tsx` is invisible to the ratchet's `grep
+-h` line-based scan because the key and its default string sit on different
+source lines. Neither was in this slice's assigned inventory.
+
 ### i18n ratchet: the untranslated-default count can no longer grow — 2026-08-21
 
 Translating 254 strings into 11 languages is a founder decision, but stopping
@@ -3908,6 +3934,10 @@ The message tells the next person what to do — add the key to en and translate
 it, or lower the baseline deliberately — and the check also reports when the
 count drops below the baseline, so the number ratchets down as work lands rather
 than silently drifting.
+
+Baseline lowered 254 → 104 on 2026-08-24 as WEB-CORE-CHAT-UI-NOT-LOCALISED-01
+slice 1 landed (see above); the drop matched the 126 slice-1 keys exactly, with
+`check:i18n-parity` re-run clean at the new baseline.
 
 ### Accessibility sweep: icon-only buttons — no defect found — 2026-08-21
 
