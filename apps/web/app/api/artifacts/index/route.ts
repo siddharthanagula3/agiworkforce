@@ -9,7 +9,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 /**
- * The account-wide artifact index (migration 0120).
+ * The account-wide artifact index (migration 0121).
  *
  *   GET /api/artifacts/index        - newest indexed artifacts for the caller
  *   GET /api/artifacts/index?limit= - bounded page
