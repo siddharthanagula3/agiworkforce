@@ -9,8 +9,11 @@ import {
   fetchPublishableKeyFromVercel,
   frontendApiHost,
   readBotProtection,
+  resolveProductionWebUrl,
   run,
 } from './check-clerk-bot-protection.mjs';
+
+const PRODUCTION_WEB_URL_DEFAULT = 'https://agiworkforce.com';
 
 const FAKE_HOST = 'clerk.example.test';
 const FAKE_PUBLISHABLE_KEY = `pk_test_${Buffer.from(`${FAKE_HOST}$`).toString('base64')}`;
@@ -48,6 +51,44 @@ test('the frontend API host is decoded from the publishable key', () => {
   assert.equal(frontendApiHost(FAKE_PUBLISHABLE_KEY), FAKE_HOST);
   assert.equal(frontendApiHost('not-a-publishable-key'), '');
   assert.equal(frontendApiHost(undefined), '');
+});
+
+test('resolveProductionWebUrl keeps a real http(s) URL as-is', () => {
+  assert.equal(
+    resolveProductionWebUrl('https://staging.agiworkforce.com'),
+    'https://staging.agiworkforce.com',
+  );
+  assert.equal(resolveProductionWebUrl('http://localhost:3000'), 'http://localhost:3000');
+});
+
+test('resolveProductionWebUrl falls back to the default on unset or unparsable junk', () => {
+  // The exact failure this guards: PRODUCTION_WEB_URL was found set to the
+  // literal "-" in the production-web GitHub env, which reached fetch() and
+  // aborted the monitor with "Failed to parse URL from -" instead of
+  // observing the real site.
+  assert.equal(resolveProductionWebUrl('-'), PRODUCTION_WEB_URL_DEFAULT);
+  assert.equal(resolveProductionWebUrl(''), PRODUCTION_WEB_URL_DEFAULT);
+  assert.equal(resolveProductionWebUrl(undefined), PRODUCTION_WEB_URL_DEFAULT);
+  assert.equal(resolveProductionWebUrl('   '), PRODUCTION_WEB_URL_DEFAULT);
+  assert.equal(resolveProductionWebUrl('not a url'), PRODUCTION_WEB_URL_DEFAULT);
+});
+
+test('resolveProductionWebUrl rejects a non-http(s) scheme even when it parses cleanly', () => {
+  assert.equal(resolveProductionWebUrl('ftp://x'), PRODUCTION_WEB_URL_DEFAULT);
+});
+
+test('run observes production through the default origin when PRODUCTION_WEB_URL is junk, instead of aborting', async () => {
+  const requested = [];
+  const fetchImpl = async (url) => {
+    requested.push(url);
+    if (url === PRODUCTION_WEB_URL_DEFAULT) return htmlResponse(REALISTIC_PRODUCTION_HTML_FIXTURE);
+    return jsonResponse(environmentWith({ captchaEnabled: true }));
+  };
+
+  const code = await run([], { PRODUCTION_WEB_URL: '-' }, { fetchImpl });
+
+  assert.equal(code, 0);
+  assert.ok(requested.includes(PRODUCTION_WEB_URL_DEFAULT));
 });
 
 test('disabled sign-up bot protection is a failure', () => {
