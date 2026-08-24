@@ -62,5 +62,17 @@
   "saving": "Salvataggio...",
   "resetToDefaults": "Ripristina Predefiniti",
   "confirmReset": "Sei sicuro di voler ripristinare tutte le impostazioni predefinite?",
-  "translationScope": "Traduce il sito pubblico, i prezzi e alcune etichette della chat. Le impostazioni e la maggior parte delle altre schermate restano in inglese."
+  "translationScope": "Traduce il sito pubblico, i prezzi e alcune etichette della chat. Le impostazioni e la maggior parte delle altre schermate restano in inglese.",
+  "connectors": {
+    "filter": "Filtra connettori"
+  },
+  "modal": {
+    "close": "Chiudi impostazioni",
+    "description": "Cerca e configura le impostazioni di AGI.",
+    "navigation": "Navigazione impostazioni",
+    "noMatches": "Nessuna corrispondenza.",
+    "searchLabel": "Cerca nelle impostazioni",
+    "searchPlaceholder": "Cerca",
+    "title": "Impostazioni"
+  }
 }

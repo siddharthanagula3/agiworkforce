@@ -62,5 +62,17 @@
   "saving": "Salvando...",
   "resetToDefaults": "Redefinir para Padrões",
   "confirmReset": "Tem certeza que deseja redefinir todas as configurações para os padrões?",
-  "translationScope": "Traduz o site público, os preços e alguns rótulos do chat. As configurações e a maioria das outras telas continuam em inglês."
+  "translationScope": "Traduz o site público, os preços e alguns rótulos do chat. As configurações e a maioria das outras telas continuam em inglês.",
+  "connectors": {
+    "filter": "Filtrar conectores"
+  },
+  "modal": {
+    "close": "Fechar configurações",
+    "description": "Pesquise e ajuste as configurações do AGI.",
+    "navigation": "Navegação de configurações",
+    "noMatches": "Nenhuma correspondência.",
+    "searchLabel": "Pesquisar configurações",
+    "searchPlaceholder": "Pesquisar",
+    "title": "Configurações"
+  }
 }

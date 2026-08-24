@@ -62,5 +62,17 @@
   "saving": "保存中...",
   "resetToDefaults": "デフォルトに戻す",
   "confirmReset": "すべての設定をデフォルトに戻してよろしいですか？",
-  "translationScope": "公開サイト、料金ページ、一部のチャット表示を翻訳します。設定やその他の多くの画面は英語のままです。"
+  "translationScope": "公開サイト、料金ページ、一部のチャット表示を翻訳します。設定やその他の多くの画面は英語のままです。",
+  "connectors": {
+    "filter": "コネクタをフィルター"
+  },
+  "modal": {
+    "close": "設定を閉じる",
+    "description": "AGIの設定を検索・変更できます。",
+    "navigation": "設定ナビゲーション",
+    "noMatches": "一致する項目はありません。",
+    "searchLabel": "設定を検索",
+    "searchPlaceholder": "検索",
+    "title": "設定"
+  }
 }

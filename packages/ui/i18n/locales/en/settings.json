@@ -62,5 +62,17 @@
   "saving": "Saving...",
   "resetToDefaults": "Reset to Defaults",
   "confirmReset": "Are you sure you want to reset all settings to defaults?",
-  "translationScope": "Translates the public site, pricing, and some chat labels. Settings and most other screens are still English."
+  "translationScope": "Translates the public site, pricing, and some chat labels. Settings and most other screens are still English.",
+  "connectors": {
+    "filter": "Filter connectors"
+  },
+  "modal": {
+    "close": "Close settings",
+    "description": "Search and configure AGI settings.",
+    "navigation": "Settings navigation",
+    "noMatches": "No matches.",
+    "searchLabel": "Search settings",
+    "searchPlaceholder": "Search",
+    "title": "Settings"
+  }
 }

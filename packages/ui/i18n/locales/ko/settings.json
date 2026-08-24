@@ -62,5 +62,17 @@
   "saving": "저장 중...",
   "resetToDefaults": "기본값으로 재설정",
   "confirmReset": "모든 설정을 기본값으로 재설정하시겠습니까?",
-  "translationScope": "공개 사이트, 요금제 페이지, 일부 채팅 라벨을 번역합니다. 설정과 대부분의 다른 화면은 영어로 유지됩니다."
+  "translationScope": "공개 사이트, 요금제 페이지, 일부 채팅 라벨을 번역합니다. 설정과 대부분의 다른 화면은 영어로 유지됩니다.",
+  "connectors": {
+    "filter": "커넥터 필터링"
+  },
+  "modal": {
+    "close": "설정 닫기",
+    "description": "AGI 설정을 검색하고 구성합니다.",
+    "navigation": "설정 탐색",
+    "noMatches": "일치하는 항목이 없습니다.",
+    "searchLabel": "설정 검색",
+    "searchPlaceholder": "검색",
+    "title": "설정"
+  }
 }

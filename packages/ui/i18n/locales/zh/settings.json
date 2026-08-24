@@ -62,5 +62,17 @@
   "saving": "保存中...",
   "resetToDefaults": "恢复默认值",
   "confirmReset": "确定要将所有设置恢复为默认值吗？",
-  "translationScope": "可翻译公开网站、价格页面和部分聊天标签。设置及大多数其他界面仍为英文。"
+  "translationScope": "可翻译公开网站、价格页面和部分聊天标签。设置及大多数其他界面仍为英文。",
+  "connectors": {
+    "filter": "筛选连接器"
+  },
+  "modal": {
+    "close": "关闭设置",
+    "description": "搜索并配置 AGI 设置。",
+    "navigation": "设置导航",
+    "noMatches": "无匹配项。",
+    "searchLabel": "搜索设置",
+    "searchPlaceholder": "搜索",
+    "title": "设置"
+  }
 }
