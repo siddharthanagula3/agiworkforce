@@ -256,24 +256,27 @@ export async function drainAuditDestination(
     };
   }
 
-  const cursorAt = toIso(row.last_delivered_at);
-  const params: unknown[] = [organizationId];
-  let predicate = '';
-  if (cursorAt && row.last_delivered_id) {
-    params.push(cursorAt, row.last_delivered_id);
-    predicate = 'and (created_at, id) > ($2::timestamptz, $3::uuid)';
-  }
-  params.push(AUDIT_STREAM_BATCH);
-
+  // The cursor is compared inside the database and never round-trips through
+  // JS. `timestamptz` holds microseconds and a JS Date holds milliseconds, so
+  // reading it out and passing it back as a parameter truncates it — and a
+  // truncated cursor is strictly LESS than the row it came from, which selects
+  // that row again on every drain. Joining the destination row in keeps the
+  // full precision on both sides of the comparison.
   const events = await db.query<StreamableEvent>(
-    `select id, organization_id, actor_user_id, surface, action, resource_type,
-            resource_id, outcome, severity, metadata, created_at
-       from public.enterprise_audit_events
-      where organization_id = $1
-        ${predicate}
-      order by created_at asc, id asc
-      limit $${params.length}`,
-    params,
+    `select e.id, e.organization_id, e.actor_user_id, e.surface, e.action, e.resource_type,
+            e.resource_id, e.outcome, e.severity, e.metadata, e.created_at
+       from public.enterprise_audit_events e
+       cross join public.organization_audit_destinations d
+      where e.organization_id = $1
+        and d.organization_id = $1
+        and (
+          d.last_delivered_at is null
+          or d.last_delivered_id is null
+          or (e.created_at, e.id) > (d.last_delivered_at, d.last_delivered_id)
+        )
+      order by e.created_at asc, e.id asc
+      limit $2`,
+    [organizationId, AUDIT_STREAM_BATCH],
   );
 
   if (events.length === 0) {
@@ -317,10 +320,13 @@ export async function drainAuditDestination(
   if (succeeded && last) {
     await db.query(
       `update public.organization_audit_destinations
-          set last_delivered_at = $2, last_delivered_id = $3,
-              last_attempt_at = now(), last_status = $4, consecutive_failures = 0
+          set last_delivered_at = coalesce(
+                (select created_at from public.enterprise_audit_events where id = $2),
+                last_delivered_at),
+              last_delivered_id = $2,
+              last_attempt_at = now(), last_status = $3, consecutive_failures = 0
         where organization_id = $1`,
-      [organizationId, toIso(last.created_at), last.id, `HTTP ${status}`],
+      [organizationId, last.id, `HTTP ${status}`],
     );
     return { organizationId, delivered: events.length, status: 'delivered', error: null };
   }
