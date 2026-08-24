@@ -185,6 +185,16 @@ export const rateLimitConfigs = {
     window: '1 h', // 3 deletion requests per hour - irreversible operation
     failClosed: true, // Security-sensitive: block if Redis fails
   },
+  'account-deletion-status': {
+    limit: 30,
+    window: '1 m', // read-only status check, polled on settings load
+    failClosed: false,
+  },
+  'account-deletion-cancel': {
+    limit: 10,
+    window: '1 h', // account-lifecycle mutation, generous enough for retries
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
   'user-data-export': {
     limit: 5,
     window: '1 h', // 5 export requests per hour - data portability

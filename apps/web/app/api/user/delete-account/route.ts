@@ -53,6 +53,59 @@ function activeSubscriptionMessage(subscription: SubscriptionInfo): string {
   return `Cancel your ${plan} plan before deleting your account. Nothing was deleted, and billing continues until you cancel in Settings > Billing. Email ${CONTACT_EMAIL} if you need help.`;
 }
 
+interface DeletionScheduleRow {
+  deletion_requested_at: string | null;
+  deletion_scheduled_for: string | null;
+}
+
+export async function GET(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'account-deletion-status');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  let userId: string;
+  try {
+    const authResult = await getClerkAuthUser(request);
+    userId = authResult.userId;
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
+  }
+
+  const db = getNeonDb();
+  let row: DeletionScheduleRow | undefined;
+  try {
+    const rows = await db.query<DeletionScheduleRow>(
+      `select deletion_requested_at, deletion_scheduled_for from profiles where id = $1`,
+      [userId],
+    );
+    row = rows[0];
+  } catch (error) {
+    if (!isMissingDeletionColumns(error)) {
+      logger.error(
+        { userId, error: error instanceof Error ? error.message : String(error) },
+        'Could not read account deletion status',
+      );
+      return NextResponse.json(
+        { error: 'Could not read account deletion status.' },
+        { status: 500, headers: SECURITY_HEADERS },
+      );
+    }
+  }
+
+  const scheduledFor = row?.deletion_scheduled_for ?? null;
+  const pending = scheduledFor !== null;
+  const canCancel = pending && new Date(scheduledFor).getTime() > Date.now();
+
+  return NextResponse.json(
+    {
+      pending,
+      canCancel,
+      requestedAt: pending ? (row?.deletion_requested_at ?? null) : null,
+      scheduledFor,
+    },
+    { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
+  );
+}
+
 export async function DELETE(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'user-data-delete');
   if (rateLimitResponse) return rateLimitResponse;
@@ -195,7 +248,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json(
       {
-        message: `Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. To stop this, email ${CONTACT_EMAIL} before then.`,
+        message: `Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. Sign back in and cancel from Settings > Account any time before then to keep your account.`,
         scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       },
       { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },

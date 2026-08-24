@@ -77,8 +77,8 @@ export default function DataRightsPage() {
                 <td>
                   Request it from account settings. Erasure is scheduled 24 hours out and then
                   performed by a daily job, which also deletes your identity at our authentication
-                  provider. You get no confirmation email and there is no self-serve cancel, so
-                  inside that window you must reach us.
+                  provider. You get no confirmation email, but cancellation is self-serve: sign back
+                  in and cancel from Settings &gt; Account any time inside that window.
                 </td>
               </tr>
               <tr>

@@ -581,10 +581,9 @@ export default function DpaPage() {
             <strong>Deletion.</strong> An account deletion request records a deletion timestamp and
             schedules erasure 24 hours later. A daily job then erases user-scoped records and the
             stored objects belonging to that account and deletes the identity at the authentication
-            provider. Two limits are stated plainly because the product has them: no confirmation
-            email is sent, because the product has no account-lifecycle mailing path; and there is
-            no self-serve cancellation of a scheduled deletion, so a user who changes their mind
-            within the 24-hour window must reach support.
+            provider. No confirmation email is sent, because the product has no account-lifecycle
+            mailing path. Cancellation is self-serve: a user who changes their mind can sign back in
+            and cancel from Settings &gt; Account any time within the 24-hour window.
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16 }}>
             <strong>Backups.</strong> Database and object-storage snapshots are governed by the
