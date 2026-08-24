@@ -2273,9 +2273,54 @@ support is the only route inside that window. Four tests guard it, including one
 that fails if a real cancel path is ever added — at which point the copy should
 be revisited in the same change rather than silently drifting true again.
 
-STILL OPEN: a real cancel endpoint nulling the two `profiles` columns is the
-better product answer. The copy fix is the P1; the endpoint is a product
-decision.
+DONE (follow-up — 2026-08-24): the real cancel endpoint now exists.
+`POST /api/user/delete-account/cancel` verifies the caller owns the pending
+deletion (scoped by the authenticated `userId`, same as the schedule route),
+nulls `deletion_requested_at`/`deletion_scheduled_for` in one conditional
+`UPDATE ... WHERE deletion_scheduled_for > now()`, and refuses with a 409 and
+an honest message once that condition is false — so cancelling past the
+deadline can never resurrect data the purge cron has already started erasing.
+Cancelling when nothing is pending is a 200 no-op, not a 500. The cancellation
+is recorded via `recordAuditEvent` with `account_deletion_cancelled`, the same
+pseudonymized `subjectRef` domain (`delete-account-subject`) as the scheduling
+event, so the two correlate in the audit trail exactly as scheduling does.
+`GET /api/user/delete-account` now reports `{ pending, canCancel, requestedAt,
+scheduledFor }` so the settings UI can read the state without guessing.
+`AccountSection.tsx` renders the pending-deletion block with its deadline and
+a Cancel deletion control (app-standard `AlertDialog` confirm) whenever
+`pending` is true, replacing the Delete account trigger; a successful cancel
+writes the deletion-status query back to "nothing pending" directly from the
+response, so the UI is restored without a manual refresh. The delete
+confirmation dialog and `app/privacy/page.tsx` §07 no longer say cancellation
+requires contacting support — both now say to sign back in and cancel from
+Settings > Account before the deadline, which is accurate now that signing
+back in is possible (the Clerk identity is not deleted until the purge cron
+runs) and cancelling is self-serve. The two `profiles` columns were sufficient
+as they stood; no migration was needed. Tests: 6 server-route tests on the
+cancel endpoint (happy path, nothing pending, expired window, missing
+columns, unauthenticated, CSRF/rate-limit rejection, caller-scoped params), 6
+on the status GET, 5 UI tests (pending render, expired-window render with no
+cancel control, successful cancel restoring the trigger, failure path leaving
+the account scheduled, nothing-pending render), and the `delete-account-copy`
+suite was rewritten to pin the new invariant (self-serve copy, endpoint
+actually nulls both columns, only while `deletion_scheduled_for > now()`)
+instead of the old one it superseded.
+
+DONE (follow-up — 2026-08-24): a verifier pass on the cancel-endpoint branch
+caught two things the feature landing above missed. First, the new
+`cancel/route.ts` file shifted the RLS-coverage counts that
+`app/trust/rls-coverage-claim.test.ts` measures directly off the API tree
+(owner-connection routes 112 → 113, database-backed 147 → 148); `/trust`
+still said 112/147 and the test failed. Re-measured with the test's own
+`measure()` and updated the page to 35 of 148 database-backed, 113 on the
+owner connection. Second, "fix the misleading copy" in the entry above was
+incomplete: the DELETE route's own success message (shown in the same dialog,
+directly above the corrected self-serve line) still told the user to email
+support to cancel, and three public pages the copy-regression test does not
+scan — `/faq`, `/terms`, `/data-use` — plus `/dpa` and `/privacy/requests`
+(found by a broader grep, not in the original finding) still asserted no
+self-serve cancellation exists. All five now say cancellation is self-serve
+via Settings > Account, matching `/privacy` §07 and the actual endpoint.
 
 ### P1: usage bars failed optimistic — 2026-08-20
 

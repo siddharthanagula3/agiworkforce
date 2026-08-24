@@ -287,12 +287,12 @@ export default function TermsPage() {
             You can export your data at any time while your account is active. An account deletion
             request schedules permanent erasure 24 hours later; a daily job then removes your
             user-scoped records and stored files and deletes your identity at our authentication
-            provider. Two limits, stated plainly: no confirmation email is sent, because the product
-            has no account-lifecycle mailing path, and there is no self-serve way to cancel a
-            scheduled deletion &mdash; within the 24-hour window, contact support. Sections that by
-            their nature survive &mdash; licence restrictions, your content representations,
-            intellectual property, disclaimers, limitation of liability, indemnification, governing
-            law and disputes &mdash; survive termination.
+            provider. No confirmation email is sent, because the product has no account-lifecycle
+            mailing path, but cancellation is self-serve: sign back in and cancel from Settings &gt;
+            Account any time within the 24-hour window. Sections that by their nature survive
+            &mdash; licence restrictions, your content representations, intellectual property,
+            disclaimers, limitation of liability, indemnification, governing law and disputes
+            &mdash; survive termination.
           </p>
         </section>
 

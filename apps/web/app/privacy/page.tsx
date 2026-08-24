@@ -864,8 +864,8 @@ export default function PrivacyPage() {
                 <td>
                   Account settings. Erasure is scheduled 24 hours out, then performed by a daily job
                   that also deletes your identity at our authentication provider. Read the survivors
-                  table in section 05 first &mdash; and note there is no self-serve cancel inside
-                  that 24-hour window.
+                  table in section 05 first. Cancellation is self-serve: sign back in and cancel
+                  from Settings &gt; Account any time before the 24 hours are up.
                 </td>
               </tr>
               <tr>
@@ -954,11 +954,13 @@ export default function PrivacyPage() {
                 <td style={{ verticalAlign: 'top' }}>Deletion</td>
                 <td>
                   Request account deletion from the product. Erasure is scheduled 24 hours later and
-                  then performed. Two limits stated plainly: you get no confirmation email, because
-                  the only email this product sends is support escalation, scheduled-task
-                  notifications and operational alerts to us &mdash; there is no account-lifecycle
-                  mail; and there is no self-serve way to cancel a scheduled deletion, so if you
-                  change your mind inside the 24-hour window you must reach support.
+                  then performed. You get no confirmation email, because the only email this product
+                  sends is support escalation, scheduled-task notifications and operational alerts
+                  to us &mdash; there is no account-lifecycle mail. Cancellation is self-serve: sign
+                  back in and cancel from Settings &gt; Account any time before the 24 hours are up,
+                  and the request is discarded without touching your data. Once that window has
+                  closed the product refuses to cancel, so the request cannot be revived after
+                  erasure begins.
                 </td>
               </tr>
               <tr>

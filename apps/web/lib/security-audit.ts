@@ -188,6 +188,7 @@ export type AuditEventType =
   | 'billing_portal_opened'
   | 'data_exported'
   | 'account_deletion_requested'
+  | 'account_deletion_cancelled'
   | 'two_factor_disabled'
   | 'admin_policy_changed'
   | 'retention_sweep_completed'
@@ -429,6 +430,7 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'data_exported':
       return 'user_data';
     case 'account_deletion_requested':
+    case 'account_deletion_cancelled':
       return 'account';
     case 'two_factor_disabled':
       return 'two_factor';
