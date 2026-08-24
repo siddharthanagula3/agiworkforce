@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
-import { auth } from '@clerk/nextjs/server';
 import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
 import { THEME_INIT_SCRIPT } from '@/shared/components/seo/theme-init-script';
@@ -141,12 +140,12 @@ export default async function RootLayout({
 
   const gaTrackingId = process.env['NEXT_PUBLIC_GA_TRACKING_ID'];
 
-  // Signed-in: read the account's real, server-stored consent so a brand-new
-  // device's first paint sees it before instrumentation-client.ts decides
-  // whether to init Sentry (WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01).
-  // Signed out or unreadable: fail closed, matching the toggle's own default.
-  const { userId } = await auth();
-  const telemetryConsent = userId ? await readServerTelemetryConsent() : false;
+  // The account's real, server-stored consent, so a brand-new device's first
+  // paint sees it before instrumentation-client.ts decides whether to init
+  // Sentry (WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01). The helper owns the
+  // auth() call inside its catch-all: this layout renders routes the Clerk
+  // proxy matcher excludes, where a bare auth() throws and 500s the page.
+  const telemetryConsent = await readServerTelemetryConsent();
 
   return (
     <html lang="en" suppressHydrationWarning data-telemetry-consent={String(telemetryConsent)}>

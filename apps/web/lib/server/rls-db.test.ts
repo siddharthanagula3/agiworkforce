@@ -161,6 +161,15 @@ describe('getCurrentUserRlsDb', () => {
     expect(rlsWithUser).not.toHaveBeenCalled();
   });
 
+  it('treats a route with no auth context as signed out instead of throwing', async () => {
+    mockAuth.mockRejectedValue(
+      new Error("Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware()"),
+    );
+
+    await expect(getCurrentUserRlsDb()).resolves.toBeNull();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
   it('returns null when the session carries no token', async () => {
     mockAuth.mockResolvedValue({ userId: 'user_1', getToken: async () => null });
 

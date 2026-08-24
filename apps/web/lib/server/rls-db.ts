@@ -113,7 +113,15 @@ export interface CurrentUserRlsDb {
  * signed out, so callers can fail closed instead of crashing the render.
  */
 export async function getCurrentUserRlsDb(): Promise<CurrentUserRlsDb | null> {
-  const { userId, getToken } = await auth();
+  let session: Awaited<ReturnType<typeof auth>>;
+  try {
+    session = await auth();
+  } catch {
+    // Routes the Clerk proxy matcher excludes have no auth context; auth()
+    // throws there, and for this helper that simply means signed out.
+    return null;
+  }
+  const { userId, getToken } = session;
   if (!userId) return null;
   const token = await getToken();
   if (!token) return null;
