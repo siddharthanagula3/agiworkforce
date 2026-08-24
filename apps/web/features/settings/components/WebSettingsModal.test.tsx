@@ -64,6 +64,7 @@ function stubFetch({
   skillFailuresBeforeSuccess = 0,
   installationsFailuresBeforeSuccess = 0,
   installationsFailureStatus = 500,
+  installationsFailureMode = 'status' as 'status' | 'invalid-schema' | 'json-throw',
 } = {}) {
   let connectorRequests = 0;
   let skillRequests = 0;
@@ -102,6 +103,22 @@ function stubFetch({
       const shouldFail = installationsRequests < installationsFailuresBeforeSuccess;
       installationsRequests += 1;
       if (shouldFail) {
+        if (installationsFailureMode === 'invalid-schema') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ installations: 'nope' }),
+          } as Response;
+        }
+        if (installationsFailureMode === 'json-throw') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => {
+              throw new SyntaxError('Unexpected end of JSON input');
+            },
+          } as Response;
+        }
         return {
           ok: false,
           status: installationsFailureStatus,
@@ -223,6 +240,30 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     const githubRow = within(table).getByText('GitHub').closest('tr') as HTMLElement;
     expect(within(githubRow).getByRole('button', { name: /^Connect/ })).toBeTruthy();
 
+    expect(
+      await screen.findByText(
+        'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['an invalid installations schema', 'invalid-schema'],
+    ['an installations JSON parse failure', 'json-throw'],
+  ] as const)('degrades to the scoped notice on %s', async (_label, mode) => {
+    stubFetch({
+      connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }],
+      available: ['notion', 'github'],
+      installationsFailuresBeforeSuccess: Infinity,
+      installationsFailureMode: mode,
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('Notion')).toBeTruthy();
     expect(
       await screen.findByText(
         'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',

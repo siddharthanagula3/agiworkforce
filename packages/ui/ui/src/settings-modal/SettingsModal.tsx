@@ -1630,7 +1630,16 @@ function ConnectorsPanel({
                 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
                 aria-hidden="true"
               />
-              {notice}
+              <span className="flex-1">{notice}</span>
+              {adapter?.retryConnectors ? (
+                <button
+                  type="button"
+                  onClick={() => void adapter.retryConnectors?.()}
+                  className="shrink-0 font-medium underline underline-offset-2 hover:text-foreground"
+                >
+                  Try again
+                </button>
+              ) : null}
             </div>
           ) : null}
 
