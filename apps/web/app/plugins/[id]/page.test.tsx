@@ -31,6 +31,7 @@ describe('PluginDetailPage', () => {
       requiredConnectors: [],
       capabilities: [],
       permissions: [],
+      examplePrompts: [],
       versions: [],
       distribution: null,
       integrity: { sha256: null, signature: null, signatureAlgorithm: null },
