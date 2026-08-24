@@ -95,7 +95,8 @@ describe('conversation branch service', () => {
       .mockResolvedValueOnce([sourceConversation])
       .mockResolvedValueOnce([{ id: '0190a000-0000-7000-8000-0000000000bb' }])
       .mockResolvedValueOnce([{ sibling_count: 0, group_count: 0 }])
-      .mockResolvedValueOnce([targetConversation]);
+      .mockResolvedValueOnce([targetConversation])
+      .mockResolvedValueOnce([]);
     execute.mockResolvedValue(1);
 
     await expect(
@@ -108,7 +109,7 @@ describe('conversation branch service', () => {
 
     expect(db.transaction).toHaveBeenCalledOnce();
     expect(query.mock.calls[1]![0]).toContain('for update');
-    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenCalledTimes(1);
     const [relationSql, relationParams] = execute.mock.calls[0]!;
     expect(relationSql).toContain('insert into public.conversation_branches');
     expect(relationParams).toEqual([
@@ -118,11 +119,12 @@ describe('conversation branch service', () => {
       'user-1',
     ]);
 
-    const [copySql, copyParams] = execute.mock.calls[1]!;
+    const [copySql, copyParams] = query.mock.calls[5]!;
     expect(copySql).toContain('row_number() over');
     expect(copySql).toContain('insert into public.web_messages');
     expect(copySql).toContain('cost_cents');
     expect(copySql).toContain('insert into public.conversation_branch_messages');
+    expect(copySql).toContain("where inserted_messages.role = 'assistant'");
     expect(copyParams).toEqual([
       sourceConversation.id,
       '0190a000-0000-7000-8000-0000000000bb',
