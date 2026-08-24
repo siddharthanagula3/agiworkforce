@@ -41,6 +41,7 @@ interface PluginRegistryRow {
   required_connectors: unknown;
   capabilities: unknown;
   permissions: unknown;
+  example_prompts: unknown;
   versions: unknown;
   manifest: unknown;
   manifest_url: string | null;
@@ -177,6 +178,7 @@ function rowToEntry(row: PluginRegistryRow): PluginRegistryEntry {
     requiredConnectors: normalizeStringList(row.required_connectors),
     capabilities: normalizeCapabilities(row.capabilities),
     permissions: normalizeStringList(row.permissions),
+    examplePrompts: normalizeStringList(row.example_prompts),
     versions: normalizeVersions(row.versions),
     distribution,
     integrity: {
