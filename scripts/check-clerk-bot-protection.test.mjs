@@ -88,7 +88,7 @@ test('run observes production through the default origin when PRODUCTION_WEB_URL
   const code = await run([], { PRODUCTION_WEB_URL: '-' }, { fetchImpl });
 
   assert.equal(code, 0);
-  assert.ok(requested.includes(PRODUCTION_WEB_URL_DEFAULT));
+  assert.ok(requested.some((url) => url === PRODUCTION_WEB_URL_DEFAULT));
 });
 
 test('disabled sign-up bot protection is a failure', () => {
