@@ -6,6 +6,43 @@ Last updated: 2026-08-24
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — plugin directory: real role packs, filters, install counts] — 2026-08-24
+
+### Added
+
+- **Three new installable plugin packs, bundling only skills that really
+  exist.** `db/neon/0145_web_pack_example_prompts.sql` adds `engineering-pack`
+  (code-review, systematic-debugging, frontend-design-review), `writing-pack`
+  (document-creation, presentation-creation, research-and-citations), and
+  `data-pack` (data-analysis, document-creation) as published,
+  `web_installable`, first-party entries with an embedded manifest — the same
+  constraint-satisfying shape `research-pack` already used. The three legacy
+  preview shells (`github-automation`, `calendar-assistant`, `crm-sync`) stay
+  `preview`: their declared skills do not correspond to any real skill, so
+  promoting them would advertise an install that installs nothing.
+  `plugin_registry_entries` also gains `example_prompts`, a directory
+  "Try asking" field on `PluginRegistryEntry.examplePrompts`.
+- **Category filter and a real Sort by control on the Plugins directory tab.**
+  `packages/ui/ui/src/settings-modal/SettingsModal.tsx` gained a category
+  `<select>` (mirroring the Connectors tab) and a Sort by control (Name A-Z,
+  Recently updated, and Most popular once real counts exist), plus a category
+  chip and install count on each card.
+- **Real install counts, computed on the privileged connection.**
+  `countPluginInstallations` in `plugin-installation-service.ts` runs a
+  `COUNT(*) GROUP BY plugin_id` over `plugin_installations` on `getNeonDb()` —
+  never a caller-scoped connection, since that table has FORCE ROW LEVEL
+  SECURITY and would otherwise collapse every count to the caller's own row,
+  the same class of bug `resolveOrganizationEntitlementPlan` was fixed for.
+  The query selects no `user_id`, so who installed a plugin is never
+  observable. `GET /api/plugins` now returns `installCount` per entry;
+  `packages/contracts/types/src/plugins.ts`'s module doc no longer claims no
+  install total is modeled.
+- **The install-confirm surface now shows what a pack actually contains.**
+  Bundled skills and required connectors render as pills, required connectors
+  carry a one-line explainer that installing does not connect them for you,
+  and `examplePrompts` render as an inert "Try asking" list — all before the
+  user clicks Install.
+
 ## [Unreleased — unreachable web controls closed] — 2026-08-24
 
 ### Fixed
