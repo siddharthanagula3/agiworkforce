@@ -62,5 +62,17 @@
   "saving": "Speichern...",
   "resetToDefaults": "Auf Standardwerte zurücksetzen",
   "confirmReset": "Möchten Sie wirklich alle Einstellungen auf die Standardwerte zurücksetzen?",
-  "translationScope": "Übersetzt die öffentliche Website, die Preise und einige Chat-Bezeichnungen. Einstellungen und die meisten anderen Bildschirme bleiben auf Englisch."
+  "translationScope": "Übersetzt die öffentliche Website, die Preise und einige Chat-Bezeichnungen. Einstellungen und die meisten anderen Bildschirme bleiben auf Englisch.",
+  "connectors": {
+    "filter": "Konnektoren filtern"
+  },
+  "modal": {
+    "close": "Einstellungen schließen",
+    "description": "Durchsuchen und konfigurieren Sie die AGI-Einstellungen.",
+    "navigation": "Einstellungsnavigation",
+    "noMatches": "Keine Treffer.",
+    "searchLabel": "Einstellungen suchen",
+    "searchPlaceholder": "Suchen",
+    "title": "Einstellungen"
+  }
 }

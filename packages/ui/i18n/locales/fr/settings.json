@@ -62,5 +62,17 @@
   "saving": "Enregistrement...",
   "resetToDefaults": "Réinitialiser les paramètres par défaut",
   "confirmReset": "Voulez-vous vraiment réinitialiser tous les paramètres par défaut ?",
-  "translationScope": "Traduit le site public, les tarifs et certains libellés du chat. Les paramètres et la plupart des autres écrans restent en anglais."
+  "translationScope": "Traduit le site public, les tarifs et certains libellés du chat. Les paramètres et la plupart des autres écrans restent en anglais.",
+  "connectors": {
+    "filter": "Filtrer les connecteurs"
+  },
+  "modal": {
+    "close": "Fermer les paramètres",
+    "description": "Recherchez et configurez les paramètres d'AGI.",
+    "navigation": "Navigation des paramètres",
+    "noMatches": "Aucune correspondance.",
+    "searchLabel": "Rechercher dans les paramètres",
+    "searchPlaceholder": "Rechercher",
+    "title": "Paramètres"
+  }
 }

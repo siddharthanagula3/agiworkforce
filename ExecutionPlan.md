@@ -3980,6 +3980,56 @@ covered — it likely still renders English in production. And
 -h` line-based scan because the key and its default string sit on different
 source lines. Neither was in this slice's assigned inventory.
 
+**Slice 2 (scanner fix + full remaining inventory) landed — 2026-08-24.** Fixed
+both blind spots in the scanner itself before translating anything, since a
+blind scanner makes any inventory dishonest. `check:i18n-parity` now parses
+whole file contents (not `grep -h`, so a key and its default on different
+source lines are found) and resolves each `t()` call's namespace from the
+nearest preceding `useUiTranslation('<ns>')` / `useTranslation('<ns>')`
+binding for that local variable name in the same file, or from an explicit
+`t('ns:key', ...)` form, falling back to an all-catalogues search (and
+reporting how many calls fell back) only when no binding resolves. Re-run
+against the tree, the honest count came back 113, not 104: the 104 from
+slice 1's inventory, plus `sidebar.noConversations` and `composer.queueHint`
+(the two known blind spots), plus 7 more the namespace-blind scan had been
+silently miscrediting to unrelated `v3.json`/`common.json` entries of the
+same bare key (`stats` grew 9→11, `list` grew 5→7, `settings.modal` grew
+7→8) or had never scanned as a distinct namespace at all (`common` 19 keys
+in `packages/ui/ui` primitives, `models.selector` 3 keys). All 113 resolved
+cleanly to a single namespace — zero calls fell back to the all-catalogues
+search. All 113 now carry real translations (not machine-translated
+placeholders) in all 12 locales: `bubble` 12, `composer` 2, `goalHandoff` 3,
+`header` 9, `interface` 8, `list` 7, `projects` 2, `research` 11, `sidebar`
+4, `stats` 11, `stream` 14 (all `chat.json`), `common` 19, `models.selector`
+3, `settings.connectors` 1, `settings.modal` 7. Terminology was harvested
+from each locale's existing catalogue before coining anything new (e.g.
+reusing the already-translated `sidebar.searchConversations` string for the
+new `interface.searchConversations`, and the established per-locale "token",
+"provider", "runtime", "managed" vocabulary from `settings.json`/`models.json`
+for the new `stats.*`/`models.selector.*` keys) — verified by rendering
+`MessageBubble`, `ConversationStatsPanel` and `Pagination` against the real
+`es`/`ru`/`pt` catalogue bundles and asserting the translated string renders,
+not the English default. Baseline dropped 104 → 0. Both ratchet blind spots
+from slice 1 are closed: `sidebar.noConversations` now resolves in the `chat`
+namespace it is actually read from, and `composer.queueHint`'s multi-line
+`t(` call is now visible to the scan.
+
+**Slice 2 punctuation regression fixed — 2026-08-24.** Review caught every
+genuinely new sentence-final Hindi string across the four touched files
+(`chat.json`, `common.json`, `models.json`, `settings.json`) using a Latin
+period instead of the catalogue's established Devanagari danda `।` —
+`auth.json`/`errors.json`/pre-existing `chat.json` strings are 27/27 `।`, 0
+`.`. The terminology harvest that correctly avoided `v3.json` for key
+namespacing apparently still consulted it (the only real-namespace-adjacent
+file that uses `.`) for punctuation register. Retranslated the 16
+sentence-final strings plus one internal sentence boundary in
+`goalHandoff.offer` (17 replacements total, punctuation only, zero key or
+placeholder changes) to end clauses with `।`. No such punctuation-consistency
+script exists in the repo to correct — the claim that one ran was wrong, not
+just its source file. `check:i18n-parity` re-run clean at baseline 0;
+`@agiworkforce/ui` and `@agiworkforce/unified-chat` suites re-run clean
+(133 and 1248 tests).
+
 ### i18n ratchet: the untranslated-default count can no longer grow — 2026-08-21
 
 Translating 254 strings into 11 languages is a founder decision, but stopping
@@ -4003,6 +4053,15 @@ than silently drifting.
 Baseline lowered 254 → 104 on 2026-08-24 as WEB-CORE-CHAT-UI-NOT-LOCALISED-01
 slice 1 landed (see above); the drop matched the 126 slice-1 keys exactly, with
 `check:i18n-parity` re-run clean at the new baseline.
+
+Baseline lowered 104 → 0 on 2026-08-24 as WEB-CORE-CHAT-UI-NOT-LOCALISED-01
+slice 2 landed (see above). The scanner itself was fixed first — namespace
+resolution and multi-line scanning — which raised the honest inventory from
+104 to 113 before any translation started; all 113 were then translated and
+the baseline dropped to 0. Verified in both directions again: a probe key
+added to `SendButton.tsx` under the `chat` namespace failed the check naming
+the exact file, line and namespace, and reverting the probe passed clean,
+with `git status`/`git diff` confirming the file was fully restored.
 
 ### Accessibility sweep: icon-only buttons — no defect found — 2026-08-21
 
