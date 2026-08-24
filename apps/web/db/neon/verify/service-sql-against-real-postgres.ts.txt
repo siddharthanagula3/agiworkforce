@@ -44,12 +44,19 @@ afterAll(async () => {
   await client?.end();
 });
 
+/** Read from the database rather than hardcoded, so any seeded workspace works. */
+async function db_orgName(): Promise<Array<{ name: string }>> {
+  const r = await client.query('select name from public.organizations where id = $1', [ORG]);
+  return r.rows as Array<{ name: string }>;
+}
+
 describe('service SQL against a real schema', () => {
   it('readWorkspacePosture returns a complete posture', async () => {
     const { readWorkspacePosture } = await import('@/lib/services/workspace-posture-service');
     const posture = await readWorkspacePosture(db, ORG);
 
-    expect(posture.organizationName).toBe('Verified Enterprise Co');
+    const [named] = await db_orgName();
+    expect(posture.organizationName).toBe(named.name);
     expect(posture.groups.length).toBeGreaterThan(4);
     const ids = posture.groups.flatMap((g) => g.signals.map((s) => s.id));
     for (const id of ['sso', 'members', 'seats', 'retention', 'model-policy', 'connector-policy', 'spend-limit', 'siem']) {
