@@ -306,6 +306,37 @@ carries a regression test that fails if any timestamp is passed as a cursor
 parameter. Unit tests could not have caught this — they mock the adapter, and a
 mock hands back whatever string the test wrote.
 
+## 2026-08-24 Three-vendor enterprise comparison, checked live rather than from screenshots
+
+The reference corpus at `/Users/siddhartha/Desktop/references_for_agi` was
+captured 2026-08-07 and has no xAI material at all. Checked against live
+sources; four capability rows added (CAP-063..066) and CAP-017 restated.
+
+What the corpus did not have, and what changed:
+
+- **Grok was entirely absent.** xAI sells Business at a published per-seat price
+  with SOC 2 Type II, RBAC, seat management and consolidated billing, and
+  Enterprise adds custom SSO, SCIM, custom RBAC, and an **Enterprise Vault**: a
+  data plane isolated from the consumer environment with application-level
+  encryption and customer-managed keys. It also documents a **team-wide zero
+  data retention** option against a 30-day encrypted default.
+- **Claude's live pricing lists two rows the screenshots did not**: IP
+  allowlisting and network-level access control, and it words role-based access
+  as "fine grained permissioning".
+- **All three sell a compliance API**, and OpenAI's is a Compliance Logs
+  Platform of immutable time-windowed JSONL aimed at SIEM, eDiscovery and DLP.
+  Ours is an on-demand JSONL download. The gap is immutability and coverage,
+  not the existence of an export.
+
+Two honest notes on method. openai.com, x.ai and help.openai.com all answer 403
+to automated fetches, so the OpenAI and xAI rows rest on the captured
+screenshots plus search summaries rather than a primary fetch — treat them as
+good but not first-hand, and re-check before quoting one to a customer. And the
+comparison is about what can be _sold_: Local and BYOK answer the isolation
+question more strongly than any vendor tier by keeping content off our
+infrastructure, but that is architecture, not an administrable control, and a
+procurement checklist asks for the control.
+
 ## 2026-08-24 No Windows or macOS installer exists, and the feature set the Windows job builds could not compile
 
 **DISTRIBUTION-01 — ROOT CAUSE FIXED, RELEASE STILL UNPROVEN.**
