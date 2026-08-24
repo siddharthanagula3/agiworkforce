@@ -486,6 +486,7 @@ function SkillDownloadAction({
 // ---------------------------------------------------------------------------
 
 type BrowseTab = 'connectors' | 'skills' | 'plugins';
+type PluginSort = 'name' | 'updated';
 
 function DirectoryBrowse({
   adapter,
@@ -503,6 +504,7 @@ function DirectoryBrowse({
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'az' | 'za'>('az');
   const [category, setCategory] = useState('All');
+  const [pluginSort, setPluginSort] = useState<PluginSort>('name');
   const { confirm, dialog: confirmDialog } = useConfirm();
   // WEB-31: installing a pack grants its skills and reuses the connectors it
   // declares, so the grant has to be shown and accepted before the install call
@@ -545,10 +547,24 @@ function DirectoryBrowse({
     () => ['All', ...Array.from(new Set(connectors.map((c) => c.category)))],
     [connectors],
   );
+  const pluginCategories = useMemo(
+    () => [
+      'All',
+      ...Array.from(
+        new Set(plugins.map((pl) => pl.category).filter((c): c is string => Boolean(c))),
+      ),
+    ],
+    [plugins],
+  );
+  const activeCategories = tab === 'plugins' ? pluginCategories : categories;
 
   const q = search.trim().toLowerCase();
   const byName = (a: { name: string }, b: { name: string }) =>
     sort === 'az' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+  const byPluginSort = (a: SettingsPlugin, b: SettingsPlugin) =>
+    pluginSort === 'updated'
+      ? new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
+      : a.name.localeCompare(b.name);
 
   const visibleConnectors = connectors
     .filter((c) => (category === 'All' ? true : c.category === category))
@@ -562,10 +578,11 @@ function DirectoryBrowse({
     )
     .sort(byName);
   const visiblePlugins = plugins
+    .filter((pl) => (category === 'All' ? true : pl.category === category))
     .filter((pl) =>
       q ? pl.name.toLowerCase().includes(q) || pl.description.toLowerCase().includes(q) : true,
     )
-    .sort(byName);
+    .sort(byPluginSort);
 
   const isUsableHere = (connector: SettingsConnector) =>
     connectionById.has(connector.id) || Boolean(connector.canConnect && adapter?.connectConnector);
@@ -654,6 +671,7 @@ function DirectoryBrowse({
 
   const selectTab = (nextTab: BrowseTab) => {
     setTab(nextTab);
+    setCategory('All');
     if (nextTab === 'connectors' && adapter?.connectors === undefined && !connectorsLoading) {
       void adapter?.retryConnectors?.();
     }
@@ -727,9 +745,9 @@ function DirectoryBrowse({
             )}
           />
         </div>
-        {tab === 'connectors' && (
+        {(tab === 'connectors' || tab === 'plugins') && (
           <select
-            aria-label="Filter by type"
+            aria-label="Filter by category"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             className={cn(
@@ -737,24 +755,39 @@ function DirectoryBrowse({
               FOCUS_RING,
             )}
           >
-            {categories.map((cat) => (
+            {activeCategories.map((cat) => (
               <option key={cat} value={cat}>
                 {cat}
               </option>
             ))}
           </select>
         )}
-        <button
-          type="button"
-          onClick={() => setSort((s) => (s === 'az' ? 'za' : 'az'))}
-          aria-label={sort === 'az' ? 'Sort Z to A' : 'Sort A to Z'}
-          className={cn(
-            'h-8 shrink-0 rounded-lg border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
-            FOCUS_RING,
-          )}
-        >
-          {sort === 'az' ? 'A-Z' : 'Z-A'}
-        </button>
+        {tab === 'plugins' ? (
+          <select
+            aria-label="Sort by"
+            value={pluginSort}
+            onChange={(e) => setPluginSort(e.target.value as PluginSort)}
+            className={cn(
+              'h-8 shrink-0 rounded-lg border border-border bg-background px-2 text-xs text-foreground',
+              FOCUS_RING,
+            )}
+          >
+            <option value="name">Name A-Z</option>
+            <option value="updated">Recently updated</option>
+          </select>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSort((s) => (s === 'az' ? 'za' : 'az'))}
+            aria-label={sort === 'az' ? 'Sort Z to A' : 'Sort A to Z'}
+            className={cn(
+              'h-8 shrink-0 rounded-lg border border-border bg-muted/30 px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted',
+              FOCUS_RING,
+            )}
+          >
+            {sort === 'az' ? 'A-Z' : 'Z-A'}
+          </button>
+        )}
       </div>
 
       {/* Card grids */}
@@ -937,9 +970,14 @@ function DirectoryBrowse({
                     <span className="block truncate text-sm font-medium text-foreground">
                       {plugin.name}
                     </span>
-                    {plugin.author && (
-                      <span className="text-[11px] text-muted-foreground">{plugin.author}</span>
-                    )}
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                      {plugin.author && <span>{plugin.author}</span>}
+                      {plugin.category && (
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                          {plugin.category}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {plugin.mutating ? (
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -1053,11 +1091,16 @@ function DirectoryBrowse({
             <div>
               <p className="font-semibold text-foreground">Skills it adds</p>
               {confirmingInstallPlugin?.declaredSkills?.length ? (
-                <ul className="mt-1 list-disc pl-4 text-muted-foreground">
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {confirmingInstallPlugin.declaredSkills.map((skill) => (
-                    <li key={skill}>{skill}</li>
+                    <span
+                      key={skill}
+                      className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-foreground"
+                    >
+                      {skill}
+                    </span>
                   ))}
-                </ul>
+                </div>
               ) : (
                 <p className="mt-1 text-muted-foreground">This pack declares no skills.</p>
               )}
@@ -1065,17 +1108,40 @@ function DirectoryBrowse({
             <div>
               <p className="font-semibold text-foreground">Connectors it uses</p>
               {confirmingInstallPlugin?.requiredConnectors?.length ? (
-                <ul className="mt-1 list-disc pl-4 text-muted-foreground">
-                  {confirmingInstallPlugin.requiredConnectors.map((connector) => (
-                    <li key={connector}>{connector}</li>
-                  ))}
-                </ul>
+                <>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {confirmingInstallPlugin.requiredConnectors.map((connector) => (
+                      <span
+                        key={connector}
+                        className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground"
+                      >
+                        {connector}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Connectors run through the OAuth/MCP connection you set up separately in
+                    Connectors — installing this pack does not connect them for you.
+                  </p>
+                </>
               ) : (
                 <p className="mt-1 text-muted-foreground">
                   This pack needs no connectors. Installing it grants no new data access.
                 </p>
               )}
             </div>
+            {confirmingInstallPlugin?.examplePrompts?.length ? (
+              <div>
+                <p className="font-semibold text-foreground">Try asking</p>
+                <ul className="mt-1.5 flex flex-col gap-1 text-muted-foreground">
+                  {confirmingInstallPlugin.examplePrompts.map((prompt) => (
+                    <li key={prompt} className="rounded-md bg-muted/60 px-2 py-1 italic">
+                      {`“${prompt}”`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <button

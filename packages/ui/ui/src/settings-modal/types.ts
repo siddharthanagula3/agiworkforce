@@ -46,9 +46,12 @@ export interface SettingsPlugin {
   mutating?: boolean;
   error?: string;
   author?: string;
+  category?: string;
   skillCount?: number;
   declaredSkills?: string[];
   requiredConnectors?: string[];
+  /** "Try asking" directory copy. Display-only; never sent to a model. */
+  examplePrompts?: string[];
   updatedAt?: string;
   statusLabel?: string;
   detailsHref?: string;
