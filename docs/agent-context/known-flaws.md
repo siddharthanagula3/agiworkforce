@@ -394,9 +394,16 @@ have received `-` as the deployment URL the moment `VERCEL_TOKEN` is fixed.
 The variable was corrected to `https://agiworkforce.com` the same day and the
 next dispatch (run 32745665761) passed — the workflow's first success ever,
 confirming sign-up bot protection is enabled (turnstile) on the live
-instance. Residual hardening worth doing: the script trusts
-`PRODUCTION_WEB_URL` verbatim; an unparsable value should fall back to the
-default origin instead of aborting the monitor.
+instance.
+
+**Update 2026-08-24, hardening.** The script no longer trusts the env value
+verbatim: `resolveProductionWebUrl` treats an empty, unparsable, or
+non-`http(s)` `PRODUCTION_WEB_URL` as unset and falls back to the script's
+own default origin (`https://agiworkforce.com`), so a junk GitHub environment
+variable can be wrong without blinding the check. Covered by `node --test
+scripts/check-clerk-bot-protection.test.mjs` (self-tests for `-`, empty, `not
+a url`, `ftp://x`) and verified against the live instance with each of those
+values.
 
 ## 2026-08-24 RLS hid the owner's subscription from every other administrator
 

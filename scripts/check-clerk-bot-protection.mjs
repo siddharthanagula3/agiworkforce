@@ -17,6 +17,21 @@ const ANCHORED_PUBLISHABLE_KEY_PATTERNS = [
 
 export class UndecryptedVercelValueError extends Error {}
 
+export function resolveProductionWebUrl(value) {
+  const trimmed = value?.trim();
+  if (!trimmed) return PRODUCTION_WEB_URL_DEFAULT;
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return PRODUCTION_WEB_URL_DEFAULT;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return PRODUCTION_WEB_URL_DEFAULT;
+  }
+  return trimmed;
+}
+
 export function frontendApiHost(publishableKey) {
   const key = publishableKey?.trim();
   const encoded = key?.replace(/^pk_(test|live)_/u, '');
@@ -170,7 +185,7 @@ async function resolvePublishableKey(env, target, fetchImpl) {
   }
 
   if (target === 'production') {
-    const productionUrl = env.PRODUCTION_WEB_URL?.trim() || PRODUCTION_WEB_URL_DEFAULT;
+    const productionUrl = resolveProductionWebUrl(env.PRODUCTION_WEB_URL);
     try {
       return await fetchPublishableKeyFromProductionSite({ productionUrl, fetchImpl });
     } catch (error) {

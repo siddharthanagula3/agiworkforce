@@ -2,9 +2,44 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-22
+Last updated: 2026-08-24
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — unreachable web controls closed] — 2026-08-24
+
+### Fixed
+
+- **Connector tool permissions are reachable from every web entry point.**
+  Deleted the dead `app/connectors/permissions/page.tsx` redirect, which sent
+  every visitor — signed in or out — to `/settings/capabilities`, a different
+  panel. `ToolPermissionsPanel` was already mounted in both
+  `WebSettingsModal.tsx` (via `renderConnectorToolPermissions`, for signed-in
+  users) and `ConnectorsPage.tsx` (for signed-out ones), so removing the stub
+  closes the last gap against mobile's `ConnectorDetailScreen`. Extended
+  `WebSettingsModal.test.tsx` to click through Settings > Connectors > GitHub >
+  Tool permissions and assert the dialog renders the real catalog tools and
+  persists an Allow change to `PUT /api/connectors/permissions`, instead of
+  only asserting the trigger renders.
+- **Native artifact export (PDF/Word) is proven wired end to end, not just
+  present.** `apps/web/features/library/components/LibraryView.tsx` already
+  threads a real handler backed by the shared
+  `features/chat/services/document-export-service.ts` into unified-chat's
+  `LibraryView`. Replaced the only test for this — a regex read of the source
+  file — with click-through coverage in both `packages/ui/unified-chat` and
+  `apps/web` that opens an artifact preview, opens the export menu, and
+  asserts the real service is invoked with the fetched content.
+- **The last raw `window.confirm` on a web surface is gone.**
+  `SchedulesPage.tsx`'s discard-unsaved-changes prompt now opens the same
+  `AlertDialog` primitives and destructive styling as the file's own Delete
+  Schedule confirmation, instead of a native browser dialog.
+- **A junk `PRODUCTION_WEB_URL` no longer blinds the Clerk bot-protection
+  monitor.** The `production-web` GitHub environment variable was found set
+  to the literal `-`, which reached `fetch()` unvalidated and aborted
+  `scripts/check-clerk-bot-protection.mjs` with `Failed to parse URL from -`
+  instead of checking the real site. `resolveProductionWebUrl` now treats an
+  empty, unparsable, or non-`http(s)` value as unset and falls back to the
+  script's own default production origin.
 
 ## [Unreleased — DPDP compliance, operator console, shared settings] — 2026-08-22
 

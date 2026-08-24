@@ -273,6 +273,46 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(trigger).toBeTruthy();
   });
 
+  it('opens the real tri-state tool permissions dialog and persists a change to the API', async () => {
+    const fetchMock = stubFetch({
+      installations: [{ installation_id: 42, created_at: '2026-06-01T00:00:00Z' }],
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    const table = await screen.findByRole('table');
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(within(table).getByText('GitHub'));
+
+    fireEvent.click(await screen.findByText('Tool permissions'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('GitHub - Tool Permissions')).toBeTruthy();
+    // Real catalog tools for this connector (lib/connectors/catalog.ts), not a
+    // placeholder — proves the panel is driven by the actual tool metadata.
+    expect(within(dialog).getByText('get_pull_request_diff')).toBeTruthy();
+    expect(within(dialog).getByText('post_issue_comment')).toBeTruthy();
+    expect(within(dialog).getByText('post_pull_request_review')).toBeTruthy();
+
+    const diffGroup = within(dialog).getByRole('group', {
+      name: 'Permission for get_pull_request_diff',
+    });
+    fireEvent.click(within(diffGroup).getByRole('button', { name: 'Allow' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/connectors/permissions',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            connectorId: 'github',
+            toolName: 'get_pull_request_diff',
+            level: 'allow',
+          }),
+        }),
+      ),
+    );
+  });
+
   it('names an expired session instead of blaming the network when connectors 401', async () => {
     stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 401 });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
