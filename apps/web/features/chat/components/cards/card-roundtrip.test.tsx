@@ -76,6 +76,77 @@ Servings: 4
 1. Mix everything
 `;
 
+const CALCULATION_INLINE_FORMULA = `## Compound growth
+
+The identity \`a * (1+r)^n = FV\` explains the projection.
+
+Result: 1000 USD
+`;
+
+const CALCULATION_PREFIXED_RESULT = `## Shopping trip
+
+So the grand total: $47.50
+`;
+
+const CALCULATION_NO_RESULT = `Given the running total, this is what remains:
+
+\`Remaining = Budget - Spent\`
+`;
+
+const COMPARISON_DESCRIPTIVE_HEADINGS = `# Postgres vs MySQL
+
+## Postgres
+
+### Pros of running Postgres in production
+- Rich type system
+
+### Cons worth knowing about
+- Heavier memory use
+
+## MySQL
+### Pros
+- Simple replication
+`;
+
+const COMPARISON_INLINE_WINNER = `# Postgres vs MySQL
+
+## Postgres
+### Pros
+- Rich type system
+
+## MySQL
+### Pros
+- Simple replication
+
+## Winner: Postgres — better correctness guarantees overall
+`;
+
+const STEPS_UNICODE = `# Café setup 🍵
+
+Configura tu café favorito antes de continuar.
+
+## Step 1: Elige el grano ☕
+- Selecciona un grano 100% arábica
+
+## Step 2: 磨豆 (moler el café)
+- Usa un molinillo cónico
+`;
+
+const STEPS_NESTED_MARKDOWN = `# Configure the service
+
+## Step 1: Update the config
+- Set the **timeout** to *500ms* for staging
+`;
+
+const STEPS_HUGE_EXTRA = `# Deploy the service
+
+## Step 1: Build the image
+- Run the build script
+
+## Appendix
+${Array.from({ length: 300 }, (_, i) => `- Detail item ${i + 1} of the rollout checklist`).join('\n')}
+`;
+
 describe('rich-format card parsers round-trip their source', () => {
   it('steps card keeps a sub-heading and a trailing section', () => {
     render(<StepsCard content={STEPS} />);
@@ -143,5 +214,67 @@ describe('rich-format card parsers round-trip their source', () => {
     expect(screen.getByText('200g flour')).toBeInTheDocument();
     expect(screen.getByText('Mix everything')).toBeInTheDocument();
     expect(screen.getByText('Prep:')).toBeInTheDocument();
+  });
+
+  it('calculation card keeps prose surrounding an inline formula', () => {
+    render(<CalculationCard content={CALCULATION_INLINE_FORMULA} />);
+
+    const description = screen.getByText(/The identity/);
+    expect(description.textContent).toContain('explains the projection');
+    expect(screen.getByText('a * (1+r)^n = FV')).toBeInTheDocument();
+  });
+
+  it('calculation card keeps the prefix before a result keyword', () => {
+    render(<CalculationCard content={CALCULATION_PREFIXED_RESULT} />);
+
+    expect(screen.getByText(/So the grand/)).toBeInTheDocument();
+    expect(screen.getByText('$47.50')).toBeInTheDocument();
+  });
+
+  it('calculation card degrades gracefully with no explicit result keyword', () => {
+    render(<CalculationCard content={CALCULATION_NO_RESULT} />);
+
+    expect(screen.getByText(/Given the running total, this is what remains/)).toBeInTheDocument();
+    expect(screen.getByText('Remaining = Budget - Spent')).toBeInTheDocument();
+    expect(screen.getByText('Budget - Spent')).toBeInTheDocument();
+  });
+
+  it('comparison card keeps descriptive text trailing a pros/cons heading', () => {
+    render(<ComparisonCard content={COMPARISON_DESCRIPTIVE_HEADINGS} />);
+
+    expect(screen.getByText('of running Postgres in production')).toBeInTheDocument();
+    expect(screen.getByText('worth knowing about')).toBeInTheDocument();
+  });
+
+  it('comparison card keeps a winner reason written inline in the heading', () => {
+    render(<ComparisonCard content={COMPARISON_INLINE_WINNER} />);
+
+    expect(screen.getByText(/better correctness guarantees overall/)).toBeInTheDocument();
+  });
+
+  it('steps card preserves unicode content verbatim', () => {
+    render(<StepsCard content={STEPS_UNICODE} />);
+
+    expect(screen.getByText('Café setup 🍵')).toBeInTheDocument();
+    expect(screen.getByText(/Selecciona un grano 100% arábica/)).toBeInTheDocument();
+    expect(screen.getByText(/磨豆 \(moler el café\)/)).toBeInTheDocument();
+  });
+
+  it('steps card preserves nested markdown syntax verbatim in a detail line', () => {
+    render(<StepsCard content={STEPS_NESTED_MARKDOWN} />);
+
+    expect(screen.getByText('Set the **timeout** to *500ms* for staging')).toBeInTheDocument();
+  });
+
+  it('steps card keeps every line of a large trailing section', () => {
+    render(<StepsCard content={STEPS_HUGE_EXTRA} />);
+
+    const section = screen.getByText('Appendix').closest('section');
+    expect(section).not.toBeNull();
+
+    const items = within(section as HTMLElement).getAllByRole('listitem');
+    expect(items).toHaveLength(300);
+    expect(items[0]?.textContent).toBe('Detail item 1 of the rollout checklist');
+    expect(items[299]?.textContent).toBe('Detail item 300 of the rollout checklist');
   });
 });

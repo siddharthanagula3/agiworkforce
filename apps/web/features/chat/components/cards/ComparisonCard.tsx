@@ -103,26 +103,49 @@ function parseComparison(content: string): ParsedComparison {
       continue;
     }
 
-    if (/^#{2,4}\s*\*?\*?(pros|advantages|strengths)\*?\*?/i.test(trimmed)) {
+    const prosHeading = trimmed.match(/^#{2,4}\s*\*?\*?(pros|advantages|strengths)\*?\*?\s*(.*)$/i);
+    if (prosHeading) {
       if (currentSection === 'item0' || currentSection === 'pros0' || currentSection === 'cons0') {
         currentSection = 'pros0';
       } else {
         currentSection = 'pros1';
       }
+      const trailing = (prosHeading[2] ?? '').replace(/\*\*/g, '').trim();
+      if (trailing) appendExtraLine(extraSections, headingText(trimmed), trailing);
       continue;
     }
-    if (/^#{2,4}\s*\*?\*?(cons|disadvantages|weaknesses)\*?\*?/i.test(trimmed)) {
+    const consHeading = trimmed.match(
+      /^#{2,4}\s*\*?\*?(cons|disadvantages|weaknesses)\*?\*?\s*(.*)$/i,
+    );
+    if (consHeading) {
       if (currentSection === 'item0' || currentSection === 'pros0' || currentSection === 'cons0') {
         currentSection = 'cons0';
       } else {
         currentSection = 'cons1';
       }
+      const trailing = (consHeading[2] ?? '').replace(/\*\*/g, '').trim();
+      if (trailing) appendExtraLine(extraSections, headingText(trimmed), trailing);
       continue;
     }
 
-    if (/^#{2,4}\s*\*?\*?(winner|verdict|recommendation|conclusion)\*?\*?/i.test(trimmed)) {
+    const winnerHeading = trimmed.match(
+      /^#{2,4}\s*\*?\*?(winner|verdict|recommendation|conclusion)\*?\*?\s*(.*)$/i,
+    );
+    if (winnerHeading) {
       currentSection = 'winner';
       currentHeading = headingText(trimmed);
+      const trailing = (winnerHeading[2] ?? '')
+        .replace(/^[:\-–]\s*/, '')
+        .replace(/\*\*/g, '')
+        .trim();
+      if (trailing) {
+        winnerReason = trailing;
+        if (!winner) {
+          if (items[0].name && lower.includes(items[0].name.toLowerCase())) winner = items[0].name;
+          else if (items[1].name && lower.includes(items[1].name.toLowerCase()))
+            winner = items[1].name;
+        }
+      }
       continue;
     }
     if (currentSection === 'winner') {

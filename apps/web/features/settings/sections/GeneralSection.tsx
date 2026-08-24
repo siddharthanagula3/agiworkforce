@@ -181,10 +181,9 @@ export function GeneralSection() {
       );
       setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
 
-      const storedStyle =
-        await fetchStoredPreferenceNamespace<Partial<PersonalizationSettings>>(
-          PERSONALIZATION_NAMESPACE,
-        ).catch(() => ({}) as Partial<PersonalizationSettings>);
+      const storedStyle = await fetchStoredPreferenceNamespace<Partial<PersonalizationSettings>>(
+        PERSONALIZATION_NAMESPACE,
+      ).catch(() => ({}) as Partial<PersonalizationSettings>);
       setPersonalization({
         style: RESPONSE_STYLES.some((entry) => entry.value === storedStyle.style)
           ? (storedStyle.style as ResponseStyle)
@@ -896,12 +895,15 @@ function ChatFontRow() {
   const chatFont = useSettingsStore((state) => state.chatFont) ?? 'default';
   const setChatFont = useSettingsStore((state) => state.setChatFont);
 
-  // Only families layout.tsx loads. The control this replaces offered a CDN
-  // font the CSP blocked, so it fell back silently and looked broken.
+  // Only families layout.tsx and globals.css actually load. 'dyslexic' is
+  // self-hosted under public/fonts/opendyslexic/ — the control this replaces
+  // pointed at a CDN font the CSP blocked, so it fell back silently and
+  // looked broken.
   const options = [
     { value: 'default' as const, label: 'Default' },
     { value: 'sans' as const, label: 'Sans' },
     { value: 'serif' as const, label: 'Serif' },
+    { value: 'dyslexic' as const, label: 'Dyslexic friendly' },
   ];
 
   return (

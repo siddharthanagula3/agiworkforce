@@ -10,22 +10,58 @@
 @source "../../../packages/ui/unified-chat/src/**/*.{js,ts,jsx,tsx}";
 @source "../../../packages/ui/ui/src/**/*.{js,ts,jsx,tsx}";
 
-/* OpenDyslexic font for accessibility — DISABLED 2026-05-21.
+/* OpenDyslexic font for accessibility — self-hosted 2026-08-24.
  *
- * The @font-face declarations referenced
- * https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/*.woff which
- * the production CSP at apps/web/proxy.ts blocks (font-src is 'self'
- * + fonts.gstatic.com + js.stripe.com only — third-party CDNs are
- * intentionally excluded). The font therefore never actually loaded
- * and the "Dyslexic Friendly" setting in features/settings fell
- * silently back to the next entry in --font-chat (system-ui).
+ * The previous @font-face declarations pointed at
+ * https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/*.woff, which the
+ * production CSP at apps/web/proxy.ts blocks (font-src is 'self' +
+ * fonts.gstatic.com + js.stripe.com only — third-party CDNs are
+ * intentionally excluded), so the font never loaded and the "Dyslexic
+ * Friendly" chat font option fell silently back to system-ui.
  *
- * The right fix is to self-host the OFL-licensed font binaries
- * under apps/web/public/fonts/ + change the @font-face src to
- * '/fonts/OpenDyslexic-Regular.woff' (same-origin, no CSP change
- * needed). Tracked as follow-up; removing the broken rules now so
- * the CSP violation stops appearing in browser consoles.
+ * Fixed by vendoring the unmodified v0.91.12 release from
+ * https://github.com/antijingoist/opendyslexic (SIL OFL 1.1; full license
+ * text at public/fonts/opendyslexic/OFL.txt, entry in
+ * THIRD_PARTY_LICENSES.md) under public/fonts/opendyslexic/. These URLs are
+ * same-origin, so the existing font-src 'self' already covers them — no CSP
+ * change needed.
  */
+@font-face {
+  font-family: 'OpenDyslexic';
+  src:
+    url('/fonts/opendyslexic/OpenDyslexic-Regular.woff2') format('woff2'),
+    url('/fonts/opendyslexic/OpenDyslexic-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  src:
+    url('/fonts/opendyslexic/OpenDyslexic-Bold.woff2') format('woff2'),
+    url('/fonts/opendyslexic/OpenDyslexic-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  src:
+    url('/fonts/opendyslexic/OpenDyslexic-Italic.woff2') format('woff2'),
+    url('/fonts/opendyslexic/OpenDyslexic-Italic.woff') format('woff');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  src:
+    url('/fonts/opendyslexic/OpenDyslexic-Bold-Italic.woff2') format('woff2'),
+    url('/fonts/opendyslexic/OpenDyslexic-Bold-Italic.woff') format('woff');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
 
 /* Make dark: variant respond to the .dark class (set by next-themes ThemeProvider)
    rather than the default prefers-color-scheme media query. */
@@ -1116,7 +1152,14 @@
     font-family: var(--font-newsreader), Georgia, 'Times New Roman', serif;
   }
   html[data-chat-font='sans'] .prose {
-    font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+    font-family:
+      var(--font-geist-sans),
+      system-ui,
+      -apple-system,
+      sans-serif;
+  }
+  html[data-chat-font='dyslexic'] .prose {
+    font-family: 'OpenDyslexic', var(--font-geist-sans), system-ui, sans-serif;
   }
   html[data-chat-font] .prose :is(code, pre, kbd, samp) {
     font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
@@ -1948,21 +1991,6 @@ html[data-contrast='more'] *:focus-visible {
 .agi-dashboard-theme .gradient-primary {
   background: linear-gradient(135deg, hsl(200, 98%, 39%) 0%, hsl(240, 6%, 12%) 100%);
 }
-
-/*
- * The [data-chat-font] rules that sat here were removed on 2026-08-21.
- *
- * They were residue from the Dyslexic Friendly setting: the @font-face for
- * OpenDyslexic went when the CSP blocked its CDN, and the setting went with it,
- * but these two rules stayed. Nothing set data-chat-font and nothing read
- * --font-chat, so the pair could only mislead the next reader into thinking a
- * chat font control existed.
- *
- * A real chat-font picker (claude.ai ships one) needs --font-chat consumed by
- * message rendering first, and the dyslexic option needs the OFL binaries
- * self-hosted under public/fonts/. Both are recorded in the UI gap tracker
- * rather than implied by dead CSS.
- */
 
 /* ──────────────────────────────────────────────────────────────────────
  * AGI marketing theme — applied to elements with [data-design="agi"].

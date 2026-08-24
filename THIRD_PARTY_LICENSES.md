@@ -93,6 +93,14 @@ SOFTWARE.
 - **Adoption**: Runtime dependency only; no upstream source was copied or adapted into this repository. The package generates editable Managed Cloud `.pptx` files on the server.
 - **Notice**: The complete MIT license is distributed in the installed `pptxgenjs` package.
 
+## OpenDyslexic
+
+- **Upstream**: [antijingoist/opendyslexic](https://github.com/antijingoist/opendyslexic) (https://opendyslexic.org), release `v0.91.12`
+- **License**: OFL-1.1
+- **Copyright**: © 2012–2019 Abbie Gonzalez (https://abbiecod.es), with Reserved Font Name OpenDyslexic
+- **Used by**: `apps/web/public/fonts/opendyslexic/` — self-hosted binaries backing the "Dyslexic friendly" chat font option, wired via `@font-face` in `apps/web/app/globals.css`
+- **Adoption**: Runtime font asset only; no source code was ported. Regular, Bold, Italic, and Bold-Italic styles (`.woff2` + `.woff`) are taken unmodified from the upstream GitHub release. Full OFL license text is preserved verbatim at `apps/web/public/fonts/opendyslexic/OFL.txt`.
+
 ## Porting policy
 
 `scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:

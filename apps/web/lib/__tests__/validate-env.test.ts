@@ -377,3 +377,68 @@ describe('validateEmailPseudonymPepper · boot check', () => {
     );
   });
 });
+
+import { validateSandboxOriginConfigured } from '../validate-env';
+
+describe('validateSandboxOriginConfigured · boot check', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    delete process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'];
+    delete process.env['VERCEL_ENV'];
+    delete process.env['NEXT_PHASE'];
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  it('warns, but never fails the boot check, when unset in production', () => {
+    process.env['VERCEL_ENV'] = 'production';
+
+    const result = validateSandboxOriginConfigured();
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([
+      expect.stringContaining('NEXT_PUBLIC_SANDBOX_ORIGIN is not set'),
+    ]);
+    expect(result.warnings[0]).toContain('This is a production runtime');
+  });
+
+  it('warns without the production callout outside production', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+
+    const result = validateSandboxOriginConfigured();
+
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toEqual([
+      expect.stringContaining('NEXT_PUBLIC_SANDBOX_ORIGIN is not set'),
+    ]);
+    expect(result.warnings[0]).not.toContain('production runtime');
+  });
+
+  it('is silent once the sandbox origin is set', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['NEXT_PUBLIC_SANDBOX_ORIGIN'] = 'https://sandbox.agiworkforce.com';
+
+    const result = validateSandboxOriginConfigured();
+
+    expect(result).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('reaches the boot aggregate', () => {
+    process.env['VERCEL_ENV'] = 'production';
+
+    const result = validateEnvironment();
+
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('NEXT_PUBLIC_SANDBOX_ORIGIN is not set')]),
+    );
+  });
+});

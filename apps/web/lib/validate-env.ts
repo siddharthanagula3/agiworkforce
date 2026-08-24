@@ -316,6 +316,15 @@ export function validateSecurityEscapeHatches(): ValidationResult {
   return { valid: errors.length === 0, errors, warnings };
 }
 
+function isProductionRuntime(): boolean {
+  const vercelEnv = process.env['VERCEL_ENV'];
+  return (
+    process.env['NEXT_PHASE'] !== 'phase-production-build' &&
+    vercelEnv !== 'preview' &&
+    (vercelEnv === 'production' || process.env['NODE_ENV'] === 'production')
+  );
+}
+
 export function validateEmailPseudonymPepper(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -328,16 +337,28 @@ export function validateEmailPseudonymPepper(): ValidationResult {
     'pseudonym (waitlist joins, consent records, erasure receipts) throws at runtime in ' +
     'production until this is set to 32+ random bytes.';
 
-  const vercelEnv = process.env['VERCEL_ENV'];
-  const isProductionRuntime =
-    process.env['NEXT_PHASE'] !== 'phase-production-build' &&
-    vercelEnv !== 'preview' &&
-    (vercelEnv === 'production' || process.env['NODE_ENV'] === 'production');
-
-  if (isProductionRuntime) errors.push(message);
+  if (isProductionRuntime()) errors.push(message);
   else warnings.push(message);
 
   return { valid: errors.length === 0, errors, warnings };
+}
+
+export function validateSandboxOriginConfigured(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim()) return { valid: true, errors, warnings };
+
+  const message =
+    'NEXT_PUBLIC_SANDBOX_ORIGIN is not set — cross-origin artifact isolation degrades to ' +
+    'same-origin srcDoc rendering (allow-same-origin is dropped in that fallback, so this is ' +
+    'degraded, not unsafe, but it is not the isolation the trust and security pages describe).' +
+    (isProductionRuntime()
+      ? ' This is a production runtime: set it to the deployed infrastructure/sandbox origin.'
+      : '');
+
+  warnings.push(message);
+  return { valid: true, errors, warnings };
 }
 
 export function validateGeneratedMediaStorage(): ValidationResult {
@@ -416,6 +437,7 @@ export function validateEnvironment(): ValidationResult {
     validateStripeKeyModeConsistency(),
     validateSecurityEscapeHatches(),
     validateEmailPseudonymPepper(),
+    validateSandboxOriginConfigured(),
     validateGeneratedMediaStorage(),
   ];
 
