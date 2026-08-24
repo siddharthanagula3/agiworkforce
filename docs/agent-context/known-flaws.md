@@ -284,10 +284,27 @@ failures, not disabled — an administrator's configuration is not ours to switc
 off, and the console shows the failure count so they can see why nothing
 arrives.
 
-**AUDITSTREAM-01 — PARTIALLY CLOSED 2026-08-23.** A destination round-trips
-through a REAL Postgres and the raw signing secret is confirmed absent from the
-stored row — only its hash and prefix are there. Still unproven: an actual
-signed delivery to an HTTPS receiver.
+**AUDITSTREAM-01 — CLOSED 2026-08-23.** A signed batch was delivered over real
+TLS to a receiver that recomputed the HMAC independently and accepted it, with
+the cursor advancing on 2xx, holding on 503, and the same events redelivered on
+retry. The receiver is a local TLS server reached through the `fetchImpl` seam,
+with the destination pointed at `192.0.2.0/24` so the real egress guard runs
+unmodified; delivery to a receiver on the public internet is still unobserved,
+and needs an endpoint the founder controls. The same run also proved the guard
+refuses a loopback destination.
+
+**The defect it found — cursor precision. FIXED.** `timestamptz` holds
+microseconds and a JS `Date` holds milliseconds. `drainAuditDestination` read
+the cursor out with `toIso()` and passed it back as a parameter, so a cursor
+written from `2026-08-24T00:11:25.812267Z` came back `.812` — strictly BEFORE
+the row it was taken from. Every drain re-selected the tail of the batch it had
+just delivered and the stream never reached `nothing_due`; a busy workspace
+would resend up to a full batch on every cron tick, forever. Both directions
+now keep the cursor inside SQL: the write resolves `last_delivered_at` from the
+event id, the read joins the destination row. `audit-streaming-service.test.ts`
+carries a regression test that fails if any timestamp is passed as a cursor
+parameter. Unit tests could not have caught this — they mock the adapter, and a
+mock hands back whatever string the test wrote.
 
 ## 2026-08-23 The Windows release ships remote-databases, and the audit file said it did not
 
