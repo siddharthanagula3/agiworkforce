@@ -25,7 +25,7 @@ export interface CustomCommand {
 export type MotionPreference = 'system' | 'reduced';
 
 /** 'default' leaves the app's own prose font in place. */
-export type ChatFont = 'default' | 'sans' | 'serif';
+export type ChatFont = 'default' | 'sans' | 'serif' | 'dyslexic';
 
 export type VoiceSpeed = 'slow' | 'normal' | 'fast';
 

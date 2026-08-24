@@ -48,6 +48,12 @@ describe('WEB-13 · production security headers', () => {
     expect(config).toContain("key: 'preview', value: 'pdf'");
     expect(config).toContain("value: 'SAMEORIGIN'");
   });
+
+  it('allows same-origin fonts, so a self-hosted @font-face never needs a CSP change', () => {
+    const proxy = readWebFile('proxy.ts');
+    const fontSrc = proxy.match(/font-src[^;]*;/)?.[0] ?? '';
+    expect(fontSrc).toContain("'self'");
+  });
 });
 
 describe('WEB-13 · cross-origin artifact sandbox headers', () => {

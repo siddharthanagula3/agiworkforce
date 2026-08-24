@@ -19,6 +19,7 @@ const ALLOWED = new Set([
   'Zlib',
   'Python-2.0',
   'BlueOak-1.0.0',
+  'OFL-1.1',
 ]);
 
 const DENIED = new Set([

@@ -38,6 +38,24 @@ function parseCalculation(content: string): ParsedCalculation {
   const extraSections: ExtraSection[] = [];
   let extraHeading: string | null = null;
 
+  // A keyword regex only ever matches from its keyword onward, so anything
+  // before it on the same line ("Grand total: $45" — "Grand ") has to be
+  // routed here explicitly or it silently disappears instead of landing in
+  // the description or an extra section like every other line does.
+  function routeLeftover(text: string): void {
+    const cleaned = text.trim();
+    if (!cleaned) return;
+    if (extraHeading !== null) {
+      appendExtraLine(extraSections, extraHeading, stripListMarker(cleaned));
+      return;
+    }
+    if (!result && formulas.length === 0 && steps.length === 0) {
+      descLines.push(cleaned);
+      return;
+    }
+    appendExtraLine(extraSections, '', stripListMarker(cleaned));
+  }
+
   const latexBlocks = content.match(/\$\$([\s\S]+?)\$\$/g) || [];
   for (const block of latexBlocks) {
     const expr = block.replace(/^\$\$/, '').replace(/\$\$$/, '').trim();
@@ -67,6 +85,7 @@ function parseCalculation(content: string): ParsedCalculation {
       /\*?\*?(result|answer|total|sum|difference|product|quotient|output|value)\*?\*?\s*[:=]\s*(.+)/i,
     );
     if (resultMatch) {
+      routeLeftover(trimmed.slice(0, resultMatch.index ?? 0));
       resultLabel =
         (resultMatch[1] ?? '').charAt(0).toUpperCase() + (resultMatch[1] ?? '').slice(1);
       result = (resultMatch[2] ?? '').replace(/\*\*/g, '').trim();
@@ -90,8 +109,14 @@ function parseCalculation(content: string): ParsedCalculation {
     }
 
     const inlineCodeMatch = trimmed.match(/`([^`]+[=+\-*/^][^`]+)`/);
-    if (inlineCodeMatch && !formulas.some((f) => f.expression === inlineCodeMatch[1])) {
-      formulas.push({ label: '', expression: inlineCodeMatch[1] ?? '', isLatex: false });
+    if (inlineCodeMatch) {
+      const start = inlineCodeMatch.index ?? 0;
+      const before = trimmed.slice(0, start);
+      const after = trimmed.slice(start + inlineCodeMatch[0].length);
+      routeLeftover([before.trim(), after.trim()].filter(Boolean).join(' '));
+      if (!formulas.some((f) => f.expression === inlineCodeMatch[1])) {
+        formulas.push({ label: '', expression: inlineCodeMatch[1] ?? '', isLatex: false });
+      }
       continue;
     }
 
@@ -102,17 +127,7 @@ function parseCalculation(content: string): ParsedCalculation {
       continue;
     }
 
-    if (extraHeading !== null) {
-      appendExtraLine(extraSections, extraHeading, stripListMarker(trimmed));
-      continue;
-    }
-
-    if (!result && formulas.length === 0 && steps.length === 0) {
-      descLines.push(trimmed);
-      continue;
-    }
-
-    appendExtraLine(extraSections, '', stripListMarker(trimmed));
+    routeLeftover(trimmed);
   }
 
   description = descLines.join(' ').replace(/\*\*/g, '').trim();
