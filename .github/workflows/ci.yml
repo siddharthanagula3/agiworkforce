@@ -1025,7 +1025,7 @@ jobs:
         working-directory: apps/web
         env:
           PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
-        run: pnpm exec playwright test public-auth-clean.spec.ts --project=chromium --workers=1
+        run: pnpm exec playwright test public-auth-clean.spec.ts checkout.spec.ts --project=chromium --workers=1
 
       - name: Upload Web Playwright report
         if: always()

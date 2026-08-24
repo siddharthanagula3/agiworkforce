@@ -303,6 +303,18 @@ here — but it does mean the CHANGELOG 2026-07-26 claim of a green
 re-qualification. Guardrail count also moved: 34 in the chain now, not the 27
 that entry records.
 
+**Correction, 2026-08-24: all four are fixed and no longer reproduce.** The
+`v76` migration guard landed in `ab9f8687a3` — `migrations.rs:6103-6114` now
+checks `table_exists(conn, "realtime_metrics")` before creating the index
+instead of assuming the table, closing the hazard this checkpoint flagged.
+The effort-catalog predicates the two `core::llm` tests assert are satisfied
+by the current catalog. Verified locally this session: `cargo test -p
+agiworkforce-desktop --lib --locked` for
+`test_migration_v59_rebuilds_and_redacts_auth_sessions`,
+`test_migration_v59_skips_duplicate_hashed_tokens`,
+`test_anthropic_effort_is_model_scoped_and_uses_output_config`, and
+`test_anthropic_adapter_rejects_disabled_opus_at_max_effort` — all four pass.
+
 Founder decisions standing as of this checkpoint: the branch is **not pushed**
 and **no PR is open**, deliberately — origin's copy is an ancestor 280 commits
 behind, so a push would fast-forward whenever it is authorized. The full
