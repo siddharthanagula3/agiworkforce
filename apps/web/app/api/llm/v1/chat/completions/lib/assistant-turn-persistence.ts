@@ -1,10 +1,10 @@
-
 import 'server-only';
 
 import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
 import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
+import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import type { ProcessedRequest } from './request-processor';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
@@ -85,7 +85,7 @@ export async function persistAssistantTurn(params: {
   }
 
   try {
-    await getNeonDb().execute(
+    const affected = await getNeonDb().execute(
       `insert into web_messages
          (id, conversation_id, role, content, model, provider, input_tokens, output_tokens, metadata)
        select $1::uuid, c.id, 'assistant', $3, $4, $5, $6, $7, $8::jsonb
@@ -115,6 +115,23 @@ export async function persistAssistantTurn(params: {
         processed.organizationId ?? null,
       ],
     );
+
+    // Same fire-and-forget contract as the client-save path
+    // (scheduleArtifactIndexing in messages/route.ts): a discovery aid, never a
+    // correctness requirement, so a failure here must never surface to the
+    // turn that already completed. Gated on affected > 0 — the INSERT is a
+    // SELECT ... FROM web_conversations WHERE user/org match, so a mismatch
+    // silently inserts nothing, and indexing a message that was never written
+    // would violate web_artifact_index's FK on message_id.
+    if (affected > 0) {
+      scheduleArtifactIndexing({
+        db: getNeonDb(),
+        userId,
+        conversationId,
+        messageId,
+        content: snapshot.content,
+      });
+    }
   } catch (error) {
     logger.error(
       {
