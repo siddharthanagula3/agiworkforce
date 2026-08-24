@@ -18,9 +18,13 @@
  * fields — both stay unpopulated until those decisions land. Adding them later
  * is a value change, not a breaking contract change.
  *
- * HONESTY: nothing here models a download count, a rating, or an install total.
- * The registry has never observed one, and a nullable field invites a
- * fabricated value. {@link PluginRegistryEntry.status} plus
+ * HONESTY: nothing here models a rating. {@link PluginRegistryEntry.installCount}
+ * is the one exception to "no fabricated numbers": it is a real, observed
+ * aggregate over `public.plugin_installations` (COUNT grouped by plugin id,
+ * read on the privileged connection so no caller ever sees who installed —
+ * see `countPluginInstallations`), computed by `GET /api/plugins` and absent
+ * — never zero — anywhere that aggregate was not run, including the
+ * single-entry endpoints. {@link PluginRegistryEntry.status} plus
  * {@link PluginRegistryEntry.distribution} are the only availability claims,
  * and `distribution === null` means "declared, not distributable" — the state
  * every launch row is actually in.
@@ -194,6 +198,8 @@ export interface PluginRegistryEntry {
   distribution: PluginDistribution | null;
   integrity: PluginIntegrity;
   homepageUrl?: string | null;
+  /** Real observed install count. Absent, not zero, where not computed. See module doc. */
+  installCount?: number;
   createdAt: string;
   updatedAt: string;
 }

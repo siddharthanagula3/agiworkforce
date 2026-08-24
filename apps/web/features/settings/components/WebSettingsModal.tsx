@@ -105,6 +105,7 @@ const ApiPluginsResponseSchema = z.object({
       requiredConnectors: z.array(z.string()).default([]),
       examplePrompts: z.array(z.string()).default([]),
       distribution: z.object({ manifestUrl: z.string().url() }).passthrough().nullable(),
+      installCount: z.number().int().nonnegative().optional(),
       updatedAt: z.string(),
     }),
   ),
@@ -695,6 +696,9 @@ export function WebSettingsModal({
             declaredSkills: plugin.declaredSkills,
             requiredConnectors: plugin.requiredConnectors,
             examplePrompts: plugin.examplePrompts,
+            ...(typeof plugin.installCount === 'number'
+              ? { installCount: plugin.installCount }
+              : {}),
             updatedAt: plugin.updatedAt,
             statusLabel: plugin.webInstallable
               ? 'Available on Web'

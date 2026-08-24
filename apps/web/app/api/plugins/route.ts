@@ -11,6 +11,7 @@ import {
   PLUGIN_REGISTRY_MAX_LIMIT,
   listPluginRegistryEntries,
 } from '@/lib/services/plugin-registry-service';
+import { countPluginInstallations } from '@/lib/services/plugin-installation-service';
 import {
   PLUGIN_REGISTRY_STATUSES,
   PLUGIN_SOURCE_KINDS,
@@ -59,15 +60,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const { entries, total } = await listPluginRegistryEntries(getNeonDb(), {
-      category: parsed.data.category,
-      status: parsed.data.status as PluginRegistryListResponse['entries'][number]['status'],
-      source: parsed.data.source as PluginRegistryListResponse['entries'][number]['source'],
-      limit: parsed.data.limit ?? PLUGIN_REGISTRY_DEFAULT_LIMIT,
-      offset: parsed.data.offset ?? 0,
-    });
+    const db = getNeonDb();
+    const [{ entries, total }, installCounts] = await Promise.all([
+      listPluginRegistryEntries(db, {
+        category: parsed.data.category,
+        status: parsed.data.status as PluginRegistryListResponse['entries'][number]['status'],
+        source: parsed.data.source as PluginRegistryListResponse['entries'][number]['source'],
+        limit: parsed.data.limit ?? PLUGIN_REGISTRY_DEFAULT_LIMIT,
+        offset: parsed.data.offset ?? 0,
+      }),
+      countPluginInstallations(db),
+    ]);
 
-    const body: PluginRegistryListResponse = { entries, total };
+    const body: PluginRegistryListResponse = {
+      entries: entries.map((entry) => ({
+        ...entry,
+        installCount: installCounts.get(entry.id) ?? 0,
+      })),
+      total,
+    };
     return NextResponse.json(body, {
       status: 200,
       headers: {

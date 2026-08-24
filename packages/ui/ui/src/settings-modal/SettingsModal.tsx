@@ -486,7 +486,7 @@ function SkillDownloadAction({
 // ---------------------------------------------------------------------------
 
 type BrowseTab = 'connectors' | 'skills' | 'plugins';
-type PluginSort = 'name' | 'updated';
+type PluginSort = 'name' | 'updated' | 'popular';
 
 function DirectoryBrowse({
   adapter,
@@ -561,10 +561,19 @@ function DirectoryBrowse({
   const q = search.trim().toLowerCase();
   const byName = (a: { name: string }, b: { name: string }) =>
     sort === 'az' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
-  const byPluginSort = (a: SettingsPlugin, b: SettingsPlugin) =>
-    pluginSort === 'updated'
-      ? new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
-      : a.name.localeCompare(b.name);
+  const hasInstallCounts = useMemo(
+    () => plugins.some((pl) => typeof pl.installCount === 'number'),
+    [plugins],
+  );
+  const byPluginSort = (a: SettingsPlugin, b: SettingsPlugin) => {
+    if (pluginSort === 'updated') {
+      return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime();
+    }
+    if (pluginSort === 'popular' && hasInstallCounts) {
+      return (b.installCount ?? 0) - (a.installCount ?? 0);
+    }
+    return a.name.localeCompare(b.name);
+  };
 
   const visibleConnectors = connectors
     .filter((c) => (category === 'All' ? true : c.category === category))
@@ -774,6 +783,7 @@ function DirectoryBrowse({
           >
             <option value="name">Name A-Z</option>
             <option value="updated">Recently updated</option>
+            {hasInstallCounts && <option value="popular">Most popular</option>}
           </select>
         ) : (
           <button
@@ -975,6 +985,13 @@ function DirectoryBrowse({
                       {plugin.category && (
                         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium">
                           {plugin.category}
+                        </span>
+                      )}
+                      {typeof plugin.installCount === 'number' && (
+                        <span>
+                          {plugin.installCount === 1
+                            ? '1 install'
+                            : `${plugin.installCount.toLocaleString()} installs`}
                         </span>
                       )}
                     </div>
