@@ -96,3 +96,26 @@ export async function getUserScopedDb(
 
   throw createError.unauthorized();
 }
+
+export interface CurrentUserRlsDb {
+  db: DatabaseAdapter;
+  userId: string;
+}
+
+/**
+ * RLS-scoped read access for callers with no `NextRequest` — Server
+ * Components, e.g. the root layout rendering telemetry consent server-side
+ * (WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01). Deliberately lighter than
+ * `getUserScopedDb`: no organization resolution (an extra query most callers
+ * here don't need) and no `assertAccountActive` (throwing out of a layout
+ * render would break every page for a suspended account instead of just the
+ * one action that should be blocked). Returns null rather than throwing when
+ * signed out, so callers can fail closed instead of crashing the render.
+ */
+export async function getCurrentUserRlsDb(): Promise<CurrentUserRlsDb | null> {
+  const { userId, getToken } = await auth();
+  if (!userId) return null;
+  const token = await getToken();
+  if (!token) return null;
+  return { db: getRlsCapableDb().withUser(token), userId };
+}
