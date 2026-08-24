@@ -2235,32 +2235,43 @@ one.
 - If no, say so and I will narrow the contract's documented scope to mobile so
   nothing claims coverage it does not have.
 
-## The plugin catalogue works but has only four plugins in it
+## The plugin catalogue had only four plugins in it — three real packs added (Phase 1)
 
-**Status:** `BLOCKED_BY_HUMAN` — content, not code.
+**Status:** Resolved for the packs that can honestly exist today; still open for
+going beyond the real first-party skill set.
 
 `audit/ui-gaps.csv` carried GAP-274, "Plugin catalogue is a 4-entry preview that
-installs nothing". Half of that is wrong and I have corrected the record:
-installing works, and it matters. `POST /api/plugins/installations` calls
-`installWebPlugin`, and `listEnabledPluginIdsForUser` gates real skill
-availability in the chat request-processor, the tool-loop and `/api/skills`.
-Production holds one real installation.
+installs nothing". Half of that was wrong and stays corrected: installing works,
+and it matters. `POST /api/plugins/installations` calls `installWebPlugin`, and
+`listEnabledPluginIdsForUser` gates real skill availability in the chat
+request-processor, the tool-loop and `/api/skills`.
 
-What is true is the other half. `plugin_registry_entries` has exactly four rows
-in production:
+The other half — only four catalogue rows, one of them (`research-pack`)
+actually installable — is now three rows better. Migration
+`db/neon/0145_web_pack_example_prompts.sql` adds three new published,
+web-installable, first-party packs that bundle ONLY skills `GET /api/skills`
+actually serves in production:
 
-    CRM Sync · Calendar Assistant · GitHub Automation · Research Pack
+    engineering-pack (code-review, systematic-debugging, frontend-design-review)
+    writing-pack     (document-creation, presentation-creation, research-and-citations)
+    data-pack        (data-analysis, document-creation)
 
-So a working system looks like a dead preview, which is the impression a visitor
-takes away. claude.ai's equivalent list runs to roughly 22.
+`plugin_registry_entries` now holds seven rows: those three plus `research-pack`
+are real installs; `github-automation`, `calendar-assistant`, and `crm-sync`
+stay `preview` deliberately — their declared skills ("Code Review", "Meeting
+Summarizer", …) do not correspond to any real skill, and promoting them would
+advertise an install that installs nothing real.
 
-**What is needed from you**
+**What is still needed from you**
 
-- Decide what the plugin catalogue should contain, and whether entries are
-  authored by you or opened to third parties. I can seed entries once the list
-  exists, but inventing plugins and their capabilities is not something I should
-  do unprompted — a registry entry claims a capability, and a fabricated one is
-  the same fake-availability defect this goal exists to remove.
+- Every first-party skill that exists is now spoken for by one of the four
+  installable packs. Going past seven catalogue entries means either shipping
+  new first-party skills to bundle, or deciding whether third-party submission
+  opens up — `plugin_registry_entries_first_party_only` is the one constraint
+  to drop when that decision lands. I still should not invent a plugin's
+  capabilities unprompted; a registry entry claims a capability, and a
+  fabricated one is the same fake-availability defect this goal exists to
+  remove.
 
 ## Automatic credit recharge needs your decision before any UI
 
