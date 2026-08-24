@@ -237,6 +237,17 @@ test('extractPublishableKeyFromHtml finds the key in a realistic production page
   assert.equal(extractPublishableKeyFromHtml(undefined), '');
 });
 
+test('extractPublishableKeyFromHtml prefers the anchored clerk key over an earlier pk_ token', () => {
+  const decoyed = `<script src="https://third-party.example/pk_live_REVPWURFQ09Z"></script>${REALISTIC_PRODUCTION_HTML_FIXTURE}`;
+  assert.equal(extractPublishableKeyFromHtml(decoyed), FAKE_PUBLISHABLE_KEY);
+  assert.equal(
+    extractPublishableKeyFromHtml(
+      '<script src="https://third-party.example/pk_live_REVPWURFQ09Z"></script>',
+    ),
+    'pk_live_REVPWURFQ09Z',
+  );
+});
+
 test('fetchPublishableKeyFromProductionSite extracts the key from the served page', async () => {
   const requested = [];
   const fetchImpl = async (url) => {

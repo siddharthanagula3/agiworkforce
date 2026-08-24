@@ -10,6 +10,10 @@ const TARGETS = ['production', 'preview', 'development'];
 const HOST_PATTERN = /^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/u;
 const PRODUCTION_WEB_URL_DEFAULT = 'https://agiworkforce.com';
 const PUBLISHABLE_KEY_PATTERN = /pk_(?:live|test)_[A-Za-z0-9+/=]+/u;
+const ANCHORED_PUBLISHABLE_KEY_PATTERNS = [
+  /data-clerk-publishable-key="(pk_(?:live|test)_[A-Za-z0-9+/=]+)"/u,
+  /publishableKey\\?":\\?"(pk_(?:live|test)_[A-Za-z0-9+/=]+)/u,
+];
 
 export class UndecryptedVercelValueError extends Error {}
 
@@ -106,8 +110,13 @@ export async function fetchPublishableKeyFromVercel({
 }
 
 export function extractPublishableKeyFromHtml(html) {
-  const match = PUBLISHABLE_KEY_PATTERN.exec(html ?? '');
-  return match ? match[0] : '';
+  const source = html ?? '';
+  for (const pattern of ANCHORED_PUBLISHABLE_KEY_PATTERNS) {
+    const match = pattern.exec(source);
+    if (match) return match[1];
+  }
+  const loose = PUBLISHABLE_KEY_PATTERN.exec(source);
+  return loose ? loose[0] : '';
 }
 
 export async function fetchPublishableKeyFromProductionSite({
