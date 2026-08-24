@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -199,6 +198,7 @@ export const queryKeys = {
     preferences: (userId?: string) => ['settings', 'preferences', userId] as const,
     apiKeys: (userId?: string) => ['settings', 'apiKeys', userId] as const,
     notifications: () => ['settings', 'notifications'] as const,
+    accountDeletionStatus: () => ['settings', 'accountDeletionStatus'] as const,
   },
 
   system: {
