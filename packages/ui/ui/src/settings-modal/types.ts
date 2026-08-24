@@ -52,6 +52,8 @@ export interface SettingsPlugin {
   requiredConnectors?: string[];
   /** "Try asking" directory copy. Display-only; never sent to a model. */
   examplePrompts?: string[];
+  /** Real count of active installs across all users. Absent, not zero, when unknown. */
+  installCount?: number;
   updatedAt?: string;
   statusLabel?: string;
   detailsHref?: string;
