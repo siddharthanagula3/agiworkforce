@@ -9,12 +9,17 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const rlsWithOrg = vi.fn(() => ({ tag: 'rls-adapter' }) as unknown as DatabaseAdapter);
-const rlsWithUser = vi.fn(() => ({ withOrg: rlsWithOrg }));
+const rlsWithUser = vi.fn((_jwt: string) => ({ withOrg: rlsWithOrg }));
 vi.mock('@agiworkforce/data-layer', () => ({
   createDatabaseClient: vi.fn(() => ({ withUser: rlsWithUser })),
 }));
 
-const mockAuth = vi.fn(async () => ({ userId: null, getToken: async () => null }));
+const mockAuth = vi.fn(
+  async (): Promise<{ userId: string | null; getToken: () => Promise<string | null> }> => ({
+    userId: null,
+    getToken: async () => null,
+  }),
+);
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...(args as [])),
 }));
@@ -54,7 +59,7 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isAppError } from '@/lib/errors';
-import { getUserScopedDb } from './rls-db';
+import { getCurrentUserRlsDb, getUserScopedDb } from './rls-db';
 
 const API_KEY_TOKEN = 'sk_live_0000000000000000_rls_spec_fixture';
 const API_KEY_USER = 'user_api_key_principal';
@@ -138,5 +143,48 @@ describe('getUserScopedDb with an API-key principal', () => {
     expect(scoped.userId).toBe('user_session');
     expect(rlsWithUser).toHaveBeenCalledWith('eyJhbGciOiJIUzI1NiJ9.session.sig');
     vi.unstubAllEnvs();
+  });
+});
+
+// WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01: the RLS read used by Server
+// Components with no NextRequest to build getUserScopedDb from (the root
+// layout's server-rendered telemetry consent).
+describe('getCurrentUserRlsDb', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns null when signed out', async () => {
+    mockAuth.mockResolvedValue({ userId: null, getToken: async () => null });
+
+    await expect(getCurrentUserRlsDb()).resolves.toBeNull();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
+  it('treats a route with no auth context as signed out instead of throwing', async () => {
+    mockAuth.mockRejectedValue(
+      new Error("Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware()"),
+    );
+
+    await expect(getCurrentUserRlsDb()).resolves.toBeNull();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the session carries no token', async () => {
+    mockAuth.mockResolvedValue({ userId: 'user_1', getToken: async () => null });
+
+    await expect(getCurrentUserRlsDb()).resolves.toBeNull();
+    expect(rlsWithUser).not.toHaveBeenCalled();
+  });
+
+  it('scopes the adapter to the caller without an organization-resolution query', async () => {
+    mockAuth.mockResolvedValue({ userId: 'user_1', getToken: async () => 'jwt-token' });
+
+    const scoped = await getCurrentUserRlsDb();
+
+    expect(scoped?.userId).toBe('user_1');
+    expect(scoped?.db).toBe(rlsWithUser.mock.results[0]?.value);
+    expect(rlsWithUser).toHaveBeenCalledWith('jwt-token');
+    expect(rlsWithOrg).not.toHaveBeenCalled();
   });
 });

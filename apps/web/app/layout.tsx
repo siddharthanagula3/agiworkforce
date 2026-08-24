@@ -10,6 +10,7 @@ import { CookieConsent } from '@shared/components/CookieConsent';
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
 import { OG_IMAGE } from '@/lib/seo/site';
+import { readServerTelemetryConsent } from '@/lib/server/telemetry-consent';
 import {
   organizationSchema,
   softwareApplicationSchema,
@@ -139,8 +140,15 @@ export default async function RootLayout({
 
   const gaTrackingId = process.env['NEXT_PUBLIC_GA_TRACKING_ID'];
 
+  // The account's real, server-stored consent, so a brand-new device's first
+  // paint sees it before instrumentation-client.ts decides whether to init
+  // Sentry (WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01). The helper owns the
+  // auth() call inside its catch-all: this layout renders routes the Clerk
+  // proxy matcher excludes, where a bare auth() throws and 500s the page.
+  const telemetryConsent = await readServerTelemetryConsent();
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-telemetry-consent={String(telemetryConsent)}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
       >

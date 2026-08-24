@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ErrorEvent } from '@sentry/nextjs';
 
@@ -7,12 +7,15 @@ import {
   commonInitOptions,
   hasTelemetryConsent,
   isSentryConfigured,
+  readDocumentTelemetryConsent,
   redactDeep,
   scrubBreadcrumb,
   scrubEvent,
   scrubSpan,
   scrubTransactionEvent,
   setTelemetryConsentCache,
+  shouldInitializeSentry,
+  TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE,
   TELEMETRY_CONSENT_STORAGE_KEY,
 } from '../sentry-shared';
 
@@ -473,5 +476,89 @@ describe('telemetry consent cache (client-side Sentry gate)', () => {
   it('treats a corrupted/unexpected stored value as no consent', () => {
     window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, 'yes-please');
     expect(hasTelemetryConsent()).toBe(false);
+  });
+});
+
+// WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01: the root layout renders the
+// account's server-stored consent onto <html> so a brand-new device's first
+// paint doesn't depend on a localStorage mirror it has never written.
+describe('readDocumentTelemetryConsent (server-rendered consent signal)', () => {
+  beforeEach(() => {
+    document.documentElement.removeAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE);
+  });
+
+  it('reads true when the server rendered consent', () => {
+    document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'true');
+    expect(readDocumentTelemetryConsent()).toBe(true);
+  });
+
+  it('reads false when the server rendered no consent', () => {
+    document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'false');
+    expect(readDocumentTelemetryConsent()).toBe(false);
+  });
+
+  it('returns null when the attribute was never rendered', () => {
+    expect(readDocumentTelemetryConsent()).toBeNull();
+  });
+
+  it('returns null rather than guessing on an unrecognized value', () => {
+    document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'maybe');
+    expect(readDocumentTelemetryConsent()).toBeNull();
+  });
+});
+
+describe('shouldInitializeSentry (pre-mount init gate)', () => {
+  beforeEach(() => {
+    document.documentElement.removeAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE);
+    window.localStorage.clear();
+  });
+
+  it('never initializes when Sentry is unconfigured, regardless of consent', () => {
+    document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'true');
+    expect(isSentryConfigured()).toBe(false);
+    expect(shouldInitializeSentry()).toBe(false);
+  });
+
+  describe('with Sentry configured', () => {
+    beforeEach(() => {
+      vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', 'https://fixture@sentry.example/1');
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('initializes on a brand-new device when the server rendered consent true', () => {
+      document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'true');
+      expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBeNull();
+
+      expect(shouldInitializeSentry()).toBe(true);
+      expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('true');
+    });
+
+    it('stays off on a brand-new device when the server rendered no consent', () => {
+      document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'false');
+      expect(shouldInitializeSentry()).toBe(false);
+      expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('false');
+    });
+
+    it('overrides a stale localStorage mirror with the fresh server signal', () => {
+      setTelemetryConsentCache(true);
+      document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'false');
+
+      expect(shouldInitializeSentry()).toBe(false);
+      expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('false');
+    });
+
+    it('falls back to the localStorage mirror when the document carries no signal', () => {
+      setTelemetryConsentCache(true);
+
+      expect(shouldInitializeSentry()).toBe(true);
+    });
+
+    it('fails closed when neither the document nor the mirror carries a signal', () => {
+      expect(shouldInitializeSentry()).toBe(false);
+    });
   });
 });

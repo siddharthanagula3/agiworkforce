@@ -37,6 +37,39 @@ export function setTelemetryConsentCache(value: boolean): void {
   }
 }
 
+// Root layout renders the account's real, server-stored consent onto <html> on
+// every full page load (WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01), so a
+// brand-new device's first paint reads the authoritative answer instead of a
+// localStorage mirror it has never written. It is a one-shot signal read at
+// module load, before hydration — nothing keeps it live after that, so later
+// consent changes in this tab are still tracked through the localStorage
+// mirror above, not this attribute.
+export const TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE = 'data-telemetry-consent';
+
+export function readDocumentTelemetryConsent(): boolean | null {
+  if (typeof document === 'undefined') return null;
+  const raw = document.documentElement.getAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE);
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return null;
+}
+
+/**
+ * The pre-mount Sentry init gate, called once from instrumentation-client.ts.
+ * Prefers the server-rendered document signal (always present and accurate,
+ * including on a brand-new device) over the localStorage mirror, and syncs
+ * the mirror to match so every hasTelemetryConsent() read this session — not
+ * just this decision — agrees with it before TelemetryConsentSync's fetch
+ * resolves. Falls back to the mirror only when the document carries no signal
+ * at all, which real pages never do; it exists for non-SSR call sites.
+ */
+export function shouldInitializeSentry(): boolean {
+  if (!isSentryConfigured()) return false;
+  const documentConsent = readDocumentTelemetryConsent();
+  if (documentConsent !== null) setTelemetryConsentCache(documentConsent);
+  return documentConsent ?? hasTelemetryConsent();
+}
+
 const SENSITIVE_KEY =
   /(authorization|cookie|set-cookie|x-api-key|api[_-]?key|apikey|secret|password|passwd|token|jwt|bearer|session|credential|private[_-]?key|prompt|message|content|conversation|completion|transcript|attachment|upload|email|phone|ssn)/i;
 
