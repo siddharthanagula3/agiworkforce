@@ -117,7 +117,7 @@ function stubFetch({
             json: async () => {
               throw new SyntaxError('Unexpected end of JSON input');
             },
-          } as Response;
+          } as unknown as Response;
         }
         return {
           ok: false,
