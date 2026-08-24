@@ -44,6 +44,11 @@ afterAll(async () => {
   await client?.end();
 });
 
+async function db_seats(): Promise<Array<{ licensed_seats: number }>> {
+  const r = await client.query('select licensed_seats from public.organizations where id = $1', [ORG]);
+  return r.rows as Array<{ licensed_seats: number }>;
+}
+
 /** Read from the database rather than hardcoded, so any seeded workspace works. */
 async function db_orgName(): Promise<Array<{ name: string }>> {
   const r = await client.query('select name from public.organizations where id = $1', [ORG]);
@@ -62,9 +67,11 @@ describe('service SQL against a real schema', () => {
     for (const id of ['sso', 'members', 'seats', 'retention', 'model-policy', 'connector-policy', 'spend-limit', 'siem']) {
       expect(ids, `posture is missing ${id}`).toContain(id);
     }
-    // The seeded org has one owner and 25 licensed seats.
+    // Read from the database, not a literal: any seeded workspace should pass,
+    // and a harness that hardcodes the seed fails for reasons that are not defects.
+    const [{ licensed_seats: licensed }] = await db_seats();
     const seats = posture.groups.flatMap((g) => g.signals).find((s) => s.id === 'seats');
-    expect(seats?.value).toContain('25');
+    expect(seats?.value).toContain(String(licensed));
   });
 
   it('the model policy round-trips and the evaluator agrees with what was stored', async () => {

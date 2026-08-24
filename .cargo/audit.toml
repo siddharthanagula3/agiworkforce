@@ -41,32 +41,40 @@ ignore = [
     "RUSTSEC-2025-0100", # unic-ucd-ident - unmaintained (transitive, no security issue)
     "RUSTSEC-2025-0098", # unic-ucd-version - unmaintained (transitive, no security issue)
 
-    # lru - unsound IterMut (mysql_async dependency)
-    # The unsoundness only affects IterMut which we don't use directly
-    "RUSTSEC-2026-0002", # lru - unsound IterMut (mysql_async dependency, not used in our code)
-
-    # FIX-018 (Sprint 3) — transitive deps from the `remote-databases` feature
-    # (mongodb, mysql_async).
+    # FIX-018 (Sprint 3) — transitive deps from the `remote-databases` feature.
     #
-    # CORRECTED 2026-08-23. This block used to say the feature was "off by
-    # default and gated behind a build flag", so "users who enable it accept
-    # these advisories". The first half is true of a stock `cargo build`. It is
-    # NOT true of what users install: build-windows-release.yml builds the
-    # shipped NSIS installer with
-    #   --no-default-features --features shell,updater,billing,devtools,vad,remote-databases
-    # so every Windows user is running mongodb and mysql_async, and nobody
-    # "enabled" anything or accepted anything.
+    # 2026-08-24: four of the five entries that used to sit here are GONE, and
+    # they were removed by fixing the tree, not by rewording the excuse.
     #
-    # These entries therefore suppress advisories that are LIVE in a shipped
-    # artifact. They are kept only because removing them turns the gate red
-    # without making anyone safer, and the real fixes are upstream bumps or
-    # dropping the feature from the Windows build — a product decision about
-    # whether the desktop app needs remote database connectors at all.
-    # Until one of those happens, do not read this block as "not reachable".
-    "RUSTSEC-2026-0119", # hickory-proto O(n²) name compression (mongodb transitive, optional feature)
-    "RUSTSEC-2026-0118", # hickory-proto NSEC3 unbounded loop (mongodb transitive, optional feature)
-    "RUSTSEC-2023-0071", # rsa Marvin Attack (mongodb / mysql_async transitive, optional feature)
-    "RUSTSEC-2026-0173", # proc-macro-error2 unmaintained (mysql_async → mysql-common-derive transitive, optional feature)
+    #   RUSTSEC-2026-0119, RUSTSEC-2026-0118 (hickory-proto) — mongodb moved
+    #     3.5 -> 3.8, which carries hickory-proto 0.25.2 -> 0.26.1. Both
+    #     advisories are fixed at 0.26.1, so there is nothing left to suppress.
+    #   RUSTSEC-2023-0071 (rsa Marvin Attack) — `rsa` is not in Cargo.lock and
+    #     was not in main's lock either. This entry suppressed an advisory for a
+    #     crate the tree does not depend on. A stale ignore is not free: it is
+    #     one more line that reads as "known and accepted" while covering
+    #     nothing, which is how the rustls-webpki entry survived.
+    #   RUSTSEC-2026-0002 (lru unsound IterMut) — took three bumps, because
+    #     the comment had the parent wrong and removing the ignore revealed a
+    #     second advisory. It said mysql_async; the 0.12.5 copy came from
+    #     ratatui in apps/cli. ratatui 0.29 -> 0.30 moved that to 0.18.2, which
+    #     then surfaced RUSTSEC-2026-0253 (use-after-free in LruCache::pop, no
+    #     panic safety) against the 0.16.3 still held by our own
+    #     crates/agiworkforce-utils-image and by mysql_async. Both are now past
+    #     it: our crate takes lru 0.18, and mysql_async 0.36 -> 0.37 drops its
+    #     copy entirely. lru 0.16.3 is no longer in the tree.
+    #
+    # What the old block claimed, and why it was wrong in the other direction:
+    # it said "every Windows user is running mongodb and mysql_async". No
+    # Windows user is running anything. build-windows-release.yml has failed on
+    # every run in its visible history, the newest release carries only Linux
+    # artifacts, and production /api/download answers 503 for windows and mac.
+    # The feature set that workflow builds did not compile until 2026-08-24.
+    # See DISTRIBUTION-01 in docs/agent-context/known-flaws.md.
+    #
+    # One entry remains, and it is a maintenance warning rather than a
+    # vulnerability:
+    "RUSTSEC-2026-0173", # proc-macro-error2 unmaintained (mysql_async → mysql-common-derive)
 
     # COVERAGE BOUNDARY — read this before trusting the CI advisory gate.
     #

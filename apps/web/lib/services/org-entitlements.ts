@@ -18,10 +18,26 @@ export interface OrganizationEntitlements {
   sharedConnectorLimit: number | null;
 }
 
+/**
+ * Resolves what an ORGANIZATION is entitled to, on the privileged connection.
+ *
+ * It deliberately does not accept a caller-scoped adapter, because accepting
+ * one is how this went wrong: entitlement resolves from the OWNER's
+ * subscription row, `public.subscriptions` has RLS forced, and a scoped
+ * connection only ever sees the caller's own row. Every administrator who was
+ * not the owner therefore joined to NULL, resolved to `free`, and was told the
+ * workspace had no subscription — on all ten organization routes, while the
+ * workspace held a valid Enterprise plan.
+ *
+ * This is an organization-level fact, not the caller's own data, and callers
+ * establish membership on the scoped connection before asking: both call sites
+ * pass an organization id taken from the caller's own membership, and
+ * `requireTeamAdminAccess` asserts membership first.
+ */
 export async function resolveOrganizationEntitlementPlan(
-  db: DatabaseAdapter,
   organizationId: string,
 ): Promise<BillingPlanTier> {
+  const db: DatabaseAdapter = getNeonDb();
   const [billing] = await db.query<{
     user_id: string | null;
     plan_tier: string | null;
@@ -68,8 +84,7 @@ export async function resolveOrganizationEntitlementPlan(
 export async function getOrganizationEntitlements(
   organizationId: string,
 ): Promise<OrganizationEntitlements> {
-  const db: DatabaseAdapter = getNeonDb();
-  const plan = await resolveOrganizationEntitlementPlan(db, organizationId);
+  const plan = await resolveOrganizationEntitlementPlan(organizationId);
 
   const limits = getBillingPlanProductLimits(plan);
   return {

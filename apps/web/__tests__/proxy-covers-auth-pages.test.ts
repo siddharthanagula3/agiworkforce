@@ -55,11 +55,28 @@ function matcherPatterns(name: string): string[] {
   return [...(block?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
 }
 
+const WILDCARD = '\u0000';
+
+/**
+ * Escapes every regex metacharacter, not a hand-picked few.
+ *
+ * The previous version escaped `/` and nothing else, which left `\` — and
+ * every other metacharacter — to be reinterpreted. `/` never needed escaping
+ * here at all: these patterns are compiled with the RegExp constructor, not
+ * written as literals.
+ */
+function patternToRegExp(pattern: string): RegExp {
+  const escaped = pattern
+    .replaceAll('(.*)', WILDCARD)
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replaceAll(WILDCARD, '(?:/.*)?');
+  return new RegExp(`^${escaped}$`);
+}
+
 function covers(patterns: string[], route: string): boolean {
   return patterns.some((pattern) => {
-    const source = `^${pattern.replace(/\(\.\*\)/g, '(?:/.*)?').replace(/\//g, '\\/')}$`;
     try {
-      return new RegExp(source).test(route);
+      return patternToRegExp(pattern).test(route);
     } catch {
       return false;
     }
