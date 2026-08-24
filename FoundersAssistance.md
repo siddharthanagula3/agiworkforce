@@ -2191,6 +2191,7 @@ hole the sweep closed.
 which boots the real server as a child process with and without `ALLOWED_ORIGINS`
 and asserts the close codes. Five of its nine assertions fail against the pre-fix
 handler.
+
 ## Three Neon migrations are written but not applied — RESOLVED 2026-08-21
 
 Applied to production on 2026-08-21 with founder authorization, after
@@ -2420,9 +2421,10 @@ undici pin, given the override reads like a CVE floor.
 
 DECISION NEEDED, and it is not mine to make because I cannot know the intent
 behind the pin:
-  - drop the direct `undici` dependency from apps/web and let the root override
-    supply it, or
-  - widen the root override to admit `^8.10.0`.
+
+- drop the direct `undici` dependency from apps/web and let the root override
+  supply it, or
+- widen the root override to admit `^8.10.0`.
 
 I did not touch either file. Working around it with `--no-frozen-lockfile` would
 rewrite the lockfile underneath another session's in-flight edit.
@@ -2465,13 +2467,13 @@ wrong list is worse off than if neither existed, because the decorative one
 gives them the feeling of having locked the door.
 
 DECISION NEEDED:
-  (a) delete the decorative lists and their store plumbing, leaving the per-app
-      permission registry as the single allow/deny surface — nothing is lost,
-      the registry already carries the always-blocked list and active-window
-      helper; or
-  (b) keep them as a convenience front-end, in which case they MUST write
-      through to `app_permissions_set` / `app_permissions_remove` so they are a
-      second view of the same data rather than a competing one.
+(a) delete the decorative lists and their store plumbing, leaving the per-app
+permission registry as the single allow/deny surface — nothing is lost,
+the registry already carries the always-blocked list and active-window
+helper; or
+(b) keep them as a convenience front-end, in which case they MUST write
+through to `app_permissions_set` / `app_permissions_remove` so they are a
+second view of the same data rather than a competing one.
 
 Nothing has been changed. Recommendation is (a).
 
@@ -2571,13 +2573,13 @@ succeed, and cannot distinguish "my change broke the build" from "I do not hold
 a release secret".
 
 YOUR CALL, two defensible options:
-  (a) Intended — the full build is a release-only path, in which case the script
-      or its docs should say so, because today it looks like a broken build.
-  (b) Make updater-bundle generation conditional on `TAURI_SIGNING_PRIVATE_KEY`
-      being present, mirroring how notarization already degrades. Local runs
-      would then produce .app and .dmg and exit 0; CI, which supplies the secret
-      and guards on it being non-empty (release-desktop.yml:69-73), still
-      produces and signs the updater artifact.
+(a) Intended — the full build is a release-only path, in which case the script
+or its docs should say so, because today it looks like a broken build.
+(b) Make updater-bundle generation conditional on `TAURI_SIGNING_PRIVATE_KEY`
+being present, mirroring how notarization already degrades. Local runs
+would then produce .app and .dmg and exit 0; CI, which supplies the secret
+and guards on it being non-empty (release-desktop.yml:69-73), still
+produces and signs the updater artifact.
 
 I did not change the build script. Which of these is right depends on whether
 you want local full builds to be a supported workflow, and that is a product
@@ -2672,11 +2674,11 @@ consumer — except this one is attached to a file watcher, so unlike dead code 
 costs the user something continuously.
 
 DECISION NEEDED, and it is a product call rather than a cleanup:
-  (a) DELETE the indexer and its watcher. Nothing reads it, so nothing regresses,
-      and users stop paying for it.
-  (b) WIRE `getRelevantContext()` into chat context, which is evidently what it
-      was built for. That is a feature decision — it changes what gets sent to
-      the model — and it needs your intent, not a guess from me.
+(a) DELETE the indexer and its watcher. Nothing reads it, so nothing regresses,
+and users stop paying for it.
+(b) WIRE `getRelevantContext()` into chat context, which is evidently what it
+was built for. That is a feature decision — it changes what gets sent to
+the model — and it needs your intent, not a guess from me.
 
 Not urgent in the incident sense; it has presumably always been this way. But it
 is the only finding today that costs the user resources continuously rather than
@@ -2714,13 +2716,14 @@ WHY THIS ALMOST GOT DELETED. I had authorised removing all 20 tautologies in
 that file on the grounds they were redundant, with the condition that redundancy
 be proven input by input first. That check found FOUR of the six blocks were not
 redundant at all:
-  - the privacy notice above (zero coverage anywhere)
-  - `commandLabel`, real exported code behind the plan-mode confirmation prompt,
-    where the copy had also DRIFTED — production has five labels including
-    `docs: 'Generate Docs'`, the copy had four
-  - the API-key validator at `commandSetup.ts:515`, no coverage
-Only two blocks were genuinely deletable, plus one that described a function
-(`isLocalPortReachable`) that does not exist.
+
+- the privacy notice above (zero coverage anywhere)
+- `commandLabel`, real exported code behind the plan-mode confirmation prompt,
+  where the copy had also DRIFTED — production has five labels including
+  `docs: 'Generate Docs'`, the copy had four
+- the API-key validator at `commandSetup.ts:515`, no coverage
+  Only two blocks were genuinely deletable, plus one that described a function
+  (`isLocalPortReachable`) that does not exist.
 
 Recording this because the lesson generalises: "vacuous" and "redundant" are not
 the same property. A test can assert nothing AND be the only thing pointing at a
@@ -2742,11 +2745,11 @@ The VS Code finding (145 of 986 tests unable to fail) prompted a sweep of every
 other surface. Rates are ESTIMATES from biased samples, not censuses; the
 vacuous counts themselves are verified by reading.
 
-  extension (chrome)  166 vacuous / 1587 blocks   ~10.5%   worst
-  desktop             163 / 3230                  ~5.0%
-  web                 113 / 8695                  ~1.3%
-  mobile               27 / 2897                  ~0.9%
-  cli                   8 / 1942                  ~0.4%    effectively clean
+extension (chrome) 166 vacuous / 1587 blocks ~10.5% worst
+desktop 163 / 3230 ~5.0%
+web 113 / 8695 ~1.3%
+mobile 27 / 2897 ~0.9%
+cli 8 / 1942 ~0.4% effectively clean
 
 ### WEB IS NOT INFECTED — the number I quoted you holds
 
@@ -2785,6 +2788,7 @@ A file named `security-fixes.test.ts`, indexed by finding ID, is exactly what a
 reader treats as proof those findings were fixed and stay fixed.
 
 Also on Chrome, all verified:
+
 - `background.cookies.test.ts` 25/25, with PROVEN drift. Production was rewritten
   to structured `CookieBlockEntry` parsing; the suite still holds 44 regexes and
   its own matcher, and never noticed. They also DISAGREE: the test's pattern
@@ -2903,3 +2907,40 @@ entry at all. If yes, it cannot be gated client-side — `AGI_PLATFORM_ADMIN_USE
 is server-only by design — so it needs a server component or an endpoint that
 reports platform membership for the signed-in user. Until then, reach the console
 by navigating to `/admin` directly; it works for allowlisted operators.
+
+---
+
+## 40. Missing `ANTHROPIC_API_KEY` Actions secret — "AI output quality evals" has never passed on schedule
+
+**Status:** `BLOCKED_BY_HUMAN` — needs a repository secret only you can add.
+
+**Blocks:** any real measurement of model output quality. Every scheduled run of
+`.github/workflows/evals.yml` has failed identically since it was added: run
+31363692413 (2026-08-10, its first scheduled run) and run 32695971124 (this
+week) both fail at the same guard,
+`evals.yml:119-124` ("Require the provider key"), which checks
+`ANTHROPIC_API_KEY` and exits 1 when it is empty — by design, per
+`tools/evals/README.md:58-60`, because a green run that measured nothing is the
+exact failure mode this directory exists to prevent. The env dump on run
+32695971124 confirms the secret is empty in this repository.
+
+**The fix:** add `ANTHROPIC_API_KEY` under repository Settings → Secrets and
+variables → Actions. Then trigger `workflow_dispatch` on "AI output quality
+evals" once to confirm the live job actually runs — the guard passing is not
+enough by itself; the job downstream (`pnpm exec vitest run tools/evals` with
+`AGIWORKFORCE_LIVE_TEST=1`) must be seen scoring the three corpora.
+
+**Cost of adding it:** real, ongoing spend. The weekly live job
+(`__tests__/live.eval.test.ts`) runs the `golden` (12 rows), `refusal` (10
+rows), and `jailbreak` (11 rows) corpora — 33 rows total — through one
+non-streaming Anthropic Messages call per row, each capped at 512 max output
+tokens (`tools/evals/src/anthropic.ts`'s `maxOutputTokens` default). That is a
+small, bounded weekly cost, not a runaway one, but it is real production API
+spend against whatever key you add, so it should come from a key budgeted for
+this rather than a shared production credential.
+
+**Cost of leaving it:** none of the quality, refusal, or jailbreak-resistance
+claims this suite exists to back are actually being measured in CI. The offline
+harness job (`pnpm exec vitest run tools/evals`, no live model) still runs and
+passes on every change to the directory, so the grading logic itself is
+exercised — only the live measurement against a real model is dark.
