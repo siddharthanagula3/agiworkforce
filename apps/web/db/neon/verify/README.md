@@ -123,6 +123,31 @@ order and twice in a row. They did not start that way: the audit-stream harness
 counted the workspace's audit events, and the connector harness writes audit
 events of its own, so running the second changed the first's answer.
 
+## Driving the console and its enforcement in a browser
+
+`apps/web/e2e/workspace-console.spec.ts` and
+`apps/web/e2e/enterprise-enforcement.spec.ts` run against the local stack above
+with `PLAYWRIGHT_REUSE_RUNNING_SERVER=1` and `CLERK_SECRET_KEY` exported. The
+second one is the important one: it changes a control through the real API and
+then makes a request that must be DENIED, because a PATCH returning 200 proves
+only that a row was written.
+
+Two things it must keep doing, both learned by getting them wrong:
+
+- **Send `x-agi-surface`.** Managed Cloud refuses a request that does not name a
+  supported client surface, and that gate fires BEFORE the workspace policy
+  gate. Without the header the turn is still refused, for a different and
+  correct reason, which would let the spec claim the policy bound when it had
+  never been consulted. The spec now asserts the denial is NOT
+  `managed_cloud_surface_unknown`.
+- **Do not truncate the response.** The posture body is longer than 400
+  characters, so a `slice(0, 400)` helper reports signals as missing that are
+  present.
+
+To confirm the enforcement assertions are not vacuous, flip the column in SQL
+(`update organization_admin_policies set audit_export_enabled = false`) and
+re-run: the spec must fail on the FIRST assertion, before it changes anything.
+
 ## Running the app itself against this database
 
 The data layer speaks to Postgres over a WebSocket, so it cannot reach a plain
