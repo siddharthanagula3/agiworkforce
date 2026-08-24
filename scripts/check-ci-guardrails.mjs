@@ -156,7 +156,7 @@ requireIncludes(
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/mobile test:e2e:ios:ci');
 requireIncludes(
   '.github/workflows/ci.yml',
-  'pnpm exec playwright test public-auth-clean.spec.ts --project=chromium --workers=1',
+  'pnpm exec playwright test public-auth-clean.spec.ts checkout.spec.ts --project=chromium --workers=1',
 );
 requireIncludes('apps/mobile/detox.config.js', 'ONLY_ACTIVE_ARCH=YES');
 requireIncludes('apps/mobile/detox.config.js', 'DETOX_IOS_DEVICE');
