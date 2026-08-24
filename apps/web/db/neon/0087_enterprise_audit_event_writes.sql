@@ -9,16 +9,9 @@
 --   and creates exactly ONE policy — `enterprise_audit_events_admin_read`
 --   (FOR SELECT). With RLS enabled and no INSERT policy, EVERY insert is
 --   rejected, for every role, including the table owner (FORCE applies to the
---   owner too). The Enterprise "audit trail" was therefore a table nothing
---   could ever write to.
---
---   Correction (2026-08-22): this header originally cited a reader at
---   services/api-gateway/src/routes/enterprise.ts. That service was removed in
---   the 2026-07 restructure — `services/` now holds only `signaling-server` —
---   and no replacement read route exists yet. Writes land through
---   `recordAuditEvent` (apps/web/lib/security-audit.ts) whenever an event
---   carries an organizationId; the read and export path is tracked as Wave 3 of
---   docs/plans/teams-enterprise-2026-08-22.md.
+--   owner too). The Enterprise "audit trail" therefore had a read endpoint
+--   (services/api-gateway/src/routes/enterprise.ts) over a table nothing could
+--   ever write to.
 --
 -- Shape of the fix (append-only, non-forgeable):
 --   1. A SECURITY DEFINER writer function owned by the table owner. All audit
