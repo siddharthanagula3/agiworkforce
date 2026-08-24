@@ -386,7 +386,7 @@ fn json_to_bson_document(json_doc: &Document) -> Result<BsonDocument> {
     let json_value = serde_json::to_value(json_doc)
         .map_err(|e| Error::Other(format!("JSON serialization error: {}", e)))?;
 
-    let bson = bson::to_bson(&json_value)
+    let bson = bson::serialize_to_bson(&json_value)
         .map_err(|e| Error::Other(format!("BSON conversion error: {}", e)))?;
 
     match bson {
@@ -397,7 +397,7 @@ fn json_to_bson_document(json_doc: &Document) -> Result<BsonDocument> {
 
 fn bson_document_to_json(bson_doc: BsonDocument) -> Result<Document> {
     let bson_value = Bson::Document(bson_doc);
-    let json_value = bson::from_bson(bson_value)
+    let json_value = bson::deserialize_from_bson(bson_value)
         .map_err(|e| Error::Other(format!("BSON to JSON conversion error: {}", e)))?;
 
     match json_value {
