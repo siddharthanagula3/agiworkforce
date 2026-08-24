@@ -129,6 +129,7 @@ export function SchedulesPage({
   const [formErrors, setFormErrors] = useState<ScheduleFormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
 
   const [operations, setOperations] = useState<Record<string, ScheduleOperation>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
@@ -289,11 +290,19 @@ export function SchedulesPage({
 
   const closeEditor = (force = false) => {
     if (saving) return;
-    if (!force && draftDirty && !window.confirm('Discard your unsaved schedule changes?')) return;
+    if (!force && draftDirty) {
+      setDiscardConfirmOpen(true);
+      return;
+    }
     setDialogOpen(false);
     setEditing(null);
     setFormErrors({});
     setSubmitError(null);
+  };
+
+  const confirmDiscard = () => {
+    setDiscardConfirmOpen(false);
+    closeEditor(true);
   };
 
   const saveSchedule = async () => {
@@ -775,6 +784,29 @@ export function SchedulesPage({
               {deleteTarget && operations[deleteTarget.id] === 'delete'
                 ? 'Deleting…'
                 : 'Delete Schedule'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard Unsaved Changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your schedule edits have not been saved. Closing the editor now discards them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                confirmDiscard();
+              }}
+            >
+              Discard Changes
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

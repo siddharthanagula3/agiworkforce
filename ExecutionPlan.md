@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-22
+Last updated: 2026-08-24
 
 The open execution queue, ordered consequence-to-effort. Completed items are
 removed rather than annotated — `CHANGELOG.md` carries verified slices and
@@ -2049,45 +2049,24 @@ BLOCKED_BY_HUMAN — local `DATABASE_URL` points at production Neon, so none of
 the user-skill storage work above can be tested locally without a branch
 database.
 
-### Connector tool permissions are built and unreachable on web — 2026-08-20
+### Connector tool permissions panel does not group by read vs write — 2026-08-24
 
-Traced while mapping claude.ai's connector surfaces component by component.
-claude.ai's connector detail carries a Tool permissions section: tools grouped
-`Read-only tools (5)` / `Write/delete tools (22)`, a group-level `Always allow`
-dropdown, and a per-tool allow / ask / deny tri-state.
+Follow-up to the 2026-08-20 finding that per-tool connector permissions were
+unreachable from web. `ToolPermissionsPanel` is now mounted in both the
+signed-in settings modal (`WebSettingsModal.tsx`, via
+`renderConnectorToolPermissions` into the shared `ConnectorsPanel`'s connector
+detail view) and the signed-out `ConnectorsPage.tsx`, and the dead
+`/connectors/permissions` redirect page is deleted — mobile and web now reach
+the same store and API.
 
-Every layer of that exists here already:
+Still open against claude.ai's connector detail: claude.ai groups
+`Read-only tools (5)` / `Write/delete tools (22)` with a group-level `Always
+allow` dropdown; `ToolPermissionsPanel` renders every tool in one flat list.
 
-- `connector_tool_permissions` table with FORCE RLS (`0069_connector_tool_permissions_rls.sql`)
-- `GET/PUT/DELETE /api/connectors/permissions`, user-scoped via `getUserScopedDb()`
-- runtime enforcement in `tool-loop.ts:1307-1345,1930`, including the
-  lethal-trifecta escalation
-- `features/connectors/stores/tool-permissions-store.ts`, hydrated on chat load
-  at `features/chat/pages/WebChatPage.tsx:768`
-- `features/connectors/components/ToolPermissionsPanel.tsx`, which already
-  renders the same allow / ask / deny tri-state Claude shows
-- mobile consumes the API directly (`apps/mobile/services/connectors.ts:185,197`)
-
-The panel is reachable only from `features/connectors/pages/ConnectorsPage.tsx`,
-and `app/connectors/page.tsx` renders that page ONLY when the visitor is signed
-out or Clerk has not loaded. A signed-in user is sent to
-`<SettingsModalRedirect section="connectors" />`, which opens the settings modal
-and navigates to `returnTo='/chat'`. The modal's own `ConnectorsPanel`
-(`packages/ui/ui/src/settings-modal/SettingsModal.tsx:1401`) has no
-tool-permission UI at all — connect, disconnect and a detail card only.
-
-`/connectors/permissions` compounds it: the whole page body is
-`redirect('/settings/capabilities')`, a different panel.
-
-Net effect: every signed-in web user has per-tool connector permissions being
-enforced against them with no way to see or change them. Mobile can, web cannot.
-
-TODO — mount `ToolPermissionsPanel` in the settings modal's connector detail
-view and delete the dead `/connectors/permissions` redirect. No backend work:
-table, API, store and enforcement all exist and are tested. Group the rows by
-read vs write using the `actionClass` already declared in `tool-metadata.ts`,
-which is what makes Claude's `Read-only (5)` / `Write/delete (22)` split
-possible.
+TODO — group `ToolRow`s in `ToolPermissionsPanel.tsx` by the `actionClass`
+already declared in `tool-metadata.ts`, which is what makes the read/write
+split possible. No backend work: the classification already exists, only the
+panel's rendering needs to change.
 
 ### Operator dashboard — goodwill levers — 2026-08-20
 
@@ -2210,9 +2189,9 @@ phrase and the grant amount/reason. Those are value entry, not destructive
 gating, and ConfirmDialog takes no input. A proper form dialog for the grant
 flow is the follow-up; the destructive decision itself is now correctly gated.
 
-STILL OPEN from the same gap: `SchedulesPage.tsx:279` uses `window.confirm` for
-a discard-unsaved-changes prompt. Lower stakes and outside the original
-citations, but it is the last raw confirm on a web surface.
+DONE: `SchedulesPage.tsx`'s discard-unsaved-changes prompt, the last raw
+`window.confirm` on a web surface, now uses the same `AlertDialog` primitives
+and destructive styling as the file's own Delete Schedule confirmation.
 
 ### Skill relevance matcher — root-cause fix — 2026-08-20
 
@@ -4214,10 +4193,7 @@ all, and let the typecheck find the edges.
 Every remaining live-component candidate from the dead-prop sweep is properly
 guarded — `ArtifactRenderer`'s apply/export, `ChatInterface`'s usage upgrade and
 dismiss, `GeneratedFileCard`'s source-session link all hide when unwired. No
-fake controls. `onExportNative` is the one with product value left in it: the
-artifact viewer offers Copy and a raw Download but no native docx/xlsx export,
-while the app already ships a working export service elsewhere. Wiring it means
-passing a handler from the web app into unified-chat's `LibraryView`. TODO.
+fake controls.
 
 ## The orphan list holds stale code, not lost features (2026-08-21)
 
@@ -4280,11 +4256,6 @@ behaviour. All of them have since shipped:
 Conclusion for future sweeps: do not treat that ledger as a live TODO list. Its
 Partial/Missing labels reflect 2026-07-19 and the web surface has moved. Re-verify
 before acting on any row.
-
-The one confirmed gap that survives re-verification is native artifact export:
-the viewer offers Copy and a raw Download, `onExportNative` is built and gated,
-and the app already ships a working PDF/docx service — it only lacks a handler
-passed into unified-chat's `LibraryView`. That maps to WEB-RND-001 "Downloads".
 
 ## Browser internals leaked across the whole settings surface (2026-08-21)
 

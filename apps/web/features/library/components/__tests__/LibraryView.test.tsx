@@ -1,17 +1,20 @@
-
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 
-const { mockUseAuth } = vi.hoisted(() => ({
+const { mockUseAuth, exportDocument } = vi.hoisted(() => ({
   mockUseAuth: vi.fn(() => ({ isSignedIn: true })),
+  exportDocument: vi.fn(async () => {}),
 }));
 
 vi.mock('@clerk/nextjs', () => ({
   useAuth: mockUseAuth,
 }));
+
+// Mocked at the module boundary LibraryView actually imports through
+// (@features/chat/services/document-export-service is the real, shared
+// export service used elsewhere in chat — this proves LibraryView calls it,
+// not a second exporter, without exercising jsPDF/docx internals here).
+vi.mock('@features/chat/services/document-export-service', () => ({ exportDocument }));
 
 import { LibraryView, iconKindFor, generatedFileFromLibraryItem } from '../LibraryView';
 
@@ -161,23 +164,81 @@ describe('generatedFileFromLibraryItem', () => {
   });
 });
 
-// The shared LibraryView reads native export off the transport, so dropping
-// the field here silently removes Export as PDF/Word from the Library while
-// every component test keeps passing. Assert the wiring, not just the widget.
-describe('library transport declares native export', () => {
-  const source = readFileSync(path.join(__dirname, '..', 'LibraryView.tsx'), 'utf8');
-
-  it('passes an exportNative implementation', () => {
-    expect(source).toMatch(/exportNative:/);
-    expect(source).toMatch(/exportDocument\(/);
+// The shared LibraryView reads native export off the transport. A dropped
+// field or a swapped-out exporter would silently remove Export as PDF/Word
+// from the Library while every other component test keeps passing, so this
+// drives the real click path (Preview -> export menu -> Export as PDF/Word)
+// through the real exportDocument service rather than asserting on source text.
+describe('native artifact export', () => {
+  const markdownItem = makeItem({
+    id: '44444444-4444-4444-8444-444444444444',
+    file_name: 'quarterly-summary.md',
+    mime_type: 'text/markdown',
+    surface: 'artifact',
+    previewable: true,
+    uri: '/api/files/44444444-4444-4444-8444-444444444444',
   });
 
-  it('declares only the formats web can actually produce', () => {
-    const formats = /nativeExportFormats:\s*\[([^\]]+)\]/.exec(source);
-    expect(formats, 'nativeExportFormats not declared').not.toBeNull();
-    expect(formats![1]).toContain("'pdf'");
-    expect(formats![1]).toContain("'word'");
-    // There is no xlsx writer on web; advertising it would fail after the pick.
-    expect(formats![1]).not.toContain("'excel'");
+  function stubLibraryAndAsset(content: string) {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === markdownItem.uri) {
+        return { ok: true, status: 200, text: async () => content } as Response;
+      }
+      return pageResponse([markdownItem]);
+    });
+  }
+
+  beforeEach(() => {
+    exportDocument.mockClear();
+  });
+
+  it('exports the real fetched artifact content as PDF through the shared export service', async () => {
+    stubLibraryAndAsset('# Quarterly summary\n\nRevenue is up.');
+    render(<LibraryView />);
+
+    await screen.findByText('quarterly-summary.md');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await screen.findByTestId('artifact-renderer');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Export as PDF' }));
+
+    await waitFor(() => expect(exportDocument).toHaveBeenCalledTimes(1));
+    expect(exportDocument).toHaveBeenCalledWith(
+      '# Quarterly summary\n\nRevenue is up.',
+      'pdf',
+      'quarterly-summary.md',
+      { title: 'quarterly-summary.md' },
+    );
+  });
+
+  it('exports as Word through the same handler', async () => {
+    stubLibraryAndAsset('# Notes');
+    render(<LibraryView />);
+
+    await screen.findByText('quarterly-summary.md');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await screen.findByTestId('artifact-renderer');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Export as Word' }));
+
+    await waitFor(() => expect(exportDocument).toHaveBeenCalledTimes(1));
+    expect(exportDocument).toHaveBeenCalledWith('# Notes', 'docx', 'quarterly-summary.md', {
+      title: 'quarterly-summary.md',
+    });
+  });
+
+  it('never offers Export as Excel: web has no xlsx writer', async () => {
+    stubLibraryAndAsset('# Notes');
+    render(<LibraryView />);
+
+    await screen.findByText('quarterly-summary.md');
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    await screen.findByTestId('artifact-renderer');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
+    expect(screen.queryByRole('button', { name: 'Export as Excel' })).toBeNull();
   });
 });
