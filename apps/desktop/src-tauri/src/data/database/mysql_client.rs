@@ -14,7 +14,7 @@ pub struct MySqlClient {
 impl MySqlClient {
     /// Validates that a SQL identifier (table name, procedure name) contains only
     /// alphanumeric characters and underscores, preventing SQL injection.
-    fn validate_sql_identifier(name: &str, kind: &str) -> Result<(), Error> {
+    fn validate_sql_identifier(name: &str, kind: &str) -> Result<()> {
         if name.is_empty() {
             return Err(Error::Other(format!("{} name cannot be empty", kind)));
         }
@@ -30,7 +30,7 @@ impl MySqlClient {
     /// SECURITY: Validates a SQL statement for safety in query mode.
     /// Blocks DDL/DML operations, stacked queries, and comment injection.
     /// Only SELECT, SHOW, DESCRIBE, and EXPLAIN statements are allowed.
-    fn validate_query_sql(sql: &str) -> Result<(), Error> {
+    fn validate_query_sql(sql: &str) -> Result<()> {
         let sql_upper = sql.trim().to_uppercase();
 
         // Block empty queries
