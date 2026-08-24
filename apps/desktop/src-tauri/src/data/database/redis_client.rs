@@ -249,7 +249,7 @@ impl RedisClient {
         let mut manager = Self::prepare_manager(&conn.manager, conn.db).await?;
 
         let values: Vec<Option<String>> = manager
-            .get(keys)
+            .mget(keys)
             .await
             .map_err(|e| Error::Other(format!("Redis MGET error: {}", e)))?;
 
