@@ -368,6 +368,17 @@ describe('Connectors pane (table)', () => {
     expect(screen.getByRole('alert').textContent).toContain('Directory unavailable.');
   });
 
+  it('renders a scoped connectorsNotice alongside the table instead of replacing it', () => {
+    renderModal(
+      {},
+      { connectorsLoading: false, connectorsNotice: 'One source could not be loaded.' },
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Connector' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('One source could not be loaded.');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('renders a Connect button ONLY when the surface can actually connect, surfacing failures inline', async () => {
     const connectConnector = vi.fn().mockRejectedValue(new Error('OAuth flow failed.'));
     renderModal(
