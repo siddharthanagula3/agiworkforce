@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
@@ -22,12 +22,18 @@ compute off for every existing organization the moment this shipped. `PATCH`
 therefore merges onto the current effective policy and writes a complete row, so
 a one-field patch can never materialize a row that silently disables the rest.
 
-- **ORGPOLICY-01 — OPEN, not verified against a live workspace.** Every layer is
-  unit-tested (94 tests across the evaluator, gate, gate response, and route) and
-  the deny path returns a 403 with a stable code, but no managed turn has been
-  observed being denied against a real Neon organization with a saved policy.
-  That is the exit criterion this wave set for itself and it is not met. Needs a
-  seeded org, a member, and a watched request.
+- **ORGPOLICY-01 — CLOSED 2026-08-23.** Observed: a real POST to
+  `/api/llm/v1/chat/completions` on a seeded Enterprise workspace with
+  `allow_managed_compute = false` returned 403 `managed_compute_disabled` with the
+  administrator-facing reason, before any provider was contacted. Superseded text:
+
+**Formerly: not verified against a live workspace.** Every layer is
+unit-tested (94 tests across the evaluator, gate, gate response, and route) and
+the deny path returns a 403 with a stable code, but no managed turn has been
+observed being denied against a real Neon organization with a saved policy.
+That is the exit criterion this wave set for itself and it is not met. Needs a
+seeded org, a member, and a watched request.
+
 - **ORGPOLICY-02 — OPEN by design, per-surface sync is not a security boundary.**
   `chat_sync_surfaces` and `allow_*_cloud_sync` resolve from the client-supplied
   `x-agi-surface` hint, so they govern the clients an organization deploys, not
@@ -35,14 +41,485 @@ a one-field patch can never materialize a row that silently disables the rest.
   `api` rather than denying untagged callers. The UI says so in the panel copy.
   `allow_managed_compute` and `allowed_privacy_modes` are the controls that bind
   regardless of client. Do not relabel these as enforcement.
-- **ORGPOLICY-03 — PARTIALLY CLOSED 2026-08-23.** `auditExportEnabled` is now
-  enforced: it gates `GET /api/settings/organization/audit/export`, and a
-  refusal is written to the trail. Still recorded-but-unenforced:
-  `retentionDays` (nothing sweeps on it) and `requireLocalToByokPreview`
-  (Desktop owns that transition; the web endpoint serves the obligation but no
-  Desktop client reads it yet). Retention is shown in the settings panel as a
-  stated position rather than a control, so it cannot read as a setting that
-  decides something.
+- **ORGPOLICY-03 — NEARLY CLOSED 2026-08-23.** `auditExportEnabled` gates
+  `GET /api/settings/organization/audit/export` and a refusal is written to the
+  trail. `retentionDays` is now enforced too, behind an explicit per-workspace
+  opt-in (`retention_enforced`, 0138): the nightly sweep at
+  `/api/cron/enforce-workspace-retention` deletes conversations past the window,
+  legal holds suspend it, and every run is recorded. The posture badge follows
+  the workspace rather than a constant — `stated` until an owner opts in,
+  `enforced` after. Still recorded-but-unenforced: `requireLocalToByokPreview`
+  alone (Desktop owns that transition; the web endpoint serves the obligation
+  but no Desktop client reads it yet), and the policy panel now says so on the
+  row itself.
+
+## 2026-08-23 Workspace admin console — landed, with one named gap
+
+Wave 2 of `docs/plans/teams-enterprise-2026-08-22.md`. The customer-facing
+console lives at `/workspace`; `/admin` remains the platform operator console.
+
+- **CONSOLE-01 — CLOSED 2026-08-23.** Rendered as a real owner of a seeded
+  Enterprise workspace against a live database, with the posture reading its own
+  configuration. All nine admin APIs answered 200. See
+  `apps/web/db/neon/verify/README.md` for the setup. Superseded text follows:
+
+**Formerly: never rendered as an actual workspace owner.** All seven
+routes, the anonymous gate, the 403 on the posture API, and axe cleanliness
+are verified in a real browser against a live Clerk session
+(`apps/web/e2e/workspace-console.spec.ts`). What is NOT verified is the
+posture dashboard itself: the QA account is on `max_15x`, and workspace
+creation correctly refuses with `SUBSCRIPTION_REQUIRED`, so the console has
+only ever been observed in its "No workspace selected" state. Needs a seeded
+Team or Enterprise workspace. Same blocker as ORGPOLICY-01 — one seeded
+organization closes both.
+
+- **CONSOLE-02 — RESOLVED 2026-08-23, but the trap will catch the next agent.**
+  Server-side `auth()` verifies the session's authorized party against
+  `CLERK_AUTHORIZED_PARTIES`, which falls back to `NEXT_PUBLIC_APP_URL`'s origin
+  (`apps/web/lib/clerk-authorized-parties.ts`). Against a localhost dev server
+  that fallback is the PRODUCTION origin, so every protected page redirects to
+  sign-in however valid the browser session is. The symptom is indistinguishable
+  from broken authentication, and it is why no agent had visually verified any
+  authenticated page in this repo before now. Start the dev server with
+  `CLERK_AUTHORIZED_PARTIES=http://localhost:3000`.
+
+The `enforcement` field on every posture signal (`enforced` / `stated` /
+`unconfigured`) is load-bearing, not decoration. It is what keeps `retentionDays`
+— stored and swept by nothing — from rendering beside managed-compute admission
+wearing the same badge. Do not remove it to simplify the type.
+
+## 2026-08-23 SSO enforcement: designed, deliberately not shipped
+
+"SSO required" is the last genuinely ABSENT capability in the workspace posture,
+and it is the one place this session declined to ship rather than ship
+unverified. The reasoning, so nobody has to reconstruct it:
+
+**The check that is available is weaker than the control it would be labelled
+as.** Clerk exposes a user's linked `samlAccounts`, so "this member HAS an SSO
+identity on a verified domain of this workspace" is checkable today. What an
+enterprise means by "SSO required" is "THIS SESSION arrived through our IdP",
+which is a different claim. Shipping the first under the second's name is
+exactly the fake-control failure the `enforced` / `stated` badge exists to
+prevent, and it would be worse here than elsewhere because a security reviewer
+would reasonably stop asking after seeing it.
+
+**An auth boundary that cannot be verified must not ship.** §112 lists SSO
+lockout as a P0 failure. Every other control added this session denies a
+request; this one denies ACCESS, and getting it wrong locks an organization out
+of its own workspace. The live Clerk verification that would prove it needs a
+paid plan with enterprise connections — the blocker already recorded for Wave 5.
+
+**The safe design, when that plan exists.** Deny the WORKSPACE, never the login:
+a member who authenticates outside the IdP still signs in and lands in personal
+scope with no access to what the workspace owns. That removes the lockout class
+entirely, because an owner can always reach the console to turn it off, which is
+also the "emergency recovery procedure" §19 asks for. Enforce it in
+`evaluateActiveWorkspacePolicy` alongside the other resources so it binds on
+every surface rather than at the login page.
+
+**SSOENFORCE-01 — ABSENT by decision, not oversight.** The posture says "Not
+available" and must keep saying so until the session-level check is real and has
+been watched working against a live IdP.
+
+## 2026-08-23 Seeding a stale conversation: messages bump the parent
+
+`update_conversation_on_message` sets `web_conversations.updated_at` when a
+message is inserted. That is correct — a conversation someone just posted to is
+not dormant, and retention runs from last activity — but it silently defeats the
+obvious fixture. Seeding three backdated conversations and then adding a message
+to each un-stales all three, the sweep finds nothing, and it reads as retention
+being broken.
+
+Backdate AFTER seeding messages, not before. The harness at
+`apps/web/db/neon/verify/retention-sweep-against-real-rows.ts.txt` does this and
+says why.
+
+The same harness is self-seeding on purpose: the sweep consumes what it deletes,
+so a test relying on rows seeded elsewhere passes once and reports `nothing_due`
+on every run after.
+
+## 2026-08-23 Three denials observed on live requests
+
+Against the seeded Enterprise workspace, with the app talking to a real database:
+
+- chat completions with `allow_managed_compute = false` → 403
+  `managed_compute_disabled`
+- chat completions naming a blocked catalog model → 403 `model_blocked`
+- chat completions with 500c settled against a 1c cap → 402 `over_cap`
+
+None needed provider credentials, because all three fire before any provider is
+contacted — which is the property that makes them cheap to regression-test and
+is worth preserving if these gates are ever moved.
+
+The order they fire in is itself a finding: managed compute is checked first, so
+with it off you never see a model denial however the policy is set. Anyone
+testing model governance must enable managed compute first or they will conclude
+the model rule does not work.
+
+Managed Cloud chat also requires an `Idempotency-Key` header. A request without
+one is refused 400 before either gate, so a probe that omits it proves nothing
+about policy.
+
+## 2026-08-23 The console, verified as a real enterprise owner
+
+Seeded workspace, live database through a wsproxy, signed in as the owner. The
+console rendered its own configuration and every badge came from a real row:
+
+- Managed cloud compute — Blocked — ENFORCED
+- Approved models — 2 rules in force — ENFORCED
+- Approved connectors — 2 rules in force — ENFORCED
+- Retention — 1 days, enforced — ENFORCED
+- Spend limit — $0.01 a month, enforced — ENFORCED
+- SIEM streaming — Delivering — ENFORCED
+- Deprovision revokes credentials — ENFORCED
+- Chat sync surfaces — STATED POSITION (correct: it reads a client hint)
+- SSO required — Not available — NOT CONFIGURED (correct: not built)
+
+All nine admin APIs answered 200 as owner. The recommendations panel offered
+only actions the workspace could actually take.
+
+**FOUR GATES FIRED CORRECTLY BEFORE IT WOULD RENDER**, and each is worth knowing
+because each looks like a bug until you read it:
+
+1. `organizations.billing_plan_tier` does NOT gate entitlement. The plan comes
+   from the OWNER'S `subscriptions` row via `resolveOrganizationEntitlementPlan`.
+   Setting the org column alone leaves `plan: "free"` and every admin API 403s.
+2. A trigger refuses an organization with no `owner` member.
+3. `organizations_seats_within_license` refuses more members than
+   `licensed_seats`, which defaults to 1.
+4. `requireCurrentTermsAcceptance` redirects to the terms page until
+   `profiles.terms_version` equals `POLICY_LAST_UPDATED.terms`.
+
+The first is the one that will cost someone a day: provisioning an enterprise
+customer by setting the org column looks right and does nothing.
+
+## 2026-08-23 How to actually verify this stack: Docker Postgres, not mocks
+
+Every service test in `apps/web` mocks the database adapter, so a query naming a
+column that does not exist, casting wrongly, or violating a constraint passes
+happily. Two real defects hid behind that and were found in one afternoon by
+running the schema for real.
+
+The recipe, because it is worth repeating:
+
+    docker run -d --name agi-migtest -e POSTGRES_PASSWORD=test \
+      -e POSTGRES_DB=agitest -p 55433:5432 postgres:16-alpine
+
+Apply every file in `apps/web/db/neon/*.sql` in order, each wrapped in its own
+`BEGIN; SET LOCAL lock_timeout='10s'; ... COMMIT;` — that is exactly what
+`scripts/lib/neon-migrations.mjs` does, and applying them WITHOUT the transaction
+produces a spurious failure on 0136 (`LOCK TABLE can only be used in transaction
+blocks`).
+
+Then drive the services directly: they all take `db: DatabaseAdapter` as their
+first parameter, so a thirty-line `pg`-backed adapter is enough to run their real
+SQL against the real schema with no app server involved.
+
+Two things this catches that nothing else does: SQL that is wrong against the
+actual columns, and grants that contradict the comment above them. It found
+0144's missing REVOKE and it found `current_app_user_id()` reads
+`request.jwt.claim.sub` — a scalar GUC — rather than the `request.jwt.claims`
+JSON blob that a first guess reaches for.
+
+**What it CANNOT do:** run the app itself. The data layer uses
+`@neondatabase/serverless`'s WebSocket `Pool`, which cannot reach a plain
+Postgres over TCP, and the adapter exposes no `neonConfig.wsProxy` hook. Pointing
+`AGI_DATABASE_URL` at a local Postgres gets as far as "account_status lookup
+failed after retry; denying request (fail-closed)" — the guard behaving
+correctly over a transport that cannot connect. Verifying a live denial end to
+end needs either a Neon branch or a wsproxy hook in the adapter.
+
+## 2026-08-23 GRANT SELECT does not revoke anything — 0037 grants writes by default
+
+0037 ran `ALTER DEFAULT PRIVILEGES ... GRANT SELECT, INSERT, UPDATE, DELETE ON
+TABLES TO app_rls`. Every table created since inherits full DML for the
+application role, automatically, whatever a later migration writes.
+
+0138 through 0143 each stated "writable by nobody through the application role"
+and each wrote `GRANT SELECT`. That is additive: it granted nothing new and
+revoked nothing. All six tables came back `DELETE,INSERT,SELECT,UPDATE` from
+`information_schema.role_table_grants`. 0144 revokes them explicitly, the way
+0087 already had to for `enterprise_audit_events`.
+
+**It was never exploitable**, and the reason matters: each table has a
+`FOR SELECT` policy and no permissive policy for the write verbs, so with RLS
+forced an INSERT is refused and an UPDATE matches zero rows. The protection was
+real but accidental — it rested on a policy NOT existing rather than a privilege
+not being held. Anyone later adding a `FOR ALL` policy for a legitimate read
+reason would have silently handed over write access to legal holds, retention
+evidence, spend caps, and SIEM configuration.
+
+**How it was found, because the method is the point:** applying all 143
+migrations to a throwaway Postgres in Docker and querying the grants. Text
+review passed them; `check:neon-migrations` passed them; every unit test passed.
+Only running them showed it. Any new migration that says "writable by nobody"
+must REVOKE, not GRANT SELECT, and the claim should be checked against
+`role_table_grants` rather than against the SQL that was written.
+
+## 2026-08-23 Audit streaming — the cursor rule is the whole design
+
+`organization_audit_destinations` (0143) POSTs new audit events to a customer's
+SIEM, drained by cron every ten minutes.
+
+- **A failed delivery HOLDS the cursor.** Events are retried rather than
+  dropped. A receiver can deduplicate on the event id; it cannot recover what
+  never arrived. Do not "fix" a retry storm by advancing the cursor on failure.
+- **The cursor is (created_at, id), never a timestamp alone.** created_at is not
+  unique and a burst sharing a millisecond is exactly what a busy workspace
+  produces, so a timestamp-only cursor silently skips or repeats those rows.
+  The table CHECK refuses half a cursor for the same reason.
+- **Drained, never written inline.** Delivering during an audited action would
+  couple every policy change to a customer endpoint being up, and slow the
+  action being audited. An unreachable SIEM must never stop a policy change.
+- **The endpoint is re-validated on EVERY send**, not only when saved: a
+  destination saved months ago may point at a hostname that now resolves inward.
+  Delivery goes through `pinnedPublicFetch` so a rebind between validation and
+  send cannot redirect it.
+- **The signature covers the timestamp**, so a captured delivery cannot be
+  replayed later with a fresh header. Receivers should reject a timestamp
+  outside their tolerance.
+
+A dead endpoint is SKIPPED after `AUDIT_STREAM_FAILURE_CEILING` consecutive
+failures, not disabled — an administrator's configuration is not ours to switch
+off, and the console shows the failure count so they can see why nothing
+arrives.
+
+**AUDITSTREAM-01 — PARTIALLY CLOSED 2026-08-23.** A destination round-trips
+through a REAL Postgres and the raw signing secret is confirmed absent from the
+stored row — only its hash and prefix are there. Still unproven: an actual
+signed delivery to an HTTPS receiver.
+
+## 2026-08-23 The Windows release ships remote-databases, and the audit file said it did not
+
+`.cargo/audit.toml` suppressed four vulnerability-class advisories (two
+`hickory-proto`, `rsa`, `proc-macro-error2`) on the grounds that
+`remote-databases` is "off by default and gated behind a build flag", so "users
+who enable it accept these advisories".
+
+`build-windows-release.yml:278` builds the shipped NSIS installer with
+`--no-default-features --features shell,updater,billing,devtools,vad,remote-databases`.
+Every Windows user is running mongodb and mysql_async. Nobody enabled anything
+and nobody accepted anything.
+
+The file's own COVERAGE BOUNDARY note warned about exactly this shape — "the
+same shape of reasoning that hid the rustls-webpki line for months under a claim
+about Tauri that turned out to be false" — and then asserted this one was "true
+and checkable". It was checkable. Checking it showed the claim answered the
+wrong question: not "is it on by default" but "what ships".
+
+Compounding it, `deny.toml` sets `[graph] all-features = false`, so the blocking
+CI advisory step never walks the `remote-databases` edge at all. The suppression
+is not what leaves those advisories unenforced; nothing was enforcing them.
+
+**SUPPLYCHAIN-01 — OPEN, needs a product decision.** Three ways out, none of
+which an agent should pick unilaterally: bump `mongodb` past its `hickory-proto
+^0.25` pin, drop `remote-databases` from the Windows build if the desktop app
+does not need remote database connectors, or accept the risk explicitly with the
+corrected reasoning in front of whoever accepts it. The comment block now states
+the truth so the next reader is not misled.
+
+**SUPPLYCHAIN-02 — OPEN, noticed alongside.** The same Windows release line
+enables `devtools` in the signed production installer. Worth confirming that is
+intended rather than inherited.
+
+## 2026-08-23 Spend caps — eventual on purpose, and said so
+
+`organization_spend_limits` (0142) refuses metered turns once a workspace passes
+a calendar-month cap it chose to enforce. Four decisions worth not re-opening:
+
+- **Enforcement is EVENTUAL, not exact.** Summing month-to-date spend on every
+  turn would put an aggregate scan on the hot path, so the decision is cached
+  for `SPEND_CACHE_TTL_MS` and a workspace can overshoot by roughly one window
+  of spend. The console says so in those words, and the posture badge repeats
+  it. A cap presented as exact when it is not is the same class of lie as a
+  retention window nothing sweeps.
+- **`notify` never refuses.** It exists so a finance owner can watch a budget
+  before deciding to enforce it. The posture reports a notify-only cap as a
+  STATED position, not an enforced control.
+- **`block` is never a default.** The column default is `off`, and blocking is
+  the one mode that stops people working.
+- **Ungoverned on failure.** A billing lookup failing is an infrastructure
+  fault; refusing every member's work over it is worse than briefly
+  overshooting.
+
+The cap and the month-to-date sum are read in ONE query. Two round trips would
+double the latency added to every governed turn and could disagree if a write
+landed between them. Raising a cap invalidates the cached decision so a
+workspace is freed at once rather than a window later.
+
+`spend-limit-coverage.test.ts` asserts every metered route asks, AND that it
+asks before reserving credit — a turn a cap will refuse must not spend first and
+be refunded.
+
+**SPENDLIMIT-01 — CLOSED 2026-08-23.** Observed: with a settled 500-cent turn
+seeded and a 1-cent cap set to `block`, a real chat request returned 402
+`over_cap`. Note the cache: the decision is held for SPEND_CACHE_TTL_MS, so a
+cap lowered under a warm cache does not bite until it expires — which is the
+eventual-enforcement behaviour the console describes, seen working.
+
+## 2026-08-23 Connector governance — one enforcement point, on purpose
+
+`organization_connector_policies` (0141) is applied inside
+`loadUserConnectorToolCatalog`, where the tool catalog is assembled. That is the
+single path chat, scheduled tasks, and cloud agent runs all share, so a blocked
+connector is never offered to the model from any of them. Enforcing per caller
+would produce a rule that holds in chat and not in a scheduled task, which is
+not a control.
+
+- **Filtering IS the enforcement.** A tool the model is never told about cannot
+  be called. Do not weaken this to a flag on an offered tool.
+- **The workspace policy is applied BEFORE the per-turn `isToolDenied` hook.**
+  That hook is a caller's own restriction; the administrator's has to bound what
+  a caller can widen. `connector-policy-coverage.test.ts` asserts the ordering.
+- **Custom connectors are a separate switch**, and naming one on the approved
+  list does not escape it. A custom connector is an arbitrary member-supplied
+  MCP endpoint — a different risk from a catalog integration — so "no arbitrary
+  endpoints" must not be silently defeatable.
+- **Ungoverned on a read failure**, like model policy. Connector governance
+  decides which approved integrations staff use; the tenancy layer is what stops
+  cross-workspace access and that fails closed. Denying every connector because
+  the policy table blipped would break every member's tools for a reason no
+  administrator chose.
+
+**CONNECTORPOLICY-01 — PARTIALLY CLOSED 2026-08-23.** The policy round-trips
+through a REAL Postgres, including the custom-connector switch. Still unproven:
+a connector actually vanishing from an offered tool catalog on a live turn.
+
+## 2026-08-23 Deprovision — three properties that must not be simplified
+
+`deprovisionMember` (`apps/web/lib/services/deprovision-service.ts`) runs when a
+member is removed by hand and when SCIM deactivates or deletes them.
+
+- **Each step is independent.** A Clerk outage must not leave the leaver's
+  developer keys live as well, so a failure in one revocation does not abandon
+  the rest. What could not be reached is RETURNED, not swallowed: a deprovision
+  that silently half-succeeded is worse than one that failed loudly, because an
+  administrator believes the person is cut off.
+- **A failed session LIST does not report zero.** Reporting zero would read as
+  "this user had no sessions", the opposite of the truth.
+- **It revokes credentials, never the account.** A member removed from one
+  workspace keeps their personal account and signs in again into personal scope.
+  Deleting the account is a different, far more destructive act that no
+  administrator asked for by removing a member.
+
+The SCIM path never throws: an IdP treats a non-2xx as a failed deprovision and
+retries, which would re-run a revoke that already succeeded and report the whole
+operation as failed when the membership WAS revoked. Warnings land on the
+directory sync event instead.
+
+**DEPROVISION-01 — OPEN, never observed against a live IdP.** Eight unit tests
+with a stubbed Clerk client. No real session has been watched dying. Needs the
+same seeded workspace as CONSOLE-01.
+
+## 2026-08-23 Turbopack dies sweeping many routes in dev
+
+`pnpm dev` panics after roughly twenty sequential cold page compiles:
+`turbo-tasks: an internal panic occurred outside the per-task panic boundary`
+from `turbo-tasks-backend/src/backend/operation/mod.rs`. It is a Turbopack bug,
+not a product one, and it silently turns the rest of a browser sweep into
+`ERR_CONNECTION_REFUSED` that reads like dozens of broken pages.
+
+Sweep against a production build (`pnpm build` then `next start`) instead. Two
+things it needs that dev does not: `EMAIL_HASH_PEPPER` (the env guard refuses to
+boot without it) and `NEXT_PUBLIC_APP_URL=http://localhost:3000` AT BUILD TIME,
+since that value is inlined into the client bundle and a production origin there
+leaves the browser session unusable by the server.
+
+## 2026-08-23 External sharing — two states, and why not three
+
+`external_sharing_enabled` (0140) refuses NEW anonymous public links on both
+paths that mint them: `/api/share` (a chat transcript) and
+`/api/artifacts/publish`. `lib/services/__tests__/external-sharing-coverage.test.ts`
+reads both sources and also asserts the gate runs BEFORE the write — a gate
+after the insert has already published the link.
+
+Two decisions worth not re-litigating:
+
+- **Only new links are refused.** A link published last week stays reachable
+  when an administrator switches sharing off today. Revoking published content
+  is a different decision with different consequences — a member who shared a
+  document with a customer should not have it break because a setting changed.
+  The policy copy, the settings panel, and the denial message all say so.
+- **There is no "approved domains only" middle state**, and one must not be
+  added as a checkbox. A public share link is anonymous; there is no recipient
+  identity at fetch time to check a domain against, so the control would decide
+  nothing. Domain scoping needs authenticated recipients first, which is a
+  different feature.
+
+## 2026-08-23 Model governance — where the check lives is the design
+
+`organization_model_policies` (0139) with one evaluator,
+`lib/services/model-policy-evaluator.ts`. Four properties are deliberate:
+
+- **The check runs AFTER auto-routing resolves**, in
+  `app/api/llm/v1/chat/completions/lib/request-processor.ts` at the line that
+  assigns `chatRequest.model = routeDecision.modelKey`. Checking the REQUESTED
+  model would let a blocked model be reached by asking for `auto` and having the
+  router pick it — a bypass no amount of picker filtering closes. Do not move
+  this check earlier.
+- **An empty allowlist means unrestricted, not deny-all.** A row that arrives
+  empty must not lock every member out of every model. Denial is something an
+  administrator says, never something a blank field implies. Same rule 0076 set
+  for the admin policy.
+- **A named model outranks a blocked provider.** "No Provider X except this one
+  model" is a policy enterprises write, and it cannot be expressed if the
+  provider block swallows it. Precedence is specificity-ordered: model rules
+  beat provider rules, deny beats allow within each level.
+- **The gate acquires its own database handle inside try/catch**
+  (`evaluateModelAccessForRequest`). Leaving `getNeonDb()` at the call site turns
+  a missing connection string into a 500 on every chat turn — the identical
+  mistake that shipped once in the managed-compute gate, and that broke 48 tests
+  here before it was caught.
+
+**MODELPOLICY-01 — CLOSED 2026-08-23.** All five model-serving routes now ask
+the evaluator on the RESOLVED model: chat completions (in the request
+processor), embeddings, transcriptions, image generation, and video generation.
+`lib/services/__tests__/model-policy-coverage.test.ts` reads the route sources
+and fails if a new model-serving route ships without the gate, if the chat check
+drifts back above the resolution line, or if a call site passes a
+provider-facing `apiModelId` where the catalog id belongs. Do not add a route to
+an exemption list there without writing the reason beside it.
+
+**MODELPOLICY-02 — CLOSED 2026-08-23.** Observed on a live chat turn: a real
+POST naming a blocked catalog model returned 403 with
+`"Your workspace administrator has blocked the model ..."` and code
+`model_blocked`. The denial fires after model resolution and before any provider
+call, which is why it needs no provider credentials to reproduce.
+
+## 2026-08-23 Retention enforcement — the fail-closed rule is load-bearing
+
+`sweepOrganizationRetention` (`apps/web/lib/services/retention-service.ts`)
+deletes customer conversations. Three properties are deliberate and must not be
+"simplified" away:
+
+- **It fails closed.** If the legal-hold set cannot be read, it deletes nothing
+  and records `aborted`. A missed sweep costs a day of retention drift and is
+  corrected on the next run; a sweep that deletes records under legal hold
+  destroys evidence, cannot be undone, and ends an enterprise relationship. The
+  asymmetry is total, so every uncertain path declines to delete.
+- **Opt-in, never inherited.** An organization with no policy row, or one that
+  has not set `retention_enforced`, is skipped — the cron filters on the column
+  AND the service re-checks rather than trusting its caller. Sweeping on the
+  strength of the shipped 365-day default would delete data nobody chose to
+  delete. `DEFAULT_ENTERPRISE_ADMIN_POLICY.retentionEnforced` is pinned false by
+  a test in the contracts package for the same reason.
+- **Retention runs from `updated_at`, not `created_at`.** An old conversation
+  someone is still working in has not been dormant for the window; deleting it
+  reads as data loss rather than as policy.
+
+`legal_holds` and `organization_retention_sweeps` are SELECT-only for `app_rls`
+(0138). A hold the held organization can delete is not a hold, and a sweep
+record it can edit is not evidence. Writes go through the privileged connection
+in a route that has already checked the owner/admin role.
+
+**RETENTION-01 — CLOSED 2026-08-23.** Observed against real rows on a seeded
+Enterprise workspace: three conversations, two dormant past a 30-day window and
+one touched today. The sweep deleted exactly the two, their messages went with
+them through the FK cascade, the active one survived, a second sweep reported
+`nothing_due`, and the evidence row recorded `deleted` with a count of 2. Under
+an organization-wide hold it returns `held` and deletes nothing, then proceeds
+once released. Harness kept at
+`apps/web/db/neon/verify/retention-sweep-against-real-rows.ts.txt`.
 
 ## 2026-08-23 Branch audit: what the ahead/behind counters hide
 

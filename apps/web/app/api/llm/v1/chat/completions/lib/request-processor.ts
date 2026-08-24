@@ -28,6 +28,7 @@ import {
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { selectCheapestRequestFallback } from '@/lib/services/request-cost-fallback';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
+import { evaluateModelAccessForOrganization } from '@/lib/services/model-policy-gate';
 import { canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
@@ -1898,6 +1899,35 @@ export async function processRequest(
   }
 
   chatRequest.model = routeDecision.modelKey;
+
+  // The workspace administrator's model policy, checked AFTER auto-routing has
+  // resolved. Checking the requested model instead would let a blocked model be
+  // reached by asking for `auto` and having the router pick it — a bypass that
+  // no amount of picker filtering closes.
+  // The scoped handle resolved the active workspace back at line ~1300,
+  // including the x-agi-organization-id override. Re-resolving here would add a
+  // second round trip to the hot path for an answer already in hand.
+  const scopedForPolicy = await scopedDbPromise;
+  const modelAccess = await evaluateModelAccessForOrganization(
+    scopedForPolicy.db,
+    scopedForPolicy.organizationId,
+    { provider: resolveProviderFromModel(chatRequest.model), modelId: chatRequest.model },
+  );
+  if (!modelAccess.allowed) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: modelAccess.reason,
+            type: 'invalid_request_error',
+            code: modelAccess.code,
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
 
   if (requestedModel !== chatRequest.model) {
     logger.info(

@@ -54,9 +54,7 @@ import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events
 import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
 import { TeamSection } from '../sections/TeamSection';
-import { OrganizationSharingSection } from '../sections/OrganizationSharingSection';
-import { WorkspaceAuditSection } from '../sections/WorkspaceAuditSection';
-import { WorkspacePolicySection } from '../sections/WorkspacePolicySection';
+import { WorkspaceConsolePointer } from '../sections/WorkspaceConsolePointer';
 import { SecuritySection } from '../sections/SecuritySection';
 import { SafetySection } from '../sections/SafetySection';
 import { PrivacySection } from '../sections/PrivacySection';
@@ -908,17 +906,14 @@ export function WebSettingsModal({
   const sectionContent: Partial<Record<string, React.ReactNode>> = {
     general: <GeneralSection />,
     account: <AccountSection />,
-    // Team administration (members, roles) and the organization's SHARED
-    // ecosystem (0086) are the same job to the person doing it: "who is in my
-    // org, and what do they get". They render in one section rather than
-    // behind a second nav entry, which would also mean changing the shared
-    // `SETTINGS_NAV_GROUPS_WEB` contract that the desktop settings-IA test pins.
+    // Membership stays here because a plain member legitimately needs it — to
+    // see who is in their workspace and to leave it. Policy, sharing, and the
+    // audit trail moved to the `/workspace` console, which is addressable per
+    // section and gated on the owner/admin role those panels actually require.
     team: (
       <div style={{ display: 'grid', gap: 16 }}>
+        <WorkspaceConsolePointer />
         <TeamSection />
-        <WorkspacePolicySection />
-        <OrganizationSharingSection />
-        <WorkspaceAuditSection />
       </div>
     ),
     security: <SecuritySection />,

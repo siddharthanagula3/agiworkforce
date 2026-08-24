@@ -59,6 +59,14 @@
     {
       "path": "/api/cron/enforce-billing-retention",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/enforce-workspace-retention",
+      "schedule": "20 4 * * *"
+    },
+    {
+      "path": "/api/cron/drain-audit-streams",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

@@ -34,6 +34,8 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  buildSpendLimitGateResponse,
+  buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -719,6 +721,11 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   );
   if (policyGateResponse) return policyGateResponse;
 
+  // The workspace budget, checked before any credit is reserved so a turn
+  // that a spend cap will refuse never spends anything first.
+  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
+  if (spendGateResponse) return spendGateResponse;
+
   const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
@@ -903,6 +910,17 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   }
 
   const { provider, model } = resolveVideoModel(requestedProvider, requestedModelId);
+
+  // Checked on the RESOLVED model: a provider default must not be a way past a
+  // rule the workspace administrator wrote.
+  const modelPolicyResponse = await buildModelPolicyGateResponse(
+    userId,
+    request,
+    { provider: String(provider), modelId: model.id },
+    { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  );
+  if (modelPolicyResponse) return modelPolicyResponse;
+
   if (!isVideoProviderReleaseEnabled(provider)) {
     throw createError.serviceUnavailable(
       'This video provider is not available while its managed billing controls are being finalized.',

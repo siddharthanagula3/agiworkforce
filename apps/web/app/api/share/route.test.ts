@@ -125,8 +125,19 @@ describe('POST /api/share — link lifetime', () => {
     );
   }
 
+  // Selected by SQL rather than by call index: the route asks the workspace
+  // sharing policy before it writes, so the insert is no longer the first
+  // query this mock sees.
+  function insertCall(): unknown[] {
+    const call = mocks.query.mock.calls.find((c) =>
+      /insert into shared_sessions/i.test(String(c[0])),
+    );
+    if (!call) throw new Error('no insert into shared_sessions was issued');
+    return call[1] as unknown[];
+  }
+
   function insertedExpiryDays(): number {
-    const params = mocks.query.mock.calls[0]?.[1] as unknown[];
+    const params = insertCall();
     const expiresAt = new Date(String(params[params.length - 1]));
     return Math.round((expiresAt.getTime() - Date.now()) / 86_400_000);
   }
@@ -144,6 +155,9 @@ describe('POST /api/share — link lifetime', () => {
   it('rejects a lifetime outside the allowed set', async () => {
     const response = await post({ title: 'Session', expires_in_days: 3650 });
     expect(response.status).toBe(400);
-    expect(mocks.query).not.toHaveBeenCalled();
+    expect(
+      mocks.query.mock.calls.some((c) => /insert into shared_sessions/i.test(String(c[0]))),
+      'a rejected lifetime must not reach the insert',
+    ).toBe(false);
   });
 });

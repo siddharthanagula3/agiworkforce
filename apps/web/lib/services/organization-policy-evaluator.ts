@@ -6,7 +6,8 @@ export type PolicyAsk =
   | { resource: 'managed_compute'; surface: PolicySurface }
   | { resource: 'chat_sync'; surface: PolicySurface }
   | { resource: 'privacy_mode'; mode: PrivacyMode }
-  | { resource: 'audit_export' };
+  | { resource: 'audit_export' }
+  | { resource: 'external_sharing' };
 
 export type PolicyDecisionCode =
   | 'allowed'
@@ -14,7 +15,8 @@ export type PolicyDecisionCode =
   | 'managed_compute_disabled'
   | 'privacy_mode_not_allowed'
   | 'surface_sync_disabled'
-  | 'audit_export_disabled';
+  | 'audit_export_disabled'
+  | 'external_sharing_disabled';
 
 export interface PolicyObligation {
   type: 'local_to_byok_preview' | 'retention_days';
@@ -170,6 +172,24 @@ export function evaluateOrganizationPolicy(policy: AdminPolicy, ask: PolicyAsk):
           allowed: false,
           code: 'audit_export_disabled',
           reason: 'Audit export is turned off for this workspace.',
+          obligations,
+        };
+      }
+      return {
+        allowed: true,
+        code: 'allowed',
+        reason: 'Allowed by workspace policy.',
+        obligations,
+      };
+    }
+
+    case 'external_sharing': {
+      if (!policy.externalSharingEnabled) {
+        return {
+          allowed: false,
+          code: 'external_sharing_disabled',
+          reason:
+            'Your workspace administrator has turned off public sharing. Links already created are unaffected.',
           obligations,
         };
       }
