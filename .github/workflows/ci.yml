@@ -1027,6 +1027,10 @@ jobs:
           PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
         run: pnpm exec playwright test public-auth-clean.spec.ts checkout.spec.ts --project=chromium --workers=1
 
+      - name: Print Web app log on failure
+        if: failure()
+        run: tail -n 300 apps/web/app.log
+
       - name: Upload Web Playwright report
         if: always()
         uses: actions/upload-artifact@v7
