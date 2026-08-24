@@ -49,6 +49,7 @@ function stubFetch({
       id: 'github-automation',
       name: 'GitHub Automation',
       description: 'Pull request and issue workflows.',
+      category: 'Developer',
       status: 'preview' as const,
       webInstallable: false,
       publisher: { name: 'AGI' },
