@@ -107,11 +107,11 @@ for (const root of LOCALE_ROOTS) {
  * 126 keys) landed across all 12 locales, dropping the baseline from 254 to
  * 104. Slice 2 fixed this scanner's namespace blindness and multi-line
  * blindness, which raised the honest count from 104 to 113 (the two known
- * blind-spot keys plus 7 more this scan finally saw) with no new debt from
- * the fix itself — baseline raised to match while the 113 get translated.
- * See ExecutionPlan.md for the full history.
+ * blind-spot keys plus 7 more this scan finally saw), translated all 113
+ * across all 12 locales, and dropped the baseline to 0. See
+ * ExecutionPlan.md for the full history.
  */
-const UNTRANSLATED_DEFAULT_BASELINE = 113;
+const UNTRANSLATED_DEFAULT_BASELINE = 0;
 
 const SCAN_ROOTS = ['apps/web', 'packages/ui'];
 const SCAN_EXTENSIONS = new Set(['.ts', '.tsx']);
