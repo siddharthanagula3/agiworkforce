@@ -28,6 +28,8 @@ vi.mock('@/lib/cors', () => ({
 vi.mock('@/lib/managed-compute-gate', () => ({
   buildManagedComputeGateResponse: vi.fn(() => null),
   buildOrganizationPolicyGateResponse: vi.fn(async () => null),
+  buildModelPolicyGateResponse: vi.fn(async () => null),
+  buildSpendLimitGateResponse: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },

@@ -102,26 +102,41 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `0087` SECURITY DEFINER writer, and policy changes now do. The missing half is
   read and export — Wave 3. `0087`'s stale reference to the removed
   `services/api-gateway` reader was corrected on 2026-08-22.
-- **`organization_usage_ledger` has no admin read path.** No route, no
-  dashboard, no export.
-- **Four designed contracts with no implementation** — `ProviderPolicy`,
-  `ConnectorPolicy`, `RetentionPolicy`, `AuditExportRequest` in
-  `packages/contracts/types/src/enterprise/index.ts` are referenced nowhere else
-  in the tree. `AdminPolicy` was the fifth and is now implemented; these four
-  belong to Waves 3, 4, and 6.
+- **`organization_usage_ledger` has NO WRITER, and is not the usage table.**
+  Only `lib/server/account-erasure.ts` and `lib/billing/financial-record-retention.ts`
+  reference it; nothing inserts. A dashboard built on it would report zero
+  forever while looking authoritative. Workspace usage analytics
+  (`/workspace/usage`, 2026-08-23) therefore reads `managed_usage_requests`,
+  which is where a managed turn actually lands. Either give the ledger a writer
+  or drop it — do not build a second read path on it.
+- **One designed contract with no implementation** — `AuditExportRequest` in
+  `packages/contracts/types/src/enterprise/index.ts` is referenced nowhere else
+  in the tree. `ConnectorPolicy`'s substance shipped as
+  `organization_connector_policies` (0141). `AdminPolicy` (Wave 1),
+  `RetentionPolicy`'s conversation window (0138), and `ProviderPolicy`'s
+  substance (0139, as `organization_model_policies`) are now implemented. The
+  remaining two belong to Waves 3 and 4.
 - **Directory groups drive only a role.** `scim_groups` / `scim_group_members`
   map to an org role via `/api/admin/directory-sync/groups`. No sharing grant,
   policy scope, or budget is addressable by group.
 
 ### ABSENT
 
-- Customer-facing admin console.
+- ~~Customer-facing admin console.~~ **SHIPPED 2026-08-23 (Wave 2)** at
+  `/workspace`. See CONSOLE-01 for what is still unverified.
 - SSO sign-in affordance, org-level SSO enforcement, break-glass path.
   `/login/page.tsx` mounts a bare Clerk `<SignIn>`.
-- Session and device-token revocation on deprovision.
-- Legal hold. `legal_hold` does not appear anywhere in the repository.
-- Retention enforcement. `retention_days` is stored and never read.
-- Compliance/audit export and SIEM streaming.
+- ~~Session and device-token revocation on deprovision.~~ **SHIPPED
+  2026-08-23 (Wave 5).** `lib/services/deprovision-service.ts`, wired into
+  member removal and both SCIM removal paths. Revokes Clerk sessions, device
+  refresh tokens, and API keys; never deletes the account.
+- ~~Legal hold.~~ **SHIPPED 2026-08-23 (Wave 3).** `legal_holds` (0138),
+  placed and released at `/workspace/data`, suspends retention for its subject.
+- ~~Retention enforcement. `retention_days` is stored and never read.~~
+  **SHIPPED 2026-08-23 (Wave 3).** Opt-in per workspace via
+  `retention_enforced`; nightly sweep at
+  `/api/cron/enforce-workspace-retention`; fails closed when holds cannot be
+  read. See RETENTION-01 for what is still unproven.
 - Admin adoption, value, and cost reporting.
 - IP allowlist, tenant restrictions, managed device policy (MDM/plist/registry).
 - Sharing of prompts, skills, agents, artifacts, or files outside a project.
@@ -214,18 +229,61 @@ in an observed network request, and the denial lands in
 live Neon organization. Tracked as ORGPOLICY-01. This is the first thing to do
 when a seeded workspace is available.
 
-### Wave 2 — Workspace admin console (4 agents)
+### Wave 2 — Workspace admin console — LANDED 2026-08-23
 
-- Console route with Overview, People, Sharing, Identity, Policy, Usage, Audit,
-  Data.
-- Decompose `TeamSection` and `OrganizationSharingSection` into console pages;
-  settings keeps a pointer, not a duplicate.
-- Move SSO and directory-sync administration from operator-gated `/admin` into
-  the customer console, keeping the `enterprise_controls` gate.
-- Empty, loading, error, and permission-denied states for every panel.
+Shipped in this pass at `/workspace`, kept deliberately distinct from `/admin`
+(the platform operator console, gated on Clerk `publicMetadata` that no customer
+holds). Seven routes: Overview, Members, Identity, Policy, Sharing, Audit,
+Billing.
+
+- `app/workspace/layout.tsx` — resolves role server-side and renders one of
+  three named states rather than an empty frame: personal scope, non-admin
+  denial, and membership-read failure, which is deliberately NOT collapsed into
+  the personal-scope state (that would tell an administrator their organization
+  had vanished).
+- `lib/services/workspace-posture-service.ts` — reads the live configuration of
+  one workspace across identity, provisioning, access, AI controls, data, and
+  audit. Every signal carries an `enforcement` field of `enforced` /
+  `stated` / `unconfigured`, so a recorded value can never wear the same badge
+  as a runtime control. `retentionDays` and per-surface sync are `stated`;
+  managed compute and privacy modes are `enforced`.
+- `GET /api/settings/organization/posture` — owner/admin gated, rate limited,
+  entitlement checked. The posture enumerates how a workspace authenticates and
+  shares, so the role check is a real gate rather than a UI hint.
+- `features/workspace-console/` — nav, shell, posture dashboard, identity
+  panels, billing summary.
+- Settings keeps a pointer, not a duplicate: the Team panel used to stack
+  `TeamSection` + policy + sharing + audit (~78KB of admin UI behind one scroll
+  with no addressable sections). Policy, sharing, and audit moved to the
+  console; membership stays in settings because a plain member legitimately
+  needs it.
+- SSO and directory-sync administration moved from operator-gated `/admin` to
+  the customer console. Their APIs were always org-scoped and
+  `enterprise_controls`-gated, so this moves the UI to the population the
+  authorization was already written for.
+- 52 unit tests plus a four-case Playwright suite.
 
 **Exit:** an owner completes every administrative task from one place; a member
 hitting the same route sees a correct denial, not a broken page.
+
+**Exit status: PARTIALLY met.** Verified in a real browser against a live Clerk
+session (`e2e/workspace-console.spec.ts`, 4/4 passing): all seven routes render
+a named state, an anonymous visitor is gated with the destination preserved, the
+posture API returns 403 to a caller who administers nothing, and the reachable
+page carries zero serious or critical axe violations. NOT verified: the console
+as an actual workspace owner. The QA account is on `max_15x`, which correctly
+refuses workspace creation with `SUBSCRIPTION_REQUIRED`, so the posture
+dashboard has never been rendered against a real organization. Tracked as
+CONSOLE-01 in `known-flaws.md`.
+
+**Local verification prerequisite, recorded because it silently blocked this for
+weeks:** server-side `auth()` verifies the session's authorized party against
+`CLERK_AUTHORIZED_PARTIES`, which falls back to `NEXT_PUBLIC_APP_URL`'s origin
+(`lib/clerk-authorized-parties.ts`). Against a localhost dev server that
+fallback is the production origin, so EVERY protected page redirects to sign-in
+no matter how valid the browser session is — which reads exactly like broken
+auth. Start the dev server with `CLERK_AUTHORIZED_PARTIES=http://localhost:3000`
+to render any authenticated page locally.
 
 ### Wave 3 — Audit and compliance backbone (5 agents)
 
@@ -242,6 +300,42 @@ hitting the same route sees a correct denial, not a broken page.
 **Exit:** a privileged action is reconstructable from the export with actor,
 resource, policy decision, and outcome; a held record survives a retention
 sweep.
+
+### Wave 3 — Audit and compliance backbone — PARTIALLY LANDED
+
+- **Audit read API — LANDED 2026-08-23.** Keyset pagination over
+  `(created_at DESC, id DESC)` with actor, action, resource, outcome, severity
+  and date filters.
+- **JSONL export — LANDED 2026-08-23.** Gated on the `audit_export` policy
+  resource; every export and every refusal is written back to the trail.
+- **Retention enforcement — LANDED 2026-08-23.** `0138` adds
+  `retention_enforced` (opt-in, defaults false), `legal_holds`, and
+  `organization_retention_sweeps`. `lib/services/retention-service.ts` sweeps
+  from `updated_at`, excludes held subjects, and FAILS CLOSED when the hold set
+  cannot be read. `/api/cron/enforce-workspace-retention` runs nightly at 04:20
+  and accepts `?dryRun=1`. Administered at `/workspace/data`; the workspace
+  posture badge follows the workspace's own opt-in rather than a constant.
+- **Legal hold — LANDED 2026-08-23.** Organization-wide or per-member, with
+  release recorded at critical severity. Both tables are SELECT-only for the
+  application role.
+- **SIEM streaming — LANDED 2026-08-23.** `organization_audit_destinations`
+  (0143). Events are POSTed with an HMAC-SHA256 signature over timestamp and
+  body, drained every ten minutes rather than written during the audited action
+  — an unreachable endpoint must never stop the thing it records. A failed
+  delivery HOLDS the keyset cursor, so events are retried rather than dropped.
+  The endpoint is validated with `assertResolvedPublicHostname` on save AND on
+  every send, and delivered through `pinnedPublicFetch`, so a DNS rebind cannot
+  turn it into an internal request.
+- **One writer for `audit_logs` and `enterprise_audit_events` — STILL OPEN.**
+
+**Exit:** a privileged action is reconstructable from the export with actor,
+resource, policy decision, and outcome; a held record survives a retention
+sweep.
+
+**Exit status: half met.** The first clause holds and is verified. The second is
+unit-tested across 24 tests but has never been observed against a live database
+— tracked as RETENTION-01. Do not describe retention as proven to a customer
+until a dry run has been watched against a seeded workspace.
 
 ### Wave 4 — Sharing that reads as sharing (5 agents)
 
@@ -300,18 +394,20 @@ policy denial holds identically on every one.
 | SSO (SAML/OIDC)               | Both                       | SHIPPED, unverified live        | 5    |
 | Domain verification           | Both                       | SHIPPED                         | —    |
 | SCIM provisioning             | Enterprise on both         | SHIPPED                         | —    |
-| Deprovision revokes sessions  | Both                       | ABSENT                          | 5    |
+| Deprovision revokes sessions  | Both                       | SHIPPED, both paths, unrun live | 5    |
 | Shared projects               | Both                       | PARTIAL, invisible in UI        | 4    |
 | Shared project conversations  | Both                       | ABSENT                          | 4    |
 | Shared agents/skills/prompts  | Both                       | ABSENT                          | 4    |
-| Admin connector policy        | Both                       | INERT, contract only            | 1, 4 |
-| Central admin console         | Both                       | ABSENT                          | 2    |
-| Audit log read                | Both                       | INERT, write-only               | 3    |
-| Compliance export / SIEM      | Enterprise on both         | ABSENT                          | 3    |
-| Custom retention + legal hold | Enterprise on both         | ABSENT                          | 3    |
-| Usage and cost analytics      | Both                       | INERT, ledger unread            | 6    |
+| Admin model/provider policy   | Both                       | SHIPPED, enforced post-routing  | 1    |
+| Admin connector policy        | Both                       | SHIPPED, enforced in the loader | 1    |
+| Central admin console         | Both                       | SHIPPED, unverified as owner    | 2    |
+| Audit log read                | Both                       | SHIPPED, read + JSONL export    | 3    |
+| Compliance export / SIEM      | Enterprise on both         | SHIPPED, signed webhook drain   | 3    |
+| Custom retention + legal hold | Enterprise on both         | SHIPPED, opt-in, unrun live     | 3    |
+| Usage and cost analytics      | Both                       | SHIPPED, with enforceable caps  | 6    |
 | Central billing and seats     | Both                       | PARTIAL, live prices missing    | 6    |
 | IP allowlist / device policy  | Enterprise on both         | ABSENT                          | 7    |
+| External sharing control      | Both                       | SHIPPED, enforced on both paths | 3    |
 | Policy across Local + BYOK    | Neither                    | ABSENT                          | 1    |
 | Trust-transition governance   | Neither                    | PARTIAL, consent without policy | 1    |
 

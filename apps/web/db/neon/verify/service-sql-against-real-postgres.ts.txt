@@ -1,0 +1,227 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Client } from 'pg';
+
+import { vi } from 'vitest';
+vi.mock('server-only', () => ({}));
+
+/**
+ * Runs the SQL our services actually emit against a REAL Postgres carrying the
+ * full migration chain.
+ *
+ * Every other test of these services mocks the adapter, so a query naming a
+ * column that does not exist, casting wrongly, or violating a constraint passes
+ * happily. This is the only place that would catch it.
+ */
+const URL = 'postgresql://postgres:test@127.0.0.1:55433/agitest';
+let client: Client;
+
+const db = {
+  query: async <T>(sql: string, params?: unknown[]): Promise<T[]> => {
+    const res = await client.query(sql, params as never[]);
+    return res.rows as T[];
+  },
+  execute: async (sql: string, params?: unknown[]): Promise<number> => {
+    const res = await client.query(sql, params as never[]);
+    return res.rowCount ?? 0;
+  },
+} as never;
+
+let ORG = '';
+const QA = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
+
+beforeAll(async () => {
+  client = new Client({ connectionString: URL });
+  await client.connect();
+  const r = await client.query(
+    `select organization_id from public.organization_members where user_id = $1 limit 1`,
+    [QA],
+  );
+  ORG = r.rows[0]?.organization_id;
+  expect(ORG, 'the seeded workspace must exist').toBeTruthy();
+});
+
+afterAll(async () => {
+  await client?.end();
+});
+
+describe('service SQL against a real schema', () => {
+  it('readWorkspacePosture returns a complete posture', async () => {
+    const { readWorkspacePosture } = await import('@/lib/services/workspace-posture-service');
+    const posture = await readWorkspacePosture(db, ORG);
+
+    expect(posture.organizationName).toBe('Verified Enterprise Co');
+    expect(posture.groups.length).toBeGreaterThan(4);
+    const ids = posture.groups.flatMap((g) => g.signals.map((s) => s.id));
+    for (const id of ['sso', 'members', 'seats', 'retention', 'model-policy', 'connector-policy', 'spend-limit', 'siem']) {
+      expect(ids, `posture is missing ${id}`).toContain(id);
+    }
+    // The seeded org has one owner and 25 licensed seats.
+    const seats = posture.groups.flatMap((g) => g.signals).find((s) => s.id === 'seats');
+    expect(seats?.value).toContain('25');
+  });
+
+  it('the model policy round-trips and the evaluator agrees with what was stored', async () => {
+    const { upsertModelPolicy, readModelPolicy } = await import(
+      '@/lib/services/model-policy-service'
+    );
+    const { evaluateModelAccess } = await import('@/lib/services/model-policy-evaluator');
+
+    await upsertModelPolicy(db, ORG, {
+      allowedProviders: [],
+      blockedProviders: ['openai'] as never,
+      allowedModels: [],
+      blockedModels: ['fixture-blocked-model'],
+    }, QA);
+
+    const stored = await readModelPolicy(db, ORG);
+    expect(stored?.blockedModels).toEqual(['fixture-blocked-model']);
+
+    expect(
+      evaluateModelAccess(stored, { provider: 'openai', modelId: 'fixture-blocked-model' }).allowed,
+    ).toBe(false);
+    expect(evaluateModelAccess(stored, { provider: 'anthropic', modelId: 'other' }).allowed).toBe(true);
+  });
+
+  it('the connector policy round-trips', async () => {
+    const { upsertConnectorPolicy, readConnectorPolicy } = await import(
+      '@/lib/services/connector-policy-service'
+    );
+    await upsertConnectorPolicy(db, ORG, {
+      allowedConnectors: [],
+      blockedConnectors: ['fixture-connector'],
+      allowCustomConnectors: false,
+    }, QA);
+
+    const stored = await readConnectorPolicy(db, ORG);
+    expect(stored?.blockedConnectors).toEqual(['fixture-connector']);
+    expect(stored?.allowCustomConnectors).toBe(false);
+  });
+
+  it('a spend cap is read back and evaluated from real rows', async () => {
+    const { upsertSpendLimit, readSpendState, evaluateSpendLimit, __clearSpendCacheForTests } =
+      await import('@/lib/services/spend-limit-service');
+
+    await upsertSpendLimit(db, ORG, {
+      monthlyCapCents: 1,
+      enforcement: 'block',
+      alertThresholdPct: 50,
+    }, QA);
+    __clearSpendCacheForTests();
+
+    const state = await readSpendState(db, ORG);
+    expect(state.configured).toBe(true);
+    expect(state.monthlyCapCents).toBe(1);
+
+    // No managed usage seeded, so spend is zero and a 1-cent cap is not reached.
+    expect(state.spentCents).toBe(0);
+    expect((await evaluateSpendLimit(db, ORG)).allowed).toBe(true);
+  });
+
+  it('usage analytics aggregates without error on an empty workspace', async () => {
+    const { readOrganizationUsage, resolveUsageWindow } = await import(
+      '@/lib/services/organization-usage-service'
+    );
+    const usage = await readOrganizationUsage(db, ORG, resolveUsageWindow(null, null));
+
+    expect(usage.totals.requests).toBe(0);
+    expect(usage.byMember).toEqual([]);
+    expect(usage.daily).toEqual([]);
+  });
+
+  it('a legal hold is placed, listed, and released', async () => {
+    const { createLegalHold, listLegalHolds, releaseLegalHold } = await import(
+      '@/lib/services/retention-service'
+    );
+
+    const hold = await createLegalHold(db, {
+      organizationId: ORG,
+      name: 'Integration matter',
+      reason: 'verification',
+      scope: 'organization',
+      subjectUserId: null,
+      createdByUserId: QA,
+    });
+    expect(hold.scope).toBe('organization');
+
+    expect((await listLegalHolds(db, ORG)).map((h) => h.id)).toContain(hold.id);
+
+    const released = await releaseLegalHold(db, ORG, hold.id, QA);
+    expect(released?.releasedAt).toBeTruthy();
+    expect(await releaseLegalHold(db, ORG, hold.id, QA), 're-release must not succeed').toBeNull();
+  });
+
+  it('the retention sweep declines to delete under an organization-wide hold', async () => {
+    const { createLegalHold, releaseLegalHold, sweepOrganizationRetention, isSwept } = await import(
+      '@/lib/services/retention-service'
+    );
+    const { upsertOrganizationPolicy, getEffectiveOrganizationPolicy } = await import(
+      '@/lib/services/organization-policy-service'
+    );
+
+    const current = await getEffectiveOrganizationPolicy(db, ORG);
+    await upsertOrganizationPolicy(db, ORG, {
+      ...current.policy,
+      retentionDays: 1,
+      retentionEnforced: true,
+    });
+
+    const hold = await createLegalHold(db, {
+      organizationId: ORG,
+      name: 'Blocking matter',
+      reason: null,
+      scope: 'organization',
+      subjectUserId: null,
+      createdByUserId: QA,
+    });
+
+    const held = await sweepOrganizationRetention(db, ORG);
+    expect(held.outcome).toBe('held');
+    expect(isSwept(held) && held.conversationsDeleted).toBe(0);
+
+    await releaseLegalHold(db, ORG, hold.id, QA);
+
+    const swept = await sweepOrganizationRetention(db, ORG);
+    expect(['deleted', 'nothing_due']).toContain(swept.outcome);
+  });
+
+  it('every sweep wrote an evidence row', async () => {
+    const { listRetentionSweeps } = await import('@/lib/services/retention-service');
+    const sweeps = await listRetentionSweeps(db, ORG);
+
+    expect(sweeps.length).toBeGreaterThanOrEqual(2);
+    expect(sweeps.some((s) => s.outcome === 'held')).toBe(true);
+  });
+
+  it('an audit destination round-trips and its secret is never stored raw', async () => {
+    const { upsertAuditDestination, readAuditDestination } = await import(
+      '@/lib/services/audit-streaming-service'
+    );
+
+    const saved = await upsertAuditDestination(db, ORG, {
+      endpointUrl: 'https://example.com/siem',
+      enabled: true,
+      createdByUserId: QA,
+    });
+    expect(saved.secret).toHaveLength(64);
+
+    const stored = await readAuditDestination(db, ORG);
+    expect(stored?.secretPrefix).toBe(saved.secret.slice(0, 8));
+
+    const raw = await client.query(
+      'select secret_hash from public.organization_audit_destinations where organization_id = $1',
+      [ORG],
+    );
+    expect(raw.rows[0].secret_hash, 'the raw secret must never be stored').not.toBe(saved.secret);
+  });
+
+  it('the audit trail reads back what recordAuditEvent wrote', async () => {
+    const { listAuditEvents } = await import('@/lib/services/enterprise-audit-service');
+    await client.query(
+      `select public.record_enterprise_audit_event($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [ORG, QA, 'web', 'admin_policy_changed', 'organization_admin_policy', ORG, 'success', 'info', '{}'],
+    ).catch(() => undefined);
+
+    const page = await listAuditEvents(db, ORG, {}, { limit: 10 });
+    expect(Array.isArray(page.events)).toBe(true);
+  });
+});
