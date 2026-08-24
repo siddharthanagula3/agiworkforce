@@ -192,6 +192,54 @@ describe('SchedulesPage', () => {
     expect(api.createSchedule).not.toHaveBeenCalled();
   });
 
+  it('confirms discarding unsaved changes with the shared dialog, not a native window.confirm', async () => {
+    const api = createApi();
+    const user = userEvent.setup();
+    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    await screen.findByText('No schedules yet');
+
+    await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create Schedule' });
+    await user.type(within(dialog).getByLabelText('Schedule Name'), 'Draft brief');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    const confirmation = screen.getByRole('alertdialog', { name: 'Discard Unsaved Changes?' });
+    expect(screen.getAllByRole('dialog', { hidden: true })).toHaveLength(1);
+
+    await user.click(within(confirmation).getByRole('button', { name: 'Keep Editing' }));
+    expect(screen.queryByRole('alertdialog', { name: 'Discard Unsaved Changes?' })).toBeNull();
+    expect(
+      within(screen.getByRole('dialog', { name: 'Create Schedule' })).getByLabelText(
+        'Schedule Name',
+      ),
+    ).toHaveValue('Draft brief');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(
+      within(screen.getByRole('alertdialog', { name: 'Discard Unsaved Changes?' })).getByRole(
+        'button',
+        { name: 'Discard Changes' },
+      ),
+    );
+    expect(screen.queryByRole('dialog', { name: 'Create Schedule' })).toBeNull();
+    expect(screen.queryByRole('alertdialog', { name: 'Discard Unsaved Changes?' })).toBeNull();
+  });
+
+  it('closes the editor without a confirmation when nothing changed', async () => {
+    const api = createApi();
+    const user = userEvent.setup();
+    render(<SchedulesPage api={api} now={() => new Date('2026-07-15T12:00:00.000Z')} />);
+    await screen.findByText('No schedules yet');
+
+    await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
+    screen.getByRole('dialog', { name: 'Create Schedule' });
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('alertdialog', { name: 'Discard Unsaved Changes?' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Create Schedule' })).toBeNull();
+  });
+
   it('offers only interval units the deployed sweep can deliver and names its real cadence', async () => {
     const api = createApi();
     const user = userEvent.setup();
