@@ -49,7 +49,7 @@ async function signIn(page: Page): Promise<void> {
 async function api(
   page: Page,
   path: string,
-  init?: { method?: string; body?: unknown },
+  init?: { method?: string; body?: unknown; idempotencyKey?: string },
 ): Promise<{ status: number; body: string }> {
   return page.evaluate(
     async ({ p, i }) => {
@@ -71,6 +71,9 @@ async function api(
         csrf = (c as { csrfToken?: string } | null)?.csrfToken;
         if (csrf) headers['x-csrf-token'] = csrf;
       }
+      // Managed Cloud chat requires an idempotency key so a retry cannot bill
+      // twice, and refuses the request without one before any policy is read.
+      if (i?.idempotencyKey) headers['Idempotency-Key'] = i.idempotencyKey;
       const res = await fetch(p, {
         method: i?.method ?? 'GET',
         headers,
@@ -104,6 +107,7 @@ test.describe('enterprise controls bind at runtime, not just in the row', () => 
 
     const turn = await api(page, '/api/llm/v1/chat/completions', {
       method: 'POST',
+      idempotencyKey: 'enforcement-managed-compute-disabled',
       body: { model: 'auto', messages: [{ role: 'user', content: 'hello' }], stream: false },
     });
     expect(
@@ -116,6 +120,9 @@ test.describe('enterprise controls bind at runtime, not just in the row', () => 
     ).toMatch(/managed_compute_disabled|over_cap|model_blocked/i);
     expect(turn.body, 'a surface error means the policy gate was never reached').not.toMatch(
       /managed_cloud_surface_unknown/i,
+    );
+    expect(turn.body, 'a missing idempotency key means the same').not.toMatch(
+      /idempotency_key_required/i,
     );
   });
 
@@ -147,5 +154,95 @@ test.describe('enterprise controls bind at runtime, not just in the row', () => 
     await signIn(page);
     const audit = await api(page, '/api/settings/organization/audit');
     expect(audit.status, 'an admin may read the trail').toBe(200);
+  });
+});
+
+test.describe('external sharing and model policy bind the same way', () => {
+  test('public sharing stops minting links when the workspace turns it off', async ({ page }) => {
+    await signIn(page);
+
+    const allowed = await api(page, '/api/share', {
+      method: 'POST',
+      body: { title: 'enforcement probe', messages: [] },
+    });
+    expect(
+      [200, 201],
+      `sharing must work while enabled, got ${allowed.status}: ${allowed.body}`,
+    ).toContain(allowed.status);
+
+    const off = await api(page, '/api/settings/organization/policy', {
+      method: 'PATCH',
+      body: { externalSharingEnabled: false },
+    });
+    expect(off.status, off.body).toBe(200);
+
+    const refused = await api(page, '/api/share', {
+      method: 'POST',
+      body: { title: 'enforcement probe 2', messages: [] },
+    });
+    expect(refused.status, 'a new anonymous link must be refused once sharing is off').toBe(403);
+
+    const back = await api(page, '/api/settings/organization/policy', {
+      method: 'PATCH',
+      body: { externalSharingEnabled: true },
+    });
+    expect(back.status).toBe(200);
+  });
+
+  test('a blocked model is refused by id, not merely hidden from a picker', async ({ page }) => {
+    await signIn(page);
+
+    // The id comes from the catalog at run time. A literal here would be a
+    // model id hardcoded outside the registry, which the repo forbids, and it
+    // would rot the moment the catalog changes.
+    const target = await page.evaluate(async () => {
+      const res = await fetch('/api/models');
+      if (!res.ok) return null;
+      const parsed = (await res.json()) as
+        | { models?: Array<{ id?: string }> }
+        | Array<{ id?: string }>;
+      const list = Array.isArray(parsed) ? parsed : (parsed.models ?? []);
+      return list.find((m) => typeof m.id === 'string')?.id ?? null;
+    });
+    expect(target, '/api/models must offer at least one model to block').toBeTruthy();
+
+    // The policy route refuses an incoherent workspace: turning managed compute
+    // on without allowing the managed privacy mode would block members by their
+    // own policy, and it says so rather than saving the contradiction. Both
+    // fields therefore move together.
+    const allowManaged = await api(page, '/api/settings/organization/policy', {
+      method: 'PATCH',
+      body: { allowManagedCompute: true, allowedPrivacyModes: ['local', 'byok', 'managed'] },
+    });
+    expect(allowManaged.status, allowManaged.body).toBe(200);
+
+    const blocked = await api(page, '/api/settings/organization/model-policy', {
+      method: 'PUT',
+      body: {
+        allowedProviders: [],
+        blockedProviders: [],
+        allowedModels: [],
+        blockedModels: [target],
+      },
+    });
+    expect([200, 201], `blocking must save: ${blocked.body}`).toContain(blocked.status);
+
+    const turn = await api(page, '/api/llm/v1/chat/completions', {
+      method: 'POST',
+      idempotencyKey: `enforcement-blocked-model-${target}`,
+      body: { model: target, messages: [{ role: 'user', content: 'hi' }], stream: false },
+    });
+    expect(turn.status, `a blocked model must be refused: ${turn.body}`).toBe(403);
+    expect(turn.body, 'the refusal must name the model policy').toMatch(/model_blocked/i);
+
+    // Leave the workspace as it was found.
+    await api(page, '/api/settings/organization/model-policy', {
+      method: 'PUT',
+      body: { allowedProviders: [], blockedProviders: [], allowedModels: [], blockedModels: [] },
+    });
+    await api(page, '/api/settings/organization/policy', {
+      method: 'PATCH',
+      body: { allowManagedCompute: false, allowedPrivacyModes: ['local', 'byok'] },
+    });
   });
 });

@@ -148,6 +148,22 @@ To confirm the enforcement assertions are not vacuous, flip the column in SQL
 (`update organization_admin_policies set audit_export_enabled = false`) and
 re-run: the spec must fail on the FIRST assertion, before it changes anything.
 
+Three more gates fire BEFORE any workspace policy is read, and each one refuses
+the request for a correct reason that has nothing to do with the control under
+test. A spec that does not satisfy them will record a denial the policy never
+contributed to:
+
+- `x-agi-surface` — Managed Cloud refuses a request that does not name a
+  supported client surface (`managed_cloud_surface_unknown`).
+- `Idempotency-Key` — Managed Cloud chat refuses a request without one
+  (`idempotency_key_required`), so a retry cannot bill twice.
+- Policy coherence — the policy route refuses `allowManagedCompute: true`
+  unless `managed` is also in `allowedPrivacyModes`, because that combination
+  would block members by their own workspace policy. Move both together.
+
+The spec asserts the denial is NEITHER of the first two codes, so an earlier
+gate cannot masquerade as policy enforcement.
+
 ## Running the app itself against this database
 
 The data layer speaks to Postgres over a WebSocket, so it cannot reach a plain
