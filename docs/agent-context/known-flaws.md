@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
@@ -356,6 +356,21 @@ independently of whoever reissues `VERCEL_TOKEN` for that deploy path. This
 does not fix DEPLOY-01 itself — `vercel pull` has no such fallback — and
 `--target preview`/`--target development` still depend on a working,
 decrypt-capable token with no fallback of their own.
+
+**Update 2026-08-24.** The production-page fallback above had its own single
+point of failure: `PRODUCTION_WEB_URL` was found set to the literal `-` in the
+`production-web` GitHub environment, and the script passed it straight to
+`fetch()` unvalidated. `fetch('-')` throws `TypeError: Failed to parse URL from
+-`, so a junk env value aborted the monitor with that message instead of
+falling through to an actual check — the same "looks like an outage, is
+actually a bad env var" shape as DEPLOY-01 itself. `resolveProductionWebUrl`
+now treats an empty, unparsable, or non-`http(s)` `PRODUCTION_WEB_URL` as
+unset and falls back to the script's own default origin
+(`https://agiworkforce.com`), so the GitHub environment variable can be wrong
+without blinding the check. Covered by `node --test
+scripts/check-clerk-bot-protection.test.mjs` (self-tests for `-`, empty, `not
+a url`, `ftp://x`) and verified against the live instance with each of those
+values.
 
 ## 2026-08-24 RLS hid the owner's subscription from every other administrator
 
