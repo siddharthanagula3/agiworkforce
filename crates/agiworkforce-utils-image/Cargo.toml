@@ -12,7 +12,7 @@ name = "agiworkforce_utils_image"
 path = "src/lib.rs"
 
 [dependencies]
-lru = "0.16.3"
+lru = "0.18"
 mime_guess = "2.0.5"
 sha1 = "0.10.6"
 tokio = { version = "1", features = ["sync", "time", "rt", "rt-multi-thread"] }
