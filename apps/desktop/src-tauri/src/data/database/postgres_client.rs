@@ -16,7 +16,7 @@ impl PostgresClient {
     /// SECURITY: Validates a SQL statement for safety in query mode.
     /// Blocks DDL/DML operations, stacked queries, and comment injection.
     /// Only SELECT, SHOW, and EXPLAIN statements are allowed.
-    fn validate_query_sql(sql: &str) -> Result<(), Error> {
+    fn validate_query_sql(sql: &str) -> Result<()> {
         let sql_upper = sql.trim().to_uppercase();
 
         // Block empty queries
