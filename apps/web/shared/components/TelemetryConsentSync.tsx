@@ -11,12 +11,16 @@ const NAMESPACE = 'privacy';
 /**
  * Brings this device's telemetry-consent mirror in line with the account.
  *
- * Consent lives in two places: the synced `privacy` settings namespace, and a
- * localStorage mirror that `instrumentation-client.ts` reads. Sentry
- * initialises before React mounts, so the mirror is the only thing it can
- * consult — and until now only the Settings screen ever wrote it. A user who
- * turned telemetry off on one device and never opened Settings on a second
- * still had Sentry initialising there.
+ * The pre-mount Sentry init decision (instrumentation-client.ts) no longer
+ * depends on this: the root layout renders the account's real consent onto
+ * <html>, read there before hydration, which is what closed
+ * WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01 for a brand-new device's first
+ * paint. This component is the remaining defence-in-depth layer — it corrects
+ * the localStorage mirror that later hasTelemetryConsent() reads (setUser,
+ * event scrubbing) consult for the rest of the session, covering the case
+ * where the server-rendered read itself failed closed (DB hiccup) but the
+ * account's real answer is reachable a moment later through the ordinary,
+ * retried settings fetch.
  *
  * Mounted at the app root so the mirror is corrected on first visit instead of
  * on first visit TO SETTINGS.
@@ -25,11 +29,6 @@ const NAMESPACE = 'privacy';
  * mirror, so firing this on the public marketing pages fetched an authenticated
  * endpoint that could only ever answer 401 — twice per visit under StrictMode —
  * and printed those failures to the console of every anonymous visitor.
- *
- * KNOWN LIMIT, deliberately not papered over: Sentry has already initialised by
- * the time this runs, so a correction takes effect from the next load. Closing
- * that gap needs the consent rendered into the document server-side, before any
- * client code runs. Tracked as WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01.
  */
 export function TelemetryConsentSync() {
   const { isLoaded, isSignedIn } = useAuth();
