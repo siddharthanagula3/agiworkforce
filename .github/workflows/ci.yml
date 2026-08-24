@@ -474,7 +474,13 @@ jobs:
     name: Rust desktop and CLI (default features)
     runs-on: ubuntu-24.04
     needs: scope
-    if: needs.scope.outputs.native_changed == 'true'
+    # Rust builds every crate in the workspace from source and is the
+    # slowest thing in CI by an order of magnitude. It only covers desktop
+    # and CLI, which are built and tested locally before they ship, so on
+    # pull requests the cost buys almost nothing. Running it on main keeps
+    # the gate: a native regression still blocks the production promotion,
+    # it is just caught at merge instead of at review.
+    if: needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
@@ -1048,7 +1054,13 @@ jobs:
     name: Clippy (all features)
     runs-on: ubuntu-24.04
     needs: scope
-    if: needs.scope.outputs.native_changed == 'true'
+    # Rust builds every crate in the workspace from source and is the
+    # slowest thing in CI by an order of magnitude. It only covers desktop
+    # and CLI, which are built and tested locally before they ship, so on
+    # pull requests the cost buys almost nothing. Running it on main keeps
+    # the gate: a native regression still blocks the production promotion,
+    # it is just caught at merge instead of at review.
+    if: needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v6
@@ -1128,7 +1140,13 @@ jobs:
     name: macOS Rust smoke (cargo check + clippy)
     runs-on: macos-latest
     needs: scope
-    if: needs.scope.outputs.native_changed == 'true'
+    # Rust builds every crate in the workspace from source and is the
+    # slowest thing in CI by an order of magnitude. It only covers desktop
+    # and CLI, which are built and tested locally before they ship, so on
+    # pull requests the cost buys almost nothing. Running it on main keeps
+    # the gate: a native regression still blocks the production promotion,
+    # it is just caught at merge instead of at review.
+    if: needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -1169,7 +1187,13 @@ jobs:
     name: Windows Rust smoke (cargo check + tests, --skip linux-only)
     runs-on: windows-latest
     needs: scope
-    if: needs.scope.outputs.native_changed == 'true'
+    # Rust builds every crate in the workspace from source and is the
+    # slowest thing in CI by an order of magnitude. It only covers desktop
+    # and CLI, which are built and tested locally before they ship, so on
+    # pull requests the cost buys almost nothing. Running it on main keeps
+    # the gate: a native regression still blocks the production promotion,
+    # it is just caught at merge instead of at review.
+    if: needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
