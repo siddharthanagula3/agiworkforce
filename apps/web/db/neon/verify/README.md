@@ -87,6 +87,19 @@ comparison happens in the database. The cursor never crosses the JS boundary.
 Unit tests could not see this — they mock the adapter, and a mock returns
 whatever string the test wrote.
 
+`connector-policy-live-catalog.ts.txt` watches a connector leave the offered
+catalog. It seeds a verified `github_installations` row (which puts the static
+GitHub tool defs in the catalog without any network call), then drives the real
+`loadUserConnectorToolDefs` — the single function chat, scheduled tasks, and
+cloud agent runs all load their catalog through. It asserts the connector is
+present while ungoverned, gone once blocked, back when the block is lifted, and
+gone again under an allowlist that omits it. The first assertion is what makes
+the second meaningful: without it, "not offered" could mean the catalog was
+empty all along.
+
+Set the five `GITHUB_APP_*` variables to any non-empty values — the gate only
+checks that they are present, and nothing calls GitHub.
+
 `service-sql-against-real-postgres.ts.txt` is a Vitest file that runs the real
 SQL of the posture, model policy, connector policy, spend limit, usage, legal
 hold, retention sweep, and audit streaming services against the real schema. It
