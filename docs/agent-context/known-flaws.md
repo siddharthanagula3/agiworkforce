@@ -306,6 +306,34 @@ carries a regression test that fails if any timestamp is passed as a cursor
 parameter. Unit tests could not have caught this — they mock the adapter, and a
 mock hands back whatever string the test wrote.
 
+## 2026-08-24 The production deploy cannot authenticate to Vercel
+
+**DEPLOY-01 — BLOCKED_BY_HUMAN.** `deploy-production.yml` now clears every gate
+it owns and fails on the first step that talks to Vercel:
+
+    vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+    Error: Could not retrieve Project Settings.
+
+Everything before it is green, including `Verify the production schema ledger
+without mutation` — the 0087 checksum drift that blocked this for the whole of
+2026-08-24 is fixed and the gate passes.
+
+The identifiers are NOT the problem. Checked against the Vercel API:
+`prj_vDA7A5nZakjYscIsc47JyGqek3Ea` on `team_QAqU2q6NTV4xxn971rfTy1F4`, which is
+exactly what `apps/web/.vercel/project.json` records and the only team on the
+account. So the failure is one of the three GitHub secrets — `VERCEL_TOKEN`
+expired, revoked, or scoped to another account; or `VERCEL_ORG_ID` /
+`VERCEL_PROJECT_ID` holding something other than the two ids above.
+
+No run of this workflow has succeeded in its last forty. Production is
+therefore being promoted some other way, and the automated path has never
+worked. That matters more than the immediate failure: the rollback step, the
+serving-path verification, and the migration-state recording all live in this
+workflow, so whatever is promoting production today is doing it without them.
+
+An agent cannot fix this — it needs someone to reissue the token in the Vercel
+dashboard and update the repository secret.
+
 ## 2026-08-24 RLS hid the owner's subscription from every other administrator
 
 **ENTITLEMENT-01 — FIXED.** A user who IS an admin of an Enterprise workspace
