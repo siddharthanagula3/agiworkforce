@@ -357,7 +357,7 @@ export default function TrustPage() {
           </h2>
           <p className="agi-fl-section-lede">
             Mechanisms are explained on{' '}
-            <Link href="/security" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/security" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               /security
             </Link>
             . This table is the summary a reviewer can scan, including the three rows that say a
