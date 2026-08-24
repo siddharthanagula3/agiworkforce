@@ -85,7 +85,7 @@ describe('root layout renders telemetry consent server-side', () => {
     expect(mocks.readServerTelemetryConsent).not.toHaveBeenCalled();
   });
 
-  it('renders false when the consent read itself fails, rather than throwing', async () => {
+  it('renders false when the consent read resolves false after an internal failure', async () => {
     mocks.auth.mockResolvedValue({ userId: 'user_1' });
     mocks.readServerTelemetryConsent.mockResolvedValue(false);
 
