@@ -398,9 +398,15 @@ not a control.
   the policy table blipped would break every member's tools for a reason no
   administrator chose.
 
-**CONNECTORPOLICY-01 — PARTIALLY CLOSED 2026-08-23.** The policy round-trips
-through a REAL Postgres, including the custom-connector switch. Still unproven:
-a connector actually vanishing from an offered tool catalog on a live turn.
+**CONNECTORPOLICY-01 — CLOSED 2026-08-23.** Observed against a real Postgres:
+with a verified GitHub installation seeded, `loadUserConnectorToolDefs` — the
+one function chat, scheduled tasks, and cloud agent runs all load their catalog
+through — offered the `github` connector while the workspace was ungoverned,
+did NOT offer it once an administrator's policy row blocked it, offered it
+again when the block was lifted, and withheld it again under an allowlist that
+omitted it. The harness is `db/neon/verify/connector-policy-live-catalog.ts.txt`.
+The first assertion is load-bearing: without proving the connector was there,
+"not offered" would be indistinguishable from an empty catalog.
 
 ## 2026-08-23 Deprovision — three properties that must not be simplified
 
