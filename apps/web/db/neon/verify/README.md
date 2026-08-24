@@ -2,8 +2,8 @@
 
 Every service test in `apps/web` mocks the database adapter. A query naming a
 column that does not exist, casting wrongly, or violating a constraint passes
-happily. This directory holds the recipe that catches those, and the harness
-that found two real defects.
+happily. This directory holds the recipe that catches those, and the harnesses
+that found three real defects.
 
 ## Why bother
 
@@ -65,14 +65,38 @@ COMMIT;
 
 ## Drive the services themselves
 
+`audit-stream-live-delivery.ts.txt` drives a real signed delivery: it stands up
+a TLS server with a throwaway certificate, points a destination at a
+`192.0.2.0/24` address (RFC 5737 documentation space, which the egress guard
+accepts because it is not private, and which never leaves the machine), and
+routes the socket to the local receiver through the `fetchImpl` seam. The
+receiver recomputes the HMAC independently. It found the cursor-precision
+defect below.
+
+### The defect this one found
+
+`timestamptz` holds microseconds. A JS `Date` holds milliseconds. The cursor
+was read out with `toIso()` and passed back as a query parameter, so
+`2026-08-24T00:11:25.812267Z` became `.812` — strictly BEFORE the row it was
+taken from. Every drain re-selected the tail of the batch it had just
+delivered, and the stream never reached `nothing_due`.
+
+Both directions had to change: the write now resolves `last_delivered_at` from
+the event id inside SQL, and the read joins the destination row so the
+comparison happens in the database. The cursor never crosses the JS boundary.
+Unit tests could not see this — they mock the adapter, and a mock returns
+whatever string the test wrote.
+
 `service-sql-against-real-postgres.ts.txt` is a Vitest file that runs the real
 SQL of the posture, model policy, connector policy, spend limit, usage, legal
 hold, retention sweep, and audit streaming services against the real schema. It
 is kept as `.txt` deliberately: it needs a live database on port 55433 and would
 fail in CI, where no such database exists.
 
-To use it, seed a workspace, copy it to
-`apps/web/lib/services/__tests__/`, run it, and delete it again.
+To use either, seed a workspace, copy it to
+`apps/web/lib/services/__tests__/`, run it FROM `apps/web` (the `@/` alias
+resolves against that package's Vitest config, not the root one), and delete it
+again. The delivery harness resets its own state, so it can be re-run.
 
 ## Running the app itself against this database
 
