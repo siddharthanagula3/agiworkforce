@@ -27,7 +27,7 @@ export async function getTeamAdminAccess(
   organizationId?: string | null,
 ): Promise<TeamAdminAccess> {
   const plan = organizationId
-    ? await resolveOrganizationEntitlementPlan(db, organizationId)
+    ? await resolveOrganizationEntitlementPlan(organizationId)
     : await (async () => {
         const subscription = await SubscriptionService.getSubscription(db, userId);
         return normalizeBillingPlanTier(

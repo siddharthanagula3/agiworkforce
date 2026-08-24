@@ -14,6 +14,7 @@ vi.mock('server-only', () => ({}));
 const URL_PG = 'postgresql://postgres:test@127.0.0.1:55433/agitest';
 const ORG = '358fe6cb-582e-44f7-8726-7fe4f3a951da';
 const ENDPOINT = 'https://192.0.2.77:8443/siem';
+const USER_ID = 'user_auditverify001';
 
 let client: Client;
 let server: Server;
@@ -32,9 +33,20 @@ beforeAll(async () => {
   client = new Client({ connectionString: URL_PG });
   await client.connect();
 
-  // Re-runnable: the cursor and the 5xx event are state this file writes.
+  // Self-contained: this file owns the org's destination and its event set, so
+  // a sibling harness writing audit events of its own cannot change the counts
+  // asserted below.
   await client.query(`delete from public.organization_audit_destinations where organization_id = $1`, [ORG]);
-  await client.query(`delete from public.enterprise_audit_events where organization_id = $1 and metadata->>'seq' = '8'`, [ORG]);
+  await client.query(`delete from public.enterprise_audit_events where organization_id = $1`, [ORG]);
+  await client.query(
+    `insert into public.enterprise_audit_events
+       (organization_id, actor_user_id, surface, action, resource_type, resource_id,
+        outcome, severity, metadata, created_at)
+     select $1::uuid, $2, 'web', 'policy.updated', 'organization_admin_policy', $1::uuid,
+            'success', 'info', jsonb_build_object('seq', g), now() - make_interval(secs => (7 - g)::int)
+       from generate_series(1, 7) g`,
+    [ORG, USER_ID],
+  );
 
   const dir = mkdtempSync(join(tmpdir(), 'agi-siem-'));
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes',

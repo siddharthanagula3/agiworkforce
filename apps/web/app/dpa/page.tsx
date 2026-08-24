@@ -250,7 +250,7 @@ export default function DpaPage() {
             This Data Processing Addendum (&ldquo;DPA&rdquo;) is entered into between {LEGAL_ENTITY}
             , {LEGAL_ENTITY_DESCRIPTOR} (&ldquo;AGI&rdquo;), and the customer entity that accepts
             the{' '}
-            <Link href="/terms" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/terms" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               Terms of Service
             </Link>{' '}
             (&ldquo;Customer&rdquo;). It forms part of those terms and applies where AGI processes
@@ -359,7 +359,7 @@ export default function DpaPage() {
             administration, billing records, security and audit logs, and service telemetry. It
             processes those for its own legitimate interests in running and securing the service, as
             described in the{' '}
-            <Link href="/privacy" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/privacy" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               privacy policy
             </Link>
             .
@@ -420,7 +420,10 @@ export default function DpaPage() {
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             The Customer gives general written authorisation for AGI to engage sub-processors. The
             current list, with each one&rsquo;s purpose and processing region, is published at{' '}
-            <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
+            <Link
+              href="/subprocessors"
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               /subprocessors
             </Link>{' '}
             and forms Annex III to this DPA. AGI imposes data protection obligations on each
@@ -429,11 +432,17 @@ export default function DpaPage() {
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16 }}>
             <strong>Change notice.</strong> AGI publishes additions and replacements on{' '}
-            <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
+            <Link
+              href="/subprocessors"
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               /subprocessors
             </Link>{' '}
             and records the change on{' '}
-            <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
+            <Link
+              href="/changelog"
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               /changelog
             </Link>
             , which is the notice mechanism AGI can actually operate today &mdash; no mailing path
@@ -500,7 +509,10 @@ export default function DpaPage() {
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
             AGI has not appointed a representative under GDPR Art. 27. The current position is
             stated at{' '}
-            <Link href="/legal/eu-representative" style={{ color: 'var(--agi-ink)' }}>
+            <Link
+              href="/legal/eu-representative"
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               /legal/eu-representative
             </Link>{' '}
             rather than left implied here.
@@ -629,11 +641,11 @@ export default function DpaPage() {
             AGI makes available the information necessary to demonstrate compliance with this DPA.
             In practice that means written responses to a security questionnaire and the published
             material on{' '}
-            <Link href="/security" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/security" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               /security
             </Link>{' '}
             and{' '}
-            <Link href="/trust" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/trust" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               /trust
             </Link>
             , once per twelve months on reasonable notice.{' '}
@@ -652,7 +664,7 @@ export default function DpaPage() {
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Managed Cloud is in public alpha. Its features, capacity and operational controls change
             as it develops, and no service level agreement applies during alpha &mdash; see{' '}
-            <Link href="/sla" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/sla" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               /sla
             </Link>
             . This does not reduce AGI&rsquo;s obligations as processor under this DPA or under
@@ -717,7 +729,7 @@ export default function DpaPage() {
               Grievance redressal under s. 13: email{' '}
               <a
                 href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)}
-                style={{ color: 'var(--agi-ink)' }}
+                style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
               >
                 {CONTACT_EMAIL}
               </a>{' '}
@@ -731,11 +743,17 @@ export default function DpaPage() {
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
             The notice AGI gives its own Data Principals in India, including the consent purposes
             and the retention schedule behind them, is at{' '}
-            <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} style={{ color: 'var(--agi-ink)' }}>
+            <Link
+              href={CANONICAL_POLICY_ROUTES.indiaPrivacy}
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               /privacy/india
             </Link>
             , and rights are exercised at{' '}
-            <Link href={CANONICAL_POLICY_ROUTES.dataRights} style={{ color: 'var(--agi-ink)' }}>
+            <Link
+              href={CANONICAL_POLICY_ROUTES.dataRights}
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               /privacy/requests
             </Link>
             .
@@ -747,7 +765,10 @@ export default function DpaPage() {
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             This DPA is effective without signature once the Terms of Service are accepted. If your
             procurement process needs a countersigned copy, email{' '}
-            <a href={contactMailto(CONTACT_SUBJECTS.dpa)} style={{ color: 'var(--agi-ink)' }}>
+            <a
+              href={contactMailto(CONTACT_SUBJECTS.dpa)}
+              style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}
+            >
               {CONTACT_EMAIL}
             </a>{' '}
             with the subject line &ldquo;{CONTACT_SUBJECTS.dpa}&rdquo; and your entity&rsquo;s legal

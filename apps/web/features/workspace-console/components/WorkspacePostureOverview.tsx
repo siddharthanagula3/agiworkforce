@@ -88,11 +88,21 @@ function EnforcementBadge({ enforcement }: { enforcement: PostureEnforcement }) 
   return (
     <span
       title={title}
-      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em]"
+      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em]"
       style={{
-        color:
-          enforcement === 'stated' ? 'var(--settings-destructive-foreground)' : 'var(--text-3)',
-        borderColor: enforcement === 'stated' ? 'currentColor' : 'var(--settings-border)',
+        // `--settings-destructive-foreground` is the colour to put ON a
+        // destructive background, not a destructive text colour: it resolves
+        // near-white, so as text on the card it measured 1.04:1 and this badge
+        // — the one that says nothing enforces the row — was the only one a
+        // reader could not see.
+        //
+        // The distinction lives in the WORDS, which is what a screen reader and
+        // a colour-blind reader both get: "Enforced" against "Stated position".
+        // The border keeps a colour cue for everyone else without making colour
+        // the only carrier, and the text stays at full contrast.
+        color: 'var(--text-1)',
+        borderColor:
+          enforcement === 'stated' ? 'var(--settings-destructive)' : 'var(--settings-border)',
       }}
     >
       {text}

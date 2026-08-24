@@ -100,7 +100,7 @@ rusqlite = { version = "0.32.1", features = ["bundled-sqlcipher-vendored-openssl
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
 postgres-types = { version = "0.2", features = ["derive", "with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
 deadpool-postgres = { version = "0.14", optional = true }
-mysql_async = { version = "0.36", optional = true }
+mysql_async = { version = "0.37", optional = true }
 # default features pull compat-3-0-0 -> bson-2, which collides with the bson 3
 # we depend on directly: every Document crossing the boundary is a different
 # type. bson-3 aligns them. dns-resolver stays because mongodb+srv:// URIs
