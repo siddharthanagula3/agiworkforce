@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
@@ -10,6 +9,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
@@ -58,6 +58,10 @@ async function handleCreateShare(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
+
+  const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
+  if (sharingGateResponse) return sharingGateResponse;
+
   const db = getNeonDb();
 
   let rawBody: unknown = {};

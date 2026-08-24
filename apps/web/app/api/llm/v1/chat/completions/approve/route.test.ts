@@ -14,6 +14,8 @@ vi.mock('../lib/auth-gate', () => ({
 vi.mock('@/lib/managed-compute-gate', () => ({
   buildManagedComputeGateResponse: () => null,
   buildOrganizationPolicyGateResponse: async () => null,
+  buildModelPolicyGateResponse: async () => null,
+  buildSpendLimitGateResponse: async () => null,
 }));
 
 const mockProcessRequest = vi.fn();

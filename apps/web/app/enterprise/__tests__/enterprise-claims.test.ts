@@ -106,15 +106,41 @@ describe('/enterprise — control claims stay accurate: shipped controls say so,
     ).toBe(false);
   });
 
-  it('keeps retention scoped as a contract commitment, since it is not shipped', () => {
+  it('describes retention as the opt-in control it actually is', () => {
+    // Retention shipped in 0138, so contract-scoping language would now
+    // UNDERclaim it. The risk moved rather than disappeared: the failure to
+    // guard against is implying that setting a window deletes anything. It
+    // does not until an owner switches enforcement on, and the earlier
+    // "org-level retention windows, you set them" phrasing is exactly the
+    // overclaim that got this row rewritten the first time.
     const source = rendered();
     const index = source.indexOf("k: 'Retention'");
     expect(index, 'Retention row missing').toBeGreaterThan(-1);
-    const context = source.slice(index, index + 420).toLowerCase();
+    const context = source.slice(index, index + 900).toLowerCase();
+
     expect(
-      /scoped|no per-organization|not a shipped control|commitment/u.test(context),
-      'Retention is stated without contract scoping',
+      /until enforcement is on|recorded position|whether it is enforced/u.test(context),
+      'Retention does not say the window is inert until enforcement is switched on',
     ).toBe(true);
+    expect(
+      /nothing is deleted/u.test(context),
+      'Retention does not state that nothing is deleted before enforcement',
+    ).toBe(true);
+    expect(
+      /legal hold/u.test(context),
+      'Retention does not mention that legal holds suspend it',
+    ).toBe(true);
+  });
+
+  it('does not promise deletion the sweep would refuse to perform', () => {
+    // The sweep fails closed: if the hold set cannot be read it deletes
+    // nothing. A page that promises unconditional nightly deletion would be
+    // describing behaviour the code deliberately does not have.
+    const source = rendered().toLowerCase();
+    expect(
+      /retention windows\. you set them/u.test(source),
+      'Retention regressed to the unconditional "you set them" claim',
+    ).toBe(false);
   });
 
   it('claims no certification it does not hold', () => {

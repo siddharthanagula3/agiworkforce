@@ -54,6 +54,25 @@ export interface AdminPolicy {
   allowChromeCloudSync: boolean;
   auditExportEnabled: boolean;
   retentionDays: number;
+  /**
+   * Whether `retentionDays` deletes anything.
+   *
+   * False means the number is a recorded position and no sweep acts on it —
+   * the state every workspace starts in, because turning retention on
+   * permanently deletes conversations and that must be a deliberate choice.
+   * Surfaces that show retention must read this before describing it as a
+   * control.
+   */
+  retentionEnforced: boolean;
+  /**
+   * Whether members may mint anonymous public links.
+   *
+   * Two states, not three: a public link has no recipient identity at fetch
+   * time, so an "approved domains only" middle state would be a control that
+   * decides nothing. Defaults true so no existing workspace loses sharing when
+   * this ships.
+   */
+  externalSharingEnabled: boolean;
   metadata?: Record<string, unknown>;
   updatedAt: string;
 }
@@ -349,6 +368,10 @@ export const DEFAULT_ENTERPRISE_ADMIN_POLICY: Omit<AdminPolicy, 'organizationId'
   allowChromeCloudSync: false,
   auditExportEnabled: true,
   retentionDays: 365,
+  // Off by default and never flipped by a migration: enabling retention starts
+  // permanently deleting conversations, which only a workspace owner can decide.
+  retentionEnforced: false,
+  externalSharingEnabled: true,
 };
 
 export const MANAGED_COMPUTE_MARGIN_POLICY = {

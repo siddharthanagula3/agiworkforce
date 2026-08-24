@@ -8,6 +8,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import {
   MAX_CONTENT_CHARS,
   PUBLISHABLE_KINDS,
@@ -71,6 +72,9 @@ async function handlePublish(request: NextRequest): Promise<Response> {
   }
 
   const { db, userId } = await getUserScopedDb(request);
+
+  const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
+  if (sharingGateResponse) return sharingGateResponse;
 
   let published;
   try {

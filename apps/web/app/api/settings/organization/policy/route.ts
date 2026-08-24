@@ -43,6 +43,8 @@ const PolicyPatchSchema = z
     allowChromeCloudSync: z.boolean(),
     auditExportEnabled: z.boolean(),
     retentionDays: z.number().int().min(1).max(3650),
+    retentionEnforced: z.boolean(),
+    externalSharingEnabled: z.boolean(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
@@ -140,6 +142,9 @@ async function handlePatch(request: NextRequest): Promise<NextResponse | Respons
     allowChromeCloudSync: parsed.data.allowChromeCloudSync ?? current.policy.allowChromeCloudSync,
     auditExportEnabled: parsed.data.auditExportEnabled ?? current.policy.auditExportEnabled,
     retentionDays: parsed.data.retentionDays ?? current.policy.retentionDays,
+    retentionEnforced: parsed.data.retentionEnforced ?? current.policy.retentionEnforced,
+    externalSharingEnabled:
+      parsed.data.externalSharingEnabled ?? current.policy.externalSharingEnabled,
     metadata: current.policy.metadata ?? {},
   };
 

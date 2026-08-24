@@ -50,10 +50,19 @@ describe('cron routes and vercel.json schedules agree', () => {
   // A sub-daily cron is rejected on the Hobby plan, and the rejection kills the
   // whole deployment rather than just the cron: pushes succeed and no build ever
   // queues. The account moved to Pro on 2026-08-16, so sub-daily is permitted —
-  // but only for the schedule sweep, which is the one cron whose cadence is a
-  // product promise rather than a housekeeping choice. Every other job stays
-  // daily, so a future downgrade breaks one line here instead of the deploy.
-  const SUB_DAILY_ALLOWED = new Set(['/api/cron/run-schedules']);
+  // but only for the jobs whose cadence is a product promise rather than a
+  // housekeeping choice. Every other job stays daily, so a future downgrade
+  // breaks one line here instead of the deploy.
+  //
+  //   run-schedules      — the cadence users are offered for scheduled tasks.
+  //   drain-audit-streams — a security team integrating a SIEM expects events
+  //                         within minutes. Delivered daily it would be an
+  //                         export with extra steps, and the /workspace posture
+  //                         describes it as streaming.
+  //
+  // Adding a third entry needs the same test: is the cadence something a
+  // customer was promised, or a choice we made for our own convenience?
+  const SUB_DAILY_ALLOWED = new Set(['/api/cron/run-schedules', '/api/cron/drain-audit-streams']);
 
   function isSubDaily(schedule: string): boolean {
     const [minute, hour] = schedule.split(/\s+/);

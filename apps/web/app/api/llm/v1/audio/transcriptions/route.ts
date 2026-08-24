@@ -14,6 +14,8 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  buildSpendLimitGateResponse,
+  buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
@@ -240,6 +242,11 @@ async function handleTranscriptions(request: NextRequest) {
   );
   if (policyGateResponse) return policyGateResponse;
 
+  // The workspace budget, checked before any credit is reserved so a turn
+  // that a spend cap will refuse never spends anything first.
+  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
+  if (spendGateResponse) return spendGateResponse;
+
   let formData: FormData;
   try {
     formData = (await request.formData()) as unknown as FormData;
@@ -369,6 +376,16 @@ async function handleTranscriptions(request: NextRequest) {
       ? requestedModel
       : defaultModel;
   const model = selectedModel.apiModelId ?? selectedModel.id;
+
+  // Checked on the RESOLVED catalog model, not on `model` above, which is the
+  // provider-facing id. The policy is written against catalog ids.
+  const modelPolicyResponse = await buildModelPolicyGateResponse(
+    userId,
+    request,
+    { provider: String(selectedModel.provider), modelId: selectedModel.id },
+    { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  );
+  if (modelPolicyResponse) return modelPolicyResponse;
 
   const forwardForm = new FormData();
   forwardForm.append('file', file);

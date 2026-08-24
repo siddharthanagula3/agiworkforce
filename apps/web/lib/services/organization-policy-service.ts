@@ -36,6 +36,8 @@ interface AdminPolicyRow {
   allow_chrome_cloud_sync: boolean;
   audit_export_enabled: boolean;
   retention_days: number;
+  retention_enforced: boolean;
+  external_sharing_enabled: boolean;
   metadata: Record<string, unknown> | null;
   updated_at: string;
 }
@@ -43,7 +45,8 @@ interface AdminPolicyRow {
 const POLICY_COLUMNS = `organization_id, default_privacy_mode, allowed_privacy_modes,
   allow_managed_compute, require_local_to_byok_preview, chat_sync_surfaces,
   allow_cli_cloud_sync, allow_vscode_cloud_sync, allow_chrome_cloud_sync,
-  audit_export_enabled, retention_days, metadata, updated_at`;
+  audit_export_enabled, retention_days, retention_enforced,
+  external_sharing_enabled, metadata, updated_at`;
 
 function toIso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -64,6 +67,8 @@ export function formatAdminPolicy(row: AdminPolicyRow): AdminPolicy {
     allowChromeCloudSync: row.allow_chrome_cloud_sync,
     auditExportEnabled: row.audit_export_enabled,
     retentionDays: row.retention_days,
+    retentionEnforced: row.retention_enforced,
+    externalSharingEnabled: row.external_sharing_enabled,
     metadata: row.metadata ?? {},
     updatedAt: toIso(row.updated_at),
   };
@@ -124,8 +129,9 @@ export async function upsertOrganizationPolicy(
        organization_id, default_privacy_mode, allowed_privacy_modes,
        allow_managed_compute, require_local_to_byok_preview, chat_sync_surfaces,
        allow_cli_cloud_sync, allow_vscode_cloud_sync, allow_chrome_cloud_sync,
-       audit_export_enabled, retention_days, metadata
-     ) values ($1, $2, $3::text[], $4, $5, $6::text[], $7, $8, $9, $10, $11, $12::jsonb)
+       audit_export_enabled, retention_days, retention_enforced,
+       external_sharing_enabled, metadata
+     ) values ($1, $2, $3::text[], $4, $5, $6::text[], $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
      on conflict (organization_id) do update set
        default_privacy_mode          = excluded.default_privacy_mode,
        allowed_privacy_modes         = excluded.allowed_privacy_modes,
@@ -137,6 +143,8 @@ export async function upsertOrganizationPolicy(
        allow_chrome_cloud_sync       = excluded.allow_chrome_cloud_sync,
        audit_export_enabled          = excluded.audit_export_enabled,
        retention_days                = excluded.retention_days,
+       retention_enforced            = excluded.retention_enforced,
+       external_sharing_enabled      = excluded.external_sharing_enabled,
        metadata                      = excluded.metadata
      returning ${POLICY_COLUMNS}`,
     [
@@ -151,6 +159,8 @@ export async function upsertOrganizationPolicy(
       input.allowChromeCloudSync,
       input.auditExportEnabled,
       input.retentionDays,
+      input.retentionEnforced,
+      input.externalSharingEnabled,
       JSON.stringify(input.metadata ?? {}),
     ],
   );
@@ -177,6 +187,8 @@ export function diffAdminPolicy(
     'allowChromeCloudSync',
     'auditExportEnabled',
     'retentionDays',
+    'retentionEnforced',
+    'externalSharingEnabled',
   ];
 
   for (const key of keys) {

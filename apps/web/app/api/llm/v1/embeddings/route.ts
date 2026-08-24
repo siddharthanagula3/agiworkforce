@@ -18,6 +18,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
+  buildSpendLimitGateResponse,
+  buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -186,6 +188,20 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
     { ...getCorsHeaders(request), ...getSecurityHeaders() },
   );
   if (policyGateResponse) return policyGateResponse;
+
+  // The workspace budget, checked before any credit is reserved so a turn
+  // that a spend cap will refuse never spends anything first.
+  const spendGateResponse = await buildSpendLimitGateResponse(userId, request);
+  if (spendGateResponse) return spendGateResponse;
+
+  const modelPolicyResponse = await buildModelPolicyGateResponse(
+    userId,
+    request,
+    { provider: String(model.provider), modelId: model.id },
+    { ...getCorsHeaders(request), ...getSecurityHeaders() },
+  );
+  if (modelPolicyResponse) return modelPolicyResponse;
+
   const estimatedTokens = estimateTokens(inputs);
 
   let reservation: ManagedUsageRequestReservation;
