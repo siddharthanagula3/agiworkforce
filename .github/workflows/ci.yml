@@ -951,6 +951,12 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
       NEON_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
+      # next start makes NODE_ENV production, which arms rate-limit.ts's
+      # SEV-WEB-13 module-scope guard (Redis credentials or refuse to serve) and
+      # empty-500s every rate-limited API route. This single-instance CI server
+      # is a preview-class environment, so use the guard's own preview exemption
+      # instead of weakening the guard or faking Redis.
+      VERCEL_ENV: preview
       CLERK_SECRET_KEY: test-clerk-secret-key
       # The same public, non-routable clerk-ci.invalid fixture the packaging
       # jobs use, and live-format on purpose. A pk_test_ key names a Clerk
@@ -1026,6 +1032,10 @@ jobs:
         env:
           PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
         run: pnpm exec playwright test public-auth-clean.spec.ts checkout.spec.ts --project=chromium --workers=1
+
+      - name: Print Web app log on failure
+        if: failure()
+        run: tail -n 300 apps/web/app.log
 
       - name: Upload Web Playwright report
         if: always()
