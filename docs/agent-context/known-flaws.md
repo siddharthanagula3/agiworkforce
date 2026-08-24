@@ -24,15 +24,25 @@ shapes — `buildAdapterStreamResponse` and `buildManagedAgentStream`, so
 tool-loop and research-loop turns are covered too), gated on the message
 insert actually affecting a row so a conversation-ownership mismatch can
 never orphan an index row against `web_artifact_index`'s FK on `message_id`.
-Two more real insertion points into `web_messages` with `role = 'assistant'`
-were found by grep and wired the same way: the bulk-save route
+Three more real insertion points into `web_messages` with `role = 'assistant'`
+were found and wired the same way: the bulk-save route
 (`apps/web/app/api/chat/conversations/[id]/messages/bulk/route.ts`, no known
-production caller today but a real reachable surface) and the desktop/mobile
+production caller today but a real reachable surface), the desktop/mobile
 device-sync push (`apps/web/app/api/chat/sync/route.ts`, real production
-traffic from `apps/desktop` and `apps/mobile`). All three call sites are
-fire-and-forget with swallowed-and-logged errors, matching the existing
-`scheduleArtifactIndexing` contract — indexing can never fail, delay, or
-block the turn or sync response it rides on.
+traffic from `apps/desktop` and `apps/mobile`), and `forkConversation`
+(`apps/web/lib/services/conversation-branch-service.ts`, UI-wired through
+`POST /api/chat/conversations/[id]/branches` and the "branch this
+conversation" control in `WebChatPage`/`MessageBubble` — the first pass's grep
+sweep missed this one because it copies existing rows with `insert ... select`
+rather than inserting a literal `'assistant'`, and a branch's copied assistant
+messages get fresh `gen_random_uuid()` ids that need their own index rows,
+not the source conversation's). All four call sites are fire-and-forget with
+swallowed-and-logged errors, matching the existing `scheduleArtifactIndexing`
+contract — indexing can never fail, delay, or block the turn, sync response,
+or fork request it rides on. `forkConversation` schedules indexing with the
+outer (non-transactional) `DatabaseAdapter` only after its transaction
+commits, because the `tx` adapter's pooled connection is released back to the
+pool the instant the transaction callback returns.
 
 **Residual, by design.** No backfill migration was written. Conversations
 whose assistant turns were persisted before this fix stay unindexed until the
