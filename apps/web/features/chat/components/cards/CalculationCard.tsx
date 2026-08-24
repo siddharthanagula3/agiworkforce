@@ -113,7 +113,7 @@ function parseCalculation(content: string): ParsedCalculation {
       const start = inlineCodeMatch.index ?? 0;
       const before = trimmed.slice(0, start);
       const after = trimmed.slice(start + inlineCodeMatch[0].length);
-      routeLeftover(`${before} ${after}`);
+      routeLeftover([before.trim(), after.trim()].filter(Boolean).join(' '));
       if (!formulas.some((f) => f.expression === inlineCodeMatch[1])) {
         formulas.push({ label: '', expression: inlineCodeMatch[1] ?? '', isLatex: false });
       }
