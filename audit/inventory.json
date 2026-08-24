@@ -254,8 +254,8 @@
   {
     "item": "artifact-publish-share",
     "surface": "apps/web",
-    "status": "missing",
-    "evidence": "Web has no recipient-readable, revocable artifact publication contract. apps/web/features/chat/components/artifacts/ArtifactPreview.tsx exposes browser-native sharing or clipboard copy for an existing generated-file URI, but that does not publish a public artifact and an authenticated /api/files URI is not a recipient share link. The uncalled /api/artifacts/publish route and adapter were deleted because they always returned a fabricated waitlist result with no URL; repository-wide call-site tracing found no production consumer. @agiworkforce/artifacts now models only real local export, host-injected cloud publication, or honest host unavailability. A future implementation requires bounded artifact content/storage, opaque public tokens, expiry/revocation, safe recipient rendering, owner management, and abuse controls; until those exist this capability is honestly Missing rather than Partial or reachable-but-fake."
+    "status": "built",
+    "evidence": "Recipient-readable and revocable artifact publication exists. Migration 0095 creates public.published_artifacts with a 24-character unique token; POST /api/artifacts/publish mints a link and GET lists them; the recipient reads it at the public page apps/web/app/shared-artifact/[token]/page.tsx, which resolves the token through getPublishedArtifactByToken; DELETE /api/artifacts/publish/[token] unpublishes, and /api/admin/takedown can remove one operationally. Creation is governed: buildExternalSharingGateResponse gates this route and /api/share, the only two anonymous-link paths, with a coverage guard (external-sharing-coverage.test.ts) that fails if either gate is removed. The prior evidence predates the viewer page and the policy gate."
   },
   {
     "item": "sandboxed-iframe",
