@@ -304,6 +304,77 @@ describe('shared LibraryView', () => {
       expect(screen.queryByTestId('artifact-renderer')).toBeNull();
     });
 
+    it('invokes the host native export handler with the real fetched content', async () => {
+      const markdownItem = {
+        ...ARTIFACT_ITEM,
+        id: 'asset-markdown',
+        file_name: 'quarterly-summary.md',
+        mime_type: 'text/markdown',
+        uri: '/api/files/asset-markdown',
+      };
+      const exportNative = vi.fn(async () => {});
+      const transport = artifactTransport({
+        listPage: vi.fn(async () =>
+          jsonResponse({ items: [markdownItem], has_more: false, next_offset: null }),
+        ),
+        fetchAsset: vi.fn(
+          async () =>
+            ({
+              ok: true,
+              status: 200,
+              text: async () => '# Quarterly summary\n\nRevenue is up.',
+            }) as unknown as Response,
+        ),
+        exportNative,
+        nativeExportFormats: ['pdf', 'word'],
+      });
+      render(<LibraryView transport={transport} />);
+
+      await screen.findByText('quarterly-summary.md');
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+      await screen.findByTestId('artifact-renderer');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Export as PDF' }));
+
+      await waitFor(() =>
+        expect(exportNative).toHaveBeenCalledWith(
+          'pdf',
+          'asset-markdown',
+          '# Quarterly summary\n\nRevenue is up.',
+          'quarterly-summary.md',
+        ),
+      );
+    });
+
+    it('offers no native export option when the host declares none', async () => {
+      const markdownItem = {
+        ...ARTIFACT_ITEM,
+        id: 'asset-markdown-2',
+        file_name: 'notes.md',
+        mime_type: 'text/markdown',
+        uri: '/api/files/asset-markdown-2',
+      };
+      const transport = artifactTransport({
+        listPage: vi.fn(async () =>
+          jsonResponse({ items: [markdownItem], has_more: false, next_offset: null }),
+        ),
+        fetchAsset: vi.fn(
+          async () =>
+            ({ ok: true, status: 200, text: async () => '# Notes' }) as unknown as Response,
+        ),
+      });
+      render(<LibraryView transport={transport} />);
+
+      await screen.findByText('notes.md');
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+      await screen.findByTestId('artifact-renderer');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Download or export artifact' }));
+      expect(screen.queryByRole('button', { name: 'Export as PDF' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Export as Word' })).toBeNull();
+    });
+
     it('refuses to inline an artifact large enough to hang the tab', async () => {
       const transport = artifactTransport({
         fetchAsset: vi.fn(
