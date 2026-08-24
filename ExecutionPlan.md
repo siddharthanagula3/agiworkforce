@@ -3701,6 +3701,71 @@ to remove.
 Six tests, including the three ways this could quietly do nothing: no stored
 answer, a non-boolean, and an unreadable account.
 
+### WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01 closed: consent renders into the document — 2026-08-24
+
+The RESIDUAL LIMIT above named the real gap correctly but misdiagnosed its
+cost: it assumed `app/layout.tsx` was statically rendered and that an
+authenticated read would newly force it dynamic. It already wasn't static —
+the layout reads `headers()` for the CSP nonce unconditionally, no Suspense
+boundary, so every route already renders per request. The premise that made
+the fix look expensive was wrong before this session touched anything, which
+is its own lesson: the earlier note's reasoning went unchallenged for three
+days because "sounds right" is not the same as "checked against the code that
+motivated it."
+
+DONE: `readServerTelemetryConsent()` (`lib/server/telemetry-consent.ts`) reads
+`user_settings` through a new `getCurrentUserRlsDb()` (`lib/server/rls-db.ts`)
+— the RLS-scoped client, not `getNeonDb()`, so 0134's FORCE policy stays real
+for this read the same way `app/api/settings/preferences/__tests__/rls-scoped
+.test.ts` already guards for the settings route. `app/layout.tsx` renders the
+result onto `<html data-telemetry-consent>`. `instrumentation-client.ts` now
+calls a single `shouldInitializeSentry()` (`lib/sentry-shared.ts`) that prefers
+that attribute over the localStorage mirror and syncs the mirror to match, so
+a brand-new device's first paint reads the account's real answer instead of a
+mirror it has never written.
+
+Deliberate choices:
+
+- `getCurrentUserRlsDb()` is a new, lighter sibling of `getUserScopedDb` for
+  Server Components with no `NextRequest`: no organization resolution (this
+  read needs none — `user_settings` RLS is user-only) and no
+  `assertAccountActive` (throwing out of a layout render would break every
+  page for a suspended account, not just the one action that should be
+  blocked). Returns null on sign-out rather than throwing, so the layout fails
+  closed instead of crashing.
+- Every exit of `readServerTelemetryConsent()` — signed out, no token, no row,
+  unset key, DB error — resolves to `false`. A telemetry read must never be
+  able to break page rendering or default a user into being tracked.
+- `TelemetryConsentSync` is untouched. It is no longer load-bearing for the
+  init decision, but stays as defence-in-depth for the one case the
+  server-rendered read can still get wrong: a DB hiccup that made it fail
+  closed when the real answer was true. Its own settings fetch goes through
+  the battle-tested, retried `getUserScopedDb` path and can still correct the
+  mirror a moment later.
+- The cost this closes the earlier note's objection to is scoped on purpose:
+  only signed-in full page loads pay the extra query, and only that query —
+  signed-out visitors (most marketing traffic) never reach it.
+
+Tests: `lib/server/telemetry-consent.test.ts` (signed-in with consent, signed-in
+without, no settings row, signed out, DB error), `lib/server/rls-db.test.ts`
+(new `getCurrentUserRlsDb` cases), `app/__tests__/layout.telemetry-consent
+.test.tsx` (signed-in true/false, signed-out never reads the DB, a
+revoke-then-reload sees the new value), `lib/__tests__/sentry-shared.test.ts`
+(`readDocumentTelemetryConsent`, `shouldInitializeSentry` including "a fresh
+server signal overrides a stale mirror"). Full web suite green: 1074 files,
+10211 tests, 0 failures.
+
+Live-verified signed-out only. `pnpm dev` (Next.js 16.3.0, Turbopack) loaded
+`.env.local` only — printed `- Environments: .env.local` at boot, no other env
+file, no explicit process-env overrides for this run. `curl -s
+http://localhost:3001/` came back `200`, `x-clerk-auth-status: signed-out`,
+body `<html lang="en" data-telemetry-consent="false">` — the mechanism working
+end to end for the fail-closed path, and no `telemetry` log line at all,
+confirming the DB read was skipped rather than attempted and swallowed. The
+signed-in path could not be exercised the same way — no working local
+sign-in fixture in this environment — and rests on the unit tests above. That
+is a real gap in what was directly observed, named rather than smoothed over.
+
 ### Settings deep links can no longer 404 — 2026-08-21
 
 `SettingsSectionLink` renders `/settings/<key>` for any section, and settings

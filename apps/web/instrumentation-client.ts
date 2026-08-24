@@ -1,8 +1,8 @@
 import * as Sentry from '@sentry/nextjs';
 
-import { commonInitOptions, hasTelemetryConsent, isSentryConfigured } from './lib/sentry-shared';
+import { commonInitOptions, shouldInitializeSentry } from './lib/sentry-shared';
 
-if (isSentryConfigured() && hasTelemetryConsent()) {
+if (shouldInitializeSentry()) {
   Sentry.init(commonInitOptions());
 }
 
