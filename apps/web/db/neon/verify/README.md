@@ -111,6 +111,18 @@ To use either, seed a workspace, copy it to
 resolves against that package's Vitest config, not the root one), and delete it
 again. The delivery harness resets its own state, so it can be re-run.
 
+## Read the Test Files line, not only the Tests line
+
+A harness whose `beforeAll` throws reports `Tests 6 skipped (6)` — which scans
+as green if you are grepping for failures. The suite-level result is on the
+`Test Files` line, and it says `1 failed`. A skipped verification is worse than
+a failed one, because it is silent.
+
+Each harness owns and reseeds the rows it asserts on, so they can be run in any
+order and twice in a row. They did not start that way: the audit-stream harness
+counted the workspace's audit events, and the connector harness writes audit
+events of its own, so running the second changed the first's answer.
+
 ## Running the app itself against this database
 
 The data layer speaks to Postgres over a WebSocket, so it cannot reach a plain
