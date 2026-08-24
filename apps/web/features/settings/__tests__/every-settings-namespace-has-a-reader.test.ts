@@ -32,11 +32,12 @@ const NAMESPACE_CONSUMERS: Readonly<Record<string, NamespaceConsumer>> = {
   memory: { file: 'lib/services/managed-memory-context-service.ts' },
   notifications: { file: 'lib/services/schedule-notification-service.ts' },
   personalization: { file: 'lib/server/user-identity.ts' },
-  // Sentry is a browser SDK and initialises before React mounts, so consent is
-  // read from a localStorage mirror rather than from the synced namespace.
-  // PrivacySection writes both and reconciles them when it loads — which means
-  // the synced value only reaches Sentry on a new device once Settings has been
-  // opened there. Recorded as WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01.
+  // Sentry is a browser SDK and initialises before React mounts, so it cannot
+  // fetch the synced namespace itself. The root layout now reads it
+  // server-side (lib/server/telemetry-consent.ts) and renders it onto <html>
+  // before hydration; PrivacySection also writes a localStorage mirror as the
+  // fallback for the rare case that attribute carries no signal. Fixed
+  // 2026-08-24 — see WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01.
   privacy: { file: 'lib/sentry-shared.ts', token: 'agi.privacy.shareTelemetry' },
   safety: { file: 'lib/services/managed-content-safety-service.ts' },
   security: { file: 'lib/server/device-signin-policy.ts' },
