@@ -2306,6 +2306,22 @@ suite was rewritten to pin the new invariant (self-serve copy, endpoint
 actually nulls both columns, only while `deletion_scheduled_for > now()`)
 instead of the old one it superseded.
 
+DONE (follow-up — 2026-08-24): a verifier pass on the cancel-endpoint branch
+caught two things the feature landing above missed. First, the new
+`cancel/route.ts` file shifted the RLS-coverage counts that
+`app/trust/rls-coverage-claim.test.ts` measures directly off the API tree
+(owner-connection routes 112 → 113, database-backed 147 → 148); `/trust`
+still said 112/147 and the test failed. Re-measured with the test's own
+`measure()` and updated the page to 35 of 148 database-backed, 113 on the
+owner connection. Second, "fix the misleading copy" in the entry above was
+incomplete: the DELETE route's own success message (shown in the same dialog,
+directly above the corrected self-serve line) still told the user to email
+support to cancel, and three public pages the copy-regression test does not
+scan — `/faq`, `/terms`, `/data-use` — plus `/dpa` and `/privacy/requests`
+(found by a broader grep, not in the original finding) still asserted no
+self-serve cancellation exists. All five now say cancellation is self-serve
+via Settings > Account, matching `/privacy` §07 and the actual endpoint.
+
 ### P1: usage bars failed optimistic — 2026-08-20
 
 `normalizeUsagePercentage(undefined)` returns 0 (managed-usage-balance.ts:39-42),

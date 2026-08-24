@@ -248,7 +248,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json(
       {
-        message: `Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. To stop this, email ${CONTACT_EMAIL} before then.`,
+        message: `Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. Sign back in and cancel from Settings > Account any time before then to keep your account.`,
         scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       },
       { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },

@@ -864,8 +864,8 @@ export default function PrivacyPage() {
                 <td>
                   Account settings. Erasure is scheduled 24 hours out, then performed by a daily job
                   that also deletes your identity at our authentication provider. Read the survivors
-                  table in section 05 first &mdash; and note there is no self-serve cancel inside
-                  that 24-hour window.
+                  table in section 05 first. Cancellation is self-serve: sign back in and cancel
+                  from Settings &gt; Account any time before the 24 hours are up.
                 </td>
               </tr>
               <tr>
