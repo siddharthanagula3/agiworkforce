@@ -306,6 +306,43 @@ carries a regression test that fails if any timestamp is passed as a cursor
 parameter. Unit tests could not have caught this — they mock the adapter, and a
 mock hands back whatever string the test wrote.
 
+## 2026-08-24 RLS hid the owner's subscription from every other administrator
+
+**ENTITLEMENT-01 — FIXED.** A user who IS an admin of an Enterprise workspace
+was shown "You do not administer this workspace", and
+`/api/settings/organization/posture` answered `403 SUBSCRIPTION_REQUIRED` with
+`currentPlan: "free"` — on a workspace holding a valid enterprise subscription.
+
+`resolveOrganizationEntitlementPlan` resolves from the OWNER's `subscriptions`
+row. All ten organization routes called it on `getUserScopedDb`, and
+`public.subscriptions` has RLS forced, so a scoped connection sees only the
+caller's own row: the join returned NULL and the plan collapsed to `free`.
+Confirmed directly against Postgres on BOTH branches of that join — with and
+without an organization `stripe_subscription_id` — where the owner resolves
+`enterprise` and the admin resolves NULL.
+
+Blast radius was the entire administration surface: posture, policy,
+model-policy, connector-policy, spend-limit, legal-holds, usage-analytics,
+audit, audit/export, audit/destination. The OWNER was never affected, which is
+exactly why it survived: every live verification in this session had been run as
+the owner, and an owner can always see their own row.
+
+Fixed by resolving entitlement on the privileged connection. Entitlement is an
+organization-level fact rather than the caller's own data, and membership is
+still established on the scoped connection first — both call sites pass an
+organization id taken from the caller's own membership, and
+`requireTeamAdminAccess` asserts membership before asking.
+
+**Why the suite was green.** Unit tests mock the adapter, and a mock always
+"sees" the owner's row, so RLS never applies. Worse, the existing E2E asserted
+`posture must not serve a non-administrator` → 403 and PASSED — it had encoded
+the broken behaviour as the expectation. The new guard is structural: it asserts
+the function takes an organization id ALONE, because a `db` parameter is what
+lets a scoped adapter back in.
+
+This is the same shape as the 0144 grant defect: protection that reads correctly
+until something runs as a real, non-privileged caller.
+
 ## 2026-08-24 Six desktop tests fail on a local macOS checkout and pass in CI
 
 **Not a defect, and not worth chasing again.** `cargo test --lib mcp_oauth` and

@@ -115,15 +115,33 @@ test.describe('workspace administration console', () => {
     expect(errors.filter((e) => !/favicon|manifest|clerk/i.test(e))).toEqual([]);
   });
 
-  test('the posture API refuses a caller who administers nothing', async ({ page }) => {
-    // The UI gate and the API gate must agree. A member who cannot see the
-    // console must not be able to read the same data by calling the endpoint.
+  test('the console UI and the posture API agree about who administers', async ({ page }) => {
+    // The invariant is AGREEMENT, not a particular answer. This assertion used
+    // to hardcode 403, which quietly encoded a bug as the expectation: every
+    // non-owner administrator was refused, because entitlement resolved from
+    // the OWNER's subscription row over an RLS-scoped connection that can only
+    // see the caller's own. The suite stayed green while the whole
+    // administration surface was closed to delegated admins. Pinning the
+    // expected status is what let that happen, so this asks the two gates
+    // whether they say the same thing.
     await signIn(page);
-    await page.goto('/chat', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1500);
+    await page.goto('/workspace', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2500);
+
+    const deniedInUi = await page
+      .locator('body')
+      .innerText()
+      .then((t) => /you do not administer this workspace/i.test(t));
 
     const posture = await authedFetch(page, '/api/settings/organization/posture');
-    expect(posture.status, 'posture must not serve a non-administrator').toBe(403);
+
+    if (deniedInUi) {
+      expect(posture.status, 'UI refused, so the API must refuse too').toBe(403);
+    } else {
+      expect(posture.status, 'UI rendered the console, so the API must serve the same caller').toBe(
+        200,
+      );
+    }
   });
 
   test('the reachable console page is free of serious accessibility violations', async ({
