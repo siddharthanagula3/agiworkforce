@@ -16,6 +16,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 
 const MAX_CONVERSATIONS_PULL = 500;
 const MAX_MESSAGES_PULL = 1000;
@@ -400,6 +401,25 @@ async function handlePush(request: NextRequest) {
         [userId, JSON.stringify(messages)],
       );
       collectBatchRows(rows, applied.messages, conflicts.messages);
+
+      // Device sync (desktop/mobile) is another real path that writes
+      // assistant-authored web_messages rows — index the same way the live
+      // chat turn does, so the web gallery can discover artifacts from
+      // conversations synced in from another surface. Fire-and-forget: a
+      // discovery aid, never allowed to fail or slow the sync response.
+      const pushedById = new Map(messages.map((item) => [item.id, item]));
+      for (const row of applied.messages) {
+        const pushed = pushedById.get(row.id);
+        if (pushed?.role === 'assistant' && !pushed.isDeleted) {
+          scheduleArtifactIndexing({
+            db,
+            userId,
+            conversationId: pushed.conversationId,
+            messageId: pushed.id,
+            content: pushed.content,
+          });
+        }
+      }
     }
 
     if (artifacts.length > 0) {
