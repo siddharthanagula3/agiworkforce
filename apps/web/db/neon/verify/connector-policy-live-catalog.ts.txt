@@ -1,0 +1,92 @@
+// @vitest-environment node
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { Client } from 'pg';
+
+vi.mock('server-only', () => ({}));
+
+process.env['GITHUB_APP_ID'] = '123456';
+process.env['GITHUB_APP_PRIVATE_KEY_BASE64'] = Buffer.from('not-a-real-key').toString('base64');
+process.env['GITHUB_APP_SLUG'] = 'agi-verify';
+process.env['GITHUB_APP_CLIENT_ID'] = 'Iv1.verify';
+process.env['GITHUB_APP_CLIENT_SECRET'] = 'verify-secret';
+
+const PG = 'postgresql://postgres:test@127.0.0.1:55433/agitest';
+const ORG = '358fe6cb-582e-44f7-8726-7fe4f3a951da';
+const USER = 'user_auditverify001';
+
+let client: Client;
+
+const db = {
+  query: async <T>(sql: string, params?: unknown[]): Promise<T[]> =>
+    (await client.query(sql, params as never[])).rows as T[],
+  execute: async (sql: string, params?: unknown[]): Promise<number> =>
+    (await client.query(sql, params as never[])).rowCount ?? 0,
+};
+
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
+
+beforeAll(async () => {
+  client = new Client({ connectionString: PG });
+  await client.connect();
+  await client.query(`delete from public.organization_connector_policies where organization_id = $1`, [ORG]);
+  await client.query(
+    `insert into public.github_installations (user_id, installation_id, account_login, account_type, ownership_verified_at)
+     values ($1, 991122, 'verified-co', 'Organization', now())
+     on conflict do nothing`,
+    [USER],
+  );
+});
+
+afterAll(async () => {
+  await client?.query(`delete from public.github_installations where user_id = $1`, [USER]);
+  await client?.query(`delete from public.organization_connector_policies where organization_id = $1`, [ORG]);
+  await client?.end();
+});
+
+async function offeredServerIds(): Promise<string[]> {
+  vi.resetModules();
+  const { loadUserConnectorToolDefs } = await import('@/lib/user-connector-tools');
+  const defs = await loadUserConnectorToolDefs(USER, { organizationId: ORG, planTier: 'enterprise' });
+  return [...new Set(defs.map((d) => d.serverId))];
+}
+
+describe('connector policy removes a connector from a live offered catalog', () => {
+  it('offers the github connector while the workspace is ungoverned', async () => {
+    const ids = await offeredServerIds();
+    expect(ids, 'a verified installation must put github in the catalog').toContain('github');
+  });
+
+  it('drops it once an administrator blocks it, through the real policy row', async () => {
+    const { upsertConnectorPolicy } = await import('@/lib/services/connector-policy-service');
+    await upsertConnectorPolicy(
+      db as never, ORG,
+      { allowedConnectors: [], blockedConnectors: ['github'], allowCustomConnectors: true },
+      USER,
+    );
+
+    const ids = await offeredServerIds();
+    expect(ids, 'the blocked connector must not be offered to the model').not.toContain('github');
+  });
+
+  it('returns it when the block is lifted, so the control is reversible', async () => {
+    const { upsertConnectorPolicy } = await import('@/lib/services/connector-policy-service');
+    await upsertConnectorPolicy(
+      db as never, ORG,
+      { allowedConnectors: [], blockedConnectors: [], allowCustomConnectors: true },
+      USER,
+    );
+
+    expect(await offeredServerIds()).toContain('github');
+  });
+
+  it('a non-empty allowlist that omits github also drops it', async () => {
+    const { upsertConnectorPolicy } = await import('@/lib/services/connector-policy-service');
+    await upsertConnectorPolicy(
+      db as never, ORG,
+      { allowedConnectors: ['linear'], blockedConnectors: [], allowCustomConnectors: true },
+      USER,
+    );
+
+    expect(await offeredServerIds()).not.toContain('github');
+  });
+});

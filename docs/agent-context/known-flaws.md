@@ -284,10 +284,57 @@ failures, not disabled — an administrator's configuration is not ours to switc
 off, and the console shows the failure count so they can see why nothing
 arrives.
 
-**AUDITSTREAM-01 — PARTIALLY CLOSED 2026-08-23.** A destination round-trips
-through a REAL Postgres and the raw signing secret is confirmed absent from the
-stored row — only its hash and prefix are there. Still unproven: an actual
-signed delivery to an HTTPS receiver.
+**AUDITSTREAM-01 — CLOSED 2026-08-23.** A signed batch was delivered over real
+TLS to a receiver that recomputed the HMAC independently and accepted it, with
+the cursor advancing on 2xx, holding on 503, and the same events redelivered on
+retry. The receiver is a local TLS server reached through the `fetchImpl` seam,
+with the destination pointed at `192.0.2.0/24` so the real egress guard runs
+unmodified; delivery to a receiver on the public internet is still unobserved,
+and needs an endpoint the founder controls. The same run also proved the guard
+refuses a loopback destination.
+
+**The defect it found — cursor precision. FIXED.** `timestamptz` holds
+microseconds and a JS `Date` holds milliseconds. `drainAuditDestination` read
+the cursor out with `toIso()` and passed it back as a parameter, so a cursor
+written from `2026-08-24T00:11:25.812267Z` came back `.812` — strictly BEFORE
+the row it was taken from. Every drain re-selected the tail of the batch it had
+just delivered and the stream never reached `nothing_due`; a busy workspace
+would resend up to a full batch on every cron tick, forever. Both directions
+now keep the cursor inside SQL: the write resolves `last_delivered_at` from the
+event id, the read joins the destination row. `audit-streaming-service.test.ts`
+carries a regression test that fails if any timestamp is passed as a cursor
+parameter. Unit tests could not have caught this — they mock the adapter, and a
+mock hands back whatever string the test wrote.
+
+## 2026-08-24 No Windows or macOS installer exists, and the feature set the Windows job builds could not compile
+
+**DISTRIBUTION-01 — ROOT CAUSE FIXED, RELEASE STILL UNPROVEN.**
+`build-windows-release.yml:278` builds with `--no-default-features --features
+shell,updater,billing,devtools,vad,remote-databases`. That exact set failed
+`cargo check` with 20 errors. Every run of the workflow in its visible history
+has FAILED, the last attempt on 2026-03-06. The newest release
+(`v-desktop-1.2.0`) carries only `.rpm`, `.AppImage`, and `.deb`; there is no
+`.exe` and no `.dmg`. Production `/api/download` answers 503 for `windows` and
+`mac` and 200 for `linux`, observed 2026-08-24.
+
+The root cause was a split bson: the crate depends on `bson 3` directly while
+mongodb's default features select `compat-3-0-0`, which pulls `bson 2`, so every
+`Document` crossing the boundary was a different type. Four smaller breaks sat
+behind it in code that had therefore never compiled — `bson 3` renamed
+`to_bson`/`from_bson`, mysql and postgres wrote `Result<(), Error>` against a
+one-argument alias, and redis `mget` called `get`, whose key must be a single
+argument. The feature set now compiles and clippy is clean.
+
+What is NOT proven: that the Windows job now produces a signed installer. That
+needs a run of the workflow on a Windows runner, which is the next step and has
+not happened. Do not describe Windows distribution as fixed until an `.exe` is
+attached to a release.
+
+**This also corrects the SUPPLYCHAIN-01 entry below.** Its statement that "every
+Windows user is running mongodb and mysql_async" cannot be true of a build that
+has never succeeded. The advisories were real; the population was not. Moving to
+mongodb 3.8 carries `hickory-proto 0.25.2 -> 0.26.1`, which clears both
+hickory advisories outright rather than by suppression.
 
 ## 2026-08-23 The Windows release ships remote-databases, and the audit file said it did not
 
@@ -381,9 +428,15 @@ not a control.
   the policy table blipped would break every member's tools for a reason no
   administrator chose.
 
-**CONNECTORPOLICY-01 — PARTIALLY CLOSED 2026-08-23.** The policy round-trips
-through a REAL Postgres, including the custom-connector switch. Still unproven:
-a connector actually vanishing from an offered tool catalog on a live turn.
+**CONNECTORPOLICY-01 — CLOSED 2026-08-23.** Observed against a real Postgres:
+with a verified GitHub installation seeded, `loadUserConnectorToolDefs` — the
+one function chat, scheduled tasks, and cloud agent runs all load their catalog
+through — offered the `github` connector while the workspace was ungoverned,
+did NOT offer it once an administrator's policy row blocked it, offered it
+again when the block was lifted, and withheld it again under an allowlist that
+omitted it. The harness is `db/neon/verify/connector-policy-live-catalog.ts.txt`.
+The first assertion is load-bearing: without proving the connector was there,
+"not offered" would be indistinguishable from an empty catalog.
 
 ## 2026-08-23 Deprovision — three properties that must not be simplified
 

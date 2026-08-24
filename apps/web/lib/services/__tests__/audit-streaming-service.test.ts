@@ -135,6 +135,14 @@ describe('upsertAuditDestination', () => {
   });
 });
 
+/**
+ * The cursor advances only through the event id: `last_delivered_at` is
+ * resolved from that id inside the database, never sent as a parameter.
+ */
+function advancesCursor(sql: string): boolean {
+  return /last_delivered_id = \$2/.test(sql);
+}
+
 describe('drainAuditDestination', () => {
   it('does nothing without an enabled destination', async () => {
     const h = harness({ destination: null });
@@ -184,7 +192,7 @@ describe('drainAuditDestination', () => {
     expect(init.headers['X-AGI-Audit-Signature']).toMatch(/^sha256=[0-9a-f]{64}$/);
     expect(init.headers['X-AGI-Audit-Timestamp']).toBe(NOW.toISOString());
 
-    const advanced = h.updates.find((u) => String(u[0]).includes('last_delivered_at = $2'));
+    const advanced = h.updates.find((u) => advancesCursor(String(u[0])));
     expect(advanced, 'the cursor must advance after a 2xx').toBeDefined();
   });
 
@@ -196,7 +204,7 @@ describe('drainAuditDestination', () => {
     const result = await drainAuditDestination(h.db, ORG, { now: NOW, fetchImpl: h.fetchImpl });
 
     expect(result.status).toBe('failed');
-    expect(h.updates.some((u) => String(u[0]).includes('last_delivered_at = $2'))).toBe(false);
+    expect(h.updates.some((u) => advancesCursor(String(u[0])))).toBe(false);
     expect(h.updates.some((u) => String(u[0]).includes('consecutive_failures + 1'))).toBe(true);
   });
 
@@ -206,7 +214,7 @@ describe('drainAuditDestination', () => {
 
     expect(result.status).toBe('failed');
     expect(result.error).toContain('ECONNREFUSED');
-    expect(h.updates.some((u) => String(u[0]).includes('last_delivered_at = $2'))).toBe(false);
+    expect(h.updates.some((u) => advancesCursor(String(u[0])))).toBe(false);
   });
 
   it('re-validates the endpoint on every send, not only when it was saved', async () => {
@@ -243,8 +251,45 @@ describe('drainAuditDestination', () => {
     const read = h.query.mock.calls.find((c) =>
       /from public\.enterprise_audit_events/i.test(String(c[0])),
     );
-    expect(String(read?.[0])).toContain('(created_at, id) >');
-    expect(String(read?.[0])).toContain('order by created_at asc, id asc');
+    expect(String(read?.[0])).toContain(
+      '(e.created_at, e.id) > (d.last_delivered_at, d.last_delivered_id)',
+    );
+    expect(String(read?.[0])).toContain('order by e.created_at asc, e.id asc');
+  });
+
+  it('never sends the cursor timestamp back as a parameter', async () => {
+    // `timestamptz` holds microseconds; a JS Date holds milliseconds. Reading
+    // the cursor out and passing it back truncates it, which lands the cursor
+    // STRICTLY BEFORE the row it was taken from — so that row is selected
+    // again on the next drain, and every drain after it, forever. Verified
+    // against a real Postgres: a cursor written from `2026-08-24T00:11:25.812267Z`
+    // came back as `.812`, and the same batch re-delivered on every run.
+    const h = harness({
+      destination: {
+        endpoint_url: 'https://siem.example.test/hook',
+        secret_hash: 'a'.repeat(64),
+        last_delivered_at: new Date('2026-08-23T09:00:00.000Z'),
+        last_delivered_id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001',
+        consecutive_failures: 0,
+      },
+    });
+    await drainAuditDestination(h.db, ORG, { now: NOW, fetchImpl: h.fetchImpl });
+
+    const cursorParams = [
+      ...h.query.mock.calls
+        .filter((c) => /from public\.enterprise_audit_events/i.test(String(c[0])))
+        .flatMap((c) => (c[1] as unknown[]) ?? []),
+      ...h.updates.filter((u) => advancesCursor(String(u[0]))).flatMap((u) => u.slice(1)),
+    ];
+
+    expect(cursorParams.length).toBeGreaterThan(0);
+    for (const param of cursorParams) {
+      expect(param, 'a Date parameter has already lost the microseconds').not.toBeInstanceOf(Date);
+      expect(
+        typeof param === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(param),
+        `an ISO timestamp parameter cannot carry microsecond precision: ${String(param)}`,
+      ).toBe(false);
+    }
   });
 
   it('bounds one delivery so a backlog cannot make a single POST enormous', async () => {
