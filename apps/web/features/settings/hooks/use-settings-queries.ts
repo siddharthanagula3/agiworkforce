@@ -638,6 +638,115 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
 }
 
 /**
+ * Current account-deletion schedule for the signed-in user, as recorded on
+ * `profiles.deletion_requested_at` / `profiles.deletion_scheduled_for` and
+ * read back from `GET /api/user/delete-account`.
+ *
+ * `canCancel` is `false` once `scheduledFor` has passed even though `pending`
+ * stays `true` — the grace window is closed and the purge cron owns the row
+ * from here, so the UI must not offer a cancel control it cannot honour.
+ */
+export interface AccountDeletionStatus {
+  pending: boolean;
+  canCancel: boolean;
+  requestedAt: string | null;
+  scheduledFor: string | null;
+}
+
+const NO_PENDING_DELETION: AccountDeletionStatus = {
+  pending: false,
+  canCancel: false,
+  requestedAt: null,
+  scheduledFor: null,
+};
+
+function parseAccountDeletionStatus(data: unknown): AccountDeletionStatus {
+  const record = data !== null && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+  return {
+    pending: record['pending'] === true,
+    canCancel: record['canCancel'] === true,
+    requestedAt: typeof record['requestedAt'] === 'string' ? record['requestedAt'] : null,
+    scheduledFor: typeof record['scheduledFor'] === 'string' ? record['scheduledFor'] : null,
+  };
+}
+
+/**
+ * Reads whether an account deletion is currently scheduled, so the settings
+ * UI can show the pending state and a cancel control instead of only ever
+ * offering "Delete account".
+ */
+export function useAccountDeletionStatus(): UseQueryResult<AccountDeletionStatus, Error> {
+  return useQuery<AccountDeletionStatus, Error>({
+    queryKey: queryKeys.settings.accountDeletionStatus(),
+    queryFn: async ({ signal }): Promise<AccountDeletionStatus> => {
+      const timeoutSignal = AbortSignal.timeout(TimeoutPresets.FAST);
+      const requestSignal = AbortSignal.any([signal, timeoutSignal]);
+      const response = await fetch('/api/user/delete-account', {
+        method: 'GET',
+        cache: 'no-store',
+        signal: requestSignal,
+      });
+      const data: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(readDeleteAccountError(data, 'Unable to check account deletion status.'));
+      }
+      return parseAccountDeletionStatus(data);
+    },
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    meta: {
+      errorMessage: 'Failed to check account deletion status',
+    },
+  });
+}
+
+export interface CancelAccountDeletionResult {
+  message: string;
+  cancelled: boolean;
+}
+
+/**
+ * Cancels a pending account deletion inside its grace window. On success the
+ * deletion-status query is written back to "nothing pending" directly from
+ * the response, so the settings UI reflects the restored account without a
+ * manual refresh.
+ */
+export function useCancelAccountDeletion(): UseMutationResult<
+  CancelAccountDeletionResult,
+  Error,
+  void
+> {
+  const queryClient: QueryClient = useQueryClient();
+
+  return useMutation<CancelAccountDeletionResult, Error, void>({
+    mutationFn: async (): Promise<CancelAccountDeletionResult> => {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+      const res = await fetch('/api/user/delete-account/cancel', { method: 'POST', headers });
+      const data: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(readDeleteAccountError(data, 'Could not cancel account deletion.'));
+      }
+      const record =
+        data !== null && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+      return {
+        message: readDeleteAccountMessage(data, 'Account deletion cancelled.'),
+        cancelled: record['cancelled'] === true,
+      };
+    },
+    onSuccess: (): void => {
+      queryClient.setQueryData<AccountDeletionStatus>(
+        queryKeys.settings.accountDeletionStatus(),
+        NO_PENDING_DELETION,
+      );
+    },
+    onError: (error: Error): void => {
+      logger.error('Error cancelling account deletion:', error);
+    },
+  });
+}
+
+/**
  * Invalidate all settings queries
  *
  * @returns Callback function to invalidate all settings queries
