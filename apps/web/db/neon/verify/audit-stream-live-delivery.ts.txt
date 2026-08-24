@@ -1,0 +1,186 @@
+// @vitest-environment node
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { Client } from 'pg';
+import { createServer, request as httpsRequest, type Server } from 'node:https';
+import { createHmac } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+vi.mock('server-only', () => ({}));
+
+const URL_PG = 'postgresql://postgres:test@127.0.0.1:55433/agitest';
+const ORG = '358fe6cb-582e-44f7-8726-7fe4f3a951da';
+const ENDPOINT = 'https://192.0.2.77:8443/siem';
+
+let client: Client;
+let server: Server;
+let port = 0;
+const received: Array<{ headers: Record<string, string>; body: string }> = [];
+let nextStatus = 200;
+
+const db = {
+  query: async <T>(sql: string, params?: unknown[]): Promise<T[]> =>
+    (await client.query(sql, params as never[])).rows as T[],
+  execute: async (sql: string, params?: unknown[]): Promise<number> =>
+    (await client.query(sql, params as never[])).rowCount ?? 0,
+} as never;
+
+beforeAll(async () => {
+  client = new Client({ connectionString: URL_PG });
+  await client.connect();
+
+  // Re-runnable: the cursor and the 5xx event are state this file writes.
+  await client.query(`delete from public.organization_audit_destinations where organization_id = $1`, [ORG]);
+  await client.query(`delete from public.enterprise_audit_events where organization_id = $1 and metadata->>'seq' = '8'`, [ORG]);
+
+  const dir = mkdtempSync(join(tmpdir(), 'agi-siem-'));
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', join(dir, 'k.pem'), '-out', join(dir, 'c.pem'),
+    '-days', '1', '-subj', '/CN=localhost']);
+
+  server = createServer(
+    { key: readFileSync(join(dir, 'k.pem')), cert: readFileSync(join(dir, 'c.pem')) },
+    (req, res) => {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        received.push({ headers: req.headers as Record<string, string>, body });
+        res.writeHead(nextStatus).end('ok');
+      });
+    },
+  );
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  port = (server.address() as AddressInfo).port;
+});
+
+afterAll(async () => {
+  server?.close();
+  await client?.end();
+});
+
+/**
+ * Routes the pinned public URL to the local TLS receiver, trusting its
+ * self-signed certificate. Everything before the socket — the egress guard,
+ * the cursor query, the batch selection, the signing — is the real code path.
+ */
+const toReceiver = ((_input: unknown, init?: RequestInit) =>
+  new Promise((resolve, reject) => {
+    const req = httpsRequest(
+      {
+        host: '127.0.0.1',
+        port,
+        path: '/siem',
+        method: init?.method ?? 'POST',
+        headers: init?.headers as Record<string, string>,
+        rejectUnauthorized: false,
+      },
+      (res) => {
+        res.resume();
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, ok: (res.statusCode ?? 0) < 400 }));
+      },
+    );
+    req.on('error', reject);
+    req.end(init?.body as string);
+  })) as unknown as typeof fetch;
+
+describe('audit stream: a real signed delivery over TLS', () => {
+  it('mints a destination whose raw secret is never stored', async () => {
+    const { upsertAuditDestination, hashSecret } = await import('@/lib/services/audit-streaming-service');
+    const { destination, secret } = await upsertAuditDestination(db, ORG, {
+      endpointUrl: ENDPOINT, enabled: true, createdByUserId: 'user_auditverify001',
+    });
+    expect(destination.secretPrefix).toBe(secret.slice(0, 8));
+
+    const [row] = await db_query();
+    expect(row.secret_hash).toBe(hashSecret(secret));
+    expect(JSON.stringify(row)).not.toContain(secret);
+  });
+
+  it('delivers over real TLS with a signature an independent verifier accepts', async () => {
+    const { drainAuditDestination } = await import('@/lib/services/audit-streaming-service');
+    const result = await drainAuditDestination(db, ORG, { fetchImpl: toReceiver });
+
+    expect(result.status).toBe('delivered');
+    expect(result.delivered).toBe(7);
+    expect(received).toHaveLength(1);
+
+    const hit = received[0]!;
+    const ts = hit.headers['x-agi-audit-timestamp']!;
+    const sig = hit.headers['x-agi-audit-signature']!;
+    expect(sig.startsWith('sha256=')).toBe(true);
+
+    const [row] = await db_query();
+    const expected = createHmac('sha256', row.secret_hash).update(`${ts}.${hit.body}`).digest('hex');
+    expect(sig).toBe(`sha256=${expected}`);
+
+    const parsed = JSON.parse(hit.body);
+    expect(parsed.organizationId).toBe(ORG);
+    expect(parsed.events).toHaveLength(7);
+    expect(parsed.events.map((e: { metadata: { seq: number } }) => e.metadata.seq)).toEqual([1,2,3,4,5,6,7]);
+  });
+
+  it('a tampered body fails the receiver-side check', async () => {
+    const hit = received[0]!;
+    const ts = hit.headers['x-agi-audit-timestamp']!;
+    const [row] = await db_query();
+    const forged = createHmac('sha256', row.secret_hash).update(`${ts}.${hit.body}`).digest('hex');
+    const tampered = hit.body.replace('"outcome":"success"', '"outcome":"denied"');
+    expect(tampered).not.toBe(hit.body);
+    const overTampered = createHmac('sha256', row.secret_hash).update(`${ts}.${tampered}`).digest('hex');
+    expect(overTampered).not.toBe(forged);
+  });
+
+  it('advances the cursor so a second drain has nothing due', async () => {
+    const { drainAuditDestination } = await import('@/lib/services/audit-streaming-service');
+    const again = await drainAuditDestination(db, ORG, { fetchImpl: toReceiver });
+    expect(again.status).toBe('nothing_due');
+    expect(received).toHaveLength(1);
+  });
+
+  it('holds the cursor on a 5xx so nothing is dropped', async () => {
+    const { drainAuditDestination } = await import('@/lib/services/audit-streaming-service');
+    await client.query(
+      `insert into public.enterprise_audit_events
+        (organization_id, actor_user_id, surface, action, resource_type, outcome, severity, metadata)
+       values ($1,'user_auditverify001','web','member.removed','organization_member','success','info','{"seq":8}')`,
+      [ORG],
+    );
+
+    nextStatus = 503;
+    const failed = await drainAuditDestination(db, ORG, { fetchImpl: toReceiver });
+    expect(failed.status).toBe('failed');
+    expect(failed.delivered).toBe(0);
+
+    const [afterFail] = await db_query();
+    expect(afterFail.consecutive_failures).toBe(1);
+
+    nextStatus = 200;
+    const retried = await drainAuditDestination(db, ORG, { fetchImpl: toReceiver });
+    expect(retried.status).toBe('delivered');
+    expect(retried.delivered).toBe(1);
+    expect(JSON.parse(received[received.length - 1]!.body).events[0].metadata.seq).toBe(8);
+
+    const [afterOk] = await db_query();
+    expect(afterOk.consecutive_failures).toBe(0);
+  });
+
+  it('the real egress guard refuses a loopback destination', async () => {
+    const { upsertAuditDestination } = await import('@/lib/services/audit-streaming-service');
+    await expect(
+      upsertAuditDestination(db, ORG, {
+        endpointUrl: 'https://127.0.0.1:9999/siem', enabled: true, createdByUserId: 'user_auditverify001',
+      }),
+    ).rejects.toThrow(/Egress blocked/);
+  });
+});
+
+async function db_query(): Promise<Array<{ secret_hash: string; consecutive_failures: number }>> {
+  const r = await client.query(
+    `select secret_hash, consecutive_failures from public.organization_audit_destinations where organization_id = $1`,
+    [ORG],
+  );
+  return r.rows;
+}
