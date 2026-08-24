@@ -65,4 +65,34 @@ describe('GitHub installation listing ownership proof', () => {
     const [sql] = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/ownership_verified_at is not null/i);
   });
+
+  // known-flaws WEB-CONNECTORS-PANEL-ALL-OR-NOTHING-01: an unmigrated
+  // github_installations table used to 500 here, which the settings panel's
+  // Promise.all turned into a global "connectors could not be loaded" error
+  // even though /api/connectors and /api/connectors/custom were healthy.
+  // Degrading to an empty list (mirroring getUserGithubInstallations) reads
+  // as "no installations", exactly like /api/connectors already does.
+  it('degrades an unmigrated github_installations table to an empty list instead of 500', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+    mocks.query.mockRejectedValueOnce(
+      Object.assign(new Error('relation "github_installations" does not exist'), {
+        code: '42P01',
+      }),
+    );
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/github/installations'));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ installations: [] });
+  });
+
+  it('still 500s on a genuinely unexpected database error', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+    mocks.query.mockRejectedValueOnce(new Error('connection terminated unexpectedly'));
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/github/installations'));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: 'Failed to fetch installations' });
+  });
 });
