@@ -8,6 +8,10 @@ const CLERK_API_VERSION = '2026-05-12';
 const PUBLISHABLE_KEY_NAME = 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY';
 const TARGETS = ['production', 'preview', 'development'];
 const HOST_PATTERN = /^(?!-)[a-z0-9-]{1,63}(?:\.(?!-)[a-z0-9-]{1,63})+$/u;
+const PRODUCTION_WEB_URL_DEFAULT = 'https://agiworkforce.com';
+const PUBLISHABLE_KEY_PATTERN = /pk_(?:live|test)_[A-Za-z0-9+/=]+/u;
+
+export class UndecryptedVercelValueError extends Error {}
 
 export function frontendApiHost(publishableKey) {
   const key = publishableKey?.trim();
@@ -89,11 +93,39 @@ export async function fetchPublishableKeyFromVercel({
   for (const entry of entries) {
     if (entry?.key !== PUBLISHABLE_KEY_NAME || entry.gitBranch) continue;
     const entryTargets = Array.isArray(entry.target) ? entry.target : [entry.target];
-    if (entryTargets.includes(target) && typeof entry.value === 'string' && entry.value.trim()) {
-      return entry.value.trim();
+    if (!entryTargets.includes(target)) continue;
+    if (typeof entry.value !== 'string' || !entry.value.trim()) continue;
+    if (entry.decrypted !== true) {
+      throw new UndecryptedVercelValueError(
+        `Vercel returned an undecryptable value for ${PUBLISHABLE_KEY_NAME} (sensitive env var, or the token lacks decrypt scope): its "decrypted" field is not true, so the value field is ciphertext, not the key`,
+      );
     }
+    return entry.value.trim();
   }
   return '';
+}
+
+export function extractPublishableKeyFromHtml(html) {
+  const match = PUBLISHABLE_KEY_PATTERN.exec(html ?? '');
+  return match ? match[0] : '';
+}
+
+export async function fetchPublishableKeyFromProductionSite({
+  productionUrl,
+  fetchImpl = globalThis.fetch,
+}) {
+  const response = await fetchImpl(productionUrl, { headers: { accept: 'text/html' } });
+  if (!response.ok) {
+    throw new Error(
+      `Production page ${productionUrl} returned ${response.status}; cannot read ${PUBLISHABLE_KEY_NAME} from it`,
+    );
+  }
+  const html = await response.text();
+  const key = extractPublishableKeyFromHtml(html);
+  if (!key) {
+    throw new Error(`no ${PUBLISHABLE_KEY_NAME} found on the production page at ${productionUrl}`);
+  }
+  return key;
 }
 
 function parseArgs(argv) {
@@ -111,14 +143,35 @@ function parseArgs(argv) {
 async function resolvePublishableKey(env, target, fetchImpl) {
   const fromEnv = env[PUBLISHABLE_KEY_NAME]?.trim();
   if (fromEnv) return fromEnv;
-  if (!env.VERCEL_TOKEN || !env.VERCEL_PROJECT_ID) return '';
-  return await fetchPublishableKeyFromVercel({
-    token: env.VERCEL_TOKEN,
-    projectId: env.VERCEL_PROJECT_ID,
-    orgId: env.VERCEL_ORG_ID,
-    target,
-    fetchImpl,
-  });
+
+  const failures = [];
+  if (env.VERCEL_TOKEN && env.VERCEL_PROJECT_ID) {
+    try {
+      const key = await fetchPublishableKeyFromVercel({
+        token: env.VERCEL_TOKEN,
+        projectId: env.VERCEL_PROJECT_ID,
+        orgId: env.VERCEL_ORG_ID,
+        target,
+        fetchImpl,
+      });
+      if (key) return key;
+    } catch (error) {
+      if (!(error instanceof UndecryptedVercelValueError)) throw error;
+      failures.push(error.message);
+    }
+  }
+
+  if (target === 'production') {
+    const productionUrl = env.PRODUCTION_WEB_URL?.trim() || PRODUCTION_WEB_URL_DEFAULT;
+    try {
+      return await fetchPublishableKeyFromProductionSite({ productionUrl, fetchImpl });
+    } catch (error) {
+      failures.push(error.message);
+    }
+  }
+
+  if (failures.length > 0) throw new Error(failures.join('; '));
+  return '';
 }
 
 export async function run(argv = process.argv.slice(2), env = process.env, deps = {}) {
