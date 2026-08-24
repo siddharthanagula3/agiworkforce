@@ -904,22 +904,56 @@ triaged on 2026-08-20 as well:
 
 ## 2026-08-12 Three rich-format card parsers are still unaudited for content loss
 
-- **WEB-FORMAT-CARD-LOSSY-PARSE — PARTIALLY OPEN, mitigated.**
+- **WEB-FORMAT-CARD-LOSSY-PARSE — CLOSED 2026-08-24.**
   `apps/web/features/chat/components/cards/` holds four heuristic parsers that
-  turn assistant markdown into structured cards. They were written but never
-  wired to anything (zero consumers) until 2026-08-12. All four `continue` past
-  lines they do not recognise, so any of them can drop content.
-- **One was provably lossy and is fixed.** `RecipeCard.parseRecipe` set
-  `currentSection = 'other'` on the first unrecognised heading and nothing
+  turn assistant markdown into structured cards. `RecipeCard` was already fixed
+  (see below) by the time this row was opened. As of 2026-08-24 the three
+  siblings named below have each been audited line by line against the same
+  bug class — every branch that reaches a `continue` was traced to confirm it
+  either matches nothing worth keeping (an empty line, a table separator) or
+  hands its text to `extraSections`/`descLines`/a typed field — and two of the
+  three had a real, previously-undetected instance of it, now fixed the same
+  way `RecipeCard` was.
+- **One was provably lossy and is fixed (pre-existing).** `RecipeCard.parseRecipe`
+  set `currentSection = 'other'` on the first unrecognised heading and nothing
   collected that branch, so a trailing "Notes" / "Tips" / "Variations" section
   vanished from the card. Now captured into `extraSections` and rendered.
-- **`ComparisonCard`, `StepsCard`, `CalculationCard` have NOT been audited**
-  for the same class of bug. Assume they can drop content until someone checks.
-- **Why that is survivable.** `MessageFormatCard` is the only sanctioned way to
-  render these: it shows the card by default and keeps the exact model markdown
-  behind an "Original response" toggle. A parser gap therefore costs a click,
-  not the answer. Do NOT render these cards in place of the prose without that
-  wrapper — that is what would make an answer silently lossy.
+- **`CalculationCard` had two real drops, now fixed.** `parseCalculation`'s
+  `resultMatch` and inline-code-formula regexes are unanchored keyword
+  matches: `.match()` returns only the substring from the keyword onward, so
+  any prefix on the same line ("Grand total: $45" → "Grand ", or "The
+  identity `a+b=c` explains it" → the prose around the backticks) matched
+  nothing and was never appended anywhere. Both sites now route their
+  unmatched prefix/remainder through a shared `routeLeftover` helper that
+  files it into the description or an extra section, the same buckets every
+  other unclassified line already used.
+- **`ComparisonCard` had two real drops, now fixed.** The pros/cons and
+  winner/verdict heading regexes matched on the keyword alone and discarded
+  any trailing words on that heading line ("### Pros of running Postgres in
+  production" kept only the section toggle, dropping "of running Postgres in
+  production"; "## Winner: Postgres — better correctness guarantees overall"
+  dropped everything after the keyword). Trailing text on a pros/cons heading
+  now lands in an extra section keyed by the full heading; trailing text on a
+  winner heading now seeds `winnerReason` (and infers `winner` from it) the
+  same way a separate winner-reason line already did.
+- **`StepsCard` is clean — audited, not modified.** Every `continue` in
+  `parseSteps` is on an anchored, whole-line match (title, step header,
+  generic `#{1,6}` heading, or the extra/preamble/detail catch-alls), so there
+  is no keyword-in-the-middle regex that can strand a prefix the way
+  `CalculationCard`'s did. `clampToSentence`'s truncation of the _displayed_
+  preamble is a UI affordance, not a parse loss: the untruncated text is
+  always in `parsed.description` and reachable via the paragraph's `title`
+  attribute.
+- **Verification.** `card-roundtrip.test.tsx` gained regression cases for both
+  fixes plus unicode, deeply nested markdown, a missing-result calculation,
+  and a 300-line trailing section, run via
+  `pnpm --filter @agiworkforce/web exec vitest run features/chat/components/cards/`
+  (44/44 passing, all four card files covered).
+- **Why a residual parser gap would still be survivable.** `MessageFormatCard`
+  is the only sanctioned way to render these: it shows the card by default and
+  keeps the exact model markdown behind an "Original response" toggle. Do NOT
+  render these cards in place of the prose without that wrapper — that is what
+  would make an answer silently lossy.
 - **Detection runs only on settled text.** `MessageBubble` computes
   `detectCardType` with `isStreaming` false, because the detector keys on
   structural thresholds (an `## Ingredients` heading, three `Step N:` markers)
