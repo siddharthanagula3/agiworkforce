@@ -73,7 +73,7 @@ bytes = { version = "1.11.1", default-features = false }
 cpal = "0.15"
 hound = "3.5"
 crossterm = { version = "0.28", features = ["bracketed-paste"] }
-ratatui = "0.29"
+ratatui = "0.30"
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
 cron = "0.13"
 axum = { version = "0.8", features = ["tokio", "ws"] }
