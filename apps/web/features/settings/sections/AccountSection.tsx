@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
-import { LogOut, RefreshCw, Trash2 } from 'lucide-react';
+import { LogOut, RefreshCw, Trash2, Undo2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,8 +20,12 @@ import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
 import { LinkedDevicesPanel } from '../components/LinkedDevicesPanel';
 import { CopyableIdField } from '../components/CopyableIdField';
-import { useOrganizationOverview } from '../hooks/use-settings-queries';
-import { useDeleteAccount } from '../hooks/use-settings-queries';
+import {
+  useOrganizationOverview,
+  useDeleteAccount,
+  useAccountDeletionStatus,
+  useCancelAccountDeletion,
+} from '../hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
 
 function formatDateTime(value: Date | null | undefined): string {
@@ -76,7 +80,6 @@ export function AccountSection() {
 
   const userId = user?.id ?? null;
   const organizationId = useOrganizationOverview().data?.organization?.id ?? null;
-
 
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -175,9 +178,7 @@ export function AccountSection() {
           router.replace('/login');
           return;
         }
-        setSessionActionError(
-          toUserMessage(error, 'Unable to revoke this session.'),
-        );
+        setSessionActionError(toUserMessage(error, 'Unable to revoke this session.'));
       } finally {
         setRevokingSessionId(null);
       }
@@ -203,6 +204,24 @@ export function AccountSection() {
     setShowDeleteDialog(false);
     void deleteAccountMutation.signOutAfterDeletion();
   }, [deleteAccountMutation]);
+
+  // ── Cancel a pending deletion, before the erasure deadline ──────────────────
+  // The account stays reachable here because scheduling a deletion does not
+  // revoke the Clerk session — only the post-confirm sign-out above does, and
+  // only once the user clicks Continue. Signing back in before the deadline
+  // (the Clerk identity itself is not deleted until the purge cron runs)
+  // lands here with deletionStatus.pending true, which is what this reads.
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const deletionStatus = useAccountDeletionStatus();
+  const cancelDeletionMutation = useCancelAccountDeletion();
+
+  const handleCancelDeletion = useCallback(() => {
+    cancelDeletionMutation.mutate(undefined, {
+      onSuccess: () => setShowCancelDialog(false),
+    });
+  }, [cancelDeletionMutation]);
+
+  const pendingDeletion = deletionStatus.data?.pending === true;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -317,51 +336,135 @@ export function AccountSection() {
         >
           Danger Zone
         </div>
-        <div
-          style={{
-            padding: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: '0 0 4px' }}>
-              Delete account
-            </p>
-            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-              To delete your account and all associated data, confirm below. This cannot be undone.
-            </p>
-          </div>
-          <button
-            type="button"
-            data-testid="delete-account-trigger"
-            onClick={() => {
-              setDeleteConfirmInput('');
-              deleteAccountMutation.reset();
-              setShowDeleteDialog(true);
-            }}
+        {pendingDeletion ? (
+          <div
             style={{
-              flexShrink: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '8px 14px',
-              fontSize: 13,
-              fontWeight: 500,
-              color: 'var(--settings-destructive-foreground)',
-              background: 'var(--settings-destructive)',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
             }}
           >
-            <Trash2 size={14} />
-            Delete account
-          </button>
-        </div>
+            <div>
+              <p
+                data-testid="pending-deletion-title"
+                style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: '0 0 4px' }}
+              >
+                Account deletion scheduled
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+                Your account and all data will be permanently erased on{' '}
+                {formatDateTime(
+                  deletionStatus.data?.scheduledFor
+                    ? new Date(deletionStatus.data.scheduledFor)
+                    : null,
+                )}
+                .{' '}
+                {deletionStatus.data?.canCancel
+                  ? 'You can cancel any time before then.'
+                  : 'The cancellation window has closed and erasure is already underway.'}
+              </p>
+            </div>
+            {deletionStatus.data?.canCancel && (
+              <button
+                type="button"
+                data-testid="cancel-deletion-trigger"
+                onClick={() => {
+                  cancelDeletionMutation.reset();
+                  setShowCancelDialog(true);
+                }}
+                style={{
+                  alignSelf: 'flex-start',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 14px',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: 'var(--text-1)',
+                  background: 'transparent',
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Undo2 size={14} />
+                Cancel deletion
+              </button>
+            )}
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div>
+              <p
+                style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: '0 0 4px' }}
+              >
+                Delete account
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+                To delete your account and all associated data, confirm below. This cannot be
+                undone.
+              </p>
+              {deletionStatus.isError && (
+                <p
+                  role="alert"
+                  style={{ fontSize: 11, color: 'var(--settings-destructive)', margin: '6px 0 0' }}
+                >
+                  Could not check whether a deletion is already pending.{' '}
+                  <button
+                    type="button"
+                    onClick={() => void deletionStatus.refetch()}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: 'inherit',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Retry
+                  </button>
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              data-testid="delete-account-trigger"
+              onClick={() => {
+                setDeleteConfirmInput('');
+                deleteAccountMutation.reset();
+                setShowDeleteDialog(true);
+              }}
+              style={{
+                flexShrink: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                fontSize: 13,
+                fontWeight: 500,
+                color: 'var(--settings-destructive-foreground)',
+                background: 'var(--settings-destructive)',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={14} />
+              Delete account
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Account identifier */}
@@ -636,7 +739,8 @@ export function AccountSection() {
               {deleteAccountMutation.data?.scheduledFor && (
                 <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '-8px 0 0' }}>
                   Your data is permanently erased on{' '}
-                  {formatDateTime(new Date(deleteAccountMutation.data.scheduledFor))}.
+                  {formatDateTime(new Date(deleteAccountMutation.data.scheduledFor))}. Sign back in
+                  and cancel from Settings &gt; Account any time before then to keep your account.
                 </p>
               )}
               <AlertDialogFooter>
@@ -656,10 +760,9 @@ export function AccountSection() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This permanently deletes your account and all associated data. You are signed
-                  out immediately and cannot sign back in. Erasure runs 24 hours after you
-                  confirm, and there is no self-serve way to cancel it — contact support inside
-                  that window if you change your mind.
+                  This permanently deletes your account and all associated data. You are signed out
+                  now, and erasure runs 24 hours after you confirm. If you change your mind, sign
+                  back in and cancel from Settings &gt; Account any time before then.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-1">
@@ -703,6 +806,41 @@ export function AccountSection() {
               </AlertDialogFooter>
             </>
           )}
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel-deletion confirmation dialog */}
+      <AlertDialog
+        open={showCancelDialog}
+        onOpenChange={(open) => {
+          if (!cancelDeletionMutation.isPending) setShowCancelDialog(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel account deletion?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your account will stay active and none of your data will be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {cancelDeletionMutation.error && (
+            <p className="text-xs text-destructive">{cancelDeletionMutation.error.message}</p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelDeletionMutation.isPending}>
+              Keep deletion scheduled
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="cancel-deletion-confirm"
+              onClick={(e) => {
+                e.preventDefault();
+                handleCancelDeletion();
+              }}
+              disabled={cancelDeletionMutation.isPending}
+            >
+              {cancelDeletionMutation.isPending ? 'Cancelling…' : 'Cancel deletion'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

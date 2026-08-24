@@ -6,37 +6,50 @@ const WEB_ROOT = join(__dirname, '..', '..', '..', '..');
 const read = (p: string) => readFileSync(join(WEB_ROOT, p), 'utf-8');
 
 /**
- * The dialog promised a "24-hour grace window before deletion completes" while
- * the privacy policy stated there is no self-serve way to cancel a scheduled
- * deletion — and the code agreed with the policy: `deletion_scheduled_for` is
- * set on confirm and nulled nowhere, while device refresh blocks re-auth
- * immediately. Telling someone an irreversible action is reversible is the one
- * thing this dialog must never do.
+ * Account deletion now has a real self-serve cancel path
+ * (`POST /api/user/delete-account/cancel`, nulling
+ * `profiles.deletion_requested_at` / `deletion_scheduled_for` while the grace
+ * window is open). This suite used to pin the opposite invariant — that no
+ * cancel path existed and the dialog said so — and its own comment predicted
+ * this exact change: "If a real cancel endpoint is ever added, this test
+ * should fail and the dialog copy should be revisited in the same change."
+ * This is that revisit: it now pins that the copy and the code agree that
+ * cancellation is self-serve, and that the endpoint actually honours the
+ * grace window rather than clearing the schedule unconditionally.
  */
 describe('delete-account dialog matches what deletion actually does', () => {
   const dialog = read('features/settings/sections/AccountSection.tsx');
+  const privacy = read('app/privacy/page.tsx');
+  const cancelRoute = read('app/api/user/delete-account/cancel/route.ts');
 
-  it('does not promise a grace window the product cannot honour', () => {
+  it('does not promise a grace window it cannot honour', () => {
     expect(dialog).not.toMatch(/grace window/i);
   });
 
-  it('states that cancellation is not self-serve', () => {
-    expect(dialog).toMatch(/no self-serve way to cancel/i);
+  it('no longer tells the user cancellation requires contacting support', () => {
+    expect(dialog).not.toMatch(/no self-serve way to cancel/i);
   });
 
-  it('agrees with the privacy policy rather than contradicting it', () => {
-    expect(read('app/privacy/page.tsx')).toMatch(/no self-serve way to cancel a scheduled deletion/i);
+  it('tells the user how to cancel: sign back in and use Settings > Account', () => {
+    expect(dialog).toMatch(
+      /sign\s+back\s+in\s+and\s+cancel\s+from\s+settings\s*(?:>|&gt;)\s*account/i,
+    );
   });
 
-  it('still has no code path that clears a scheduled deletion', () => {
-    // If a real cancel endpoint is ever added, this test should fail and the
-    // dialog copy should be revisited in the same change.
-    const routes = [
-      'app/api/user/delete-account/route.ts',
-      'app/api/cron/purge-deleted-accounts/route.ts',
-    ];
-    for (const r of routes) {
-      expect(read(r)).not.toMatch(/deletion_scheduled_for\s*=\s*null/i);
-    }
+  it('privacy policy agrees that cancellation is self-serve, not a support request', () => {
+    expect(privacy).not.toMatch(/no self-serve way to cancel a scheduled deletion/i);
+    expect(privacy).toMatch(/cancellation is self-serve/i);
+  });
+
+  it('the cancel endpoint actually nulls both deletion-schedule columns', () => {
+    expect(cancelRoute).toMatch(/deletion_requested_at\s*=\s*null/i);
+    expect(cancelRoute).toMatch(/deletion_scheduled_for\s*=\s*null/i);
+  });
+
+  it('the cancel endpoint only clears the schedule while it is still in the future', () => {
+    // Cancelling after the grace window closes must not be able to resurrect
+    // data the purge cron has already started erasing — the UPDATE has to be
+    // conditioned on the schedule still being ahead of `now()`.
+    expect(cancelRoute).toMatch(/deletion_scheduled_for\s*>\s*now\(\)/i);
   });
 });

@@ -42,6 +42,18 @@ vi.mock('../hooks/use-settings-queries', () => ({
     data: undefined,
     signOutAfterDeletion: vi.fn(async () => {}),
   }),
+  useAccountDeletionStatus: () => ({
+    data: { pending: false, canCancel: false, requestedAt: null, scheduledFor: null },
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+  useCancelAccountDeletion: () => ({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
 }));
 
 describe('AccountSection API keys', () => {
