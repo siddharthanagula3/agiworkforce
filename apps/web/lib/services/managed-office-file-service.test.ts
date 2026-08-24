@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 
@@ -114,5 +117,35 @@ describe('managed Office file service', () => {
     expect(firstSlideXml?.indexOf('Release order')).toBeLessThan(
       firstSlideXml?.indexOf('>AGI<') ?? -1,
     );
+  });
+});
+
+describe('pptxgenjs never receives an image', () => {
+  /**
+   * `pptxgenjs` pulls in `image-size`, which has two unpatched CVSS-7.5
+   * denial-of-service advisories (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq):
+   * a crafted ICNS, JXL, or HEIF buffer spins its parser in an infinite loop
+   * and permanently blocks the Node event loop. There is no fixed release.
+   *
+   * The advisories do not reach us because `image-size` is only invoked when
+   * an image is added to a slide, and this generator only ever adds shapes and
+   * text. That is a property of THIS FILE, not of the dependency, so it needs a
+   * test: the moment someone adds a picture to a generated deck, an unpatched
+   * remote DoS becomes reachable from whatever supplies that image.
+   *
+   * If this fails, do not delete it. Either keep images out of the generator,
+   * or validate the buffer before it reaches pptxgenjs and re-assess the
+   * dismissed Dependabot alerts.
+   */
+  it('adds no image to a generated deck', () => {
+    // Resolved by marker, not process.cwd(): vitest runs from both the repo
+    // root and apps/web, and import.meta.url throws under this transform.
+    const root = existsSync(join(process.cwd(), 'db/neon'))
+      ? process.cwd()
+      : join(process.cwd(), 'apps/web');
+    const source = readFileSync(join(root, 'lib/services/managed-office-file-service.ts'), 'utf8');
+    const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(withoutComments).not.toMatch(/\.addImage\s*\(/);
+    expect(withoutComments).not.toMatch(/\.addMedia\s*\(/);
   });
 });
