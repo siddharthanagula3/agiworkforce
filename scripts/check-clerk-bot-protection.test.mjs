@@ -299,7 +299,7 @@ test('run falls back to the production page when Vercel cannot decrypt the value
 
   assert.equal(code, 0);
   assert.ok(requested.some((url) => url.startsWith('https://api.vercel.com/')));
-  assert.ok(requested.includes('https://agiworkforce.com'));
+  assert.ok(requested.some((url) => url === 'https://agiworkforce.com'));
   assert.ok(requested.some((url) => url.startsWith(`https://${FAKE_HOST}/v1/environment`)));
 });
 
@@ -320,7 +320,7 @@ test('run falls back to the production page when the Vercel call itself fails, n
 
   assert.equal(code, 0);
   assert.ok(requested.some((url) => url.startsWith('https://api.vercel.com/')));
-  assert.ok(requested.includes('https://agiworkforce.com'));
+  assert.ok(requested.some((url) => url === 'https://agiworkforce.com'));
 });
 
 test('run reports both failures accurately when Vercel cannot decrypt and the production page has no key', async () => {
