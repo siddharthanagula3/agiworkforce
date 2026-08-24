@@ -306,6 +306,28 @@ carries a regression test that fails if any timestamp is passed as a cursor
 parameter. Unit tests could not have caught this — they mock the adapter, and a
 mock hands back whatever string the test wrote.
 
+## 2026-08-24 SCIM authentication verified against production
+
+**SCIMAUTH-01 — VERIFIED, no defect.** Checked because an unauthenticated
+directory-provisioning endpoint would be the worst hole on the enterprise
+surface. Observed live on agiworkforce.com: `/api/scim/v2/Users`, `/Groups` and
+`/ServiceProviderConfig` all answer 401 with no credential, and 401 to a bogus
+bearer token.
+
+The implementation is stronger than a token compare. Every route goes through
+`withScim`, which rate-limits and then calls `authenticateScimRequest` BEFORE
+the handler, so a handler cannot run unauthenticated. The token is looked up by
+prefix with `revoked_at is null and (expires_at is null or expires_at > now())`
+in the SQL rather than in JS; the prefix is compared with `timingSafeEqual`; and
+the secret is verified with `argon2.verify` against a stored hash, so the
+comparison is constant-time by construction and the raw token is never stored.
+Every error path returns null or throws 401 — including a failed entitlement
+lookup, which logs "failing closed" and resolves to an unentitled plan. A
+disabled connection returns 403 rather than 401, which is the right distinction.
+
+Recorded so the next audit does not re-derive it. If those files change, re-run
+the live check rather than trusting this paragraph.
+
 ## 2026-08-24 Three-vendor enterprise comparison, checked live rather than from screenshots
 
 The reference corpus at `/Users/siddhartha/Desktop/references_for_agi` was
