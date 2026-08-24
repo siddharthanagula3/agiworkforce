@@ -10,24 +10,15 @@ test.describe('signup gates the purchase', () => {
     const getPro = page.getByRole('button', { name: 'Get Pro' });
     await expect(getPro).toBeEnabled();
 
-    const loginStatuses: number[] = [];
-    page.on('response', (response) => {
-      if (
-        new URL(response.url()).pathname === '/login' &&
-        response.request().resourceType() === 'document'
-      ) {
-        loginStatuses.push(response.status());
-      }
-    });
-
     await getPro.click();
 
+    // The button does a client-side router.push, not a hard redirect, so
+    // there is no document-typed navigation response to assert on — Next
+    // fetches the destination as an RSC payload instead. The real evidence
+    // that the CTA sent the visitor somewhere real is the URL and the
+    // rendered login page itself, same as public-auth-clean.spec.ts checks.
     await expect(page).toHaveURL(/\/login\?redirectTo=%2Fpricing/);
-    await page.waitForLoadState('domcontentloaded');
-    expect(
-      loginStatuses.at(-1),
-      'the paid CTA sent a signed-out visitor to a /login that did not render',
-    ).toBe(200);
+    await page.waitForLoadState('networkidle');
     await expect(page.locator('.agi-auth-title').first()).toBeVisible();
   });
 
