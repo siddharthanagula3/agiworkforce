@@ -85,16 +85,20 @@ for (const root of LOCALE_ROOTS) {
  * Untranslated-by-default ratchet.
  *
  * Parity above compares locales to EACH OTHER, so a key that exists in none of
- * them is perfectly consistent — and 254 such keys ship today, rendering
- * English in every language because their `t()` call carries an inline English
- * default. The check passed green while the sidebar, composer and model picker
- * were English-only for a user who chose Japanese.
+ * them is perfectly consistent, which is how this list grew undetected. The
+ * check passed green while the sidebar, composer and model picker were
+ * English-only for a user who chose Japanese.
  *
  * This does not translate anything. It stops the number growing: a NEW `t()`
  * key with an inline default and no catalogue entry fails here. Lowering the
  * baseline is the work; raising it needs a deliberate edit.
+ *
+ * WEB-CORE-CHAT-UI-NOT-LOCALISED-01 slice 1 (sidebar + selector + composer,
+ * 126 keys) landed across all 12 locales, dropping the baseline from 254 to
+ * 104. Remaining surfaces (projects, stream, bubble, research, header, ...)
+ * are still tracked in ExecutionPlan.md.
  */
-const UNTRANSLATED_DEFAULT_BASELINE = 254;
+const UNTRANSLATED_DEFAULT_BASELINE = 104;
 
 function catalogueHas(catalogues, key) {
   const [namespace, rest] = key.includes(':') ? key.split(/:(.*)/s) : [null, key];
