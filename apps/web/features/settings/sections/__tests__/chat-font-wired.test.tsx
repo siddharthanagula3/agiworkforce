@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -28,6 +28,12 @@ describe('the chat font preference reaches the document', () => {
     expect(document.documentElement.getAttribute('data-chat-font')).toBe('serif');
   });
 
+  it('stamps the dyslexic-friendly family', () => {
+    useSettingsStore.getState().setChatFont('dyslexic');
+    render(<AppearancePreferences />);
+    expect(document.documentElement.getAttribute('data-chat-font')).toBe('dyslexic');
+  });
+
   it('clears the attribute when returning to default', () => {
     useSettingsStore.getState().setChatFont('sans');
     render(<AppearancePreferences />);
@@ -43,6 +49,7 @@ describe('the stylesheet answers the attribute', () => {
   it('has a rule for every value the control offers', () => {
     expect(css).toContain("html[data-chat-font='serif'] .prose");
     expect(css).toContain("html[data-chat-font='sans'] .prose");
+    expect(css).toContain("html[data-chat-font='dyslexic'] .prose");
   });
 
   it('only offers families the app actually loads', () => {
@@ -60,14 +67,67 @@ describe('the stylesheet answers the attribute', () => {
     expect(css).toMatch(/html\[data-chat-font\] \.prose :is\(code, pre, kbd, samp\)/);
   });
 
-  it('does not resurrect the CDN font the CSP blocks', () => {
-    // Asserted on declarations, not prose: the file carries a comment
-    // explaining why OpenDyslexic was removed, and that comment is the record
-    // of the decision — matching it would fail on the documentation.
-    expect(css).not.toMatch(/font-family:[^;]*OpenDyslexic/);
-    expect(css).not.toMatch(/src:[^;]*jsdelivr/);
-    // An actual rule opens with a brace; the three '@font-face' mentions in
-    // this file are all inside the comments that record why it went.
-    expect(css).not.toMatch(/@font-face\s*\{/);
+  it('does not point at the CDN the CSP blocks', () => {
+    // Scoped to actual url(...) declarations, not the comment recording why
+    // the CDN version was removed — that comment names the old URL on purpose.
+    const urls = css.match(/url\([^)]*\)/g) ?? [];
+    for (const url of urls) {
+      expect(url).not.toMatch(/jsdelivr/);
+    }
+  });
+});
+
+describe('OpenDyslexic is self-hosted, not CDN-loaded', () => {
+  const FONT_DIR = join(process.cwd(), 'public/fonts/opendyslexic');
+  const FONT_FACE_BLOCKS = css.match(/@font-face\s*\{[^}]*\}/g) ?? [];
+  const STYLES: Array<{ file: string; weight: string; style: string }> = [
+    { file: 'OpenDyslexic-Regular.woff2', weight: '400', style: 'normal' },
+    { file: 'OpenDyslexic-Bold.woff2', weight: '700', style: 'normal' },
+    { file: 'OpenDyslexic-Italic.woff2', weight: '400', style: 'italic' },
+    { file: 'OpenDyslexic-Bold-Italic.woff2', weight: '700', style: 'italic' },
+  ];
+
+  it('declares at least one @font-face rule', () => {
+    expect(FONT_FACE_BLOCKS.length).toBeGreaterThanOrEqual(STYLES.length);
+  });
+
+  it.each(STYLES)(
+    '$file is vendored on disk and declared with the right weight/style',
+    ({ file, weight, style }) => {
+      expect(existsSync(join(FONT_DIR, file))).toBe(true);
+      expect(existsSync(join(FONT_DIR, file.replace('.woff2', '.woff')))).toBe(true);
+
+      const block = FONT_FACE_BLOCKS.find((b) => b.includes(`/fonts/opendyslexic/${file}`));
+      expect(block).toBeDefined();
+      expect(block).toContain(`font-weight: ${weight}`);
+      expect(block).toContain(`font-style: ${style}`);
+      expect(block).toContain('font-display: swap');
+      expect(block).toContain("font-family: 'OpenDyslexic'");
+    },
+  );
+
+  it('every @font-face src is same-origin, never a third-party host', () => {
+    const opendyslexicBlocks = FONT_FACE_BLOCKS.filter((b) => b.includes('opendyslexic'));
+    expect(opendyslexicBlocks.length).toBe(STYLES.length);
+    for (const block of opendyslexicBlocks) {
+      const urls = block.match(/url\([^)]*\)/g) ?? [];
+      expect(urls.length).toBeGreaterThan(0);
+      for (const url of urls) {
+        expect(url).not.toMatch(/https?:\/\//);
+        expect(url).toMatch(/url\('\/fonts\/opendyslexic\//);
+      }
+    }
+  });
+
+  it('the OFL license text is vendored alongside the binaries', () => {
+    const licensePath = join(FONT_DIR, 'OFL.txt');
+    expect(existsSync(licensePath)).toBe(true);
+    expect(readFileSync(licensePath, 'utf8')).toContain('SIL OPEN FONT LICENSE');
+  });
+
+  it('is recorded in THIRD_PARTY_LICENSES.md', () => {
+    const notices = readFileSync(join(process.cwd(), '../../THIRD_PARTY_LICENSES.md'), 'utf8');
+    expect(notices).toMatch(/## OpenDyslexic/);
+    expect(notices).toMatch(/OFL-1\.1/);
   });
 });
