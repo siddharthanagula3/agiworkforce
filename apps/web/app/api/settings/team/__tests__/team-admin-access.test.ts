@@ -92,7 +92,7 @@ describe('team administration billing capability', () => {
       seatSource: 'billing',
     });
     expect(mockQuery.mock.calls[0]?.[1]).toEqual([ORG_A]);
-    expect(resolveOrganizationEntitlementPlan).toHaveBeenCalledWith(db, ORG_A);
+    expect(resolveOrganizationEntitlementPlan).toHaveBeenCalledWith(ORG_A);
     expect(getSubscription).not.toHaveBeenCalled();
   });
 
