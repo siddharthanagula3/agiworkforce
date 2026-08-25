@@ -9,6 +9,17 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { isGitHubInstallationLinkingAvailable } from '@/lib/github-app';
 
+const PG_UNDEFINED_TABLE = '42P01';
+
+function isUndefinedTable(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
+      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
+  );
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
@@ -37,6 +48,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       [userId],
     );
   } catch (err) {
+    if (isUndefinedTable(err)) {
+      logger.warn(
+        { userId },
+        'github_installations table not migrated; returning no installations',
+      );
+      return NextResponse.json({ installations: [] });
+    }
     logger.error({ err, userId }, 'Failed to fetch GitHub installations');
     return NextResponse.json({ error: 'Failed to fetch installations' }, { status: 500 });
   }
