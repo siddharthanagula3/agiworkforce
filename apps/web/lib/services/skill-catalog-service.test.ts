@@ -16,6 +16,7 @@ import {
   getManagedSkillCatalog,
   getManagedSkillDirectory,
   getManagedSkillLayers,
+  getManagedSkillPluginOwners,
   parseSkillLayersConfig,
   resetManagedSkillCatalogCacheForTests,
 } from './skill-catalog-service';
@@ -169,6 +170,30 @@ describe('managed Skill catalog service', () => {
     expect(download?.content.toString('utf-8')).toContain('name: code-review');
     await expect(getBundledSkillDownload('design-review')).resolves.toBeNull();
     await expect(getBundledSkillDownload('unreleased-fixture')).resolves.toBeNull();
+  });
+
+  it('maps only plugin-owned skills to their owner, keyed by skill name', async () => {
+    const gatedDir = join(root, 'gated-skill');
+    await mkdir(gatedDir, { recursive: true });
+    await writeFile(
+      join(gatedDir, 'SKILL.md'),
+      [
+        '---',
+        'name: gated-skill',
+        'description: Owned by a pack.',
+        'plugin: test-pack',
+        '---',
+        '',
+        'Body.',
+      ].join('\n'),
+      'utf-8',
+    );
+    resetManagedSkillCatalogCacheForTests();
+
+    const owners = await getManagedSkillPluginOwners();
+    expect(owners.get('gated-skill')).toBe('test-pack');
+    expect(owners.has('design-review')).toBe(false);
+    expect(owners.has('unreleased-fixture')).toBe(false);
   });
 
   it('downloads a plugin-owned bundle only when that plugin is enabled', async () => {

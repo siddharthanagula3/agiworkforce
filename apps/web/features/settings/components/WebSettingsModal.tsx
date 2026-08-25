@@ -102,6 +102,7 @@ const ApiPluginsResponseSchema = z.object({
       webInstallable: z.boolean(),
       publisher: z.object({ name: z.string().min(1) }),
       declaredSkills: z.array(z.string()),
+      skillsRequireInstall: z.boolean().default(false),
       requiredConnectors: z.array(z.string()).default([]),
       examplePrompts: z.array(z.string()).default([]),
       distribution: z.object({ manifestUrl: z.string().url() }).passthrough().nullable(),
@@ -694,6 +695,7 @@ export function WebSettingsModal({
             category: plugin.category,
             skillCount: plugin.declaredSkills.length,
             declaredSkills: plugin.declaredSkills,
+            skillsRequireInstall: plugin.skillsRequireInstall,
             requiredConnectors: plugin.requiredConnectors,
             examplePrompts: plugin.examplePrompts,
             ...(typeof plugin.installCount === 'number'
