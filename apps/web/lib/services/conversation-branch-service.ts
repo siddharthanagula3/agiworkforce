@@ -6,6 +6,12 @@ import type {
   ManagedCloudConversationWire,
 } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
+import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
+
+type CopiedAssistantMessage = {
+  id: string;
+  content: string;
+};
 
 type BranchGroupRow = {
   local_message_id: string | null;
@@ -176,7 +182,15 @@ export async function forkConversation(
   userId: string,
   input: ForkConversationInput,
 ): Promise<ManagedCloudConversationWire> {
-  return db.transaction(async (tx) => {
+  // The transaction's `tx` adapter is bound to a pooled connection that is
+  // released the moment the callback below returns (NeonDatabaseAdapter.
+  // transaction() calls client.release() in its `finally`), so indexing must
+  // be scheduled with the outer `db` AFTER commit, never with `tx` inside the
+  // callback -- firing it there would run against a connection the pool may
+  // have already handed to an unrelated request.
+  let copiedAssistantMessages: CopiedAssistantMessage[] = [];
+
+  const target = await db.transaction(async (tx) => {
     const existing = await findIdempotentBranch(tx, userId, input.requestId);
     if (existing) return existing;
 
@@ -277,7 +291,15 @@ export async function forkConversation(
       [input.requestId, input.sourceConversationId, input.messageId, userId],
     );
 
-    await tx.execute(
+    // The final SELECT returns the copied assistant rows (id + content) so
+    // the caller can index their artifacts once this transaction commits --
+    // a forked conversation reuses fresh ids for every copied message, so
+    // each one needs its own web_artifact_index row; nothing upstream
+    // derives it for free. `branch_map` is joined into that SELECT (rather
+    // than left as a bare CTE) so Postgres cannot skip evaluating it: a
+    // data-modifying CTE only runs if the primary query's FROM/JOIN chain
+    // actually reaches it.
+    copiedAssistantMessages = await tx.query<CopiedAssistantMessage>(
       `with ordered_messages as (
          select message.*,
                 row_number() over (
@@ -324,17 +346,37 @@ export async function forkConversation(
                 created_at
            from messages_to_copy
           order by message_position
-         returning id
+         returning id, role, content
+       ),
+       branch_map as (
+         insert into public.conversation_branch_messages
+           (branch_id, source_message_id, target_message_id)
+         select $4, source.id, source.target_message_id
+           from messages_to_copy as source
+           join inserted_messages as inserted
+             on inserted.id = source.target_message_id
+         returning target_message_id
        )
-       insert into public.conversation_branch_messages
-         (branch_id, source_message_id, target_message_id)
-       select $4, source.id, source.target_message_id
-         from messages_to_copy as source
-         join inserted_messages as inserted
-           on inserted.id = source.target_message_id`,
+       select inserted_messages.id, inserted_messages.content
+         from inserted_messages
+         join branch_map
+           on branch_map.target_message_id = inserted_messages.id
+        where inserted_messages.role = 'assistant'`,
       [input.sourceConversationId, input.messageId, target.id, input.requestId],
     );
 
     return target;
   });
+
+  for (const message of copiedAssistantMessages) {
+    scheduleArtifactIndexing({
+      db,
+      userId,
+      conversationId: target.id,
+      messageId: message.id,
+      content: message.content,
+    });
+  }
+
+  return target;
 }

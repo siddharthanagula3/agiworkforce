@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 
 /**
- * The account-wide artifact index (migration 0120, `GET /api/artifacts/index`).
+ * The account-wide artifact index (migration 0121, `GET /api/artifacts/index`).
  *
  * The locally-derived artifact store only knows about conversations THIS device
  * has actually rendered, because web artifacts are derived from message
