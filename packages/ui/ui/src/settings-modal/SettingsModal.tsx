@@ -1493,6 +1493,7 @@ function ConnectorsPanel({
   );
   const loading = adapter?.connectorsLoading ?? false;
   const loadError = adapter?.connectorsError;
+  const notice = adapter?.connectorsNotice;
 
   const tabCounts = useMemo(() => {
     let connected = 0;
@@ -1620,6 +1621,28 @@ function ConnectorsPanel({
         </div>
       ) : (
         <>
+          {notice ? (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-foreground"
+            >
+              <AlertTriangle
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="flex-1">{notice}</span>
+              {adapter?.retryConnectors ? (
+                <button
+                  type="button"
+                  onClick={() => void adapter.retryConnectors?.()}
+                  className="shrink-0 font-medium underline underline-offset-2 hover:text-foreground"
+                >
+                  Try again
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           {suggested.length > 0 ? (
             <section aria-labelledby="connector-suggestions" className="flex flex-col gap-2">
               <h3
