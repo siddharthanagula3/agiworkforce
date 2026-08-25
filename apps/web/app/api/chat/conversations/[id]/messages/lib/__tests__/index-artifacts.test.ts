@@ -1,5 +1,5 @@
 /**
- * Unit tests for the artifact index writer (migration 0120).
+ * Unit tests for the artifact index writer (migration 0121).
  *
  * The index exists because web artifacts are DERIVED from message markdown at
  * render time, so the client only knows about conversations it has actually
