@@ -62,10 +62,14 @@ function stubFetch({
   connectorFailuresBeforeSuccess = 0,
   connectorFailureStatus = 503,
   skillFailuresBeforeSuccess = 0,
+  installationsFailuresBeforeSuccess = 0,
+  installationsFailureStatus = 500,
+  installationsFailureMode = 'status' as 'status' | 'invalid-schema' | 'json-throw',
 } = {}) {
   let connectorRequests = 0;
   let skillRequests = 0;
   let pluginCatalogRequests = 0;
+  let installationsRequests = 0;
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.includes('/api/skills')) {
@@ -96,7 +100,32 @@ function stubFetch({
       } as Response;
     }
     if (url.includes('/api/github/installations')) {
-      return { ok: true, json: async () => ({ installations }) } as Response;
+      const shouldFail = installationsRequests < installationsFailuresBeforeSuccess;
+      installationsRequests += 1;
+      if (shouldFail) {
+        if (installationsFailureMode === 'invalid-schema') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ installations: 'nope' }),
+          } as Response;
+        }
+        if (installationsFailureMode === 'json-throw') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => {
+              throw new SyntaxError('Unexpected end of JSON input');
+            },
+          } as unknown as Response;
+        }
+        return {
+          ok: false,
+          status: installationsFailureStatus,
+          json: async () => ({ error: 'Failed to fetch installations' }),
+        } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ installations }) } as Response;
     }
     if (url.includes('/api/connectors/custom')) {
       return { ok: true, json: async () => ({ connectors: [] }) } as Response;
@@ -183,6 +212,101 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await screen.findByText('Connect your first tool')).toBeTruthy();
     expect(
       screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+    ).toBeNull();
+  });
+
+  // known-flaws WEB-CONNECTORS-PANEL-ALL-OR-NOTHING-01: production served
+  // /api/connectors and /api/connectors/custom 200 while
+  // /api/github/installations 500'd, and the panel showed nothing but the
+  // generic global error — even though the other 16 connectors had loaded
+  // fine. Installations must degrade on its own from here on.
+  it('renders the full connector list plus a scoped GitHub notice when only installations 500s', async () => {
+    stubFetch({
+      connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }],
+      available: ['notion', 'github'],
+      installationsFailuresBeforeSuccess: Infinity,
+      installationsFailureStatus: 500,
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('Notion')).toBeTruthy();
+    const notionRow = within(table).getByText('Notion').closest('tr') as HTMLElement;
+    await waitFor(() => expect(within(notionRow).getByText('Connected')).toBeTruthy());
+
+    // GitHub itself never claims to be connected off stale/absent data — its
+    // row falls back to the ordinary Connect affordance, same as any other
+    // available-but-not-yet-connected connector.
+    const githubRow = within(table).getByText('GitHub').closest('tr') as HTMLElement;
+    expect(within(githubRow).getByRole('button', { name: /^Connect/ })).toBeTruthy();
+
+    expect(
+      await screen.findByText(
+        'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['an invalid installations schema', 'invalid-schema'],
+    ['an installations JSON parse failure', 'json-throw'],
+  ] as const)('degrades to the scoped notice on %s', async (_label, mode) => {
+    stubFetch({
+      connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }],
+      available: ['notion', 'github'],
+      installationsFailuresBeforeSuccess: Infinity,
+      installationsFailureMode: mode,
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('Notion')).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+    ).toBeNull();
+  });
+
+  it('does not misreport a signed-out session when only installations 401s', async () => {
+    stubFetch({
+      available: ['notion', 'github'],
+      installationsFailuresBeforeSuccess: Infinity,
+      installationsFailureStatus: 401,
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    await screen.findByRole('table');
+    expect(
+      await screen.findByText(
+        'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(
+        'Your session expired. Reload the page to sign back in, then reopen Connectors.',
+      ),
+    ).toBeNull();
+  });
+
+  it('still shows the global error when the core /api/connectors call itself fails, even if installations succeeds', async () => {
+    stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 500 });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    expect(
+      await screen.findByText(
+        'Connectors could not be loaded. Check your connection and try again.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(
+      screen.queryByText('GitHub app installations could not be loaded.', { exact: false }),
     ).toBeNull();
   });
 
@@ -327,6 +451,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     ).toBeNull();
   });
 
+  // All three sources are still requested every load — installations only
+  // stopped gating the panel's success/failure, it did not stop being fetched.
   it('sends the Clerk bearer token with the connector directory requests', async () => {
     const fetchMock = stubFetch({});
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);

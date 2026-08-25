@@ -127,6 +127,14 @@ class ConnectorLoadError extends Error {
   }
 }
 
+// GET /api/github/installations is fetched independently from the other two
+// connector sources (known-flaws WEB-CONNECTORS-PANEL-ALL-OR-NOTHING-01): its
+// failure means GitHub's connected state can't be confirmed right now, not
+// that the whole directory is unreachable, so it degrades to this scoped
+// notice instead of the global connectorsError.
+const GITHUB_INSTALLATIONS_NOTICE =
+  'GitHub app installations could not be loaded. GitHub may show as not connected here until this is retried.';
+
 const ConnectorsResponseSchema = z.object({
   connectors: z.array(
     z.object({
@@ -374,6 +382,9 @@ export function WebSettingsModal({
 
   const [connectorsLoading, setConnectorsLoading] = useState(false);
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
+  // Scoped to the GitHub installations source only — never blocks the rest of
+  // the panel (see GITHUB_INSTALLATIONS_NOTICE).
+  const [githubInstallationsNotice, setGithubInstallationsNotice] = useState<string | null>(null);
 
   const refreshCustomConnectors = useCallback(async () => {
     const response = await fetch('/api/connectors/custom', {
@@ -390,32 +401,36 @@ export function WebSettingsModal({
     async (signal?: AbortSignal) => {
       setConnectorsLoading(true);
       setConnectorsError(null);
+      setGithubInstallationsNotice(null);
       try {
         const requestOptions = {
           credentials: 'include' as const,
           headers: await authedHeaders(),
           ...(signal ? { signal } : {}),
         };
+        // All three fetch in parallel — GitHub installations still races
+        // alongside the other two — but only /api/connectors and
+        // /api/connectors/custom gate the panel. Installations is judged and
+        // applied on its own below, so a failure there degrades to a scoped
+        // notice instead of taking the whole panel down with it.
         const [connectorsResponse, installationsResponse, customResponse] = await Promise.all([
           fetch('/api/connectors', requestOptions),
           fetch('/api/github/installations', requestOptions),
           fetch('/api/connectors/custom', requestOptions),
         ]);
-        if (!connectorsResponse.ok || !installationsResponse.ok || !customResponse.ok) {
-          const status = [connectorsResponse, installationsResponse, customResponse].find(
+        if (!connectorsResponse.ok || !customResponse.ok) {
+          const status = [connectorsResponse, customResponse].find(
             (response) => !response.ok,
           )?.status;
           throw new ConnectorLoadError(status === 401 || status === 403 ? 'signed-out' : 'request');
         }
-        const [connectorsJson, installationsJson, customJson] = await Promise.all([
+        const [connectorsJson, customJson] = await Promise.all([
           connectorsResponse.json(),
-          installationsResponse.json(),
           customResponse.json(),
         ]);
         const connectorsResult = ConnectorsResponseSchema.safeParse(connectorsJson);
-        const installationsResult = GitHubInstallationsResponseSchema.safeParse(installationsJson);
         const customResult = CustomConnectorsResponseSchema.safeParse(customJson);
-        if (!connectorsResult.success || !installationsResult.success || !customResult.success) {
+        if (!connectorsResult.success || !customResult.success) {
           throw new ConnectorLoadError('invalid-data');
         }
         if (signal?.aborted) return;
@@ -426,8 +441,30 @@ export function WebSettingsModal({
             .filter((connector) => connector.needsReauthorization)
             .map((connector) => connector.connectorId),
         );
-        setGithubInstallations(installationsResult.data.installations);
         setCustomConnectors(customResult.data.connectors);
+
+        // Deliberately isolated from the try/catch above: a malformed body or
+        // JSON parse failure here must still degrade to the scoped notice,
+        // never escalate to the blocking connectorsError.
+        if (!installationsResponse.ok) {
+          setGithubInstallations([]);
+          setGithubInstallationsNotice(GITHUB_INSTALLATIONS_NOTICE);
+        } else {
+          try {
+            const installationsResult = GitHubInstallationsResponseSchema.safeParse(
+              await installationsResponse.json(),
+            );
+            if (installationsResult.success) {
+              setGithubInstallations(installationsResult.data.installations);
+            } else {
+              setGithubInstallations([]);
+              setGithubInstallationsNotice(GITHUB_INSTALLATIONS_NOTICE);
+            }
+          } catch {
+            setGithubInstallations([]);
+            setGithubInstallationsNotice(GITHUB_INSTALLATIONS_NOTICE);
+          }
+        }
       } catch (error) {
         if (signal?.aborted) return;
         const kind = error instanceof ConnectorLoadError ? error.kind : 'request';
@@ -881,6 +918,7 @@ export function WebSettingsModal({
     connectedConnectors: mergedConnectedConnectors,
     connectorsLoading,
     connectorsError,
+    connectorsNotice: githubInstallationsNotice,
     retryConnectors: loadConnectors,
     connectConnector,
     disconnectConnector,
