@@ -2244,7 +2244,10 @@ going beyond the real first-party skill set.
 installs nothing". Half of that was wrong and stays corrected: installing works,
 and it matters. `POST /api/plugins/installations` calls `installWebPlugin`, and
 `listEnabledPluginIdsForUser` gates real skill availability in the chat
-request-processor, the tool-loop and `/api/skills`.
+request-processor, the tool-loop and `/api/skills` — but only for a skill
+whose own `SKILL.md` names a `plugin:` owner. `research-pack`'s
+`literature-review` is the one skill in the tree that does; installing that
+pack is what makes it selectable.
 
 The other half — only four catalogue rows, one of them (`research-pack`)
 actually installable — is now three rows better. Migration
@@ -2256,11 +2259,38 @@ actually serves in production:
     writing-pack     (document-creation, presentation-creation, research-and-citations)
     data-pack        (data-analysis, document-creation)
 
-`plugin_registry_entries` now holds seven rows: those three plus `research-pack`
-are real installs; `github-automation`, `calendar-assistant`, and `crm-sync`
-stay `preview` deliberately — their declared skills ("Code Review", "Meeting
-Summarizer", …) do not correspond to any real skill, and promoting them would
-advertise an install that installs nothing real.
+`plugin_registry_entries` now holds seven rows, and all seven behave like real
+installs the same way: a genuine `plugin_installations` row, real enable/
+disable/remove, and a real count. `github-automation`, `calendar-assistant`,
+and `crm-sync` stay `preview` deliberately — their declared skills ("Code
+Review", "Meeting Summarizer", …) do not correspond to any real skill, and
+promoting them would advertise an install that installs nothing real.
+
+Skill _gating_ is a narrower claim than "real install," and I got it wrong on
+the first pass of this note: none of the seven skills the three new packs
+declare carries a `plugin:` owner in its `SKILL.md` — they are first-party
+skills already available to every user regardless of any pack, unlike
+`literature-review`. Installing engineering-pack/writing-pack/data-pack
+therefore cannot change what shows up in Skills; it only adds the pack to the
+account as a curated shortcut alongside whatever connectors and example
+prompts it declares. `GET /api/plugins` now computes this honestly as
+`skillsRequireInstall` (true only for `research-pack`, by checking the live
+Skill catalog's `plugin:` ownership against each entry's `declaredSkills`),
+and the install-confirm dialog and its "Skills it adds"/"Skills included"
+heading read that flag instead of asserting a grant that doesn't hold. Proven
+by `apps/web/lib/services/skill-catalog-service.test.ts` (the owner map
+mechanics), `apps/web/app/api/plugins/__tests__/route.test.ts` (the derivation
+on both routes, plus a 503 if the catalog can't be read), and
+`apps/web/db/neon/web-pack-example-prompts-migration.test.ts` (the real
+migration content and the real `.agents/skills` tree agree: none of the three
+packs' declared skills is owned, `literature-review` still is).
+
+Going further than that — actually gating engineering-pack/writing-pack/
+data-pack's skills behind install, the way `research-pack` is gated — is a
+bigger, riskier change: those seven skills are meant to be globally available
+general-purpose skills today, and moving them behind a pack would take them
+away from anyone who doesn't install the matching pack. I left that choice to
+you rather than making it silently.
 
 **What is still needed from you**
 

@@ -49,6 +49,8 @@ export interface SettingsPlugin {
   category?: string;
   skillCount?: number;
   declaredSkills?: string[];
+  /** True only when installing is what unlocks a declared skill; false means they're already available. */
+  skillsRequireInstall?: boolean;
   requiredConnectors?: string[];
   /** "Try asking" directory copy. Display-only; never sent to a model. */
   examplePrompts?: string[];
