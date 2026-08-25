@@ -29,6 +29,14 @@
  * and `distribution === null` means "declared, not distributable" — the state
  * every launch row is actually in.
  *
+ * {@link PluginRegistryEntry.skillsRequireInstall} guards a specific false
+ * claim: a pack whose {@link PluginRegistryEntry.declaredSkills} are all
+ * already reachable without installing anything (no Skill's frontmatter
+ * names this entry as its `plugin` owner) grants nothing by being installed —
+ * it is a curated bundle, not an access grant, and the UI must say so.
+ * `GET /api/plugins` and `GET /api/plugins/[id]` compute it against the live
+ * Skill catalog; it is never hand-set on a row.
+ *
  * @module plugins
  * @packageDocumentation
  */
@@ -189,6 +197,14 @@ export interface PluginRegistryEntry {
   status: PluginRegistryStatus;
   webInstallable: boolean;
   declaredSkills: string[];
+  /**
+   * True when installing this entry is what makes at least one of
+   * {@link declaredSkills} reachable. False means every declared skill is
+   * already available without installing anything. Absent only where the
+   * live Skill catalog was not consulted; every route that returns this type
+   * computes it. See the module HONESTY note.
+   */
+  skillsRequireInstall?: boolean;
   requiredConnectors: string[];
   capabilities: PluginCapability[];
   permissions: string[];

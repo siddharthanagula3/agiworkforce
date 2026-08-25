@@ -506,9 +506,10 @@ function DirectoryBrowse({
   const [category, setCategory] = useState('All');
   const [pluginSort, setPluginSort] = useState<PluginSort>('name');
   const { confirm, dialog: confirmDialog } = useConfirm();
-  // WEB-31: installing a pack grants its skills and reuses the connectors it
-  // declares, so the grant has to be shown and accepted before the install call
-  // is made — never on the way back from it.
+  // WEB-31: a pack can gate real skill access (skillsRequireInstall) or just
+  // bundle skills a user already has, and it always reuses the connectors it
+  // declares — the actual effect has to be shown accurately and accepted
+  // before the install call is made, never on the way back from it.
   const [confirmingInstallPlugin, setConfirmingInstallPlugin] = useState<SettingsPlugin | null>(
     null,
   );
@@ -1100,13 +1101,18 @@ function DirectoryBrowse({
               {confirmingInstallPlugin?.author
                 ? `Published by ${confirmingInstallPlugin.author}. `
                 : ''}
-              Installing adds this pack&apos;s skills to your account. You can disable or remove it
-              at any time.
+              {confirmingInstallPlugin?.skillsRequireInstall
+                ? "Installing adds this pack's skills to your account. You can disable or remove it at any time."
+                : "This pack's skills are already available in Skills. Installing adds the pack to your account as a shortcut, together with its connectors and example prompts below. You can disable or remove it at any time."}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 text-xs">
             <div>
-              <p className="font-semibold text-foreground">Skills it adds</p>
+              <p className="font-semibold text-foreground">
+                {confirmingInstallPlugin?.skillsRequireInstall
+                  ? 'Skills it adds'
+                  : 'Skills included'}
+              </p>
               {confirmingInstallPlugin?.declaredSkills?.length ? (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {confirmingInstallPlugin.declaredSkills.map((skill) => (

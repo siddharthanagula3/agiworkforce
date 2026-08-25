@@ -5,9 +5,10 @@ import { SETTINGS_NAV_GROUPS_WEB } from '../../settings-nav';
 import type { SettingsDataAdapter } from '../types';
 
 /**
- * WEB-31: installing a plugin pack grants its skills and reuses the connectors
- * it declares. Install must state that grant and be accepted before the
- * install call is made.
+ * WEB-31: installing a plugin pack always reuses the connectors it declares,
+ * and can also gate real skill access when `skillsRequireInstall` is true.
+ * Whichever is actually true must be stated accurately and accepted before
+ * the install call is made.
  */
 
 function renderPluginDirectory(adapterOverrides: Partial<SettingsDataAdapter> = {}) {
@@ -77,6 +78,58 @@ describe('plugin install consent', () => {
 
     expect(installPlugin).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog', { name: 'Install Research Pack?' })).toBeNull();
+  });
+
+  it('does not claim a skill grant for a pack whose skills are already available', () => {
+    renderPluginDirectory({
+      pluginCatalog: [
+        {
+          id: 'engineering-pack',
+          name: 'Engineering Pack',
+          description: 'Review, debug, and design-check.',
+          enabled: false,
+          installed: false,
+          installable: true,
+          declaredSkills: ['code-review'],
+          requiredConnectors: [],
+          skillsRequireInstall: false,
+        },
+      ],
+    });
+
+    const card = screen.getByText('Engineering Pack').closest('div')!.parentElement!.parentElement!;
+    fireEvent.click(within(card).getByRole('button', { name: 'Install' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Install Engineering Pack?' });
+    expect(dialog.textContent).toContain('already available in Skills');
+    expect(dialog.textContent).not.toContain("adds this pack's skills to your account");
+    expect(within(dialog).getByText('Skills included')).toBeTruthy();
+  });
+
+  it('states the grant plainly for a pack that actually gates a skill', () => {
+    renderPluginDirectory({
+      pluginCatalog: [
+        {
+          id: 'research-pack',
+          name: 'Research Pack',
+          description: 'A reviewed research workflow.',
+          enabled: false,
+          installed: false,
+          installable: true,
+          declaredSkills: ['literature-review'],
+          requiredConnectors: [],
+          skillsRequireInstall: true,
+        },
+      ],
+    });
+
+    const card = screen.getByText('Research Pack').closest('div')!.parentElement!.parentElement!;
+    fireEvent.click(within(card).getByRole('button', { name: 'Install' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Install Research Pack?' });
+    expect(dialog.textContent).toContain("adds this pack's skills to your account");
+    expect(dialog.textContent).not.toContain('already available in Skills');
+    expect(within(dialog).getByText('Skills it adds')).toBeTruthy();
   });
 
   it('says plainly when a pack needs no connectors', () => {

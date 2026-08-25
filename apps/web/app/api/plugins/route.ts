@@ -12,6 +12,7 @@ import {
   listPluginRegistryEntries,
 } from '@/lib/services/plugin-registry-service';
 import { countPluginInstallations } from '@/lib/services/plugin-installation-service';
+import { getManagedSkillPluginOwners } from '@/lib/services/skill-catalog-service';
 import {
   PLUGIN_REGISTRY_STATUSES,
   PLUGIN_SOURCE_KINDS,
@@ -61,7 +62,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const db = getNeonDb();
-    const [{ entries, total }, installCounts] = await Promise.all([
+    const [{ entries, total }, installCounts, skillOwners] = await Promise.all([
       listPluginRegistryEntries(db, {
         category: parsed.data.category,
         status: parsed.data.status as PluginRegistryListResponse['entries'][number]['status'],
@@ -70,12 +71,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         offset: parsed.data.offset ?? 0,
       }),
       countPluginInstallations(db),
+      getManagedSkillPluginOwners(),
     ]);
 
     const body: PluginRegistryListResponse = {
       entries: entries.map((entry) => ({
         ...entry,
         installCount: installCounts.get(entry.id) ?? 0,
+        skillsRequireInstall: entry.declaredSkills.some(
+          (skill) => skillOwners.get(skill) === entry.id,
+        ),
       })),
       total,
     };

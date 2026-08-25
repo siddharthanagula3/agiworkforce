@@ -7,6 +7,7 @@ import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getPluginRegistryEntry } from '@/lib/services/plugin-registry-service';
+import { getManagedSkillPluginOwners } from '@/lib/services/skill-catalog-service';
 import type { PluginRegistryEntryResponse } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
@@ -48,7 +49,16 @@ export async function GET(
       );
     }
 
-    const body: PluginRegistryEntryResponse = { entry: found.entry, manifest: found.manifest };
+    const skillOwners = await getManagedSkillPluginOwners();
+    const body: PluginRegistryEntryResponse = {
+      entry: {
+        ...found.entry,
+        skillsRequireInstall: found.entry.declaredSkills.some(
+          (skill) => skillOwners.get(skill) === found.entry.id,
+        ),
+      },
+      manifest: found.manifest,
+    };
     return NextResponse.json(body, {
       status: 200,
       headers: {
