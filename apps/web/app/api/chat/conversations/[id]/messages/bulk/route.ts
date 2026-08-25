@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,6 +17,7 @@ import {
 } from '@/lib/server/neon-chat';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { scheduleArtifactIndexing } from '../lib/index-artifacts';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -75,8 +75,9 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
 
   try {
     for (const msg of messages) {
+      let row: ChatMessageRow | undefined;
       if (msg.id) {
-        const [row] = await db.query<ChatMessageRow>(
+        [row] = await db.query<ChatMessageRow>(
           `
             insert into web_messages
               (id, conversation_id, role, content, model, metadata)
@@ -103,7 +104,7 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
         }
         saved.push(row);
       } else {
-        const [row] = await db.query<ChatMessageRow>(
+        [row] = await db.query<ChatMessageRow>(
           `
             insert into web_messages
               (conversation_id, role, content, model, metadata)
@@ -120,6 +121,18 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
           ],
         );
         if (row) saved.push(row);
+      }
+
+      // Same fire-and-forget discovery aid as the single-message route: index
+      // any artifacts this bulk-saved assistant message produces.
+      if (msg.role === 'assistant' && row) {
+        scheduleArtifactIndexing({
+          db,
+          userId,
+          conversationId,
+          messageId: row.id,
+          content: msg.content.trim(),
+        });
       }
     }
 
