@@ -71,7 +71,6 @@
     "md-path::docs/surfaces/desktop.md::packages/chat",
     "md-path::tools/skill-vetting/README.md::docs/strategy/PORTING-TRACKER.md",
     "package::apps/cli/src/sdk_io/protocol.rs::@agiworkforce/agent-sdk",
-    "package::packages/contracts/cloud-contracts/AGENTS.md::@agiworkforce/services",
     "path::apps/cli/Cargo.toml::apps/cli/src/policy/windows_sandbox.rs",
     "path::apps/cli/src/models/streaming.rs::docs/plans/rust-engine-extraction-2026-07-09.md",
     "path::apps/cli/src/tui/terminal_palette.rs::packages/ui/design-tokens/src/tokens.ts",

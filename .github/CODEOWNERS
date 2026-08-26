@@ -6,8 +6,6 @@
 * @siddhartha
 
 # Root strategy, agent context, and repo-operability guardrails.
-/AGENTS.md @siddhartha
-/CLAUDE.md @siddhartha
 /PLAN.md @siddhartha
 /CHANGELOG.md @siddhartha
 /docs/agent-context/ @siddhartha

@@ -10,8 +10,6 @@ export const TRACKED_STALE = ['reports', 'tasks', '_archive', 'docs/archive'];
 const CACHE_STALE = ['.tmp', '.tmp_capture', '.playwright-mcp', '.remember', '.firecrawl'];
 
 export const KEEP = [
-  'AGENTS.md',
-  'CLAUDE.md',
   'README.md',
   'audit',
   'docs/current',

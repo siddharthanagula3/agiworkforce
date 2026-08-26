@@ -62,8 +62,6 @@ if (!exists(codeownersPath)) {
   }
 
   for (const requiredPath of [
-    '/AGENTS.md',
-    '/CLAUDE.md',
     '/PLAN.md',
     '/CHANGELOG.md',
     '/docs/agent-context/',

@@ -178,9 +178,9 @@
       "id": "repo-organization",
       "severity": "medium",
       "owner": "Platform lead",
-      "paths": ["AGENTS.md", "CLAUDE.md", "docs/agent-context"],
-      "reviewFocus": "Agent docs match JSON maps; no root clutter regressions; known flaws are indexed",
-      "checks": ["pnpm check:agent-context", "pnpm check:repo-organization"]
+      "paths": ["docs/agent-context"],
+      "reviewFocus": "JSON maps match the tree; no root clutter regressions; known flaws are indexed",
+      "checks": ["pnpm check:repo-organization"]
     }
   ]
 }
