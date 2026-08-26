@@ -26,7 +26,7 @@ export interface SharedSession {
   created_at: string;
 }
 
-export function SharedSessionViewer({ session }: { session: SharedSession }) {
+export function SharedSessionViewer({ session, token }: { session: SharedSession; token: string }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Top banner */}
@@ -58,7 +58,8 @@ export function SharedSessionViewer({ session }: { session: SharedSession }) {
             </div>
           </div>
           <Link
-            href="/"
+            href={`/chat/from-share/${token}`}
+            prefetch={false}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
             Open in AGI

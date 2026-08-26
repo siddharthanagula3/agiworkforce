@@ -68,7 +68,7 @@ export default async function SharedSessionPage({ params }: Props) {
 
   return (
     <>
-      <SharedSessionViewer session={data as SharedSession} />
+      <SharedSessionViewer session={data as SharedSession} token={token} />
       <ReportContentLink publicPath={`/share/${token}`} />
     </>
   );
