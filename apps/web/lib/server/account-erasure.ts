@@ -108,7 +108,6 @@ async function deleteBetaApplicationsByEmail(
   }
 }
 
-
 export const ANONYMIZED_USER_COLUMNS: ReadonlyArray<{
   table: string;
   column: string;
@@ -481,11 +480,76 @@ async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number;
   return deleteObjectKeys(key ? [key] : [], 'avatar');
 }
 
+async function isSubjectUnderLegalHold(userId: string): Promise<{ held: boolean; error?: string }> {
+  try {
+    const rows = await getNeonDb().query<{ held: boolean }>(
+      `select exists (
+         select 1
+           from public.legal_holds hold
+          where hold.released_at is null
+            and (
+              (hold.scope = 'member' and hold.subject_user_id = $1)
+              or (
+                hold.scope = 'organization'
+                and hold.organization_id in (
+                  select organization_id
+                    from public.organization_members
+                   where user_id = $1
+                )
+              )
+            )
+       ) as held`,
+      [userId],
+    );
+    return { held: rows[0]?.held === true };
+  } catch (error) {
+    // Fail closed: an unreadable hold set may be concealing an active hold, and
+    // erasing under one destroys evidence that cannot be recovered.
+    return { held: true, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function heldReport(userId: string, error: string | undefined): AccountErasureReport {
+  return {
+    userId,
+    mediaObjectsDeleted: 0,
+    mediaObjectsFailed: 0,
+    mediaRowsDeleted: 0,
+    knowledgeObjectsDeleted: 0,
+    knowledgeObjectsFailed: 0,
+    avatarObjectsDeleted: 0,
+    avatarObjectsFailed: 0,
+    cacheKeysDeleted: 0,
+    cacheKeysFailed: 0,
+    tables: {
+      legal_holds: {
+        deleted: false,
+        retainedForRetry: true,
+        error: error
+          ? `Legal hold status could not be read, so nothing was erased: ${error}`
+          : 'Subject is under an active legal hold; data preserved.',
+      },
+      [PROFILE_TABLE]: { deleted: false, retainedForRetry: true },
+    },
+    anonymized: {},
+    complete: false,
+    profileRetained: true,
+  };
+}
+
 export async function eraseUserAccountData(
   userId: string,
   options: EraseUserAccountOptions = {},
 ): Promise<AccountErasureReport> {
   const db = getNeonDb();
+  const legalHold = await isSubjectUnderLegalHold(userId);
+  if (legalHold.held) {
+    logger.warn(
+      { userId, error: legalHold.error },
+      'Account erasure declined: subject is under an active legal hold',
+    );
+    return heldReport(userId, legalHold.error);
+  }
   const videoGate = await sealAndCheckVideoJobsForErasure(userId, options.scope ?? 'account');
   if (videoGate.blocked) {
     return {

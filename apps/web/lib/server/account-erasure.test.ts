@@ -132,10 +132,16 @@ interface ErasureFixture {
   videoGateError?: Error;
   missingProfileFence?: boolean;
   liveDataFence?: boolean;
+  underLegalHold?: boolean;
+  legalHoldError?: Error;
 }
 
 function primeDb(fixture: ErasureFixture = {}): void {
   mocks.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('public.legal_holds')) {
+      if (fixture.legalHoldError) throw fixture.legalHoldError;
+      return [{ held: fixture.underLegalHold ?? false }];
+    }
     if (sql.includes("to_regclass('public.video_generation_jobs')")) {
       return [{ provisioned: true }];
     }
@@ -491,6 +497,44 @@ describe('eraseUserAccountData', () => {
     expect(
       executedStatements().some((sql) => sql.includes('delete from public.user_projects')),
     ).toBe(false);
+  });
+
+  it('erases nothing and never seals the profile fence while a legal hold is active', async () => {
+    primeDb({ underLegalHold: true });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
+    expect(report.tables['legal_holds']).toMatchObject({ deleted: false, retainedForRetry: true });
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+    const queries = mocks.query.mock.calls.map((call) => String(call[0]));
+    expect(queries.some((sql) => sql.includes('deletion_requested_at'))).toBe(false);
+    expect(queries.some((sql) => sql.includes('public.legal_holds'))).toBe(true);
+  });
+
+  it('fails closed without erasing when the legal hold set cannot be read', async () => {
+    primeDb({ legalHoldError: new Error('legal_holds unreachable') });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.tables['legal_holds']?.error).toContain('legal_holds unreachable');
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('applies the same organization-scoped hold semantics as retention', async () => {
+    primeDb({ underLegalHold: false });
+
+    await eraseUserAccountData('user-1');
+
+    const holdSql = mocks.query.mock.calls
+      .map((call) => String(call[0]))
+      .find((sql) => sql.includes('public.legal_holds'));
+    expect(holdSql).toMatch(/scope = 'member'[\s\S]*subject_user_id = \$1/);
+    expect(holdSql).toMatch(/scope = 'organization'[\s\S]*organization_members/);
+    expect(holdSql).toMatch(/released_at is null/);
   });
 
   it('retains the profile row for the caller that owns the retry queue', async () => {

@@ -41,6 +41,19 @@ function source(relative: string): string {
   return readFileSync(join(APP_ROOT, relative), 'utf8');
 }
 
+/** Extracts an exported async function body by brace-matching from its signature. */
+function functionBody(text: string, name: string): string {
+  const start = text.indexOf(`export async function ${name}(`);
+  if (start === -1) throw new Error(`${name} not found`);
+  const open = text.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}' && --depth === 0) return text.slice(open, i + 1);
+  }
+  throw new Error(`${name} body not terminated`);
+}
+
 describe('deprovision covers every removal path', () => {
   for (const { file, what } of REMOVAL_PATHS) {
     it(`${what} revokes credentials`, () => {
@@ -52,14 +65,17 @@ describe('deprovision covers every removal path', () => {
   }
 
   it('the SCIM path covers BOTH deactivate and delete', () => {
-    // A user can leave a directory two ways. Covering only one leaves the other
-    // silently intact.
+    // A user can leave a directory three ways: PATCH {active:false}, PUT with
+    // active:false, or DELETE. A file-wide count is false assurance — delete +
+    // replace alone satisfy "at least two calls" while patch stays unguarded, so
+    // each removal function must itself contain the revoke.
     const text = source('lib/server/scim/scim-provisioning-service.ts');
-    const calls = [...text.matchAll(/revokeCredentialsAfterScimRemoval\(/g)];
-    expect(
-      calls.length,
-      'both patchScimUser and deleteScimUser must revoke',
-    ).toBeGreaterThanOrEqual(2);
+    for (const name of ['patchScimUser', 'deleteScimUser', 'replaceScimUser']) {
+      expect(
+        functionBody(text, name),
+        `${name} deactivates or removes a user without revoking their live credentials`,
+      ).toMatch(/revokeCredentialsAfterScimRemoval\(/);
+    }
   });
 
   it('the SCIM path never throws on a revocation failure', () => {
