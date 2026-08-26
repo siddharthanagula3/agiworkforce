@@ -1580,58 +1580,6 @@ fn is_git_plugin_source(source: &str) -> bool {
     source.ends_with(".git")
 }
 
-/// Host the quota check talks to when `AGI_API_URL` is unset.
-const DEFAULT_QUOTA_API_BASE: &str = "https://api.agiworkforce.com";
-
-/// Resolve the base URL that `fetch_remaining_pct` sends the account bearer
-/// token to.
-///
-/// `AGI_API_URL` is an operator override, so anyone able to plant it in the
-/// environment could otherwise redirect the `Authorization` header to a host of
-/// their choosing. Route it through the same allowlist that guards
-/// `AGIWORKFORCE_API_BASE`: HTTPS, and an `agiworkforce.com` origin. Anything
-/// else yields `None` so the caller skips the fetch instead of leaking the
-/// token.
-fn resolve_quota_api_base(raw: Option<&str>) -> Option<String> {
-    let raw = raw.map(str::trim).filter(|s| !s.is_empty());
-    tier_cache::resolve_agi_api_base(raw.unwrap_or(DEFAULT_QUOTA_API_BASE))
-}
-
-/// Fetch the user's remaining credit percentage from the AGI cloud API.
-/// Returns `None` on any network/parse failure so callers can fall back gracefully.
-/// The response exposes only percentage/reset metadata and availability.
-async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
-    #[derive(serde::Deserialize)]
-    struct Credits {
-        usage_percentage: f64,
-        has_usage_remaining: bool,
-    }
-    #[derive(serde::Deserialize)]
-    struct BalanceResp {
-        credits: Option<Credits>,
-    }
-
-    let url = format!("{}/api/llm/v1/credits/balance", api_base);
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(3))
-        .build()
-        .ok()?;
-
-    let resp = client.get(&url).bearer_auth(bearer).send().await.ok()?;
-
-    if !resp.status().is_success() {
-        return None;
-    }
-
-    let body: BalanceResp = resp.json().await.ok()?;
-    let credits = body.credits?;
-    if !credits.has_usage_remaining {
-        return Some(0);
-    }
-    let used = credits.usage_percentage.clamp(0.0, 100.0);
-    Some((100.0 - used).round() as u8)
-}
-
 /// Main async entry point — called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
@@ -3046,72 +2994,6 @@ pub async fn run_main() -> Result<()> {
     // Resolve team mode from --team flag or AGI_TEAM env var
     let team_mode = cli.team || std::env::var("AGI_TEAM").is_ok_and(|v| v == "1" || v == "true");
 
-    // TODO(openQuestion): This block uses the AGI_PLAN=="hobby" env guard and calls
-    // fetch_remaining_pct against https://api.agiworkforce.com (AGI_API_URL).
-    // "Hobby" has been removed from the canonical tier model (tier_cache::UserTier no longer
-    // has a Hobby variant) and the quota endpoint/host is unproven.  This block is left
-    // intact (it only fires if AGI_PLAN=="hobby" is explicitly set, which is not standard)
-    // but should be removed or re-targeted when the flat Pro/Max subscription quota contract
-    // is confirmed.  Tracked as openQuestion in the AGI-subscription implementation plan.
-    // BYOK and Local users never see this banner — they have no managed quota.
-    {
-        // Guard first — skip the auth load and network call entirely for non-Hobby plans.
-        let is_hobby = std::env::var("AGI_PLAN")
-            .map(|v| v.eq_ignore_ascii_case("hobby"))
-            .unwrap_or(false);
-
-        if is_hobby {
-            // Attempt to fetch live remaining credits from the cloud API.
-            // Falls back to the AGI_QUOTA_REMAINING_PCT env var (or 100) on any
-            // failure so offline / unauthenticated runs are unaffected.
-            let token = auth::AuthStore::load()
-                .ok()
-                .and_then(|s| s.entries.get("agiworkforce").cloned())
-                .map(|e| match e {
-                    auth::AuthEntry::OAuth { access, .. } => access,
-                    auth::AuthEntry::ApiKey { key } => key,
-                });
-
-            let remaining: u8 = if let Some(bearer) = token {
-                let raw_base = std::env::var("AGI_API_URL").ok();
-                let fetched = match resolve_quota_api_base(raw_base.as_deref()) {
-                    Some(api_base) => fetch_remaining_pct(&bearer, &api_base).await,
-                    None => {
-                        eprintln!(
-                            "{}",
-                            colored::Colorize::yellow(
-                                "Warning: AGI_API_URL is not an https agiworkforce.com origin — skipping the quota check instead of sending your token there."
-                            )
-                        );
-                        None
-                    }
-                };
-                fetched
-                    .or_else(|| {
-                        std::env::var("AGI_QUOTA_REMAINING_PCT")
-                            .ok()
-                            .and_then(|s| s.parse().ok())
-                    })
-                    .unwrap_or(100)
-            } else {
-                // Not authenticated — fall back to env var (decorative / CI override).
-                std::env::var("AGI_QUOTA_REMAINING_PCT")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(100)
-            };
-
-            if remaining < 10 {
-                eprintln!(
-                    "{}",
-                    colored::Colorize::yellow(
-                        "Warning: you have less than 10% of your weekly limit left. Run /status for a breakdown."
-                    )
-                );
-            }
-        }
-    }
-
     // Seed interactive sessions with the Auto launch state so per-turn
     // re-classification has full continuity (selection, model_key, task,
     // trust, tier) — see AgentSession::re_resolve_auto_route_for_turn.
@@ -3833,7 +3715,6 @@ pub async fn run_oneshot(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
     fn catalog_json_labels_base_rates_and_projects_every_input_tier() {
@@ -3991,34 +3872,6 @@ mod tests {
             !subcommands.iter().any(|command| command == "cloud"),
             "managed execution uses the normal model/session path; an unwired cloud task command must not be exposed: {subcommands:?}"
         );
-    }
-
-    #[tokio::test]
-    async fn cloud_balance_reads_the_public_percentage_contract() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind test listener");
-        let address = listener.local_addr().expect("listener address");
-        let server = tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.expect("accept request");
-            let mut request = [0_u8; 2048];
-            let _ = socket.read(&mut request).await.expect("read request");
-            let body = r#"{"credits":{"usage_percentage":28,"reset_at":"2026-08-01T00:00:00.000Z","seconds_until_reset":86400,"has_usage_remaining":true}}"#;
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            socket
-                .write_all(response.as_bytes())
-                .await
-                .expect("write response");
-        });
-
-        let remaining = fetch_remaining_pct("test-token", &format!("http://{address}")).await;
-        server.await.expect("test server finished");
-
-        assert_eq!(remaining, Some(72));
     }
 
     #[test]
@@ -4293,55 +4146,6 @@ mod tests {
             Some(Command::Completion { shell }) => assert_eq!(shell, ShellType::Fish),
             other => panic!("expected completion command, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn api_base_resolution_defaults_to_the_agiworkforce_quota_host() {
-        assert_eq!(
-            resolve_quota_api_base(None).as_deref(),
-            Some("https://api.agiworkforce.com")
-        );
-        // A blank override is a misconfiguration, not a redirect — fall back.
-        assert_eq!(
-            resolve_quota_api_base(Some("   ")).as_deref(),
-            Some("https://api.agiworkforce.com")
-        );
-    }
-
-    #[test]
-    fn api_base_resolution_accepts_agiworkforce_origins() {
-        assert_eq!(
-            resolve_quota_api_base(Some("https://api.agiworkforce.com")).as_deref(),
-            Some("https://api.agiworkforce.com")
-        );
-        assert_eq!(
-            resolve_quota_api_base(Some("https://agiworkforce.com/")).as_deref(),
-            Some("https://agiworkforce.com")
-        );
-    }
-
-    #[test]
-    fn api_base_resolution_rejects_attacker_supplied_hosts() {
-        // The quota request carries the account bearer token, so an override
-        // that names any other host must abort the fetch, not redirect it.
-        assert_eq!(resolve_quota_api_base(Some("https://evil.example")), None);
-        assert_eq!(
-            resolve_quota_api_base(Some("https://api.agiworkforce.com.evil.example")),
-            None
-        );
-        assert_eq!(
-            resolve_quota_api_base(Some("https://evil.example/api.agiworkforce.com")),
-            None
-        );
-    }
-
-    #[test]
-    fn api_base_resolution_rejects_plaintext_and_non_http_schemes() {
-        assert_eq!(
-            resolve_quota_api_base(Some("http://api.agiworkforce.com")),
-            None
-        );
-        assert_eq!(resolve_quota_api_base(Some("file:///etc/passwd")), None);
     }
 
     #[test]
