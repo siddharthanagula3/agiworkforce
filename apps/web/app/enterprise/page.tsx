@@ -52,54 +52,17 @@ export default function EnterprisePage() {
         />
 
         {/*
-          These rows previously read as SHIPPED controls ("Org-level retention
-          windows. You set them.", "SAML 2.0 and OIDC. Okta, Azure AD, Google
-          Workspace."). A security reviewer treats that as a product claim and
-          tests it. Two rows were cut outright rather than softened:
-
-            - Residency ("United States by default. EU on the roadmap; custom
-              regions by contract") — there is NO residency or region-pinning
-              mechanism anywhere in the codebase. Where the infrastructure
-              happens to run is not a control we offer, and "custom regions by
-              contract" promised a capability with nothing behind it.
-            - The bare four-hour SLA promise — /sla states that number as a
-              PLANNED target and explicitly "not a binding commitment". The same
-              number cannot be planned on one page and promised on another, so
-              this page now defers to /sla instead of restating it.
-
-          AUDIT-FIX (competitive-gap-2026-08-15, G12): the identity/audit rows
-          then swung too far the other way and called SSO, directory sync, and
-          audit logging contract-in-progress commitments you'd have to "ask us
-          about" — that was accurate when written but the concurrent workstream
-          this comment flagged has since landed. AdminConsolePage.tsx's
-          Identity readiness row now reads "Implemented — entitlement-gated":
-          first-party SSO sign-in (lib/server/sso/clerk-enterprise-connections.ts,
-          /api/admin/sso) and SCIM provisioning (/api/scim/v2) are live code
-          paths, gated on the `enterprise_controls` billing capability rather
-          than aspirational. The org audit trail RECORDS but is not readable:
-          writes land in `enterprise_audit_events` (see
-          db/neon/0087_enterprise_audit_event_writes.sql), but the
-          `/organizations/:orgId/audit-events` read and `/export` endpoints
-          lived in the Express gateway that was deleted on 2026-08-17, and
-          nothing in apps/web replaced them — /api/settings/audit-logs reads
-          `security_audit_logs`, a different table.
-
-          2026-08-23: both of those gaps are now closed and the rows changed
-          again. The audit read and JSONL export landed
-          (/api/settings/organization/audit and /audit/export), gated on the
-          `audit_export` policy resource, with every export and every refusal
-          written back to the trail. Org-configurable retention landed with it
-          (0138): `retention_enforced` is opt-in per workspace, the nightly
-          sweep at /api/cron/enforce-workspace-retention deletes conversations
-          past the window, legal holds suspend it, and the sweep FAILS CLOSED —
-          if the hold set cannot be read it deletes nothing and records the
-          refusal. The retention row may now describe a control, but only
-          because one exists; do not restore the old "you set them" phrasing,
-          which implied enforcement was unconditional rather than opt-in.
-
-          Calling shipped, gated controls "roadmap" is the same honesty bug as
-          overclaiming them; this page must not repeat it in either direction,
-          so re-verify each row here against the code before editing.
+          Every control row below must match shipped code, in both directions:
+          never name a control we do not offer, and never call a shipped,
+          entitlement-gated control "roadmap". There is NO data-residency or
+          region-pinning mechanism, so those rows stay cut. SSO/OIDC, SCIM
+          directory sync, org audit read + JSONL export, and per-workspace
+          retention are live, gated on the `enterprise_controls` /
+          `audit_export` capabilities; retention enforcement is opt-in per
+          workspace and fails closed, so do not restore "you set them" phrasing
+          that implied it is unconditional. The four-hour SLA is a PLANNED
+          target on /sla, not a binding promise — defer to /sla rather than
+          restating it. Re-verify each row against the code before editing.
         */}
         <LedgerSection
           eyebrow="What an enterprise contract covers"

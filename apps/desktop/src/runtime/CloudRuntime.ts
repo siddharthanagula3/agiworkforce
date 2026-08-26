@@ -30,9 +30,8 @@
  * `desktopChatRuntime.ts`, which selects this runtime only for a signed-in
  * Tauri host whose app mode is exactly `cloud`. Local and BYOK continue to
  * select `TauriRuntime`; unreadable mode state fails closed there as well.
- * DCL-4 removed the former coming-soon gate while preserving this explicit
- * trust-boundary selection. See `docs/strategy/PUBLIC-ALPHA-CUTOVER.md` and
- * `DESKTOP-CLOUD-MODE-SPEC-VS-REALITY-01`.
+ * Managed cloud is open in public alpha — there is no coming-soon gate — but
+ * this trust-boundary selection stays explicit.
  *
  * @module CloudRuntime
  */

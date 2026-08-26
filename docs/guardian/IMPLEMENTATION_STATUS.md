@@ -176,7 +176,7 @@ Concrete attachment points so Phase 3 starts from file paths, not re-mapping:
   `runtime='nodejs'` + `dynamic='force-dynamic'`; `api/github/webhook` has
   neither. It works today (handlers default to the Node runtime), but mirror
   the stripe-webhook treatment when next touching the route.
-- **Lane contract** (`apps/web/AGENTS.md`): Guardian spans migrations,
+- **Lane contract**: Guardian spans migrations,
   `packages/` contracts, and workflow files — integrator-path changes, not a
   single web feature lane. Run `pnpm check:structure-conventions` and
   `pnpm check:service-layer` alongside the web filter checks.

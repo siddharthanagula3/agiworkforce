@@ -11,6 +11,12 @@
       "pathPrefix": "THIRD_PARTY_LICENSES.md",
       "reason": "Every path to the right of an arrow in this file is a path in the UPSTREAM project a file was ported from, not a path in this repo. Most read as `src/...` and never collide; `packages/plugin-sdk/src/provider-entry.ts` happens to look repo-rooted. Resolving these against this tree is the wrong check.",
       "kinds": ["md-path"]
+    },
+    {
+      "pathPrefix": "docs/agent-context/known-flaws.md",
+      "reference": "scripts/check-native-module-tracing.mjs",
+      "reason": "NATIVE-TRACING-GUARD-01 documents a guard that lives on the hotfix/argon2-native-module-tracing branch and was deliberately not adopted on main; the entry names the branch file on purpose so the un-adopted guard stays findable.",
+      "kinds": ["md-path"]
     }
   ],
   "knownContradictions": [],
@@ -28,9 +34,7 @@
     "md-path::docs/agent-context/known-flaws.md::apps/desktop/src/features/chat/Sidebar.tsx",
     "md-path::docs/agent-context/known-flaws.md::apps/desktop/src/features/editor/MonacoEditor.tsx",
     "md-path::docs/agent-context/known-flaws.md::apps/desktop/src/features/v3/ActiveChat.tsx",
-    "md-path::docs/agent-context/known-flaws.md::apps/sandbox",
     "md-path::docs/agent-context/known-flaws.md::apps/web/core/monitoring/system-monitor.ts",
-    "md-path::docs/agent-context/known-flaws.md::apps/web/features/chat/lib/chatClient.ts",
     "md-path::docs/agent-context/known-flaws.md::docs/architecture-review/AGI_WORKFORCE_VS_GOOSE_HARNESS.md",
     "md-path::docs/agent-context/known-flaws.md::docs/architecture-review/BUILD_VS_BUY_OSS_ADOPTION.md",
     "md-path::docs/agent-context/known-flaws.md::docs/archive/",
@@ -46,9 +50,6 @@
     "md-path::docs/current/parity-implementation-matrix.md::apps/web/core/ai/llm",
     "md-path::docs/current/parity-implementation-matrix.md::apps/web/stores",
     "md-path::docs/current/source-of-truth.md::apps/web/lib/modelRouter.ts",
-    "md-path::docs/current/technical-architecture.md::docs/architecture/shared-packages-decision-log.md",
-    "md-path::docs/current/technical-architecture.md::docs/plans/monorepo-restructure-2026-07-08.md",
-    "md-path::docs/current/technical-architecture.md::docs/plans/rust-engine-extraction-2026-07-09.md",
     "md-path::docs/current/trust-mode-surface-matrix.md::docs/research/competitor-capability-session-architecture-2026-07-15.md",
     "md-path::docs/decisions/CURRENT_DECISIONS.md::docs/design/design-spec-2026-05-15.md",
     "md-path::docs/design/execution-plan-contract-and-cpst-2026-08-05.md::apps/cli/src/routing/strategy.rs",

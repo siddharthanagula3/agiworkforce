@@ -273,8 +273,8 @@ agi doctor --json
 - Rust workspace with shared protocol, model-registry, sandbox, MCP, and runtime
   crates used by `apps/cli` and the Tauri backend. Build the primary binary with
   `cargo build --release -p agiworkforce-cli --bin agi`.
-- TUI: ratatui + crossterm. The live module set is locked in
-  `apps/cli/AGENTS.md` and guarded by the repository module-reachability check.
+- TUI: ratatui + crossterm. The live module set is guarded by the repository
+  module-reachability check.
 - Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux
   Landlock are enum stubs (Phase 2).
 - MCP: 3 transports shipped (stdio, SSE, Streamable HTTP with optional OAuth).

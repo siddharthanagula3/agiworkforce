@@ -388,7 +388,7 @@ Managed Cloud is in public alpha and open by default (founder decision, 2026-06-
 
 - **For a system overview:** [`docs/current/technical-architecture.md`](docs/current/technical-architecture.md) — surfaces, trust boundaries, shared layers, and request flow.
 - **For product intent:** [`docs/current/source-of-truth.md`](docs/current/source-of-truth.md), then [`docs/current/agi-product-requirements.md`](docs/current/agi-product-requirements.md).
-- **For coding agents:** read [AGENTS.md](AGENTS.md) first, then the relevant scoped `AGENTS.md` files and [docs/agent-context/](docs/agent-context/).
+- **For coding agents:** [docs/agent-context/](docs/agent-context/) — machine-readable maps, risk areas, commands, and known flaws.
 - **For builds and deployment:** [`docs/current/ci-deployment-policy.md`](docs/current/ci-deployment-policy.md).
 
 ## License
