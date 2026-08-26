@@ -118,7 +118,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   const handleClick = useCallback(() => {
     if (isListening) {
       handleStop();
-    } else if (mode === 'idle') {
+    } else if (mode === 'idle' || mode === 'error') {
       handleStart();
     }
   }, [isListening, mode, handleStop, handleStart]);

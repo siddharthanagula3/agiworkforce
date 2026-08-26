@@ -165,8 +165,9 @@ async function handleGet(request: NextRequest) {
     'user_id = $1',
     'title ilike $2',
     'organization_id is not distinct from $3::uuid',
+    'deleted_at is null',
   ];
-  if (!includeArchived) sessionClauses.push('deleted_at is null');
+  if (!includeArchived) sessionClauses.push('archived = false');
   if (startDate) {
     sessionClauses.push(`created_at >= $${sessionParams.length + 1}`);
     sessionParams.push(startDate);
@@ -190,8 +191,9 @@ async function handleGet(request: NextRequest) {
     'user_id = $1',
     '(name ilike $2 or description ilike $2)',
     'organization_id is not distinct from $3::uuid',
+    'deleted_at is null',
   ];
-  if (!includeArchived) projectClauses.push('deleted_at is null');
+  if (!includeArchived) projectClauses.push('is_archived = false');
   if (startDate) {
     projectClauses.push(`created_at >= $${projectParams.length + 1}`);
     projectParams.push(startDate);
@@ -239,11 +241,10 @@ async function handleGet(request: NextRequest) {
     'c.user_id = $1',
     'm.content ilike $2',
     'c.organization_id is not distinct from $3::uuid',
+    'c.deleted_at is null',
+    'm.deleted_at is null',
   ];
-  if (!includeArchived) {
-    msgClauses.push('c.deleted_at is null');
-    msgClauses.push('m.deleted_at is null');
-  }
+  if (!includeArchived) msgClauses.push('c.archived = false');
   if (role) {
     msgClauses.push(`m.role = $${msgParams.length + 1}`);
     msgParams.push(role);

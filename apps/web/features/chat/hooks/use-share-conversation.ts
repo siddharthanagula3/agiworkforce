@@ -57,6 +57,15 @@ export function useShareConversation(conversationTitle?: string, modelId?: strin
             role: m.role,
             content: m.content,
             created_at: m.createdAt,
+            ...(m.attachments && m.attachments.length > 0
+              ? {
+                  attachments: m.attachments.map((a) => ({
+                    name: a.name,
+                    type: a.type,
+                    mimeType: a.mimeType,
+                  })),
+                }
+              : {}),
           })),
         };
         const res = await fetch('/api/share', {

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -47,6 +46,22 @@ function messageQuery(): QueryCall {
   return call!;
 }
 
+function sessionQuery(): QueryCall {
+  const call = (mockNeonQuery.mock.calls as QueryCall[]).find(([sql]) =>
+    sql.includes('from web_conversations'),
+  );
+  expect(call, 'no web_conversations query was issued').toBeDefined();
+  return call!;
+}
+
+function projectQuery(): QueryCall {
+  const call = (mockNeonQuery.mock.calls as QueryCall[]).find(([sql]) =>
+    sql.includes('from user_projects'),
+  );
+  expect(call, 'no user_projects query was issued').toBeDefined();
+  return call!;
+}
+
 beforeEach(() => {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
@@ -72,17 +87,19 @@ describe('GET /api/search message scoping', () => {
     expect(prefetch).toEqual([]);
   });
 
-  it('excludes soft-deleted conversations and messages unless includeArchived is set', async () => {
+  it('always excludes soft-deleted conversations and messages, regardless of includeArchived', async () => {
     await GET(searchRequest());
     const [defaultSql] = messageQuery();
     expect(defaultSql).toContain('c.deleted_at is null');
     expect(defaultSql).toContain('m.deleted_at is null');
+    expect(defaultSql).toContain('c.archived = false');
 
     mockNeonQuery.mockClear();
     await GET(searchRequest('&includeArchived=true'));
     const [archivedSql] = messageQuery();
-    expect(archivedSql).not.toContain('c.deleted_at is null');
-    expect(archivedSql).not.toContain('m.deleted_at is null');
+    expect(archivedSql).toContain('c.deleted_at is null');
+    expect(archivedSql).toContain('m.deleted_at is null');
+    expect(archivedSql).not.toContain('c.archived = false');
   });
 
   it('qualifies the date filters so they are not ambiguous across the join', async () => {
@@ -140,6 +157,27 @@ describe('GET /api/search message scoping', () => {
     const res = await GET(searchRequest());
     const body = (await res.json()) as { stats: { messageMatches: number } };
     expect(body.stats.messageMatches).toBe(1);
+  });
+
+  it('never surfaces soft-deleted sessions or projects, and toggles archived via the archived column', async () => {
+    await GET(searchRequest());
+    const [defaultSessionSql] = sessionQuery();
+    expect(defaultSessionSql).toContain('deleted_at is null');
+    expect(defaultSessionSql).toContain('archived = false');
+
+    const [defaultProjectSql] = projectQuery();
+    expect(defaultProjectSql).toContain('deleted_at is null');
+    expect(defaultProjectSql).toContain('is_archived = false');
+
+    mockNeonQuery.mockClear();
+    await GET(searchRequest('&includeArchived=true'));
+    const [archivedSessionSql] = sessionQuery();
+    expect(archivedSessionSql).toContain('deleted_at is null');
+    expect(archivedSessionSql).not.toContain('archived = false');
+
+    const [archivedProjectSql] = projectQuery();
+    expect(archivedProjectSql).toContain('deleted_at is null');
+    expect(archivedProjectSql).not.toContain('is_archived = false');
   });
 
   it('attributes full-search telemetry to the workspace captured for the request', async () => {
