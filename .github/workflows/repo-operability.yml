@@ -163,10 +163,10 @@ jobs:
       - name: Verify skill integrity lock
         run: node scripts/verify-skills-lock.mjs
 
-  # The vendored SkillSpector fork is described in tools/AGENTS.md as the trust
-  # boundary for skill vetting. This job is what makes that true: it first proves
-  # the gate still blocks the known-malicious fixture, then applies it to every
-  # skill package actually vendored in this repo.
+  # The vendored SkillSpector fork is the trust boundary for skill vetting.
+  # This job is what makes that true: it first proves the gate still blocks
+  # the known-malicious fixture, then applies it to every skill package
+  # actually vendored in this repo.
   skill-supply-chain:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
