@@ -1,5 +1,3 @@
-
-
 export const DEFAULT_PAIRING_TTL_SECONDS = 300;
 
 export const DEFAULT_HOST = '0.0.0.0';
@@ -47,6 +45,8 @@ export const RATE_LIMIT_PAIRING_DELETE = 10;
 export const RATE_LIMIT_HEALTH_CHECK = 100;
 
 export const MAX_CONNECTIONS_PER_IP = 10;
+
+export const TRUSTED_PROXY_HOPS_DEFAULT = 1;
 
 export const CONNECTION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
