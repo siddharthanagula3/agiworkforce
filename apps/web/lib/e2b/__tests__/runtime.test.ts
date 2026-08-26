@@ -287,6 +287,20 @@ describe('getE2BExecutor — conversation-scoped', () => {
     expect(sessions.has(scopeKey(scope('conv-4')))).toBe(true);
   });
 
+  it('inherits the trusted chat default when the scope declares no networkAccess', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(scope('conv-net'));
+
+    const createOptions = (create.mock.calls[0] as unknown[])[0] as {
+      allowInternetAccess?: boolean;
+      network?: { allowOut?: string[]; denyOut?: string[] };
+    };
+    expect(createOptions.allowInternetAccess).toBeUndefined();
+    expect(createOptions.network?.allowOut).toContain('github.com');
+    expect(createOptions.network?.allowOut).toContain('registry.npmjs.org');
+    expect(createOptions.network?.denyOut).toContain('0.0.0.0/0');
+  });
+
   it('does not resume another user sandbox when the conversation id collides', async () => {
     sessions.set(scopeKey(scope('shared-conv', 'user-a')), {
       sandboxId: 'sbx-user-a',

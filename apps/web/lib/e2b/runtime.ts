@@ -174,10 +174,12 @@ function createNetworkOptions(scope: E2BSessionScope | undefined): {
   allowInternetAccess?: boolean;
   network?: { allowOut?: string[]; denyOut?: string[] };
 } {
-  // A scope-less sandbox has no declared policy, so it inherits the chat-sandbox
-  // default (restricted) rather than the SDK's internet-open default. A scoped
-  // sandbox that declares no networkAccess falls through to deny-all (fail-closed).
-  const networkAccess = scope ? scope.networkAccess : CHAT_SANDBOX_NETWORK_ACCESS;
+  // A sandbox with no declared policy inherits the chat-sandbox default
+  // ('trusted': a github/npm/pypi allowlist over deny-all egress) rather than the
+  // SDK's internet-open default. This covers both a scope-less sandbox and a
+  // scoped chat conversation that declares no networkAccess, so execute_code can
+  // still install packages while arbitrary exfiltration stays blocked.
+  const networkAccess = scope?.networkAccess ?? CHAT_SANDBOX_NETWORK_ACCESS;
   if (networkAccess === 'full') return { allowInternetAccess: true };
   if (networkAccess === 'trusted') {
     return {
