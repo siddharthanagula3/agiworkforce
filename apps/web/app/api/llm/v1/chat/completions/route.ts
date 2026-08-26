@@ -356,9 +356,9 @@ async function dispatchChatCompletions(
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
       const researchUsage = createObservedProviderUsage();
-      // AUDIT-FIX SYS-21: the research loop can now rotate to a managed-failover
-      // candidate. Track the view that is actually serving so settlement and
-      // attribution price by it, not by the primary that failed.
+      // The research loop can rotate to a managed-failover candidate. Track the
+      // view that is actually serving so settlement and attribution price by it,
+      // not by the primary that failed.
       let researchServing: ProcessedRequest = processed;
       const researchFailover = createFailoverPlan(processed, {
         signal: request.signal,
@@ -622,8 +622,8 @@ async function dispatchChatCompletions(
           : undefined;
       const toolLoopUsage = createObservedProviderUsage();
       let approvalCheckpointSaved = false;
-      // AUDIT-FIX SYS-21: the tool loop can now rotate to a managed-failover
-      // candidate mid-run; keep the serving view for settlement/attribution.
+      // The tool loop can rotate to a managed-failover candidate mid-run; keep
+      // the serving view for settlement/attribution.
       let toolLoopServing: ProcessedRequest = processed;
       const toolLoopFailover = createFailoverPlan(processed, {
         signal: request.signal,

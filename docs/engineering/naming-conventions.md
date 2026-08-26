@@ -119,7 +119,7 @@ Canonical as of 2026-06-28. Full version + CI enforcement: `docs/strategy/15-str
 ## Hooks
 
 - `.husky/commit-msg` runs `pnpm exec commitlint --edit "$1"`.
-- `.husky/pre-commit` runs `pnpm exec lint-staged`, `pnpm check:structure-conventions`, and `pnpm check:agent-context`.
+- `.husky/pre-commit` runs `pnpm exec lint-staged`, `pnpm check:audit-inventory`, `pnpm check:executable-docs`, `pnpm check:structure-conventions`, and `pnpm check:llm-failures:staged`.
 - `.husky/pre-push` runs `pnpm check:llm-operability`, `git diff --check`, and `git diff --cached --check`.
 - `SKIP_PRE_PUSH=1` may skip pre-push only for emergency pushes; the skipped checks must be recorded in the PR or handoff.
 - `pnpm check:hooks` enforces this policy.

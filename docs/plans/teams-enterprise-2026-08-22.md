@@ -101,7 +101,7 @@ TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `recordAuditEvent` call carrying an `organizationId` goes through the
   `0087` SECURITY DEFINER writer, and policy changes now do. The missing half is
   read and export — Wave 3. `0087`'s stale reference to the removed
-  `services/api-gateway` reader was corrected on 2026-08-22.
+  services/api-gateway reader was corrected on 2026-08-22.
 - **`organization_usage_ledger` has NO WRITER, and is not the usage table.**
   Only `lib/server/account-erasure.ts` and `lib/billing/financial-record-retention.ts`
   reference it; nothing inserts. A dashboard built on it would report zero

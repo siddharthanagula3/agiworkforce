@@ -564,7 +564,7 @@ mod tests {
             "echo ok | tee /tmp/log",
             "sh -c 'cargo build && cargo test'",
             "bash --version",
-            "python3 scripts/report.py --json",
+            "python3 report.py --json",
             "sudo -u root cargo build",
             "env FOO=1 nice -n 5 cargo build",
             "for f in *.rs; do echo $f; done",

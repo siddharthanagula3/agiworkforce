@@ -161,12 +161,11 @@ interface CompareRow {
 }
 
 /**
- * G7 (competitive-gap-2026-08-15): ChatGPT and Claude's pricing tables both
- * carry a training-data-use row. Ours is unconditional and identical across
- * every trust mode and plan — apps/web/app/privacy/page.tsx states plainly
- * that "AGI does not use customer conversation content to train AGI-owned
- * models" — so the row is a single constant rather than a per-plan
- * derivation; there is no weaker/stronger variant by tier to compute.
+ * The training-data-use row is unconditional and identical across every trust
+ * mode and plan — apps/web/app/privacy/page.tsx states plainly that "AGI does
+ * not use customer conversation content to train AGI-owned models" — so the row
+ * is a single constant rather than a per-plan derivation; there is no
+ * weaker/stronger variant by tier to compute.
  */
 const UPGRADE_SETTLE_ATTEMPTS = 6;
 const UPGRADE_SETTLE_INTERVAL_MS = 1_000;
@@ -192,7 +191,6 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
     developerSurfaces: canUseBillingPlanCapability(plan, 'developer_surfaces')
       ? 'CLI, Chrome & VS Code'
       : 'No managed access',
-    // G12 (competitive-gap-2026-08-15): itemized rather than a bare Yes/No —
     // SSO and SCIM directory sync are implemented and entitlement-gated on
     // `enterprise_controls` (apps/web/features/admin/pages/AdminConsolePage.tsx's
     // "Implemented — entitlement-gated" Identity row; live routes at
@@ -208,14 +206,14 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
 }
 
 /**
- * G1 (competitive-gap-2026-08-15): a per-provider "models included" matrix
- * generated live from the canonical catalog
+ * A per-provider "models included" matrix generated live from the canonical
+ * catalog
  * (packages/contracts/types/src/models.json's `tierAllowedModels`), through
  * the SAME `canAccessModelForSubscriptionTier` gate the in-app model picker
  * enforces (apps/web/features/chat/components/Composer/ComposerFooter.tsx's
  * `modelLock` -> `isModelSelectableForTier` -> that function). Grouped by
- * provider rather than one row per model, per the audit recommendation —
- * models.json's own verificationLog notes the roster changes weekly, and a
+ * provider rather than one row per model — models.json's own verificationLog
+ * notes the roster changes weekly, and a
  * hand-typed per-model table would rot the moment it did. Team and Enterprise
  * are folded onto Pro's and Max's columns respectively because
  * `canAccessModelForSubscriptionTier` normalizes them to the same access
@@ -991,13 +989,10 @@ export default function PricingPage() {
                 <span className="agi-tier-price-num">{t('custom')}</span>
                 <span className="agi-tier-price-sub">{t('customPricingSub')}</span>
               </p>
-              {/* G12 (competitive-gap-2026-08-15): the `enterpriseBody` key
-                  ("Discuss SSO/SCIM roadmap...") has the same honesty bug as
-                  `enterpriseFeature3` below and sits right above it, so
-                  leaving it untouched would contradict the corrected bullet
-                  two lines down. Stated inline for the same
-                  cross-file-ownership reason — see the fuller note on the
-                  enterpriseFeature3 li. */}
+              {/* Stated inline rather than through pricing.json's
+                  `enterpriseBody` key, which still frames SSO/SCIM as a
+                  "roadmap"; that i18n string is shared across locales and
+                  outside this surface's owned files. */}
               <p className="agi-tier-body">
                 SSO, SCIM, and audit are shipped and entitlement-gated; we scope capacity, data
                 retention, and rollout to how your org actually works. Reach out and we will plan it
@@ -1013,21 +1008,15 @@ export default function PricingPage() {
                   {t('enterpriseFeature2')}
                 </li>
                 <li>
-                  {/* G12 (competitive-gap-2026-08-15): pricing.json's
-                      `enterpriseFeature3` string calls SSO/audit/retention a
-                      "roadmap" item, but SSO sign-in and SCIM directory sync
-                      are implemented and live — gated on the `enterprise_controls`
-                      entitlement, not aspirational (see
-                      apps/web/features/admin/pages/AdminConsolePage.tsx's
+                  {/* Stated inline: pricing.json's `enterpriseFeature3` still
+                      calls SSO/audit/retention a "roadmap" item, but SSO
+                      sign-in and SCIM directory sync are implemented and gated
+                      on `enterprise_controls` (see AdminConsolePage.tsx's
                       "Implemented — entitlement-gated" Identity row, plus
-                      /api/admin/sso and /api/scim/v2). Only org-configurable
-                      retention windows remain a contract-scoped commitment.
-                      packages/ui/i18n/locales/&lt;lang&gt;/pricing.json is
-                      outside this surface's owned files (11 locales, shared
-                      with other pages), so this bullet is stated directly here instead
-                      of through the still-wrong `enterpriseFeature3` key —
-                      that key should be corrected (or retired in favor of a
-                      new one) by whoever owns packages/ui/i18n next. */}
+                      /api/admin/sso and /api/scim/v2); only org-configurable
+                      retention remains contract-scoped. That i18n key is shared
+                      across 11 locales and outside this surface's owned files,
+                      so correct it (or retire it) in packages/ui/i18n. */}
                   <CheckIcon />
                   SSO, SCIM directory sync, and audit logs — shipped, gated on the Enterprise
                   plan&apos;s entitlement. Retention windows stay contract-scoped.
@@ -1428,13 +1417,11 @@ export default function PricingPage() {
         </section>
 
         {/* ──────────────────── Models included, by plan ────────────────────
-            G1 (competitive-gap-2026-08-15): ChatGPT publishes a per-model
-            per-tier access matrix; we did not. This table is generated live
-            from `tierAllowedModels` in the canonical catalog through the same
-            `canAccessModelForSubscriptionTier` gate the model picker and the
-            server enforce (see `modelAccessByProvider` above) — never a
-            hand-typed model list, so it cannot drift from what a plan
-            actually unlocks the way the old relative-usage strings could. */}
+            This table is generated live from `tierAllowedModels` in the
+            canonical catalog through the same `canAccessModelForSubscriptionTier`
+            gate the model picker and the server enforce (see
+            `modelAccessByProvider` above) — never a hand-typed model list, so it
+            cannot drift from what a plan actually unlocks. */}
         <section className="agi-fl-section" aria-labelledby="pricing-models-title">
           <p className="agi-fl-eyebrow">Models</p>
           <h2 id="pricing-models-title" className="agi-fl-h2">

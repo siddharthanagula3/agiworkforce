@@ -43,27 +43,15 @@ function getStorage(): MMKV {
 /**
  * Generate a 256-bit MMKV encryption key as 64 lowercase hex chars.
  *
- * **Why this is a separate, exported function** (CRIT-MOB-02 fix, 2026-05):
- * the previous implementation concatenated two `Crypto.randomUUID()` calls
- * and stripped dashes:
- *
- *   const uuid1 = Crypto.randomUUID();  // 36 chars, 122 bits of entropy
- *   const uuid2 = Crypto.randomUUID();  // 36 chars, 122 bits of entropy
- *   key = (uuid1 + uuid2).replace(/-/g, ''); // 64 hex chars, 244 bits effective
- *
- * Each RFC 4122 v4 UUID encodes only 122 bits of entropy (4 bits go to the
- * version field, 2 bits go to the variant field, both fixed). Concatenating
- * two yields 244 bits of entropy in a 256-bit-shaped string — the visible
- * key shape suggests stronger material than is actually present, and the
- * fixed-bit pattern is a distinguisher in pathological cracking scenarios.
- *
  * `Crypto.getRandomBytesAsync(32)` returns 32 raw random bytes from the
- * platform CSPRNG — the actual primitive. Hex-encode for storage as a
- * string; `react-native-mmkv` accepts the hex string directly as
- * `encryptionKey`. Result: a true 256-bit key with no fixed-bit overhead.
+ * platform CSPRNG — a true 256-bit key. Hex-encode for storage as a string;
+ * `react-native-mmkv` accepts the hex string directly as `encryptionKey`. Do
+ * NOT synthesize the key from concatenated `Crypto.randomUUID()` calls: each
+ * RFC 4122 v4 UUID carries only 122 bits of entropy (version and variant bits
+ * are fixed), so that shape looks like 256 bits while carrying far less.
  *
- * Exported separately so unit tests can pin the format without spinning
- * up a real `SecureStore`.
+ * Exported separately so unit tests can pin the format without spinning up a
+ * real `SecureStore`.
  */
 export async function generateMmkvEncryptionKey(): Promise<string> {
   const bytes = await Crypto.getRandomBytesAsync(32);
@@ -128,26 +116,16 @@ export const mmkvStorage: StateStorage = {
 /**
  * Shared MMKV-race helper for Zustand persist stores.
  *
- * FIX (audit 2026-05-20, §17): every persisted mobile store carried this
- * boilerplate at the bottom of its module:
- *
- * ```ts
- * whenMmkvReady(() => {
- *   useFooStore.persist.rehydrate();
- * });
- * ```
- *
- * 23 stores carry the AUDIT-FIX: MMKV-RACE marker. Consolidating the
- * pattern here so:
+ * Persist-enabled stores must defer `persist.rehydrate()` until the encrypted
+ * MMKV instance is ready. This helper consolidates that pattern so:
  *   1. New stores opt in via one call, not three lines.
- *   2. If we ever need to add structured logging / metrics around
- *      rehydration timing, there's one place to change.
- *   3. The shape `{ persist: { rehydrate(): Promise<void> | void } }`
- *      is enforced statically rather than via duck-typing.
+ *   2. Structured logging / metrics around rehydration timing have one place
+ *      to change.
+ *   3. The shape `{ persist: { rehydrate(): Promise<void> | void } }` is
+ *      enforced statically rather than via duck-typing.
  *
- * Use this helper in new persist-enabled stores; existing call sites can
- * migrate opportunistically (don't churn for churn's sake — a TODO marker
- * was left on the remaining 20 stores referencing this helper).
+ * Use this in new persist-enabled stores; existing call sites can migrate
+ * opportunistically.
  */
 export interface RehydratableStore {
   persist: {

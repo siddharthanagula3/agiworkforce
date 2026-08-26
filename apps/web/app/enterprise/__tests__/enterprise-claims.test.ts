@@ -52,23 +52,12 @@ describe('/enterprise — dated posture', () => {
 });
 
 describe('/enterprise — control claims stay accurate: shipped controls say so, unbuilt ones do not', () => {
-  // AUDIT-FIX (competitive-gap-2026-08-15, G12): this test originally required
-  // SSO/SCIM/Audit to read as contract-scoped, not-yet-shipped commitments.
-  // That was accurate when written, but apps/web/features/admin/pages/
-  // AdminConsolePage.tsx's Identity readiness row has since flipped to
-  // "Implemented — entitlement-gated": first-party SSO sign-in and SCIM
-  // provisioning are live code paths gated on the `enterprise_controls`
-  // billing capability. Calling a shipped, gated control "roadmap" is the
-  // same honesty bug this suite exists to catch — it just runs in the other
-  // direction — so the assertion below now requires the opposite: these rows
-  // must say "implemented" and must NOT regress to roadmap/ask-us framing.
-  // Audit is checked separately (below) because
-  // services/api-gateway/src/routes/enterprise.ts gates its audit-events
-  // routes on organization-admin membership, NOT `enterprise_controls` — a
-  // test that demanded the same entitlement wording there would itself be
-  // asserting something the code does not do. Retention is unchanged: there
-  // is still no per-organization retention control, so that row keeps the
-  // original contract-scoped assertion.
+  // These rows must match shipped code. SSO and SCIM are implemented and gated
+  // on the `enterprise_controls` entitlement, so the assertions require them to
+  // read "implemented" and forbid roadmap/ask-us framing — underclaiming a
+  // shipped, gated control is the same honesty bug as overclaiming one. Audit is
+  // checked separately below, and retention keeps its contract-scoped assertion
+  // because there is still no per-organization retention control.
   it('states SSO and directory provisioning as implemented and entitlement-gated', () => {
     const source = rendered();
     for (const control of ["k: 'SSO'", "k: 'Directory provisioning'"]) {

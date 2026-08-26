@@ -13,7 +13,6 @@ Purpose: collect durable engineering workflow, review, and agent-native developm
 4. [`service-layer-architecture.md`](./service-layer-architecture.md) - action/route orchestration vs reusable service mechanics.
 5. [`naming-conventions.md`](./naming-conventions.md) - locked names for product, CLI, files, folders, packages, branches, commits, docs, and releases.
 6. [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) - internal contribution workflow and PR expectations.
-7. [`../../AGENTS.md`](../../AGENTS.md) - root tool-neutral agent instructions.
 
 ## What Belongs Here
 

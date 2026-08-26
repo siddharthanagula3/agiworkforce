@@ -249,7 +249,7 @@ interface ChatComposerProps {
   /**
    * Per-file privacy label rendered as a chip on each attachment thumbnail
    * (e.g. "Local", "BYOK", "Managed"). Sourced from the host's SendPreview
-   * presentation. PLAN.md section 5: "Add per-file privacy labels".
+   * presentation.
    */
   attachmentPrivacyShortLabel?: string;
   /**
