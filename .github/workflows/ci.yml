@@ -293,7 +293,7 @@ jobs:
         run: pnpm db:migrate -- apply --target ci
 
       - name: Install Chromium
-        # scripts/__tests__/a11y-audit.test.ts drives a real browser, so the
+        # apps/web/scripts/__tests__/a11y-audit.test.ts drives a real browser, so the
         # test step needs one even though this job is not the E2E job.
         run: pnpm exec playwright install --with-deps chromium
 
