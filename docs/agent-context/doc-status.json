@@ -2,8 +2,6 @@
   "version": 2,
   "lastUpdated": "2026-08-08",
   "currentSourcesOfTruth": [
-    "AGENTS.md",
-    "CLAUDE.md",
     "docs/current/README.md",
     "docs/current/source-of-truth.md",
     "docs/current/agi-product-requirements.md",

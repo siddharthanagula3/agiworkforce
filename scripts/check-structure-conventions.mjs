@@ -118,13 +118,7 @@ const trackedTextFiles = workspaceTextFiles();
 const activeOperationalFiles = trackedTextFiles.filter((file) => {
   if (file === 'scripts/check-structure-conventions.mjs') return false;
 
-  if (
-    file === 'AGENTS.md' ||
-    file === 'CLAUDE.md' ||
-    file === 'PLAN.md' ||
-    file === 'README.md' ||
-    file === 'TODO.md'
-  ) {
+  if (file === 'PLAN.md' || file === 'README.md' || file === 'TODO.md') {
     return true;
   }
 

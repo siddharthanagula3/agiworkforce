@@ -80,8 +80,6 @@ function walk(relativeDir, files = []) {
 
 requireFile('docs/engineering/service-layer-architecture.md');
 
-requireIncludes('AGENTS.md', 'docs/engineering/service-layer-architecture.md');
-requireIncludes('CLAUDE.md', 'docs/engineering/service-layer-architecture.md');
 requireIncludes('docs/agent-context/README.md', 'service-layer-architecture.md');
 requireIncludes('docs/engineering/README.md', 'service-layer-architecture.md');
 requireIncludes('docs/engineering/agent-native-development.md', 'service-layer-architecture.md');
