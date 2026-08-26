@@ -2235,32 +2235,73 @@ one.
 - If no, say so and I will narrow the contract's documented scope to mobile so
   nothing claims coverage it does not have.
 
-## The plugin catalogue works but has only four plugins in it
+## The plugin catalogue had only four plugins in it — three real packs added (Phase 1)
 
-**Status:** `BLOCKED_BY_HUMAN` — content, not code.
+**Status:** Resolved for the packs that can honestly exist today; still open for
+going beyond the real first-party skill set.
 
 `audit/ui-gaps.csv` carried GAP-274, "Plugin catalogue is a 4-entry preview that
-installs nothing". Half of that is wrong and I have corrected the record:
-installing works, and it matters. `POST /api/plugins/installations` calls
-`installWebPlugin`, and `listEnabledPluginIdsForUser` gates real skill
-availability in the chat request-processor, the tool-loop and `/api/skills`.
-Production holds one real installation.
+installs nothing". Half of that was wrong and stays corrected: installing works,
+and it matters. `POST /api/plugins/installations` calls `installWebPlugin`, and
+`listEnabledPluginIdsForUser` gates real skill availability in the chat
+request-processor, the tool-loop and `/api/skills` — but only for a skill
+whose own `SKILL.md` names a `plugin:` owner. `research-pack`'s
+`literature-review` is the one skill in the tree that does; installing that
+pack is what makes it selectable.
 
-What is true is the other half. `plugin_registry_entries` has exactly four rows
-in production:
+The other half — only four catalogue rows, one of them (`research-pack`)
+actually installable — is now three rows better. Migration
+`db/neon/0145_web_pack_example_prompts.sql` adds three new published,
+web-installable, first-party packs that bundle ONLY skills `GET /api/skills`
+actually serves in production:
 
-    CRM Sync · Calendar Assistant · GitHub Automation · Research Pack
+    engineering-pack (code-review, systematic-debugging, frontend-design-review)
+    writing-pack     (document-creation, presentation-creation, research-and-citations)
+    data-pack        (data-analysis, document-creation)
 
-So a working system looks like a dead preview, which is the impression a visitor
-takes away. claude.ai's equivalent list runs to roughly 22.
+`plugin_registry_entries` now holds seven rows, and all seven behave like real
+installs the same way: a genuine `plugin_installations` row, real enable/
+disable/remove, and a real count. `github-automation`, `calendar-assistant`,
+and `crm-sync` stay `preview` deliberately — their declared skills ("Code
+Review", "Meeting Summarizer", …) do not correspond to any real skill, and
+promoting them would advertise an install that installs nothing real.
 
-**What is needed from you**
+Skill _gating_ is a narrower claim than "real install," and I got it wrong on
+the first pass of this note: none of the seven skills the three new packs
+declare carries a `plugin:` owner in its `SKILL.md` — they are first-party
+skills already available to every user regardless of any pack, unlike
+`literature-review`. Installing engineering-pack/writing-pack/data-pack
+therefore cannot change what shows up in Skills; it only adds the pack to the
+account as a curated shortcut alongside whatever connectors and example
+prompts it declares. `GET /api/plugins` now computes this honestly as
+`skillsRequireInstall` (true only for `research-pack`, by checking the live
+Skill catalog's `plugin:` ownership against each entry's `declaredSkills`),
+and the install-confirm dialog and its "Skills it adds"/"Skills included"
+heading read that flag instead of asserting a grant that doesn't hold. Proven
+by `apps/web/lib/services/skill-catalog-service.test.ts` (the owner map
+mechanics), `apps/web/app/api/plugins/__tests__/route.test.ts` (the derivation
+on both routes, plus a 503 if the catalog can't be read), and
+`apps/web/db/neon/web-pack-example-prompts-migration.test.ts` (the real
+migration content and the real `.agents/skills` tree agree: none of the three
+packs' declared skills is owned, `literature-review` still is).
 
-- Decide what the plugin catalogue should contain, and whether entries are
-  authored by you or opened to third parties. I can seed entries once the list
-  exists, but inventing plugins and their capabilities is not something I should
-  do unprompted — a registry entry claims a capability, and a fabricated one is
-  the same fake-availability defect this goal exists to remove.
+Going further than that — actually gating engineering-pack/writing-pack/
+data-pack's skills behind install, the way `research-pack` is gated — is a
+bigger, riskier change: those seven skills are meant to be globally available
+general-purpose skills today, and moving them behind a pack would take them
+away from anyone who doesn't install the matching pack. I left that choice to
+you rather than making it silently.
+
+**What is still needed from you**
+
+- Every first-party skill that exists is now spoken for by one of the four
+  installable packs. Going past seven catalogue entries means either shipping
+  new first-party skills to bundle, or deciding whether third-party submission
+  opens up — `plugin_registry_entries_first_party_only` is the one constraint
+  to drop when that decision lands. I still should not invent a plugin's
+  capabilities unprompted; a registry entry claims a capability, and a
+  fabricated one is the same fake-availability defect this goal exists to
+  remove.
 
 ## Automatic credit recharge needs your decision before any UI
 

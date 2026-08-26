@@ -28,6 +28,7 @@ const ROW = {
   required_connectors: ['github'],
   capabilities: ['connectors', 'network'],
   permissions: [],
+  example_prompts: [],
   versions: [],
   manifest: null,
   manifest_url: null,
@@ -142,6 +143,21 @@ describe('listPluginRegistryEntries', () => {
     const result = await listPluginRegistryEntries(stringified);
     expect(result.entries[0]?.declaredSkills).toEqual(['Code Review']);
     expect(result.entries[0]?.requiredConnectors).toEqual(['github']);
+  });
+
+  it('maps example prompts and treats an absent column as an empty list', async () => {
+    const withPrompts = database([
+      { ...ROW, example_prompts: ['Review this pull request for bugs and style issues.'] },
+    ]);
+    const result = await listPluginRegistryEntries(withPrompts);
+    expect(result.entries[0]?.examplePrompts).toEqual([
+      'Review this pull request for bugs and style issues.',
+    ]);
+
+    const { example_prompts: _omitted, ...withoutColumn } = ROW;
+    const missing = database([withoutColumn]);
+    const missingResult = await listPluginRegistryEntries(missing);
+    expect(missingResult.entries[0]?.examplePrompts).toEqual([]);
   });
 
   it('never surfaces a signature, even when a row somehow carries one', async () => {

@@ -479,6 +479,167 @@ describe('Connectors pane (table)', () => {
     expect(screen.getByText('Loading plugins…')).toBeTruthy();
   });
 
+  const MULTI_PLUGIN_CATALOG = [
+    {
+      id: 'engineering-pack',
+      name: 'Engineering Pack',
+      description: 'Review, debug, and design-check.',
+      enabled: false,
+      author: 'AGI',
+      category: 'Developer',
+      installable: true,
+      declaredSkills: ['code-review'],
+      requiredConnectors: ['github'],
+      examplePrompts: ['Review this pull request for bugs and style issues.'],
+      updatedAt: '2026-08-20T00:00:00.000Z',
+    },
+    {
+      id: 'writing-pack',
+      name: 'Writing Pack',
+      description: 'Draft, present, and cite.',
+      enabled: false,
+      author: 'AGI',
+      category: 'Productivity',
+      installable: true,
+      declaredSkills: ['document-creation'],
+      requiredConnectors: [],
+      examplePrompts: [],
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    },
+  ];
+
+  it('filters the plugin catalogue by category', () => {
+    renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG });
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+    fireEvent.click(
+      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
+        name: 'Plugins',
+      }),
+    );
+
+    expect(screen.getByText('Engineering Pack')).toBeTruthy();
+    expect(screen.getByText('Writing Pack')).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by category' }), {
+      target: { value: 'Developer' },
+    });
+    expect(screen.getByText('Engineering Pack')).toBeTruthy();
+    expect(screen.queryByText('Writing Pack')).toBeNull();
+  });
+
+  it('sorts the plugin catalogue by recently updated', () => {
+    renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG });
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+    fireEvent.click(
+      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
+        name: 'Plugins',
+      }),
+    );
+
+    const grid = document.getElementById('settings-directory-plugins')!;
+    const namesInOrder = () =>
+      Array.from(grid.querySelectorAll('span.truncate')).map((el) => el.textContent);
+    expect(namesInOrder()).toEqual(['Engineering Pack', 'Writing Pack']);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort by' }), {
+      target: { value: 'updated' },
+    });
+    expect(namesInOrder()).toEqual(['Engineering Pack', 'Writing Pack']);
+  });
+
+  it('offers Most popular only once at least one entry carries a real install count', () => {
+    renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG });
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+    fireEvent.click(
+      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
+        name: 'Plugins',
+      }),
+    );
+    expect(
+      within(screen.getByRole('combobox', { name: 'Sort by' })).queryByText('Most popular'),
+    ).toBeNull();
+  });
+
+  it('sorts the plugin catalogue by install count once real counts are wired', () => {
+    renderModal(
+      {},
+      {
+        pluginCatalog: [
+          { ...MULTI_PLUGIN_CATALOG[0]!, installCount: 5 },
+          { ...MULTI_PLUGIN_CATALOG[1]!, installCount: 90 },
+        ],
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+    fireEvent.click(
+      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
+        name: 'Plugins',
+      }),
+    );
+
+    const grid = document.getElementById('settings-directory-plugins')!;
+    fireEvent.change(screen.getByRole('combobox', { name: 'Sort by' }), {
+      target: { value: 'popular' },
+    });
+    const namesInOrder = Array.from(grid.querySelectorAll('span.truncate')).map(
+      (el) => el.textContent,
+    );
+    expect(namesInOrder).toEqual(['Writing Pack', 'Engineering Pack']);
+  });
+
+  it('renders a category chip and install count on a plugin card', () => {
+    renderModal(
+      {},
+      {
+        pluginCatalog: [
+          { ...MULTI_PLUGIN_CATALOG[0]!, installCount: 42 },
+          MULTI_PLUGIN_CATALOG[1]!,
+        ],
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+    fireEvent.click(
+      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
+        name: 'Plugins',
+      }),
+    );
+
+    const grid = within(document.getElementById('settings-directory-plugins')!);
+    expect(grid.getByText('Developer')).toBeTruthy();
+    expect(grid.getByText('Productivity')).toBeTruthy();
+    expect(grid.getByText('42 installs')).toBeTruthy();
+  });
+
+  it('shows bundled skills, connectors, and try-asking prompts before installing', () => {
+    const installPlugin = vi.fn();
+    renderModal({}, { pluginCatalog: MULTI_PLUGIN_CATALOG, installPlugin });
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+    fireEvent.click(
+      within(screen.getByRole('tablist', { name: 'Directory sections' })).getByRole('tab', {
+        name: 'Plugins',
+      }),
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0]!);
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Install Engineering Pack?')).toBeTruthy();
+    expect(within(dialog).getByText('code-review')).toBeTruthy();
+    expect(within(dialog).getByText('github')).toBeTruthy();
+    expect(
+      within(dialog).getByText(/Review this pull request for bugs and style issues\./),
+    ).toBeTruthy();
+    expect(within(dialog).getByText(/does not connect them for you/i)).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Install' }));
+    expect(installPlugin).toHaveBeenCalledWith('engineering-pack');
+  });
+
   // CONNECTOR-FORM-PASSWORD-AUTOFILL-01
   it('opts the custom-connector fields out of password-manager autofill', () => {
     renderModal({}, { addCustomConnector: vi.fn(), customConnectorAuthTokenSupported: true });
