@@ -56,6 +56,7 @@ const sessions = new Map<
   { sandboxId: string; contexts: Record<string, unknown>; activeSinceMs?: number }
 >();
 vi.mock('../session-store', () => ({
+  CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
   getE2BSession: vi.fn(async (value: TestScope) => sessions.get(scopeKey(value)) ?? null),
   saveE2BSession: vi.fn(async (value: TestScope, session: unknown) => {
     sessions.set(
