@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import {
@@ -181,10 +180,25 @@ export function isAllowedConnectorOAuthRedirectUri(redirectUri: string): boolean
   return allowed !== null && redirectUri === allowed;
 }
 
+const RETURN_PATH_RE = /^\/[^/\\]/;
+// eslint-disable-next-line no-control-regex -- URL parsing strips tab/CR/LF anywhere in the input
+const RETURN_PATH_CONTROL_RE = /[\u0000-\u001f\u007f]/;
+const RETURN_PATH_PROBE_ORIGIN = 'https://connector-return-path.invalid';
+
 export function sanitizeConnectorReturnPath(candidate: string | null | undefined): string {
   const fallback = '/connectors';
   if (!candidate || candidate.length > 512) return fallback;
-  return /^\/[^/\\]/.test(candidate) ? candidate : fallback;
+  if (RETURN_PATH_CONTROL_RE.test(candidate)) return fallback;
+  if (!RETURN_PATH_RE.test(candidate)) return fallback;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate, RETURN_PATH_PROBE_ORIGIN);
+  } catch {
+    return fallback;
+  }
+  if (parsed.origin !== RETURN_PATH_PROBE_ORIGIN) return fallback;
+  const resolved = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  return RETURN_PATH_RE.test(resolved) ? resolved : fallback;
 }
 
 export function buildAuthorizationUrl(params: {
