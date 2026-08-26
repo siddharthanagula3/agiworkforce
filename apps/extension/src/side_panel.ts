@@ -576,6 +576,33 @@ function managedOutboundRoutingPayload(): {
   };
 }
 
+const OUTBOUND_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Server-authority identity for a managed turn: a client-generated
+ * `assistantMessageId` (also stamped onto the assistant row so the cloud sync
+ * reuses it) and, when the conversation is already bound server-side, its cloud
+ * `conversationId`. Sending both lets the server persist the turn under the
+ * same id the extension would sync, so they converge on ONE row. When the
+ * conversation is not yet bound the conversation id is omitted and the
+ * extension's own sync stays authoritative.
+ */
+function managedTurnPersistencePayload(streamId: string): {
+  assistantMessageId?: string;
+  conversationId?: string;
+} {
+  const assistantMessageId = assistantCloudIdByStreamId.get(streamId);
+  const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
+  return {
+    ...(assistantMessageId && OUTBOUND_UUID_PATTERN.test(assistantMessageId)
+      ? { assistantMessageId }
+      : {}),
+    ...(cloudConversationId && OUTBOUND_UUID_PATTERN.test(cloudConversationId)
+      ? { conversationId: cloudConversationId }
+      : {}),
+  };
+}
+
 // Provider display order in the grouped picker.
 const PROVIDER_GROUP_ORDER: ProviderId[] = [
   'anthropic',
@@ -606,6 +633,7 @@ const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
 const resolvedRouteByStreamId = new Map<string, { model: string; provider: string }>();
 const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
+const assistantCloudIdByStreamId = new Map<string, string>();
 
 let currentPageHostname = '';
 
@@ -622,38 +650,35 @@ function trimLiveMessages(): void {
 }
 
 function serializeMessagesForHistory() {
-  return _ctx.messages
-    .filter((message) => !message.error)
-    .slice(-MAX_STORED_MESSAGES)
-    .map((message) => ({
-      role: message.role,
-      content: message.content,
-      timestamp: message.timestamp,
-      ...(message.runtime ? { runtime: message.runtime } : {}),
-      ...(message.role === 'assistant' && message.agentEvents
-        ? { agentEvents: message.agentEvents }
-        : {}),
-      ...(message.role === 'assistant' && message.cloudAgentRun
-        ? { cloudAgentRun: message.cloudAgentRun }
-        : {}),
-      ...(message.role === 'assistant' && message.cloudApprovalDecisions
-        ? { cloudApprovalDecisions: message.cloudApprovalDecisions }
-        : {}),
-      ...(message.role === 'assistant' && message.cloudApprovalError
-        ? { cloudApprovalError: message.cloudApprovalError }
-        : {}),
-      ...(message.role === 'assistant' && message.managedQuickMode
-        ? { managedQuickMode: true }
-        : {}),
-      ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
-      ...(message.role === 'assistant' && message.provider ? { provider: message.provider } : {}),
-      ...(message.role === 'assistant' && message.generatedFiles
-        ? { generatedFiles: message.generatedFiles }
-        : {}),
-      ...(message.role === 'assistant' && message.interactiveCards
-        ? { interactiveCards: message.interactiveCards }
-        : {}),
-    }));
+  return _ctx.messages.slice(-MAX_STORED_MESSAGES).map((message) => ({
+    role: message.role,
+    content: message.content,
+    timestamp: message.timestamp,
+    ...(message.runtime ? { runtime: message.runtime } : {}),
+    ...(message.error ? { error: true } : {}),
+    ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
+    ...(message.role === 'assistant' && message.agentEvents
+      ? { agentEvents: message.agentEvents }
+      : {}),
+    ...(message.role === 'assistant' && message.cloudAgentRun
+      ? { cloudAgentRun: message.cloudAgentRun }
+      : {}),
+    ...(message.role === 'assistant' && message.cloudApprovalDecisions
+      ? { cloudApprovalDecisions: message.cloudApprovalDecisions }
+      : {}),
+    ...(message.role === 'assistant' && message.cloudApprovalError
+      ? { cloudApprovalError: message.cloudApprovalError }
+      : {}),
+    ...(message.role === 'assistant' && message.managedQuickMode ? { managedQuickMode: true } : {}),
+    ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
+    ...(message.role === 'assistant' && message.provider ? { provider: message.provider } : {}),
+    ...(message.role === 'assistant' && message.generatedFiles
+      ? { generatedFiles: message.generatedFiles }
+      : {}),
+    ...(message.role === 'assistant' && message.interactiveCards
+      ? { interactiveCards: message.interactiveCards }
+      : {}),
+  }));
 }
 
 function persistMessages(): Promise<void> {
@@ -4534,6 +4559,7 @@ function beginManagedStream(quickMode: boolean): string {
   const streamId = `stream-${crypto.randomUUID()}`;
   ownerByStreamId.set(streamId, { ...owner });
   quickModeByStreamId.set(streamId, quickMode);
+  assistantCloudIdByStreamId.set(streamId, crypto.randomUUID());
   _ctx.currentStreamId = streamId;
   _ctx.isStreaming = true;
   startManagedChatKeepalive();
@@ -4694,6 +4720,7 @@ function sendMessage(text: string): void {
             modelSelection: _ctx.selectedModel,
             quickMode: _ctx.quickMode || undefined,
             ...managedOutboundRoutingPayload(),
+            ...managedTurnPersistencePayload(streamId),
           },
           (response?: { success?: boolean; error?: string }) => {
             if (chrome.runtime.lastError) {
@@ -4751,6 +4778,7 @@ function sendMessage(text: string): void {
       modelSelection: _ctx.selectedModel,
       quickMode: _ctx.quickMode || undefined,
       ...managedOutboundRoutingPayload(),
+      ...managedTurnPersistencePayload(streamId),
     },
     (response?: { success?: boolean; error?: string }) => {
       if (chrome.runtime.lastError) {
@@ -4789,9 +4817,11 @@ function retryFailedMessage(messageId: string): void {
 function handleStreamError(id: string, errorText: string): void {
   if (_ctx.currentStreamId !== id) return;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
+  const assistantCloudId = assistantCloudIdByStreamId.get(id);
   resolvedRouteByStreamId.delete(id);
   quickModeByStreamId.delete(id);
   ownerByStreamId.delete(id);
+  assistantCloudIdByStreamId.delete(id);
   stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -4814,9 +4844,16 @@ function handleStreamError(id: string, errorText: string): void {
   } else {
     applyStreamFailure(_ctx.messages, id, errorText);
   }
-  if (streamUsedQuick) {
-    const failedTurn = _ctx.messages.find((message) => message.id === id);
-    if (failedTurn) failedTurn.managedQuickMode = true;
+  const failedTurn = _ctx.messages.find((message) => message.id === id);
+  if (failedTurn) {
+    if (streamUsedQuick) failedTurn.managedQuickMode = true;
+    // A failed row pushed with no runtime would flip the whole conversation to
+    // cloud-ineligible (isCloudPersistenceEligible requires every message to be
+    // managed-cloud); this turn is managed-cloud, so mark it as such.
+    if (!failedTurn.runtime) failedTurn.runtime = 'managed-cloud';
+    if (assistantCloudId && !failedTurn.cloudMessageId) {
+      failedTurn.cloudMessageId = assistantCloudId;
+    }
   }
   trimLiveMessages();
   _ctx.isStreaming = false;
@@ -10277,7 +10314,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       existing.streaming = false;
       const cloudRun = cloudRunsByStreamId.get(chunk.id);
       if (cloudRun) existing.cloudAgentRun = { ...cloudRun };
+      const assistantCloudId = assistantCloudIdByStreamId.get(chunk.id);
+      if (assistantCloudId && !existing.cloudMessageId) existing.cloudMessageId = assistantCloudId;
     }
+    assistantCloudIdByStreamId.delete(chunk.id);
     cloudRunsByStreamId.delete(chunk.id);
     removeThinking();
     _ctx.isStreaming = false;

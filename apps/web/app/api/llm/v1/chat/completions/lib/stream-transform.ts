@@ -678,42 +678,29 @@ export async function buildAdapterStreamResponse(
 
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
-      for await (const chunk of chunks) {
-        ingestUsageChunk(usage, chunk);
-        try {
-          collectGeneratedFileRefs(chunk, generatedFileRefs);
-        } catch {
-          /* scanning is best-effort; never break the stream */
-        }
-        const wireEvents = assembler.sseChunks(chunk);
-        if (wireEvents.length === 0) continue;
+      try {
+        for await (const chunk of chunks) {
+          ingestUsageChunk(usage, chunk);
+          try {
+            collectGeneratedFileRefs(chunk, generatedFileRefs);
+          } catch {
+            /* scanning is best-effort; never break the stream */
+          }
+          const wireEvents = assembler.sseChunks(chunk);
+          if (wireEvents.length === 0) continue;
 
-        const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
-        controller.enqueue(encoder.encode(lines + '\n\n'));
+          const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
+          controller.enqueue(encoder.encode(lines + '\n\n'));
 
-        if (firstTokenTimestampMs === null) {
-          for (const event of wireEvents) {
-            const deltaContent = (event as { choices?: Array<{ delta?: { content?: unknown } }> })
-              .choices?.[0]?.delta?.content;
-            if (typeof deltaContent === 'string' && deltaContent.length > 0) {
-              firstTokenTimestampMs = Date.now() - streamStartedAt;
-              logger.info(
-                {
-                  event: 'llm_ttft_observed',
-                  requestId,
-                  userId,
-                  provider: providerUsed,
-                  model: modelUsed,
-                  ttftMs: firstTokenTimestampMs,
-                  sloTargetMs: TTFT_SLO_TARGET_MS,
-                  sloBreachMs: TTFT_SLO_BREACH_MS,
-                },
-                'First token observed',
-              );
-              if (firstTokenTimestampMs > TTFT_SLO_BREACH_MS) {
-                logger.warn(
+          if (firstTokenTimestampMs === null) {
+            for (const event of wireEvents) {
+              const deltaContent = (event as { choices?: Array<{ delta?: { content?: unknown } }> })
+                .choices?.[0]?.delta?.content;
+              if (typeof deltaContent === 'string' && deltaContent.length > 0) {
+                firstTokenTimestampMs = Date.now() - streamStartedAt;
+                logger.info(
                   {
-                    event: 'llm_ttft_slo_breach',
+                    event: 'llm_ttft_observed',
                     requestId,
                     userId,
                     provider: providerUsed,
@@ -722,13 +709,65 @@ export async function buildAdapterStreamResponse(
                     sloTargetMs: TTFT_SLO_TARGET_MS,
                     sloBreachMs: TTFT_SLO_BREACH_MS,
                   },
-                  'TTFT exceeded breach threshold',
+                  'First token observed',
                 );
+                if (firstTokenTimestampMs > TTFT_SLO_BREACH_MS) {
+                  logger.warn(
+                    {
+                      event: 'llm_ttft_slo_breach',
+                      requestId,
+                      userId,
+                      provider: providerUsed,
+                      model: modelUsed,
+                      ttftMs: firstTokenTimestampMs,
+                      sloTargetMs: TTFT_SLO_TARGET_MS,
+                      sloBreachMs: TTFT_SLO_BREACH_MS,
+                    },
+                    'TTFT exceeded breach threshold',
+                  );
+                }
+                break;
               }
-              break;
             }
           }
         }
+      } catch (streamError) {
+        logger.error(
+          {
+            event: 'llm_stream_threw_mid_stream',
+            error: streamError,
+            requestId,
+            userId,
+            provider: providerUsed,
+            model: modelUsed,
+          },
+          'Provider stream threw before completion; settling as failed and persisting a marker',
+        );
+        try {
+          await settleStreamBilling({
+            processed,
+            userId,
+            provider: providerUsed,
+            model: modelUsed,
+            usage: {
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              reasoningOutputTokens: usage.reasoningOutputTokens,
+              cacheReadInputTokens: usage.cacheReadInputTokens,
+              cacheCreationInputTokens: usage.cacheCreationInputTokens,
+              cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+            },
+            outcome: 'failed',
+          });
+        } catch (reconciliationError) {
+          logger.error(
+            { error: reconciliationError, userId, requestId, providerUsed, modelUsed },
+            'CRITICAL: Credit reconciliation failed after stream threw - may require manual adjustment',
+          );
+        }
+        await persistAssistantTurnSnapshot(true);
+        controller.error(streamError);
+        return;
       }
 
       if (generatedFileRefs.size > 0) {
@@ -843,6 +882,8 @@ export async function buildAdapterStreamResponse(
       if (assembler.lastError === null) {
         await persistAssistantTurnSnapshot(false);
         await onSuccessfulTurn?.();
+      } else {
+        await persistAssistantTurnSnapshot(true);
       }
 
       controller.enqueue(encoder.encode('data: [DONE]\n\n'));

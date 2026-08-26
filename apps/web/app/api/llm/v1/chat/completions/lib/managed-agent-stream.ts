@@ -247,7 +247,7 @@ export function buildManagedAgentStream(
                 );
               });
             }
-            await persistTurn(false);
+            await persistTurn(reportedFailure);
             await reportTerminal(reportedFailure ? 'failed' : 'completed');
             controller.enqueue(encoder.encode(TERMINAL_EVENT));
             controller.close();
@@ -307,6 +307,12 @@ export function buildManagedAgentStream(
             'Managed agent terminal owner could not record failure',
           );
         });
+        await persistTurn(true).catch((persistError) => {
+          logger.error(
+            { persistError, requestId: input.processed.requestId },
+            'Managed agent failure marker could not be persisted',
+          );
+        });
         controller.error(error);
       }
     },
@@ -317,12 +323,13 @@ export function buildManagedAgentStream(
         try {
           await settle(input.cancellationReason, 'cancelled');
         } finally {
+          const awaitingInput = input.preserveAwaitingInputOnCancel?.() ?? false;
           if (input.runJournal) {
-            await transitionJournal(
-              input.preserveAwaitingInputOnCancel?.() ? 'awaiting_input' : 'cancelled',
-            );
+            await transitionJournal(awaitingInput ? 'awaiting_input' : 'cancelled');
           }
-          await persistTurn(true);
+          if (!awaitingInput) {
+            await persistTurn(true);
+          }
           await reportTerminal('cancelled');
         }
       }

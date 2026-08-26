@@ -68,6 +68,7 @@ export interface HistoryMessage {
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   runtime?: ConversationRuntime;
+  error?: boolean;
   cloudMessageId?: string;
   cloudSyncedAt?: number;
   cloudSyncedChars?: number;
@@ -347,6 +348,9 @@ function normalizeHistoryMessage(
   }
   if (message['runtime'] === 'managed-cloud' || message['runtime'] === 'local') {
     normalized.runtime = message['runtime'];
+  }
+  if (message['error'] === true) {
+    normalized.error = true;
   }
   if (
     typeof message['cloudMessageId'] === 'string' &&

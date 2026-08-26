@@ -51,6 +51,22 @@ function isRefusalFinish(message: ChatMessage | undefined | null): boolean {
   return reason === 'refusal' || reason === 'content_filter';
 }
 
+/**
+ * A turn that never produced a usable assistant reply: either the user's
+ * message is trailing with no assistant row after it (a managed-cloud turn
+ * dropped before any row was persisted), or the assistant row exists but is
+ * marked truncated/error by the server marker or a web-composer error row.
+ * Distinct from streamError (additive mid-stream failure with partial content)
+ * and refusal — it gets an explicit "didn't complete" affordance with Retry.
+ */
+function isIncompleteTurn(message: ChatMessage | undefined | null): boolean {
+  if (!message) return false;
+  if (message.role === 'user') return true;
+  if (message.role !== 'assistant') return false;
+  if (message.error) return true;
+  return (message.metadata as { truncated?: unknown } | undefined)?.truncated === true;
+}
+
 export interface ChatMessageListProps {
   messages: ChatMessage[];
   currentTier?: UserTier;
@@ -828,6 +844,25 @@ const ChatMessageListComponent = ({
     isRefusalFinish(lastMessage),
   );
 
+  /**
+   * A turn that dropped without a usable reply (see isIncompleteTurn): the
+   * managed-cloud path could persist only a truncated marker, or nothing after
+   * the user row, and a web-composer error row lands here too. Shown once
+   * streaming has stopped and only when none of the more specific notices
+   * (Continue, stream-error, refusal) already own the last message, so the user
+   * always gets an explicit "didn't complete" state plus Retry instead of a
+   * silently missing answer.
+   */
+  const showIncompleteTurnNotice = Boolean(
+    onRegenerate &&
+    !isLoading &&
+    !lastMessage?.isStreaming &&
+    !showContinue &&
+    !showStreamErrorNotice &&
+    !showRefusalNotice &&
+    isIncompleteTurn(lastMessage),
+  );
+
   const showFollowUps =
     onSendMessage &&
     !isLoading &&
@@ -1168,6 +1203,24 @@ const ChatMessageListComponent = ({
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {showIncompleteTurnNotice && lastMessage && (
+        <div className="px-4 pt-1 md:px-12 lg:px-20">
+          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-muted-foreground">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+            <span>This turn didn&apos;t complete. No response was received.</span>
+            <button
+              type="button"
+              onClick={() => onRegenerate?.(lastMessage.id)}
+              className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+              aria-label="Retry this turn"
+            >
+              <RefreshCw className="h-3 w-3" aria-hidden="true" />
+              Retry
+            </button>
           </div>
         </div>
       )}

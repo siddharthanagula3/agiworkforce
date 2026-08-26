@@ -54,6 +54,7 @@ export interface ExtensionCloudMessageMetadataInput {
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
+  error?: boolean;
 }
 
 export function buildExtensionCloudMessageMetadata(
@@ -67,6 +68,7 @@ export function buildExtensionCloudMessageMetadata(
     ...(input.cloudAgentRunId ? { cloudAgentRunId: input.cloudAgentRunId.slice(0, 200) } : {}),
     ...(input.model ? { model: input.model.slice(0, 200) } : {}),
     ...(input.provider ? { provider: input.provider.slice(0, 100) } : {}),
+    ...(input.error ? { error: true } : {}),
   };
 
   const appendIfBounded = (

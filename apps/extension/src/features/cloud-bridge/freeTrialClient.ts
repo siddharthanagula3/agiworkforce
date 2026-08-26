@@ -449,6 +449,8 @@ export interface ManagedChatStreamOptions {
   workMode?: 'chat' | 'agiwork';
   approvalResume?: ToolApprovalResumeRequest;
   idempotencyKey?: string;
+  conversationId?: string;
+  assistantMessageId?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -797,6 +799,10 @@ export async function* streamFreeChat(
             ...(options.workMode ? { work_mode: options.workMode } : {}),
             ...(options.extendedThinking ? { thinking_mode: true } : {}),
             ...(options.effort ? { effort: options.effort } : {}),
+            ...(options.conversationId ? { conversation_id: options.conversationId } : {}),
+            ...(options.assistantMessageId
+              ? { assistant_message_id: options.assistantMessageId }
+              : {}),
           },
         ),
         signal: controller.signal,

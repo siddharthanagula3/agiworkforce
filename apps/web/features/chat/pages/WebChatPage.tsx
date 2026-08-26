@@ -1598,8 +1598,7 @@ export default function WebChatPage() {
           await doSend();
         }
       } catch (error) {
-        const message =
-          toUserMessage(error, 'Could not attach the selected files.');
+        const message = toUserMessage(error, 'Could not attach the selected files.');
         setChatError(message, targetConversationId ?? undefined);
         toast.error(message);
       } finally {
@@ -3010,9 +3009,7 @@ export default function WebChatPage() {
         meta: pendingByokHandoff.meta,
       });
     } catch (error) {
-      setHandoffError(
-        toUserMessage(error, 'Could not create BYOK fork conversation.'),
-      );
+      setHandoffError(toUserMessage(error, 'Could not create BYOK fork conversation.'));
     } finally {
       setIsConfirmingHandoff(false);
       // The dispatched sendContent (conversationId already set) claimed its own
@@ -3405,10 +3402,7 @@ export default function WebChatPage() {
         removeImageTranscriptRecoveriesForMessages(mutationIds);
         return true;
       } catch (error) {
-        setChatError(
-          toUserMessage(error, 'Failed to delete message'),
-          conversationId,
-        );
+        setChatError(toUserMessage(error, 'Failed to delete message'), conversationId);
         return false;
       } finally {
         releaseImageTranscriptMutation(mutationIds);
@@ -3738,14 +3732,26 @@ export default function WebChatPage() {
   const handleRegenerateMessage = useCallback(
     async (id: string) => {
       if (!displayedConversationId || isStreaming) return;
-      const assistantMsg = displayedMessages.find((m) => m.id === id);
+      const targetMsg = displayedMessages.find((m) => m.id === id);
+      // A dropped turn leaves the user message trailing with no assistant reply
+      // to regenerate. Retry resends that user turn: roll back from it inclusive
+      // so the resend replaces it rather than duplicating it.
+      const userRetryIndex =
+        targetMsg?.role === 'user' ? displayedMessages.findIndex((m) => m.id === id) : -1;
       // Roll back from the user turn being regenerated (inclusive) so re-sending
       // the user content replaces it instead of creating a duplicate user
       // message. planRegenerateRollback resolves the preceding user message.
-      const plan = planRegenerateRollback(displayedMessages, id);
+      const plan =
+        userRetryIndex >= 0
+          ? {
+              userIndex: userRetryIndex,
+              rollbackIds: displayedMessages.slice(userRetryIndex).map((m) => m.id),
+            }
+          : planRegenerateRollback(displayedMessages, id);
       if (!plan) return;
       const userMsg = displayedMessages[plan.userIndex];
       if (!userMsg) return;
+      const assistantMsg = userRetryIndex >= 0 ? undefined : targetMsg;
       if (isTrialExhausted) {
         handleOpenUpgradeDialog();
         return;
@@ -4061,10 +4067,7 @@ export default function WebChatPage() {
           conversationId,
         );
       } catch (error) {
-        setChatError(
-          toUserMessage(error, 'Failed to update reaction'),
-          conversationId,
-        );
+        setChatError(toUserMessage(error, 'Failed to update reaction'), conversationId);
       }
     },
     [displayedConversationId, getToken, setChatError, updateMessage],
@@ -4104,10 +4107,7 @@ export default function WebChatPage() {
           conversationId,
         );
       } catch (error) {
-        setChatError(
-          toUserMessage(error, 'Failed to pin message'),
-          conversationId,
-        );
+        setChatError(toUserMessage(error, 'Failed to pin message'), conversationId);
       }
     },
     [displayedConversationId, getToken, setChatError, updateMessage],
