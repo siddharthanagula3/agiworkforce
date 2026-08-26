@@ -240,6 +240,24 @@ describe('sanitizeConnectorReturnPath', () => {
     expect(sanitizeConnectorReturnPath('/')).toBe('/connectors');
   });
 
+  it('rejects a path the URL parser would collapse into another origin', () => {
+    expect(sanitizeConnectorReturnPath('/\t/evil.test')).toBe('/connectors');
+    expect(sanitizeConnectorReturnPath('/\n/evil.test')).toBe('/connectors');
+    expect(sanitizeConnectorReturnPath('/\r/evil.test')).toBe('/connectors');
+    expect(sanitizeConnectorReturnPath('/\t\\evil.test')).toBe('/connectors');
+    expect(sanitizeConnectorReturnPath('/\u0000/evil.test')).toBe('/connectors');
+    expect(sanitizeConnectorReturnPath('/..//evil.test')).toBe('/connectors');
+  });
+
+  it('keeps a legitimate path with a query string and a fragment', () => {
+    expect(sanitizeConnectorReturnPath('/settings/connectors?tab=x')).toBe(
+      '/settings/connectors?tab=x',
+    );
+    expect(sanitizeConnectorReturnPath('/settings/connectors?tab=x#panel')).toBe(
+      '/settings/connectors?tab=x#panel',
+    );
+  });
+
   it('builds a start path that carries only the connector and the return', () => {
     expect(buildConnectorOAuthStartPath('linear', '//evil.test')).toBe(
       '/api/connectors/oauth/start?connectorId=linear&returnPath=%2Fconnectors',
