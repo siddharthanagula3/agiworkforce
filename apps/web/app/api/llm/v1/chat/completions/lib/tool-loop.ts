@@ -288,6 +288,8 @@ export interface ToolLoopOptions {
   maxDurationMs?: number;
   now?: () => number;
   approvalMode?: ApprovalMode;
+  /** No human can answer an approval prompt on this run (e.g. a scheduled cron). */
+  unattended?: boolean;
   mcpTools?: WebMcpToolDef[];
   resume?: ResumeApproval;
   eventSessionId?: string;
@@ -1160,10 +1162,7 @@ async function runMcpTool(
     // the request body — a client-side check alone would be a preference the
     // caller could decline to honour. The model is told plainly so it explains
     // rather than retrying the same call.
-    if (
-      executionContext?.userId &&
-      !(await isCloudCodeExecutionEnabled(executionContext.userId))
-    ) {
+    if (executionContext?.userId && !(await isCloudCodeExecutionEnabled(executionContext.userId))) {
       return {
         content:
           'Cloud code execution is turned off for this account. Tell the user it is off and that they can turn it back on in Settings › Capabilities; do not try another execution tool.',
@@ -1282,6 +1281,7 @@ export async function* runToolLoop(
   const now = options.now ?? Date.now;
   const startedAt = now();
   const approvalMode = options.approvalMode ?? 'manual';
+  const unattended = options.unattended === true;
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
@@ -1370,6 +1370,13 @@ export async function* runToolLoop(
       | 'lethal_trifecta';
   };
 
+  // An egress escalation can never be silently allowed. Interactively it asks a
+  // human; on an unattended run (no one to ask) it must deny rather than fall
+  // through to auto-allow, or injected instructions could reach an egress tool.
+  function escalatedGate(reason: ToolCallGate['reason']): ToolCallGate {
+    return { verdict: unattended ? 'deny' : 'ask', reason };
+  }
+
   function resolveToolCallGate(toolCall: PendingToolCall): ToolCallGate {
     const saved = connectorPermissions.levelFor(toolCall.qualifiedName);
     if (saved === 'deny') return { verdict: 'deny', reason: 'blocked_by_user_permission' };
@@ -1381,7 +1388,7 @@ export async function* runToolLoop(
 
     if (saved === 'allow') {
       return trifecta
-        ? { verdict: 'ask', reason: 'lethal_trifecta' }
+        ? escalatedGate('lethal_trifecta')
         : { verdict: 'allow', reason: 'always_allow' };
     }
     if (saved === 'ask') return { verdict: 'ask', reason: 'user_requires_approval' };
@@ -1391,7 +1398,7 @@ export async function* runToolLoop(
         : { verdict: 'ask', reason: 'manual_approval_mode' };
     }
     return trifecta
-      ? { verdict: 'ask', reason: 'lethal_trifecta' }
+      ? escalatedGate('lethal_trifecta')
       : { verdict: 'allow', reason: 'auto_approval_mode' };
   }
 
@@ -1399,6 +1406,14 @@ export async function* runToolLoop(
     return (
       `Tool "${qualifiedName}" is blocked by this account's connector permissions and was not ` +
       'executed. Do not retry it; continue without it or tell the user it is blocked.'
+    );
+  }
+
+  function refusedToolResultMessage(qualifiedName: string): string {
+    return (
+      `Tool "${qualifiedName}" was refused: untrusted external content is in this conversation and ` +
+      'this run is unattended, so it cannot ask a human to approve an action that could send data ' +
+      'off the system. Do not retry it; report this to the user instead of continuing.'
     );
   }
 
@@ -2290,12 +2305,17 @@ export async function* runToolLoop(
         .filter((entry) => entry.gate.verdict === 'allow')
         .map((entry) => entry.tc);
 
-      for (const { tc } of blockedCalls) {
+      for (const { tc, gate } of blockedCalls) {
+        const escalationDenied = gate.reason === 'lethal_trifecta';
         logger.warn(
-          { tool: tc.qualifiedName, requestId: processed.requestId },
-          '[tool-loop] tool call blocked by the user permission store',
+          { tool: tc.qualifiedName, requestId: processed.requestId, reason: gate.reason },
+          escalationDenied
+            ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
+            : '[tool-loop] tool call blocked by the user permission store',
         );
-        const content = blockedToolResultMessage(tc.qualifiedName);
+        const content = escalationDenied
+          ? refusedToolResultMessage(tc.qualifiedName)
+          : blockedToolResultMessage(tc.qualifiedName);
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);
         yield encoder.encode(
           eventStream.emit({

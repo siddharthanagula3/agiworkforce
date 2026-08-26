@@ -47,6 +47,7 @@ import {
   sandboxComputeIsPriceable,
 } from './compute-metering';
 import {
+  CHAT_SANDBOX_NETWORK_ACCESS,
   getE2BSession,
   saveE2BSession,
   deleteE2BSession,
@@ -173,9 +174,12 @@ function createNetworkOptions(scope: E2BSessionScope | undefined): {
   allowInternetAccess?: boolean;
   network?: { allowOut?: string[]; denyOut?: string[] };
 } {
-  if (scope?.resource?.kind !== 'code_session') return {};
-  if (scope.networkAccess === 'full') return { allowInternetAccess: true };
-  if (scope.networkAccess === 'trusted') {
+  // A scope-less sandbox has no declared policy, so it inherits the chat-sandbox
+  // default (restricted) rather than the SDK's internet-open default. A scoped
+  // sandbox that declares no networkAccess falls through to deny-all (fail-closed).
+  const networkAccess = scope ? scope.networkAccess : CHAT_SANDBOX_NETWORK_ACCESS;
+  if (networkAccess === 'full') return { allowInternetAccess: true };
+  if (networkAccess === 'trusted') {
     return {
       network: {
         allowOut: [...TRUSTED_CODE_HOSTS],
@@ -371,7 +375,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         metadata,
         ...createNetworkOptions(scope),
       }
-    : { timeoutMs: sandboxTimeoutMs, metadata };
+    : { timeoutMs: sandboxTimeoutMs, metadata, ...createNetworkOptions(scope) };
 
   async function createFresh(): Promise<SandboxInstance | null> {
     const create = async (): Promise<SandboxInstance | null> => {

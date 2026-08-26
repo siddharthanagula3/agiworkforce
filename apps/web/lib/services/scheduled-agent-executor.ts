@@ -274,6 +274,7 @@ async function runScheduledToolLoop(input: {
   const loop = runToolLoop(input.processed, {
     mcpTools: input.plan.mcpTools,
     approvalMode: 'auto',
+    unattended: true,
     userId: input.userId,
     connectorPermissions: input.plan.connectorPermissions,
     ...(input.plan.connectorExecutor ? { connectorExecutor: input.plan.connectorExecutor } : {}),
