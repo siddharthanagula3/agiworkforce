@@ -27,7 +27,28 @@ updates:
         update-types:
           - 'major'
 
-  # ─── Cargo (Rust) ────────────────────────────────────────────────────────────
+  # ─── Cargo (Rust) — root workspace (apps/cli, crates/*) ─────────────────────
+  - package-ecosystem: 'cargo'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 0
+    labels:
+      - 'dependencies'
+      - 'rust'
+    groups:
+      rust-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      rust-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+
+  # ─── Cargo (Rust) — apps/desktop/src-tauri ──────────────────────────────────
   - package-ecosystem: 'cargo'
     directory: '/apps/desktop/src-tauri'
     schedule:
@@ -154,6 +175,31 @@ updates:
       - dependency-name: 'react'
         update-types: ['version-update:semver-major']
       - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm — apps/mobile ────────────────────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/apps/mobile'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 0
+    labels:
+      - 'dependencies'
+      - 'javascript'
+      - 'mobile'
+    groups:
+      mobile-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+      mobile-major:
+        applies-to: version-updates
+        update-types:
+          - 'major'
+    ignore:
+      - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
   # ─── npm / pnpm — apps/extension ────────────────────────────────────────────
