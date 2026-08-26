@@ -37,6 +37,11 @@ export interface E2BSessionScope {
 
 export const MANAGED_CLOUD_E2B_TENANT_ID = 'managed-cloud';
 
+// Single source of truth for the scope-less chat sandbox's egress policy. It runs
+// model-directed code that can act on untrusted content, so it gets the trusted
+// package/source allowlist plus deny-all rather than the SDK's internet-open default.
+export const CHAT_SANDBOX_NETWORK_ACCESS: CloudCodeNetworkAccess = 'trusted';
+
 export function managedCloudE2BSessionScope(
   userId: string,
   conversationId: string,
