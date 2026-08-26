@@ -4808,6 +4808,8 @@ async function handleChatMessage(
         extendedThinking: message.extendedThinking,
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,
+        conversationId: message.conversationId,
+        assistantMessageId: message.assistantMessageId,
         idempotencyKey: delivery?.requestId,
         completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,

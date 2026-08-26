@@ -24,6 +24,12 @@ export interface SidePanelChatMessage {
   interactiveCards?: InteractiveCard[];
   runtime?: 'managed-cloud' | 'local';
   errorText?: string;
+  /**
+   * Client-generated UUID reused as the server's `assistant_message_id` and the
+   * cloud sync's message id, so a server-persisted turn and the extension's own
+   * terminal sync converge on ONE row instead of duplicating.
+   */
+  cloudMessageId?: string;
   timestamp: number;
 }
 
@@ -41,6 +47,8 @@ export interface StoredSidePanelChatMessage {
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
   runtime?: 'managed-cloud' | 'local';
+  error?: boolean;
+  cloudMessageId?: string;
 }
 
 const MAX_PERSISTED_ACTIVITY_EVENTS = 1_000;
@@ -117,6 +125,8 @@ export function hydrateStoredChatMessage(
       ? { interactiveCards: message.interactiveCards.map((card) => ({ ...card })) }
       : {}),
     ...(message.runtime ? { runtime: message.runtime } : {}),
+    ...(message.error ? { error: true } : {}),
+    ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
   };
 }
 

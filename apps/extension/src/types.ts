@@ -503,6 +503,8 @@ export interface ChatMessageMessage extends BaseMessage {
   effort?: Effort;
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
+  conversationId?: string;
+  assistantMessageId?: string;
 }
 
 export interface CancelStreamMessage extends BaseMessage {

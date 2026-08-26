@@ -34,6 +34,7 @@ const MAX_HISTORY_MESSAGES = 100;
 const MAX_IDENTIFIER_CHARS = 200;
 const STREAM_ID_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
+const MANAGED_TURN_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ROUTING_TASKS = new Set<RoutingTaskType>([
   'coding',
   'reasoning',
@@ -82,6 +83,8 @@ export interface ChromeManagedChatRequest {
   previousTaskType?: RoutingTaskType | null;
   idempotencyKey?: string;
   completionMode?: 'interactive' | 'unattended';
+  conversationId?: string;
+  assistantMessageId?: string;
   signal?: AbortSignal;
 }
 
@@ -223,6 +226,18 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
     request.completionMode !== 'unattended'
   ) {
     return 'Invalid Managed Cloud completion mode.';
+  }
+  if (
+    request.conversationId !== undefined &&
+    !MANAGED_TURN_UUID_PATTERN.test(request.conversationId)
+  ) {
+    return 'Invalid Managed Cloud conversation identifier.';
+  }
+  if (
+    request.assistantMessageId !== undefined &&
+    !MANAGED_TURN_UUID_PATTERN.test(request.assistantMessageId)
+  ) {
+    return 'Invalid Managed Cloud assistant message identifier.';
   }
   if (
     request.currentModelKey !== undefined &&
@@ -468,6 +483,8 @@ export async function executeChromeManagedChat(
     ...(effort ? { effort } : {}),
     extendedThinking: request.extendedThinking,
     workMode: 'agiwork',
+    ...(request.conversationId ? { conversationId: request.conversationId } : {}),
+    ...(request.assistantMessageId ? { assistantMessageId: request.assistantMessageId } : {}),
     signal: request.signal,
   };
   let latestTaskState: AgentTaskState | undefined;
