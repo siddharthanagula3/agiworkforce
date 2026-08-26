@@ -422,7 +422,7 @@
       "trustBoundary": "provider egress adapters",
       "status": "active-grouping-directory",
       "action": "keep",
-      "evidence": ["packages/ai/providers/AGENTS.md", "packages/ai/providers/*/package.json"]
+      "evidence": ["packages/ai/providers/*/package.json"]
     },
     {
       "path": "packages/ai/providers/factory",

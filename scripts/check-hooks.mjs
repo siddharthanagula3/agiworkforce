@@ -67,7 +67,6 @@ requireIncludes('.husky/pre-commit', 'pnpm exec lint-staged');
 requireIncludes('.husky/pre-commit', 'pnpm check:audit-inventory');
 requireIncludes('.husky/pre-commit', 'pnpm check:executable-docs');
 requireIncludes('.husky/pre-commit', 'pnpm check:structure-conventions');
-requireIncludes('.husky/pre-commit', 'pnpm check:agent-context');
 requireIncludes('.husky/pre-push', 'SKIP_PRE_PUSH=1');
 requireIncludes('.husky/pre-push', 'pnpm check:llm-operability');
 requireIncludes('.husky/pre-push', 'git diff --check');

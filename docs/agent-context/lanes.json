@@ -21,8 +21,6 @@
       ".gitignore",
       ".gitattributes",
       ".github/**",
-      "AGENTS.md",
-      "CLAUDE.md",
       "PLAN.md",
       "CHANGELOG.md",
       "docs/agent-context/**",
@@ -331,8 +329,6 @@
       "name": "Repo docs, agent context, and guardrails",
       "ownerRole": "Platform lead",
       "ownedWritePaths": [
-        "AGENTS.md",
-        "CLAUDE.md",
         "PLAN.md",
         "CHANGELOG.md",
         "docs/agent-context/**",

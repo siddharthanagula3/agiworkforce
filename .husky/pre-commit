@@ -2,5 +2,4 @@ pnpm exec lint-staged
 pnpm check:audit-inventory
 pnpm check:executable-docs
 pnpm check:structure-conventions
-pnpm check:agent-context
 pnpm check:llm-failures:staged

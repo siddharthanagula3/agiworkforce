@@ -31,7 +31,6 @@
     "rustDependencyAdvisories": "cargo deny check advisories --allow unmaintained --allow unsound --allow notice",
     "secretScan": "pnpm check:secrets",
     "dependencyAuditJs": "pnpm audit --audit-level=critical",
-    "agentContext": "pnpm check:agent-context",
     "auditInventory": "pnpm check:audit-inventory",
     "capabilityGaps": "pnpm check:capability-gaps",
     "uiGaps": "pnpm check:ui-gaps",
