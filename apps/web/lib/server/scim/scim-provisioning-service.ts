@@ -833,6 +833,10 @@ export async function patchScimUser(
     return { row: patched, outcome: await reconcileMembership(tx, ctx, patched) };
   });
 
+  const revocationWarnings = outcome.membershipRevoked
+    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, row.linked_user_id)
+    : [];
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: row.active ? 'user.updated' : 'user.deactivated',
@@ -841,6 +845,8 @@ export async function patchScimUser(
       scimUserId: row.id,
       membershipGranted: outcome.membershipGranted,
       membershipRevoked: outcome.membershipRevoked,
+      credentialsRevoked: outcome.membershipRevoked && revocationWarnings.length === 0,
+      revocationWarnings,
     },
   });
 
