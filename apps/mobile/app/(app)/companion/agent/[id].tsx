@@ -113,7 +113,7 @@ export default function AgentDetailScreen() {
     requestAgentRefresh();
   }, []);
 
-  if (!FEATURES.agents) return <FeatureUnavailable feature="Agents" />;
+  if (!FEATURES.companion) return <FeatureUnavailable feature="Remote" />;
 
   if (!agent) {
     return (
