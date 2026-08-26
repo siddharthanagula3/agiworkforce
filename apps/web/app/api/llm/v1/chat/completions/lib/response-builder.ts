@@ -11,6 +11,7 @@ import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { extractJsonObject, wantsJsonObject } from './json-object-mode';
 import { compactionUsageFields } from './context-window';
+import { canPersistAssistantTurn, persistAssistantTurn } from './assistant-turn-persistence';
 import type { ProcessedRequest } from './request-processor';
 import {
   ManagedUsageRequestError,
@@ -198,6 +199,21 @@ export async function buildNonStreamResponse(
       );
     }
     llmResponse.content = extraction.content ?? llmResponse.content;
+  }
+
+  if (canPersistAssistantTurn(processed)) {
+    await persistAssistantTurn({
+      processed,
+      userId,
+      snapshot: {
+        content: llmResponse.content ?? '',
+        model: llmResponse.model,
+        provider,
+        inputTokens: llmResponse.promptTokens,
+        outputTokens: llmResponse.completionTokens,
+        truncated: false,
+      },
+    });
   }
 
   const responseHeaders: Record<string, string> = {
