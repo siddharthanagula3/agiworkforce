@@ -1641,6 +1641,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                     self.session.permission_mode,
                     self.session.allowed_tools.clone(),
                     self.session.disallowed_tools.clone(),
+                    self.session.subagent_depth,
                 ));
             }
 
