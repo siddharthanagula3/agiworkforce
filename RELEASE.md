@@ -9,7 +9,7 @@ The one consolidated task list for taking every supported app to public release.
 It supersedes the scattered control docs; every item here is grounded in code,
 git, or a live run. Supported surfaces: **web, mobile, desktop, CLI, VS Code
 extension, browser extension, backend services + shared packages.**
-`apps/slack-app` and `apps/github-app` are future surfaces, OUT OF SCOPE.
+The Slack and GitHub apps are future surfaces, OUT OF SCOPE.
 
 Guiding lens (founder): ship functional, stable, polished, secure. Fix what is
 broken before building what is merely missing; defer/document speculative work.
@@ -94,7 +94,7 @@ wire it in, or cut it for release. None is currently reachable by users.
 4. **Set `NEXT_PUBLIC_SANDBOX_ORIGIN` in prod (REL-019).**
 5. **App Store / Play Console IAP product IDs (REL-016).**
 
-**Security decisions** 6. **F2 (SCIM).** Query prod for Enterprise orgs with an active directory-sync connection and NO verified domain (F2 returns 400 on their SCIM without grace). Ship F2 with a cleanup migration for links poisoned before it lands (a stale link still reaches platform-wide credential revocation). 7. **F4 (quota migration).** Run `0146` against a throwaway Postgres (`db/neon/verify/README.md`) — the SQL was never executed; a bad column ref would 503 the billing path. 8. **F7 (jurisdiction routing).** Approves changing paid users' model routing (Pro balanced → gemini-3.5-flash-lite; premium → gpt-5.6-sol). Needs `@agiworkforce/compliance` declared in `packages/ai/routing/package.json`. W2-02 stays partly open (explicit provider selection + the Rust desktop/CLI resolver are still ungated). 9. **R2 upload bucket is public.** Uploads are world-readable before the scanner runs. Decide: private bucket + proxied reads (egress cost), or scan-at-presign. 10. **Delete stale secret backups** `.env.local.bak`, `.env.local.bak-20260814-021900` (deletion was permission-blocked for me).
+**Security decisions** 6. **F2 (SCIM).** Query prod for Enterprise orgs with an active directory-sync connection and NO verified domain (F2 returns 400 on their SCIM without grace). Ship F2 with a cleanup migration for links poisoned before it lands (a stale link still reaches platform-wide credential revocation). 7. **F4 (quota migration).** Run `0146` against a throwaway Postgres (`db/neon/verify/README.md`) — the SQL was never executed; a bad column ref would 503 the billing path. 8. **F7 (jurisdiction routing).** Approves changing paid users' model routing (Pro balanced-reasoning drops to a cheaper catalog model; premium-reasoning rises to a higher-tier one — exact catalog IDs are in the F7 patch, not repeated here). Needs `@agiworkforce/compliance` declared in `packages/ai/routing/package.json`. W2-02 stays partly open (explicit provider selection + the Rust desktop/CLI resolver are still ungated). 9. **R2 upload bucket is public.** Uploads are world-readable before the scanner runs. Decide: private bucket + proxied reads (egress cost), or scan-at-presign. 10. **Delete stale secret backups** `.env.local.bak`, `.env.local.bak-20260814-021900` (deletion was permission-blocked for me).
 
 ---
 

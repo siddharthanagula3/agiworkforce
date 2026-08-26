@@ -1,6 +1,4 @@
-//! One versioned agent event envelope (W5 discipline-wave item 4;
-//! `docs/plans/restructure-execution-program-2026-07-15.md` §W5,
-//! `docs/plans/target-structure-finalization-2026-07-15.md` §4.1 item 2).
+//! One versioned agent event envelope.
 //!
 //! Web SSE chat streaming, the local developer-session app-server's
 //! `turn/*` JSON-RPC notifications, and Desktop's Tauri stream events are

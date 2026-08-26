@@ -146,7 +146,7 @@ impl ConnectionGuard {
     /// occur, polluting the API. If you have a handle that *might* be returned
     /// (e.g., during cleanup), use [`try_get`] which already returns `Option`.
     ///
-    /// # Panic safety (DESK-SQLITE-PANIC mitigation per UNIFIED_LAUNCH_PLAN.md §1)
+    /// # Panic safety (DESK-SQLITE-PANIC mitigation)
     ///
     /// Workspace Cargo.toml sets `panic = "abort"`, so any reached panic kills
     /// the backend. The path below logs a structured error and aborts only if
@@ -171,7 +171,7 @@ impl ConnectionGuard {
                 // Invariant violated by unsafe code or future bug. Abort with structured log
                 // is preferred over silent UB. Callers who tolerate fallibility must use try_get().
                 panic!(
-                    "ConnectionGuard invariant violated at {} — see UNIFIED_LAUNCH_PLAN.md §1 DESK-SQLITE-PANIC",
+                    "ConnectionGuard invariant violated at {} — see DESK-SQLITE-PANIC",
                     std::panic::Location::caller()
                 );
             }
@@ -196,7 +196,7 @@ impl ConnectionGuard {
                     "ConnectionGuard::get_mut() invariant violated — see DESK-SQLITE-PANIC",
                 );
                 panic!(
-                    "ConnectionGuard invariant violated at {} — see UNIFIED_LAUNCH_PLAN.md §1 DESK-SQLITE-PANIC",
+                    "ConnectionGuard invariant violated at {} — see DESK-SQLITE-PANIC",
                     std::panic::Location::caller()
                 );
             }

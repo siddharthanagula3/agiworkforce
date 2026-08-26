@@ -145,7 +145,7 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
           retention_period: 30,
           max_concurrent_jobs: 10,
           default_ai_provider: 'openai',
-          // MODEL-IDS-HARDCODED fix per UNIFIED_LAUNCH_PLAN.md §1: read from models.json catalog
+          // Model IDs come from the models.json catalog, never hardcoded.
           default_ai_model: requireProviderDefaultModel('openai'),
           prefer_streaming: true,
           ai_temperature: 0.7,

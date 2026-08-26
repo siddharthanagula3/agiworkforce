@@ -25,8 +25,7 @@ import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
  *   LONG PRESS     → opens full voice conversation mode (onLongPress callback)
  *
  * All paths route through {@link VoiceService.startRecording} /
- * {@link VoiceService.stopRecording} — the in-file `Audio.Recording` stub
- * that previously bypassed the STT pipeline has been removed.
+ * {@link VoiceService.stopRecording}; nothing bypasses the STT pipeline.
  */
 
 interface VoiceInputButtonProps {

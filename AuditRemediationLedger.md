@@ -13,7 +13,7 @@ reach independently is worth more than one that appears once.
 | Source                                        | Scope                                                                           | Where it lives                                  |
 | --------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------- |
 | **This ledger** (5 artifacts: BL/SC/PP/CM/HC) | 535 verification items across 10 phases; the stop gate                          | this file                                       |
-| **Gap audit, 2026-08-08**                     | 21 GAP items, evidence-graded CONFIRMED / TRACKED / LIVE-PROOF-REQUIRED / STALE | `docs/current/gap-audit-2026-08-08.md`          |
+| **Gap audit, 2026-08-08**                     | 21 GAP items, evidence-graded CONFIRMED / TRACKED / LIVE-PROOF-REQUIRED / STALE | folded into this ledger                         |
 | **Wave 6 — conformance**                      | 592 canonical concepts scored; 117 findings, 2 critical                         | artifact `5d12b3a1-9e2c-4140-a9df-0ca34e171a7b` |
 
 The gap audit's grading is the most useful convention of the three and should be
@@ -1362,7 +1362,7 @@ reach independently is worth more than one that appears once.
 | Source                                        | Scope                                                                           | Where it lives                                  |
 | --------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------- |
 | **This ledger** (5 artifacts: BL/SC/PP/CM/HC) | 535 verification items across 10 phases; the stop gate                          | this file                                       |
-| **Gap audit, 2026-08-08**                     | 21 GAP items, evidence-graded CONFIRMED / TRACKED / LIVE-PROOF-REQUIRED / STALE | `docs/current/gap-audit-2026-08-08.md`          |
+| **Gap audit, 2026-08-08**                     | 21 GAP items, evidence-graded CONFIRMED / TRACKED / LIVE-PROOF-REQUIRED / STALE | folded into this ledger                         |
 | **Wave 6 — conformance**                      | 592 canonical concepts scored; 117 findings, 2 critical                         | artifact `5d12b3a1-9e2c-4140-a9df-0ca34e171a7b` |
 
 The gap audit's grading is the most useful convention of the three and should be

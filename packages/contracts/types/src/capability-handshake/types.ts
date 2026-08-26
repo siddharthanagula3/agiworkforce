@@ -11,9 +11,7 @@
  * capability). A same-named `capabilities/` directory next to
  * `capabilities.ts` would make `./capabilities` resolve ambiguously for
  * every future import; this module composes with that file instead of
- * colliding with it (`docs/plans/restructure-execution-program-2026-07-15.md`
- * W5 §item 3 / TODO.md's `{sessions,capabilities,agents}` shorthand is
- * informal — this is the concrete, collision-free path for the same intent).
+ * colliding with it.
  *
  * ## The single-vocabulary decision
  *
