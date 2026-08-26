@@ -263,6 +263,11 @@ pub mod constants {
     /// Maximum depth of task decomposition.
     pub const MAX_DECOMPOSITION_DEPTH: usize = 5;
 
+    /// Maximum number of subtasks a single decomposition may produce. Guards
+    /// against a pathological model response fanning out into an unbounded
+    /// subtask graph.
+    pub const MAX_DECOMPOSED_SUBTASKS: usize = 64;
+
     /// Time-to-live for decomposition cache entries (1 hour).
     pub const DECOMPOSITION_CACHE_TTL: Duration = Duration::from_secs(3600);
 }

@@ -186,6 +186,10 @@ pub struct AgentSession {
     pub(crate) active_rule_sources: HashSet<PathBuf>,
     pub debug_mode: bool,
     pub(crate) subagent_manager: Option<subagent::SubagentManager>,
+    /// Nesting depth of this session in the subagent tree. The root interactive
+    /// session is 0; each spawned subagent runs one level deeper. Bounds nested
+    /// `task` spawning via `SubagentManager`.
+    pub(crate) subagent_depth: usize,
     pub(crate) team_manager: Option<teams::TeamManager>,
     /// Post-turn memory consolidation work owned by this session.
     ///
@@ -587,6 +591,7 @@ impl AgentSession {
             active_rule_sources,
             debug_mode: false,
             subagent_manager: None,
+            subagent_depth: 0,
             team_manager: None,
             memory_consolidation_tasks: Vec::new(),
             managed_session: None,
@@ -635,6 +640,7 @@ impl AgentSession {
             self.permission_mode,
             self.allowed_tools.clone(),
             self.disallowed_tools.clone(),
+            self.subagent_depth,
         ));
     }
 

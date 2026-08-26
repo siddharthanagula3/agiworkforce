@@ -110,43 +110,41 @@ impl WordEditor {
                 docx = docx.add_paragraph(heading);
             }
             WordEdit::ReplaceText { old_text, new_text } => {
-                tracing::warn!(
-                    "WordEdit::ReplaceText not yet implemented (old='{}', new='{}'). \
-                     docx_rs does not support reading/modifying existing document content.",
-                    old_text,
-                    new_text
-                );
+                return Err(Error::Generic(format!(
+                    "WordEdit::ReplaceText is not supported (old='{}', new='{}'): docx_rs is \
+                     write-only and cannot read or modify existing document content.",
+                    old_text, new_text
+                )));
             }
             WordEdit::DeleteParagraph { index } => {
-                tracing::warn!(
-                    "WordEdit::DeleteParagraph not yet implemented (index={}). \
-                     docx_rs does not support reading/modifying existing document structure.",
+                return Err(Error::Generic(format!(
+                    "WordEdit::DeleteParagraph is not supported (index={}): docx_rs is write-only \
+                     and cannot read or modify existing document structure.",
                     index
-                );
+                )));
             }
             WordEdit::InsertTableRow {
                 table_index,
                 row_index,
                 cells,
             } => {
-                tracing::warn!(
-                    "WordEdit::InsertTableRow not yet implemented (table={}, row={}, {} cells). \
-                     docx_rs does not support modifying existing tables.",
+                return Err(Error::Generic(format!(
+                    "WordEdit::InsertTableRow is not supported (table={}, row={}, {} cells): \
+                     docx_rs is write-only and cannot modify existing tables.",
                     table_index,
                     row_index,
                     cells.len()
-                );
+                )));
             }
             WordEdit::DeleteTableRow {
                 table_index,
                 row_index,
             } => {
-                tracing::warn!(
-                    "WordEdit::DeleteTableRow not yet implemented (table={}, row={}). \
-                     docx_rs does not support modifying existing tables.",
-                    table_index,
-                    row_index
-                );
+                return Err(Error::Generic(format!(
+                    "WordEdit::DeleteTableRow is not supported (table={}, row={}): docx_rs is \
+                     write-only and cannot modify existing tables.",
+                    table_index, row_index
+                )));
             }
         }
 

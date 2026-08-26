@@ -99,6 +99,12 @@ impl std::fmt::Debug for SubagentEntry {
 /// Default maximum number of concurrent subagents.
 const DEFAULT_MAX_CONCURRENT: usize = 7;
 
+/// Maximum subagent nesting depth. The root interactive session is depth 0; a
+/// subagent it spawns runs at depth 1, and so on. Spawning is refused once a
+/// session at this depth would create a deeper child, bounding the subagent
+/// tree so nested `task` calls cannot fan out into unbounded cost.
+const MAX_SUBAGENT_DEPTH: usize = 3;
+
 /// Manages concurrent subagent tasks spawned via `task` or a named `agent`.
 ///
 /// Each subagent runs on a dedicated OS thread with its own tokio runtime,
@@ -109,6 +115,9 @@ const DEFAULT_MAX_CONCURRENT: usize = 7;
 pub struct SubagentManager {
     entries: Arc<RwLock<HashMap<String, SubagentEntry>>>,
     max_concurrent: usize,
+    /// Nesting depth of the session that owns this manager. Children spawned
+    /// through it run at `depth + 1`.
+    depth: usize,
     next_id: Arc<RwLock<u64>>,
     /// Cloned config for subagent sessions.
     config: CliConfig,
@@ -129,6 +138,8 @@ pub struct SubagentManager {
 struct SubagentRunConfig {
     config: CliConfig,
     model: String,
+    /// Depth the spawned child session runs at (owning manager's depth + 1).
+    depth: usize,
     sys_context: SystemContext,
     skip_permissions: bool,
     permission_mode: crate::cli_options::PermissionMode,
@@ -139,6 +150,7 @@ struct SubagentRunConfig {
 
 impl SubagentManager {
     /// Create a new subagent manager.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: CliConfig,
         model: String,
@@ -147,10 +159,12 @@ impl SubagentManager {
         permission_mode: crate::cli_options::PermissionMode,
         allowed_tools: Option<Vec<String>>,
         disallowed_tools: Vec<String>,
+        depth: usize,
     ) -> Self {
         Self {
             entries: Arc::new(RwLock::new(HashMap::new())),
             max_concurrent: DEFAULT_MAX_CONCURRENT,
+            depth,
             next_id: Arc::new(RwLock::new(1)),
             config,
             model,
@@ -202,6 +216,17 @@ impl SubagentManager {
         prompt: &str,
         named_agent: Option<crate::agents::AgentDefinition>,
     ) -> Result<String> {
+        // Enforce recursion-depth limit before doing any work. The child would
+        // run at `self.depth + 1`; refuse once that would exceed the cap so a
+        // nested subagent cannot spawn an unbounded subagent tree.
+        if self.depth >= MAX_SUBAGENT_DEPTH {
+            bail!(
+                "Maximum subagent nesting depth reached ({}). A subagent at depth {} cannot spawn further subagents.",
+                MAX_SUBAGENT_DEPTH,
+                self.depth
+            );
+        }
+
         // Check concurrency limit
         let running_count = {
             let entries = self.entries.read().await;
@@ -241,6 +266,7 @@ impl SubagentManager {
         let task_run_config = SubagentRunConfig {
             config: self.config.clone(),
             model: self.model.clone(),
+            depth: self.depth + 1,
             sys_context: self.sys_context.clone(),
             skip_permissions: self.skip_permissions,
             permission_mode: self.permission_mode,
@@ -507,6 +533,7 @@ async fn run_subagent(
     )?;
     session.skip_permissions = run_config.skip_permissions;
     session.permission_mode = run_config.permission_mode;
+    session.subagent_depth = run_config.depth;
     session.allowed_tools = run_config.allowed_tools.clone();
     session
         .disallowed_tools
@@ -790,6 +817,7 @@ mod tests {
             crate::cli_options::PermissionMode::Default,
             None,
             Vec::new(),
+            0,
         );
 
         manager.sync_parent_authority(
@@ -811,6 +839,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn spawn_refused_at_max_depth() {
+        let manager = SubagentManager::new(
+            CliConfig::default(),
+            "fixture-local-model:latest".to_string(),
+            crate::context::gather_system_context(),
+            false,
+            crate::cli_options::PermissionMode::Default,
+            None,
+            Vec::new(),
+            MAX_SUBAGENT_DEPTH,
+        );
+
+        let err = manager
+            .spawn("nested", "do work")
+            .await
+            .expect_err("spawn at max depth must be refused");
+        assert!(
+            err.to_string().contains("nesting depth"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            manager.list().await.is_empty(),
+            "no subagent may be spawned once the depth cap is reached"
+        );
+    }
+
+    #[tokio::test]
     async fn manager_shutdown_cancels_and_joins_background_threads() {
         let manager = SubagentManager::new(
             CliConfig::default(),
@@ -820,6 +875,7 @@ mod tests {
             crate::cli_options::PermissionMode::Default,
             None,
             Vec::new(),
+            0,
         );
         let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let worker_cancelled = cancelled.clone();
