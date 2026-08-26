@@ -38,6 +38,7 @@ const allowedRootFiles = new Set([
   'ONBOARDING.md',
   'PLAN.md',
   'README.md',
+  'RELEASE.md',
   'SECURITY.md',
   'THIRD_PARTY_LICENSES.md',
   'TODO.md',
