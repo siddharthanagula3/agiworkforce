@@ -611,7 +611,7 @@ export async function replaceScimUser(
   });
 
   const revocationWarnings = outcome.membershipRevoked
-    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, row.linked_user_id)
+    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, outcome.linkedUserId)
     : [];
 
   await touchConnection(db, ctx);
@@ -834,7 +834,7 @@ export async function patchScimUser(
   });
 
   const revocationWarnings = outcome.membershipRevoked
-    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, row.linked_user_id)
+    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, outcome.linkedUserId)
     : [];
 
   await touchConnection(db, ctx);
