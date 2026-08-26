@@ -175,7 +175,7 @@ pub fn render_mcp_list(scopes: &[McpScope]) -> String {
     }
 
     body.push("  ※ Run `agi --debug` to see error logs".to_string());
-    body.push("  https://code.agiworkforce.com/docs/mcp for help".to_string());
+    body.push("  https://agiworkforce.com/integrations for help".to_string());
 
     frame(
         "Manage MCP servers".to_string(),

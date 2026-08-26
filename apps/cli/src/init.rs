@@ -51,7 +51,7 @@ fn write_default_config(home: &Path) -> Result<()> {
 # Global: ~/.agiworkforce/config.toml
 # Project override: .agiworkforce/config.toml
 #
-# Documentation: https://docs.agiworkforce.com/cli/config
+# Documentation: https://agiworkforce.com/cli
 #
 # Uncomment and edit the values below to customize your setup.
 # Environment variables (e.g. AGIWORKFORCE_MODEL) override these values.
