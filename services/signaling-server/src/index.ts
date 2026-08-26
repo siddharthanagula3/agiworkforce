@@ -21,6 +21,7 @@ import {
   getSessionExpiresAtByCode,
   insertSession,
 } from './db.js';
+import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from './client-ip.js';
 import { logger, generateCorrelationId } from './logger.js';
 import { connectionManager } from './connection-manager.js';
 import { metrics } from './metrics.js';
@@ -158,9 +159,8 @@ const publicWsUrl =
 
 const app = express();
 
-const trustProxy = process.env['TRUST_PROXY'] === 'true' || process.env['TRUST_PROXY'] === '1';
-if (trustProxy) {
-  app.set('trust proxy', true);
+if (isProxyTrusted()) {
+  app.set('trust proxy', resolveTrustedProxyHops());
 }
 
 disablePoweredBy(app);
@@ -699,11 +699,7 @@ wss.on('connection', (socket, request) => {
     return;
   }
 
-  const forwardedFor = trustProxy ? request.headers['x-forwarded-for'] : undefined;
-  const ip =
-    (typeof forwardedFor === 'string' ? forwardedFor.split(',')[0]?.trim() : undefined) ??
-    request.socket.remoteAddress ??
-    'unknown';
+  const ip = resolveClientIp(request);
 
   const blacklistStatus = wsRateLimiter.isBlacklisted(ip);
   if (blacklistStatus.blacklisted) {

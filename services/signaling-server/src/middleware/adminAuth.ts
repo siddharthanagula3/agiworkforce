@@ -1,6 +1,6 @@
-
 import type { Request, Response, NextFunction } from 'express';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { resolveClientIp } from '../client-ip.js';
 import { logger } from '../logger.js';
 
 const ADMIN_API_KEY = process.env['ADMIN_API_KEY'];
@@ -18,29 +18,6 @@ interface AuthFailureEntry {
 }
 
 const authFailures = new Map<string, AuthFailureEntry>();
-
-function getClientIp(req: Request): string {
-  const trustProxy =
-    req.app.get('trust proxy') === true ||
-    process.env['TRUST_PROXY'] === 'true' ||
-    process.env['TRUST_PROXY'] === '1';
-
-  if (trustProxy) {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-      const ip = ips?.trim();
-      if (ip) return ip;
-    }
-
-    const realIp = req.headers['x-real-ip'];
-    if (realIp) {
-      return Array.isArray(realIp) ? (realIp[0] ?? 'unknown') : realIp;
-    }
-  }
-
-  return req.ip ?? req.socket.remoteAddress ?? 'unknown';
-}
 
 const COMPARE_KEY = randomBytes(32);
 
@@ -96,7 +73,7 @@ function clearAuthFailure(ip: string): void {
 }
 
 export function adminAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const ip = getClientIp(req);
+  const ip = resolveClientIp(req);
 
   const lockoutStatus = isLockedOut(ip);
   if (lockoutStatus.locked) {
