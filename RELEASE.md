@@ -3,179 +3,117 @@
 Status: ACTIVE — release-execution session
 Owner: Release lead (orchestrator)
 Branch: `release/readiness-2026-08-25`
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
-This file is the **one** consolidated task list for taking every supported app to
-public release. It supersedes the scattered control docs (PLAN.md, CHANGELOG.md,
-ExecutionPlan.md, FoundersAssistance.md, docs/agent-context/known-flaws.md, and
-the audit/parity markdown). Those are treated as stale leads only; every item
-here is grounded in code, git, or a live run — not in a doc claim.
+The one consolidated task list for taking every supported app to public release.
+It supersedes the scattered control docs; every item here is grounded in code,
+git, or a live run. Supported surfaces: **web, mobile, desktop, CLI, VS Code
+extension, browser extension, backend services + shared packages.**
+`apps/slack-app` and `apps/github-app` are future surfaces, OUT OF SCOPE.
 
-Supported release surfaces: **web, mobile, desktop, CLI, VS Code extension,
-browser extension, backend services + shared packages.** `apps/slack-app` and
-`apps/github-app` are future surfaces and are OUT OF SCOPE for this release.
-
-Statuses: `TODO` `INVESTIGATING` `BLOCKED` `IMPLEMENTING` `FIXED` `VERIFIED`
-`MANUAL` `NOT_APPLICABLE`. Once an item is `VERIFIED` it moves to the Done log.
-
-Guiding lens (founder directive): ship functional, stable, polished, secure.
-Fix what is **broken** (crashes, data loss, dead controls, security, false
-success) before building what is merely **missing**. Do not chase speculative
-architecture or unadvertised features; defer/document those.
+Guiding lens (founder): ship functional, stable, polished, secure. Fix what is
+broken before building what is merely missing; defer/document speculative work.
 
 ---
 
-## Build & health evidence (live runs, this session)
+## Build & health evidence (live runs this session)
 
-| Check                                                    | Result                                                                       |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm build` (turbo, all but desktop)                    | GREEN — 40/40 tasks; web compiled in 60s                                     |
-| `pnpm typecheck:all`                                     | GREEN — 0 TS errors                                                          |
-| `pnpm check:llm-operability`                             | GREEN — 42 checks EXIT 0                                                     |
-| `cargo check --workspace`                                | GREEN — 0 warnings                                                           |
-| `cargo test -p agiworkforce-desktop --lib` (macOS local) | 5124 pass / 6 fail — all 6 macOS-keychain-local (REL-005); GREEN on Linux CI |
-| CI rust lane (last executed, commit `22654e949`)         | success                                                                      |
-
----
-
-## Gather status (inputs consolidated)
-
-| Stream                         | State                                               |
-| ------------------------------ | --------------------------------------------------- |
-| Static health battery          | DONE — all green                                    |
-| CI failure triage              | DONE — REL-001 root cause fixed                     |
-| Deploy pipeline triage         | DONE — REL-002 MANUAL blocker                       |
-| Turbo build (all but desktop)  | DONE — 40/40 green                                  |
-| Desktop crate tests            | DONE — 6 macOS-local fails (REL-005)                |
-| Stale-purge discovery          | DONE — purge wave pending                           |
-| Release-gather (6 code scouts) | DONE — 61 findings folded in below                  |
-| Security scan (adversarial)    | RUNNING — findings fold in on completion            |
-| Machine trackers reconciled    | DONE — folded into gather (REL-065/066 corrections) |
+| Check                                                    | Result                                               |
+| -------------------------------------------------------- | ---------------------------------------------------- |
+| `pnpm build` (turbo, all but desktop)                    | GREEN — 40/40 tasks; web compiled in 60s             |
+| `pnpm typecheck:all`                                     | GREEN — 0 TS errors                                  |
+| `pnpm check:llm-operability`                             | GREEN — full chain EXIT 0 (re-run after every slice) |
+| `cargo check --workspace`                                | GREEN                                                |
+| `cargo test -p agiworkforce-desktop --lib` (macOS local) | 6 macOS-keychain-local fails only; GREEN on Linux CI |
+| Security review (2 waves, adversarial)                   | 7 findings: 0 high (after downgrade), 5 med, 2 low   |
 
 ---
 
-## Tier 0 — Blockers (must clear before public release)
+## Security review outcome (2026-08-26, adversarially verified)
 
-| ID      | Title                                                                                                                                                                       | Surface        | Sev  | Status        | Auto?  | Evidence                                                                                                                                                          |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---- | ------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| REL-001 | Migration 0145 unescaped apostrophe aborts every CI DB-prep step                                                                                                            | web/db         | crit | FIXED         | yes    | `apps/web/db/neon/0145_web_pack_example_prompts.sql`; committed `eeefe1d14`, verified by full-chain SQL lexer                                                     |
-| REL-002 | GitHub-Actions production deploy dead since 2026-08-09 (invalid `VERCEL_TOKEN` in `production-web` env). Absorbs the "deploy pipeline cannot auth to Vercel" gather finding | release-infra  | crit | MANUAL        | no     | `vercel pull` → "Could not retrieve Project Settings"; 5/200 runs green, last 2026-08-09; same pull succeeds with founder local login                             |
-| REL-010 | Chrome extension ships without a stable CRX key → production Clerk cloud sign-in breaks on every rebuild                                                                    | apps/extension | high | MANUAL        | no     | `apps/extension/scripts/manifest-config.mjs:130-152` only warns when `CHROME_EXTENSION_PUBLIC_KEY` unset; unstable extension ID rotates the OAuth origin          |
-| REL-011 | Free-tier daily budget + managed rolling spend-cap depend on migrations 0065/0066 being applied in prod — financial exposure if not                                         | web/billing    | high | INVESTIGATING | manual | `apps/web/db/neon/0065_free_daily_usage_budget.sql`, `0066_managed_usage_rolling_caps.sql`; reservation path inactive until both applied. Needs prod schema check |
+New-since-PR#416 code (workspace/platform admin consoles, audit/SIEM streaming +
+cron, plugin directory, enterprise verification) came back **clean** under a
+dedicated adversarial pass — a real result, not a coverage gap.
 
----
+| ID    | Finding                                                            | Sev | Status                                                        |
+| ----- | ------------------------------------------------------------------ | --- | ------------------------------------------------------------- |
+| W1-01 | prompt-injection → auto-approved code exec in network-open sandbox | med | FIXED `7f80f8b21` (sandbox egress contained; unattended deny) |
+| W1-03 | connector OAuth open redirect (tab/newline smuggling)              | med | FIXED `998119a06` (F1)                                        |
+| W2-01 | signaling-server trusts leftmost XFF → cap/limit/blacklist bypass  | med | FIXED `1a9759610` (F6)                                        |
+| W1-05 | `/tasks` protected but no server-side auth                         | low | FIXED `e13298dd6` (F5)                                        |
+| W1-02 | SCIM cross-tenant membership → platform-wide forced logout         | med | DECISION (F2) — see checklist                                 |
+| W1-04 | per-unit quota TOCTOU (bounded 7–11 req)                           | low | DECISION (F4) — needs Postgres run                            |
+| W2-02 | Chinese-HQ provider consent gate not enforced server-side          | med | DECISION (F7) — partial; changes paid routing                 |
 
-## Tier 1 — Major (ship-degraded; fix before or immediately at launch)
-
-| ID      | Title                                                                                                                    | Surface        | Sev  | Status | Auto?  | Evidence                                                                                                                            |
-| ------- | ------------------------------------------------------------------------------------------------------------------------ | -------------- | ---- | ------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| REL-025 | Non-streaming chat completions never persist the assistant turn to `web_messages` (silent history loss for stream:false) | web/api        | med  | FIXED  | yes    | non-stream path now persists via the same upsert helper; committed `83b5c44db`, 151 web tests pass                                  |
-| REL-020 | Excel edit tool silently no-ops DeleteRow/DeleteColumn/InsertColumn/UpdateStyle while reporting success                  | desktop        | high | FIXED  | yes    | `edit_excel.rs`/`edit_word.rs` unsupported ops now return Err (was false success); committed `da3556c13`, 34/34 tests               |
-| REL-014 | Subagent spawn has no recursion depth limit — nested task-tool calls can spawn unbounded subagent trees                  | cli/core-agent | high | FIXED  | yes    | MAX_SUBAGENT_DEPTH=3 threaded through spawn path; committed `da3556c13`                                                             |
-| REL-022 | No safety limit on subagent/task decomposition fan-out or size                                                           | core-agent     | med  | FIXED  | yes    | MAX_DECOMPOSED_SUBTASKS=64 reject-at-parse; committed `da3556c13`                                                                   |
-| REL-021 | Shared-session viewer "Open in AGI" link is a dead end — no continuation of the shared chat                              | apps/web       | med  | FIXED  | yes    | new /chat/from-share/[token] clones the shared chat into the viewer's account; committed `860edf448`, web typecheck clean           |
-| REL-018 | Managed-cloud turns can silently drop with no assistant reply and no failure UI                                          | web/chat       | high | FIXED  | yes    | server failure-marker + chrome msg identity + extension error-sync + client retry UI; committed `83b5c44db`, adversarially verified |
-| REL-019 | Cross-origin artifact sandbox degrades to same-origin srcDoc in prod when `NEXT_PUBLIC_SANDBOX_ORIGIN` unset             | web/security   | high | MANUAL | manual | `lib/validate-env.ts:346-356` warns; weakens artifact isolation boundary. Needs prod env var                                        |
-| REL-015 | Spawned subagents inherit parent's full permission mode with no independent tool scoping                                 | cli/core-agent | high | TODO   | no     | `apps/cli/src/subagent.rs:~509-513` copies skip_permissions to child                                                                |
-| REL-013 | CLI plugin marketplace registry backend does not exist — search/browse returns empty with no error surfaced              | apps/cli       | high | TODO   | manual | `apps/cli/src/marketplace.rs:135` hardcodes registry URL with no deployment                                                         |
-| REL-017 | Desktop Mobile Companion pairing calls a REST endpoint deleted with the Express api-gateway — feature dead               | apps/desktop   | high | TODO   | no     | `apps/desktop/src/api/config.ts:15-26` STB-8: gateway base removed                                                                  |
-| REL-016 | Mobile native IAP path fully wired but disabled by unset store product IDs (config, not unbuilt)                         | apps/mobile    | high | MANUAL | manual | store product IDs unset; needs App Store / Play Console product setup                                                               |
-| REL-023 | No self-update / version-check path in the CLI                                                                           | apps/cli       | med  | TODO   | yes    | `apps/cli/src/lib.rs` Command enum has no self-update                                                                               |
-| REL-024 | No per-file undo for agent-made edits in the CLI (only whole-conversation rewind)                                        | apps/cli       | med  | TODO   | yes    | file-edit tools keep no pre-edit backup                                                                                             |
+Patch files: `CLAUDE-SECURITY-20260826-{WAVE1-web,WAVE2-server}/patches/`. F3 was
+rejected and superseded by the W1-01 commit above.
 
 ---
 
-## Tier 2 — Minor (polish/cleanup; do not block launch)
+## Tier 0 — Blockers (all founder-only)
 
-| ID      | Title                                                                                              | Surface             | Sev | Status | Auto?  |
-| ------- | -------------------------------------------------------------------------------------------------- | ------------------- | --- | ------ | ------ |
-| REL-026 | VS Code telemetry endpoint domain has no deployment — opt-in telemetry silently no-ops             | vscode-ext          | med | TODO   | manual |
-| REL-027 | VS Code advertises `checkpoints: false` — no checkpoint/restore UI                                 | ide-ext             | med | TODO   | no     |
-| REL-028 | Enterprise admin console shows compile-time default policy, not the org's saved policy             | apps/web            | med | TODO   | no     |
-| REL-029 | No Windows sandbox isolation adapter — AppContainer probe diagnostic-only                          | permissions         | med | TODO   | no     |
-| REL-030 | No PII detection/redaction scanner over free-form content                                          | safety              | med | TODO   | no     |
-| REL-031 | No background/detached execution for long-running commands or subagents                            | cli/core-agent      | med | TODO   | no     |
-| REL-032 | Hardcoded-provider-endpoint migration still incomplete across 10 files                             | desktop/cli/web     | med | TODO   | yes    |
-| REL-033 | Chrome Web Store packaging ships unstable ID unless public key set (pairs with REL-010)            | apps/extension      | med | TODO   | manual |
-| REL-034 | PATCH /api/me accepts unbounded/unrestricted avatar_url, bypassing presign controls                | web/api             | med | TODO   | yes    |
-| REL-035 | Cloud-web invoke() shim fabricates success for most non-chat commands                              | desktop             | med | TODO   | manual |
-| REL-036 | TLS cert pinning ships placeholder hashes, enforcement off                                         | mobile              | med | TODO   | manual |
-| REL-037 | Remote device revocation unimplemented; only local sign-out                                        | desktop             | med | TODO   | no     |
-| REL-038 | Orphaned unified-chat components (SettingsShell, CommandPalette, CheckpointManager)                | ui/unified-chat     | med | TODO   | manual |
-| REL-039 | data-layer multi-provider factory used only for Database; Auth/Storage/Realtime unused throw-stubs | platform/data-layer | med | TODO   | manual |
-| REL-040 | VS Code Marketplace description drifted to 'cloud-only' while BYOK still ships                     | vscode-ext          | low | TODO   | no     |
-| REL-041 | Two doc links in shipped CLI UX point at undeployed subdomains (fixed `18c09706f`)                 | apps/cli            | low | FIXED  | yes    |
-| REL-042 | Dead Hobby-tier quota-banner path in CLI startup hits unproven endpoint (fixed `18c09706f`)        | apps/cli            | low | FIXED  | yes    |
-| REL-043 | Chrome content-script protocol guard doesn't special-case PDFs                                     | chrome-ext          | low | TODO   | yes    |
-| REL-044 | Artifact panel has no inline/targeted edit — full replace only                                     | apps/web            | low | TODO   | no     |
-| REL-045 | No cross-tab chat state sync on web                                                                | apps/web            | low | TODO   | yes    |
-| REL-046 | No web service worker / browser push notifications                                                 | apps/web            | low | TODO   | yes    |
-| REL-047 | First-party SAML runtime absent; admin route stores IdP metadata only                              | auth                | low | TODO   | no     |
-| REL-048 | SCIM pre-existing-user link-timing gap (linked on next write, not at enable)                       | auth                | low | TODO   | no     |
-| REL-049 | No passkey/WebAuthn support on any surface                                                         | auth                | low | TODO   | no     |
-| REL-050 | Mobile has no force-upgrade / min-version prompt                                                   | apps/mobile         | low | TODO   | yes    |
-| REL-051 | No OS home/lock-screen widget or Live Activity on mobile                                           | apps/mobile         | low | TODO   | no     |
-| REL-052 | No JetBrains plugin exists                                                                         | ide-ext             | low | TODO   | no     |
-| REL-053 | VS Code extension relies on bare `agi` PATH lookup, doesn't bundle CLI                             | ide-ext             | low | TODO   | yes    |
-| REL-054 | MCP server-declared `instructions` field not parsed/surfaced                                       | tools/mcp           | low | TODO   | yes    |
-| REL-055 | No MCP Apps (embedded UI) host — tool `_meta.ui.resourceUri` not rendered                          | tools/mcp           | low | TODO   | no     |
-| REL-056 | No skill frontmatter glob-pattern matching in any skill loader                                     | extensibility       | low | TODO   | yes    |
-| REL-057 | Plugin discovery resolves from raw cwd, never walks to git/worktree root                           | extensibility       | low | TODO   | yes    |
-| REL-058 | Memory files have no @path import expansion                                                        | extensibility       | low | TODO   | yes    |
-| REL-059 | No AWS Bedrock / GCP Vertex provider adapters                                                      | apps/cli            | low | TODO   | no     |
-| REL-060 | Org-wide model-restriction policy exists in types but no runtime enforces it                       | permissions         | low | TODO   | no     |
-| REL-061 | Mobile Android versionCode / iOS buildNumber are stale placeholders                                | apps/mobile         | low | TODO   | manual |
-| REL-062 | Desktop CSP connect-src hardcodes raw Fly.io signaling hostname                                    | desktop             | low | TODO   | yes    |
-| REL-063 | System TTS has no working implementation outside macOS                                             | desktop             | low | TODO   | manual |
-| REL-064 | Shared ModelType contract has no 'realtime' member (blocks duplex voice models)                    | contracts/types     | low | TODO   | no     |
+| ID      | Title                                                                                                             | Status | Evidence / action                                                                                           |
+| ------- | ----------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
+| REL-002 | GHA production deploy dead since 2026-08-09 (missing `VERCEL_TOKEN` + `AGI_DATABASE_URL` in `production-web` env) | MANUAL | `scripts/founder/provision-deploy-environments.sh` automates it — export the values, run it. See checklist. |
+| REL-010 | Chrome extension has no stable CRX key → cloud sign-in breaks each rebuild                                        | MANUAL | set `CHROME_EXTENSION_PUBLIC_KEY` in the ext build env                                                      |
+| REL-011 | Free-tier/spend-cap enforcement depends on migrations 0065/0066 applied in prod                                   | MANUAL | query prod for `extend_managed_usage_request_provider_step`; apply 0065→0066 if absent                      |
 
 ---
 
-## Tier 3 — Deferred / informational / tracker corrections (not release work)
+## Active autonomous backlog (in progress, no founder needed)
 
-| ID      | Note                                                                                                                                                                          |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| REL-003 | Production serving commit 83 behind main — resolves automatically once REL-002 token rotated                                                                                  |
-| REL-005 | Desktop lib tests: 6 macOS-keychain-local failures (`mcp_oauth`, `reflection`); GREEN on Linux CI, real app unaffected. Low-priority test-portability item, not a product bug |
-| REL-065 | Org-level project sharing IS implemented — inventory "missing" verdict is stale (correct the tracker)                                                                         |
-| REL-066 | Desktop single-instance lock IS implemented — inventory "missing" verdict is stale (correct the tracker)                                                                      |
-| REL-067 | Lovable workflow-migration is backend+client-wired but has no UI entry point — product decision: wire or cut                                                                  |
-| REL-068 | ~34 Zustand stores carry an unfinished migrate-to-client-runtime TODO — deliberate architecture migration, not release work                                                   |
-| REL-069 | Dead cloud waitlist / invite-code UI never wired into any screen — delete or wire                                                                                             |
-| REL-070 | Raw Postgres adapter is a documented, gated throw-only skeleton — informational                                                                                               |
-| REL-004 | Stale agent-doc apparatus removed (committed `0dbae4f2b`)                                                                                                                     |
+| ID      | Title                                                                                                                                                                                       | Surface   | Impact               | Auto?  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------------- | ------ |
+| REL-073 | Vacuous CI test tier — `Test Priority Levels 3-4` (and level-2) pass without running any test (fake gate)                                                                                   | ci        | high-integrity/minor | yes    |
+| REL-074 | Stale doc cleanup — `docs/remediation/{register.json,WAVES.md}`, `docs/agent-context/HANDOFF.md`, `docs/current/gap-audit-2026-08-08.md`, and the 3797-line `known-flaws.md` are superseded | docs      | cleanup              | yes    |
+| REL-075 | `check:reference-integrity` red — ~15 dead refs (deleted `check:agent-context`, `AGENTS.md` links) + 4 stale allowlist entries                                                              | tooling   | cleanup              | yes    |
+| REL-076 | Stale code comments citing deleted docs (UNIFIED_LAUNCH_PLAN/PLAN.md sections, ExecutionPlan.md, PUBLIC-ALPHA-CUTOVER, AUDIT-FIX/SYS-21 ticket tags) across web/desktop/mobile/packages     | multi     | cleanup              | yes    |
+| REL-077 | Incident-response health-probe cron still daily; project is on Pro so it can tighten                                                                                                        | web/infra | minor                | yes    |
+| REL-078 | CodeQL: committed `codeql-config.yml` is inert (default setup ignores it) — delete or document                                                                                              | ci        | minor                | manual |
+
+---
+
+## Wire-or-cut — built but unmounted (founder decides; git preserves either way)
+
+Each is a fully-built surface with zero live importers/mount points. Decision:
+wire it in, or cut it for release. None is currently reachable by users.
+
+- Desktop: `agent-collaboration`, `background-tasks`, `simple-mode`, `ArtifactsGallery`/`ArtifactCategoryFilter`, `MCP*` manager UIs, `TitleBar`, checkpoint Tauri commands, `local-llm` (llama-cpp-2) feature, `DocumentWorkspace`/PDFViewer, Discord/Signal/Telegram + Gmail OAuth messaging clients.
+- Web: `MaxUpgradePrompt`, in-progress media cards (`ImageGenCard`/`VideoGenCard`), offline message queue (consumer/UI built, zero producers), built `403`/`session-expired` pages not linked from the flows that trigger them, `founder`/`blog` pages absent from nav + hard-coded off.
+- Mobile: `InviteCodeModal` (REL-069), billing/connector placeholders behind disabled flags.
 
 ---
 
 ## Manual Release Checklist (actions that require the founder)
 
-1. **Rotate the Vercel deploy token (REL-002).** Vercel dashboard → create a
-   token scoped to team `siddharthanagula4`
-   (`team_QAqU2q6NTV4xxn971rfTy1F4`); GitHub repo → Settings → Environments →
-   `production-web` → update secret `VERCEL_TOKEN`. Unblocks REL-002, REL-003,
-   and the deploy-all-apps step. Verify: re-run Deploy Production Surfaces;
-   `scripts/verify-deployment.mjs https://agiworkforce.com <main-sha>` should
-   report production serving main.
-2. **Confirm migrations 0065/0066 applied in production (REL-011).** Query prod
-   Neon for the function `extend_managed_usage_request_provider_step` and the
-   free-daily-budget tables. If absent, apply `0065` then `0066` (in order).
-   Unblocks: server-side spend ceilings for the publicly-open managed cloud.
-   Verify: one request past the free daily cap and one past a rolling window
-   both fail closed.
-3. **Set a stable Chrome extension public key (REL-010 / REL-033).** Provide
-   `CHROME_EXTENSION_PUBLIC_KEY` (base64 DER RSA public key from the CWS
-   listing) to the extension build env so the extension ID — and thus the Clerk
-   OAuth origin — is stable across rebuilds. Verify: rebuild twice, confirm the
-   ID is identical and cloud sign-in works.
-4. **Set `NEXT_PUBLIC_SANDBOX_ORIGIN` in production (REL-019).** Point it at the
-   provisioned sandbox origin so artifact HTML/JS renders cross-origin, not
-   same-origin srcDoc. Verify: production artifact iframe loads from the
-   distinct origin.
-5. **App Store / Play Console product IDs for mobile IAP (REL-016).** The native
-   purchase path is wired but inert until store product IDs are configured.
+**Deploy / release infra**
+
+1. **Rotate + populate deploy env (REL-002).** `export VERCEL_TOKEN=…` (mint at vercel.com/account/tokens) `AGI_DATABASE_URL=…` `VERCEL_ORG_ID=…` `VERCEL_PROJECT_ID=…` `PAGER_WEBHOOK_URL=…` `PRODUCTION_WEB_URL=https://agiworkforce.com`, then `gh auth login` and run `scripts/founder/provision-deploy-environments.sh`. Verify: re-run Deploy Production Surfaces; `scripts/verify-deployment.mjs https://agiworkforce.com <main-sha>` shows prod serving main. (This also promotes the ~90 commits main is ahead of prod.)
+2. **Confirm migrations 0065/0066 applied in prod (REL-011).**
+3. **Set `CHROME_EXTENSION_PUBLIC_KEY` (REL-010/REL-033).**
+4. **Set `NEXT_PUBLIC_SANDBOX_ORIGIN` in prod (REL-019).**
+5. **App Store / Play Console IAP product IDs (REL-016).**
+
+**Security decisions** 6. **F2 (SCIM).** Query prod for Enterprise orgs with an active directory-sync connection and NO verified domain (F2 returns 400 on their SCIM without grace). Ship F2 with a cleanup migration for links poisoned before it lands (a stale link still reaches platform-wide credential revocation). 7. **F4 (quota migration).** Run `0146` against a throwaway Postgres (`db/neon/verify/README.md`) — the SQL was never executed; a bad column ref would 503 the billing path. 8. **F7 (jurisdiction routing).** Approves changing paid users' model routing (Pro balanced → gemini-3.5-flash-lite; premium → gpt-5.6-sol). Needs `@agiworkforce/compliance` declared in `packages/ai/routing/package.json`. W2-02 stays partly open (explicit provider selection + the Rust desktop/CLI resolver are still ungated). 9. **R2 upload bucket is public.** Uploads are world-readable before the scanner runs. Decide: private bucket + proxied reads (egress cost), or scan-at-presign. 10. **Delete stale secret backups** `.env.local.bak`, `.env.local.bak-20260814-021900` (deletion was permission-blocked for me).
 
 ---
 
-## Done log (VERIFIED — kept for traceability)
+## Done log (VERIFIED this session)
 
-_(empty until first items are verified end-to-end)_
+| Item                                                    | Commit      |
+| ------------------------------------------------------- | ----------- |
+| Migration 0145 apostrophe build-blocker                 | `eeefe1d14` |
+| Remove agent-doc apparatus (CLAUDE.md + AGENTS.md tree) | `0dbae4f2b` |
+| Consolidated master list                                | `bc821354e` |
+| REL-014/020/022 agent + Excel/Word tool safety          | `da3556c13` |
+| REL-018/025 silent lost-turn + non-stream persistence   | `83b5c44db` |
+| REL-021 shared-session continuation route               | `860edf448` |
+| REL-041/042 CLI dead links + dead startup code          | `18c09706f` |
+| Stale-doc purge (103 files)                             | `4d1d714b5` |
+| Leftover audit snapshots + stale checker refs           | `85e1895c7` |
+| Dead audit scripts + stale CI config                    | `cb080ecbe` |
+| REL-072 mobile Companion agent-detail reachable         | `8641860df` |
+| W1-03 connector OAuth open redirect (F1)                | `998119a06` |
+| W1-05 /tasks server-side auth gate (F5)                 | `e13298dd6` |
+| W2-01 signaling trusted-proxy client IP (F6)            | `1a9759610` |
+| W1-01 chat sandbox egress containment                   | `7f80f8b21` |
