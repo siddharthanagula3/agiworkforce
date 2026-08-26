@@ -263,6 +263,23 @@ describe('GET /api/connectors/oauth/callback', () => {
     expect(target.pathname).toBe('/connectors');
   });
 
+  it('refuses a stored return path the URL parser would collapse into another origin', async () => {
+    mocks.consumePending.mockResolvedValue(pending({ returnPath: '/\t/evil.test' }));
+    mocks.exchange.mockResolvedValue({
+      accessToken: 'a',
+      refreshToken: null,
+      tokenType: 'Bearer',
+      accessTokenExpiresAt: null,
+      grantedScopes: [],
+    });
+
+    const response = await GET(request(`?state=${STATE}&code=auth-code`));
+
+    const target = location(response);
+    expect(target.origin).toBe('https://app.example.com');
+    expect(target.pathname).toBe('/connectors');
+  });
+
   it('sends a signed-out browser to login without consuming the state', async () => {
     mocks.authUser.mockRejectedValue(new Error('unauthenticated'));
 

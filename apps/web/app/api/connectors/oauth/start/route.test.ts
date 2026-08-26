@@ -141,6 +141,14 @@ describe('GET /api/connectors/oauth/start', () => {
     expect(pending['returnPath']).toBe('/connectors');
   });
 
+  it('refuses a return path the URL parser would collapse into another origin', async () => {
+    const response = await GET(request('?connectorId=trello&returnPath=%2F%09%2Fevil.test'));
+
+    const location = new URL(response.headers.get('location') as string);
+    expect(location.origin).toBe('https://app.example.com');
+    expect(location.pathname).toBe('/connectors');
+  });
+
   it('sends a signed-out browser to login rather than starting a flow', async () => {
     configureLinear();
     mocks.authUser.mockRejectedValue(new Error('unauthenticated'));
