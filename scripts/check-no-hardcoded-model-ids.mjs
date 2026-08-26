@@ -41,20 +41,6 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   'tools/skill-vetting/src/skillspector/providers/anthropic/model_registry.yaml',
 ]);
 
-// Competitor research. These files record what OTHER products display in their own
-// UIs, so the names are observations of a third party, not references to our catalog.
-// Swapping a model in our registry does not make any of this prose stale, which is the
-// property the rule protects. Scoped to the dated audit sets so it cannot creep into
-// product docs.
-const THIRD_PARTY_OBSERVATION_PREFIXES = Object.freeze([
-  'audit/parity-2026-08-15/',
-  'audit/competitive-gap-2026-08-15/',
-]);
-
-function isThirdPartyObservation(file) {
-  return THIRD_PARTY_OBSERVATION_PREFIXES.some((prefix) => file.startsWith(prefix));
-}
-
 const OWNER_PATH_SET = new Set(MODEL_ID_OWNER_PATHS);
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
 const BINARY_EXTENSIONS = new Set([
@@ -397,7 +383,7 @@ export function findRetiredModelFamilyOccurrences(text) {
 
 export function isModelIdOwnerPath(repoRoot, filePath) {
   const relativePath = toPosixPath(path.relative(repoRoot, path.resolve(filePath)));
-  return OWNER_PATH_SET.has(relativePath) || isThirdPartyObservation(relativePath);
+  return OWNER_PATH_SET.has(relativePath);
 }
 
 function readUtf8Text(filePath) {

@@ -108,10 +108,9 @@ jobs:
           node scripts/check-release-gates.mjs
 
       - name: Hardcoded-model-id gate (Rust)
-        # Wave 1.5 prevention layer (CLAUDE.md §"Critical rules" #1).
         # ESLint covers TS/JS in the js-verify lane; this script covers
-        # Rust (CLI + Tauri backend) so the locked rule "never hardcode
-        # model IDs" is enforced uniformly across the repo.
+        # Rust (CLI + Tauri backend) so the rule "never hardcode model
+        # IDs; derive them from the catalog" is enforced uniformly.
         run: bash scripts/check-no-hardcoded-models.sh
 
       - name: HookEvent fire-site gate (AP-07)
