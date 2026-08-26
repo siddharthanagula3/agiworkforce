@@ -104,8 +104,8 @@ architecture or unadvertised features; defer/document those.
 | REL-038 | Orphaned unified-chat components (SettingsShell, CommandPalette, CheckpointManager)                | ui/unified-chat     | med | TODO   | manual |
 | REL-039 | data-layer multi-provider factory used only for Database; Auth/Storage/Realtime unused throw-stubs | platform/data-layer | med | TODO   | manual |
 | REL-040 | VS Code Marketplace description drifted to 'cloud-only' while BYOK still ships                     | vscode-ext          | low | TODO   | no     |
-| REL-041 | Two doc links in shipped CLI UX point at undeployed subdomains                                     | apps/cli            | low | TODO   | yes    |
-| REL-042 | Dead Hobby-tier quota-banner path in CLI startup hits unproven endpoint                            | apps/cli            | low | TODO   | yes    |
+| REL-041 | Two doc links in shipped CLI UX point at undeployed subdomains (fixed `18c09706f`)                 | apps/cli            | low | FIXED  | yes    |
+| REL-042 | Dead Hobby-tier quota-banner path in CLI startup hits unproven endpoint (fixed `18c09706f`)        | apps/cli            | low | FIXED  | yes    |
 | REL-043 | Chrome content-script protocol guard doesn't special-case PDFs                                     | chrome-ext          | low | TODO   | yes    |
 | REL-044 | Artifact panel has no inline/targeted edit — full replace only                                     | apps/web            | low | TODO   | no     |
 | REL-045 | No cross-tab chat state sync on web                                                                | apps/web            | low | TODO   | yes    |
