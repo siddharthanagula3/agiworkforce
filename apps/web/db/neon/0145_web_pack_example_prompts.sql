@@ -90,7 +90,7 @@ insert into public.plugin_registry_entries (
       "Analyze this CSV and summarize the key trends.",
       "Find correlations between these two datasets.",
       "Turn this analysis into a shareable report.",
-      "Summarize what changed in this quarter's numbers."
+      "Summarize what changed in this quarter''s numbers."
     ]'::jsonb,
     '{
       "name": "data-pack",
