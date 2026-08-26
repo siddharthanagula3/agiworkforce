@@ -527,7 +527,10 @@ function DirectoryBrowse({
   const skills = adapter?.skills ?? [];
   const hasPluginDirectory =
     adapter != null && ('pluginCatalog' in adapter || 'plugins' in adapter);
-  const plugins = adapter?.pluginCatalog ?? adapter?.plugins ?? [];
+  const plugins = useMemo(
+    () => adapter?.pluginCatalog ?? adapter?.plugins ?? [],
+    [adapter?.pluginCatalog, adapter?.plugins],
+  );
   const connectorsLoading = adapter?.connectorsLoading ?? false;
   const connectorsError = adapter?.connectorsError;
   const skillsLoading = adapter?.skillsLoading ?? false;
