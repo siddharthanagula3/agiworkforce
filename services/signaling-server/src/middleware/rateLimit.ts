@@ -1,5 +1,5 @@
-
 import type { IncomingMessage } from 'http';
+import { resolveClientIp } from '../client-ip.js';
 import { logger } from '../logger.js';
 
 export const WS_CONNECTION_LIMIT = Number(process.env['WS_CONNECTION_LIMIT'] ?? 10);
@@ -47,23 +47,7 @@ export class WebSocketRateLimiter {
   }
 
   getClientIp(req: IncomingMessage): string {
-    const trustProxy = process.env['TRUST_PROXY'] === 'true' || process.env['TRUST_PROXY'] === '1';
-
-    if (trustProxy) {
-      const forwardedFor = req.headers['x-forwarded-for'];
-      if (forwardedFor) {
-        const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-        const ip = ips?.trim();
-        if (ip) return ip;
-      }
-
-      const realIp = req.headers['x-real-ip'];
-      if (realIp) {
-        return Array.isArray(realIp) ? (realIp[0] ?? 'unknown') : realIp;
-      }
-    }
-
-    return req.socket.remoteAddress ?? 'unknown';
+    return resolveClientIp(req);
   }
 
   isBlacklisted(ip: string): { blacklisted: boolean; reason?: string; retryAfter?: number } {
