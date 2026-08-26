@@ -208,29 +208,27 @@ impl ExcelEditor {
                 }
             }
             ExcelEdit::DeleteRow { sheet, row } => {
-                tracing::warn!(
-                    "ExcelEdit::DeleteRow not yet implemented (sheet='{}', row={}). \
-                     xlsxwriter does not support row deletion — would require full sheet rebuild.",
-                    sheet,
-                    row
-                );
+                return Err(Error::Generic(format!(
+                    "ExcelEdit::DeleteRow is not supported (sheet='{}', row={}): rust_xlsxwriter is \
+                     write-only and cannot delete or shift rows in an existing sheet.",
+                    sheet, row
+                )));
             }
             ExcelEdit::DeleteColumn { sheet, col } => {
-                tracing::warn!(
-                    "ExcelEdit::DeleteColumn not yet implemented (sheet='{}', col={}). \
-                     xlsxwriter does not support column deletion — would require full sheet rebuild.",
-                    sheet,
-                    col
-                );
+                return Err(Error::Generic(format!(
+                    "ExcelEdit::DeleteColumn is not supported (sheet='{}', col={}): rust_xlsxwriter is \
+                     write-only and cannot delete or shift columns in an existing sheet.",
+                    sheet, col
+                )));
             }
             ExcelEdit::InsertColumn { sheet, col, values } => {
-                tracing::warn!(
-                    "ExcelEdit::InsertColumn not yet fully implemented (sheet='{}', col={}, {} values). \
-                     Column insertion requires shifting existing data.",
+                return Err(Error::Generic(format!(
+                    "ExcelEdit::InsertColumn is not supported (sheet='{}', col={}, {} values): column \
+                     insertion requires shifting existing data, which rust_xlsxwriter cannot do.",
                     sheet,
                     col,
                     values.len()
-                );
+                )));
             }
             ExcelEdit::UpdateStyle {
                 sheet,
@@ -239,15 +237,12 @@ impl ExcelEditor {
                 bold,
                 color,
             } => {
-                tracing::warn!(
-                    "ExcelEdit::UpdateStyle not yet implemented (sheet='{}', row={}, col={}, bold={:?}, color={:?}). \
-                     Style updates require re-writing the cell with format.",
-                    sheet,
-                    row,
-                    col,
-                    bold,
-                    color
-                );
+                return Err(Error::Generic(format!(
+                    "ExcelEdit::UpdateStyle is not supported (sheet='{}', row={}, col={}, bold={:?}, \
+                     color={:?}): restyling a cell requires re-reading its existing value, which this \
+                     write-only path does not retain.",
+                    sheet, row, col, bold, color
+                )));
             }
         }
 
@@ -339,6 +334,41 @@ mod tests {
     #[test]
     fn test_excel_editor_creation() {
         let _editor = ExcelEditor::new();
+    }
+
+    #[test]
+    fn unsupported_edits_return_err_not_false_success() {
+        let editor = ExcelEditor::new();
+        let mut workbook = Workbook::new();
+        let unsupported = [
+            ExcelEdit::DeleteRow {
+                sheet: "Sheet1".to_string(),
+                row: 0,
+            },
+            ExcelEdit::DeleteColumn {
+                sheet: "Sheet1".to_string(),
+                col: 0,
+            },
+            ExcelEdit::InsertColumn {
+                sheet: "Sheet1".to_string(),
+                col: 0,
+                values: vec![],
+            },
+            ExcelEdit::UpdateStyle {
+                sheet: "Sheet1".to_string(),
+                row: 0,
+                col: 0,
+                bold: Some(true),
+                color: None,
+            },
+        ];
+        for edit in unsupported {
+            let mut sheets = std::collections::HashMap::new();
+            assert!(
+                editor.apply_edit(&mut sheets, &mut workbook, edit).is_err(),
+                "unsupported edit must return Err, never a silent success"
+            );
+        }
     }
 
     #[test]

@@ -707,6 +707,14 @@ Provide ONLY the JSON array, no other text."#,
         let parsed: Vec<serde_json::Value> = serde_json::from_str(&json_str)
             .map_err(|e| SwarmError::DecompositionFailed(format!("JSON parse error: {}", e)))?;
 
+        if parsed.len() > constants::MAX_DECOMPOSED_SUBTASKS {
+            return Err(SwarmError::DecompositionFailed(format!(
+                "decomposition produced {} subtasks, exceeding the maximum of {}",
+                parsed.len(),
+                constants::MAX_DECOMPOSED_SUBTASKS
+            )));
+        }
+
         let mut subtasks = Vec::new();
         for (idx, item) in parsed.into_iter().enumerate() {
             let subtask = self.parse_subtask_item(item, goal, idx)?;
@@ -886,6 +894,51 @@ mod tests {
 
         completed.insert("s0".to_string());
         assert!(subtask.is_ready(&completed));
+    }
+
+    fn test_goal() -> Goal {
+        Goal {
+            id: "goal_cap".to_string(),
+            description: "fan-out guard".to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: Vec::new(),
+            success_criteria: Vec::new(),
+            trust_mode: None,
+        }
+    }
+
+    fn decomposer() -> TaskDecomposer {
+        TaskDecomposer::new(Arc::new(RwLock::new(LLMRouter::default())))
+    }
+
+    fn subtask_json_array(count: usize) -> String {
+        let items: Vec<String> = (0..count)
+            .map(|i| {
+                format!(
+                    r#"{{"id":"s{i}","description":"d{i}","type":"computation","dependencies":[]}}"#
+                )
+            })
+            .collect();
+        format!("[{}]", items.join(","))
+    }
+
+    #[test]
+    fn decomposition_rejects_fan_out_beyond_cap() {
+        let response = subtask_json_array(constants::MAX_DECOMPOSED_SUBTASKS + 1);
+        let result = decomposer().parse_decomposition_response(&response, &test_goal());
+        assert!(
+            matches!(result, Err(SwarmError::DecompositionFailed(_))),
+            "over-cap decomposition must be rejected"
+        );
+    }
+
+    #[test]
+    fn decomposition_accepts_fan_out_at_cap() {
+        let response = subtask_json_array(constants::MAX_DECOMPOSED_SUBTASKS);
+        let result = decomposer().parse_decomposition_response(&response, &test_goal());
+        let subtasks = result.expect("at-cap decomposition must parse");
+        assert_eq!(subtasks.len(), constants::MAX_DECOMPOSED_SUBTASKS);
     }
 
     #[test]
