@@ -61,6 +61,52 @@ describe('useShareConversation', () => {
     expect(result.current.activeShare?.token).toBe('abc123');
   });
 
+  it('includes a lightweight attachment descriptor instead of dropping attachments', async () => {
+    useChatStore.setState({
+      messages: [
+        {
+          ...MESSAGE,
+          attachments: [
+            {
+              id: 'att-1',
+              assetId: 'asset-1',
+              type: 'image',
+              name: 'diagram.png',
+              mimeType: 'image/png',
+              url: '/api/files/asset-1',
+            },
+          ],
+        },
+      ],
+    });
+
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          shareUrl: 'https://agiworkforce.com/share/abc123',
+          token: 'abc123',
+          expiresAt: '2026-07-08T00:00:00.000Z',
+          messageCount: 1,
+        }),
+        { status: 201 },
+      ),
+    );
+
+    const { result } = renderHook(() => useShareConversation('My session'));
+
+    await act(async () => {
+      await result.current.share(30);
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+    expect(body.messages[0].attachments).toEqual([
+      { name: 'diagram.png', type: 'image', mimeType: 'image/png' },
+    ]);
+    expect(body.messages[0].attachments[0].url).toBeUndefined();
+    expect(body.messages[0].attachments[0].assetId).toBeUndefined();
+    expect(body.messages[0].attachments[0].content).toBeUndefined();
+  });
+
   it('revokes the active share via DELETE /api/share/[token]', async () => {
     vi.spyOn(global, 'fetch')
       .mockResolvedValueOnce(
