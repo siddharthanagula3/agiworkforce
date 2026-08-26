@@ -29,6 +29,7 @@ function entry(overrides: Partial<PluginRegistryEntry> = {}): PluginRegistryEntr
     requiredConnectors: ['github'],
     capabilities: ['connectors'],
     permissions: [],
+    examplePrompts: [],
     versions: [],
     distribution: null,
     integrity: { sha256: null, signature: null, signatureAlgorithm: null },

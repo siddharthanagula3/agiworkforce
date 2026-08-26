@@ -18,12 +18,24 @@
  * fields — both stay unpopulated until those decisions land. Adding them later
  * is a value change, not a breaking contract change.
  *
- * HONESTY: nothing here models a download count, a rating, or an install total.
- * The registry has never observed one, and a nullable field invites a
- * fabricated value. {@link PluginRegistryEntry.status} plus
+ * HONESTY: nothing here models a rating. {@link PluginRegistryEntry.installCount}
+ * is the one exception to "no fabricated numbers": it is a real, observed
+ * aggregate over `public.plugin_installations` (COUNT grouped by plugin id,
+ * read on the privileged connection so no caller ever sees who installed —
+ * see `countPluginInstallations`), computed by `GET /api/plugins` and absent
+ * — never zero — anywhere that aggregate was not run, including the
+ * single-entry endpoints. {@link PluginRegistryEntry.status} plus
  * {@link PluginRegistryEntry.distribution} are the only availability claims,
  * and `distribution === null` means "declared, not distributable" — the state
  * every launch row is actually in.
+ *
+ * {@link PluginRegistryEntry.skillsRequireInstall} guards a specific false
+ * claim: a pack whose {@link PluginRegistryEntry.declaredSkills} are all
+ * already reachable without installing anything (no Skill's frontmatter
+ * names this entry as its `plugin` owner) grants nothing by being installed —
+ * it is a curated bundle, not an access grant, and the UI must say so.
+ * `GET /api/plugins` and `GET /api/plugins/[id]` compute it against the live
+ * Skill catalog; it is never hand-set on a row.
  *
  * @module plugins
  * @packageDocumentation
@@ -185,13 +197,25 @@ export interface PluginRegistryEntry {
   status: PluginRegistryStatus;
   webInstallable: boolean;
   declaredSkills: string[];
+  /**
+   * True when installing this entry is what makes at least one of
+   * {@link declaredSkills} reachable. False means every declared skill is
+   * already available without installing anything. Absent only where the
+   * live Skill catalog was not consulted; every route that returns this type
+   * computes it. See the module HONESTY note.
+   */
+  skillsRequireInstall?: boolean;
   requiredConnectors: string[];
   capabilities: PluginCapability[];
   permissions: string[];
+  /** "Try asking" directory copy. Display-only strings, never sent to a model. */
+  examplePrompts: string[];
   versions: PluginVersionRef[];
   distribution: PluginDistribution | null;
   integrity: PluginIntegrity;
   homepageUrl?: string | null;
+  /** Real observed install count. Absent, not zero, where not computed. See module doc. */
+  installCount?: number;
   createdAt: string;
   updatedAt: string;
 }

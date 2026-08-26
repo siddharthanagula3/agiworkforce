@@ -107,6 +107,16 @@ export async function getManagedSkillCatalog(): Promise<Skill[]> {
   return value;
 }
 
+export async function getManagedSkillPluginOwners(): Promise<ReadonlyMap<string, string>> {
+  const directory = await getManagedSkillDirectory();
+  const owners = new Map<string, string>();
+  for (const skill of directory) {
+    const owner = skillPluginOwner(skill);
+    if (owner !== null) owners.set(skill.name, owner);
+  }
+  return owners;
+}
+
 export async function getManagedSkillDirectoryForPlugins(
   enabledPluginIds: ReadonlySet<string>,
 ): Promise<Skill[]> {
