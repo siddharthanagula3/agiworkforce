@@ -1,4 +1,3 @@
-
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PluginRegistryEntry } from '@agiworkforce/types';
@@ -33,6 +32,7 @@ function entry(overrides: Partial<PluginRegistryEntry> = {}): PluginRegistryEntr
     requiredConnectors: ['github'],
     capabilities: ['connectors'],
     permissions: [],
+    examplePrompts: [],
     versions: [],
     distribution: null,
     integrity: { sha256: null, signature: null, signatureAlgorithm: null },

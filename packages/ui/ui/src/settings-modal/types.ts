@@ -46,9 +46,16 @@ export interface SettingsPlugin {
   mutating?: boolean;
   error?: string;
   author?: string;
+  category?: string;
   skillCount?: number;
   declaredSkills?: string[];
+  /** True only when installing is what unlocks a declared skill; false means they're already available. */
+  skillsRequireInstall?: boolean;
   requiredConnectors?: string[];
+  /** "Try asking" directory copy. Display-only; never sent to a model. */
+  examplePrompts?: string[];
+  /** Real count of active installs across all users. Absent, not zero, when unknown. */
+  installCount?: number;
   updatedAt?: string;
   statusLabel?: string;
   detailsHref?: string;

@@ -97,12 +97,16 @@ const ApiPluginsResponseSchema = z.object({
       id: z.string().min(1),
       name: z.string().min(1),
       description: z.string(),
+      category: z.string(),
       status: z.enum(['preview', 'published', 'deprecated']),
       webInstallable: z.boolean(),
       publisher: z.object({ name: z.string().min(1) }),
       declaredSkills: z.array(z.string()),
+      skillsRequireInstall: z.boolean().default(false),
       requiredConnectors: z.array(z.string()).default([]),
+      examplePrompts: z.array(z.string()).default([]),
       distribution: z.object({ manifestUrl: z.string().url() }).passthrough().nullable(),
+      installCount: z.number().int().nonnegative().optional(),
       updatedAt: z.string(),
     }),
   ),
@@ -725,9 +729,15 @@ export function WebSettingsModal({
             installed: Boolean(installation),
             installable: plugin.webInstallable,
             author: plugin.publisher.name,
+            category: plugin.category,
             skillCount: plugin.declaredSkills.length,
             declaredSkills: plugin.declaredSkills,
+            skillsRequireInstall: plugin.skillsRequireInstall,
             requiredConnectors: plugin.requiredConnectors,
+            examplePrompts: plugin.examplePrompts,
+            ...(typeof plugin.installCount === 'number'
+              ? { installCount: plugin.installCount }
+              : {}),
             updatedAt: plugin.updatedAt,
             statusLabel: plugin.webInstallable
               ? 'Available on Web'

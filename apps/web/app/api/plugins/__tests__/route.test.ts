@@ -1,10 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { withRateLimitMock, getNeonDbMock, listMock, getEntryMock } = vi.hoisted(() => ({
+const {
+  withRateLimitMock,
+  getNeonDbMock,
+  listMock,
+  getEntryMock,
+  countInstallsMock,
+  getSkillPluginOwnersMock,
+} = vi.hoisted(() => ({
   withRateLimitMock: vi.fn(),
   getNeonDbMock: vi.fn(),
   listMock: vi.fn(),
   getEntryMock: vi.fn(),
+  countInstallsMock: vi.fn(),
+  getSkillPluginOwnersMock: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -23,6 +32,18 @@ vi.mock('@/lib/services/plugin-registry-service', async () => {
     getPluginRegistryEntry: getEntryMock,
   };
 });
+vi.mock('@/lib/services/plugin-installation-service', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/services/plugin-installation-service')>(
+    '@/lib/services/plugin-installation-service',
+  );
+  return {
+    ...actual,
+    countPluginInstallations: countInstallsMock,
+  };
+});
+vi.mock('@/lib/services/skill-catalog-service', () => ({
+  getManagedSkillPluginOwners: getSkillPluginOwnersMock,
+}));
 
 import { NextRequest } from 'next/server';
 import { GET as listPlugins } from '../route';
@@ -41,6 +62,7 @@ const ENTRY = {
   requiredConnectors: ['github'],
   capabilities: ['connectors'],
   permissions: [],
+  examplePrompts: [],
   versions: [],
   distribution: null,
   integrity: { sha256: null, signature: null, signatureAlgorithm: null },
@@ -59,6 +81,8 @@ beforeEach(() => {
   getNeonDbMock.mockReturnValue({ query: vi.fn() });
   listMock.mockResolvedValue({ entries: [ENTRY], total: 1 });
   getEntryMock.mockResolvedValue({ entry: ENTRY, manifest: null });
+  countInstallsMock.mockResolvedValue(new Map());
+  getSkillPluginOwnersMock.mockResolvedValue(new Map());
 });
 
 describe('GET /api/plugins', () => {
@@ -73,6 +97,57 @@ describe('GET /api/plugins', () => {
   it('is publicly cacheable', async () => {
     const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
     expect(response.headers.get('cache-control')).toContain('public');
+  });
+
+  it('merges the real install count onto each entry, defaulting to zero', async () => {
+    countInstallsMock.mockResolvedValue(new Map([['github-automation', 7]]));
+    const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    const body = await response.json();
+    expect(body.entries[0].installCount).toBe(7);
+
+    countInstallsMock.mockResolvedValue(new Map());
+    const empty = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    expect((await empty.json()).entries[0].installCount).toBe(0);
+  });
+
+  it('never leaks a user id through the install count', async () => {
+    countInstallsMock.mockResolvedValue(new Map([['github-automation', 1]]));
+    const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    const body = await response.json();
+    expect(JSON.stringify(body)).not.toMatch(/user[_-]?id/i);
+  });
+
+  it('reports 503 when the install count aggregate fails, same as a catalogue failure', async () => {
+    countInstallsMock.mockRejectedValue(new Error('connection refused'));
+    const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    expect(response.status).toBe(503);
+  });
+
+  it('marks skillsRequireInstall true only when a declared skill is actually owned by this entry', async () => {
+    listMock.mockResolvedValue({
+      entries: [
+        { ...ENTRY, id: 'research-pack', declaredSkills: ['literature-review'] },
+        { ...ENTRY, id: 'engineering-pack', declaredSkills: ['code-review'] },
+      ],
+      total: 2,
+    });
+    getSkillPluginOwnersMock.mockResolvedValue(new Map([['literature-review', 'research-pack']]));
+
+    const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    const body = await response.json();
+
+    expect(body.entries.find((e: { id: string }) => e.id === 'research-pack')).toMatchObject({
+      skillsRequireInstall: true,
+    });
+    expect(body.entries.find((e: { id: string }) => e.id === 'engineering-pack')).toMatchObject({
+      skillsRequireInstall: false,
+    });
+  });
+
+  it('reports 503 when the skill catalog is unavailable, same as a catalogue failure', async () => {
+    getSkillPluginOwnersMock.mockRejectedValue(new Error('catalog unavailable'));
+    const response = await listPlugins(request('https://agiworkforce.com/api/plugins'));
+    expect(response.status).toBe(503);
   });
 
   it('passes validated filters through to the service', async () => {
@@ -163,6 +238,30 @@ describe('GET /api/plugins/[id]', () => {
 
   it('reports 503 when the registry read fails', async () => {
     getEntryMock.mockRejectedValue(new Error('down'));
+    const response = await getPlugin(
+      request('https://agiworkforce.com/api/plugins/github-automation'),
+      { params: Promise.resolve({ id: 'github-automation' }) },
+    );
+    expect(response.status).toBe(503);
+  });
+
+  it('computes skillsRequireInstall for the single entry the same way as the list', async () => {
+    getEntryMock.mockResolvedValue({
+      entry: { ...ENTRY, id: 'research-pack', declaredSkills: ['literature-review'] },
+      manifest: null,
+    });
+    getSkillPluginOwnersMock.mockResolvedValue(new Map([['literature-review', 'research-pack']]));
+
+    const response = await getPlugin(
+      request('https://agiworkforce.com/api/plugins/research-pack'),
+      { params: Promise.resolve({ id: 'research-pack' }) },
+    );
+    const body = await response.json();
+    expect(body.entry.skillsRequireInstall).toBe(true);
+  });
+
+  it('reports 503 when the skill catalog is unavailable for a single entry too', async () => {
+    getSkillPluginOwnersMock.mockRejectedValue(new Error('catalog unavailable'));
     const response = await getPlugin(
       request('https://agiworkforce.com/api/plugins/github-automation'),
       { params: Promise.resolve({ id: 'github-automation' }) },
