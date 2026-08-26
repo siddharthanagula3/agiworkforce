@@ -29,7 +29,6 @@ const allowedRootFiles = new Set([
   'CONTRIBUTING.md',
   'AuditRemediationLedger.md',
   'FoundersAssistance.md',
-  'ExecutionPlan.md',
   'Cargo.lock',
   'Cargo.toml',
   'LICENSE',

@@ -28,9 +28,8 @@ Two similarly named items are **not** WEB-13 and must not be substituted for it:
   (`docs/agent-context/known-flaws.md`
   `PROD-ENV-DRIFT-ALERTING-GAP-2026-07-11`). Backing-store availability, not
   artifact sandbox egress. It is relevant to this review only through C5.
-- **WEB-13 in the remediation register**
-  (`docs/remediation/waves/W09-web-application-and-shared-ui-surfaces.md`) — a
-  `/connectors` dev-server hang, a separate ID namespace.
+- **WEB-13 in the remediation register** — a `/connectors` dev-server hang, a
+  separate ID namespace.
 
 The precondition is therefore concrete and directly topical: CAP-052 puts a
 network verb back inside the sandbox WEB-13's fix sealed. "WEB-13 stays closed"
