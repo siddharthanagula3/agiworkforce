@@ -48,6 +48,17 @@ vi.mock('@/lib/device-token-crypto', () => ({
   decryptToken: vi.fn((t: string) => t),
 }));
 
+const mockIsDeviceCodeSignInEnabled = vi.fn();
+const mockHasAcceptedCurrentTerms = vi.fn();
+
+vi.mock('@/lib/server/device-signin-policy', () => ({
+  isDeviceCodeSignInEnabled: (userId: string) => mockIsDeviceCodeSignInEnabled(userId),
+}));
+
+vi.mock('@/lib/server/terms', () => ({
+  hasAcceptedCurrentTerms: (userId: string) => mockHasAcceptedCurrentTerms(userId),
+}));
+
 import { POST, OPTIONS } from '@/app/api/device/approve/route';
 import { requireCsrfToken } from '@/lib/csrf';
 
@@ -80,6 +91,10 @@ describe('Device Approve API', () => {
     mockQuery.mockResolvedValue([makePendingRecord()]);
 
     mockExecute.mockResolvedValue(undefined);
+
+    // Both approval gates open by default; the cases below close one at a time.
+    mockIsDeviceCodeSignInEnabled.mockResolvedValue(true);
+    mockHasAcceptedCurrentTerms.mockResolvedValue(true);
   });
 
   describe('POST /api/device/approve', () => {
@@ -301,6 +316,77 @@ describe('Device Approve API', () => {
 
         const response = await POST(request);
         expect(response.status).toBe(409);
+      });
+    });
+
+    describe('Approval Gates', () => {
+      // The device code is minted by an unauthenticated caller, so these two
+      // checks are the only place an account policy can be consulted. If either
+      // stops refusing, a disabled account or one that never accepted the
+      // current terms hands a long-lived session token to a device.
+      it('refuses approval when the account has device sign-in turned off', async () => {
+        mockIsDeviceCodeSignInEnabled.mockResolvedValueOnce(false);
+
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: validCode, action: 'approve' }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(403);
+
+        const data = await response.json();
+        expect(data.error.code).toBe('DEVICE_SIGNIN_DISABLED');
+
+        // Only the lookup ran: the code is left pending rather than approved
+        // with a token written to it.
+        expect(mockQuery).toHaveBeenCalledTimes(1);
+        expect(mockHasAcceptedCurrentTerms).not.toHaveBeenCalled();
+      });
+
+      it('refuses approval until the current terms are accepted', async () => {
+        mockHasAcceptedCurrentTerms.mockResolvedValueOnce(false);
+
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: validCode, action: 'approve' }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(403);
+
+        const data = await response.json();
+        expect(data.error.code).toBe('TERMS_ACCEPTANCE_REQUIRED');
+        expect(data.acceptanceUrl).toBe(
+          `/login/complete?redirectTo=${encodeURIComponent(`/verify?code=${validCode}`)}`,
+        );
+
+        expect(mockQuery).toHaveBeenCalledTimes(1);
+      });
+
+      it('still lets the user deny a device when both gates are shut', async () => {
+        // Denial is a rejection, not a grant: an account with device sign-in
+        // switched off must still be able to turn away a code it was shown.
+        mockIsDeviceCodeSignInEnabled.mockResolvedValue(false);
+        mockHasAcceptedCurrentTerms.mockResolvedValue(false);
+
+        mockQuery.mockResolvedValueOnce([makePendingRecord()]);
+        mockQuery.mockResolvedValueOnce([{ status: 'denied' }]);
+
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: validCode, action: 'deny' }),
+        });
+
+        const response = await POST(request);
+        expect(response.status).toBe(200);
+
+        const data = await response.json();
+        expect(data.status).toBe('denied');
+        expect(mockIsDeviceCodeSignInEnabled).not.toHaveBeenCalled();
       });
     });
   });

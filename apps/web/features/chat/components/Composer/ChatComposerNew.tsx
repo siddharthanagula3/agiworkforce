@@ -92,6 +92,11 @@ import {
 // web-local copy — Mobile and Desktop read the same source, so a model that
 // publishes no 4k size cannot offer it on one surface and hide it on another.
 import { getVideoAspectOptionsForModel, getVideoQualityOptionsForModel } from '@agiworkforce/types';
+import {
+  consumePendingMcpContextSelection,
+  MCP_CONTEXT_SELECTED_EVENT,
+  type McpContextSelection,
+} from '@/features/connectors/lib/mcp-context-selection';
 
 export {
   getImageAspectOptionsForModel,
@@ -199,6 +204,8 @@ export interface ComposerSendMeta {
   styleInstruction?: string;
   /** Exact server-catalog skill name; the server resolves and loads its body. */
   skillName?: string;
+  /** Explicit user-selected MCP Prompt/Resources for this one turn. */
+  mcpContext?: McpContextSelection;
   /** CAP-048: structured AGI Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
 }
@@ -500,6 +507,7 @@ const ChatComposerNewComponent = ({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
   const { skills: availableSkills, loading: skillsLoading, error: skillsError } = useSkillsList();
+  const [selectedMcpContext, setSelectedMcpContext] = useState<McpContextSelection | null>(null);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   // Cowork folder — local-only; handle is never forwarded to any API route.
@@ -509,6 +517,37 @@ const ChatComposerNewComponent = ({
   const canPickFolder = supportsDirectoryPicker();
   const router = useRouter();
   const isFreeTrial = freeTrial?.enabled ?? false;
+
+  useEffect(() => {
+    const apply = (selection: McpContextSelection | null) => {
+      if (!selection) return;
+      setSelectedMcpContext((current) => ({
+        ...(current ?? {}),
+        ...(selection.prompt ? { prompt: selection.prompt } : {}),
+        ...(selection.resources
+          ? {
+              resources: [...(current?.resources ?? []), ...selection.resources]
+                .filter(
+                  (resource, index, all) =>
+                    all.findIndex(
+                      (candidate) =>
+                        candidate.connectorId === resource.connectorId &&
+                        candidate.uri === resource.uri,
+                    ) === index,
+                )
+                .slice(0, 4),
+            }
+          : {}),
+      }));
+    };
+    apply(consumePendingMcpContextSelection());
+    const listener = (event: Event) => {
+      const selected = consumePendingMcpContextSelection();
+      apply(selected ?? (event as CustomEvent<McpContextSelection>).detail);
+    };
+    window.addEventListener(MCP_CONTEXT_SELECTED_EVENT, listener);
+    return () => window.removeEventListener(MCP_CONTEXT_SELECTED_EVENT, listener);
+  }, []);
 
   /**
    * AUDIT-FIX CMP-11/CMP-14: client gates now read the SAME canonical billing
@@ -1072,6 +1111,7 @@ const ChatComposerNewComponent = ({
     // already an explicit way out — the × on the mode pill, which clears the
     // mode and its model together.
     setComposerToggles({ selectedSkillName: null });
+    setSelectedMcpContext(null);
     setLocalNotice(null);
     // A new draft gets its own secret warning.
     secretWarningAcknowledgedRef.current = false;
@@ -1654,6 +1694,12 @@ const ChatComposerNewComponent = ({
     if (officeCreationEnabled) labels.push('Office files');
     if (thinkingEnabled) labels.push('Extended thinking');
     if (selectedSkillName) labels.push(`/${selectedSkillName}`);
+    if (selectedMcpContext?.prompt) labels.push(`Prompt: ${selectedMcpContext.prompt.name}`);
+    if (selectedMcpContext?.resources?.length) {
+      labels.push(
+        `${selectedMcpContext.resources.length} connector resource${selectedMcpContext.resources.length === 1 ? '' : 's'}`,
+      );
+    }
     return labels;
   }, [
     canUseAgiWork,
@@ -1664,6 +1710,7 @@ const ChatComposerNewComponent = ({
     officeCreationEnabled,
     thinkingEnabled,
     selectedSkillName,
+    selectedMcpContext,
   ]);
 
   const handleStop = useCallback(() => {
@@ -1881,6 +1928,7 @@ const ChatComposerNewComponent = ({
         // is never empty, so out-of-the-box turns finally carry real guidance.
         styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
         skillName: selectedSkillName ?? undefined,
+        mcpContext: selectedMcpContext ?? undefined,
         // CAP-048: attach the structured goal on an AGI Work send. The objective
         // is the composed message; the optional scope fields ride alongside.
         agiWorkGoal:
@@ -1932,6 +1980,7 @@ const ChatComposerNewComponent = ({
     message,
     attachments,
     selectedSkillName,
+    selectedMcpContext,
     isTurnActive,
     disabled,
     hasAttachmentConflict,
@@ -2317,6 +2366,32 @@ const ChatComposerNewComponent = ({
               <X className="h-2.5 w-2.5" />
             </button>
           </span>
+        </div>
+      )}
+
+      {selectedMcpContext && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {selectedMcpContext.prompt ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-600/30 bg-sky-500/10 px-2.5 py-1 text-xs text-sky-700 dark:text-sky-300">
+              Prompt: {selectedMcpContext.prompt.name}
+            </span>
+          ) : null}
+          {(selectedMcpContext.resources ?? []).map((resource) => (
+            <span
+              key={`${resource.connectorId}:${resource.uri}`}
+              className="inline-flex max-w-64 items-center gap-1.5 truncate rounded-full border border-sky-600/30 bg-sky-500/10 px-2.5 py-1 text-xs text-sky-700 dark:text-sky-300"
+            >
+              Resource: {resource.name ?? resource.uri}
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={() => setSelectedMcpContext(null)}
+            className="rounded-full p-1 text-muted-foreground hover:bg-muted"
+            aria-label="Remove selected connector context"
+          >
+            <X className="h-3 w-3" />
+          </button>
         </div>
       )}
 

@@ -52,7 +52,7 @@ const COMPLIANCE: {
     item: 'GDPR — data subject rights',
     status: 'Implemented',
     artifact:
-      'Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 68 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66 — nothing checked it. A test now derives it from the code.',
+      'Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 70 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66 — nothing checked it. A test now derives it from the code.',
     asOf: '2026-08-14',
   },
   {
@@ -179,10 +179,10 @@ const POSTURE: { item: string; state: string; detail: string; asOf: string }[] =
   },
   {
     item: 'Database row-level isolation',
-    state: 'Partial — 35 of 148 database-backed hosted API route files',
+    state: 'Partial — 39 of 153 database-backed hosted API route files',
     detail:
-      'Counted against the 148 route files that reach the database; the other 97 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 113 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security.',
-    asOf: '2026-08-24',
+      'Counted against the 153 route files that reach the database; the other 98 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 114 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security.',
+    asOf: '2026-08-26',
   },
   {
     item: 'Authentication and CSRF',
