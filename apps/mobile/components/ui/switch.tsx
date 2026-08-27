@@ -7,6 +7,7 @@ interface SwitchProps {
   disabled?: boolean;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  testID?: string;
 }
 
 export function Switch({
@@ -15,11 +16,13 @@ export function Switch({
   disabled = false,
   accessibilityLabel,
   accessibilityHint,
+  testID,
 }: SwitchProps) {
   const colors = useThemeColors();
 
   return (
     <NativeSwitch
+      testID={testID}
       value={value}
       onValueChange={onValueChange}
       disabled={disabled}

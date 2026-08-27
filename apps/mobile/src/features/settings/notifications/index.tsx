@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import {
   Bell,
   BellOff,
+  Bot,
   CheckSquare,
   AlertTriangle,
   AlertOctagon,
@@ -35,6 +36,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
 import { NOTIFICATION_CATEGORIES, NOTIFICATION_CATEGORY_COPY } from './categories';
+import { useAgentActivityPushSync } from './useAgentActivityPushSync';
 import { useTimeFocusSync } from './useTimeFocusSync';
 import { BREAK_REMINDER_MINUTES, type TimeFocusWeekday } from '@agiworkforce/types';
 
@@ -308,6 +310,7 @@ export default function NotificationPreferencesScreen() {
   } = useNotificationPrefsStore();
   const CATEGORIES = getCategories(colors);
   const timeFocusSync = useTimeFocusSync();
+  const agentActivityPush = useAgentActivityPushSync();
   const pushTimeFocus = timeFocusSync.push;
 
   const [timePickerField, setTimePickerField] = useState<'start' | 'end' | null>(null);
@@ -418,6 +421,50 @@ export default function NotificationPreferencesScreen() {
           );
         })}
       </Card>
+
+      {/* Agent runs. The four categories above are enforced on this device and,
+          once registered, by the sender; this switch is the account-level
+          consent the cloud agent sender reads before it calls Expo at all. */}
+      <View className="mt-6 mb-2">
+        <Text
+          className="text-[11px] uppercase mb-3"
+          style={{ color: colors.textMuted, letterSpacing: 0 }}
+        >
+          Agent Runs
+        </Text>
+      </View>
+      <Card>
+        <View className="flex-row items-center justify-between py-3 px-1">
+          <View className="flex-row items-center gap-3 flex-1 mr-3">
+            <Bot size={18} color={colors.teal} />
+            <View className="flex-1">
+              <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                Agent Run Push
+              </Text>
+              <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+                Approvals, questions, and finished or failed runs
+              </Text>
+            </View>
+          </View>
+          <Switch
+            accessibilityLabel="Agent Run Push"
+            value={agentActivityPush.enabled}
+            disabled={agentActivityPush.status === 'local'}
+            onValueChange={agentActivityPush.setEnabled}
+          />
+        </View>
+      </Card>
+      <Text className="text-[11px] mt-2 px-1" style={{ color: colors.textMuted }}>
+        {agentActivityPush.status === 'local'
+          ? 'Switch to AGI Cloud to control agent run push — local mode has no cloud agents to notify you.'
+          : agentActivityPush.status === 'loading'
+            ? 'Loading your account settings…'
+            : agentActivityPush.status === 'saving'
+              ? 'Saving to your account…'
+              : agentActivityPush.status === 'error'
+                ? (agentActivityPush.error ?? 'Could not reach your account settings.')
+                : 'Applied by the server before it sends, on every device on this account.'}
+      </Text>
 
       {/* Quiet hours */}
       <View className="mt-6 mb-2">

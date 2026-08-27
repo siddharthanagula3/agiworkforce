@@ -77,6 +77,12 @@ describe('push-token registration ownership', () => {
       {
         deviceId: 'device-1',
         pushToken: 'expo-token-a',
+        preferences: expect.objectContaining({
+          categories: expect.any(Object),
+          eventTypes: expect.any(Object),
+          quietHours: expect.any(Object),
+          timezone: expect.any(String),
+        }),
       },
       {
         headers: { Authorization: 'Bearer jwt-a' },

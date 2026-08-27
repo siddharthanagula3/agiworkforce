@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import type { NotificationEventType } from '@/services/notifications';
+import {
+  QUIET_HOURS_EXEMPT_EVENT_TYPES,
+  type NotificationEventType,
+} from '@/services/notificationEventTypes';
 import {
   isDateWithinQuietHours,
   type BreakReminderMinutes,
@@ -16,7 +19,7 @@ export type QuietHours = QuietHoursPreferences;
 
 export const ALL_WEEKDAYS: readonly TimeFocusWeekday[] = [0, 1, 2, 3, 4, 5, 6];
 
-function deviceTimezone(): string {
+export function deviceTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   } catch {
@@ -69,12 +72,10 @@ export function shouldNotifyWithPreferences(
   const category = getCategoryForType(type);
   if (!preferences.categoryEnabled[category]) return false;
 
-  const isCritical =
-    type === 'agent_failed' ||
-    type === 'emergency_stop_triggered' ||
-    type === 'agent_approval_needed' ||
-    type === 'approval_pending_escalation';
-  if (!isCritical && isDateWithinQuietHours(now, preferences.quietHours)) {
+  if (
+    !QUIET_HOURS_EXEMPT_EVENT_TYPES.includes(type) &&
+    isDateWithinQuietHours(now, preferences.quietHours)
+  ) {
     return false;
   }
 

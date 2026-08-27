@@ -3,11 +3,15 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import type { MobileAuthSession } from './authSession';
-import { api } from './api';
-import { getDeviceId } from '@/lib/deviceId';
 import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 import { notificationAllowed } from './notificationGate';
 import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from './notificationCategories';
+import type { NotificationEventType } from './notificationEventTypes';
+import {
+  beginPushPreferenceSync,
+  postPushRegistration,
+  stopPushPreferenceSync,
+} from './pushPreferenceSync';
 
 let _isSignedIn = false;
 export function setSignedIn(value: boolean): void {
@@ -17,24 +21,7 @@ export function setCurrentSession(session: MobileAuthSession | null): void {
   _isSignedIn = session != null;
 }
 
-export type NotificationEventType =
-  | 'task_completed'
-  | 'agent_approval_needed'
-  | 'agent_failed'
-  | 'emergency_stop_triggered'
-  | 'approval_pending_escalation'
-  | 'agent_paused'
-  | 'status_update'
-  | 'heartbeat_info'
-  | 'schedule_triggered'
-  // Emitted by the ONLY server-side push producer this app has:
-  // `apps/web/lib/services/schedule-notification-service.ts` sends
-  // `{ type: 'schedule_run', taskId }` after a scheduled run is finalized.
-  // Without this member every real push fell through to `default:` and opened
-  // app home instead of the schedules list.
-  | 'schedule_run'
-  | 'companion_connected'
-  | 'chat_message';
+export type { NotificationEventType };
 
 export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 
@@ -204,30 +191,11 @@ async function sendTokenToBackend(
   token: string,
   accountContext: PushNotificationAccountContext,
 ): Promise<boolean> {
-  try {
-    if (!accountContextIsCurrent(accountContext)) return false;
-    const authToken = await accountContext.getAuthToken();
-    if (!authToken || !accountContextIsCurrent(accountContext)) {
-      return false;
-    }
-
-    const deviceId = await getDeviceId();
-    if (!accountContextIsCurrent(accountContext)) return false;
-    await api.post(
-      '/api/mobile/push-token',
-      {
-        deviceId,
-        pushToken: token,
-      },
-      {
-        headers: { Authorization: `Bearer ${authToken}` },
-        signal: accountContext.signal,
-      },
-    );
-    return accountContextIsCurrent(accountContext);
-  } catch {
-    return false;
+  const registered = await postPushRegistration(token, accountContext);
+  if (registered) {
+    beginPushPreferenceSync(token, accountContext);
   }
+  return registered;
 }
 
 export async function scheduleLocalNotification(opts: {
@@ -499,6 +467,7 @@ export function setupNotificationListeners(
       foregroundSubscription = null;
       responseSubscription = null;
       tokenSubscription = null;
+      stopPushPreferenceSync();
     };
   }
 
@@ -536,6 +505,7 @@ export function setupNotificationListeners(
     foregroundSubscription = null;
     responseSubscription = null;
     tokenSubscription = null;
+    stopPushPreferenceSync();
   };
 }
 

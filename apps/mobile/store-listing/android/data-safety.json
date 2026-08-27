@@ -4,6 +4,8 @@
   "dataDeletionEndpoint": "apps/web/app/api/user/delete-account/route.ts",
   "allDataEncryptedInTransit": true,
   "usesAdvertisingId": false,
+  "sharingBasis": "Every entry below answers Play's sharing question false on the service-provider basis. The ground fact: in Cloud mode the user's messages and attachments leave the device, reach AGI Cloud, and are forwarded server-side to the model provider serving the request; sign-in identity is handled by Clerk and push delivery by the push service. Those subprocessors are listed at https://agiworkforce.com/subprocessors and process the data on AGI's behalf, not for their own purposes. What the source tree proves: every outbound request from the device goes to an AGI-controlled host (apps/mobile/lib/constants.ts) plus Clerk and the push service, so no third party receives data directly from the device, and apps/mobile/package.json declares no analytics, crash-reporting or ad SDK. Whether the exception covers each subprocessor rests on the data-processing terms behind that list, which this repo cannot verify. LISTING-METADATA-ANDROID.json data_safety.data_shared is false to match.",
+  "optionalityBasis": "Every entry is optional because Cloud sign-in is optional. A signed-out user who has completed onboarding lands in Local Mode and is never redirected to a sign-in wall (apps/mobile/app/_layout.tsx), and Local Mode is prevented from reaching AGI hosts by apps/mobile/lib/egressGuard.ts.",
   "collectedData": [
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeEmailAddress",
@@ -12,9 +14,10 @@
       "collected": true,
       "sharedWithThirdParties": false,
       "purposes": ["App functionality", "Account management"],
-      "optional": false,
+      "optional": true,
       "ephemeral": false,
-      "usedForTracking": false
+      "usedForTracking": false,
+      "backedBy": "Clerk sign-in only (apps/mobile/app/(auth)/login.tsx). Never collected in Local Mode."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeName",
@@ -25,29 +28,44 @@
       "purposes": ["App functionality", "Account management"],
       "optional": true,
       "ephemeral": false,
-      "usedForTracking": false
+      "usedForTracking": false,
+      "backedBy": "Collected only if the user's sign-in method provides it (apps/mobile/app/(auth)/login.tsx)."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeOtherUserContent",
       "playCategory": "Messages",
       "playDataType": "Other in-app messages",
       "collected": true,
-      "sharedWithThirdParties": true,
+      "sharedWithThirdParties": false,
       "purposes": ["App functionality"],
-      "optional": false,
+      "optional": true,
       "ephemeral": false,
-      "usedForTracking": false
+      "usedForTracking": false,
+      "backedBy": "Cloud-mode chat content, uploaded to AGI Cloud and processed by the model provider serving the request. Local Mode uploads nothing."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypePhotosorVideos",
       "playCategory": "Photos and videos",
       "playDataType": "Photos",
       "collected": true,
-      "sharedWithThirdParties": true,
+      "sharedWithThirdParties": false,
       "purposes": ["App functionality"],
       "optional": true,
       "ephemeral": false,
-      "usedForTracking": false
+      "usedForTracking": false,
+      "backedBy": "Image attachments picked for a Cloud message (apps/mobile/src/features/media/photo-picker.ts) and the Cloud profile photo, which is uploaded to Clerk (apps/mobile/src/features/settings/index.tsx)."
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeOtherUserContent",
+      "playCategory": "Files and docs",
+      "playDataType": "Files and docs",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["App functionality"],
+      "optional": true,
+      "ephemeral": false,
+      "usedForTracking": false,
+      "backedBy": "A document attached to a Cloud message through expo-document-picker (apps/mobile/app/(app)/chat/[id].tsx:703, apps/mobile/app/(app)/(tabs)/chat.tsx:596). Apple has no separate documents type, so it maps onto the same NSPrivacyCollectedDataTypeOtherUserContent entry the privacy manifest already declares for message content; Play has a distinct type and needs its own row."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeUserID",
@@ -56,9 +74,10 @@
       "collected": true,
       "sharedWithThirdParties": false,
       "purposes": ["App functionality", "Account management"],
-      "optional": false,
+      "optional": true,
       "ephemeral": false,
-      "usedForTracking": false
+      "usedForTracking": false,
+      "backedBy": "The account identifier carried by every authenticated cloud request (apps/mobile/services/api.ts)."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeDeviceID",
@@ -67,9 +86,10 @@
       "collected": true,
       "sharedWithThirdParties": false,
       "purposes": ["App functionality"],
-      "optional": false,
+      "optional": true,
       "ephemeral": false,
-      "usedForTracking": false
+      "usedForTracking": false,
+      "backedBy": "An app-generated UUID from apps/mobile/lib/deviceId.ts, registered with the push token by apps/mobile/services/notifications.ts. Created only when push is enabled; it is not an advertising identifier."
     }
   ]
 }

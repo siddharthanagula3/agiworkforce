@@ -6,6 +6,8 @@ import sharp from 'sharp';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 
+import { SCREENSHOTS, deviceForClassName } from './catalog';
+
 const BG_TOP = '#0f0f0f';
 const BG_BOTTOM = '#171717';
 const ACCENT = '#10a37f';
@@ -110,45 +112,6 @@ async function composite(args: Args): Promise<void> {
   console.log(`Composited ${out}`);
 }
 
-const SCREENSHOTS_FOR_RECOMPOSE = [
-  {
-    id: '01',
-    name: 'local-demo-chat',
-    heading: 'Local chat first',
-    subhead: 'Start privately, then sign in to unlock cloud.',
-  },
-  {
-    id: '02',
-    name: 'onboarding-local',
-    heading: 'Start without an account',
-    subhead: 'Local setup, device fit, and model readiness.',
-  },
-  {
-    id: '03',
-    name: 'first-message',
-    heading: 'Chat with local models',
-    subhead: 'Composer, model badge, and performance feedback.',
-  },
-  {
-    id: '04',
-    name: 'cloud-sign-in',
-    heading: 'Sign in for Cloud',
-    subhead: 'Cloud chat opens to any signed-in account.',
-  },
-  {
-    id: '05',
-    name: 'image-question',
-    heading: 'Ask about images',
-    subhead: 'Attach a photo and keep the workflow in chat.',
-  },
-  {
-    id: '06',
-    name: 'voice-recording',
-    heading: 'Hold to speak',
-    subhead: 'Voice input feeds the same local chat workflow.',
-  },
-];
-
 async function recomposeAll(): Promise<void> {
   const root = resolve(__dirname, '..', '..', 'store-listing', 'screenshots', 'captures');
   if (!existsSync(root)) {
@@ -161,17 +124,21 @@ async function recomposeAll(): Promise<void> {
       const rawDir = join(platformDir, className, 'raw');
       const finalDir = join(platformDir, className, 'final');
       if (!existsSync(rawDir)) continue;
-      for (const shot of SCREENSHOTS_FOR_RECOMPOSE) {
+      const device = deviceForClassName(className);
+      if (!device) {
+        console.log(`Skipping ${platform}/${className}: no device class in the catalog`);
+        continue;
+      }
+      for (const shot of SCREENSHOTS) {
         const rawFile = join(rawDir, `${shot.id}-${shot.name}.png`);
         if (!existsSync(rawFile)) continue;
-        const meta = await sharp(rawFile).metadata();
         await composite({
           raw: rawFile,
           out: join(finalDir, `${shot.id}-${shot.name}.png`),
           heading: shot.heading,
           subhead: shot.subhead,
-          width: meta.width ?? 1206,
-          height: meta.height ?? 2622,
+          width: device.width,
+          height: device.height,
         });
       }
     }
@@ -179,7 +146,7 @@ async function recomposeAll(): Promise<void> {
 }
 
 async function main() {
-  GlobalFonts.loadSystemFonts?.();
+  (GlobalFonts as unknown as { loadSystemFonts?: () => void }).loadSystemFonts?.();
   const argv = process.argv.slice(2);
   if (argv.includes('--recompose-all')) {
     await recomposeAll();

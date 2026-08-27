@@ -1,11 +1,18 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
+import { SCREENSHOTS, VERIFY_SCREENSHOT, deviceForClassName } from './catalog';
 import {
   DEVICES,
+  resolveAndroidAvd,
   resolveSimulatorUdid,
   type SimctlDevice,
   type SimctlDeviceListing,
 } from './pipeline';
+
+const MOBILE_ROOT = resolve(__dirname, '..', '..');
+const SPEC_DIR = join(MOBILE_ROOT, 'scripts', 'screenshots', 'specs');
 
 const IOS_26_1 = 'com.apple.CoreSimulator.SimRuntime.iOS-26-1';
 const IOS_26_2 = 'com.apple.CoreSimulator.SimRuntime.iOS-26-2';
@@ -128,5 +135,101 @@ describe('resolveSimulatorUdid', () => {
     expect(() => resolveSimulatorUdid({ devices: { [IOS_26_1]: [] } }, IPHONE_17_PRO)).toThrow(
       /iPhone 17 Pro/u,
     );
+  });
+});
+
+describe('resolveAndroidAvd', () => {
+  it('returns the avd when the emulator reports it', () => {
+    expect(resolveAndroidAvd(['pixel_8_api_34', 'pixel_tablet_api_34'], 'pixel_8_api_34')).toBe(
+      'pixel_8_api_34',
+    );
+  });
+
+  it('throws naming the requested avd and what is actually available', () => {
+    expect(() => resolveAndroidAvd(['pixel_6_api_33'], 'pixel_8_api_34')).toThrow(
+      /pixel_8_api_34[\s\S]*pixel_6_api_33/u,
+    );
+  });
+
+  it('reports an empty device manager rather than matching nothing', () => {
+    expect(() => resolveAndroidAvd([], 'pixel_8_api_34')).toThrow(/\(none\)/u);
+  });
+});
+
+describe('screenshot catalog', () => {
+  const allShots = [...SCREENSHOTS, VERIFY_SCREENSHOT];
+
+  it('points every screenshot at a spec file that exists', () => {
+    for (const shot of allShots) {
+      expect(existsSync(join(SPEC_DIR, shot.spec))).toBe(true);
+    }
+  });
+
+  it('names each capture exactly as its spec calls device.takeScreenshot', () => {
+    for (const shot of allShots) {
+      const source = readFileSync(join(SPEC_DIR, shot.spec), 'utf8');
+      const captured = [...source.matchAll(/device\.takeScreenshot\(\s*'([^']+)'/gu)].map(
+        (match) => match[1],
+      );
+      expect(captured.length).toBeGreaterThan(0);
+      expect(captured).toContain(`${shot.id}-${shot.name}`);
+    }
+  });
+
+  it('gives every device class a distinct name and a positive store-conformant size', () => {
+    expect(new Set(DEVICES.map((d) => d.className)).size).toBe(DEVICES.length);
+    for (const device of DEVICES) {
+      expect(device.width).toBeGreaterThanOrEqual(320);
+      expect(device.height).toBeGreaterThanOrEqual(320);
+      expect(device.width).toBeLessThanOrEqual(3840);
+      expect(device.height).toBeLessThanOrEqual(3840);
+      expect(deviceForClassName(device.className)).toBe(device);
+    }
+  });
+
+  it('carries the three device classes the stores require, at their exact required sizes', () => {
+    expect(deviceForClassName('iphone-17-pro-max')).toMatchObject({ width: 1320, height: 2868 });
+    expect(deviceForClassName('ipad-pro-13')).toMatchObject({ width: 2048, height: 2732 });
+    expect(deviceForClassName('phone')).toMatchObject({ width: 1080, height: 1920 });
+    for (const className of ['iphone-17-pro-max', 'ipad-pro-13', 'phone']) {
+      expect(deviceForClassName(className)?.storeSlot).toEqual(expect.stringMatching(/required/u));
+    }
+  });
+
+  it('keeps every Play screenshot at the 9:16 ratio the console enforces', () => {
+    for (const device of DEVICES.filter((d) => d.platform === 'android')) {
+      expect(device.width / device.height).toBeCloseTo(9 / 16, 5);
+    }
+  });
+});
+
+describe('pipeline wiring', () => {
+  it('resolves the compositor to a file that exists', () => {
+    expect(existsSync(join(MOBILE_ROOT, 'scripts', 'screenshots', 'compositor.ts'))).toBe(true);
+  });
+
+  it('shares the detox env names with detox.config.js instead of re-inlining them', () => {
+    const config = readFileSync(join(MOBILE_ROOT, 'detox.config.js'), 'utf8');
+    expect(config).toContain("require('./detox.env')");
+    expect(config).not.toMatch(/process\.env\.DETOX_/u);
+  });
+
+  it('declares a detox configuration for every platform and variant the pipeline can request', () => {
+    const config = readFileSync(join(MOBILE_ROOT, 'detox.config.js'), 'utf8');
+    for (const name of [
+      'ios.sim.debug',
+      'ios.sim.release',
+      'android.emu.debug',
+      'android.emu.release',
+    ]) {
+      expect(config).toContain(`'${name}'`);
+    }
+  });
+
+  it('keeps the app identifier in detox.env equal to both native identifiers', () => {
+    const { APP_BUNDLE_ID } = require('../../detox.env');
+    const appConfig = readFileSync(join(MOBILE_ROOT, 'app.config.js'), 'utf8');
+    expect(appConfig).toContain(`bundleIdentifier: '${APP_BUNDLE_ID}'`);
+    expect(appConfig).toContain(`package: '${APP_BUNDLE_ID}'`);
   });
 });
