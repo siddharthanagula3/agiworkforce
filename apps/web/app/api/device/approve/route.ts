@@ -12,6 +12,8 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { encryptToken } from '@/lib/device-token-crypto';
+import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
+import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 import { QrLinkCodeSchema } from '@/lib/validations/device';
 
 const DeviceApproveRequestSchema = z.object({
@@ -111,6 +113,38 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       return NextResponse.json(
         { success: true, status: 'denied' },
         { status: 200, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    // Enforced on APPROVAL, not on code issuance: starting the flow is
+    // unauthenticated, so there is no account to consult until a human approves.
+    // Both gates sit after the deny branch so a rejection still works when the
+    // account has device sign-in switched off.
+    if (!(await isDeviceCodeSignInEnabled(userId))) {
+      logger.info({ userId }, 'Device approval refused: device sign-in is off');
+      return NextResponse.json(
+        {
+          error: {
+            code: 'DEVICE_SIGNIN_DISABLED',
+            message:
+              'Device sign-in is turned off for this account. Turn it back on in Settings › Security to approve a device.',
+          },
+        },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
+    if (!(await hasAcceptedCurrentTerms(userId))) {
+      const returnTo = `/verify?${new URLSearchParams({ code }).toString()}`;
+      return NextResponse.json(
+        {
+          error: {
+            code: 'TERMS_ACCEPTANCE_REQUIRED',
+            message: 'Review and accept the current Terms of Service before approving a device.',
+          },
+          acceptanceUrl: `/login/complete?redirectTo=${encodeURIComponent(returnTo)}`,
+        },
+        { status: 403, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 

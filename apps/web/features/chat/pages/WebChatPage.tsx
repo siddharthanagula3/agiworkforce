@@ -210,6 +210,7 @@ import {
   type ImageTranscriptRecovery,
 } from '../stores/image-transcript-recovery-store';
 import { toUserMessage } from '@/lib/user-error-message';
+import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 
 // A fresh [] each render changes the identity every time and defeats the
 // memoization below, which is what the exhaustive-deps warning was pointing at.
@@ -232,6 +233,7 @@ type SendMeta = {
   styleInstruction?: string;
   /** Exact server-catalog skill name. */
   skillName?: string;
+  mcpContext?: McpContextSelection;
   /** CAP-048: structured AGI Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
 };
@@ -1582,6 +1584,7 @@ export default function WebChatPage() {
             styleMode: options.meta?.styleMode,
             styleInstruction: options.meta?.styleInstruction,
             skillName: options.meta?.skillName,
+            mcpContext: options.meta?.mcpContext,
           });
 
         // Deferred edit rollback: if this send is the resubmission of an edited

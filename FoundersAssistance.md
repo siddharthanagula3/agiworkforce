@@ -2931,8 +2931,9 @@ enforced in two other places.
 
 **Status:** `BLOCKED_BY_HUMAN` — a product decision, not a code gap.
 
-`apps/web/features/admin/components/AdminConsoleEntry.tsx` was added on
-`compliance/dpdp` to surface an "Open admin console" card in Settings → Security.
+`apps/web/features/admin/components/AdminConsoleEntry.tsx` (since removed) was
+added on `compliance/dpdp` to surface an "Open admin console" card in Settings →
+Security.
 It gated on `hasAdminConsoleAccess(user.publicMetadata)` — the **organisation**
 `owner`/`admin` role — while the routes behind it are now gated on
 `requirePlatformAdmin`, i.e. the deploy-time `AGI_PLATFORM_ADMIN_USER_IDS`
