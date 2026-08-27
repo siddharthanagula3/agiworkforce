@@ -47,7 +47,7 @@ function defaultSendCommandImpl(
         'URL: https://example.com',
         'TITLE: Test',
         '',
-        'INTERACTABLE ELEMENTS (2):',
+        'INTERACTABLE ELEMENTS (2 addressable of 2 found):',
         '  [1] button label="Submit"',
         '  [2] input:email name="email"',
         '',
@@ -55,9 +55,16 @@ function defaultSendCommandImpl(
         'Hello World',
         '--- END UNTRUSTED PAGE CONTENT ---',
       ].join('\n');
-      const indexMap: Record<string, string> = {
-        '1': 'button',
-        '2': 'input[name="email"]',
+      // Structural paths, not tag names: an index must name exactly one element.
+      const indexMap: Record<string, { selector: string; signature: string }> = {
+        '1': {
+          selector: 'html > body:nth-of-type(1) > button:nth-of-type(1)',
+          signature: 'button||||Submit',
+        },
+        '2': {
+          selector: 'html > body:nth-of-type(1) > input:nth-of-type(1)',
+          signature: 'input||email|email|',
+        },
       };
       callback({
         result: {
@@ -626,6 +633,51 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
     expect(chromeMock.debugger.attach.mock.calls.length).toBe(attachCallsBefore);
   });
 
+  it('Chrome’s own Cancel on the debugging bar terminates the run', () => {
+    const onDetachedByUser = vi.fn();
+    registerActiveTab(101, onDetachedByUser);
+    ensureOnDetachListener();
+
+    (
+      chromeMock.debugger as typeof chromeMock.debugger & {
+        _fireDetach: (id: number, r: string) => void;
+      }
+    )._fireDetach(101, 'canceled_by_user');
+
+    expect(onDetachedByUser).toHaveBeenCalledWith(101);
+  });
+
+  it('an eviction detach does not terminate the run — it re-attaches instead', () => {
+    const onDetachedByUser = vi.fn();
+    registerActiveTab(102, onDetachedByUser);
+    ensureOnDetachListener();
+
+    (
+      chromeMock.debugger as typeof chromeMock.debugger & {
+        _fireDetach: (id: number, r: string) => void;
+      }
+    )._fireDetach(102, 'target_closed');
+
+    expect(onDetachedByUser).not.toHaveBeenCalled();
+    unregisterActiveTab(102);
+  });
+
+  it('runAgentLoop forwards its detach handler to the driver registry', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    const onDebuggerDetachedByUser = vi.fn();
+
+    const loop = runAgentLoop('Detach wiring', 42, { maxSteps: 1, onDebuggerDetachedByUser });
+    ensureOnDetachListener();
+    (
+      chromeMock.debugger as typeof chromeMock.debugger & {
+        _fireDetach: (id: number, r: string) => void;
+      }
+    )._fireDetach(42, 'canceled_by_user');
+    await loop;
+
+    expect(onDebuggerDetachedByUser).toHaveBeenCalledWith(42);
+  });
+
   it('onDetach for unregistered tab does NOT trigger re-attach', () => {
     ensureOnDetachListener();
     unregisterActiveTab(99);
@@ -734,7 +786,6 @@ describe('P2-5: approval gate — fail-CLOSED on timeout', () => {
 });
 
 describe('P2-6: content fencing + injection heuristic', () => {
-
   it('scanForInjection returns null for clean content', () => {
     expect(scanForInjection('Welcome to our job board. Apply today!')).toBeNull();
     expect(scanForInjection('Submit your resume below.')).toBeNull();

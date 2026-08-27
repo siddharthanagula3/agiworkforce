@@ -86,7 +86,12 @@ import {
 } from './features/privacy/cloudMirroring';
 import { getChromeSurfaceAvailability } from './features/side-panel/surface-policy';
 import { ManagedCloudOwnerRequestFence } from './features/side-panel/managed-owner-request-fence';
-import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl, sanitizePageText } from './background/policy';
+import {
+  ALLOWED_BRIDGE_HOSTS,
+  DEFAULT_AGI_BRIDGE_URL,
+  validateBridgeUrl,
+  sanitizePageText,
+} from './background/policy';
 import {
   FilePen,
   Loader2,
@@ -114,8 +119,14 @@ import {
 import {
   buildComputerUsePanel,
   COMPUTER_USE_PANEL_CSS,
+  describeCancellationReason,
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
+import {
+  buildCloudRunsPanel,
+  CLOUD_RUNS_PANEL_CSS,
+  type CloudRunsPanelAPI,
+} from './features/side-panel/cloudRunsPanel';
 import {
   beginPairing,
   loadPairingState,
@@ -637,7 +648,7 @@ const assistantCloudIdByStreamId = new Map<string, string>();
 
 let currentPageHostname = '';
 
-type SidePanelTab = 'chat' | 'workflows' | 'computer-use';
+type SidePanelTab = 'chat' | 'workflows' | 'computer-use' | 'cloud-runs';
 
 const MAX_STORED_MESSAGES = 50;
 const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
@@ -2473,15 +2484,22 @@ function injectStyles(): void {
     }
     .sp-tab {
       flex: 1;
+      /* A flex child will not shrink below its text's min-content width without
+         min-width:0, so the fourth tab pushed the bar wider than the panel
+         rather than sharing the row. Clip the label instead of the bar. */
+      min-width: 0;
       background: transparent;
       border: none;
       border-bottom: 2px solid transparent;
       color: var(--agi-ext-text-muted);
       font-size: 12px;
       font-weight: 500;
-      padding: 9px 0;
+      padding: 9px 4px;
       cursor: pointer;
       letter-spacing: 0.02em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       transition: color 0.15s, border-color 0.15s;
     }
     .sp-tab:hover { color: var(--agi-ext-text); }
@@ -4199,7 +4217,7 @@ function injectStyles(): void {
     typeof (CSSStyleSheet.prototype as { replaceSync?: unknown }).replaceSync === 'function'
   ) {
     const sheet = new CSSStyleSheet();
-    sheet.replaceSync(cssText + '\n' + COMPUTER_USE_PANEL_CSS);
+    sheet.replaceSync(cssText + '\n' + COMPUTER_USE_PANEL_CSS + '\n' + CLOUD_RUNS_PANEL_CSS);
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   } else {
     const fallback = document.createElement('style');
@@ -4373,16 +4391,47 @@ function updateStreamingBubble(id: string, fullText: string, done: boolean): voi
   scrollToBottom();
 }
 
-async function capturePageContext(): Promise<string | null> {
+const PAGE_CONTEXT_MAX_CHARS = 5_000;
+
+/**
+ * Why a capture failed, in words the user can act on. `chrome.scripting`
+ * needs a host permission or a live activeTab grant, and the side panel
+ * outlives tab switches — so denial is the ordinary case, not an edge one.
+ */
+const PAGE_CONTEXT_DENIED_REASON =
+  'Chrome would not let the extension read this page. Add this site under Approved sites in the ' +
+  'extension options, reload the page, and try again.';
+
+const PAGE_CONTEXT_EMPTY_REASON = 'This page had no readable text to attach.';
+
+export type PageContextCapture = { ok: true; text: string } | { ok: false; reason: string };
+
+function describePageContextFailure(message: string): string {
+  return /cannot access|host permission|must request permission|chrome:\/\/|extension gallery/i.test(
+    message,
+  )
+    ? PAGE_CONTEXT_DENIED_REASON
+    : `The page could not be read: ${message}`;
+}
+
+/**
+ * Reads the active tab's visible text.
+ *
+ * Resolves a discriminated result rather than `null`: every caller here either
+ * shows the user why nothing was attached or refuses to send a turn that needs
+ * the page, and neither is possible without the reason.
+ */
+async function capturePageContext(): Promise<PageContextCapture> {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (chrome.runtime.lastError) {
-        resolve(null);
+      const queryFailure = chrome.runtime.lastError?.message;
+      if (queryFailure) {
+        resolve({ ok: false, reason: describePageContextFailure(queryFailure) });
         return;
       }
       const tab = tabs[0];
       if (!tab?.id) {
-        resolve(null);
+        resolve({ ok: false, reason: 'No page is open in the active tab.' });
         return;
       }
       chrome.scripting.executeScript(
@@ -4391,12 +4440,16 @@ async function capturePageContext(): Promise<string | null> {
           func: () => (document.body?.innerText ?? '').slice(0, 5000),
         },
         (results) => {
-          if (chrome.runtime.lastError || !results?.[0]) {
-            resolve(null);
-          } else {
-            const raw = typeof results[0].result === 'string' ? results[0].result : '';
-            resolve(sanitizePageText(raw).slice(0, 5000));
+          const scriptFailure = chrome.runtime.lastError?.message;
+          if (scriptFailure) {
+            resolve({ ok: false, reason: describePageContextFailure(scriptFailure) });
+            return;
           }
+          const raw = typeof results?.[0]?.result === 'string' ? results[0].result : '';
+          const text = sanitizePageText(raw).slice(0, PAGE_CONTEXT_MAX_CHARS);
+          resolve(
+            text.trim() ? { ok: true, text } : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
+          );
         },
       );
     });
@@ -4682,6 +4735,7 @@ function sendMessage(text: string): void {
     const attachmentsToSend = pendingAttachments.slice();
     pendingAttachments.length = 0;
     composerAttachmentNotice = null;
+    composerContextNotice = null;
     updateContextButton();
     updateAttachmentPreview();
 
@@ -4700,9 +4754,15 @@ function sendMessage(text: string): void {
     const streamId = beginManagedStream(_ctx.quickMode);
 
     capturePageContext()
-      .then((capturedCtx) => {
+      .then((capture) => {
         if (_ctx.currentStreamId !== streamId) return;
-        const pageCtx = capturedCtx ?? pageContextAtAdmission;
+        const pageCtx = capture.ok ? capture.text : pageContextAtAdmission;
+        if (!pageCtx) {
+          // This command is about the page. Answering without it would be an
+          // answer about nothing, dressed as an answer about this page.
+          handleStreamError(streamId, capture.ok ? PAGE_CONTEXT_EMPTY_REASON : capture.reason);
+          return;
+        }
 
         const history = selectModelHistory(_ctx.messages, userMsg.id);
 
@@ -4713,7 +4773,7 @@ function sendMessage(text: string): void {
             clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
             id: streamId,
             text: actualPrompt,
-            pageContext: pageCtx ?? undefined,
+            pageContext: pageCtx,
             conversationHistory: history,
             attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
             extendedThinking: _ctx.thinkingEnabled || undefined,
@@ -4757,6 +4817,7 @@ function sendMessage(text: string): void {
   const attachmentsToSend = pendingAttachments.slice();
   pendingAttachments.length = 0;
   composerAttachmentNotice = null;
+  composerContextNotice = null;
   updateContextButton();
   updateAttachmentPreview();
 
@@ -5021,6 +5082,8 @@ function pendingAttachmentBytes(): number {
 }
 
 let composerAttachmentNotice: string | null = null;
+/** Why the last page-context capture produced nothing. Rendered in the same composer strip. */
+let composerContextNotice: string | null = null;
 
 function attachmentBudgetLabel(bytes: number): string {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
@@ -5096,6 +5159,7 @@ function updateAttachmentPreview(): void {
   if (
     pendingAttachments.length === 0 &&
     !composerAttachmentNotice &&
+    !composerContextNotice &&
     composerAttachmentIntakeCount === 0
   ) {
     bar.style.display = 'none';
@@ -5131,6 +5195,20 @@ function updateAttachmentPreview(): void {
     chip.appendChild(thumb);
     chip.appendChild(removeBtn);
     bar.appendChild(chip);
+  }
+  if (composerContextNotice) {
+    bar.appendChild(
+      el(
+        'div',
+        {
+          class: 'sp-attachment-notice',
+          id: 'sp-context-notice',
+          role: 'status',
+          'aria-live': 'polite',
+        },
+        composerContextNotice,
+      ),
+    );
   }
   if (composerAttachmentNotice) {
     bar.appendChild(
@@ -7293,7 +7371,7 @@ function buildUI(): void {
     class: 'sp-drawer-bridge-input',
     id: 'sp-drawer-bridge-input',
     type: 'text',
-    placeholder: 'ws://localhost:8787',
+    placeholder: DEFAULT_AGI_BRIDGE_URL,
     spellcheck: 'false',
   }) as HTMLInputElement;
   chrome.storage.local.get('agi_bridge_url', (result) => {
@@ -7316,6 +7394,11 @@ function buildUI(): void {
 
   function drawerSaveBridgeUrl(): void {
     const raw = (drawerBridgeInput as HTMLInputElement).value.trim();
+    // What gets stored, broadcast and shown is the normalized form, never the
+    // raw text. Pairing hands this straight to fetch(), which cannot use a ws:
+    // scheme — so persisting what the user typed made the placeholder itself an
+    // unusable value.
+    let persisted = '';
     if (!raw) {
       chrome.storage.local.remove('agi_bridge_url');
     } else {
@@ -7327,16 +7410,18 @@ function buildUI(): void {
         setTimeout(() => drawerBridgeError.setAttribute('hidden', ''), 8000);
         return;
       }
+      persisted = validated;
       chrome.storage.local
-        .set({ agi_bridge_url: raw })
+        .set({ agi_bridge_url: validated })
         .catch((err: unknown) => console.warn('[SidePanel] drawer bridge save failed:', err));
     }
+    drawerBridgeInput.value = persisted;
     drawerBridgeError.setAttribute('hidden', '');
     chrome.runtime
-      .sendMessage({ type: 'BRIDGE_URL_CHANGED', url: raw })
+      .sendMessage({ type: 'BRIDGE_URL_CHANGED', url: persisted })
       .catch((err: unknown) => console.warn('[SidePanel] drawer bridge notify failed:', err));
     const oldInput = document.getElementById('sp-bridge-url-input') as HTMLInputElement | null;
-    if (oldInput) oldInput.value = raw;
+    if (oldInput) oldInput.value = persisted;
   }
   drawerBridgeSaveBtn.addEventListener('click', drawerSaveBridgeUrl);
   drawerBridgeInput.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -7906,15 +7991,34 @@ function buildUI(): void {
     },
     'Computer Use',
   );
+  const runsTabBtn = el(
+    'button',
+    {
+      class: 'sp-tab',
+      id: 'sp-tab-cloud-runs',
+      'data-tab': 'cloud-runs',
+      role: 'tab',
+      'aria-selected': 'false',
+      'aria-controls': 'sp-runs-panel',
+      tabindex: '-1',
+    },
+    'Runs',
+  );
   tabBar.appendChild(chatTabBtn);
   tabBar.appendChild(workflowsTabBtn);
   tabBar.appendChild(cuTabBtn);
+  tabBar.appendChild(runsTabBtn);
   document.body.appendChild(tabBar);
 
   const cuPanel: ComputerUsePanelAPI = buildComputerUsePanel();
   cuPanel.panelEl.setAttribute('role', 'tabpanel');
   cuPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-computer-use');
   cuPanel.panelEl.setAttribute('aria-hidden', 'true');
+
+  const runsPanel: CloudRunsPanelAPI = buildCloudRunsPanel();
+  runsPanel.panelEl.setAttribute('role', 'tabpanel');
+  runsPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-cloud-runs');
+  runsPanel.panelEl.setAttribute('aria-hidden', 'true');
 
   function switchTab(tab: SidePanelTab): void {
     const chatPanelEl = document.getElementById('sp-chat-panel');
@@ -7924,18 +8028,23 @@ function buildUI(): void {
     chatTabBtn.classList.toggle('sp-tab-active', tab === 'chat');
     workflowsTabBtn.classList.toggle('sp-tab-active', tab === 'workflows');
     cuTabBtn.classList.toggle('sp-tab-active', tab === 'computer-use');
+    runsTabBtn.classList.toggle('sp-tab-active', tab === 'cloud-runs');
     chatTabBtn.setAttribute('aria-selected', String(tab === 'chat'));
     workflowsTabBtn.setAttribute('aria-selected', String(tab === 'workflows'));
     cuTabBtn.setAttribute('aria-selected', String(tab === 'computer-use'));
+    runsTabBtn.setAttribute('aria-selected', String(tab === 'cloud-runs'));
     chatTabBtn.tabIndex = tab === 'chat' ? 0 : -1;
     workflowsTabBtn.tabIndex = tab === 'workflows' ? 0 : -1;
     cuTabBtn.tabIndex = tab === 'computer-use' ? 0 : -1;
+    runsTabBtn.tabIndex = tab === 'cloud-runs' ? 0 : -1;
     if (chatPanelEl) chatPanelEl.classList.toggle('sp-tab-hidden', tab !== 'chat');
     if (workflowsPanelEl) workflowsPanelEl.classList.toggle('sp-tab-visible', tab === 'workflows');
     cuPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'computer-use');
+    runsPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'cloud-runs');
     chatPanelEl?.setAttribute('aria-hidden', String(tab !== 'chat'));
     workflowsPanelEl?.setAttribute('aria-hidden', String(tab !== 'workflows'));
     cuPanel.panelEl.setAttribute('aria-hidden', String(tab !== 'computer-use'));
+    runsPanel.panelEl.setAttribute('aria-hidden', String(tab !== 'cloud-runs'));
     if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
     if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
     tabBar.classList.toggle('sp-tab-bar-exit', tab !== 'chat');
@@ -7946,11 +8055,15 @@ function buildUI(): void {
     if (tab === 'computer-use') {
       cuPanel.refreshAuthChip();
     }
+    // The runs list polls the gateway. Deactivating stops the timer and drops
+    // every rendered row, so a hidden tab costs nothing and holds no data.
+    runsPanel.setActive(tab === 'cloud-runs');
   }
   chatTabBtn.addEventListener('click', () => switchTab('chat'));
   workflowsTabBtn.addEventListener('click', () => switchTab('workflows'));
   cuTabBtn.addEventListener('click', () => switchTab('computer-use'));
-  const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn];
+  runsTabBtn.addEventListener('click', () => switchTab('cloud-runs'));
+  const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn, runsTabBtn];
   tabBar.addEventListener('keydown', (event: KeyboardEvent) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
@@ -8689,6 +8802,8 @@ function buildUI(): void {
 
   document.body.appendChild(cuPanel.panelEl);
 
+  document.body.appendChild(runsPanel.panelEl);
+
   chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (!msg || typeof msg !== 'object') return;
     const m = msg as Record<string, unknown>;
@@ -8706,15 +8821,22 @@ function buildUI(): void {
         (status === 'stopped' || status === 'completed' || status === 'error') &&
         cuPanel.ownsRun(runId)
       ) {
+        const stoppedBecause = describeCancellationReason(m['reason']);
         cuPanel.setRunState(false, runId as string);
+        if (status !== 'completed' && stoppedBecause) {
+          cuPanel.showHandoffBanner(stoppedBecause, 'run_stopped');
+          switchTab('computer-use');
+        }
       }
     } else if (m['type'] === 'AGI_CU_STEP') {
       if (!cuPanel.ownsRun(runId)) return;
+      cuPanel.noteRunActivity();
       const step = m['step'] as Parameters<ComputerUsePanelAPI['appendStep']>[0];
       cuPanel.appendStep(step);
       switchTab('computer-use');
     } else if (m['type'] === 'AGI_CU_USAGE') {
       if (!cuPanel.ownsRun(runId)) return;
+      cuPanel.noteRunActivity();
       const usage = m['usage'] as Parameters<ComputerUsePanelAPI['updateUsageMeter']>[0];
       if (
         usage &&
@@ -8726,11 +8848,13 @@ function buildUI(): void {
       }
     } else if (m['type'] === 'AGI_CU_ESCALATE') {
       if (!cuPanel.ownsRun(runId)) return;
+      cuPanel.noteRunActivity();
       const reason = typeof m['reason'] === 'string' ? m['reason'] : 'Fast-path autofill stalled.';
       cuPanel.showHandoffBanner(reason);
       switchTab('computer-use');
     } else if (m['type'] === 'AGI_CU_APPROVE_REQUEST') {
       if (!cuPanel.ownsRun(runId)) return;
+      cuPanel.noteRunActivity();
       const requestId = typeof m['requestId'] === 'string' ? m['requestId'] : '';
       const toolName = typeof m['toolName'] === 'string' ? m['toolName'] : 'action';
       const description = typeof m['description'] === 'string' ? m['description'] : '';
@@ -9246,14 +9370,17 @@ function buildUI(): void {
     chip.textContent = t('spContextChipCapturing');
     chip.classList.add('loading');
     chip.disabled = true;
-    const ctx = await capturePageContext();
+    const capture = await capturePageContext();
     chip.disabled = false;
     chip.classList.remove('loading');
-    if (ctx) {
-      _ctx.pendingPageContext = ctx;
+    if (capture.ok) {
+      _ctx.pendingPageContext = capture.text;
+      composerContextNotice = null;
     } else {
       chip.textContent = prevText;
+      composerContextNotice = capture.reason;
     }
+    updateAttachmentPreview();
     updateContextButton();
   });
   composerBarStart.appendChild(contextBtn);
@@ -10423,11 +10550,15 @@ function checkPendingChat(): void {
         break;
       case 'summarize':
         capturePageContext()
-          .then((ctx) => {
-            if (ctx) _ctx.pendingPageContext = ctx;
-            sendMessage(
-              'Summarize this page concisely. Include key points, main arguments, and any important details.',
-            );
+          .then((capture) => {
+            if (!capture.ok) {
+              composerContextNotice = capture.reason;
+              updateAttachmentPreview();
+              return;
+            }
+            _ctx.pendingPageContext = capture.text;
+            composerContextNotice = null;
+            sendMessage(SLASH_COMMANDS['/summarize']!.prompt);
           })
           .catch((err) => {
             console.error('[SidePanel] Failed to capture page context for summarize:', err);

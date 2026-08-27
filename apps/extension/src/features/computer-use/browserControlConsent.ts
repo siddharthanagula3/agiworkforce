@@ -7,8 +7,10 @@ export const BROWSER_CONTROL_CONSENT_HEADLINE = 'This grants full DevTools-Proto
 export const BROWSER_CONTROL_CONSENT_BODY =
   'Approving browser control lets AGI attach the Chrome DevTools Protocol debugger to this origin ' +
   'and click, type, navigate, read the page DOM, and take screenshots inside your signed-in ' +
-  'session there. Chrome shows a debugging banner while a run is attached. Grant this only on ' +
-  'sites you trust with that session, and remove the site to revoke it.';
+  'session there. Chrome shows a debugging banner while a run is attached. Chrome will ask you ' +
+  'to grant site access for this origin — that grant is what makes the control possible, and you ' +
+  'can withdraw it from chrome://extensions at any time. Grant this only on sites you trust with ' +
+  'that session, and remove the site to revoke it.';
 
 export interface BrowserControlConsentStorage {
   get(key: string): Promise<Record<string, unknown>>;
@@ -38,14 +40,94 @@ export async function readBrowserControlConsent(
   return sanitizeBrowserControlConsent(result?.[BROWSER_CONTROL_CONSENT_STORAGE_KEY]);
 }
 
+export function browserControlHostPattern(origin: string): string | null {
+  const normalized = normalizeApprovedSiteOrigin(origin);
+  return normalized === null ? null : `${normalized}/*`;
+}
+
+export interface BrowserControlPermissions {
+  contains(permissions: chrome.permissions.Permissions): Promise<boolean>;
+  request(permissions: chrome.permissions.Permissions): Promise<boolean>;
+  remove(permissions: chrome.permissions.Permissions): Promise<boolean>;
+}
+
+function chromePermissions(): BrowserControlPermissions {
+  return {
+    contains: (permissions) => chrome.permissions.contains(permissions),
+    request: (permissions) => chrome.permissions.request(permissions),
+    remove: (permissions) => chrome.permissions.remove(permissions),
+  };
+}
+
+/**
+ * Whether Chrome itself has granted this extension host access to `origin`.
+ *
+ * `chrome.debugger.attach` takes a bare tab id and needs no host permission, so
+ * without this check the only thing standing between the DevTools Protocol and
+ * an arbitrary origin is a record in the extension's own storage — invisible to
+ * Chrome, to chrome://extensions, and to a Web Store reviewer. Fails closed.
+ */
+export async function hasBrowserControlHostPermission(
+  origin: string,
+  permissions: BrowserControlPermissions = chromePermissions(),
+): Promise<boolean> {
+  const pattern = browserControlHostPattern(origin);
+  if (!pattern) return false;
+  try {
+    return await permissions.contains({ origins: [pattern] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Asks Chrome for host access to `origin`. Must be called from a foreground
+ * extension page inside a user gesture, and must be the first await in that
+ * handler — an earlier await spends the gesture and Chrome refuses.
+ */
+export async function requestBrowserControlHostPermission(
+  origin: string,
+  permissions: BrowserControlPermissions = chromePermissions(),
+): Promise<boolean> {
+  const pattern = browserControlHostPattern(origin);
+  if (!pattern) return false;
+  try {
+    return await permissions.request({ origins: [pattern] });
+  } catch {
+    return false;
+  }
+}
+
+export async function removeBrowserControlHostPermission(
+  origin: string,
+  permissions: BrowserControlPermissions = chromePermissions(),
+): Promise<void> {
+  const pattern = browserControlHostPattern(origin);
+  if (!pattern) return;
+  try {
+    await permissions.remove({ origins: [pattern] });
+  } catch {
+    // A pattern covered by a required host permission cannot be removed; the
+    // stored record is revoked regardless, which is what gates the run.
+  }
+}
+
+/**
+ * The gate every computer-use entry point consults. Both halves must hold: the
+ * in-extension record that the user read the DevTools-Protocol warning, and the
+ * Chrome-enforced host grant that makes the reach real and revocable from
+ * chrome://extensions.
+ */
 export async function hasBrowserControlConsent(
   origin: string,
   storage: BrowserControlConsentStorage = chromeStorage(),
+  permissions: BrowserControlPermissions = chromePermissions(),
 ): Promise<boolean> {
   const normalized = normalizeApprovedSiteOrigin(origin);
   if (!normalized) return false;
   const granted = await readBrowserControlConsent(storage);
-  return granted.includes(normalized);
+  if (!granted.includes(normalized)) return false;
+  return hasBrowserControlHostPermission(normalized, permissions);
 }
 
 export async function grantBrowserControlConsent(
@@ -77,7 +159,7 @@ export async function revokeBrowserControlConsent(
 export function browserControlConsentRequiredMessage(origin: string): string {
   return (
     `${origin} has not been granted full Chrome DevTools Protocol control. ` +
-    'Open the AGI extension options, add the site, and confirm "Grant full browser control" ' +
-    'before starting computer use.'
+    'Open the AGI extension options, add the site, confirm "Grant full browser control", and ' +
+    'accept the site-access prompt Chrome shows, before starting computer use.'
   );
 }

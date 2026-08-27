@@ -15,6 +15,8 @@ import {
   BROWSER_CONTROL_CONSENT_HEADLINE,
   grantBrowserControlConsent,
   readBrowserControlConsent,
+  removeBrowserControlHostPermission,
+  requestBrowserControlHostPermission,
   revokeBrowserControlConsent,
 } from './features/computer-use/browserControlConsent';
 import {
@@ -1194,6 +1196,8 @@ function buildPage(): void {
           const list = await loadAllowlist();
           await saveAllowlist(list.filter((o) => o !== origin));
           await revokeBrowserControlConsent(origin);
+
+          await removeBrowserControlHostPermission(origin);
           await refreshAllowlist();
           setAllowlistStatus(`${origin} removed. Browser control for it was revoked.`);
         } catch (error: unknown) {
@@ -1254,7 +1258,20 @@ function buildPage(): void {
   consentGrantBtn.addEventListener('click', async () => {
     const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
     if (!origin) return;
+    // Chrome spends the user gesture on the first await, so the site-access
+    // prompt has to be raised before any storage read. Nothing is recorded
+    // unless Chrome itself grants the host — the extension's own record must
+    // never be the only thing authorizing DevTools-Protocol reach.
+    const hostGranted = await requestBrowserControlHostPermission(origin);
     consentGrantBtn.disabled = true;
+    if (!hostGranted) {
+      consentGrantBtn.disabled = false;
+      setAllowlistStatus(
+        `Chrome did not grant site access for ${origin}, so browser control was not enabled.`,
+        true,
+      );
+      return;
+    }
     setAllowlistStatus('Saving approved sites…');
     try {
       const list = await loadAllowlist();
@@ -1265,6 +1282,7 @@ function buildPage(): void {
       await refreshAllowlist();
       setAllowlistStatus(`${origin} approved with full browser control.`);
     } catch (error: unknown) {
+      await removeBrowserControlHostPermission(origin);
       consentGrantBtn.disabled = false;
       setAllowlistStatus(
         error instanceof Error ? error.message : 'Could not update approved sites.',
@@ -1290,6 +1308,8 @@ function buildPage(): void {
     try {
       await saveAllowlist(list.filter((o) => o !== origin));
       await revokeBrowserControlConsent(origin);
+
+      await removeBrowserControlHostPermission(origin);
       await refreshAllowlist();
       setAllowlistStatus(`${origin} removed. Browser control for it was revoked.`);
     } catch (error: unknown) {

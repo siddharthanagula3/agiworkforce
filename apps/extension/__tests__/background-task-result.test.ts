@@ -365,7 +365,11 @@ describe('background dispatch is wired to the sink', () => {
     expect(background).toMatch(/findChromeManagedRunByRequestId\(\s*state\.journal\.requestId,/);
     expect(background).toContain('resumeChromeManagedRun(');
     expect(background).toContain('.then(recoverScheduledTaskRuns)');
-    expect(background).toContain('recoverScheduledTaskRuns().catch');
+    // The periodic retry moved into the demand-driven maintenance pass, which
+    // also decides whether an unfinished journal is worth another wake.
+    expect(background).toMatch(
+      /async function runMaintenancePass\(\)[\s\S]*?await recoverScheduledTaskRuns\(\);\s*outstanding = \(await loadScheduledTaskRunJournals\(\)\)\.length > 0;/,
+    );
     expect(background).toContain("modelSelection: state.journal.routing?.modelKey ?? 'auto'");
     expect(background).toContain('await abandonScheduledTaskRun(journal, credential)');
     expect(background).toContain('active.requestId !== journal.requestId');

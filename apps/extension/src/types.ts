@@ -42,6 +42,7 @@ export type NativeMessageType =
   | 'RESUME_CHAT_RUN'
   | 'RESOLVE_CHAT_APPROVAL'
   | 'CANCEL_COMPUTER_USE'
+  | 'GET_COMPUTER_USE_STATE'
   | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
   | 'SET_COOKIE'
@@ -963,11 +964,21 @@ export interface CancelComputerUseMessage extends BaseMessage {
   reason?: 'account_changed' | 'panel_closed' | 'user_cleared' | 'user_stopped';
 }
 
+/**
+ * Asked by a side panel on boot. A computer-use run lives in the service
+ * worker, not in the panel document, so a panel that was closed and reopened
+ * has no way to know a run is still driving a tab unless it asks.
+ */
+export interface GetComputerUseStateMessage extends BaseMessage {
+  type: 'GET_COMPUTER_USE_STATE';
+}
+
 export interface ComputerUseCommandResponse {
   success: boolean;
   runId?: string;
   runGeneration?: number;
   running?: boolean;
+  tabId?: number;
   error?: string;
 }
 
@@ -1046,6 +1057,7 @@ export type ExtensionMessage =
   | RunAutofillMessage
   | StartComputerUseMessage
   | CancelComputerUseMessage
+  | GetComputerUseStateMessage
   | ApproveContextHandoffMessage
   | CancelContextHandoffMessage;
 
