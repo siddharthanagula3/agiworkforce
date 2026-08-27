@@ -280,10 +280,6 @@ const tsTargets = [
       'apps/desktop/src/features/git/GitStatusPanel.tsx',
       'apps/desktop/src/features/git/index.ts',
       'apps/desktop/src/features/index.ts',
-      'apps/desktop/src/features/layout/BudgetStatusWidget.tsx',
-      'apps/desktop/src/features/layout/TitleBar.tsx',
-      'apps/desktop/src/features/layout/UserProfile.tsx',
-      'apps/desktop/src/features/layout/index.ts',
       'apps/desktop/src/features/mcp/MCPConnectionStatus.tsx',
       'apps/desktop/src/features/mcp/MCPLogsViewer.tsx',
       'apps/desktop/src/features/mcp/MCPServerBrowser.tsx',
@@ -396,7 +392,6 @@ const tsTargets = [
       'apps/desktop/src/stores/schedulesStore.ts',
       'apps/desktop/src/stores/templateStore.ts',
       'apps/desktop/src/stores/thinkingStore.ts',
-      'apps/desktop/src/stores/windowStore.ts',
       'apps/desktop/src/stores/workflowStore.ts',
       'apps/desktop/src/types/automation.ts',
       'apps/desktop/src/types/automationEnhanced.ts',
@@ -430,7 +425,7 @@ const tsTargets = [
       'apps/desktop/src/utils/tokenCount.ts',
       'apps/desktop/src/utils/validation.ts',
     ],
-    maxKnownUnreachable: 240,
+    maxKnownUnreachable: 235,
   },
 ];
 

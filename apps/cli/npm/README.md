@@ -122,7 +122,7 @@ agi -m "<cloud-model>,<local-model>" exec "..."  # cloud first, fallback local
 AGI Workforce CLI is an MCP client: it consumes external MCP servers configured in
 `.mcp.json` (project) or `~/.agiworkforce/.mcp.json` (global).
 
-`agi mcp-server` speaks the protocol but currently answers `tools/list` with an
+`agi mcp-server` speaks the protocol but currently answers the MCP tools/list method with an
 empty set, so nothing can call it yet. It is not usable as an MCP server.
 
 ## Documentation
