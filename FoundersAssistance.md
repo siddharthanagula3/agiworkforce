@@ -985,6 +985,57 @@ distribution claims honest.
 
 ---
 
+## 46. Four pending migrations — apply 0152 first and 0150 LAST
+
+**Status:** `BLOCKED_BY_HUMAN`. Migrations are never applied by an agent, so all four
+are authored and waiting. **The order matters and getting it wrong causes an outage.**
+
+`scripts/lib/neon-migrations.mjs:308-316` throws on ANY pending file, and
+`deploy-production.yml:215` runs `pnpm db:migrate -- verify` as a pre-build gate. So
+the production deploy is already blocked by the three that are committed, independent
+of anything added since.
+
+**Apply 0152 now, on its own, ahead of any deploy.**
+`0152_restore_null_tolerant_usage_caps.sql` fixes a live outage: every uncapped —
+i.e. enterprise — plan currently 503s on every chat turn. `getPlanSessionUsageCapCents`
+returns NULL for those tiers, `reserveManagedUsageRequest` forwards it, and 0119's
+validation raises `22023` on NULL. The function is wrong, not the caller, so there is
+nothing to coordinate. It is a single `create or replace` with the signature
+unchanged, so grants and comments survive, and the down file restores 0119 exactly.
+Applying it early is strictly safe and strictly good.
+
+The same migration also fixes a quieter bug in the other direction: 0119 reads a cap
+of exactly `0` as "no cap", which silently disables rolling enforcement for every
+zero-budget tier — the precise rule 0070 existed to enforce.
+
+**Do NOT apply 0150 until its code is deployed.**
+`0150_cloud_code_session_run_lease_check.sql` says so in its own header: applied
+before the code that claims a session under a lease has rolled out, every Code agent
+turn and terminal command fails the new constraint. It is the contract half of an
+expand/contract pair whose expand half (0149) is already committed, and both landed
+in the same commit — which is what created the deadlock, since the code cannot deploy
+while 0150 is pending and 0150 breaks production if applied first.
+
+**Suggested order:**
+
+1. `0152` — now, standalone. Fixes the enterprise 503.
+2. `0149` and `0151` — with or before the next deploy. `0151` adds
+   `web_push_subscriptions`; nothing reads it until web push ships, so it is inert.
+3. Deploy the code.
+4. `0150` — only after that deploy is live.
+
+**The thing to avoid** is treating these as one batch called "the pending
+migrations". That is the single action that turns a fixed outage into a new one.
+
+**Owed as engineering afterwards:** teach `db:migrate verify` to distinguish an
+expand step from a contract step — a `-- requires-code:` header it honours — so the
+deploy gate stops being all-or-nothing, and make production migration application a
+named workflow step. Today no workflow applies production migrations at all; it is a
+human step no file describes, which is why this sequencing lives in a document
+instead of in the tool.
+
+---
+
 ## 45. Nothing verifies a release artifact — only the working tree
 
 **Status:** engineering work, but it needs your decision on scope first. Found
