@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { Config } from '../platform/config';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
@@ -146,6 +145,12 @@ export class ChatEditorPanel {
   static pushFollowUpBehavior(): void {
     for (const instance of ChatEditorPanel.instances) {
       instance.stateManager.pushFollowUpBehavior();
+    }
+  }
+
+  static refreshRuntimeStatus(): void {
+    for (const instance of ChatEditorPanel.instances) {
+      void instance.stateManager.refreshRuntimeStatus();
     }
   }
 

@@ -24,6 +24,9 @@ import {
 } from '@agiworkforce/types';
 import { Config, type ComposerFollowUpBehavior } from '../../platform/config';
 import {
+  CLI_NOT_EXECUTABLE_MARKER,
+  cliAcquisitionHint,
+  CLI_NOT_FOUND_MARKER,
   LocalRuntimeProtocolError,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
@@ -69,6 +72,9 @@ import {
 
 type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
 
+const RUNTIME_SETUP_ERROR_MARKERS = [CLI_NOT_FOUND_MARKER, CLI_NOT_EXECUTABLE_MARKER] as const;
+const RUNTIME_SETUP_ERROR_MAX_LENGTH = 320;
+
 const MAX_QUEUED_SENDS = 20;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const PRE_START_EVENT_OVERFLOW_MESSAGE =
@@ -91,6 +97,7 @@ export type WebviewToExtMessage =
   | { type: 'openSettings' }
   | { type: 'openWorkspace' }
   | { type: 'manageWorkspaceTrust' }
+  | { type: 'retryRuntime' }
   | { type: 'cancel' }
   | { type: 'fileSearch'; payload: { query: string } }
   | { type: 'shareDiagnostics' }
@@ -142,7 +149,7 @@ export type ExtToWebviewMessage =
   | {
       type: 'runtimeStatus';
       payload: {
-        status: 'ready' | 'unavailable' | 'workspace-required' | 'workspace-untrusted';
+        status: 'ready' | 'probing' | 'unavailable' | 'workspace-required' | 'workspace-untrusted';
         message?: string;
       };
     }
@@ -466,6 +473,7 @@ export class ChatStateManager {
   private _attachmentSeq = 0;
   private _clientMessageSeq = 0;
   private readonly _localModelProviders = new Map<string, LocalModelSummary['provider']>();
+  private _runtimeReady = false;
 
   constructor(
     private readonly _secrets: vscode.SecretStorage,
@@ -553,6 +561,18 @@ export class ChatStateManager {
 
       case 'manageWorkspaceTrust': {
         await vscode.commands.executeCommand('workbench.trust.manage');
+        break;
+      }
+
+      case 'retryRuntime': {
+        this._post({ type: 'runtimeStatus', payload: { status: 'probing' } });
+        await this._discoverLocalModels();
+        if (this._runtimeReady) {
+          const model = this._normalizeModelSelection(this._activeModel);
+          this._activeModel = model;
+          this._post({ type: 'model', payload: { model } });
+          this._postProviderBadge(model);
+        }
         break;
       }
 
@@ -1212,7 +1232,7 @@ export class ChatStateManager {
         payload: localModelDiscoveryFailed
           ? {
               status: 'unavailable',
-              message: 'Install or update the AGI CLI, then configure its path in Settings.',
+              message: cliAcquisitionHint(),
             }
           : { status: 'ready' },
       });
@@ -1464,14 +1484,22 @@ export class ChatStateManager {
   }
 
   private _describeLocalRuntimeSetupError(error: unknown): string {
-    const message = error instanceof Error ? error.message.trim() : '';
-    if (message.length === 0) {
+    const raw = error instanceof Error ? error.message.trim() : '';
+    if (raw.length === 0) {
       return 'The AGI CLI could not start. Check its path in Runtime settings.';
     }
-    if (/\bENOENT\b|command not found|executable.*not found/i.test(message)) {
+    const marked = RUNTIME_SETUP_ERROR_MARKERS.find((marker) => raw.startsWith(`${marker}: `));
+    const message = marked === undefined ? raw : raw.slice(marked.length + 2);
+    if (marked === undefined && /\bENOENT\b|command not found|executable.*not found/i.test(raw)) {
       return 'The AGI CLI executable was not found. Choose its installed path in Runtime settings.';
     }
-    return message.length <= 320 ? message : `${message.slice(0, 317)}…`;
+    return message.length <= RUNTIME_SETUP_ERROR_MAX_LENGTH
+      ? message
+      : `${message.slice(0, RUNTIME_SETUP_ERROR_MAX_LENGTH - 1)}…`;
+  }
+
+  async refreshRuntimeStatus(): Promise<void> {
+    await this._discoverLocalModels(this._thread?.runtime);
   }
 
   private async _discoverLocalModels(runtime?: LocalRuntimeClient): Promise<LocalModelSummary[]> {
@@ -1480,6 +1508,7 @@ export class ChatStateManager {
       if (activeRuntime === undefined) {
         const workspace = await getActiveWorkspaceFolder();
         if (workspace === undefined) {
+          this._runtimeReady = false;
           this._localModelProviders.clear();
           this._post({
             type: 'runtimeStatus',
@@ -1491,6 +1520,7 @@ export class ChatStateManager {
           return [];
         }
         if (!vscode.workspace.isTrusted) {
+          this._runtimeReady = false;
           this._localModelProviders.clear();
           this._post({
             type: 'runtimeStatus',
@@ -1503,11 +1533,12 @@ export class ChatStateManager {
           return [];
         }
         if (this._localRuntimes === undefined) {
+          this._runtimeReady = false;
           this._post({
             type: 'runtimeStatus',
             payload: {
               status: 'unavailable',
-              message: 'Install or update the AGI CLI, then configure its path in Settings.',
+              message: cliAcquisitionHint(),
             },
           });
           return [];
@@ -1519,9 +1550,11 @@ export class ChatStateManager {
       for (const model of response.models) {
         this._localModelProviders.set(model.id, model.provider);
       }
+      this._runtimeReady = true;
       this._post({ type: 'runtimeStatus', payload: { status: 'ready' } });
       return response.models;
     } catch (error) {
+      this._runtimeReady = false;
       this._post({
         type: 'runtimeStatus',
         payload: {

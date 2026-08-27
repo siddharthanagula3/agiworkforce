@@ -90,10 +90,12 @@ describe('getWebviewContent — CSP', () => {
     expect(html).not.toMatch(/script-src[^;]*'unsafe-eval'/);
   });
 
-  it('img-src restricts to cspSource, https, and data', () => {
+  it('img-src restricts to cspSource so a rendered transcript cannot beacon out', () => {
     const html = render();
     expect(html).toMatch(/img-src[^;]*vscode-webview:\/\/mock/);
     expect(html).not.toMatch(/img-src[^;]*\*/);
+    expect(html).not.toMatch(/img-src[^;]*https:/);
+    expect(html).not.toMatch(/img-src[^;]*data:/);
   });
 });
 

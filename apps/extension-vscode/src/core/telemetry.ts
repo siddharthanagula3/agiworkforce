@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getExtensionVersion } from '../platform/version';
@@ -59,17 +58,14 @@ function redactProperties(props: Record<string, string>): Record<string, string>
   return out;
 }
 
-const ALLOWED_TELEMETRY_HOSTS = new Set<string>([
-  'telemetry.agiworkforce.com',
-  'agiworkforce.com',
-  'localhost',
-  '127.0.0.1',
-]);
+const ALLOWED_TELEMETRY_HOSTS = new Set<string>(['telemetry.agiworkforce.com', 'agiworkforce.com']);
+const LOOPBACK_TELEMETRY_HOSTS = new Set<string>(['localhost', '127.0.0.1', '[::1]']);
 
-function isAllowedTelemetryEndpoint(url: string): boolean {
+function isAllowedTelemetryEndpoint(url: string, allowLoopback: boolean): boolean {
   try {
     const parsed = new URL(url);
-    return ALLOWED_TELEMETRY_HOSTS.has(parsed.hostname);
+    if (ALLOWED_TELEMETRY_HOSTS.has(parsed.hostname)) return true;
+    return allowLoopback && LOOPBACK_TELEMETRY_HOSTS.has(parsed.hostname);
   } catch {
     return false;
   }
@@ -141,8 +137,7 @@ function generateSessionId(): string {
 }
 
 function isExtensionTelemetryEnabled(): boolean {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  return config.get<boolean>('telemetryEnabled') ?? false;
+  return Config.telemetryEnabled();
 }
 
 function getCommonProperties(): Record<string, string> {
@@ -154,14 +149,13 @@ function getCommonProperties(): Record<string, string> {
   };
 }
 
-export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
+export function activate(context: vscode.ExtensionContext): vscode.Disposable {
   sessionId = generateSessionId();
 
-  const telemetryEndpoint =
-    vscode.workspace.getConfiguration('agiWorkforce').get<string>('telemetryEndpoint') ??
-    'https://telemetry.agiworkforce.com/v1/events';
+  const telemetryEndpoint = Config.telemetryEndpoint();
+  const allowLoopback = context.extensionMode !== vscode.ExtensionMode.Production;
 
-  if (!isAllowedTelemetryEndpoint(telemetryEndpoint)) {
+  if (!isAllowedTelemetryEndpoint(telemetryEndpoint, allowLoopback)) {
     console.warn(
       `[AGI Workforce] Telemetry endpoint "${telemetryEndpoint}" is not in the allowed domain list. Telemetry is disabled.`,
     );
@@ -170,7 +164,7 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
   function postBatch(payload: Record<string, unknown>): void {
     if (!vscode.env.isTelemetryEnabled) return;
     if (!telemetryEndpoint) return;
-    if (!isAllowedTelemetryEndpoint(telemetryEndpoint)) return;
+    if (!isAllowedTelemetryEndpoint(telemetryEndpoint, allowLoopback)) return;
     try {
       void fetch(telemetryEndpoint, {
         method: 'POST',

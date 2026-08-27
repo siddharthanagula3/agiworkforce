@@ -27,6 +27,43 @@ const SUPPORTED_PROTOCOL_VERSION = 7;
 const MINIMUM_SUPPORTED_CLI_VERSION = [1, 7, 1] as const;
 const MINIMUM_SUPPORTED_CLI_VERSION_LABEL = MINIMUM_SUPPORTED_CLI_VERSION.join('.');
 const AGENT_EVENT_SCHEMA_VERSION = 4;
+const CLI_PATH_SETTING = 'agiWorkforce.cliPath';
+const CLI_NPM_PACKAGE = '@agiworkforce/cli';
+
+// `apps/cli/npm/package.json` scaffolds CLI_NPM_PACKAGE, but the public npm
+// registry still 404s for it, so the install command below would fail for every
+// user who ran it. Flip this to true in the same commit that publishes the
+// package; nothing else needs to change to surface the command.
+const CLI_IS_PUBLISHED: boolean = false;
+
+export const CLI_NOT_FOUND_MARKER = 'AGI_CLI_NOT_FOUND';
+export const CLI_NOT_EXECUTABLE_MARKER = 'AGI_CLI_NOT_EXECUTABLE';
+
+export function cliAcquisitionHint(): string {
+  return CLI_IS_PUBLISHED
+    ? `Install AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer with \`npm install -g ${CLI_NPM_PACKAGE}\`, then set ${CLI_PATH_SETTING} if the binary is not on your PATH.`
+    : `The AGI CLI is not published yet, so there is no install command. Build it from source and set ${CLI_PATH_SETTING} to the resulting binary, which must report version ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer.`;
+}
+
+function describeSpawnFailure(cliPath: string, error: Error): Error {
+  const code = (error as NodeJS.ErrnoException).code;
+  const target = JSON.stringify(cliPath);
+  const looksLikePath = cliPath.includes('/') || cliPath.includes('\\');
+  if (code === 'ENOENT') {
+    const where = looksLikePath
+      ? `No file exists at ${target}.`
+      : `${target} is not on the PATH this editor was launched with.`;
+    return new Error(
+      `${CLI_NOT_FOUND_MARKER}: The AGI CLI could not be started. ${where} ${cliAcquisitionHint()}`,
+    );
+  }
+  if (code === 'EACCES' || code === 'EPERM') {
+    return new Error(
+      `${CLI_NOT_EXECUTABLE_MARKER}: ${target} exists but this editor is not allowed to run it. Grant it execute permission, or point ${CLI_PATH_SETTING} at an executable AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer.`,
+    );
+  }
+  return new Error(`The AGI CLI at ${target} could not be started — ${error.message}`);
+}
 
 const errorSchema = z.object({
   code: z.number().int(),
@@ -738,15 +775,29 @@ export class LocalRuntimeClient {
     if (this.disposed) throw new Error('AGI local runtime client is disposed');
     if (this.connection !== undefined) return this.connection;
     const spawnRuntime = this.options.spawn ?? (nodeSpawn as SpawnLocalRuntime);
-    const cliPath =
+    const configuredCliPath =
       typeof this.options.cliPath === 'function' ? this.options.cliPath() : this.options.cliPath;
-    const child = spawnRuntime(cliPath, ['app-server'], {
-      cwd: this.options.cwd,
-      env: process.env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-      detached: process.platform !== 'win32',
-    });
+    const cliPath = configuredCliPath.trim();
+    if (cliPath === '') {
+      throw new Error(
+        `${CLI_NOT_FOUND_MARKER}: ${CLI_PATH_SETTING} is empty, so there is no binary to start. ${cliAcquisitionHint()}`,
+      );
+    }
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawnRuntime(cliPath, ['app-server'], {
+        cwd: this.options.cwd,
+        env: process.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+        detached: process.platform !== 'win32',
+      });
+    } catch (error) {
+      throw describeSpawnFailure(
+        cliPath,
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
     this.stderrTail = '';
     this.child = child;
     let resolveChildExit!: () => void;
@@ -772,7 +823,7 @@ export class LocalRuntimeClient {
     child.once('error', (error) => {
       if (child.pid === undefined) resolveChildExit();
       if (this.child === child && this.connection === connection) {
-        this.resetProcess(error);
+        this.resetProcess(describeSpawnFailure(cliPath, error));
       }
     });
     child.once('exit', (code, signal) => {
@@ -781,7 +832,9 @@ export class LocalRuntimeClient {
       const suffix = detail === '' ? '' : `: ${detail}`;
       if (this.child === child && this.connection === connection) {
         this.resetProcess(
-          new Error(`AGI local runtime exited (${signal ?? String(code ?? 'unknown')})${suffix}`),
+          new Error(
+            `The AGI CLI at ${JSON.stringify(cliPath)} exited (${signal ?? String(code ?? 'unknown')})${suffix}`,
+          ),
         );
       }
     });
