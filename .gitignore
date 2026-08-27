@@ -224,7 +224,7 @@ ms-playwright/
 # --- Business / personal data ---
 leads/
 
-# --- Supabase temp files ---
+# --- Tooling temp directories ---
 **/.temp/
 .worktrees/
 .code-review-graph/

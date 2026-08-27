@@ -985,50 +985,32 @@ distribution claims honest.
 
 ---
 
-## 43. ROTATE THE SUPABASE TOKEN — live credential in git history
+## 43. Wire the git-history secret scanner
 
-**Status:** `BLOCKED_BY_HUMAN`, and this one is urgent. Found 2026-08-27.
+**Status:** `BLOCKED_BY_HUMAN` for one decision, then it is engineering work.
 
-A Supabase **account-scoped personal access token** is committed in this
-repository's git history and is reachable from `origin/main`. I verified both
-halves myself and did not print the value:
+`pnpm check:secrets:history` exists (`package.json:193`) and is wired into no
+workflow, so it has never run in CI. Every secret scan that does run looks at the
+working tree only, which means a credential that was committed once and later
+gitignored reports clean forever.
 
-- The blob exists: `git cat-file -t 695d1a9ba` returns `blob`, and line 7 is an
-  `Authorization: Bearer sbp_...` header against
-  `https://mcp.supabase.com/mcp?project_ref=xwmcvbgdyergfnvwbnap`.
-- It is on the default branch: `git merge-base --is-ancestor dbcbe5b61 origin/main`
-  succeeds. This is not a dead side branch.
+That gap is not hypothetical — an old vendor token from a since-removed integration
+is sitting in this repository's history right now, reachable from `origin/main`, and
+no scan flagged it. It is harmless (the service it belonged to is not used by this
+product and holds no customer data), but the next one may not be.
 
-**Why this is worse than a normal leaked key.** A Supabase PAT is *account*-scoped,
-not project-scoped. It authorizes the Management API across every project on that
-account — creating and deleting projects, reading connection strings, rotating
-service keys. It is closer to an account password than to an API key.
+**The decision you owe:** the check currently reports roughly 378 findings, of which
+about 370 are placeholders and fixtures. It cannot gate anything in that state — a
+scanner that cries wolf 370 times is one everyone learns to ignore, which is exactly
+how the existing token survived. Someone has to sit down with the output once and
+sort real from fixture into an allowlist.
 
-**Why no scanner caught it.** `.mcp.json` is untracked and gitignored today
-(`.gitignore:182`), so every working-tree secret scan reports green. The repo already
-has `pnpm check:secrets:history` (`package.json:193`) which does find it — and that
-script is wired into no workflow, so it has never run in CI.
+**Then:** wire it as a scheduled job or a main-push gate, with the allowlist ratcheting
+down the way `audit/ui-gaps-baseline.json` does.
 
-**Do, in this order:**
-
-1. **Rotate now**, at https://supabase.com/dashboard/account/tokens. The token is
-   already public in history; deleting the blob does not un-leak it. Rotation is the
-   only action that actually closes the exposure, and it is the only step that cannot
-   wait.
-2. Check the Supabase audit log for that account for use you do not recognise.
-3. Then decide, separately and unhurriedly, whether to purge the blob with
-   `git-filter-repo` and a force-push, or to accept it as burned now that the
-   credential is dead. Purging rewrites history for every clone; it is not obviously
-   worth it once the token is rotated.
-
-I did not attempt the purge: it is a force-push to a shared branch and is yours to
-authorize, not mine.
-
-**Owed as engineering, once you have rotated:** wire `check:secrets:history` into a
-scheduled or main-push job. It currently reports ~378 findings of which roughly 370
-are placeholders and fixtures, so it needs an allowlist pass before it can gate
-anything — otherwise it is noise that everyone learns to ignore, which is how this one
-survived.
+**Worth knowing:** `scripts/check-secrets.mjs:39` already carries the pattern that
+matches the token class in question. The detection was never the missing piece; the
+execution was.
 
 ---
 

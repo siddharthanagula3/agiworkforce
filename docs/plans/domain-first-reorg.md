@@ -139,7 +139,7 @@ apps/web/
 ├── app/           # Next.js app router (kept as-is — router is the bind point)
 ├── components/    # shared "atoms" — most can be inlined or moved
 ├── core/          # mode detection, auth core, identity, env
-├── data/          # supabase clients, schemas — keep as cross-domain
+├── data/          # database clients, schemas — keep as cross-domain
 ├── features/      # 11 domain folders — destination of the moves
 ├── handlers/      # request handlers — push into domain or app/api
 ├── hooks/         # 22 cross-cutting hooks — push into domain or @agiworkforce/utils
@@ -151,7 +151,7 @@ Target shape:
 ```
 apps/web/
 ├── app/           # Next.js router only (page.tsx, layout.tsx, route.ts)
-├── core/          # platform primitives — auth, env, supabase client, types
+├── core/          # platform primitives — auth, env, database client, types
 ├── features/
 │   ├── analytics/{components,hooks,stores,services,api,types,pages}/
 │   ├── billing/{...}
@@ -183,7 +183,7 @@ apps/web/
 | `apps/web/lib/billing/*`                     | `apps/web/features/billing/lib/*`                                             |
 | `apps/web/lib/chat/*`                        | `apps/web/features/chat/lib/*`                                                |
 | `apps/web/lib/auth/*`                        | `apps/web/core/auth/*` (cross-domain — stays platform)                        |
-| `apps/web/lib/supabase*`                     | `apps/web/core/supabase/*`                                                    |
+| `apps/web/lib/server/neon-db.ts`             | `apps/web/core/data/*`                                                        |
 | `apps/web/data/schemas/*`                    | `apps/web/core/schemas/*`                                                     |
 
 Note: the Next.js `app/` router stays as-is. Routes call into
