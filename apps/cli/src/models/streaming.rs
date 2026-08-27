@@ -35,6 +35,33 @@ use super::{
     STREAM_IDLE_TIMEOUT,
 };
 
+/// Deadline for establishing a provider connection.
+///
+/// The engine's idle watchdog is constructed only after `send()` returns
+/// headers, so before this bound existed a host that blackholes SYNs — a
+/// captive portal, a dropped VPN, a firewalled egress — left the turn on the
+/// spinner for the OS connect timeout with no diagnostic.
+const PROVIDER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The one client every provider request goes through.
+///
+/// Built once: `stream_completion` used to construct a fresh `Client` per call,
+/// which discards connection pooling and TLS session reuse on every tool-loop
+/// continuation. The read deadline mirrors the engine's idle watchdog rather
+/// than introducing a second bound, and there is deliberately no overall
+/// request timeout — a streaming turn's total duration is legitimately
+/// unbounded, so `.timeout()` here would cut long answers off mid-stream.
+fn provider_client() -> &'static Client {
+    static CLIENT: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .connect_timeout(PROVIDER_CONNECT_TIMEOUT)
+            .read_timeout(STREAM_IDLE_TIMEOUT)
+            .build()
+            .unwrap_or_else(|_| Client::new())
+    })
+}
+
 /// Last-known Ollama tool-support result per model id, so a transient `/api/show`
 /// probe failure can fall back to the last successful check instead of silently
 /// stripping every tool from the turn.
@@ -346,7 +373,7 @@ pub async fn stream_completion(
     thinking_budget: Option<u32>,
     effort: Option<crate::design_system::Effort>,
 ) -> Result<CompletionResult> {
-    let client = Client::new();
+    let client = provider_client().clone();
     let temperature = config.default.temperature;
 
     // ---- Try subscription auth first (Copilot, ChatGPT Plus) ----

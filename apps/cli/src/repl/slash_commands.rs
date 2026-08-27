@@ -413,8 +413,8 @@ pub(super) async fn handle_slash_command(
         }
         "/voice" | "/v" => {
             let lang = if arg.is_empty() { "en" } else { arg };
-            if !crate::voice::is_valid_language(lang) {
-                let langs = crate::voice::supported_languages();
+            if !crate::voice_languages::is_valid_language(lang) {
+                let langs = crate::voice_languages::supported_languages();
                 let codes: Vec<&str> = langs.iter().map(|(c, _)| *c).collect();
                 output::print_warn(&format!(
                     "Unsupported language '{}'. Supported: {}",

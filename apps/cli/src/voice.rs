@@ -23,6 +23,7 @@ use crate::config::CliConfig;
 use crate::markdown::MarkdownRenderer;
 use crate::output;
 use crate::terminal_style as ts;
+use crate::voice_languages::language_name;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -47,30 +48,6 @@ const MIN_RECORDING_MS: u128 = 300;
 /// while preventing an unbounded allocation. Frames beyond this budget are
 /// dropped.
 const MAX_RECORDING_SAMPLES: usize = 96_000 * 2 * MAX_RECORDING_SECS as usize;
-
-/// Supported voice languages (ISO 639-1 codes).
-const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
-    ("en", "English"),
-    ("es", "Spanish"),
-    ("fr", "French"),
-    ("de", "German"),
-    ("it", "Italian"),
-    ("pt", "Portuguese"),
-    ("ja", "Japanese"),
-    ("ko", "Korean"),
-    ("zh", "Chinese"),
-    ("ar", "Arabic"),
-    ("hi", "Hindi"),
-    ("ru", "Russian"),
-    ("nl", "Dutch"),
-    ("pl", "Polish"),
-    ("sv", "Swedish"),
-    ("da", "Danish"),
-    ("no", "Norwegian"),
-    ("fi", "Finnish"),
-    ("tr", "Turkish"),
-    ("cs", "Czech"),
-];
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -108,11 +85,11 @@ pub async fn run_voice_mode(
         .map(|v| v.trim() == "1")
         .unwrap_or(false);
     // Validate language
-    if !SUPPORTED_LANGUAGES
-        .iter()
-        .any(|(code, _)| *code == voice_lang)
-    {
-        let valid: Vec<&str> = SUPPORTED_LANGUAGES.iter().map(|(c, _)| *c).collect();
+    if !crate::voice_languages::is_valid_language(voice_lang) {
+        let valid: Vec<&str> = crate::voice_languages::supported_languages()
+            .into_iter()
+            .map(|(code, _)| code)
+            .collect();
         bail!(
             "Unsupported voice language '{}'. Supported: {}",
             voice_lang,
@@ -300,16 +277,6 @@ pub async fn run_voice_mode(
     }
 
     Ok(())
-}
-
-/// Check whether a voice language code is valid.
-pub fn is_valid_language(lang: &str) -> bool {
-    SUPPORTED_LANGUAGES.iter().any(|(code, _)| *code == lang)
-}
-
-/// Return the list of supported language codes.
-pub fn supported_languages() -> Vec<(&'static str, &'static str)> {
-    SUPPORTED_LANGUAGES.to_vec()
 }
 
 // ---------------------------------------------------------------------------
@@ -974,15 +941,6 @@ async fn transcribe_local(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/// Get the human-readable name for a language code.
-fn language_name(code: &str) -> &'static str {
-    SUPPORTED_LANGUAGES
-        .iter()
-        .find(|(c, _)| *c == code)
-        .map(|(_, name)| *name)
-        .unwrap_or("Unknown")
-}
 
 // cpal re-export for the check function
 use cpal::traits::{DeviceTrait, HostTrait};

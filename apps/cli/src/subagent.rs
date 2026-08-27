@@ -99,6 +99,10 @@ impl std::fmt::Debug for SubagentEntry {
 /// Default maximum number of concurrent subagents.
 const DEFAULT_MAX_CONCURRENT: usize = 7;
 
+/// How long `wait_all` sleeps between checking whether subagent threads have
+/// finished. Bounds how long an interrupt waits before the turn task yields.
+const SUBAGENT_JOIN_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(25);
+
 /// Maximum subagent nesting depth. The root interactive session is depth 0; a
 /// subagent it spawns runs at depth 1, and so on. Spawning is refused once a
 /// session at this depth would create a deeper child, bounding the subagent
@@ -433,26 +437,54 @@ impl SubagentManager {
     }
 
     /// Wait for all running subagents to complete. Returns a summary.
+    ///
+    /// Polls `is_finished` and yields between rounds rather than blocking on
+    /// `join`, so this stays an await point. The app-server holds the session
+    /// mutex across `AgentSession::send`, and `interrupt_turn`/`shutdown` need
+    /// that mutex to reach `shutdown_all` — the call that sets the cancel flags
+    /// these threads are waiting on. A blocking join here gives `abort` nothing
+    /// to land on, so the turn task keeps the mutex, the teardown blocks on it,
+    /// and neither side can advance.
+    ///
+    /// A handle is taken only once its thread has finished, so a cancelled
+    /// `wait_all` leaves every unfinished handle in `entries` for a later
+    /// `shutdown_all` to join instead of detaching the thread.
     pub async fn wait_all(&self) -> Vec<(String, SubagentStatus)> {
-        // Collect thread handles
-        let handles: Vec<(String, thread::JoinHandle<()>)> = {
-            let mut entries = self.entries.write().await;
-            entries
-                .values_mut()
-                .filter_map(|entry| entry.handle.take().map(|h| (entry.id.clone(), h)))
-                .collect()
-        };
-
-        // Join all threads (blocks the current async task, but each thread
-        // has its own runtime so they run truly in parallel).
-        for (id, handle) in handles {
-            if let Err(_e) = handle.join() {
-                eprintln!(
-                    "  {} Subagent {} thread panicked",
-                    ts::danger_header("[task]"),
-                    id.bold()
-                );
+        loop {
+            let finished: Vec<(String, thread::JoinHandle<()>)> = {
+                let mut entries = self.entries.write().await;
+                entries
+                    .values_mut()
+                    .filter_map(|entry| {
+                        if !entry
+                            .handle
+                            .as_ref()
+                            .is_some_and(thread::JoinHandle::is_finished)
+                        {
+                            return None;
+                        }
+                        let id = entry.id.clone();
+                        entry.handle.take().map(|handle| (id, handle))
+                    })
+                    .collect()
+            };
+            for (id, handle) in finished {
+                if handle.join().is_err() {
+                    eprintln!(
+                        "  {} Subagent {} thread panicked",
+                        ts::danger_header("[task]"),
+                        id.bold()
+                    );
+                }
             }
+            let outstanding = {
+                let entries = self.entries.read().await;
+                entries.values().any(|entry| entry.handle.is_some())
+            };
+            if !outstanding {
+                break;
+            }
+            tokio::time::sleep(SUBAGENT_JOIN_POLL_INTERVAL).await;
         }
 
         // Collect final statuses
@@ -906,5 +938,73 @@ mod tests {
             *entry.status.read().await,
             SubagentStatus::Cancelled
         ));
+    }
+
+    #[tokio::test]
+    async fn wait_all_yields_so_an_aborted_turn_releases_its_session() {
+        let manager = Arc::new(SubagentManager::new(
+            CliConfig::default(),
+            "fixture-local-model:latest".to_string(),
+            crate::context::gather_system_context(),
+            false,
+            crate::cli_options::PermissionMode::Default,
+            None,
+            Vec::new(),
+            0,
+        ));
+        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let worker_cancelled = cancelled.clone();
+        let handle = thread::spawn(move || {
+            while !worker_cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                thread::sleep(std::time::Duration::from_millis(5));
+            }
+        });
+        manager.entries.write().await.insert(
+            "subagent-test".to_string(),
+            SubagentEntry {
+                id: "subagent-test".to_string(),
+                description: "abort sentinel".to_string(),
+                status: Arc::new(RwLock::new(SubagentStatus::Running)),
+                result: Arc::new(RwLock::new(None)),
+                handle: Some(handle),
+                cancelled: cancelled.clone(),
+            },
+        );
+
+        // Stands in for the app-server turn task, which holds the session
+        // mutex across `send` and therefore across this wait.
+        let waiter = Arc::clone(&manager);
+        let turn = tokio::spawn(async move {
+            waiter.wait_all().await;
+        });
+        tokio::time::sleep(SUBAGENT_JOIN_POLL_INTERVAL * 3).await;
+        turn.abort();
+        assert!(
+            turn.await.is_err(),
+            "wait_all must offer an await point for abort to land on, or the \
+             turn task keeps the session mutex that teardown needs"
+        );
+
+        // The abort left the still-running thread tracked rather than detached.
+        assert!(!cancelled.load(std::sync::atomic::Ordering::Acquire));
+        assert!(manager
+            .entries
+            .read()
+            .await
+            .get("subagent-test")
+            .expect("tracked subagent")
+            .handle
+            .is_some());
+
+        manager.shutdown_all().await;
+        assert!(cancelled.load(std::sync::atomic::Ordering::Acquire));
+        assert!(manager
+            .entries
+            .read()
+            .await
+            .get("subagent-test")
+            .expect("tracked subagent")
+            .handle
+            .is_none());
     }
 }
