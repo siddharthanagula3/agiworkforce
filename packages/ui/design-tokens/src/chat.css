@@ -1,5 +1,16 @@
 @layer base {
   :root {
+    --neutral-0: 0 0% 0%;
+    --neutral-1: 0 0% 5.1%;
+    --neutral-2: 0 0% 9.4%;
+    --neutral-3: 0 0% 12.9%;
+    --neutral-4: 0 0% 18.4%;
+    --neutral-5: 0 0% 18.8%;
+    --neutral-6: 0 0% 24.7%;
+    --neutral-fg-1: 0 0% 100%;
+    --neutral-fg-2: 0 0% 68.6%;
+    --neutral-fg-3: 0 0% 60.8%;
+
     /* Font families. These already existed in `agiChatCssVars` (index.ts) but
        had never been emitted into the stylesheet the surfaces actually load, so
        any shared component referencing them rendered unstyled. Fonts do not
@@ -61,45 +72,33 @@
   }
 
   .dark {
-    --chat-bg: #1a1915;
-    --chat-fg: #e8e4db;
-    --chat-surface-base: #1a1915;
-    --chat-surface-elevated: #242220;
-    /* Elevation for popovers, menus and modals that float above the surface. */
+    --chat-bg: hsl(var(--neutral-0));
+    --chat-fg: hsl(var(--neutral-fg-1));
+    --chat-surface-base: hsl(var(--neutral-0));
+    --chat-surface-elevated: hsl(var(--neutral-3));
     --chat-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
-    --chat-surface-overlay: #2e2b28;
-    --chat-surface-hover: #363330;
-    --chat-sidebar-bg: #151410;
-    --chat-input-bg: #242220;
-    --chat-code-bg: #11100d;
-    --chat-text-primary: #e8e4db;
-    /* AUDIT-FIX GOV-34: this theme was the worst of the four. --chat-text-muted
-       #5c5955 measured 2.53:1 against --chat-bg #1a1915 — barely more than half
-       the AA floor at the 11-12px sizes it is used at — and --chat-text-placeholder
-       #6b6560 measured 3.06:1 against --chat-input-bg #242220. The two also sat
-       so close to each other (and to the secondary tone) that the hierarchy did
-       not read at all. New values, measured:
-         secondary   #a8a29a  6.95:1 on #1a1915  (was #8b8680, 4.88:1)
-         muted       #8f8982  5.08:1 on #1a1915
-         placeholder #8f8982  4.58:1 on #242220 (the input surface it sits on)
-       Prominence now steps primary > secondary > muted/placeholder with real
-       separation, and every step clears AA. */
-    --chat-text-secondary: #a8a29a;
-    --chat-text-muted: #8f8982;
-    --chat-text-placeholder: #8f8982;
-    --chat-border: rgba(255, 235, 205, 0.08);
-    --chat-border-strong: rgba(255, 235, 205, 0.15);
-    --chat-border-subtle: rgba(255, 235, 205, 0.08);
+    --chat-surface-overlay: hsl(var(--neutral-3));
+    --chat-surface-hover: hsl(var(--neutral-4));
+    --chat-sidebar-bg: hsl(var(--neutral-0));
+    --chat-input-bg: hsl(var(--neutral-3));
+    --chat-code-bg: hsl(var(--neutral-1));
+    --chat-text-primary: hsl(var(--neutral-fg-1));
+    --chat-text-secondary: hsl(var(--neutral-fg-2));
+    --chat-text-muted: hsl(var(--neutral-fg-3));
+    --chat-text-placeholder: hsl(var(--neutral-fg-3));
+    --chat-border: rgba(255, 255, 255, 0.1);
+    --chat-border-strong: rgba(255, 255, 255, 0.16);
+    --chat-border-subtle: rgba(255, 255, 255, 0.08);
     --chat-accent-primary: #da7756;
     --chat-accent-primary-contrast: #ffffff;
     --chat-accent-secondary: #21808d;
     --chat-accent-secondary-soft: rgba(33, 128, 141, 0.15);
     --chat-focus-ring: rgba(33, 128, 141, 0.25);
-    --chat-user-bubble-bg: #2a2724;
-    --chat-thinking-text: #8b8680;
-    --chat-thinking-line: rgba(255, 235, 205, 0.08);
+    --chat-user-bubble-bg: hsl(var(--neutral-3));
+    --chat-thinking-text: hsl(var(--neutral-fg-2));
+    --chat-thinking-line: rgba(255, 255, 255, 0.1);
     --chat-badge-result: #22c55e;
-    --chat-badge-neutral: #6b6560;
+    --chat-badge-neutral: hsl(var(--neutral-fg-3));
     --chat-destructive: #ef4444;
     --chat-info: #3b82f6;
     --chat-success: #22c55e;
@@ -120,8 +119,14 @@
    chat container.
    ─────────────────────────────────────────────────────────────────────────── */
 @layer base {
-  /* Cool · light (ChatGPT light) */
-  [data-chat-theme='cool'] {
+  /* Cool · light (ChatGPT light).
+     Anchored to `html:not(.dark)`, not bare `:not(.dark)`: the theme class
+     lives on <html> while the attribute sits on a nested div, and bare
+     `:not(.dark)` matches <body> as an ancestor — so the light palette painted
+     straight over dark mode. Verified in the running app: /chat rendered a
+     white shell and a #f9f9f9 sidebar while every other route was black. */
+  html:not(.dark) [data-chat-theme='cool'],
+  html:not(.dark)[data-chat-theme='cool'] {
     --chat-bg: #ffffff;
     --chat-fg: #0d0d0d;
     --chat-surface-base: #ffffff;
@@ -158,39 +163,4 @@
     --chat-thinking-line: rgba(0, 0, 0, 0.08);
   }
 
-  /* Cool · dark (ChatGPT dark) — wins over .dark warm via higher specificity */
-  .dark [data-chat-theme='cool'],
-  .dark[data-chat-theme='cool'] {
-    --chat-bg: #212121;
-    --chat-fg: #ececec;
-    --chat-surface-base: #212121;
-    --chat-surface-elevated: #2f2f2f;
-    /* Elevation for popovers, menus and modals that float above the surface. */
-    --chat-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
-    --chat-surface-overlay: #2a2a2d;
-    --chat-surface-hover: #2f2f2f;
-    --chat-sidebar-bg: #171717;
-    --chat-input-bg: #2f2f2f;
-    --chat-code-bg: #1e1e1e;
-    --chat-text-primary: #ececec;
-    /* AUDIT-FIX GOV-34: the shared #8e8e8e cleared AA on --chat-bg #212121
-       (4.91:1) but not on --chat-input-bg #2f2f2f (4.09:1), which is exactly
-       where the placeholder is rendered.
-         secondary        #b4b4b4  7.77:1 on #212121 (unchanged)
-         muted/placeholder #999999 5.65:1 on #212121, 4.70:1 on #2f2f2f. */
-    --chat-text-secondary: #b4b4b4;
-    --chat-text-muted: #999999;
-    --chat-text-placeholder: #999999;
-    --chat-border: rgba(255, 255, 255, 0.1);
-    --chat-border-strong: rgba(255, 255, 255, 0.16);
-    --chat-border-subtle: rgba(255, 255, 255, 0.08);
-    --chat-accent-primary: #0b84ff;
-    --chat-accent-primary-contrast: #ffffff;
-    --chat-accent-secondary: #0a6ed1;
-    --chat-accent-secondary-soft: rgba(11, 132, 255, 0.16);
-    --chat-focus-ring: rgba(11, 132, 255, 0.4);
-    --chat-user-bubble-bg: #2f2f2f;
-    --chat-thinking-text: #b4b4b4;
-    --chat-thinking-line: rgba(255, 255, 255, 0.1);
-  }
 }

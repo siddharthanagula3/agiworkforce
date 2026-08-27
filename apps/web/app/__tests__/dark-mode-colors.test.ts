@@ -34,65 +34,159 @@ function parseDarkModeVar(cssContent: string, varName: string): string | null {
 const cssPath = path.resolve(__dirname, '../globals.css');
 const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
+const tokensPath = path.resolve(__dirname, '../../../../packages/ui/design-tokens/src/chat.css');
+const tokensContent = fs.readFileSync(tokensPath, 'utf-8');
+
+const PRIMITIVES: Record<string, string> = Object.fromEntries(
+  [...tokensContent.matchAll(/^\s*(--neutral-[a-z0-9-]+):\s*([^;]+);/gm)].map((m) => [
+    m[1]!,
+    m[2]!.trim(),
+  ]),
+);
+
+function resolveToken(value: string): string {
+  const wrapped = value.match(/^hsl\(\s*var\((--[a-z0-9-]+)\)\s*\)$/);
+  if (wrapped) return hslToHex(PRIMITIVES[wrapped[1]!] ?? '');
+  const bare = value.match(/^var\((--[a-z0-9-]+)\)$/);
+  if (bare) {
+    const primitive = PRIMITIVES[bare[1]!];
+    if (primitive === undefined) throw new Error(`Unknown primitive ${bare[1]}`);
+    return primitive;
+  }
+  return value;
+}
+
+function resolveToHex(value: string): string {
+  const resolved = resolveToken(value);
+  return resolved.startsWith('#') ? resolved : hslToHex(resolved);
+}
+
+const NEUTRAL_HSL = /^0\s+0%\s+\d+(\.\d+)?%$/;
+
 describe('Dark mode color tokens', () => {
-  describe('Background color (#0f0f13)', () => {
+  describe('Background color (#000000)', () => {
     it('--background in dark mode is defined as an HSL triple', () => {
       const value = parseDarkModeVar(cssContent, '--background');
       expect(value).not.toBeNull();
-      expect(value).toMatch(/^\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%$/);
+      expect(resolveToken(value as string)).toMatch(/^\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%$/);
     });
 
-    it('--background in dark mode resolves to #0f0f13 or nearest rounded equivalent', () => {
+    it('--background in dark mode resolves exactly to #000000', () => {
       const value = parseDarkModeVar(cssContent, '--background');
       expect(value).not.toBeNull();
 
-      const hex = hslToHex(value as string);
-      expect(['#0f0f13', '#101014']).toContain(hex);
+      expect(resolveToHex(value as string)).toBe('#000000');
     });
   });
 
-  describe('Sidebar background color (#0b0c14)', () => {
-    it('--sidebar-background in dark mode resolves exactly to #0b0c14', () => {
+  describe('Sidebar background color (#000000)', () => {
+    it('--sidebar-background in dark mode resolves exactly to #000000', () => {
       const value = parseDarkModeVar(cssContent, '--sidebar-background');
       expect(value).not.toBeNull();
 
-      const hex = hslToHex(value as string);
-      expect(hex).toBe('#0b0c14');
+      expect(resolveToHex(value as string)).toBe('#000000');
+    });
+  });
+
+  describe('Neutral surface ramp', () => {
+    it.each([
+      ['--background', '#000000'],
+      ['--card', '#181818'],
+      ['--popover', '#212121'],
+      ['--secondary', '#2f2f2f'],
+      ['--muted', '#2f2f2f'],
+      ['--accent', '#2f2f2f'],
+      ['--border', '#2f2f2f'],
+      ['--input', '#212121'],
+      ['--foreground', '#ffffff'],
+      ['--muted-foreground', '#afafaf'],
+      ['--sidebar-background', '#000000'],
+      ['--sidebar-foreground', '#afafaf'],
+      ['--sidebar-accent', '#2f2f2f'],
+      ['--sidebar-border', '#2f2f2f'],
+    ])('%s resolves to %s', (token, hex) => {
+      const value = parseDarkModeVar(cssContent, token);
+      expect(value, `${token} should be defined in dark mode`).not.toBeNull();
+      expect(resolveToHex(value as string)).toBe(hex);
+    });
+
+    it.each([
+      '--background',
+      '--card',
+      '--popover',
+      '--secondary',
+      '--muted',
+      '--accent',
+      '--border',
+      '--input',
+      '--foreground',
+      '--muted-foreground',
+      '--sidebar-background',
+      '--sidebar-foreground',
+    ])('%s carries no hue or saturation', (token) => {
+      expect(resolveToken(parseDarkModeVar(cssContent, token) as string)).toMatch(NEUTRAL_HSL);
     });
   });
 
   describe('Chat surface tokens', () => {
-    it('--chat-bg is set to #0a0a0a in dark mode', () => {
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
-      expect(darkBlockMatch).not.toBeNull();
-
-      const darkBlock = darkBlockMatch![1];
-      expect(darkBlock).toContain('--chat-bg: #0a0a0a');
-    });
-
-    it('--chat-sidebar-bg is set to #0b0c14 in dark mode', () => {
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
-      expect(darkBlockMatch).not.toBeNull();
-
-      const darkBlock = darkBlockMatch![1];
-      expect(darkBlock).toContain('--chat-sidebar-bg: #0b0c14');
+    it.each([
+      ['--chat-bg', '#000000'],
+      ['--chat-fg', '#ffffff'],
+      ['--chat-surface-base', '#000000'],
+      ['--chat-surface-elevated', '#212121'],
+      ['--chat-surface-overlay', '#212121'],
+      ['--chat-surface-hover', '#2f2f2f'],
+      ['--chat-sidebar-bg', '#000000'],
+      ['--chat-input-bg', '#212121'],
+      ['--chat-code-bg', '#0d0d0d'],
+      ['--chat-text-primary', '#ffffff'],
+      ['--chat-text-secondary', '#afafaf'],
+      ['--chat-text-muted', '#9b9b9b'],
+      ['--chat-text-placeholder', '#9b9b9b'],
+      ['--chat-user-bubble-bg', '#212121'],
+    ])('%s resolves to %s in dark mode', (token, hex) => {
+      const value = parseDarkModeVar(cssContent, token);
+      expect(value, `${token} should be defined in dark mode`).not.toBeNull();
+      expect(resolveToHex(value as string)).toBe(hex);
     });
 
     it('--chat-border-subtle defines a subtle border color', () => {
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
-      expect(darkBlockMatch).not.toBeNull();
-
-      const darkBlock = darkBlockMatch![1];
-      // Border-subtle may use hex (#xxxxxx) or rgba(...) notation
-      expect(darkBlock).toMatch(/--chat-border-subtle:\s*(?:#[0-9a-f]{6}|rgba\()/);
+      const value = parseDarkModeVar(cssContent, '--chat-border-subtle');
+      expect(value).not.toBeNull();
+      expect(value).toMatch(/^(?:#[0-9a-f]{6}|rgba\(|hsl\()/);
     });
 
     it('--chat-text-primary defines a readable text color in dark mode', () => {
-      const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
-      expect(darkBlockMatch).not.toBeNull();
+      const value = parseDarkModeVar(cssContent, '--chat-text-primary');
+      expect(value).not.toBeNull();
+      expect(resolveToHex(value as string)).toMatch(/^#[0-9a-f]{6}$/);
+    });
 
-      const darkBlock = darkBlockMatch![1];
-      expect(darkBlock).toMatch(/--chat-text-primary:\s*#[0-9a-f]{6}/);
+    it('every neutral surface token derives from a shared primitive, never a literal', () => {
+      const tokens = [
+        '--background',
+        '--card',
+        '--popover',
+        '--secondary',
+        '--muted',
+        '--accent',
+        '--border',
+        '--input',
+        '--foreground',
+        '--muted-foreground',
+        '--sidebar-background',
+        '--chat-bg',
+        '--chat-input-bg',
+        '--chat-text-primary',
+        '--chat-user-bubble-bg',
+      ];
+      for (const token of tokens) {
+        const value = parseDarkModeVar(cssContent, token);
+        expect(value, `${token} should be defined in dark mode`).not.toBeNull();
+        expect(value, `${token} must reference a --neutral-* primitive, not a literal`).toMatch(
+          /var\(--neutral-[a-z0-9-]+\)/,
+        );
+      }
     });
   });
 

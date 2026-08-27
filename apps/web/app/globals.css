@@ -257,9 +257,9 @@
   /* Exact hex aliases for the four canonical surface values - matches desktop design system.
      These allow bg-chat-bg-light, bg-chat-bg-dark, etc. as Tailwind utility classes. */
   --color-chat-bg-light: #faf9f7;
-  --color-chat-bg-dark: #0f0f13;
+  --color-chat-bg-dark: hsl(var(--neutral-0));
   --color-chat-sidebar-light: #f5f4f1;
-  --color-chat-sidebar-dark: #0b0c14;
+  --color-chat-sidebar-dark: hsl(var(--neutral-0));
 
   /* Border radius */
   --radius-lg: 12px;
@@ -747,35 +747,32 @@
   .dark {
     color-scheme: dark;
 
-    /* #0f0f13 - exact: hsl(240 14% 6.7%) matches desktop dark main bg */
-    --background: 240 14% 6.7%;
-    --foreground: 210 40% 98%;
+    --background: var(--neutral-0);
+    --foreground: var(--neutral-fg-1);
 
-    /* Slightly elevated surface above background - ~hsl(240 12% 9%) = #14141a */
-    --card: 240 12% 9%;
-    --card-foreground: 210 40% 98%;
+    --card: var(--neutral-2);
+    --card-foreground: var(--neutral-fg-1);
 
-    --popover: 240 12% 9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: var(--neutral-3);
+    --popover-foreground: var(--neutral-fg-1);
 
     --primary: 15 64.1% 59.6%;
     --primary-foreground: 180 3.1% 12.5%;
 
-    /* Elevated surface: ~hsl(240 10% 15%) = #22222a - consistent with #0f0f13 base */
-    --secondary: 240 10% 15%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: var(--neutral-4);
+    --secondary-foreground: var(--neutral-fg-1);
 
-    --muted: 240 10% 15%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: var(--neutral-4);
+    --muted-foreground: var(--neutral-fg-2);
 
-    --accent: 240 10% 15%;
-    --accent-foreground: 210 40% 98%;
+    --accent: var(--neutral-4);
+    --accent-foreground: var(--neutral-fg-1);
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 240 10% 15%;
-    --input: 240 10% 15%;
+    --border: var(--neutral-4);
+    --input: var(--neutral-3);
     /* 52% lightness → 3.24:1 on dark bg - WCAG AA for focus indicators */
     --ring: 224.3 76.3% 52%;
 
@@ -802,28 +799,38 @@
     --glow-primary: 217 91% 60%;
     --glow-secondary: 262 52% 47%;
 
-    /* Sidebar - #0b0c14 ≈ hsl(233 29% 6%) matches desktop dark sidebar */
-    --sidebar-background: 233 29% 6%;
-    --sidebar-foreground: 240 5% 65%;
+    --sidebar-background: var(--neutral-0);
+    --sidebar-foreground: var(--neutral-fg-2);
     --sidebar-primary: 224.3 76.3% 48%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 12% 14%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 240 12% 14%;
+    --sidebar-accent: var(--neutral-4);
+    --sidebar-accent-foreground: var(--neutral-fg-1);
+    --sidebar-border: var(--neutral-4);
     --sidebar-ring: 224.3 76.3% 48%;
 
-    /* Chat surface tokens - dark mode (glassmorphism dark theme) */
-    --chat-bg: #0a0a0a;
-    --chat-bg-elevated: rgba(26, 26, 26, 0.8);
-    --chat-sidebar-bg: #0b0c14;
-    --chat-border-strong: #2d2d35;
+    --chat-bg: hsl(var(--neutral-0));
+    --chat-fg: hsl(var(--neutral-fg-1));
+    --chat-surface-base: hsl(var(--neutral-0));
+    --chat-surface-elevated: hsl(var(--neutral-3));
+    --chat-surface-overlay: hsl(var(--neutral-3));
+    --chat-surface-hover: hsl(var(--neutral-4));
+    --chat-bg-elevated: hsl(var(--neutral-3) / 0.8);
+    --chat-sidebar-bg: hsl(var(--neutral-0));
+    --chat-border: rgba(255, 255, 255, 0.1);
+    --chat-border-strong: hsl(var(--neutral-6));
     --chat-border-subtle: rgba(255, 255, 255, 0.08);
     --chat-glass: rgba(255, 255, 255, 0.04);
     --chat-glass-border: rgba(255, 255, 255, 0.1);
-    --chat-input-bg: #1a1a1a;
-    --chat-code-bg: #0d1117;
-    --chat-text-primary: #e4e4e7;
-    --chat-text-secondary: #a1a1a6;
+    --chat-input-bg: hsl(var(--neutral-3));
+    --chat-code-bg: hsl(var(--neutral-1));
+    --chat-text-primary: hsl(var(--neutral-fg-1));
+    --chat-text-secondary: hsl(var(--neutral-fg-2));
+    --chat-text-muted: hsl(var(--neutral-fg-3));
+    --chat-text-placeholder: hsl(var(--neutral-fg-3));
+    --chat-user-bubble-bg: hsl(var(--neutral-3));
+    --chat-thinking-text: hsl(var(--neutral-fg-2));
+    --chat-thinking-line: rgba(255, 255, 255, 0.1);
+    --chat-badge-neutral: hsl(var(--neutral-fg-3));
     --chat-accent: #21808d;
     --chat-accent-secondary: #da7756;
     /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
