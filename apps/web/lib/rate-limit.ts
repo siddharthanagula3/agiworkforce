@@ -65,6 +65,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 push-token updates per minute (mirrors api-gateway limiter)
     failClosed: false,
   },
+  'web-push': {
+    limit: 10,
+    window: '1 m', // 10 browser registrations per minute — one browser only ever needs a few
+    failClosed: true, // Writes a row keyed on an attacker-suppliable endpoint
+  },
   'mobile-feedback': {
     limit: 10,
     window: '1 h', // 10 feedback submissions per hour — generous for real use, blocks spam

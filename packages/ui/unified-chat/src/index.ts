@@ -417,6 +417,23 @@ export { SidecarPanel } from './components/sidecar/SidecarPanel';
 export type { SidecarPanelProps, SidecarPanelType } from './components/sidecar/SidecarPanel';
 export { PresentationArtifact } from './components/artifact-components/PresentationArtifact';
 export type { PresentationArtifactProps } from './components/artifact-components/PresentationArtifact';
+export { ChartArtifact } from './components/artifact-components/ChartArtifact';
+export type { ChartArtifactProps } from './components/artifact-components/ChartArtifact';
+export {
+  CHART_KINDS,
+  CHART_ROW_CAP,
+  CHART_SERIES_CAP,
+  chartSeriesPalette,
+  parseChartArtifact,
+  toChartNumber,
+} from './components/artifact-components/chart-spec';
+export type {
+  ChartKind,
+  ChartParseResult,
+  ChartRow,
+  ChartSeriesSpec,
+  ChartSpec,
+} from './components/artifact-components/chart-spec';
 export {
   ReactPreview,
   buildReactPreviewDocument,

@@ -48,11 +48,19 @@ describe('Web Settings capability boundaries', () => {
   it('shows only the notification channels with a real sender', async () => {
     render(<NotificationsSection />);
 
-    expect(screen.getByText('Three channels have a sender')).toBeInTheDocument();
+    expect(screen.getByText('Four channels have a sender')).toBeInTheDocument();
     expect(
       screen.getByText(/Project, usage, billing, security, connector, tips, and marketing/),
     ).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('Synced to your account')).toBeInTheDocument());
+  });
+
+  it('offers the browser push channel that web-push delivery actually sends to', () => {
+    render(<NotificationsSection />);
+
+    const runEvent = screen.getByRole('region', { name: 'Agent run updates' });
+    expect(within(runEvent).getByText('Browser notifications')).toBeInTheDocument();
+    expect(within(runEvent).getByRole('switch')).toBeInTheDocument();
   });
 
   it('does not deny the email and push schedule channels, which are implemented', () => {

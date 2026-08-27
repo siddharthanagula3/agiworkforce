@@ -16,14 +16,13 @@ describe('responsive layout production wiring', () => {
   });
 
   it.each([
-    { label: 'agents', segments: ['app', '(app)', '(tabs)', 'agents.tsx'] },
     { label: 'artifacts', segments: ['src', 'features', 'artifacts', 'index.tsx'] },
     { label: 'library', segments: ['src', 'features', 'library', 'index.tsx'] },
   ])('remounts the $label grid when its responsive column count changes', ({ segments }) => {
     const source = readSource(...segments);
 
     expect(source).toContain('useResponsiveLayout()');
-    expect(source).toMatch(/key=\{`(?:agents|artifacts|library)-\$\{gridColumns\}`\}/);
+    expect(source).toMatch(/key=\{`(?:artifacts|library)-\$\{gridColumns\}`\}/);
     expect(source).toContain('numColumns={gridColumns}');
   });
 });

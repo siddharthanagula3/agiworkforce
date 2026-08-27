@@ -44,7 +44,7 @@ type RoutePath =
   | '/(app)/skills'
   | '/(app)/schedules'
   | '/(app)/companion'
-  | '/(app)/agents'
+  | '/(app)/tasks'
   | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
   | '/(app)/about'
@@ -53,7 +53,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'chats' | 'projects' | 'library' | 'skills' | 'schedules' | 'remote';
+  key: 'chats' | 'projects' | 'library' | 'skills' | 'schedules' | 'remote' | 'tasks';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -110,6 +110,20 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: MOBILE_REMOTE_SCREEN_LABEL,
     icon: MonitorSmartphone,
     route: '/(app)/companion',
+  },
+  // AGI Work NAVIGATES; it does not toggle (founder 2026-08-13). A drawer row
+  // that silently flipped a session stance gave no feedback about what it had
+  // changed and no way to see the work it produced. `workMode` is a property of
+  // a cloud agent RUN (cloud-contracts/cloud-agent-runs.ts), not of a
+  // conversation, so "the AGI Work chats" are exactly the runs list at
+  // /(app)/tasks — which is also why no separate "Tasks" row sits beside this
+  // one showing the same records.
+  {
+    key: 'tasks',
+    label: 'AGI Work',
+    icon: Bot,
+    route: '/(app)/tasks',
+    cloud: true,
   },
 ];
 
@@ -355,10 +369,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
         if (item.key === 'skills' && !FEATURES.skills) return false;
         if (item.key === 'remote' && !FEATURES.companion) return false;
+        if (item.key === 'tasks') return FEATURES.cloudTasks && showAgiWork;
         if (appMode === 'cloud') return true;
         return !item.cloud;
       }),
-    [appMode],
+    [appMode, showAgiWork],
   );
 
   const activeKey = useCallback(
@@ -370,6 +385,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'skills') return p.includes('/skills');
       if (key === 'schedules') return p.includes('/schedules');
       if (key === 'remote') return p.includes('/companion');
+      if (key === 'tasks') return p.includes('/tasks');
       return false;
     },
     [pathname],
@@ -436,22 +452,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 }}
               />
             ))}
-            {/* AGI Work NAVIGATES; it does not toggle (founder 2026-08-13).
-                A drawer row that silently flipped a session stance gave no
-                feedback about what it had changed and no way to see the work
-                it produced. `workMode` is a property of a cloud agent RUN
-                (cloud-contracts/cloud-agent-runs.ts), not of a conversation,
-                so "the AGI Work chats" are exactly the runs list — which is
-                also why the separate "Tasks" row is gone rather than sitting
-                beside this one showing the same records. */}
-            {showAgiWork ? (
-              <NavRow
-                label="AGI Work"
-                icon={Bot}
-                tag="Cloud"
-                onPress={() => navigate('/(app)/agents')}
-              />
-            ) : null}
           </View>
 
           {displayedProjects.length > 0 ? (

@@ -9,6 +9,7 @@ import { AnalyticsConsentGate } from '@shared/components/AnalyticsConsentGate';
 import { CookieConsent } from '@shared/components/CookieConsent';
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
+import { WebPushOptIn } from '@/features/notifications';
 import { OG_IMAGE } from '@/lib/seo/site';
 import { readServerTelemetryConsent } from '@/lib/server/telemetry-consent';
 import {
@@ -209,6 +210,7 @@ export default async function RootLayout({
            * `ANALYTICS_REQUIRES_CONSENT` in shared/lib/cookie-consent.ts.
            */}
           <CookieConsent />
+          <WebPushOptIn />
           {gaTrackingId && <AnalyticsConsentGate trackingId={gaTrackingId} nonce={nonce} />}
         </ClerkProvider>
       </body>

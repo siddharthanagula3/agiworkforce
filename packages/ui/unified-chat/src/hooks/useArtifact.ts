@@ -3,6 +3,8 @@ import type { Artifact } from '../lib/types';
 import { useArtifactStore, type ArtifactViewMode } from '../stores/artifactStore';
 import { useUIStore } from '../stores/uiStore';
 
+const PREVIEWABLE_TYPES = ['html', 'react', 'svg', 'markdown', 'document', 'image', 'chart'];
+
 export function useArtifact() {
   const isOpen = useUIStore((state) => state.activeRightPanel === 'artifact');
   const panelWidth = useUIStore((state) => state.artifactPanelWidth);
@@ -21,14 +23,13 @@ export function useArtifact() {
       return false;
     }
 
-    return ['html', 'react', 'svg', 'markdown', 'document', 'image'].includes(activeArtifact.type);
+    return PREVIEWABLE_TYPES.includes(activeArtifact.type);
   }, [activeArtifact]);
 
   const openArtifact = useCallback(
     (artifact: Artifact, preferredViewMode: ArtifactViewMode = 'preview') => {
       const nextViewMode =
-        preferredViewMode === 'preview' &&
-        !['html', 'react', 'svg', 'markdown', 'document', 'image'].includes(artifact.type)
+        preferredViewMode === 'preview' && !PREVIEWABLE_TYPES.includes(artifact.type)
           ? 'code'
           : preferredViewMode;
       openArtifactInternal(artifact, nextViewMode);

@@ -123,8 +123,8 @@ describe('useChatStream — interactive cards', () => {
     const init = vi.mocked(fetch).mock.calls[0]?.[1];
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body['x_interactive_cards']).toEqual({
-      supported: ['map-search.v1', 'mcp-app.v1'],
-      canRespond: false,
+      supported: ['clarify.v1', 'map-search.v1', 'mcp-app.v1'],
+      canRespond: true,
     });
   });
 

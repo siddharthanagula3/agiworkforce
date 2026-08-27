@@ -1,12 +1,17 @@
 import {
   AgentTaskStateSchema,
+  ManagedCloudAgentRunAlreadyResumingError,
+  ManagedCloudAgentRunApprovalExpiredError,
   ManagedCloudAgentRunHttpError,
   ManagedCloudAgentRunRequestIdSchema,
   ManagedCloudAgentRunReferenceSchema,
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
   createManagedCloudAgentRunClient,
   managedCloudAgentRunPath,
   reconcileManagedCloudPublicText,
   type CloudAgentRun,
+  type CloudAgentRunListPage,
+  type ManagedCloudAgentRunApprovalDecision,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
@@ -14,7 +19,11 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 
 const MAX_VISIBLE_TEXT_CHARACTERS = 512_000;
-const ALL_MANAGED_RUN_STATES = AgentTaskStateSchema.options;
+const RUN_LIST_PAGE_SIZE = 25;
+const RUN_JOURNAL_PAGE_SIZE = 500;
+const RUN_JOURNAL_MAX_PAGES = 8;
+const RUN_JOURNAL_WINDOW_SIZE = RUN_JOURNAL_PAGE_SIZE * RUN_JOURNAL_MAX_PAGES;
+export const ALL_MANAGED_RUN_STATES = AgentTaskStateSchema.options;
 
 export interface ChromeManagedRunDependencies {
   getAuthToken: typeof getAuthToken;
@@ -65,7 +74,11 @@ function validateReference(value: unknown): ManagedCloudAgentRunReference | unde
   return parsed.success ? parsed.data : undefined;
 }
 
-function errorResult(error: unknown, signal?: AbortSignal): ChromeManagedRunControlError {
+function errorResult(
+  error: unknown,
+  signal?: AbortSignal,
+  fallbackMessage = 'The AGI Cloud run could not be resumed.',
+): ChromeManagedRunControlError {
   if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
     return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
   }
@@ -78,8 +91,18 @@ function errorResult(error: unknown, signal?: AbortSignal): ChromeManagedRunCont
   return {
     status: 'error',
     code: 'server_error',
-    message: error instanceof Error ? error.message : 'The AGI Cloud run could not be resumed.',
+    message: error instanceof Error ? error.message : fallbackMessage,
   };
+}
+
+function validateRunId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    managedCloudAgentRunPath(value);
+    return value;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function findChromeManagedRunByRequestId(
@@ -196,6 +219,201 @@ export async function resumeChromeManagedRun(
     return { status: 'success' };
   } catch (error) {
     return errorResult(error, request.signal);
+  }
+}
+
+export interface ChromeManagedRunListRequest {
+  states?: CloudAgentRun['state'][];
+  cursor?: string;
+  limit?: number;
+  signal?: AbortSignal;
+}
+
+export type ChromeManagedRunListResult =
+  | { status: 'success'; page: CloudAgentRunListPage }
+  | ChromeManagedRunControlError;
+
+export async function listChromeManagedRuns(
+  request: ChromeManagedRunListRequest = {},
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+): Promise<ChromeManagedRunListResult> {
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return {
+      status: 'error',
+      code: 'auth_required',
+      message: 'Sign in to see your AGI Cloud runs.',
+    };
+  }
+  try {
+    const page = await resolvedDependencies.createClient(token).listRuns({
+      ...(request.states ? { states: [...request.states] } : {}),
+      ...(request.cursor ? { cursor: request.cursor } : {}),
+      limit: request.limit ?? RUN_LIST_PAGE_SIZE,
+      signal: request.signal,
+    });
+    return { status: 'success', page };
+  } catch (error) {
+    return errorResult(error, request.signal, 'Your AGI Cloud runs could not be loaded.');
+  }
+}
+
+export interface ChromeManagedRunJournal {
+  run: CloudAgentRun;
+  events: AgentEventEnvelope[];
+  nextAfterSequence: number;
+  truncated: boolean;
+}
+
+export interface ReadChromeManagedRunJournalRequest {
+  runId: string;
+  afterSequence?: number;
+  signal?: AbortSignal;
+}
+
+export type ChromeManagedRunJournalResult =
+  | { status: 'success'; journal: ChromeManagedRunJournal }
+  | ChromeManagedRunControlError;
+
+export async function readChromeManagedRunJournal(
+  request: ReadChromeManagedRunJournalRequest,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+): Promise<ChromeManagedRunJournalResult> {
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const runId = validateRunId(request.runId);
+  if (!runId) {
+    return { status: 'error', code: 'invalid_request', message: 'Invalid Managed Cloud run.' };
+  }
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return {
+      status: 'error',
+      code: 'auth_required',
+      message: 'Sign in to open this AGI Cloud run.',
+    };
+  }
+
+  let afterSequence = Math.max(-1, Math.trunc(request.afterSequence ?? -1));
+  const events: AgentEventEnvelope[] = [];
+  const client = resolvedDependencies.createClient(token);
+  try {
+    let run: CloudAgentRun | undefined;
+    let complete = false;
+    let skippedOlder = false;
+    let pagesRead = 0;
+    while (pagesRead < RUN_JOURNAL_MAX_PAGES && !complete) {
+      const snapshot = await client.getRun(runId, {
+        afterSequence,
+        limit: RUN_JOURNAL_PAGE_SIZE,
+        signal: request.signal,
+      });
+      run = snapshot.run;
+      // A log longer than this window cannot be held whole. Anchor the window to
+      // the newest events rather than the oldest, so the caller is showing the
+      // activity a live run is producing right now.
+      if (
+        !skippedOlder &&
+        events.length === 0 &&
+        snapshot.run.lastEventSequence - afterSequence > RUN_JOURNAL_WINDOW_SIZE
+      ) {
+        skippedOlder = true;
+        afterSequence = snapshot.run.lastEventSequence - RUN_JOURNAL_WINDOW_SIZE;
+        continue;
+      }
+      pagesRead += 1;
+      events.push(...snapshot.events);
+      afterSequence = snapshot.nextAfterSequence;
+      complete = afterSequence >= snapshot.run.lastEventSequence || snapshot.events.length === 0;
+    }
+    if (!run) {
+      return {
+        status: 'error',
+        code: 'server_error',
+        message: 'This AGI Cloud run has no journal.',
+      };
+    }
+    return {
+      status: 'success',
+      journal: {
+        run,
+        events,
+        nextAfterSequence: afterSequence,
+        truncated: skippedOlder || !complete,
+      },
+    };
+  } catch (error) {
+    return errorResult(error, request.signal, 'This AGI Cloud run could not be read.');
+  }
+}
+
+export type ChromeManagedRunApprovalErrorCode =
+  | ChromeManagedRunControlError['code']
+  | 'already_resolved'
+  | 'approval_expired';
+
+export interface ResolveChromeManagedRunApprovalRequest {
+  runId: string;
+  toolCallIds: string[];
+  decision: ManagedCloudAgentRunApprovalDecision;
+  guidance?: string;
+  signal?: AbortSignal;
+}
+
+export type ChromeManagedRunApprovalResult =
+  | { status: 'success' }
+  | { status: 'error'; code: ChromeManagedRunApprovalErrorCode; message: string };
+
+export async function resolveChromeManagedRunApproval(
+  request: ResolveChromeManagedRunApprovalRequest,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+): Promise<ChromeManagedRunApprovalResult> {
+  const resolvedDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const runId = validateRunId(request.runId);
+  const guidance = request.guidance?.trim();
+  if (
+    !runId ||
+    request.toolCallIds.length === 0 ||
+    request.toolCallIds.some((toolCallId) => toolCallId.length === 0) ||
+    (guidance !== undefined && guidance.length > TOOL_APPROVAL_GUIDANCE_MAX_LENGTH)
+  ) {
+    return { status: 'error', code: 'invalid_request', message: 'Invalid Managed Cloud approval.' };
+  }
+  const token = await resolvedDependencies.getAuthToken();
+  if (!token) {
+    return {
+      status: 'error',
+      code: 'auth_required',
+      message: 'Sign in to answer this AGI Cloud approval.',
+    };
+  }
+
+  try {
+    await resolvedDependencies.createClient(token).resumeRun(
+      runId,
+      request.toolCallIds.map((toolCallId) => ({ toolCallId, decision: request.decision })),
+      {
+        ...(guidance ? { guidance } : {}),
+        ...(request.signal ? { signal: request.signal } : {}),
+      },
+    );
+    return { status: 'success' };
+  } catch (error) {
+    if (error instanceof ManagedCloudAgentRunAlreadyResumingError) {
+      return {
+        status: 'error',
+        code: 'already_resolved',
+        message: 'Another device already answered this approval.',
+      };
+    }
+    if (error instanceof ManagedCloudAgentRunApprovalExpiredError) {
+      return {
+        status: 'error',
+        code: 'approval_expired',
+        message: 'This approval expired and the run can no longer continue from it.',
+      };
+    }
+    return errorResult(error, request.signal, 'Your decision could not be sent.');
   }
 }
 

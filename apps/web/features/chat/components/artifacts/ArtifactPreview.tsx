@@ -37,6 +37,7 @@ import {
   type SharedArtifact,
 } from '@agiworkforce/types';
 import {
+  ChartArtifact,
   GeneratedFileCard,
   MarkdownContent,
   SpreadsheetArtifact,
@@ -103,13 +104,14 @@ export interface ArtifactData {
     | 'mermaid'
     | 'code'
     | 'document'
-    // Shared-renderer types (spreadsheet/table/csv, presentation, email) —
-    // rendered by @agiworkforce/unified-chat components, not the sandbox.
+    // Shared-renderer types (spreadsheet/table/csv, presentation, email, chart)
+    // — rendered by @agiworkforce/unified-chat components, not the sandbox.
     | 'spreadsheet'
     | 'table'
     | 'csv'
     | 'presentation'
     | 'email'
+    | 'chart'
     | 'image';
   language?: string;
   title?: string;
@@ -951,7 +953,10 @@ if (__AgiApp) {
   const isTabular = ['spreadsheet', 'table', 'csv'].includes(artifact.type);
   const isPresentation = artifact.type === 'presentation';
   const isEmail = artifact.type === 'email';
-  const isSharedRendered = isTabular || isPresentation || isEmail;
+  // A chart artifact carries a JSON spec, not markup: the sandbox iframe only
+  // ever printed the escaped JSON.
+  const isChart = artifact.type === 'chart';
+  const isSharedRendered = isTabular || isPresentation || isEmail || isChart;
 
   // The unified-chat Artifact view of this artifact (content follows the
   // version navigation, exactly like the sandbox preview does).
@@ -999,6 +1004,8 @@ if (__AgiApp) {
         />
       ) : isPresentation ? (
         <PresentationArtifact artifact={sharedArtifactView} className="h-full rounded-none" />
+      ) : isChart ? (
+        <ChartArtifact artifact={sharedArtifactView} className="h-full rounded-none border-0" />
       ) : (
         <EmailArtifact artifact={sharedArtifactView} className="rounded-none border-0" />
       )}
@@ -1595,7 +1602,7 @@ if (__AgiApp) {
               </div>
             ))}
 
-          {/* Preview: shared renderers (spreadsheet / presentation / email) */}
+          {/* Preview: shared renderers (spreadsheet / presentation / email / chart) */}
           {showPreview && isSharedRendered && renderSharedPreview('h-full w-full')}
 
           {/* Preview: rendered Markdown document */}
@@ -1888,7 +1895,7 @@ if (__AgiApp) {
           </TabsContent>
         )}
 
-        {/* Preview Tab · shared renderers (spreadsheet / presentation / email) */}
+        {/* Preview Tab · shared renderers (spreadsheet / presentation / email / chart) */}
         {isSharedRendered && (
           <TabsContent value="preview" className="m-0 p-0">
             {renderSharedPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}

@@ -10,15 +10,24 @@ use crate::automation::AutomationService;
 use crate::core::agi::{AGIConfig, AGICore, Goal, Priority, ResourceLimits};
 use crate::core::llm::LLMRouter;
 use crate::sys::account::{current_managed_auth_boundary, scope_managed_auth_boundary};
+use agiworkforce_protocol::task_state::AgentTaskState;
 use anyhow::Result;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, oneshot, Semaphore};
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use uuid::Uuid;
+
+/// How often a sub-agent samples its goal's lifecycle state while waiting for
+/// it to finish. `AGICore` publishes completion through `get_task_state` and
+/// offers no subscription or join point to a caller outside its module, so the
+/// wait is a poll — bounded by the sub-agent's `operation_timeout`, which
+/// cancels the goal when the budget is spent.
+const GOAL_COMPLETION_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Configuration for a sub-agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,13 +155,24 @@ pub struct SpawnedAgent {
     stop_signal: Arc<AtomicBool>,
     /// Current task being executed.
     current_task: Arc<RwLock<Option<String>>>,
+    /// Capacity permit, released when the agent is dropped from the pool.
+    _permit: OwnedSemaphorePermit,
 }
 
 impl SpawnedAgent {
     /// Checks if the agent can accept new tasks.
+    ///
+    /// A busy agent is excluded because sub-agents run one subtask at a time
+    /// and a subtask now holds its agent until the engine finishes the goal.
+    /// A tripped agent is not excluded forever: the breaker itself decides when
+    /// the open window is over and lets a trial through, and the task loop
+    /// restores `Healthy` when that trial succeeds. Gating on `health` instead
+    /// would strand the agent — and the capacity permit it holds — for the life
+    /// of the process, because nothing else ever clears `CircuitOpen`.
     pub fn can_accept_task(&self) -> bool {
-        let health = *self.health.read();
-        health == AgentHealth::Healthy && self.circuit_breaker.allow_request()
+        *self.health.read() != AgentHealth::Terminated
+            && self.circuit_breaker.allow_request()
+            && self.current_task.read().is_none()
     }
 
     /// Gets the agent's current load (0-100).
@@ -172,13 +192,18 @@ impl SpawnedAgent {
             });
         }
 
-        self.task_sender
-            .send(task)
-            .await
-            .map_err(|_| SwarmError::AgentFailed {
+        // The task loop only marks itself busy once it dequeues, too late to
+        // stop a second dispatch in the same scheduling pass picking this agent.
+        let subtask_id = task.subtask.id.clone();
+        *self.current_task.write() = Some(subtask_id);
+
+        self.task_sender.send(task).await.map_err(|_| {
+            *self.current_task.write() = None;
+            SwarmError::AgentFailed {
                 agent_id: self.id.clone(),
                 reason: "Task channel closed".to_string(),
-            })
+            }
+        })
     }
 
     /// Signals the agent to stop.
@@ -244,6 +269,46 @@ pub struct AgentTaskResult {
     pub retriable: bool,
 }
 
+/// How the goal a sub-agent submitted for its subtask actually finished.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SubtaskOutcome {
+    Succeeded,
+    Failed(&'static str),
+}
+
+/// What became of a submitted sub-goal inside the subtask's time budget.
+#[derive(Debug)]
+enum SettledGoal {
+    Outcome(SubtaskOutcome),
+    SubmitFailed(anyhow::Error),
+    OutOfTime,
+}
+
+/// Maps an engine task state onto the outcome the swarm reports for a subtask.
+/// `None` means the goal is still live and the sub-agent must keep waiting.
+///
+/// Finished engine work settles on `ReadyForReview`: `Completed` is a human
+/// acceptance rather than an execution outcome, so waiting on
+/// `AgentTaskState::is_terminal` alone would never observe a successful run.
+fn goal_outcome(task_state: AgentTaskState) -> Option<SubtaskOutcome> {
+    match task_state {
+        AgentTaskState::ReadyForReview | AgentTaskState::Completed | AgentTaskState::Archived => {
+            Some(SubtaskOutcome::Succeeded)
+        }
+        AgentTaskState::Failed => Some(SubtaskOutcome::Failed(
+            "Sub-agent stopped before finishing the subtask",
+        )),
+        AgentTaskState::Cancelled => Some(SubtaskOutcome::Failed("Subtask was cancelled")),
+        // A sub-goal runs in a throwaway core whose id no surface is bound to,
+        // so nobody can ever answer it; waiting would burn the whole subtask
+        // budget and hold a pool slot for a question with no asker.
+        AgentTaskState::AwaitingInput => Some(SubtaskOutcome::Failed(
+            "Subtask needed input no one can answer",
+        )),
+        AgentTaskState::Queued | AgentTaskState::Running | AgentTaskState::Paused => None,
+    }
+}
+
 /// Spawner for creating and managing sub-agents.
 pub struct AgentSpawner {
     /// LLM router for agent operations.
@@ -295,14 +360,19 @@ impl AgentSpawner {
         &self,
         config: Option<SubAgentConfig>,
     ) -> SwarmResultType<Arc<SpawnedAgent>> {
-        // Try to acquire a permit
-        let _permit =
-            self.agent_semaphore
-                .try_acquire()
-                .map_err(|_| SwarmError::CapacityExceeded {
-                    current: self.max_agents,
-                    max: self.max_agents,
-                })?;
+        let permit = match self.agent_semaphore.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                self.reclaim_finished_agents();
+                self.agent_semaphore
+                    .clone()
+                    .try_acquire_owned()
+                    .map_err(|_| SwarmError::CapacityExceeded {
+                        current: self.active_agent_count(),
+                        max: self.max_agents,
+                    })?
+            }
+        };
 
         let agent_id = format!("agent_{}", &Uuid::new_v4().to_string()[..8]);
         let config = config.unwrap_or_else(|| self.default_config.clone());
@@ -328,6 +398,7 @@ impl AgentSpawner {
             task_sender,
             stop_signal: stop_signal.clone(),
             current_task: current_task.clone(),
+            _permit: permit,
         });
 
         // Start the agent's task processing loop and retain the handle for abort-based
@@ -354,6 +425,32 @@ impl AgentSpawner {
         );
 
         Ok(agent)
+    }
+
+    /// Drops agents whose task loop has ended so the capacity permits they
+    /// still hold return to the pool. Without it an agent that will never run
+    /// another subtask — its loop returned, panicked or was aborted — would
+    /// occupy a `max_agents` slot until the whole swarm is torn down.
+    fn reclaim_finished_agents(&self) {
+        let finished: Vec<String> = {
+            let agents = self.agents.read();
+            let handles = self.handles.read();
+            agents
+                .iter()
+                .filter(|(id, agent)| {
+                    *agent.health.read() == AgentHealth::Terminated
+                        || handles
+                            .get(*id)
+                            .map(|handle| handle.is_finished())
+                            .unwrap_or(true)
+                })
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+
+        for agent_id in finished {
+            self.terminate_agent(&agent_id);
+        }
     }
 
     fn start_agent_loop(
@@ -412,6 +509,10 @@ impl AgentSpawner {
                     let task_result = match result {
                         Ok(value) => {
                             circuit_breaker.record_success();
+                            // Completes the recovery `can_accept_task` starts:
+                            // a trial task that lands puts the agent back in
+                            // the healthy roster the panel and stats report.
+                            *health.write() = AgentHealth::Healthy;
                             AgentTaskResult {
                                 subtask_id: task.subtask.id.clone(),
                                 agent_id: agent_id.clone(),
@@ -475,6 +576,41 @@ impl AgentSpawner {
         }
     }
 
+    /// Submits a goal and holds the sub-agent until the engine settles it.
+    ///
+    /// `submit_goal` only queues work, so its acknowledgement carries no
+    /// verdict on the subtask; the verdict is the goal's lifecycle state,
+    /// sampled until it leaves the live states or the budget expires. The whole
+    /// submit-and-wait sits under one `timeout` so a subtask still answers to
+    /// exactly one deadline.
+    async fn settle_goal<Submission, PollState>(
+        budget: Duration,
+        poll_interval: Duration,
+        submit: Submission,
+        poll_state: PollState,
+    ) -> SettledGoal
+    where
+        Submission: Future<Output = Result<String>>,
+        PollState: Fn() -> Option<AgentTaskState>,
+    {
+        let settled = tokio::time::timeout(budget, async move {
+            submit.await?;
+            loop {
+                if let Some(outcome) = poll_state().and_then(goal_outcome) {
+                    return Ok::<SubtaskOutcome, anyhow::Error>(outcome);
+                }
+                tokio::time::sleep(poll_interval).await;
+            }
+        })
+        .await;
+
+        match settled {
+            Ok(Ok(outcome)) => SettledGoal::Outcome(outcome),
+            Ok(Err(error)) => SettledGoal::SubmitFailed(error),
+            Err(_) => SettledGoal::OutOfTime,
+        }
+    }
+
     async fn execute_subtask(
         agent_id: &str,
         subtask: &Subtask,
@@ -493,6 +629,7 @@ impl AgentSpawner {
 
         // Create a mini-goal for this subtask
         let goal = Self::subtask_goal(subtask, trust_mode);
+        let goal_id = goal.id.clone();
 
         // Create a lightweight AGI core for this subtask
         let agi_config = AGIConfig {
@@ -512,34 +649,62 @@ impl AgentSpawner {
 
         let core = AGICore::new(agi_config, router.clone(), automation.clone(), app_handle)?;
 
-        // Execute with timeout
-        let result = tokio::time::timeout(timeout, core.submit_goal(goal)).await;
+        let settled = Self::settle_goal(
+            timeout,
+            GOAL_COMPLETION_POLL_INTERVAL,
+            core.submit_goal(goal),
+            || core.get_task_state(&goal_id),
+        )
+        .await;
 
-        match result {
-            Ok(Ok(goal_id)) => {
+        match settled {
+            SettledGoal::Outcome(SubtaskOutcome::Succeeded) => {
                 tracing::debug!(
-                    "[Agent {}] Subtask {} submitted as goal {}",
+                    "[Agent {}] Subtask {} completed as goal {}",
                     agent_id,
                     subtask.id,
                     goal_id
                 );
+                let output = core.get_goal_status(&goal_id).and_then(|context| {
+                    context.tool_results.last().map(|step| step.result.clone())
+                });
                 Ok(serde_json::json!({
                     "status": "completed",
                     "subtask_id": subtask.id,
                     "goal_id": goal_id,
+                    "output": output,
                 }))
             }
-            Ok(Err(e)) => {
+            SettledGoal::Outcome(SubtaskOutcome::Failed(reason)) => {
+                tracing::warn!(
+                    "[Agent {}] Subtask {} failed: {}",
+                    agent_id,
+                    subtask.id,
+                    reason
+                );
+                Err(anyhow::anyhow!(reason))
+            }
+            SettledGoal::SubmitFailed(e) => {
                 tracing::warn!("[Agent {}] Subtask {} failed: {}", agent_id, subtask.id, e);
                 Err(e)
             }
-            Err(_) => {
+            SettledGoal::OutOfTime => {
                 tracing::warn!(
                     "[Agent {}] Subtask {} timed out after {:?}",
                     agent_id,
                     subtask.id,
                     timeout
                 );
+                // The goal worker outlives this future, so cancel it rather
+                // than leaving an orphan running against the swarm's budget.
+                if let Err(error) = core.cancel_goal(&goal_id).await {
+                    tracing::debug!(
+                        "[Agent {}] Could not cancel timed-out goal {}: {}",
+                        agent_id,
+                        goal_id,
+                        error
+                    );
+                }
                 Err(anyhow::anyhow!("Subtask timed out"))
             }
         }
@@ -714,5 +879,196 @@ mod tests {
         let config = SubAgentConfig::default();
         assert!(config.frozen);
         assert_eq!(config.max_concurrent_tasks, 1);
+    }
+
+    const TEST_POLL_INTERVAL: Duration = Duration::from_millis(5);
+    const TEST_SUBTASK_BUDGET: Duration = Duration::from_millis(120);
+    const TEST_CIRCUIT_RESET: Duration = Duration::from_millis(40);
+    const TEST_POLLS_BEFORE_THE_ENGINE_FINISHES: usize = 3;
+
+    async fn submission_accepted() -> Result<String> {
+        Ok("goal_1".to_string())
+    }
+
+    async fn submission_rejected() -> Result<String> {
+        Err(anyhow::anyhow!("engine refused the goal"))
+    }
+
+    fn test_agent(
+        circuit_breaker: Arc<CircuitBreaker>,
+    ) -> (SpawnedAgent, mpsc::Receiver<AgentTask>) {
+        let (task_sender, task_receiver) = mpsc::channel::<AgentTask>(1);
+        let permit = Arc::new(Semaphore::new(1))
+            .try_acquire_owned()
+            .expect("capacity available");
+
+        let agent = SpawnedAgent {
+            id: "agent_test".to_string(),
+            health: Arc::new(RwLock::new(AgentHealth::Healthy)),
+            config: SubAgentConfig::default(),
+            tasks_completed: AtomicU64::new(0),
+            tasks_failed: AtomicU64::new(0),
+            total_execution_time_ms: AtomicU64::new(0),
+            circuit_breaker,
+            task_sender,
+            stop_signal: Arc::new(AtomicBool::new(false)),
+            current_task: Arc::new(RwLock::new(None)),
+            _permit: permit,
+        };
+
+        (agent, task_receiver)
+    }
+
+    #[test]
+    fn test_goal_outcome_reports_finished_work_as_success() {
+        for state in [
+            AgentTaskState::ReadyForReview,
+            AgentTaskState::Completed,
+            AgentTaskState::Archived,
+        ] {
+            assert_eq!(goal_outcome(state), Some(SubtaskOutcome::Succeeded));
+        }
+    }
+
+    #[test]
+    fn test_goal_outcome_succeeds_on_the_non_terminal_ready_for_review() {
+        assert!(!AgentTaskState::ReadyForReview.is_terminal());
+        assert_eq!(
+            goal_outcome(AgentTaskState::ReadyForReview),
+            Some(SubtaskOutcome::Succeeded)
+        );
+    }
+
+    #[test]
+    fn test_goal_outcome_reports_unfinished_work_as_failure() {
+        for state in [
+            AgentTaskState::Failed,
+            AgentTaskState::Cancelled,
+            AgentTaskState::AwaitingInput,
+        ] {
+            assert!(matches!(
+                goal_outcome(state),
+                Some(SubtaskOutcome::Failed(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn test_goal_outcome_keeps_waiting_while_the_goal_is_live() {
+        for state in [
+            AgentTaskState::Queued,
+            AgentTaskState::Running,
+            AgentTaskState::Paused,
+        ] {
+            assert_eq!(goal_outcome(state), None);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_submission_acknowledgement_alone_never_settles_a_subtask() {
+        let settled = AgentSpawner::settle_goal(
+            TEST_SUBTASK_BUDGET,
+            TEST_POLL_INTERVAL,
+            submission_accepted(),
+            || Some(AgentTaskState::Running),
+        )
+        .await;
+
+        assert!(matches!(settled, SettledGoal::OutOfTime));
+    }
+
+    #[tokio::test]
+    async fn test_subtask_settles_only_once_the_engine_finishes_the_goal() {
+        let polls = Arc::new(AtomicU32::new(0));
+        let observed = polls.clone();
+
+        let settled = AgentSpawner::settle_goal(
+            TEST_SUBTASK_BUDGET,
+            TEST_POLL_INTERVAL,
+            submission_accepted(),
+            move || {
+                let seen = observed.fetch_add(1, Ordering::SeqCst) as usize;
+                if seen + 1 < TEST_POLLS_BEFORE_THE_ENGINE_FINISHES {
+                    Some(AgentTaskState::Running)
+                } else {
+                    Some(AgentTaskState::ReadyForReview)
+                }
+            },
+        )
+        .await;
+
+        assert!(matches!(
+            settled,
+            SettledGoal::Outcome(SubtaskOutcome::Succeeded)
+        ));
+        assert_eq!(
+            polls.load(Ordering::SeqCst) as usize,
+            TEST_POLLS_BEFORE_THE_ENGINE_FINISHES
+        );
+    }
+
+    #[tokio::test]
+    async fn test_subtask_settles_as_failed_when_the_engine_gives_up() {
+        let settled = AgentSpawner::settle_goal(
+            TEST_SUBTASK_BUDGET,
+            TEST_POLL_INTERVAL,
+            submission_accepted(),
+            || Some(AgentTaskState::Failed),
+        )
+        .await;
+
+        assert!(matches!(
+            settled,
+            SettledGoal::Outcome(SubtaskOutcome::Failed(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_rejected_submission_is_reported_without_waiting() {
+        let settled = AgentSpawner::settle_goal(
+            TEST_SUBTASK_BUDGET,
+            TEST_POLL_INTERVAL,
+            submission_rejected(),
+            || Some(AgentTaskState::ReadyForReview),
+        )
+        .await;
+
+        assert!(matches!(settled, SettledGoal::SubmitFailed(_)));
+    }
+
+    #[test]
+    fn test_busy_agent_is_not_offered_more_work() {
+        let (agent, _task_receiver) = test_agent(Arc::new(CircuitBreaker::new()));
+
+        assert!(agent.can_accept_task());
+
+        *agent.current_task.write() = Some("subtask_1".to_string());
+        assert!(!agent.can_accept_task());
+
+        agent.record_success(1);
+        assert!(agent.can_accept_task());
+    }
+
+    #[test]
+    fn test_tripped_agent_returns_to_service_when_the_breaker_reopens() {
+        let breaker = CircuitBreaker {
+            reset_timeout: TEST_CIRCUIT_RESET,
+            ..CircuitBreaker::new()
+        };
+        let (agent, _task_receiver) = test_agent(Arc::new(breaker));
+
+        for _ in 0..constants::CIRCUIT_BREAKER_THRESHOLD {
+            agent.record_failure();
+        }
+
+        assert_eq!(*agent.health.read(), AgentHealth::CircuitOpen);
+        assert!(!agent.can_accept_task());
+
+        std::thread::sleep(TEST_CIRCUIT_RESET + TEST_POLL_INTERVAL);
+
+        // The capacity permit an agent holds is only reclaimed by dropping the
+        // agent, so a trip that could never be walked back would retire a
+        // `max_agents` slot for the life of the process.
+        assert!(agent.can_accept_task());
     }
 }

@@ -1,18 +1,22 @@
-
 import { describe, expect, it } from 'vitest';
 
 import {
   CONNECTOR_CAPABILITIES,
   allowsPresentTenseCopy,
+  getConnectorActionSource,
   getConnectorCapability,
+  getDeclaredConnectorActions,
   isDeviceLocalConnector,
   isKnownConnectorId,
   resolveConnectorHealth,
 } from '@/lib/connectors/catalog';
 
 import {
+  ACTION_SOURCE_COPY,
   CONNECTORS,
+  RISK_CLASS_COPY,
   buildConnectorDescription,
+  describeConnectorActions,
   getConnectorAvailability,
   type Connector,
 } from '../connectors';
@@ -55,7 +59,12 @@ function firstWord(sentence: string): string {
 }
 
 function toSeed(connector: Connector) {
-  const { description: _description, riskClass: _riskClass, ...seed } = connector;
+  const {
+    description: _description,
+    riskClass: _riskClass,
+    actionCount: _actionCount,
+    ...seed
+  } = connector;
   return seed;
 }
 
@@ -158,7 +167,6 @@ describe('CRIT-001 guard — present-tense copy requires a shipped adapter', () 
         capabilitySummary: 'everything you could want',
         category: 'Productivity',
         authType: 'oauth',
-        actionCount: 9,
         phase: 1,
         iconBg: '',
         iconText: 'N',
@@ -214,5 +222,87 @@ describe('CRIT-001 guard — availability and health fail closed', () => {
       'connected',
     );
     expect(resolveConnectorHealth({ connectorId: 'gmail' })).toBe('not-configured');
+  });
+});
+
+describe('CRIT-001 guard — an absent action list is attributed, not read as "none"', () => {
+  it("records where every connector's actions come from", () => {
+    const tally = Object.values(CONNECTOR_CAPABILITIES).reduce<Record<string, string[]>>(
+      (acc, record) => {
+        (acc[record.actionSource] ??= []).push(record.id);
+        return acc;
+      },
+      {},
+    );
+    expect(tally['declared']).toEqual(['github']);
+    expect(tally['runtime-discovered']?.length).toBe(83);
+    expect(tally['device-local']?.length).toBe(5);
+  });
+
+  it('keeps an action list only where the source is this repository', () => {
+    for (const record of Object.values(CONNECTOR_CAPABILITIES)) {
+      if (record.actionSource === 'declared') {
+        expect(record.supportedActions.length).toBeGreaterThan(0);
+        expect(record.implementation).toBe('first-party');
+      } else {
+        expect(record.supportedActions).toEqual([]);
+      }
+      if (record.implementation === 'device-local') {
+        expect(record.actionSource).toBe('device-local');
+      }
+    }
+  });
+
+  it('fails closed to runtime discovery for a connector nobody registered', () => {
+    expect(getConnectorActionSource('never-heard-of-it')).toBe('runtime-discovered');
+    expect(getDeclaredConnectorActions('never-heard-of-it')).toEqual([]);
+    expect(describeConnectorActions('never-heard-of-it')).toBe(
+      ACTION_SOURCE_COPY['runtime-discovered'],
+    );
+  });
+
+  it('derives actionCount from the capability record instead of hand-writing it', () => {
+    const handWritten = CONNECTORS.filter(
+      (c) => c.actionCount !== getDeclaredConnectorActions(c.id).length,
+    ).map((c) => c.id);
+    expect(handWritten).toEqual([]);
+    expect(CONNECTORS.find((c) => c.id === 'github')?.actionCount).toBe(3);
+    expect(CONNECTORS.filter((c) => c.actionCount > 0).map((c) => c.id)).toEqual(['github']);
+  });
+});
+
+describe('CRIT-001 guard — pre-consent copy promises nothing the tool loop skips', () => {
+  // `tool-loop.ts` resolveToolCallGate returns `auto_approval_mode` allow for any
+  // connector tool with no saved permission row, and every scheduled agent run
+  // uses `approvalMode: 'auto'` (scheduled-agent-executor.ts). No catalog string
+  // may therefore promise an approval prompt.
+  const APPROVAL_PROMISES = [
+    /approve[sd]? each tool/i,
+    /needs your approval/i,
+    /requires? (?:your )?approval/i,
+    /before an agent can run/i,
+    /you approve/i,
+  ];
+
+  const ALL_COPY = [...Object.values(RISK_CLASS_COPY), ...Object.values(ACTION_SOURCE_COPY)];
+
+  it('never claims a tool is approved before it runs', () => {
+    const offenders = ALL_COPY.filter((sentence) =>
+      APPROVAL_PROMISES.some((pattern) => pattern.test(sentence)),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it('opens no capability claim in the present tense', () => {
+    const offenders = ALL_COPY.filter((sentence) => PRESENT_TENSE_OPENERS.has(firstWord(sentence)));
+    expect(offenders).toEqual([]);
+  });
+
+  it('says an absent list means undiscovered, not empty', () => {
+    expect(ACTION_SOURCE_COPY['runtime-discovered']).toContain('discovered when you connect');
+    expect(ACTION_SOURCE_COPY['device-local']).toContain('your own machine');
+    expect(describeConnectorActions('gmail')).toBe(ACTION_SOURCE_COPY['runtime-discovered']);
+    expect(describeConnectorActions('terminal')).toBe(ACTION_SOURCE_COPY['device-local']);
+    expect(describeConnectorActions('github')).toBe(ACTION_SOURCE_COPY['declared']);
   });
 });

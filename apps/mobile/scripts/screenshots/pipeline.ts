@@ -1,13 +1,33 @@
 #!/usr/bin/env tsx
 /* eslint-disable no-console -- CLI tool; stdout/log is the intended output channel */
 
-import { execSync, execFileSync } from 'node:child_process';
+import { execSync, execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, existsSync, readdirSync, statSync, copyFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 type Platform = 'ios' | 'android';
 
-interface DeviceClass {
+const SIMCTL_RUNTIME_PREFIX = 'com.apple.CoreSimulator.SimRuntime.';
+const DETOX_IOS_UDID_ENV = 'DETOX_IOS_UDID';
+
+export interface SimctlDevice {
+  udid: string;
+  name: string;
+  isAvailable?: boolean;
+  state?: string;
+  deviceTypeIdentifier?: string;
+  dataPath?: string;
+  dataPathSize?: number;
+  logPath?: string;
+  logPathSize?: number;
+  lastBootedAt?: string;
+}
+
+export interface SimctlDeviceListing {
+  devices: Record<string, SimctlDevice[]>;
+}
+
+export interface DeviceClass {
   platform: Platform;
   className: string;
   simulator: string;
@@ -15,7 +35,7 @@ interface DeviceClass {
   height: number;
 }
 
-const DEVICES: DeviceClass[] = [
+export const DEVICES: DeviceClass[] = [
   {
     platform: 'ios',
     className: 'iphone-17-pro',
@@ -114,14 +134,81 @@ function ensureDetoxInstalled() {
   }
 }
 
-function bootSimulator(device: DeviceClass) {
-  if (device.platform === 'ios') {
-    execSync(`xcrun simctl boot "${device.simulator}" 2>/dev/null || true`);
-    execSync(`xcrun simctl bootstatus "${device.simulator}" -b`);
-  } else {
-    execSync(`emulator -avd ${device.simulator} -no-snapshot -no-audio &`, { stdio: 'ignore' });
-    execSync('adb wait-for-device');
+function runtimeVersion(runtimeIdentifier: string): number[] {
+  const tail = runtimeIdentifier.startsWith(SIMCTL_RUNTIME_PREFIX)
+    ? runtimeIdentifier.slice(SIMCTL_RUNTIME_PREFIX.length)
+    : runtimeIdentifier;
+  return tail
+    .split('-')
+    .slice(1)
+    .map((part) => Number.parseInt(part, 10))
+    .map((part) => (Number.isFinite(part) ? part : 0));
+}
+
+function compareRuntimeVersions(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const diff = (b[i] ?? 0) - (a[i] ?? 0);
+    if (diff !== 0) return diff;
   }
+  return 0;
+}
+
+export function resolveSimulatorUdid(listing: SimctlDeviceListing, simulatorName: string): string {
+  const matches: { udid: string; runtime: string; version: number[] }[] = [];
+  for (const [runtime, devices] of Object.entries(listing?.devices ?? {})) {
+    for (const device of devices ?? []) {
+      if (device?.name !== simulatorName || !device.udid) continue;
+      if (device.isAvailable === false) continue;
+      matches.push({ udid: device.udid, runtime, version: runtimeVersion(runtime) });
+    }
+  }
+  if (matches.length === 0) {
+    throw new Error(
+      `No available simulator named "${simulatorName}". Create it in Xcode > Windows > Devices and Simulators, then re-run.`,
+    );
+  }
+  matches.sort(
+    (a, b) =>
+      compareRuntimeVersions(a.version, b.version) ||
+      b.runtime.localeCompare(a.runtime) ||
+      a.udid.localeCompare(b.udid),
+  );
+  return matches[0].udid;
+}
+
+function listAvailableSimulators(): SimctlDeviceListing {
+  let raw: string;
+  try {
+    raw = execFileSync('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], {
+      encoding: 'utf8',
+    });
+  } catch (error) {
+    throw new Error(
+      `Could not list simulators via "xcrun simctl": ${(error as Error).message}. ` +
+        'Install Xcode and point xcode-select at it, then re-run.',
+    );
+  }
+  try {
+    return JSON.parse(raw) as SimctlDeviceListing;
+  } catch {
+    throw new Error(
+      '"xcrun simctl list devices available --json" did not return JSON. ' +
+        'Check that xcode-select points at a full Xcode install, then re-run.',
+    );
+  }
+}
+
+function bootSimulator(device: DeviceClass): string | null {
+  if (device.platform === 'ios') {
+    const udid = resolveSimulatorUdid(listAvailableSimulators(), device.simulator);
+    console.log(`  simulator ${device.simulator} -> ${udid}`);
+    spawnSync('xcrun', ['simctl', 'boot', udid], { stdio: 'ignore' });
+    execFileSync('xcrun', ['simctl', 'bootstatus', udid, '-b'], { stdio: 'inherit' });
+    return udid;
+  }
+  execSync(`emulator -avd ${device.simulator} -no-snapshot -no-audio &`, { stdio: 'ignore' });
+  execSync('adb wait-for-device');
+  return null;
 }
 
 function resolveSpec(s: Screenshot, d: DeviceClass): string {
@@ -144,7 +231,7 @@ function findScreenshotPng(dir: string): string | null {
   return null;
 }
 
-function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
+function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string, udid: string | null) {
   const detoxConfig = device.platform === 'ios' ? 'ios.sim.debug' : 'android.emu.debug';
   const specPath = join(ROOT, 'scripts', 'screenshots', 'specs', spec);
   if (!existsSync(specPath)) {
@@ -160,7 +247,11 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
   );
   rmSync(artifactsDir, { recursive: true, force: true });
   mkdirSync(artifactsDir, { recursive: true });
-  const env = { ...process.env, DETOX_CAPTURE_PATH: rawOut };
+  const env = {
+    ...process.env,
+    DETOX_CAPTURE_PATH: rawOut,
+    ...(udid ? { [DETOX_IOS_UDID_ENV]: udid } : {}),
+  };
   execFileSync(
     'pnpm',
     [
@@ -197,7 +288,7 @@ function composite(rawPath: string, finalPath: string, s: Screenshot, device: De
 
 function captureForDevice(device: DeviceClass) {
   console.log(`\n=== ${device.platform}/${device.className} ===`);
-  bootSimulator(device);
+  const udid = bootSimulator(device);
   const classDir = join(OUT, device.platform, device.className);
   ensureDir(join(classDir, 'raw'));
   ensureDir(join(classDir, 'final'));
@@ -207,7 +298,7 @@ function captureForDevice(device: DeviceClass) {
     const finalOut = join(classDir, 'final', `${s.id}-${s.name}.png`);
     const spec = resolveSpec(s, device);
     console.log(`  -> ${s.id}-${s.name} (${spec})`);
-    runDetoxSpec(device, spec, rawOut);
+    runDetoxSpec(device, spec, rawOut, udid);
     composite(rawOut, finalOut, s, device);
   }
 }
@@ -224,4 +315,6 @@ function main() {
   console.log('\nDone. Frames in apps/mobile/store-listing/screenshots/captures/');
 }
 
-main();
+if (require.main === module) {
+  main();
+}

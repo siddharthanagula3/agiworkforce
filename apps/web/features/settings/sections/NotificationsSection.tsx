@@ -6,6 +6,7 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { Switch } from '@agiworkforce/ui';
+import { WebPushToggle } from '@/features/notifications';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const NAMESPACE = 'notifications';
@@ -60,6 +61,12 @@ const EVENTS: ReadonlyArray<EventSpec> = [
     ],
   },
 ];
+
+const AGENT_RUN_HEADING = 'Agent run updates';
+const AGENT_RUN_SUBHEADING =
+  'An agent run finishes, fails, or needs your approval — including while the tab is closed.';
+const BROWSER_SCOPE_NOTE =
+  'This switch registers the browser you are using right now, so it is not saved to your account: turn it on again on each browser you want notified.';
 
 function defaultNotificationState(): Record<NotifKey, boolean> {
   return EVENTS.flatMap((event) => event.channels).reduce(
@@ -149,13 +156,13 @@ export function NotificationsSection() {
         }}
       >
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
-          Three channels have a sender
+          Four channels have a sender
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
-          Browser replies, plus scheduled-task results by email and mobile push — the toggles below
-          are the complete list. Project, usage, billing, security, connector, tips, and marketing
-          channels are not available. AGI does not save controls for notification senders that are
-          not running.
+          Browser replies and browser push for agent runs, plus scheduled-task results by email and
+          mobile push — the toggles below are the complete list. Project, usage, billing, security,
+          connector, tips, and marketing channels are not available. AGI does not save controls for
+          notification senders that are not running.
         </p>
       </section>
 
@@ -218,6 +225,39 @@ export function NotificationsSection() {
           ))}
         </section>
       ))}
+
+      <section
+        aria-label={AGENT_RUN_HEADING}
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '14px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
+            {AGENT_RUN_HEADING}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+            {AGENT_RUN_SUBHEADING}
+          </span>
+        </div>
+        <div style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <WebPushToggle />
+          <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+            {BROWSER_SCOPE_NOTE}
+          </span>
+        </div>
+      </section>
     </div>
   );
 }

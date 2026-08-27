@@ -10,8 +10,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@agiworkforce/ui';
-import { getConnectorCapability } from '@/lib/connectors/catalog';
-import { RISK_CLASS_COPY } from '../data/connectors';
+import { getConnectorCapability, getDeclaredConnectorActions } from '@/lib/connectors/catalog';
+import { describeConnectorActions, RISK_CLASS_COPY } from '../data/connectors';
 import { ConnectorConsentSummary } from './ConnectorConsentSummary';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 
@@ -55,9 +55,8 @@ export function ConnectorOverviewDialog({
 }: ConnectorOverviewDialogProps) {
   if (!connector) return null;
 
-  const capability = getConnectorCapability(connector.id);
-  const tools = capability?.supportedActions ?? [];
-  const riskClass = capability?.riskClass ?? 'high-impact';
+  const tools = getDeclaredConnectorActions(connector.id);
+  const riskClass = getConnectorCapability(connector.id)?.riskClass ?? 'high-impact';
 
   const handleConnect = () => {
     onConnect();
@@ -97,7 +96,6 @@ export function ConnectorOverviewDialog({
               docs/legal/agent-authority-and-connector-scopes.md */}
           <ConnectorConsentSummary />
 
-          {/* Tools list — only for connectors whose tools actually exist. */}
           <div className="rounded-xl border border-border bg-muted/50 p-3.5">
             <div className="mb-2 flex items-center gap-2">
               <Wrench className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -119,8 +117,7 @@ export function ConnectorOverviewDialog({
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">
-                This connector&rsquo;s tools are listed after it connects. We don&rsquo;t show a
-                tool list here that we can&rsquo;t confirm it provides.
+                {describeConnectorActions(connector.id)}
               </p>
             )}
           </div>

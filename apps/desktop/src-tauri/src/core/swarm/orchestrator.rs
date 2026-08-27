@@ -9,7 +9,7 @@
 //! - Critical path optimization for minimum execution time
 
 use super::{
-    agent_spawner::{AgentSpawner, AgentTask, AgentTaskResult, SpawnedAgent},
+    agent_spawner::{AgentSpawner, AgentTask, AgentTaskResult, SpawnedAgent, SubAgentConfig},
     constants,
     result_aggregator::{AggregationStrategy, ResultAggregator, SubtaskResult},
     task_decomposer::{DependencyGraph, Subtask, TaskDecomposer},
@@ -116,6 +116,30 @@ pub struct SwarmResult {
     pub max_parallelism: usize,
     /// Detailed metrics.
     pub metrics: SwarmMetrics,
+}
+
+/// High-water mark of subtasks genuinely in flight at the same moment.
+///
+/// `DependencyGraph::stats().max_parallelism` cannot answer this: it reports
+/// the instantaneous width of the graph, which is zero once every subtask has
+/// settled — exactly when the orchestrator reads it to build the result.
+#[derive(Debug, Clone, Copy, Default)]
+struct PeakParallelism(usize);
+
+impl PeakParallelism {
+    fn observe(&mut self, in_flight: usize) {
+        self.0 = self.0.max(in_flight);
+    }
+
+    fn achieved(self) -> usize {
+        self.0
+    }
+}
+
+/// Outcome of one scheduling pass over a dependency graph.
+struct ParallelExecution {
+    results: Vec<SubtaskResult>,
+    peak_parallelism: usize,
 }
 
 /// The central swarm orchestrator.
@@ -225,11 +249,12 @@ impl SwarmOrchestrator {
         }
 
         // Step 3: Execute subtasks with parallel scheduling
-        let results = self.execute_parallel(&goal, &mut dependency_graph).await?;
+        let execution = self.execute_parallel(&goal, &mut dependency_graph).await?;
+        let peak_parallelism = execution.peak_parallelism;
 
         // Step 4: Aggregate results
         let wall_time = start_time.elapsed();
-        let aggregated = self.aggregator.aggregate(results, wall_time)?;
+        let aggregated = self.aggregator.aggregate(execution.results, wall_time)?;
 
         // Step 5: Build final result
         let final_stats = dependency_graph.stats();
@@ -243,13 +268,13 @@ impl SwarmOrchestrator {
             wall_time,
             speedup_ratio: aggregated.speedup_ratio,
             critical_path_length: final_stats.critical_path_length,
-            max_parallelism: final_stats.max_parallelism,
+            max_parallelism: peak_parallelism,
             metrics: SwarmMetrics {
                 tasks_submitted: initial_stats.total_subtasks as u64,
                 tasks_completed: aggregated.succeeded_count as u64,
                 tasks_failed: aggregated.failed_count as u64,
                 active_agents: self.spawner.active_agent_count(),
-                peak_agents: final_stats.max_parallelism,
+                peak_agents: peak_parallelism,
                 total_agent_time_ms: aggregated.total_agent_time.as_millis() as u64,
                 wall_clock_time_ms: wall_time.as_millis() as u64,
                 speedup_ratio: aggregated.speedup_ratio,
@@ -278,8 +303,8 @@ impl SwarmOrchestrator {
                 + aggregated.speedup_ratio)
                 / total_executions as f64;
 
-            if final_stats.max_parallelism > stats.peak_agents {
-                stats.peak_agents = final_stats.max_parallelism;
+            if peak_parallelism > stats.peak_agents {
+                stats.peak_agents = peak_parallelism;
             }
         }
 
@@ -392,8 +417,8 @@ impl SwarmOrchestrator {
                 .optimize_critical_path(&mut dependency_graph);
         }
 
-        let results = match self.execute_parallel(&goal, &mut dependency_graph).await {
-            Ok(results) => results,
+        let execution = match self.execute_parallel(&goal, &mut dependency_graph).await {
+            Ok(execution) => execution,
             Err(error) => {
                 self.is_running.store(false, Ordering::SeqCst);
                 let mut spawned = self.spawned_subtask_ids.lock().await;
@@ -401,9 +426,10 @@ impl SwarmOrchestrator {
                 return Err(error);
             }
         };
+        let peak_parallelism = execution.peak_parallelism;
 
         let wall_time = start_time.elapsed();
-        let aggregated = self.aggregator.aggregate(results, wall_time)?;
+        let aggregated = self.aggregator.aggregate(execution.results, wall_time)?;
         let final_stats = dependency_graph.stats();
         let result = SwarmResult {
             success: aggregated.success,
@@ -415,13 +441,13 @@ impl SwarmOrchestrator {
             wall_time,
             speedup_ratio: aggregated.speedup_ratio,
             critical_path_length: final_stats.critical_path_length,
-            max_parallelism: final_stats.max_parallelism,
+            max_parallelism: peak_parallelism,
             metrics: SwarmMetrics {
                 tasks_submitted: initial_stats.total_subtasks as u64,
                 tasks_completed: aggregated.succeeded_count as u64,
                 tasks_failed: aggregated.failed_count as u64,
                 active_agents: self.spawner.active_agent_count(),
-                peak_agents: final_stats.max_parallelism,
+                peak_agents: peak_parallelism,
                 total_agent_time_ms: aggregated.total_agent_time.as_millis() as u64,
                 wall_clock_time_ms: wall_time.as_millis() as u64,
                 speedup_ratio: aggregated.speedup_ratio,
@@ -448,8 +474,8 @@ impl SwarmOrchestrator {
                 + aggregated.speedup_ratio)
                 / total_executions as f64;
 
-            if final_stats.max_parallelism > stats.peak_agents {
-                stats.peak_agents = final_stats.max_parallelism;
+            if peak_parallelism > stats.peak_agents {
+                stats.peak_agents = peak_parallelism;
             }
         }
 
@@ -478,9 +504,10 @@ impl SwarmOrchestrator {
         &self,
         goal: &Goal,
         graph: &mut DependencyGraph,
-    ) -> SwarmResultType<Vec<SubtaskResult>> {
+    ) -> SwarmResultType<ParallelExecution> {
         let mut results: Vec<SubtaskResult> = Vec::new();
         let mut pending_tasks: HashMap<String, oneshot::Receiver<AgentTaskResult>> = HashMap::new();
+        let mut peak_parallelism = PeakParallelism::default();
         let deadline = Instant::now() + self.config.swarm_timeout;
 
         loop {
@@ -530,11 +557,22 @@ impl SwarmOrchestrator {
                 let agent = match self.get_or_spawn_agent().await {
                     Ok(a) => a,
                     Err(e) => {
-                        tracing::warn!(
-                            "[SwarmOrchestrator] Failed to get agent for {}: {}",
-                            subtask.id,
-                            e
-                        );
+                        // A full pool is backpressure, not a fault: this loop
+                        // re-offers the subtask every 10 ms, so warning on it
+                        // would emit thousands of lines per blocked subtask.
+                        if matches!(e, SwarmError::CapacityExceeded { .. }) {
+                            tracing::debug!(
+                                "[SwarmOrchestrator] Pool is full, deferring {}: {}",
+                                subtask.id,
+                                e
+                            );
+                        } else {
+                            tracing::warn!(
+                                "[SwarmOrchestrator] Failed to get agent for {}: {}",
+                                subtask.id,
+                                e
+                            );
+                        }
                         // Roll back the spawned insertion since we failed to get an agent
                         let mut spawned = self.spawned_subtask_ids.lock().await;
                         spawned.remove(&subtask.id);
@@ -578,6 +616,9 @@ impl SwarmOrchestrator {
                     }
                 }
             }
+
+            // Sampled after dispatch and before reaping, when concurrency peaks.
+            peak_parallelism.observe(pending_tasks.len());
 
             // Check for completed tasks
             let mut completed_ids = Vec::new();
@@ -695,7 +736,10 @@ impl SwarmOrchestrator {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
 
-        Ok(results)
+        Ok(ParallelExecution {
+            results,
+            peak_parallelism: peak_parallelism.achieved(),
+        })
     }
 
     async fn get_or_spawn_agent(&self) -> SwarmResultType<Arc<SpawnedAgent>> {
@@ -706,7 +750,16 @@ impl SwarmOrchestrator {
 
         // Spawn a new agent if auto-spawn is enabled
         if self.config.auto_spawn {
-            return self.spawner.spawn(None).await;
+            // The sub-agent's operation timeout is the deadline the subtask
+            // wait answers to, so it has to be the configured subtask budget
+            // rather than whatever `SubAgentConfig::default` happens to carry.
+            return self
+                .spawner
+                .spawn(Some(SubAgentConfig {
+                    operation_timeout: self.config.subtask_timeout,
+                    ..SubAgentConfig::default()
+                }))
+                .await;
         }
 
         Err(SwarmError::CapacityExceeded {
@@ -921,5 +974,46 @@ mod tests {
         let stats = SwarmStats::default();
         assert_eq!(stats.goals_processed, 0);
         assert_eq!(stats.peak_agents, 0);
+    }
+
+    #[test]
+    fn test_peak_parallelism_keeps_the_high_water_mark() {
+        let mut peak = PeakParallelism::default();
+        assert_eq!(peak.achieved(), 0);
+
+        peak.observe(2);
+        peak.observe(5);
+        peak.observe(1);
+        peak.observe(0);
+
+        assert_eq!(peak.achieved(), 5);
+    }
+
+    #[test]
+    fn test_settled_graph_reports_no_instantaneous_parallelism() {
+        use crate::core::swarm::SubtaskType;
+
+        let mut graph = DependencyGraph::new();
+        graph.add_subtask(Subtask::new(
+            "s1",
+            "First",
+            SubtaskType::Computation,
+            "goal",
+        ));
+        graph.add_subtask(Subtask::new(
+            "s2",
+            "Second",
+            SubtaskType::Computation,
+            "goal",
+        ));
+
+        graph.mark_running("s1");
+        graph.mark_running("s2");
+        assert_eq!(graph.stats().max_parallelism, 2);
+
+        graph.mark_completed("s1");
+        graph.mark_completed("s2");
+        assert!(graph.is_complete());
+        assert_eq!(graph.stats().max_parallelism, 0);
     }
 }

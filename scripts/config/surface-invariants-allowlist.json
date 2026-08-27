@@ -28,6 +28,16 @@
         "id": "mobile:apps/mobile/app/error.tsx",
         "reason": "Expo Router treats app/error.tsx as a route, but the module exports a Next.js-shaped ErrorBoundary({error, retry}) that no navigation targets. Owned by the mobile wave; declared so no NEW unreachable route can land.",
         "trackedBy": "SIX-32"
+      },
+      {
+        "id": "mobile:apps/mobile/app/(auth)/error.tsx",
+        "reason": "Expo Router treats the group's error.tsx as a route, but it is a file-convention error boundary the router renders on a thrown error; nothing navigates to it. Added so a failure during sign-in, onboarding or the age gate recovers locally instead of falling through to the root boundary.",
+        "trackedBy": "SIX-32"
+      },
+      {
+        "id": "mobile:apps/mobile/app/(public)/error.tsx",
+        "reason": "Expo Router treats the group's error.tsx as a route, but it is a file-convention error boundary the router renders on a thrown error; nothing navigates to it. Added so a failure during sign-in, onboarding or the age gate recovers locally instead of falling through to the root boundary.",
+        "trackedBy": "SIX-32"
       }
     ],
     "persisted-field-has-reader": [],
