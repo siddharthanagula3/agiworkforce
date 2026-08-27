@@ -1,3 +1,4 @@
+import { createECDH, randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), fetch: vi.fn() }));
@@ -10,7 +11,12 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mocks.query, execute: mocks.execute }),
 }));
 
+const VAPID_PUBLIC_KEY_ENV = 'WEB_PUSH_VAPID_PUBLIC_KEY';
+const VAPID_PRIVATE_KEY_ENV = 'WEB_PUSH_VAPID_PRIVATE_KEY';
+const VAPID_SUBJECT_ENV = 'WEB_PUSH_VAPID_SUBJECT';
+
 const { getPushTokensForUser, sendPushToUser } = await import('../push-notification-service');
+const { resetWebPushCredentialCache } = await import('../web-push-service');
 
 const TOKEN_A = 'ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]';
 const TOKEN_B = 'ExponentPushToken[bbbbbbbbbbbbbbbbbbbbbb]';
@@ -136,5 +142,117 @@ describe('sendPushToUser — never throws', () => {
     mocks.execute.mockRejectedValue(new Error('db down'));
 
     await expect(sendPushToUser('user-1', { title: 'x', body: 'y' })).resolves.toBeDefined();
+  });
+});
+
+describe('sendPushToUser — every transport the account registered', () => {
+  const EXPO_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
+  const WEB_ENDPOINT = 'https://push.example.test/push/abc';
+
+  function p256Key(): string {
+    const ecdh = createECDH('prime256v1');
+    ecdh.generateKeys();
+    return ecdh.getPublicKey().toString('base64url');
+  }
+
+  function vapidPair() {
+    const ecdh = createECDH('prime256v1');
+    ecdh.generateKeys();
+    return {
+      publicKey: ecdh.getPublicKey().toString('base64url'),
+      privateKey: ecdh.getPrivateKey().toString('base64url'),
+    };
+  }
+
+  beforeEach(() => {
+    const vapid = vapidPair();
+    vi.stubEnv(VAPID_PUBLIC_KEY_ENV, vapid.publicKey);
+    vi.stubEnv(VAPID_PRIVATE_KEY_ENV, vapid.privateKey);
+    vi.stubEnv(VAPID_SUBJECT_ENV, 'mailto:alerts@agiworkforce.test');
+    resetWebPushCredentialCache();
+
+    mocks.query.mockImplementation(async (sql: string) =>
+      String(sql).includes('web_push_subscriptions')
+        ? [
+            {
+              endpoint: WEB_ENDPOINT,
+              p256dh: p256Key(),
+              auth: randomBytes(16).toString('base64url'),
+            },
+          ]
+        : [{ push_token: TOKEN_A }],
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetWebPushCredentialCache();
+  });
+
+  it('reaches the phone and the browser from one notice', async () => {
+    mocks.fetch.mockImplementation(async (url: string) =>
+      url === EXPO_ENDPOINT
+        ? { ok: true, json: async () => ({ data: [{ status: 'ok' }] }) }
+        : { ok: true, status: 201 },
+    );
+
+    const result = await sendPushToUser('user-1', { title: 'Agent run finished', body: 'x' });
+
+    expect(result.sent).toBe(2);
+    expect(mocks.fetch.mock.calls.map((call) => call[0]).sort()).toEqual(
+      [EXPO_ENDPOINT, WEB_ENDPOINT].sort(),
+    );
+  });
+
+  it('still notifies the browser when the mobile provider is down', async () => {
+    mocks.fetch.mockImplementation(async (url: string) => {
+      if (url === EXPO_ENDPOINT) throw new Error('expo down');
+      return { ok: true, status: 201 };
+    });
+
+    await expect(
+      sendPushToUser('user-1', { title: 'Agent run finished', body: 'x' }),
+    ).resolves.toMatchObject({ sent: 1 });
+  });
+
+  it('still notifies the phone when the push service is down', async () => {
+    mocks.fetch.mockImplementation(async (url: string) => {
+      if (url !== EXPO_ENDPOINT) throw new Error('push service down');
+      return { ok: true, json: async () => ({ data: [{ status: 'ok' }] }) };
+    });
+
+    await expect(
+      sendPushToUser('user-1', { title: 'Agent run finished', body: 'x' }),
+    ).resolves.toMatchObject({ sent: 1 });
+  });
+
+  it('leaves out a transport the caller has no opt-in for', async () => {
+    mocks.fetch.mockImplementation(async (url: string) =>
+      url === EXPO_ENDPOINT
+        ? { ok: true, json: async () => ({ data: [{ status: 'ok' }] }) }
+        : { ok: true, status: 201 },
+    );
+
+    const result = await sendPushToUser(
+      'user-1',
+      { title: 'Scheduled task finished', body: 'x' },
+      { expo: true, web: false },
+    );
+
+    expect(result.sent).toBe(1);
+    expect(mocks.fetch.mock.calls.map((call) => call[0])).toEqual([EXPO_ENDPOINT]);
+  });
+
+  it('still reaches the browser when the mobile opt-in is off', async () => {
+    mocks.fetch.mockImplementation(async () => ({ ok: true, status: 201 }));
+
+    const result = await sendPushToUser(
+      'user-1',
+      { title: 'Agent run finished', body: 'x' },
+      { expo: false },
+    );
+
+    expect(result.sent).toBe(1);
+    expect(mocks.fetch.mock.calls.map((call) => call[0])).toEqual([WEB_ENDPOINT]);
   });
 });

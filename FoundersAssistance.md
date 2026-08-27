@@ -985,6 +985,77 @@ distribution claims honest.
 
 ---
 
+## 43. ROTATE THE SUPABASE TOKEN — live credential in git history
+
+**Status:** `BLOCKED_BY_HUMAN`, and this one is urgent. Found 2026-08-27.
+
+A Supabase **account-scoped personal access token** is committed in this
+repository's git history and is reachable from `origin/main`. I verified both
+halves myself and did not print the value:
+
+- The blob exists: `git cat-file -t 695d1a9ba` returns `blob`, and line 7 is an
+  `Authorization: Bearer sbp_...` header against
+  `https://mcp.supabase.com/mcp?project_ref=xwmcvbgdyergfnvwbnap`.
+- It is on the default branch: `git merge-base --is-ancestor dbcbe5b61 origin/main`
+  succeeds. This is not a dead side branch.
+
+**Why this is worse than a normal leaked key.** A Supabase PAT is *account*-scoped,
+not project-scoped. It authorizes the Management API across every project on that
+account — creating and deleting projects, reading connection strings, rotating
+service keys. It is closer to an account password than to an API key.
+
+**Why no scanner caught it.** `.mcp.json` is untracked and gitignored today
+(`.gitignore:182`), so every working-tree secret scan reports green. The repo already
+has `pnpm check:secrets:history` (`package.json:193`) which does find it — and that
+script is wired into no workflow, so it has never run in CI.
+
+**Do, in this order:**
+
+1. **Rotate now**, at https://supabase.com/dashboard/account/tokens. The token is
+   already public in history; deleting the blob does not un-leak it. Rotation is the
+   only action that actually closes the exposure, and it is the only step that cannot
+   wait.
+2. Check the Supabase audit log for that account for use you do not recognise.
+3. Then decide, separately and unhurriedly, whether to purge the blob with
+   `git-filter-repo` and a force-push, or to accept it as burned now that the
+   credential is dead. Purging rewrites history for every clone; it is not obviously
+   worth it once the token is rotated.
+
+I did not attempt the purge: it is a force-push to a shared branch and is yours to
+authorize, not mine.
+
+**Owed as engineering, once you have rotated:** wire `check:secrets:history` into a
+scheduled or main-push job. It currently reports ~378 findings of which roughly 370
+are placeholders and fixtures, so it needs an allowlist pass before it can gate
+anything — otherwise it is noise that everyone learns to ignore, which is how this one
+survived.
+
+---
+
+## 44. GitHub Actions is allocating no runners — nothing can build, test or ship
+
+**Status:** `BLOCKED_BY_HUMAN`. Found 2026-08-27.
+
+Since 2026-08-26 every workflow run fails **before a runner is assigned** —
+`{"conclusion":"failure","runner":"","steps":0}`. Both sides of the break are the
+same commit, so this is not a code change. Confirmed against the live run list: the
+last successful run of anything needing a runner was 2026-08-26T13:37Z; every run
+after it is red, including `Deploy Production Surfaces`, `AGI Guardian` and
+`Environment Drift`.
+
+`gh api users/siddharthanagula3/settings/billing/actions` returns 403 to me, so I
+could not confirm the cause. The signature matches an exhausted Actions allowance on
+a private repo: jobs hard-fail at allocation once the included minutes are gone.
+
+**Do:** open https://github.com/settings/billing and check the Actions minute balance
+and spending limit.
+
+**Why it is at the top of this file:** every other CI or release finding in this
+document is unverifiable and unfixable until runners come back. "CI is green" is not
+currently a meaningful statement about this repository — nothing is running.
+
+---
+
 ## 41. Mobile store listing assets and contact details
 
 **Status:** `BLOCKED_BY_HUMAN`. Found 2026-08-27 while auditing submission

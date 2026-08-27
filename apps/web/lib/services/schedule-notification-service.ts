@@ -65,13 +65,20 @@ export async function notifyScheduleCompleted(
 
     const [pushResult, emailResult] = await Promise.all([
       preferences.push
-        ? sendPushToUser(notice.userId, {
-            title: succeeded ? 'Scheduled task finished' : 'Scheduled task failed',
-            body: succeeded
-              ? `“${shortTitle(notice.taskName)}” completed.`
-              : `“${shortTitle(notice.taskName)}” ${timedOut ? 'timed out' : 'failed'}.`,
-            data: { type: 'schedule_run', taskId: notice.taskId },
-          }).catch(() => null)
+        ? sendPushToUser(
+            notice.userId,
+            {
+              title: succeeded ? 'Scheduled task finished' : 'Scheduled task failed',
+              body: succeeded
+                ? `“${shortTitle(notice.taskName)}” completed.`
+                : `“${shortTitle(notice.taskName)}” ${timedOut ? 'timed out' : 'failed'}.`,
+              data: { type: 'schedule_run', taskId: notice.taskId },
+            },
+            // The opt-in behind `preferences.push` is settings' "Mobile push",
+            // described there as the AGI app on signed-in devices. Browsers
+            // consent separately and are not covered by it.
+            { expo: true, web: false },
+          ).catch(() => null)
         : Promise.resolve(null),
       preferences.email && preferences.email_address
         ? sendScheduleCompletionEmail({

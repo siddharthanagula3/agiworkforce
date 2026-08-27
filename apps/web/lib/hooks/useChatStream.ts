@@ -13,6 +13,9 @@ import {
   INTERACTIVE_CARD_REQUEST_KEY,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   type InteractiveCard,
+  type InteractiveCardClientCapability,
+  type InteractiveCardResponsePayload,
+  type KnownInteractiveCardKind,
 } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { useAuth } from '@clerk/nextjs';
@@ -56,6 +59,11 @@ import {
   startAgentActivityLocally,
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
+import {
+  INTERACTIVE_CARD_RESPONSE_PATH,
+  RESPONDABLE_INTERACTIVE_CARD_KIND,
+  type InteractiveCardResponseRequest,
+} from '@/app/api/interactive-cards/response-contract';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
@@ -465,6 +473,109 @@ const ToolApprovalContext = createContext<ResolveToolApprovalFn | null>(null);
 export const ToolApprovalProvider = ToolApprovalContext.Provider;
 export function useToolApprovalResolver(): ResolveToolApprovalFn | null {
   return useContext(ToolApprovalContext);
+}
+
+export interface InteractiveCardResponseBinding {
+  conversationId: string;
+  messageId: string;
+  cardId: string;
+}
+
+export const WEB_INTERACTIVE_CARD_KINDS = [
+  'clarify.v1',
+  'map-search.v1',
+  'mcp-app.v1',
+] as const satisfies readonly KnownInteractiveCardKind[];
+
+export type WebInteractiveCardKind = (typeof WEB_INTERACTIVE_CARD_KINDS)[number];
+
+const WEB_INTERACTIVE_CARD_CAPABILITY: InteractiveCardClientCapability = {
+  supported: [...WEB_INTERACTIVE_CARD_KINDS],
+  canRespond: WEB_INTERACTIVE_CARD_KINDS.includes(RESPONDABLE_INTERACTIVE_CARD_KIND),
+};
+
+const INTERACTIVE_CARD_RESPONSE_FAILURE_MESSAGE =
+  "Couldn't send that answer — the questions are still waiting for you.";
+
+const CLARIFY_ANSWERED_PREAMBLE = 'The user answered the clarifying questions:';
+const CLARIFY_DISMISSED_PREAMBLE = 'The user declined the clarifying questions and said instead:';
+const CLARIFY_DISMISSED_SILENTLY = 'The user declined the clarifying questions without answering.';
+
+function describeSettledInteractiveCard(card: InteractiveCard): string | null {
+  if (!card.recognized || card.kind !== RESPONDABLE_INTERACTIVE_CARD_KIND) return null;
+  const { questions, state } = card.body;
+
+  if (state.status === 'dismissed') {
+    return state.freeText
+      ? `${CLARIFY_DISMISSED_PREAMBLE} ${state.freeText}`
+      : CLARIFY_DISMISSED_SILENTLY;
+  }
+  if (state.status !== 'answered') return null;
+
+  const lines = state.answers.flatMap((answer) => {
+    const question = questions.find((candidate) => candidate.id === answer.questionId);
+    if (!question || answer.kind === 'skipped') return [];
+    const value = answer.kind === 'other' ? answer.text : answer.labels.join(', ');
+    return value.length > 0 ? [`- ${question.question} ${value}`] : [];
+  });
+
+  return lines.length > 0 ? [CLARIFY_ANSWERED_PREAMBLE, ...lines].join('\n') : null;
+}
+
+function settledInteractiveCardTurn(message: Message): ApiMessage | null {
+  const settled = (message.metadata?.interactiveCards ?? [])
+    .map(describeSettledInteractiveCard)
+    .filter((entry): entry is string => entry !== null);
+  return settled.length > 0 ? { role: 'user', content: settled.join('\n\n') } : null;
+}
+
+const inFlightCardResponses = new Set<string>();
+
+export async function respondToInteractiveCard(
+  binding: InteractiveCardResponseBinding,
+  payload: InteractiveCardResponsePayload,
+): Promise<void> {
+  const inFlightKey = `${binding.conversationId}:${binding.messageId}:${binding.cardId}`;
+  if (inFlightCardResponses.has(inFlightKey)) return;
+  inFlightCardResponses.add(inFlightKey);
+  try {
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    const response = await fetch(INTERACTIVE_CARD_RESPONSE_PATH, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        conversation_id: binding.conversationId,
+        message_id: binding.messageId,
+        card_id: binding.cardId,
+        response: payload,
+      } satisfies InteractiveCardResponseRequest),
+    });
+    if (!response.ok) {
+      throw new Error(`Interactive card response rejected with ${response.status}`);
+    }
+    const settled = parseInteractiveCardDelta(await response.json());
+    if (!settled?.recognized) {
+      throw new Error('Interactive card response returned a card that failed validation');
+    }
+    const message = findConversationMessage(binding.conversationId, binding.messageId);
+    useChatStore.getState().updateMessage(
+      binding.messageId,
+      {
+        metadata: {
+          ...message?.metadata,
+          interactiveCards: (message?.metadata?.interactiveCards ?? []).map((card) =>
+            card.cardId === settled.cardId ? settled : card,
+          ),
+        },
+      },
+      binding.conversationId,
+    );
+  } catch (error) {
+    logger.error('[useChatStream] Interactive card response failed', error);
+    toast.error(INTERACTIVE_CARD_RESPONSE_FAILURE_MESSAGE);
+  } finally {
+    inFlightCardResponses.delete(inFlightKey);
+  }
 }
 
 function autoResolvePendingApprovals(
@@ -1713,14 +1824,13 @@ export function useChatStream(): UseChatStreamReturn {
       try {
         const currentMessages = readConversationMessages(conversationId);
 
-        const apiMessages: ApiMessage[] = [
-          ...currentMessages
-            .filter((m) => m.id !== assistantMessageId)
-            .map((m) => ({
-              role: m.role,
-              content: buildApiMessageContent(m),
-            })),
-        ];
+        const apiMessages: ApiMessage[] = currentMessages
+          .filter((m) => m.id !== assistantMessageId)
+          .flatMap((m) => {
+            const turn: ApiMessage = { role: m.role, content: buildApiMessageContent(m) };
+            const settled = settledInteractiveCardTurn(m);
+            return settled ? [turn, settled] : [turn];
+          });
 
         if (options.styleInstruction) {
           apiMessages.unshift({ role: 'system', content: options.styleInstruction });
@@ -1765,10 +1875,7 @@ export function useChatStream(): UseChatStreamReturn {
             conversation_id: conversationId,
             assistant_message_id: assistantMessageId,
             stream: true,
-            [INTERACTIVE_CARD_REQUEST_KEY]: {
-              supported: ['map-search.v1', 'mcp-app.v1'],
-              canRespond: false,
-            },
+            [INTERACTIVE_CARD_REQUEST_KEY]: WEB_INTERACTIVE_CARD_CAPABILITY,
             temperature: options.temperature,
             max_tokens: options.maxTokens,
             web_search: options.webSearch || options.research || undefined,
@@ -1955,7 +2062,11 @@ export function useChatStream(): UseChatStreamReturn {
 
       const apiMessages: ApiMessage[] = conversationMessages
         .slice(0, messageIndex + 1)
-        .map((m) => ({ role: m.role, content: m.content as MessageContent }));
+        .flatMap((m) => {
+          const turn: ApiMessage = { role: m.role, content: m.content as MessageContent };
+          const settled = settledInteractiveCardTurn(m);
+          return settled ? [turn, settled] : [turn];
+        });
       apiMessages.push({ role: 'user', content: CONTINUE_GENERATION_INSTRUCTION });
 
       const seedContent = message.content;

@@ -11,7 +11,8 @@ import {
   DialogDescription,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { getConnectorCapability } from '@/lib/connectors/catalog';
+import { getDeclaredConnectorActions } from '@/lib/connectors/catalog';
+import { describeConnectorActions } from '../data/connectors';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 import { useToolPermissionsStore, type PermissionLevel } from '../stores/tool-permissions-store';
 import { useConnectorCapabilities } from '../hooks/use-connector-capabilities';
@@ -141,10 +142,8 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
 
   if (!connector) return null;
 
-  const tools =
-    catalog?.tools.map((tool) => tool.name) ??
-    getConnectorCapability(connector.id)?.supportedActions ??
-    [];
+  const tools: readonly string[] =
+    catalog?.tools.map((tool) => tool.name) ?? getDeclaredConnectorActions(connector.id);
   const permissionConnectorId = catalog?.connectorId ?? connector.id;
   const discovering = loading && tools.length === 0;
   const discoveryFailed = error !== null && tools.length === 0;
@@ -196,9 +195,9 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-border bg-muted/50 px-4 py-6 text-center">
+            <div className="rounded-lg border border-border bg-muted/50 px-4 py-6">
               <p className="text-sm text-muted-foreground">
-                No tools defined for this connector yet.
+                {describeConnectorActions(connector.id)}
               </p>
             </div>
           )}

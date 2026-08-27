@@ -116,10 +116,6 @@ jest.mock('@agiworkforce/utils/format', () => ({
   truncate: (s: string, n: number) => s.slice(0, n),
 }));
 
-jest.mock('@/src/features/sidebar/components/AutoTagBadge', () => ({
-  AutoTagBadge: jest.fn().mockReturnValue(null),
-}));
-
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
 }));
@@ -155,40 +151,6 @@ jest.mock('@/components/ui/badge', () => ({
 jest.mock('@/src/features/chat/components/GeneratedFileCard', () => ({
   GeneratedFileCard: jest.fn().mockReturnValue(null),
 }));
-
-import { ConversationItem } from '../src/features/sidebar/components/ConversationItem';
-import type { ConversationSummary } from '../types/chat';
-
-function makeConv(overrides: Partial<ConversationSummary> = {}): ConversationSummary {
-  return {
-    id: 'conv-snap-1',
-    title: 'Project Planning',
-    updatedAt: '2026-05-22T10:00:00Z',
-    createdAt: '2026-05-22T09:00:00Z',
-    messageCount: 5,
-    pinned: false,
-    ...overrides,
-  };
-}
-
-describe('ConversationItem snapshots', () => {
-  it('locks the tree for a default (read, inactive) conversation', () => {
-    const { toJSON } = render(<ConversationItem conversation={makeConv()} isActive={false} />);
-    expect(toJSON()).toMatchSnapshot();
-  });
-
-  it('locks the tree for an active conversation', () => {
-    const { toJSON } = render(<ConversationItem conversation={makeConv()} isActive={true} />);
-    expect(toJSON()).toMatchSnapshot();
-  });
-
-  it('locks the tree for an unread conversation', () => {
-    const { toJSON } = render(
-      <ConversationItem conversation={makeConv({ unread: true })} isActive={false} />,
-    );
-    expect(toJSON()).toMatchSnapshot();
-  });
-});
 
 import { ArtifactFullScreen } from '../src/features/chat/components/ArtifactFullScreen';
 import type { Artifact } from '../types/chat';

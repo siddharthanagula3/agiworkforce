@@ -43,7 +43,14 @@ describe('notifyScheduleCompleted — consent', () => {
     expect(mocks.sendPush).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({ title: expect.any(String) }),
+      expect.anything(),
     );
+  });
+
+  it('keeps the mobile-push opt-in mobile: a browser is not notified off it', async () => {
+    await notifyScheduleCompleted(notice);
+
+    expect(mocks.sendPush.mock.calls[0]?.[2]).toEqual({ expo: true, web: false });
   });
 
   it('sends nothing when the preference is absent', async () => {

@@ -17,3 +17,11 @@ expo-env.d.ts
 # App Store Connect / Play Console, not committed as source.
 store-listing/screenshots/captures/
 store-listing/screenshots/.detox-artifacts/
+
+# e2e run output — Detox writes to artifacts/mobile-e2e (test:e2e:ios:ci) and a
+# runner invoked from this directory drops captures at the app root. Anchored so
+# committed source images under assets/ and docs/qa/screenshots/ keep tracking.
+/*.png
+/*.jpg
+/*.jpeg
+/artifacts/

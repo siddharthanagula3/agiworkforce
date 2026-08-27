@@ -1174,14 +1174,19 @@ DIFFERENT APPLICATION STATES.
   Current mitigation for those account/enterprise links is disclosure: all three
   are declared to App Review in `apps/mobile/store-listing/REVIEWER-NOTES-IOS.md`
   and in `LISTING-METADATA-IOS.json` → `pricing.guideline_3_1_1_residual_risk`.
-- **MOBILE-STORE-LISTING-DANGLING-REFS — PARTLY RESOLVED.** `906fe5cda` deleted
+- **MOBILE-STORE-LISTING-DANGLING-REFS — RESOLVED 2026-08-27.** `906fe5cda` deleted
   `REVIEWER-NOTES-IOS.md`, `REVIEWER-NOTES-ANDROID.md`, and
   `FOUNDER-SUBMISSION-CHECKLIST.md` without updating the JSONs that point at
   them. `REVIEWER-NOTES-IOS.md` is re-authored and the
   `FOUNDER-SUBMISSION-CHECKLIST.md` reference is replaced by the tracked risk
-  note above. `LISTING-METADATA-ANDROID.json:94` still points
-  `play_console_review_notes_file` at a non-existent `REVIEWER-NOTES-ANDROID.md`
-  — still OPEN, needs the Android lane.
+  note above. The last dangling pointer,
+  `LISTING-METADATA-ANDROID.json:118` → `play_console_review_notes_file`:
+  `apps/mobile/store-listing/REVIEWER-NOTES-ANDROID.md`, is satisfied: the
+  Android reviewer notes now exist at that path, so no listing JSON points at a
+  missing file and `pnpm check:reference-integrity` is green. Only the pointer
+  is closed here — the notes' contents were not read, so their accuracy against
+  the shipping Android build is unaudited and a re-auditor should confirm those
+  claims before submission.
 - **MOBILE-STORE-LISTING-NATIVE-BILLING-COPY — OPEN, operator-blocked.** Both listing
   descriptions told the stores the app "opens agiworkforce.com in your browser to
   complete checkout", which the code stopped doing and which is a self-reported
@@ -1527,17 +1532,56 @@ Follow-ups and supersessions from the parity remediation (backlog:
   `TTSProvider` union in `stores/settingsStore.ts` still includes `'cloud'`
   and persists `ttsProvider` with no remaining runtime reader — inert state; a
   store/contract narrowing is a separate change.
-- **`MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01` (open, policy risk):**
-  mobile has no moderation intake endpoint.
-  `apps/web/app/api/mobile/feedback/route.ts` accepts only
-  `{type: bug|feature|general, message}` with no category/messageId/
-  conversationId/excerpt fields, and no report/moderation/abuse route exists
-  under `apps/web/app/api`. The mobile report sheet now states truthfully that
-  reports are stored on device with an explicit email hand-off (PAR-M10), but
-  a Google Play GenAI content report reaches a human only if the user
-  completes the mailto hand-off. Owed: a Cloud-mode-only
-  `POST /api/mobile/content-report` plus an MMKV flush queue, then flip the
-  mobile flow back to real submission.
+- **`MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01` (PARTLY RESOLVED 2026-08-27):**
+  the two factual claims this entry rested on — "mobile has no moderation intake
+  endpoint" and "no report/moderation/abuse route exists under
+  `apps/web/app/api`" — are both false now.
+  `apps/web/app/api/mobile/content-report/route.ts` is the intake:
+  CSRF-checked, rate-limited under the
+  `mobile-content-report` bucket, Zod-validated over
+  `{reportId, messageId, conversationId, category, contentExcerpt, userNote}`
+  with the six-value category enum, inserting into `public.content_reports`
+  (`db/neon/0093_content_reports.sql`, triaged by `0124_content_report_triage.sql`)
+  `on conflict (client_report_id) do nothing`. The client posts from
+  `apps/mobile/services/contentReport.ts:141` (`submitReportToServer`) inside
+  `saveContentReport`, which is reached from the UI via
+  `src/features/chat/components/ReportFlagButton.tsx:104` rendered by
+  `MessageBubble.tsx:920`. So the owed Cloud-mode-only intake exists and a
+  signed-in Cloud-mode report does reach the trust-and-safety table.
+  Two of the owed pieces are still missing, which is why this is not a full
+  close:
+  - **Only a signed-in Cloud-mode reporter can file.** Do not read the nullable
+    `user_id` column as "anonymous reporting works" — the route's own header
+    comment says it does, and the code refuses it twice over.
+    `route.ts:40` runs `requireCsrfToken` before `auth()` at `:53`, and
+    `apps/web/lib/csrf.ts:271` only short-circuits on a _valid_
+    `Authorization: Bearer` header; otherwise it needs an `x-csrf-token`
+    verified against a session id that, with no `__Host-anon-session-id`
+    cookie, is a freshly minted `anon-<uuid>` (`lib/csrf.ts:157`) — always a
+    403 `CSRF_VALIDATION_FAILED`. The mobile client sends no CSRF header and
+    keeps no cookie jar: `apps/mobile/services/api.ts:216-218` sets only
+    `Content-Type`, `X-Requested-With`, and `getAuthHeaders()`, which is
+    Bearer-or-nothing (`apps/mobile/services/authSession.ts:30-33`), and no
+    file under `apps/mobile` references CSRF at all. In Local mode the request
+    never leaves the phone regardless: the egress guard throws
+    `EgressBlockedError` for our-cloud hosts
+    (`apps/mobile/lib/egressGuard.ts:10-23`), which is the intended trust
+    boundary and is stated in `contentReport.ts:15-18`. A signed-out or
+    Local-mode report is therefore an on-device record plus, at best, the
+    mailto hand-off. `app/api/mobile/content-report/__tests__/route.test.ts`
+    does not contradict this and must not be cited as if it did: `:13` mocks
+    `requireCsrfToken` to resolve `null`, so its `:88`
+    "accepts an anonymous report with a null `user_id`" case asserts the
+    insert shape, not reachability, and no test covers a request carrying
+    neither a bearer token nor a CSRF token.
+  - **There is still no flush queue.** `submitReportToServer` swallows every
+    failure and `saveContentReport` degrades to `delivery: 'stored-on-device'`
+    / `'email-unavailable'`, so a report that fails to POST keeps its MMKV
+    copy but is never retried. The persisted `serverAcknowledged` flag already
+    exists (`contentReport.ts:51`, set at `:189-190`, written back to MMKV by
+    `markServerAcknowledged` at `:213-221`), so the remaining work is a sweep
+    over records with `serverAcknowledged === false` on foreground /
+    connectivity regain — not a new field.
 - **`MOBILE-RGBA-LITERALS-SWEEP-01` (open, tracked exemptions):** the new
   ESLint `no-restricted-syntax` rule banning literal white/black rgba under
   `apps/mobile/src/features/**` carries a `FIXME: PAR-M13-SWEEP` ignore list
