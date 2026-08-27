@@ -92,10 +92,6 @@
       "reason": "DELETE: Saves a recording as a script file. The mounted apps/desktop/src/features/automation/ActionRecorder.tsx records through packages/client/desktop-command-client/src/automation.ts and saves a recording with skills.skillCreateFromRecording; the script/codegen export was never ported to that client and survives only in the unreachable apps/desktop/src/api/automationEnhanced.ts. Superseded by the skill flow. Delete the wrapper, its lib.rs registration, and the client."
     },
     {
-      "command": "budget_get_status",
-      "reason": "WIRE: The only window into the DailyBudgetGuard that lib.rs:492-499 initialises at a $25/day cap. Its one caller, apps/desktop/src/features/layout/BudgetStatusWidget.tsx, is exported from features/layout/index.ts but never mounted, so the cap is enforced invisibly and a user hitting it gets no explanation. Mount the widget from a reachable shell such as apps/desktop/src/features/v3/DesktopShellV3.tsx."
-    },
-    {
       "command": "chat_detect_intent",
       "reason": "DELETE: Regex intent classifier over the user\u2019s message. sys/commands/chat/intent.rs is self-contained - detect_user_intent and matches_stop_intent have no Rust caller - and the only client is the unreachable apps/desktop/src/api/chat.ts. The mounted composer stops generation with chat_stop_generation (apps/desktop/src/runtime/TauriRuntime.ts) rather than pre-classifying the text. Delete the wrapper and its lib.rs registration."
     },
