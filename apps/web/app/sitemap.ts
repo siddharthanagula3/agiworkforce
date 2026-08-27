@@ -69,7 +69,6 @@ const routes: RouteConfig[] = [
   { path: '/partners', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/press', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/community', priority: 0.6, changeFrequency: 'weekly' },
-  { path: '/buildathon', priority: 0.4, changeFrequency: 'monthly' },
 
   { path: '/use-cases', priority: 0.75, changeFrequency: 'weekly' },
   { path: '/use-cases/consulting', priority: 0.65, changeFrequency: 'monthly' },
