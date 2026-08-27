@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 
 export interface DiffSession {
@@ -167,6 +166,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
   private readonly _addedGutter: vscode.TextEditorDecorationType;
   private readonly _removedGutter: vscode.TextEditorDecorationType;
   private readonly _activeDiffs = new Map<string, DiffSession>();
+  private _rejectedStash: DiffSession[] = [];
   private _nextId = 0;
   readonly codeLensProvider: DiffCodeLensProvider;
   private readonly _disposables: vscode.Disposable[] = [];
@@ -318,51 +318,64 @@ export class DiffDecorationProvider implements vscode.Disposable {
   }
 
   rejectDiff(sessionId: string): void {
+    const session = this._activeDiffs.get(sessionId);
+    if (session === undefined) return;
+    this._stashRejected([session]);
     this._removeSession(sessionId);
   }
 
   async acceptAll(uri: vscode.Uri): Promise<void> {
-    const sessions = this._sessionsForUri(uri);
-    sessions.sort((a, b) => b.range.start.line - a.range.start.line);
-    for (const session of sessions) {
-      await this.acceptDiff(session.id);
-    }
+    await this._acceptSessions(this.sessionsForUri(uri));
   }
 
   rejectAll(uri: vscode.Uri): void {
-    for (const session of this._sessionsForUri(uri)) {
-      this._removeSession(session.id);
-    }
+    this._rejectSessions(this.sessionsForUri(uri));
   }
 
   async acceptBatch(batchId: string): Promise<void> {
-    const batchSessions = [...this._activeDiffs.values()].filter((s) => s.batchId === batchId);
-    const byUri = new Map<string, DiffSession[]>();
-    for (const s of batchSessions) {
-      const key = s.uri.toString();
-      const existing = byUri.get(key) ?? [];
-      existing.push(s);
-      byUri.set(key, existing);
-    }
-    for (const sessions of byUri.values()) {
-      sessions.sort((a, b) => b.range.start.line - a.range.start.line);
-      for (const session of sessions) {
-        await this.acceptDiff(session.id);
-      }
-    }
+    await this._acceptSessions(this.sessionsForBatch(batchId));
   }
 
   rejectBatch(batchId: string): void {
-    const batchSessions = [...this._activeDiffs.values()].filter((s) => s.batchId === batchId);
-    for (const session of batchSessions) {
-      this._removeSession(session.id);
+    this._rejectSessions(this.sessionsForBatch(batchId));
+  }
+
+  sessionsForBatch(batchId: string): DiffSession[] {
+    return [...this._activeDiffs.values()].filter((s) => s.batchId === batchId);
+  }
+
+  sessionsForUri(uri: vscode.Uri): DiffSession[] {
+    const uriStr = uri.toString();
+    return [...this._activeDiffs.values()].filter((s) => s.uri.toString() === uriStr);
+  }
+
+  allSessions(): DiffSession[] {
+    return [...this._activeDiffs.values()];
+  }
+
+  get restorableCount(): number {
+    return this._rejectedStash.length;
+  }
+
+  restoreRejected(): DiffSession[] {
+    const restored = this._rejectedStash.filter((session) => !this._activeDiffs.has(session.id));
+    this._rejectedStash = [];
+    if (restored.length === 0) return [];
+    for (const session of restored) {
+      this._activeDiffs.set(session.id, session);
     }
+    for (const editor of vscode.window.visibleTextEditors) {
+      this._applyDecorationsToEditor(editor);
+    }
+    this.codeLensProvider.refresh(this._activeDiffs);
+    void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', true);
+    return restored;
   }
 
   currentSession(): DiffSession | undefined {
     const editor = vscode.window.activeTextEditor;
     if (editor === undefined) return undefined;
-    const sessions = this._sessionsForUri(editor.document.uri);
+    const sessions = this.sessionsForUri(editor.document.uri);
     if (sessions.length === 0) return undefined;
 
     const cursorLine = editor.selection.active.line;
@@ -392,20 +405,11 @@ export class DiffDecorationProvider implements vscode.Disposable {
   }
 
   async acceptAllGlobal(): Promise<void> {
-    const allUris = new Set([...this._activeDiffs.values()].map((s) => s.uri.toString()));
-    for (const uriStr of allUris) {
-      const uri = [...this._activeDiffs.values()].find((s) => s.uri.toString() === uriStr)?.uri;
-      if (uri !== undefined) {
-        await this.acceptAll(uri);
-      }
-    }
+    await this._acceptSessions(this.allSessions());
   }
 
   rejectAllGlobal(): void {
-    const sessionIds = [...this._activeDiffs.keys()];
-    for (const id of sessionIds) {
-      this._removeSession(id);
-    }
+    this._rejectSessions(this.allSessions());
   }
 
   get sessionCount(): number {
@@ -416,9 +420,32 @@ export class DiffDecorationProvider implements vscode.Disposable {
     return this._activeDiffs.get(sessionId);
   }
 
-  private _sessionsForUri(uri: vscode.Uri): DiffSession[] {
-    const uriStr = uri.toString();
-    return [...this._activeDiffs.values()].filter((s) => s.uri.toString() === uriStr);
+  private async _acceptSessions(sessions: readonly DiffSession[]): Promise<void> {
+    const byUri = new Map<string, DiffSession[]>();
+    for (const session of sessions) {
+      const key = session.uri.toString();
+      const existing = byUri.get(key) ?? [];
+      existing.push(session);
+      byUri.set(key, existing);
+    }
+    for (const uriSessions of byUri.values()) {
+      uriSessions.sort((a, b) => b.range.start.line - a.range.start.line);
+      for (const session of uriSessions) {
+        await this.acceptDiff(session.id);
+      }
+    }
+  }
+
+  private _rejectSessions(sessions: readonly DiffSession[]): void {
+    if (sessions.length === 0) return;
+    this._stashRejected(sessions);
+    for (const session of sessions) {
+      this._removeSession(session.id);
+    }
+  }
+
+  private _stashRejected(sessions: readonly DiffSession[]): void {
+    this._rejectedStash = [...sessions];
   }
 
   private _removeSession(sessionId: string): void {
@@ -437,6 +464,9 @@ export class DiffDecorationProvider implements vscode.Disposable {
     for (const [id, session] of this._activeDiffs) {
       if (session.uri.toString() === uriStr) this._activeDiffs.delete(id);
     }
+    this._rejectedStash = this._rejectedStash.filter(
+      (session) => session.uri.toString() !== uriStr,
+    );
     this.codeLensProvider.refresh(this._activeDiffs);
   }
 
@@ -489,5 +519,6 @@ export class DiffDecorationProvider implements vscode.Disposable {
     this._removedGutter.dispose();
     for (const d of this._disposables) d.dispose();
     this._activeDiffs.clear();
+    this._rejectedStash = [];
   }
 }

@@ -10,7 +10,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     content="default-src 'none';
              style-src 'nonce-NONCE' vscode-webview://mock;
              script-src 'nonce-NONCE' vscode-webview://mock;
-             img-src vscode-webview://mock https:;
+             img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
   <title>AGI Workforce</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
@@ -225,14 +225,30 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       color: var(--warning);
     }
 
+    .runtime-status-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
     .runtime-status button {
-      align-self: flex-start;
       border: 0;
       border-radius: 5px;
       padding: 4px 8px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       cursor: pointer;
+    }
+
+    .runtime-status button.runtime-status-secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+
+    .runtime-status button[disabled] {
+      cursor: default;
+      opacity: 0.6;
     }
 
     /* ── First-run onboarding ── */
@@ -1814,8 +1830,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
   <div class="runtime-status" id="runtimeStatus" role="status" aria-live="polite">
     <strong id="runtimeStatusTitle">Developer runtime needs setup</strong>
-    <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
-    <button type="button" id="runtimeSettingsBtn">Open setup</button>
+    <span id="runtimeStatusMessage">Checking the workspace developer runtime…</span>
+    <div class="runtime-status-actions">
+      <button type="button" id="runtimeSettingsBtn">Open setup</button>
+      <button type="button" class="runtime-status-secondary" id="runtimeRetryBtn">Try again</button>
+    </div>
   </div>
 
   <!-- ── Usage meter banner ── -->
@@ -1991,6 +2010,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     const runtimeStatusTitleEl = document.getElementById('runtimeStatusTitle');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
+    const runtimeRetryBtn = document.getElementById('runtimeRetryBtn');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
@@ -2563,6 +2583,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       });
     }
 
+    if (runtimeRetryBtn) {
+      runtimeRetryBtn.addEventListener('click', function() {
+        if (runtimeRetryBtn.disabled) return;
+        vscode.postMessage({ type: 'retryRuntime' });
+      });
+    }
+
     // Upgrade button — opens pricing page via extension host
     if (upgradeBtn) {
       upgradeBtn.addEventListener('click', function() {
@@ -2608,7 +2635,27 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
     }
 
+    function setRuntimeRetryBusy(busy) {
+      if (!runtimeRetryBtn) return;
+      runtimeRetryBtn.disabled = busy;
+      runtimeRetryBtn.textContent = busy ? 'Checking…' : 'Try again';
+    }
+
+    function renderRuntimeProbing() {
+      if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl) return;
+      runtimeStatusTitleEl.textContent = 'Checking the developer runtime…';
+      runtimeStatusMessageEl.textContent =
+        'Starting the AGI CLI and asking it which models this workspace can reach.';
+      runtimeStatusEl.style.display = 'flex';
+      setRuntimeRetryBusy(true);
+    }
+
     function renderRuntimeAvailability(status, message) {
+      if (status === 'probing') {
+        renderRuntimeProbing();
+        return;
+      }
+      setRuntimeRetryBusy(false);
       runtimeBlock = status === 'ready' ? null : status;
       renderOnboardingWorkspaceState(status);
       var headline = document.getElementById('emptyStateHeadline');
@@ -4454,7 +4501,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     content="default-src 'none';
              style-src 'nonce-NONCE' vscode-webview://mock;
              script-src 'nonce-NONCE' vscode-webview://mock;
-             img-src vscode-webview://mock https:;
+             img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
   <title>AGI Workforce</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
@@ -4669,14 +4716,30 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       color: var(--warning);
     }
 
+    .runtime-status-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
     .runtime-status button {
-      align-self: flex-start;
       border: 0;
       border-radius: 5px;
       padding: 4px 8px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       cursor: pointer;
+    }
+
+    .runtime-status button.runtime-status-secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+
+    .runtime-status button[disabled] {
+      cursor: default;
+      opacity: 0.6;
     }
 
     /* ── First-run onboarding ── */
@@ -6258,8 +6321,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
   <div class="runtime-status" id="runtimeStatus" role="status" aria-live="polite">
     <strong id="runtimeStatusTitle">Developer runtime needs setup</strong>
-    <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
-    <button type="button" id="runtimeSettingsBtn">Open setup</button>
+    <span id="runtimeStatusMessage">Checking the workspace developer runtime…</span>
+    <div class="runtime-status-actions">
+      <button type="button" id="runtimeSettingsBtn">Open setup</button>
+      <button type="button" class="runtime-status-secondary" id="runtimeRetryBtn">Try again</button>
+    </div>
   </div>
 
   <!-- ── Usage meter banner ── -->
@@ -6435,6 +6501,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     const runtimeStatusTitleEl = document.getElementById('runtimeStatusTitle');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
+    const runtimeRetryBtn = document.getElementById('runtimeRetryBtn');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
@@ -7007,6 +7074,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       });
     }
 
+    if (runtimeRetryBtn) {
+      runtimeRetryBtn.addEventListener('click', function() {
+        if (runtimeRetryBtn.disabled) return;
+        vscode.postMessage({ type: 'retryRuntime' });
+      });
+    }
+
     // Upgrade button — opens pricing page via extension host
     if (upgradeBtn) {
       upgradeBtn.addEventListener('click', function() {
@@ -7052,7 +7126,27 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
     }
 
+    function setRuntimeRetryBusy(busy) {
+      if (!runtimeRetryBtn) return;
+      runtimeRetryBtn.disabled = busy;
+      runtimeRetryBtn.textContent = busy ? 'Checking…' : 'Try again';
+    }
+
+    function renderRuntimeProbing() {
+      if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl) return;
+      runtimeStatusTitleEl.textContent = 'Checking the developer runtime…';
+      runtimeStatusMessageEl.textContent =
+        'Starting the AGI CLI and asking it which models this workspace can reach.';
+      runtimeStatusEl.style.display = 'flex';
+      setRuntimeRetryBusy(true);
+    }
+
     function renderRuntimeAvailability(status, message) {
+      if (status === 'probing') {
+        renderRuntimeProbing();
+        return;
+      }
+      setRuntimeRetryBusy(false);
       runtimeBlock = status === 'ready' ? null : status;
       renderOnboardingWorkspaceState(status);
       var headline = document.getElementById('emptyStateHeadline');
@@ -8898,7 +8992,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     content="default-src 'none';
              style-src 'nonce-NONCE' vscode-webview://mock;
              script-src 'nonce-NONCE' vscode-webview://mock;
-             img-src vscode-webview://mock https:;
+             img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
   <title>AGI Workforce</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
@@ -9113,14 +9207,30 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       color: var(--warning);
     }
 
+    .runtime-status-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
     .runtime-status button {
-      align-self: flex-start;
       border: 0;
       border-radius: 5px;
       padding: 4px 8px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       cursor: pointer;
+    }
+
+    .runtime-status button.runtime-status-secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+
+    .runtime-status button[disabled] {
+      cursor: default;
+      opacity: 0.6;
     }
 
     /* ── First-run onboarding ── */
@@ -10702,8 +10812,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
   <div class="runtime-status" id="runtimeStatus" role="status" aria-live="polite">
     <strong id="runtimeStatusTitle">Developer runtime needs setup</strong>
-    <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
-    <button type="button" id="runtimeSettingsBtn">Open setup</button>
+    <span id="runtimeStatusMessage">Checking the workspace developer runtime…</span>
+    <div class="runtime-status-actions">
+      <button type="button" id="runtimeSettingsBtn">Open setup</button>
+      <button type="button" class="runtime-status-secondary" id="runtimeRetryBtn">Try again</button>
+    </div>
   </div>
 
   <!-- ── Usage meter banner ── -->
@@ -10879,6 +10992,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     const runtimeStatusTitleEl = document.getElementById('runtimeStatusTitle');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
+    const runtimeRetryBtn = document.getElementById('runtimeRetryBtn');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
@@ -11451,6 +11565,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       });
     }
 
+    if (runtimeRetryBtn) {
+      runtimeRetryBtn.addEventListener('click', function() {
+        if (runtimeRetryBtn.disabled) return;
+        vscode.postMessage({ type: 'retryRuntime' });
+      });
+    }
+
     // Upgrade button — opens pricing page via extension host
     if (upgradeBtn) {
       upgradeBtn.addEventListener('click', function() {
@@ -11496,7 +11617,27 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
     }
 
+    function setRuntimeRetryBusy(busy) {
+      if (!runtimeRetryBtn) return;
+      runtimeRetryBtn.disabled = busy;
+      runtimeRetryBtn.textContent = busy ? 'Checking…' : 'Try again';
+    }
+
+    function renderRuntimeProbing() {
+      if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl) return;
+      runtimeStatusTitleEl.textContent = 'Checking the developer runtime…';
+      runtimeStatusMessageEl.textContent =
+        'Starting the AGI CLI and asking it which models this workspace can reach.';
+      runtimeStatusEl.style.display = 'flex';
+      setRuntimeRetryBusy(true);
+    }
+
     function renderRuntimeAvailability(status, message) {
+      if (status === 'probing') {
+        renderRuntimeProbing();
+        return;
+      }
+      setRuntimeRetryBusy(false);
       runtimeBlock = status === 'ready' ? null : status;
       renderOnboardingWorkspaceState(status);
       var headline = document.getElementById('emptyStateHeadline');

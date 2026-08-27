@@ -5,7 +5,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { SidebarProvider } from '../features/sidebar-webview/sidebarProvider';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
-import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
+import { DiffDecorationProvider, type DiffSession } from '../providers/diffDecorationProvider';
 import {
   ConversationTreeProvider,
   ConversationTreeItem,
@@ -152,6 +152,105 @@ function warnNoDiffUnderCursor(verb: 'accept' | 'dismiss'): void {
   );
 }
 
+const DIFF_ACCEPT_ACTION = 'Write changes';
+const DIFF_REJECT_ACTION = 'Discard changes';
+const DIFF_RESTORE_ACTION = 'Restore discarded';
+const DIFF_REVIEW_ACTION = 'Review first';
+
+function diffSessionLabel(session: DiffSession): string {
+  return session.filePath ?? vscode.workspace.asRelativePath(session.uri);
+}
+
+function describeDiffScope(sessions: readonly DiffSession[]): string {
+  const changes = `${sessions.length} pending change${sessions.length === 1 ? '' : 's'}`;
+  const files = [...new Set(sessions.map(diffSessionLabel))];
+  const first = files[0];
+  if (files.length === 1 && first !== undefined) return `${changes} in ${first}`;
+  return `${changes} across ${files.length} files`;
+}
+
+function listDiffScopeFiles(sessions: readonly DiffSession[]): string {
+  const MAX_LISTED_FILES = 10;
+  const counts = new Map<string, number>();
+  for (const session of sessions) {
+    const label = diffSessionLabel(session);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const listed = [...counts.entries()]
+    .slice(0, MAX_LISTED_FILES)
+    .map(([label, count]) => `• ${label} (${count})`);
+  const hidden = counts.size - listed.length;
+  if (hidden > 0) listed.push(`• …and ${hidden} more file${hidden === 1 ? '' : 's'}`);
+  return listed.join('\n');
+}
+
+async function confirmDiffBulkAction(
+  sessions: readonly DiffSession[],
+  intent: 'accept' | 'reject',
+): Promise<boolean> {
+  if (sessions.length === 0) {
+    vscode.window.showWarningMessage('AGI Workforce: there are no pending changes to review.');
+    return false;
+  }
+  const accepting = intent === 'accept';
+  const action = accepting ? DIFF_ACCEPT_ACTION : DIFF_REJECT_ACTION;
+  const headline = accepting
+    ? `Write ${describeDiffScope(sessions)} to disk?`
+    : `Discard ${describeDiffScope(sessions)} without writing them?`;
+  const consequence = accepting
+    ? 'These edits are applied to your working tree. Nothing else reviews them first.'
+    : 'The proposals are dropped. Run "AGI Workforce: Restore Discarded Changes" to bring them back in this session.';
+  const choice = await vscode.window.showWarningMessage(
+    `AGI Workforce: ${headline}`,
+    { modal: true, detail: `${listDiffScopeFiles(sessions)}\n\n${consequence}` },
+    action,
+    DIFF_REVIEW_ACTION,
+  );
+  if (choice === DIFF_REVIEW_ACTION) {
+    const first = sessions[0];
+    if (first !== undefined) {
+      await vscode.window.showTextDocument(first.uri, { selection: first.range });
+    }
+    return false;
+  }
+  return choice === action;
+}
+
+function resolveDiffBatchId(batchId: unknown): string | undefined {
+  if (typeof batchId === 'string' && batchId !== '') return batchId;
+  vscode.window.showWarningMessage(
+    'AGI Workforce: batch accept and reject run from the CodeLens on a proposed batch. Use Accept/Reject All Changes to act on every pending change.',
+  );
+  return undefined;
+}
+
+function resolveDiffFileTarget(uri: unknown): vscode.Uri | undefined {
+  if (uri instanceof vscode.Uri) return uri;
+  const active = vscode.window.activeTextEditor?.document.uri;
+  if (active === undefined) {
+    vscode.window.showWarningMessage(
+      'AGI Workforce: open the file whose pending changes you want to act on.',
+    );
+  }
+  return active;
+}
+
+function announceRejected(
+  diffDecorationProvider: DiffDecorationProvider,
+  sessions: readonly DiffSession[],
+): void {
+  void vscode.window
+    .showInformationMessage(
+      `AGI Workforce: discarded ${describeDiffScope(sessions)}.`,
+      DIFF_RESTORE_ACTION,
+    )
+    .then((choice) => {
+      if (choice === DIFF_RESTORE_ACTION) {
+        void vscode.commands.executeCommand('agi-workforce.restoreRejectedDiffs');
+      }
+    });
+}
+
 let _agiGitOutputChannel: vscode.OutputChannel | undefined;
 function getAgiGitOutputChannel(): vscode.OutputChannel {
   if (_agiGitOutputChannel === undefined) {
@@ -266,14 +365,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         conversationTreeProvider.refresh();
         const message =
           result.restartedWorkspaces === 0
-            ? 'AGI Workforce: Runtime configuration reloaded. No active workspace runtime needed restarting.'
-            : `AGI Workforce: Local runtime restarted and ready in ${result.restartedWorkspaces} workspace${result.restartedWorkspaces === 1 ? '' : 's'}.`;
+            ? 'AGI Workforce: Runtime configuration reloaded. Re-checking the workspace developer runtime.'
+            : `AGI Workforce: Local runtime restarted in ${result.restartedWorkspaces} workspace${result.restartedWorkspaces === 1 ? '' : 's'}.`;
         vscode.window.showInformationMessage(message);
         return { ok: true as const, restartedWorkspaces: result.restartedWorkspaces };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         vscode.window.showErrorMessage(`AGI Workforce: Local runtime restart failed — ${message}`);
         return { ok: false as const, error: message };
+      } finally {
+        sidebarProvider.refreshRuntimeStatus();
+        ChatEditorPanel.refreshRuntimeStatus();
       }
     }),
 
@@ -346,11 +448,20 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
       diffDecorationProvider.rejectCurrentDiff();
     }),
-    register('agi-workforce.acceptAllDiffs', async (uri: vscode.Uri) => {
-      await diffDecorationProvider.acceptAll(uri);
+    register('agi-workforce.acceptAllDiffs', async (uri?: unknown) => {
+      const target = resolveDiffFileTarget(uri);
+      if (target === undefined) return;
+      const sessions = diffDecorationProvider.sessionsForUri(target);
+      if (!(await confirmDiffBulkAction(sessions, 'accept'))) return;
+      await diffDecorationProvider.acceptAll(target);
     }),
-    register('agi-workforce.rejectAllDiffs', (uri: vscode.Uri) => {
-      diffDecorationProvider.rejectAll(uri);
+    register('agi-workforce.rejectAllDiffs', async (uri?: unknown) => {
+      const target = resolveDiffFileTarget(uri);
+      if (target === undefined) return;
+      const sessions = diffDecorationProvider.sessionsForUri(target);
+      if (!(await confirmDiffBulkAction(sessions, 'reject'))) return;
+      diffDecorationProvider.rejectAll(target);
+      announceRejected(diffDecorationProvider, sessions);
     }),
     register('agi-workforce.acceptCurrentDiff', async () => {
       if (!(await diffDecorationProvider.acceptCurrentDiff())) {
@@ -363,16 +474,42 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
     register('agi-workforce.acceptAllDiffsGlobal', async () => {
+      const sessions = diffDecorationProvider.allSessions();
+      if (!(await confirmDiffBulkAction(sessions, 'accept'))) return;
       await diffDecorationProvider.acceptAllGlobal();
     }),
-    register('agi-workforce.rejectAllDiffsGlobal', () => {
+    register('agi-workforce.rejectAllDiffsGlobal', async () => {
+      const sessions = diffDecorationProvider.allSessions();
+      if (!(await confirmDiffBulkAction(sessions, 'reject'))) return;
       diffDecorationProvider.rejectAllGlobal();
+      announceRejected(diffDecorationProvider, sessions);
     }),
-    register('agi-workforce.acceptBatch', async (batchId: string) => {
-      await diffDecorationProvider.acceptBatch(batchId);
+    register('agi-workforce.acceptBatch', async (batchId?: unknown) => {
+      const id = resolveDiffBatchId(batchId);
+      if (id === undefined) return;
+      const sessions = diffDecorationProvider.sessionsForBatch(id);
+      if (!(await confirmDiffBulkAction(sessions, 'accept'))) return;
+      await diffDecorationProvider.acceptBatch(id);
     }),
-    register('agi-workforce.rejectBatch', (batchId: string) => {
-      diffDecorationProvider.rejectBatch(batchId);
+    register('agi-workforce.rejectBatch', async (batchId?: unknown) => {
+      const id = resolveDiffBatchId(batchId);
+      if (id === undefined) return;
+      const sessions = diffDecorationProvider.sessionsForBatch(id);
+      if (!(await confirmDiffBulkAction(sessions, 'reject'))) return;
+      diffDecorationProvider.rejectBatch(id);
+      announceRejected(diffDecorationProvider, sessions);
+    }),
+    register('agi-workforce.restoreRejectedDiffs', () => {
+      const restored = diffDecorationProvider.restoreRejected();
+      if (restored.length === 0) {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: there are no discarded changes left to restore in this session.',
+        );
+        return;
+      }
+      vscode.window.showInformationMessage(
+        `AGI Workforce: restored ${describeDiffScope(restored)}.`,
+      );
     }),
     register('agi-workforce.showOriginalContext', async (sessionId: string) => {
       const session = diffDecorationProvider.getSession(sessionId);
@@ -743,7 +880,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       });
       if (!msg) return;
       const folder = await getActiveWorkspaceFolder();
-      if (!folder) return;
+      if (!folder) {
+        vscode.window.showErrorMessage(
+          'AGI Workforce: open a workspace folder before committing — there is no repository to commit to.',
+        );
+        return;
+      }
 
       try {
         const gitExt = vscode.extensions.getExtension('vscode.git');

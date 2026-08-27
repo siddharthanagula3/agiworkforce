@@ -825,4 +825,100 @@ describe('LocalRuntimeClient', () => {
     expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('restarting'));
     await disposing;
   });
+  it('names the missing binary, the setting, and the required version on ENOENT', async () => {
+    const enoent = Object.assign(new Error('spawn agi ENOENT'), { code: 'ENOENT' });
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdin: PassThrough;
+        stdout: PassThrough;
+        stderr: PassThrough;
+        pid?: number;
+        kill: () => boolean;
+      };
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => true;
+      setImmediate(() => child.emit('error', enoent));
+      return child as unknown as ChildProcessWithoutNullStreams;
+    }) as unknown as SpawnLocalRuntime;
+
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(/AGI_CLI_NOT_FOUND/u);
+    await expect(client.initialize()).rejects.toThrow(/agiWorkforce\.cliPath/u);
+    await expect(client.initialize()).rejects.toThrow(/1\.7\.1/u);
+    await expect(client.initialize()).rejects.toThrow(/not on the PATH/u);
+  });
+
+  it('says the path does not exist when the setting points at a file', async () => {
+    const enoent = Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' });
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdin: PassThrough;
+        stdout: PassThrough;
+        stderr: PassThrough;
+        kill: () => boolean;
+      };
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => true;
+      setImmediate(() => child.emit('error', enoent));
+      return child as unknown as ChildProcessWithoutNullStreams;
+    }) as unknown as SpawnLocalRuntime;
+
+    const client = new LocalRuntimeClient({
+      cliPath: '/opt/missing/agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(/No file exists at "\/opt\/missing\/agi"/u);
+  });
+
+  it('refuses an empty cliPath with a message that names the setting', async () => {
+    const client = new LocalRuntimeClient({
+      cliPath: '   ',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: vi.fn() as unknown as SpawnLocalRuntime,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(/agiWorkforce\.cliPath is empty/u);
+  });
+
+  it('explains an unrunnable binary instead of surfacing a bare EACCES', async () => {
+    const denied = Object.assign(new Error('spawn EACCES'), { code: 'EACCES' });
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdin: PassThrough;
+        stdout: PassThrough;
+        stderr: PassThrough;
+        kill: () => boolean;
+      };
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => true;
+      setImmediate(() => child.emit('error', denied));
+      return child as unknown as ChildProcessWithoutNullStreams;
+    }) as unknown as SpawnLocalRuntime;
+
+    const client = new LocalRuntimeClient({
+      cliPath: '/opt/agi/agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(/AGI_CLI_NOT_EXECUTABLE/u);
+    await expect(client.initialize()).rejects.toThrow(/execute permission/u);
+  });
 });

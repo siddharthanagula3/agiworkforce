@@ -4,14 +4,21 @@
   "description": "Multi-provider AI coding assistant for VS Code",
   "version": "0.3.0",
   "publisher": "agiworkforce",
-  "license": "PROPRIETARY",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "https://github.com/siddharthanagula3/agiworkforce"
   },
+  "bugs": {
+    "url": "https://github.com/siddharthanagula3/agiworkforce/issues"
+  },
+  "homepage": "https://agiworkforce.com",
   "engines": {
     "vscode": "^1.100.0"
   },
+  "extensionKind": [
+    "workspace"
+  ],
   "preview": true,
   "pricing": "Free",
   "galleryBanner": {
@@ -22,9 +29,7 @@
   "categories": [
     "AI",
     "Chat",
-    "Machine Learning",
-    "Programming Languages",
-    "Other"
+    "Machine Learning"
   ],
   "keywords": [
     "ai",
@@ -55,6 +60,7 @@
         "agiWorkforce.desktopBridge.port",
         "agiWorkforce.autoApplyFixes",
         "agiWorkforce.memory.enabled",
+        "agiWorkforce.telemetryEnabled",
         "agiWorkforce.telemetryEndpoint"
       ]
     }
@@ -287,6 +293,11 @@
         "command": "agi-workforce.rejectBatch",
         "title": "AGI Workforce: Reject Entire Patch Batch",
         "icon": "$(trash)"
+      },
+      {
+        "command": "agi-workforce.restoreRejectedDiffs",
+        "title": "AGI Workforce: Restore Discarded Changes",
+        "icon": "$(discard)"
       },
       {
         "command": "agi-workforce.showOriginalContext",
@@ -717,6 +728,50 @@
         {
           "command": "agi-workforce.codeReview",
           "when": "editorTextFocus"
+        },
+        {
+          "command": "agi-workforce.acceptBatch",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.rejectBatch",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.showOriginalContext",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.acceptDiff",
+          "when": "agi-workforce.hasDiff"
+        },
+        {
+          "command": "agi-workforce.rejectDiff",
+          "when": "agi-workforce.hasDiff"
+        },
+        {
+          "command": "agi-workforce.acceptAllDiffs",
+          "when": "agi-workforce.hasDiff"
+        },
+        {
+          "command": "agi-workforce.rejectAllDiffs",
+          "when": "agi-workforce.hasDiff"
+        },
+        {
+          "command": "agi-workforce.acceptCurrentDiff",
+          "when": "agi-workforce.hasDiff"
+        },
+        {
+          "command": "agi-workforce.rejectCurrentDiff",
+          "when": "agi-workforce.hasDiff"
+        },
+        {
+          "command": "agi-workforce.acceptAllDiffsGlobal",
+          "when": "agi-workforce.hasDiff"
+        },
+        {
+          "command": "agi-workforce.rejectAllDiffsGlobal",
+          "when": "agi-workforce.hasDiff"
         }
       ]
     },
@@ -762,6 +817,7 @@
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
           "default": false,
+          "scope": "machine",
           "description": "Send anonymous usage telemetry to help improve AGI Workforce"
         },
         "agiWorkforce.memory.enabled": {
@@ -859,6 +915,7 @@
         "agiWorkforce.telemetryEndpoint": {
           "type": "string",
           "default": "https://telemetry.agiworkforce.com/v1/events",
+          "scope": "machine",
           "description": "Endpoint URL for sending anonymous telemetry events"
         },
         "agiWorkforce.currentTier": {

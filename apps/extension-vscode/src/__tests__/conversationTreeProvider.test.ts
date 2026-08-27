@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import type { ThreadSummary } from '@agiworkforce/types';
 import {
+  ConversationTreeErrorItem,
   ConversationTreeItem,
   ConversationTreeProvider,
   isSameWorkspacePath,
@@ -166,6 +167,78 @@ describe('ConversationTreeProvider', () => {
     await provider.getThreads();
 
     await expect(provider.resolveThread('one')).rejects.toThrow('ownership metadata');
+  });
+
+  it('shows a listing failure as its own tree item instead of an empty history', async () => {
+    const failing = {
+      listThreads: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'AGI_CLI_NOT_FOUND: The AGI CLI could not be started. "agi" is not on the PATH this editor was launched with.',
+          ),
+        ),
+    };
+    const healthy = {
+      listThreads: vi.fn().mockResolvedValue({
+        threads: [thread('kept', '2026-07-14T00:00:00Z', '/workspace/b')],
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(
+        (cwd: string) => (cwd.endsWith('/a') ? failing : healthy) as unknown as LocalRuntimeClient,
+      ),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
+
+    const children = await provider.getChildren();
+
+    const failure = children.find(
+      (child): child is ConversationTreeErrorItem => child instanceof ConversationTreeErrorItem,
+    );
+    expect(failure).toBeDefined();
+    expect(failure?.folderName).toBe('a');
+    expect(failure?.reason).toContain('not on the PATH');
+    expect(failure?.reason).not.toContain('AGI_CLI_NOT_FOUND');
+    expect(failure?.contextValue).toBe('conversationListingFailure');
+    expect(children.filter((child) => child instanceof ConversationTreeItem)).toHaveLength(1);
+  });
+
+  it('surfaces a pool that refuses to hand out a runtime rather than swallowing it', async () => {
+    const pool = {
+      forWorkspace: vi.fn(() => {
+        throw new Error('AGI local runtime is restarting; retry after restart completes');
+      }),
+    } as unknown as LocalRuntimePool;
+    vscode.workspace.workspaceFolders = [
+      { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
+    ];
+    const provider = new ConversationTreeProvider(pool);
+
+    const children = await provider.getChildren();
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ConversationTreeErrorItem);
+    expect((children[0] as ConversationTreeErrorItem).reason).toContain('restarting');
+  });
+
+  it('clears the failure item once the listing succeeds again', async () => {
+    const runtime = {
+      listThreads: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('runtime handshake failed'))
+        .mockResolvedValue({ threads: [thread('one', '2026-07-14T00:00:00Z', '/workspace/a')] }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    vscode.workspace.workspaceFolders = [
+      { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
+    ];
+    const provider = new ConversationTreeProvider(pool);
+
+    expect(await provider.getChildren()).toHaveLength(1);
+    expect((await provider.getChildren())[0]).toBeInstanceOf(ConversationTreeItem);
   });
 
   it('rejects relative host cwd metadata even when it resolves to the owner path', () => {

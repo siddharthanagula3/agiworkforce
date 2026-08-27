@@ -193,10 +193,10 @@ export const Config = {
   },
 
   telemetryEnabled(): boolean {
-    return get<boolean>('telemetryEnabled', DEFAULTS.telemetryEnabled);
+    return getUserScoped<boolean>('telemetryEnabled', DEFAULTS.telemetryEnabled);
   },
   telemetryEndpoint(): string {
-    return get<string>('telemetryEndpoint', DEFAULTS.telemetryEndpoint);
+    return getUserScoped<string>('telemetryEndpoint', DEFAULTS.telemetryEndpoint);
   },
 
   currentTier(): string {

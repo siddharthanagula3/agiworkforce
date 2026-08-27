@@ -1600,6 +1600,89 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('leaves the needs-setup state when a retry finds a working runtime', async () => {
+    const harness = makeHarness({ localModelError: new Error('spawn agi ENOENT') });
+    await harness.manager.handleMessage({ type: 'ready' });
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'runtimeStatus',
+        payload: expect.objectContaining({ status: 'unavailable' }),
+      }),
+    );
+
+    harness.runtime.listLocalModels.mockResolvedValueOnce({ models: [] });
+    harness.posted.length = 0;
+    await harness.manager.handleMessage({ type: 'retryRuntime' });
+
+    expect(harness.posted[0]).toEqual({
+      type: 'runtimeStatus',
+      payload: { status: 'probing' },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'runtimeStatus',
+      payload: { status: 'ready' },
+    });
+  });
+
+  it('re-probes on a retry and reports the new failure rather than the stale one', async () => {
+    const harness = makeHarness({ localModelError: new Error('spawn agi ENOENT') });
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    harness.runtime.listLocalModels.mockRejectedValueOnce(
+      new Error('Installed AGI CLI returned an invalid developer-session handshake'),
+    );
+    harness.posted.length = 0;
+    await harness.manager.handleMessage({ type: 'retryRuntime' });
+
+    expect(harness.runtime.listLocalModels).toHaveBeenCalledTimes(2);
+    expect(harness.posted).toContainEqual({
+      type: 'runtimeStatus',
+      payload: {
+        status: 'unavailable',
+        message: 'Installed AGI CLI returned an invalid developer-session handshake',
+      },
+    });
+  });
+
+  it('clears the untrusted-workspace block once the host grants trust and re-probes', async () => {
+    const harness = makeHarness();
+    vscode.workspace.isTrusted = false;
+    await harness.manager.handleMessage({ type: 'ready' });
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'runtimeStatus',
+        payload: expect.objectContaining({ status: 'workspace-untrusted' }),
+      }),
+    );
+
+    vscode.workspace.isTrusted = true;
+    harness.posted.length = 0;
+    await harness.manager.refreshRuntimeStatus();
+
+    expect(harness.posted).toContainEqual({
+      type: 'runtimeStatus',
+      payload: { status: 'ready' },
+    });
+  });
+
+  it('unwraps the marked missing-binary error into user-facing recovery copy', async () => {
+    const harness = makeHarness({
+      localModelError: new Error(
+        'AGI_CLI_NOT_FOUND: The AGI CLI could not be started. "agi" is not on the PATH this editor was launched with. Install AGI CLI 1.7.1 or newer, then set agiWorkforce.cliPath to its full path or relaunch the editor from a shell where "agi" runs.',
+      ),
+    });
+
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    const status = harness.posted.find(
+      (message): message is Extract<ExtToWebviewMessage, { type: 'runtimeStatus' }> =>
+        message.type === 'runtimeStatus',
+    );
+    expect(status?.payload.message).not.toContain('AGI_CLI_NOT_FOUND');
+    expect(status?.payload.message).toContain('agiWorkforce.cliPath');
+    expect(status?.payload.message).toContain('1.7.1');
+  });
+
   it('preserves an actionable CLI protocol mismatch in the persistent runtime state', async () => {
     const mismatch =
       'Installed AGI CLI uses developer-session protocol 6; this extension requires exactly protocol 7. Install a compatible AGI CLI or update the extension.';

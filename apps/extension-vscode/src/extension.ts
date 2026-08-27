@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { Config } from './platform/config';
 import { activateDesktopBridge } from './features/desktop-bridge';
@@ -100,6 +99,16 @@ export function activate(context: vscode.ExtensionContext): void {
   const sidebarProvider = chatState?.sidebarProvider;
   const conversationTreeProvider = chatState?.conversationTreeProvider;
 
+  const refreshRuntimeSurfaces = (): void => {
+    sidebarProvider?.refreshRuntimeStatus();
+    ChatEditorPanel.refreshRuntimeStatus();
+    conversationTreeProvider?.refresh();
+  };
+  context.subscriptions.push(
+    vscode.workspace.onDidGrantWorkspaceTrust(refreshRuntimeSurfaces),
+    vscode.workspace.onDidChangeWorkspaceFolders(refreshRuntimeSurfaces),
+  );
+
   if (chatState !== undefined && providerState !== undefined) {
     try {
       setupCommands(context, {
@@ -152,13 +161,13 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.affectsConfiguration('agiWorkforce.cliPath')) {
         void localRuntimes
           .restartAll()
-          .then(() => conversationTreeProvider?.refresh())
           .catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(
               `AGI Workforce: Could not restart the local runtime after the CLI path changed — ${message}`,
             );
-          });
+          })
+          .finally(refreshRuntimeSurfaces);
       }
 
       if (
