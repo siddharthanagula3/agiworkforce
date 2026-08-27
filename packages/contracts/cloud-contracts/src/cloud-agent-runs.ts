@@ -33,6 +33,28 @@ export const CloudAgentPendingApprovalSchema = z.object({
     .max(32),
 });
 
+export const MAX_CLOUD_AGENT_PENDING_INPUT_REQUESTS_SERIALIZED_LENGTH = 16_000;
+
+// The paused model-driven connector calls a run is blocked on (MCP
+// `input_required`). `inputRequests` are the remote server's own, UNTRUSTED
+// field definitions the host has already bounded (count/size) before persisting;
+// a client renders them as a form and never treats them as instructions.
+export const CloudAgentPendingInputSchema = z.object({
+  requestedAt: z.string().datetime(),
+  toolCalls: z
+    .array(
+      z.object({
+        toolCallId: z.string().min(1).max(256),
+        name: z.string().min(1).max(512),
+        connectorId: z.string().min(1).max(256),
+        round: z.number().int().nonnegative(),
+        inputRequests: z.record(z.string(), z.unknown()),
+      }),
+    )
+    .min(1)
+    .max(32),
+});
+
 export const CloudAgentRunUsageSchema = z.object({
   providerCalls: z.number().int().min(0),
   inputTokens: z.number().int().min(0),
@@ -58,6 +80,7 @@ export const CloudAgentRunSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   pendingApproval: CloudAgentPendingApprovalSchema.optional(),
+  pendingInput: CloudAgentPendingInputSchema.optional(),
   usage: CloudAgentRunUsageSchema.optional(),
 });
 
@@ -80,6 +103,7 @@ export type CloudAgentOriginSurface = z.infer<typeof CloudAgentOriginSurfaceSche
 export type CloudAgentWorkMode = z.infer<typeof CloudAgentWorkModeSchema>;
 export type CloudAgentRun = z.infer<typeof CloudAgentRunSchema>;
 export type CloudAgentPendingApproval = z.infer<typeof CloudAgentPendingApprovalSchema>;
+export type CloudAgentPendingInput = z.infer<typeof CloudAgentPendingInputSchema>;
 export type CloudAgentRunUsage = z.infer<typeof CloudAgentRunUsageSchema>;
 
 export interface CloudAgentRunSnapshotPage {

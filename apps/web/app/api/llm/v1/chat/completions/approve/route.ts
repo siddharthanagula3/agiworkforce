@@ -37,7 +37,7 @@ import {
   CloudAgentApprovalDecisionError,
   type ClaimedCloudAgentApprovalCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
-import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
+import { runCloudAgentTurn } from '@/lib/workflows/start-cloud-agent-workflow';
 import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
@@ -278,9 +278,16 @@ async function handleToolApproval(request: NextRequest) {
 
   const toolApprovalPolicy = await loadToolApprovalPolicy(db, userId);
 
-  let workflow;
+  // Transport, not authorization. Every gate above still stands — auth, managed
+  // compute, organization policy, spend limit, the tenant-scoped checkpoint
+  // claim, and the connector-permission override applied to `enforcedApprovals`
+  // — and none of them are reachable from here. What changed (AGI-39) is that a
+  // Workflow-platform outage, or an engaged AGI_DURABLE_INITIAL_TURNS
+  // kill-switch, no longer turns an authorized approval into a 503: the same
+  // resume runs request-scoped instead, and only detachability is lost.
+  let turn;
   try {
-    workflow = await startCloudAgentWorkflowExecution({
+    turn = await runCloudAgentTurn({
       db,
       runId: claim.checkpoint.runId,
       userId,
@@ -289,6 +296,11 @@ async function handleToolApproval(request: NextRequest) {
       approvalMode: 'manual',
       toolApprovalPolicy,
       connectorPermissions,
+      onDurableUnavailable: 'inline',
+      signal: request.signal,
+      completionReason: 'tool_loop_resume_completed',
+      cancellationReason: 'client_cancelled_tool_loop_resume',
+      hasConnectorTools: mcpTools.some((tool) => tool.origin === 'connector'),
       continuation: {
         eventSessionId: claim.checkpoint.sessionId,
         eventTurnId: claim.checkpoint.turnId,
@@ -315,14 +327,18 @@ async function handleToolApproval(request: NextRequest) {
       }).catch(() => undefined);
     }
     await releaseClaim(db, userId, claim);
+    // Reaching here now means BOTH transports refused, not merely the durable
+    // one -- `onDurableUnavailable: 'inline'` already absorbed a Workflow-platform
+    // failure. The lease is released so the approval stays claimable and the user
+    // can retry rather than being stranded.
     logger.error(
       { error, userId, requestId: processed.requestId, runId: claim.checkpoint.runId },
-      'Durable approval continuation could not be started',
+      'Approval continuation could not be started on either transport',
     );
     return NextResponse.json(
       {
         error: {
-          message: 'Durable agent continuation is temporarily unavailable.',
+          message: 'Agent continuation is temporarily unavailable.',
           type: 'server_error',
           code: 'agent_workflow_unavailable',
         },
@@ -336,7 +352,6 @@ async function handleToolApproval(request: NextRequest) {
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
     'X-AGI-Tool-Loop': 'resume',
-    'X-AGI-Workflow-Run-Id': workflow.workflowRunId,
     'X-AGI-Agent-Run-Id': claim.checkpoint.runId,
     'X-AGI-Agent-Run-URL': `/api/llm/v1/chat/completions/runs/${encodeURIComponent(
       claim.checkpoint.runId,
@@ -344,11 +359,17 @@ async function handleToolApproval(request: NextRequest) {
     ...getCorsHeaders(request),
     ...getSecurityHeaders(),
   };
+  // Only a durable turn has a workflow run to reattach to. Advertising one for a
+  // degraded turn would send the client chasing a run that does not exist.
+  if (turn.workflowRunId) {
+    streamHeaders['X-AGI-Workflow-Run-Id'] = turn.workflowRunId;
+  }
+  streamHeaders['X-AGI-Agent-Transport'] = turn.transport;
   if (processed.quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
   }
 
-  return new NextResponse(workflow.readable, { headers: streamHeaders });
+  return new NextResponse(turn.readable, { headers: streamHeaders });
 }
 
 export const POST = withCorsRoute(withErrorHandler(handleToolApproval));

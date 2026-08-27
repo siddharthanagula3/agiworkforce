@@ -6,7 +6,10 @@
  *   2. Stream the provider response.
  *   3. On `tool_calls` finish_reason, pause the stream, execute the tools,
  *      append `tool` result messages, and re-invoke the model.
- *   4. Repeat up to `maxSteps` times.
+ *   4. Repeat up to `maxSteps` times. `maxSteps` is a CUMULATIVE budget: a resumed
+ *      invocation carries `initialCompletedSteps` forward. Exhausting it pauses the
+ *      run on a `ToolLoopStepBudgetCheckpoint` (whenever the caller can store one)
+ *      instead of killing it; only a resume that raises `maxSteps` continues.
  *
  * REUSE:
  *   - `buildToolLoopStream` (tool-loop-anthropic.ts) -- table-driven per-provider
@@ -52,6 +55,7 @@ import type {
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
+import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
@@ -148,6 +152,7 @@ import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
+import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import { applyFreeTrialProviderBudget } from '@/lib/services/free-trial-service';
 import {
   reserveManagedUsageProviderStep,
@@ -205,16 +210,37 @@ export type ConnectorToolExecutor = (
   serverId: string,
   toolName: string,
   args: Record<string, unknown>,
-  options?: { signal?: AbortSignal },
-) => Promise<{ handled: boolean; content: string; isError: boolean }>;
+  options?: {
+    signal?: AbortSignal;
+    allowInputRequired?: boolean;
+    inputResponses?: Record<string, unknown>;
+    requestState?: string;
+  },
+) => Promise<{
+  handled: boolean;
+  content: string;
+  isError: boolean;
+  interactiveCard?: InteractiveCard;
+  inputRequired?: McpInputRequiredState;
+}>;
 
 export interface ToolApprovalDecision {
   toolCallId: string;
   decision: 'approved' | 'rejected';
 }
 
+export interface ResumeInputResponse {
+  toolCallId: string;
+  inputResponses: Record<string, unknown>;
+  requestState?: string;
+  /** The attempt round to run next (the paused round plus one). */
+  round: number;
+}
+
 export interface ResumeApproval {
-  approvals: ToolApprovalDecision[];
+  approvals?: ToolApprovalDecision[];
+  /** Responses to a prior MCP `input_required` (MRTR) pause, per paused call. */
+  inputResponses?: ResumeInputResponse[];
   guidance?: string;
 }
 
@@ -232,11 +258,56 @@ export interface ToolLoopApprovalCheckpoint {
   }>;
 }
 
+export interface ToolLoopInputCheckpoint {
+  sessionId: string;
+  turnId: string;
+  nextEventSequence: number;
+  completedSteps: number;
+  events: AgentEventEnvelope[];
+  messages: ProcessedRequest['llmRequest']['messages'];
+  pendingToolCalls: Array<{
+    id: string;
+    qualifiedName: string;
+    args: Record<string, unknown>;
+  }>;
+  /** UNTRUSTED, host-bounded remote input-request definitions, per tool call. */
+  inputRequests: Record<string, Record<string, unknown>>;
+  /** Host-owned per-call continuation metadata ({ requestState?, round }). */
+  requestState: Record<string, { requestState?: string; round: number }>;
+}
+
 export interface ToolLoopInvocationCheckpoint {
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
   completedSteps: number;
+  messages: ProcessedRequest['llmRequest']['messages'];
+}
+
+/**
+ * Emitted when the run exhausts its CUMULATIVE step budget.
+ *
+ * This is deliberately NOT a `ToolLoopInvocationCheckpoint`. The wall-clock
+ * budget is per-invocation, so its checkpoint may be continued automatically --
+ * the next invocation starts with a fresh clock and makes progress. The step
+ * budget spans invocations (`initialCompletedSteps` carries forward), so an
+ * automatic continuation would fail the very first loop test and checkpoint
+ * again, forever. A run that pauses here is therefore left in `awaiting_input`
+ * and resumes only on an explicit user decision that RAISES the budget: the
+ * resuming caller must pass `maxSteps` greater than `stepBudget` alongside
+ * `initialCompletedSteps: completedSteps`. A resume that grants nothing is
+ * refused with the terminal `max_agent_steps_reached` error rather than paused
+ * a second time, so the pause can never become a spin.
+ */
+export interface ToolLoopStepBudgetCheckpoint {
+  sessionId: string;
+  turnId: string;
+  nextEventSequence: number;
+  /** Steps already spent. Equals `stepBudget` at the moment of the pause. */
+  completedSteps: number;
+  /** The exhausted cumulative budget. A resume must grant more than this. */
+  stepBudget: number;
+  events: AgentEventEnvelope[];
   messages: ProcessedRequest['llmRequest']['messages'];
 }
 
@@ -271,6 +342,8 @@ export interface ToolLoopToolResult {
   sources?: FetchedSource[];
   pngResults?: string[];
   generatedFiles?: GeneratedFileWire[];
+  /** Set when a connector call paused for additional input (MCP input_required). */
+  inputRequired?: McpInputRequiredState;
 }
 
 export interface ToolLoopToolExecution {
@@ -296,7 +369,15 @@ export interface ToolLoopOptions {
   eventTurnId?: string;
   initialEventSequence?: number;
   onApprovalCheckpoint?: (checkpoint: ToolLoopApprovalCheckpoint) => Promise<void>;
+  onInputCheckpoint?: (checkpoint: ToolLoopInputCheckpoint) => Promise<void>;
   onInvocationCheckpoint?: (checkpoint: ToolLoopInvocationCheckpoint) => Promise<void>;
+  /**
+   * Persist the run when the cumulative step budget is spent. Supplying it
+   * turns the step-limit exit from a permanent failure into a durable pause;
+   * omitting it keeps the terminal `max_agent_steps_reached` error for callers
+   * with nowhere to store a checkpoint.
+   */
+  onStepBudgetCheckpoint?: (checkpoint: ToolLoopStepBudgetCheckpoint) => Promise<void>;
   initialCompletedSteps?: number;
   invocationContinuation?: boolean;
   providerExecutor?: ToolLoopProviderExecutor;
@@ -572,11 +653,72 @@ function toolApprovalRequestEvent(
   });
 }
 
+function toolInputRequestEvent(
+  toolId: string,
+  toolName: string,
+  connectorId: string,
+  inputRequests: Record<string, unknown>,
+  round: number,
+  responseModel: string,
+): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_tool_input_request: {
+            tool_call_id: toolId,
+            name: toolName,
+            connector_id: connectorId,
+            input_requests: inputRequests,
+            round,
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
 function interactiveCardEvent(card: InteractiveCard, responseModel: string): SseLine {
   return sseData({
     choices: [{ delta: { x_interactive_card: { card } }, index: 0 }],
     model: responseModel,
   });
+}
+
+const MAX_INPUT_REQUEST_ENTRIES = 32;
+const MAX_INPUT_REQUESTS_SERIALIZED_BYTES = 16_000;
+
+const MCP_INPUT_PAUSE_ENV = 'AGI_MCP_INPUT_PAUSE';
+
+// Off unless explicitly enabled: the server half of the MCP `input_required`
+// pause is complete (checkpoint, `input-requested` events, /resume-input), but
+// no client surface calls /resume-input yet, so a real pause would strand the
+// turn with no way to answer it. Until a client ships, an `input_required`
+// result takes the fail-safe branch below and the turn finishes cleanly.
+function isMcpInputPauseEnabled(): boolean {
+  return process.env[MCP_INPUT_PAUSE_ENV] === '1';
+}
+
+// Remote `input_required` definitions are UNTRUSTED. Only a JSON object of a
+// bounded field count and serialized size is safe to persist, stream, and later
+// render as a form; anything else settles the call rather than pausing on it.
+function boundedInputRequests(raw: unknown): Record<string, unknown> | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const entryCount = Object.keys(record).length;
+  if (entryCount < 1 || entryCount > MAX_INPUT_REQUEST_ENTRIES) return null;
+  if (JSON.stringify(record).length > MAX_INPUT_REQUESTS_SERIALIZED_BYTES) return null;
+  return record;
+}
+
+function inputRequiredFailSafeMessage(qualifiedName: string): string {
+  return (
+    `Tool "${qualifiedName}" paused asking for additional input, but this run cannot collect it ` +
+    '(no interactive session). The call was not completed. Do not retry it; continue without it ' +
+    'or tell the user it needs input in an interactive session.'
+  );
 }
 
 function generatedFilesEvent(files: GeneratedFileWire[], responseModel: string): SseLine {
@@ -1045,6 +1187,9 @@ async function runMcpTool(
     model: string;
     webSearchMaxResults?: number;
     signal?: AbortSignal;
+    allowInputRequired?: boolean;
+    inputResponses?: Record<string, unknown>;
+    requestState?: string;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -1192,10 +1337,28 @@ async function runMcpTool(
         parsed.serverId,
         parsed.toolName,
         toolCall.args,
-        executionContext?.signal ? { signal: executionContext.signal } : undefined,
+        {
+          ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
+          ...(executionContext?.allowInputRequired ? { allowInputRequired: true } : {}),
+          ...(executionContext?.inputResponses
+            ? { inputResponses: executionContext.inputResponses }
+            : {}),
+          ...(executionContext?.requestState
+            ? { requestState: executionContext.requestState }
+            : {}),
+        },
       );
       if (connectorResult.handled) {
-        return { content: capOutput(connectorResult.content), isError: connectorResult.isError };
+        return {
+          content: capOutput(connectorResult.content),
+          isError: connectorResult.isError,
+          ...(connectorResult.interactiveCard
+            ? { interactiveCard: connectorResult.interactiveCard }
+            : {}),
+          ...(connectorResult.inputRequired
+            ? { inputRequired: connectorResult.inputRequired }
+            : {}),
+        };
       }
     } catch (err) {
       return { content: capOutput(toolErrorContent(err)), isError: true };
@@ -1208,6 +1371,21 @@ async function runMcpTool(
           signal: executionContext.signal,
         })
       : await executeWebMcpTool(parsed.serverId, parsed.toolName, toolCall.args);
+    if (
+      result.task &&
+      (!executionContext?.userId ||
+        !(await bindMcpTask({
+          userId: executionContext.userId,
+          connectorId: parsed.serverId,
+          task: result.task,
+        })))
+    ) {
+      return {
+        content:
+          'The MCP server started a task, but its secure task binding could not be persisted.',
+        isError: true,
+      };
+    }
     const text = result.content
       .map((block) => {
         if (block.type === 'text') return block.text;
@@ -1218,7 +1396,47 @@ async function runMcpTool(
       })
       .filter(Boolean)
       .join('\n');
-    return { content: capOutput(text || '(no output)'), isError: result.isError === true };
+    let interactiveCard: InteractiveCard | undefined;
+    if (result.app && executionContext?.userId) {
+      const payloadId = await saveMcpAppPayload({
+        userId: executionContext.userId,
+        connectorId: parsed.serverId,
+        resourceUri: result.app.resourceUri,
+        toolName: parsed.toolName,
+        toolInput: toolCall.args,
+        toolResult: result,
+      });
+      if (payloadId) {
+        interactiveCard = {
+          schemaVersion: 1,
+          cardId: `mcp-app-${payloadId}`,
+          kind: 'mcp-app.v1',
+          recognized: true,
+          createdAt: new Date().toISOString(),
+          fallback: {
+            headline: 'Interactive connector result',
+            text: `${parsed.serverId} returned an MCP App. Open this message in a compatible web client to interact with it.`,
+          },
+          producedBy: {
+            toolCallId: payloadId,
+            toolName: toolCall.qualifiedName,
+          },
+          body: {
+            payloadId,
+            connectorId: parsed.serverId,
+            toolName: parsed.toolName,
+            resourceUri: result.app.resourceUri,
+          },
+        };
+      }
+    }
+    return {
+      content: capOutput(
+        text || (result.task ? `MCP task started: ${result.task.taskId}` : '(no output)'),
+      ),
+      isError: result.isError === true,
+      ...(interactiveCard ? { interactiveCard } : {}),
+    };
   } catch (err) {
     return { content: capOutput(toolErrorContent(err)), isError: true };
   }
@@ -1301,6 +1519,14 @@ export async function* runToolLoop(
     : options.invocationContinuation
       ? 'running'
       : undefined;
+
+  // Attended runs opt connector calls into MCP `input_required`. An unattended
+  // run (a scheduled task, no human to answer) must never invite a pause it can
+  // only fail-safe out of, so it never sets this.
+  const allowConnectorInputRequired = !unattended && isMcpInputPauseEnabled();
+  // Set by runAndStreamToolCalls when a connector call paused for input and the
+  // loop suspended; every caller returns after seeing it.
+  let suspendedForInput = false;
 
   function taskStateEvent(state: AgentTaskState, summary: string): SseLine {
     const previousState = taskState;
@@ -1645,7 +1871,13 @@ export async function* runToolLoop(
     yield encoder.encode(sseDone());
   }
 
-  async function* runAndStreamToolCalls(calls: PendingToolCall[]): AsyncGenerator<Uint8Array> {
+  async function* runAndStreamToolCalls(
+    calls: PendingToolCall[],
+    suspendContext: {
+      completedSteps: number;
+      resumeInput?: Map<string, ResumeInputResponse>;
+    },
+  ): AsyncGenerator<Uint8Array> {
     const readOnly = calls.filter((tc) => isReadOnlyTool(tc.qualifiedName));
     const mutating = calls.filter((tc) => !isReadOnlyTool(tc.qualifiedName));
 
@@ -1680,9 +1912,11 @@ export async function* runToolLoop(
       pngResults?: string[];
       generatedFiles?: GeneratedFileWire[];
       interactiveCard?: InteractiveCard;
+      inputRequired?: McpInputRequiredState;
     }[] = [];
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
+      const resumeInput = suspendContext.resumeInput?.get(tc.id);
       if (isWebSearchTool(tc.qualifiedName)) {
         webSearchCallsUsed += 1;
         if (webSearchCallsUsed > webSearchCallBudget) {
@@ -1708,10 +1942,19 @@ export async function* runToolLoop(
           model: responseModel,
           webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
           ...(options.signal ? { signal: options.signal } : {}),
+          ...(allowConnectorInputRequired ? { allowInputRequired: true } : {}),
+          ...(resumeInput ? { inputResponses: resumeInput.inputResponses } : {}),
+          ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
         });
+      // Each MRTR round is a distinct durable operation: re-running the same
+      // paused call must not return the cached input_required receipt, so the
+      // resume round scopes the idempotency key.
+      const operationKey = resumeInput
+        ? `tool:${tc.id}:input:${resumeInput.round}`
+        : `tool:${tc.id}`;
       const run = options.toolExecutor
         ? options.toolExecutor({
-            operationKey: `tool:${tc.id}`,
+            operationKey,
             retrySafety: resolveToolRetrySafety(tc.qualifiedName),
             toolCall: tc,
             execute,
@@ -1743,6 +1986,13 @@ export async function* runToolLoop(
       if (r.pngResults && r.pngResults.length > 0) turnPngResults.push(...r.pngResults);
     }
 
+    const inputRequiredCalls: {
+      tc: PendingToolCall;
+      inputRequired: McpInputRequiredState;
+      boundedRequests: Record<string, unknown>;
+      round: number;
+    }[] = [];
+
     let sourcesAdded = false;
     let searchSourcesAdded = false;
     for (const {
@@ -1753,7 +2003,37 @@ export async function* runToolLoop(
       sources,
       generatedFiles,
       interactiveCard,
+      inputRequired,
     } of results) {
+      if (inputRequired) {
+        const boundedRequests = boundedInputRequests(inputRequired.inputRequests);
+        const round = suspendContext.resumeInput?.get(tc.id)?.round ?? 0;
+        // Suspend only for an attended run with definitions small enough to
+        // present safely; otherwise settle the call as an error and continue.
+        if (allowConnectorInputRequired && boundedRequests) {
+          inputRequiredCalls.push({ tc, inputRequired, boundedRequests, round });
+          continue;
+        }
+        const failText = boundedRequests
+          ? inputRequiredFailSafeMessage(tc.qualifiedName)
+          : `Tool "${tc.qualifiedName}" asked for additional input, but its request exceeded the safe size limit and was not presented. The call was not completed.`;
+        yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'failed', responseModel));
+        yield encoder.encode(
+          toolResultEvent(tc.id, tc.qualifiedName, failText, true, responseModel),
+        );
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'tool-execution-end',
+            toolCallId: tc.id,
+            name: tc.qualifiedName,
+            output: toAgentEventJson(failText),
+            isError: true,
+            elapsedMs: Math.max(0, Date.now() - (toolStartedAt.get(tc.id) ?? Date.now())),
+          }),
+        );
+        messages.push({ role: 'tool', content: failText, tool_call_id: tc.id });
+        continue;
+      }
       if (!isError && toolAcceptsUntrustedContent(tc.qualifiedName)) {
         untrustedContentInContext = true;
       }
@@ -1847,6 +2127,81 @@ export async function* runToolLoop(
     }
     if (searchSourcesAdded) {
       yield encoder.encode(searchResultsEvent(searchedSources, responseModel));
+    }
+
+    // A connector paused for input (MCP input_required). Suspend on the exact
+    // same durable boundary as an approval: emit input-requested per paused
+    // call, flip to awaiting_input, pause, checkpoint, then end the stream. No
+    // role:'tool' result was appended for these calls; the identical call runs
+    // again on resume with the collected responses.
+    if (inputRequiredCalls.length > 0) {
+      const inputChunks: Uint8Array[] = [];
+      const inputEvents: AgentEventEnvelope[] = [];
+      const inputRequestsMap: Record<string, Record<string, unknown>> = {};
+      const requestStateMap: Record<string, { requestState?: string; round: number }> = {};
+      for (const { tc, inputRequired, boundedRequests, round } of inputRequiredCalls) {
+        const parsedName = parseQualifiedToolName(tc.qualifiedName);
+        const connectorId = parsedName?.serverId ?? tc.qualifiedName;
+        inputChunks.push(
+          encoder.encode(
+            toolInputRequestEvent(
+              tc.id,
+              tc.qualifiedName,
+              connectorId,
+              boundedRequests,
+              round,
+              responseModel,
+            ),
+          ),
+        );
+        const emitted = eventStream.emitWithEnvelope({
+          type: 'input-requested',
+          toolCallId: tc.id,
+          connectorId,
+          toolName: parsedName?.toolName ?? tc.qualifiedName,
+          inputRequests: toAgentEventJson(boundedRequests),
+          ...(inputRequired.requestState ? { requestState: inputRequired.requestState } : {}),
+          round,
+        });
+        inputEvents.push(emitted.envelope);
+        inputChunks.push(encoder.encode(emitted.sse));
+        inputRequestsMap[tc.id] = boundedRequests;
+        requestStateMap[tc.id] = {
+          ...(inputRequired.requestState ? { requestState: inputRequired.requestState } : {}),
+          round,
+        };
+      }
+      const previousState = taskState;
+      taskState = 'awaiting_input';
+      const stateEmitted = eventStream.emitWithEnvelope({
+        type: 'task-state-changed',
+        taskId,
+        state: 'awaiting_input',
+        ...(previousState !== undefined ? { previousState } : {}),
+        summary: 'The agent needs additional input before it can continue.',
+      });
+      inputEvents.push(stateEmitted.envelope);
+      inputChunks.push(encoder.encode(stateEmitted.sse));
+      const pausedEmitted = eventStream.emitWithEnvelope({ type: 'lifecycle', phase: 'paused' });
+      inputEvents.push(pausedEmitted.envelope);
+      inputChunks.push(encoder.encode(pausedEmitted.sse));
+
+      await options.onInputCheckpoint?.({
+        sessionId,
+        turnId,
+        nextEventSequence: eventStream.nextSequence(),
+        completedSteps: suspendContext.completedSteps,
+        events: inputEvents,
+        messages: messages.map((message) => ({ ...message })),
+        pendingToolCalls: inputRequiredCalls.map(({ tc }) => ({ ...tc, args: { ...tc.args } })),
+        inputRequests: inputRequestsMap,
+        requestState: requestStateMap,
+      });
+
+      for (const chunk of inputChunks) yield chunk;
+      yield encoder.encode(sseDone());
+      suspendedForInput = true;
+      return;
     }
   }
 
@@ -1949,13 +2304,21 @@ export async function* runToolLoop(
 
       const pendingIds = new Set(pending.map((p) => p.id));
 
-      for (const a of options.resume.approvals) {
-        if (!pendingIds.has(a.toolCallId)) {
+      const resumeApprovals = options.resume.approvals ?? [];
+      const resumeInputByCallId = new Map(
+        (options.resume.inputResponses ?? []).map((entry) => [entry.toolCallId, entry] as const),
+      );
+
+      for (const referencedId of [
+        ...resumeApprovals.map((a) => a.toolCallId),
+        ...resumeInputByCallId.keys(),
+      ]) {
+        if (!pendingIds.has(referencedId)) {
           yield encoder.encode(
             eventStream.emit({
               type: 'error',
-              message: 'Approval referenced an unknown tool call.',
-              code: 'approval_resume_unknown_tool_call',
+              message: 'Resume referenced an unknown tool call.',
+              code: 'tool_resume_unknown_tool_call',
               retryable: false,
             }),
           );
@@ -1963,7 +2326,7 @@ export async function* runToolLoop(
             sseData({
               choices: [
                 {
-                  delta: { content: '\n\nError: approval references an unknown tool call.' },
+                  delta: { content: '\n\nError: resume references an unknown tool call.' },
                   index: 0,
                 },
               ],
@@ -1980,13 +2343,35 @@ export async function* runToolLoop(
           .filter((m) => m.role === 'tool' && typeof m.tool_call_id === 'string')
           .map((m) => m.tool_call_id),
       );
-      const approvalById = new Map(
-        options.resume.approvals.map((a) => [a.toolCallId, a.decision] as const),
-      );
+      const approvalById = new Map(resumeApprovals.map((a) => [a.toolCallId, a.decision] as const));
 
       const toRun: PendingToolCall[] = [];
       for (const p of pending) {
         if (alreadyResolved.has(p.id)) continue;
+        if (resumeInputByCallId.has(p.id)) {
+          // An MRTR round: this call already ran and paused for input. Re-run the
+          // identical call with the collected responses, still enforcing the live
+          // permission store — a tool blocked since the pause must not run.
+          yield encoder.encode(
+            eventStream.emit({ type: 'input-resolved', toolCallId: p.id, outcome: 'resolved' }),
+          );
+          if (connectorPermissions.isDenied(p.qualifiedName)) {
+            const content = blockedToolResultMessage(p.qualifiedName);
+            yield encoder.encode(
+              toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
+            );
+            messages.push({ role: 'tool', content, tool_call_id: p.id });
+          } else if (isToolOffered(p.qualifiedName, mcpTools, availableTools)) {
+            toRun.push(p);
+          } else {
+            const content = `Tool "${p.qualifiedName}" is not available and was not executed.`;
+            yield encoder.encode(
+              toolResultEvent(p.id, p.qualifiedName, content, true, responseModel),
+            );
+            messages.push({ role: 'tool', content, tool_call_id: p.id });
+          }
+          continue;
+        }
         const decision = approvalById.get(p.id);
         if (decision) {
           yield encoder.encode(
@@ -2031,7 +2416,11 @@ export async function* runToolLoop(
           yield* flushTerminal('cancelled');
           return;
         }
-        yield* runAndStreamToolCalls(toRun);
+        yield* runAndStreamToolCalls(toRun, {
+          completedSteps: Math.max(0, Math.trunc(options.initialCompletedSteps ?? 0)),
+          resumeInput: resumeInputByCallId,
+        });
+        if (suspendedForInput) return;
       }
 
       // The guidance turn must land after every tool result: providers reject a
@@ -2054,6 +2443,11 @@ export async function* runToolLoop(
     }
 
     let step = Math.max(0, Math.trunc(options.initialCompletedSteps ?? 0));
+    // A resume that carried the spent step count forward WITHOUT raising
+    // `maxSteps` cannot advance: the loop test below fails on entry. Pausing
+    // such a run again would hand the caller the same dead resume forever, so
+    // it falls through to the terminal error instead of checkpointing twice.
+    const resumedWithoutStepBudget = step >= maxSteps;
     while (step < maxSteps) {
       if (await shouldStopForCancellation()) {
         yield* flushTerminal('cancelled');
@@ -2349,7 +2743,8 @@ export async function* runToolLoop(
       }
 
       if (autoRunCalls.length > 0) {
-        yield* runAndStreamToolCalls(autoRunCalls);
+        yield* runAndStreamToolCalls(autoRunCalls, { completedSteps: step });
+        if (suspendedForInput) return;
         if (
           mapSearchBatchCompleted &&
           autoRunCalls.every((call) => isMapSearchTool(call.qualifiedName))
@@ -2434,8 +2829,65 @@ export async function* runToolLoop(
       // Continue to next step.
     }
 
+    // The cumulative step budget is spent. Its sibling exit above -- the
+    // per-invocation wall-clock budget -- checkpoints and lets the caller
+    // continue automatically; this one must not, because the budget carries
+    // across invocations and an automatic continuation would re-hit the limit
+    // immediately. So the run pauses durably in `awaiting_input` instead of
+    // dying, and only an explicit decision that raises `maxSteps` resumes it.
+    if (options.onStepBudgetCheckpoint && !resumedWithoutStepBudget) {
+      const budgetChunks: Uint8Array[] = [];
+      const budgetEvents: AgentEventEnvelope[] = [];
+      for (const line of await harvestGeneratedFilesEvents()) {
+        budgetChunks.push(encoder.encode(line));
+      }
+      const noticeEmitted = eventStream.emitWithEnvelope({
+        type: 'progress-update',
+        progressId: `step-budget:${turnId}`,
+        summary: `Paused at the ${maxSteps}-step execution limit`,
+        detail:
+          'The agent spent every step in its execution budget. The work so far is saved -- ' +
+          'continue the run to grant more steps.',
+        status: 'completed',
+      });
+      budgetEvents.push(noticeEmitted.envelope);
+      budgetChunks.push(encoder.encode(noticeEmitted.sse));
+      const previousState = taskState;
+      taskState = 'awaiting_input';
+      const stateEmitted = eventStream.emitWithEnvelope({
+        type: 'task-state-changed',
+        taskId,
+        state: 'awaiting_input',
+        ...(previousState !== undefined ? { previousState } : {}),
+        summary: 'The agent reached its step limit and needs a decision before it can continue.',
+      });
+      budgetEvents.push(stateEmitted.envelope);
+      budgetChunks.push(encoder.encode(stateEmitted.sse));
+      const pausedEmitted = eventStream.emitWithEnvelope({ type: 'lifecycle', phase: 'paused' });
+      budgetEvents.push(pausedEmitted.envelope);
+      budgetChunks.push(encoder.encode(pausedEmitted.sse));
+
+      logger.warn(
+        { maxSteps, completedSteps: step, provider: processed.provider },
+        '[tool-loop] step budget reached without terminal stop -- pausing for a step-budget decision',
+      );
+      await options.onStepBudgetCheckpoint({
+        sessionId,
+        turnId,
+        nextEventSequence: eventStream.nextSequence(),
+        completedSteps: step,
+        stepBudget: maxSteps,
+        events: budgetEvents,
+        messages: messages.map((message) => ({ ...message })),
+      });
+
+      for (const chunk of budgetChunks) yield chunk;
+      yield encoder.encode(sseDone());
+      return;
+    }
+
     logger.warn(
-      { maxSteps, provider: processed.provider },
+      { maxSteps, resumedWithoutStepBudget, provider: processed.provider },
       '[tool-loop] max steps reached without terminal stop',
     );
     yield encoder.encode(

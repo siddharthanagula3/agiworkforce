@@ -8,7 +8,7 @@ import {
 
 function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     sessionId: 'session-1',
     turnId: 'turn-1',
     sequence,

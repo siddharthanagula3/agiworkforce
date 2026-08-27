@@ -124,6 +124,8 @@ export function agentEventToStreamChunk(event: AgentEvent): StreamChunk | null {
     case 'source-list':
     case 'approval-requested':
     case 'approval-resolved':
+    case 'input-requested':
+    case 'input-resolved':
     case 'artifact-produced':
     case 'context-compacted':
     case 'task-state-changed':

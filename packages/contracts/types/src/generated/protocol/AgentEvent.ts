@@ -4,6 +4,8 @@ import type { AgentEventApprovalResolved } from './AgentEventApprovalResolved';
 import type { AgentEventArtifactProduced } from './AgentEventArtifactProduced';
 import type { AgentEventContextCompacted } from './AgentEventContextCompacted';
 import type { AgentEventError } from './AgentEventError';
+import type { AgentEventInputRequested } from './AgentEventInputRequested';
+import type { AgentEventInputResolved } from './AgentEventInputResolved';
 import type { AgentEventLifecycle } from './AgentEventLifecycle';
 import type { AgentEventProgressUpdate } from './AgentEventProgressUpdate';
 import type { AgentEventReasoningDelta } from './AgentEventReasoningDelta';
@@ -43,6 +45,8 @@ export type AgentEvent =
   | ({ type: 'source-list' } & AgentEventSourceList)
   | ({ type: 'approval-requested' } & AgentEventApprovalRequested)
   | ({ type: 'approval-resolved' } & AgentEventApprovalResolved)
+  | ({ type: 'input-requested' } & AgentEventInputRequested)
+  | ({ type: 'input-resolved' } & AgentEventInputResolved)
   | ({ type: 'artifact-produced' } & AgentEventArtifactProduced)
   | ({ type: 'context-compacted' } & AgentEventContextCompacted)
   | ({ type: 'task-state-changed' } & AgentTaskStateChanged);

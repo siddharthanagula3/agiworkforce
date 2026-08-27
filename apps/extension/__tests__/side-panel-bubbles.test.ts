@@ -169,7 +169,7 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
   it('renders a generated artifact as an authenticated AGI open/download action', () => {
     const messages: SidePanelChatMessage[] = [];
     const assistant = applyCanonicalAgentEvent(messages, 'stream-1', {
-      schemaVersion: 3,
+      schemaVersion: 4,
       sessionId: 'session-1',
       turnId: 'turn-1',
       sequence: 1,
@@ -192,7 +192,7 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
   it('renders an honest unavailable state for a non-web artifact URI', () => {
     const messages: SidePanelChatMessage[] = [];
     const assistant = applyCanonicalAgentEvent(messages, 'stream-2', {
-      schemaVersion: 3,
+      schemaVersion: 4,
       sessionId: 'session-1',
       turnId: 'turn-2',
       sequence: 1,
@@ -214,7 +214,7 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
   it('renders actionable approve and decline controls for a managed tool boundary', () => {
     const messages: SidePanelChatMessage[] = [];
     const assistant = applyCanonicalAgentEvent(messages, 'stream-3', {
-      schemaVersion: 3,
+      schemaVersion: 4,
       sessionId: 'session-1',
       turnId: 'turn-3',
       sequence: 1,

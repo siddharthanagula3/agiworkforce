@@ -25,6 +25,22 @@ import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 
 export const runtime = 'nodejs';
 
+/**
+ * Same budget the managed agent stream asks for in
+ * app/api/llm/v1/chat/completions/route.ts — the longest this codebase declares.
+ *
+ * This is the OUTER budget, and the agent loop's own budget now sits under it:
+ * cloud-code-agent-service.ts derives CLOUD_CODE_AGENT_TURN_BUDGET_MS from this
+ * number minus a teardown reserve, so a long turn ends at the loop's `timeout`
+ * stop reason with time left to settle its reservation, write its terminal row
+ * and pause its sandbox. It used to be the other way round — the loop asked for
+ * 600s under a 300s ceiling, which made its own guard unreachable and left the
+ * platform kill, which runs no unwind code at all, as the only thing that ended
+ * a long turn. Next.js needs this to be a literal, so the two are kept in step
+ * by hand; change one and change the other.
+ */
+export const maxDuration = 300;
+
 const MAX_GOAL_LENGTH = 8000;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };

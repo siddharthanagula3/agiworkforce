@@ -153,7 +153,7 @@ describe('resolveToolApproval — durable server-owned checkpoint', () => {
 
   it('resumes a recursive approval with the same run id and no transcript replay', async () => {
     const activityBase = {
-      schemaVersion: 3 as const,
+      schemaVersion: 4 as const,
       sessionId: 'session-approval-1',
       turnId: 'turn-approval-1',
     };

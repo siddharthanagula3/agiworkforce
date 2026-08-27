@@ -251,7 +251,7 @@ describe('cloud send: canonical agent activity', () => {
   it('projects the validated event stream into durable message metadata', async () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       const base = {
-        schemaVersion: 3 as const,
+        schemaVersion: 4 as const,
         sessionId: 'session-mobile-activity',
         turnId: 'turn-mobile-activity',
       };
@@ -341,7 +341,7 @@ describe('cloud send: canonical agent activity', () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onDelta({
         x_agent_event: {
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'session-mobile-failure',
           turnId: 'turn-mobile-failure',
           sequence: 0,
@@ -368,7 +368,7 @@ describe('cloud send: canonical agent activity', () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks, signal) => {
       callbacks.onDelta({
         x_agent_event: {
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'session-mobile-cancel',
           turnId: 'turn-mobile-cancel',
           sequence: 0,

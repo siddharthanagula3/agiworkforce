@@ -944,7 +944,7 @@ describe('chatStore — streaming state', () => {
       const runId = '0190a000-0000-7000-8000-000000000099';
       const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
       const envelope = (sequence: number, delta: string) => ({
-        schemaVersion: 3 as const,
+        schemaVersion: 4 as const,
         sessionId: 'session-mobile-durable',
         turnId: 'turn-mobile-durable',
         sequence,

@@ -42,6 +42,7 @@ import { createFailoverPlan } from './lib/managed-failover';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { withSseHeartbeat } from './lib/sse-heartbeat';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
+import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
   loadConnectorToolPermissions,
@@ -62,6 +63,7 @@ import {
   findActiveCloudAgentRunForConversation,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
+  saveCloudAgentInputCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import type {
   CloudAgentOriginSurface,
@@ -363,6 +365,7 @@ async function dispatchChatCompletions(
       const researchFailover = createFailoverPlan(processed, {
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+        modelPolicy: processed.modelPolicy ?? null,
       });
       const researchGen = runResearchLoop(
         processed,
@@ -574,9 +577,28 @@ async function dispatchChatCompletions(
       // durable attach fails). `approve/route.ts` has awaited the same call on a
       // request path since durable resumes shipped.
       //
-      // Free-trial turns never qualify: they carry no managed-usage reservation,
-      // which `buildCloudAgentWorkflowInput` requires to replay billing.
-      if (processed.managedUsage && areDurableInitialTurnsEnabled()) {
+      // AGI-126: this used to read `processed.managedUsage && ...`, so the DEFAULT
+      // tier was the one tier that was never durable. A free-trial turn still got
+      // a `cloud_agent_runs` row — listed by the runs API, claimable by the
+      // approval APIs — so it LOOKED durable, then died with the client
+      // connection; and once such a turn paused on an approval it could never be
+      // resumed, because the resume routes could not rebuild a workflow input
+      // without a managed reservation.
+      //
+      // The tier no longer decides the transport. `CloudAgentWorkflowBilling`
+      // carries either reservation across the invocation boundary, and the
+      // workflow rehydrates it onto the matching side of `ProcessedRequest`, so a
+      // durable free turn is metered by exactly the free-tier budget an inline
+      // one is. A turn that carries neither reservation raises
+      // `CloudAgentWorkflowBillingUnavailableError` from the builder and lands in
+      // the same degrade below.
+      //
+      // A `start()` that THROWS is safe here: nothing has been generated,
+      // streamed, or consumed at this point, so falling through to the inline
+      // path cannot double-execute
+      // (`startCloudAgentWorkflowExecution` cancels the run it started if the
+      // durable attach fails).
+      if (areDurableInitialTurnsEnabled()) {
         try {
           const workflow = await startCloudAgentWorkflowExecution({
             db: runDb,
@@ -597,10 +619,18 @@ async function dispatchChatCompletions(
         } catch (error) {
           // Degrade, do not fail: the inline path below produces the same SSE
           // wire and the same journal. The turn is merely no longer detachable.
-          logger.error(
-            { error, userId, requestId: processed.requestId, runId: run.id },
-            'Durable initial agent turn could not start; falling back to the request-scoped stream',
-          );
+          // A turn with no reservation at all is an ordinary, expected miss, not
+          // an incident, so it is not logged at error.
+          const unreserved = error instanceof CloudAgentWorkflowBillingUnavailableError;
+          const details = { error, userId, requestId: processed.requestId, runId: run.id };
+          if (unreserved) {
+            logger.debug(details, 'Agent turn carries no reservation; running request-scoped');
+          } else {
+            logger.error(
+              details,
+              'Durable initial agent turn could not start; falling back to the request-scoped stream',
+            );
+          }
         }
       }
 
@@ -628,6 +658,7 @@ async function dispatchChatCompletions(
       const toolLoopFailover = createFailoverPlan(processed, {
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+        modelPolicy: processed.modelPolicy ?? null,
       });
       const toolLoopGen = runToolLoop(processed, {
         mcpTools,
@@ -661,6 +692,28 @@ async function dispatchChatCompletions(
             request: buildApprovalCheckpointRequest(processed.chatRequest),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
+            events: checkpoint.events,
+          });
+          approvalCheckpointSaved = true;
+        },
+        // An MCP `input_required` pause is a NON-TERMINAL exit: the loop parks the
+        // run in `awaiting_input`, streams [DONE], and returns. Without this write
+        // it parked with nothing recorded — `resume-input/` had no checkpoint to
+        // claim, so the run was unresumable and the work already done was lost.
+        // The durable transport has always written it; the inline one now does too.
+        onInputCheckpoint: async (checkpoint) => {
+          await saveCloudAgentInputCheckpoint(runDb, {
+            userId,
+            runId: run.id,
+            sessionId: checkpoint.sessionId,
+            turnId: checkpoint.turnId,
+            nextEventSequence: checkpoint.nextEventSequence,
+            completedSteps: checkpoint.completedSteps,
+            request: buildApprovalCheckpointRequest(processed.chatRequest),
+            messages: checkpoint.messages,
+            pendingToolCalls: checkpoint.pendingToolCalls,
+            inputRequests: checkpoint.inputRequests,
+            requestState: checkpoint.requestState,
             events: checkpoint.events,
           });
           approvalCheckpointSaved = true;
@@ -713,6 +766,7 @@ async function dispatchChatCompletions(
       const failover = createFailoverPlan(processed, {
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+        modelPolicy: processed.modelPolicy ?? null,
       });
       let attemptProcessed: ProcessedRequest = processed;
       let attemptAdapterProvider = adapterProvider;
@@ -796,6 +850,7 @@ async function dispatchChatCompletions(
     const failover = createFailoverPlan(processed, {
       signal: request.signal,
       isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+      modelPolicy: processed.modelPolicy ?? null,
     });
     let attemptProcessed: ProcessedRequest = processed;
     let attemptAdapterProvider = nonStreamAdapterProvider;

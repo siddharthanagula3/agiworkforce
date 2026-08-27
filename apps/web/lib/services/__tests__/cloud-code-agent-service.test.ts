@@ -13,7 +13,12 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 vi.mock('@/lib/services/cloud-code-agent-runner', () => ({
   createCloudCodeToolRunner: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/services/cloud-code-agent-loop', () => ({ runCloudCodeAgentTurn: vi.fn() }));
+// importOriginal, not a bare factory: the service also imports the loop's
+// constants, and a factory that only supplies the function makes those undefined.
+vi.mock('@/lib/services/cloud-code-agent-loop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/cloud-code-agent-loop')>()),
+  runCloudCodeAgentTurn: vi.fn(),
+}));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
@@ -30,6 +35,9 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   };
 });
 
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
 import { SLOT_REGISTRY, listCanonicalModels } from '@agiworkforce/types';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { getCloudCodeSession } from '@/lib/services/cloud-code-session-service';
@@ -43,8 +51,14 @@ import {
   reserveManagedUsageProviderStep,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
-import type { CloudCodeTurnUsage } from '@/lib/services/cloud-code-agent-loop';
-import { startCloudCodeAgentTurn } from '@/lib/services/cloud-code-agent-service';
+import type {
+  CloudCodeAgentStopReason,
+  CloudCodeTurnUsage,
+} from '@/lib/services/cloud-code-agent-loop';
+import {
+  CLOUD_CODE_AGENT_TURN_BUDGET_MS,
+  startCloudCodeAgentTurn,
+} from '@/lib/services/cloud-code-agent-service';
 
 const FLAT_RESERVATION_CENTS = 25;
 
@@ -218,5 +232,200 @@ describe('Cloud Code flagship flag reflects the model actually called', () => {
     await runTurn({ model: STANDARD_MODEL });
     expect(vi.mocked(reserveManagedUsageRequest).mock.calls[0]?.[0].isFlagship).toBe(false);
     expect(vi.mocked(reserveManagedUsageProviderStep).mock.calls[0]?.[0].isFlagship).toBe(false);
+  });
+});
+
+type TrackedDb = { query: ReturnType<typeof vi.fn> };
+
+const TURN_ROW = [{ id: 'turn-1' }];
+
+/** A db stub whose calls survive the turn, so the terminal writes can be read back. */
+function trackedDb(): TrackedDb {
+  return {
+    query: vi.fn(async (text: string) =>
+      String(text).startsWith('insert into cloud_code_agent_turns') ? TURN_ROW : [],
+    ),
+  };
+}
+
+/** The one write that moves a turn off `running` on a non-error stop reason. */
+function terminalTurnUpdate(db: TrackedDb): unknown[] | undefined {
+  const call = db.query.mock.calls.find(([text]) => String(text).includes('set state = $2'));
+  return call?.[1] as unknown[] | undefined;
+}
+
+function startTurn(db: TrackedDb, signal?: AbortSignal) {
+  return startCloudCodeAgentTurn({
+    db: db as never,
+    owner: { userId: 'user-1', organizationId: null },
+    sessionId: 'session-1',
+    goal: 'Fix the failing test',
+    model: STANDARD_MODEL,
+    planTier: 'pro',
+    idempotencyKey: '11111111-1111-4111-8111-111111111111',
+    signal: signal ?? new AbortController().signal,
+  });
+}
+
+async function runTurnOn(db: TrackedDb, stopReason: CloudCodeAgentStopReason) {
+  vi.mocked(runCloudCodeAgentTurn).mockResolvedValue({
+    stopReason,
+    stepsUsed: 3,
+    usage: NO_USAGE,
+    finalMessage: '',
+    messages: [],
+  });
+  return startTurn(db);
+}
+
+/** Works whether vitest was rooted at apps/web or at the monorepo root. */
+function webAppRoot(): string {
+  let dir = process.cwd();
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (existsSync(join(dir, 'app/api/code/sessions'))) return dir;
+    if (existsSync(join(dir, 'apps/web/app/api/code/sessions'))) return join(dir, 'apps/web');
+    dir = dirname(dir);
+  }
+  throw new Error(`Could not locate the web app root from ${process.cwd()}`);
+}
+
+function routeMaxDurationSeconds(relativePath: string): number {
+  const source = readFileSync(join(webAppRoot(), 'app/api/code/sessions', relativePath), 'utf8');
+  const match = /export const maxDuration = (\d+)/.exec(source);
+  if (!match?.[1]) throw new Error(`No maxDuration literal in ${relativePath}`);
+  return Number(match[1]);
+}
+
+describe('Cloud Code turn state does not launder a turn that stopped short', () => {
+  it('records a timed-out turn as failed, not completed', async () => {
+    const db = trackedDb();
+    await runTurnOn(db, 'timeout');
+    const params = terminalTurnUpdate(db);
+    expect(params?.[1]).toBe('failed');
+    expect(params?.[3]).toBe('timeout');
+  });
+
+  it('records a step-capped turn as failed, not completed', async () => {
+    const db = trackedDb();
+    await runTurnOn(db, 'max_steps');
+    const params = terminalTurnUpdate(db);
+    expect(params?.[1]).toBe('failed');
+    expect(params?.[3]).toBe('max_steps');
+  });
+
+  it('still records a finished turn as completed', async () => {
+    const db = trackedDb();
+    await runTurnOn(db, 'done');
+    expect(terminalTurnUpdate(db)?.[1]).toBe('completed');
+  });
+
+  it('explains a timeout instead of persisting a failed turn with no words', async () => {
+    const db = trackedDb();
+    const record = await runTurnOn(db, 'timeout');
+    expect(terminalTurnUpdate(db)?.[5]).toMatch(/time budget/i);
+    expect(record.errorMessage).toMatch(/time budget/i);
+  });
+});
+
+describe('Cloud Code loop budget fits inside the platform ceiling', () => {
+  it('hands the loop a budget under the maxDuration both routes declare', () => {
+    const agentRoute = routeMaxDurationSeconds('[sessionId]/agent/route.ts');
+    const approvalsRoute = routeMaxDurationSeconds('[sessionId]/agent/approvals/route.ts');
+    expect(approvalsRoute).toBe(agentRoute);
+    // Strictly under, with room for the unwind: the loop's `timeout` guard is
+    // dead code the moment the platform kill lands first.
+    expect(CLOUD_CODE_AGENT_TURN_BUDGET_MS).toBeLessThan(agentRoute * 1000);
+  });
+
+  it('passes that budget to the loop rather than letting it default to 600s', async () => {
+    await runTurnOn(trackedDb(), 'done');
+    const passed = vi.mocked(runCloudCodeAgentTurn).mock.calls.at(-1)?.[0];
+    expect(passed?.maxDurationMs).toBe(CLOUD_CODE_AGENT_TURN_BUDGET_MS);
+  });
+});
+
+describe('Cloud Code turn releases its resources when it blows the budget', () => {
+  it('pauses the sandbox, settles the reservation and closes the row on a budget abort', async () => {
+    vi.useFakeTimers();
+    try {
+      const pause = vi.fn();
+      const dispose = vi.fn();
+      vi.mocked(getE2BExecutor).mockResolvedValue({ pause, dispose } as never);
+      // A provider call that never returns: only the composed deadline signal
+      // can end this turn.
+      vi.mocked(runCloudCodeAgentTurn).mockImplementation(
+        (loopInput) =>
+          new Promise((_resolve, reject) => {
+            loopInput.signal.addEventListener('abort', () => reject(loopInput.signal.reason), {
+              once: true,
+            });
+          }),
+      );
+
+      const db = trackedDb();
+      const pending = startTurn(db);
+      await vi.advanceTimersByTimeAsync(CLOUD_CODE_AGENT_TURN_BUDGET_MS + 1);
+      const record = await pending;
+
+      expect(record.stopReason).toBe('timeout');
+      expect(pause).toHaveBeenCalledTimes(1);
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(finalizeManagedUsageRequest)).toHaveBeenCalledTimes(1);
+      const params = terminalTurnUpdate(db);
+      expect(params?.[1]).toBe('failed');
+      expect(params?.[3]).toBe('timeout');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('disposes the sandbox even when pausing it throws', async () => {
+    const dispose = vi.fn();
+    vi.mocked(getE2BExecutor).mockResolvedValue({
+      pause: vi.fn(async () => {
+        throw new Error('pause failed');
+      }),
+      dispose,
+    } as never);
+
+    await runTurnOn(trackedDb(), 'done');
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles the reservation even when the terminal turn row cannot be written', async () => {
+    const db: TrackedDb = {
+      query: vi.fn(async (text: string) => {
+        if (String(text).includes('set state = $2')) throw new Error('row write failed');
+        return String(text).startsWith('insert into cloud_code_agent_turns') ? TURN_ROW : [];
+      }),
+    };
+    vi.mocked(runCloudCodeAgentTurn).mockResolvedValue({
+      stopReason: 'done',
+      stepsUsed: 2,
+      usage: NO_USAGE,
+      finalMessage: 'done',
+      messages: [],
+    });
+
+    await expect(startTurn(db)).rejects.toThrow(/could not be recorded/i);
+    expect(vi.mocked(finalizeManagedUsageRequest)).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not mislabel a real client cancellation as a timeout', async () => {
+    const aborted = new AbortController();
+    aborted.abort();
+    const db = trackedDb();
+    vi.mocked(runCloudCodeAgentTurn).mockResolvedValue({
+      stopReason: 'cancelled',
+      stepsUsed: 1,
+      usage: NO_USAGE,
+      finalMessage: '',
+      messages: [],
+    });
+
+    await startTurn(db, aborted.signal);
+    const params = terminalTurnUpdate(db);
+    expect(params?.[1]).toBe('cancelled');
+    expect(params?.[3]).toBe('cancelled');
   });
 });

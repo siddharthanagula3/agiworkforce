@@ -709,7 +709,7 @@ describe('cloudApi', () => {
 
   it('dispatches a retried canonical event and its text projection exactly once', async () => {
     const envelope = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       sessionId: 'session-desktop-1',
       turnId: 'turn-desktop-1',
       sequence: 4,

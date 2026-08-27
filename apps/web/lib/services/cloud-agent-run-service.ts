@@ -17,7 +17,9 @@ import {
 import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
+import { notifyAgentRunEvent, type AgentRunNotice } from './agent-notification-service';
 
 const TERMINAL_STATES = new Set<AgentTaskState>([
   'ready_for_review',
@@ -44,7 +46,73 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   updated_at: string | Date;
   pending_approval_requested_at?: string | Date | null;
   pending_approval_tool_calls?: unknown;
+  pending_input_requested_at?: string | Date | null;
+  pending_input_tool_calls?: unknown;
+  pending_input_requests?: unknown;
+  pending_input_request_state?: unknown;
   settled_usage?: unknown;
+  /** Pre-update state, returned only by the two statements that move `state`. */
+  previous_state?: string | null;
+}
+
+/**
+ * Delivering a notification must never break a run. Mirrors the isolation
+ * `announceScheduleRun` in schedule-service.ts puts around the one other
+ * push producer in the app.
+ */
+async function announceAgentRunEvent(notice: AgentRunNotice): Promise<void> {
+  try {
+    await notifyAgentRunEvent(notice);
+  } catch (error) {
+    logger.warn({ error, runId: notice.runId }, 'Cloud agent run notification failed');
+  }
+}
+
+/**
+ * Terminal states worth telling the user about. `cancelled` is the user's own
+ * doing — schedule notifications skip it for the same reason — and `archived`
+ * is bookkeeping.
+ */
+const NOTIFIED_TERMINAL_EVENTS: Partial<Record<AgentTaskState, 'completed' | 'failed'>> = {
+  ready_for_review: 'completed',
+  completed: 'completed',
+  failed: 'failed',
+};
+
+/**
+ * Decides, from one statement's own before/after view of `cloud_agent_runs`,
+ * whether this write is the one that carried a run into a terminal state.
+ *
+ * Two writers move a run's state: the event journal
+ * ({@link appendCloudAgentEventWithinTransaction}, which derives the state from
+ * a `task-state-changed` envelope) and {@link transitionCloudAgentRun}. The
+ * journal always writes first on the workflow path — the tool loop emits
+ * `ready_for_review`/`failed` before the workflow settles — so a decision made
+ * anywhere downstream of it can only ever see an already-terminal run. Both
+ * writers therefore read the pre-update row in the same locked statement and
+ * ask here; whichever one actually performs the transition owes the notice, and
+ * the other sees a terminal `previousState` and stays silent.
+ */
+function terminalNoticeFor(input: {
+  nextState: AgentTaskState | null | undefined;
+  previousState: string | null;
+  currentState: string;
+}): 'completed' | 'failed' | null {
+  if (!input.nextState) return null;
+  const event = NOTIFIED_TERMINAL_EVENTS[input.nextState];
+  if (!event) return null;
+  // No pre-update state means we cannot prove this call is the transition, so
+  // stay silent rather than notify twice.
+  if (!input.previousState) return null;
+  if (TERMINAL_STATES.has(input.previousState as AgentTaskState)) return null;
+  // An out-of-order envelope leaves the state where it was; only the write that
+  // actually landed the terminal state owes the notice.
+  if (input.currentState !== input.nextState) return null;
+  return event;
+}
+
+function previousStateOf(row: CloudAgentRunRow | undefined): string | null {
+  return typeof row?.previous_state === 'string' ? row.previous_state : null;
 }
 
 interface CloudAgentEventRow extends Record<string, unknown> {
@@ -76,6 +144,19 @@ const PendingToolCallSchema = z.object({
 });
 
 const CheckpointStateSchema = z.enum(['pending', 'resuming', 'resolved', 'failed']);
+const CheckpointKindSchema = z.enum(['approval', 'input']);
+
+const InputRequestsMapSchema = z.record(z.string(), z.record(z.string(), z.unknown()));
+const RequestStateEntrySchema = z.object({
+  requestState: z.string().optional(),
+  round: z.number().int().nonnegative(),
+});
+const RequestStateMapSchema = z.record(z.string(), RequestStateEntrySchema);
+
+function connectorIdFromQualifiedName(qualifiedName: string): string {
+  const parts = qualifiedName.split('__');
+  return parts[0] === 'mcp' && parts.length >= 3 && parts[1] ? parts[1] : qualifiedName;
+}
 
 interface CloudAgentApprovalCheckpointRow extends Record<string, unknown> {
   id: string;
@@ -90,6 +171,9 @@ interface CloudAgentApprovalCheckpointRow extends Record<string, unknown> {
   messages: unknown;
   pending_tool_calls: unknown;
   state: string;
+  checkpoint_kind?: string;
+  input_requests?: unknown;
+  request_state?: unknown;
   lease_token: string | null;
   lease_expires_at: string | Date | null;
   resolved_at: string | Date | null;
@@ -130,6 +214,41 @@ export interface ClaimedCloudAgentApprovalCheckpoint {
   checkpoint: CloudAgentApprovalCheckpoint;
   approvals: CloudAgentApprovalDecision[];
   leaseToken: string;
+}
+
+export type CloudAgentCheckpointKind = z.infer<typeof CheckpointKindSchema>;
+
+export interface CloudAgentInputCheckpoint extends CloudAgentApprovalCheckpoint {
+  /** UNTRUSTED remote input-request field definitions, keyed by tool call id. */
+  inputRequests: Record<string, Record<string, unknown>>;
+  /** Host-owned per-call continuation metadata, keyed by tool call id. */
+  requestState: Record<string, { requestState?: string; round: number }>;
+}
+
+export interface CloudAgentInputResponse {
+  toolCallId: string;
+  inputResponses: Record<string, unknown>;
+}
+
+export interface CloudAgentInputResumption {
+  toolCallId: string;
+  inputResponses: Record<string, unknown>;
+  requestState?: string;
+  /** The attempt round to run next: the paused round plus one. */
+  round: number;
+}
+
+export interface ClaimedCloudAgentInputCheckpoint {
+  checkpoint: CloudAgentInputCheckpoint;
+  resumptions: CloudAgentInputResumption[];
+  leaseToken: string;
+}
+
+export class CloudAgentInputResponseError extends Error {
+  constructor(message = 'Input responses do not match the paused tool calls') {
+    super(message);
+    this.name = 'CloudAgentInputResponseError';
+  }
 }
 
 export interface CloudAgentRunSnapshot {
@@ -190,6 +309,7 @@ const PENDING_APPROVAL_LATERAL = `
       from public.cloud_agent_approval_checkpoints checkpoint
      where checkpoint.run_id = runs.id
        and checkpoint.user_id = runs.user_id
+       and checkpoint.checkpoint_kind = 'approval'
        and checkpoint.state = 'pending'
        and checkpoint.created_at > now() - make_interval(hours => ${APPROVAL_CHECKPOINT_TTL_HOURS})
      order by checkpoint.version desc
@@ -199,6 +319,26 @@ const PENDING_APPROVAL_LATERAL = `
 const PENDING_APPROVAL_COLUMNS = `
   pending.created_at as pending_approval_requested_at,
   pending.pending_tool_calls as pending_approval_tool_calls`;
+
+const PENDING_INPUT_LATERAL = `
+  left join lateral (
+    select checkpoint.created_at, checkpoint.pending_tool_calls,
+           checkpoint.input_requests, checkpoint.request_state
+      from public.cloud_agent_approval_checkpoints checkpoint
+     where checkpoint.run_id = runs.id
+       and checkpoint.user_id = runs.user_id
+       and checkpoint.checkpoint_kind = 'input'
+       and checkpoint.state = 'pending'
+       and checkpoint.created_at > now() - make_interval(hours => ${APPROVAL_CHECKPOINT_TTL_HOURS})
+     order by checkpoint.version desc
+     limit 1
+  ) pending_input on true`;
+
+const PENDING_INPUT_COLUMNS = `
+  pending_input.created_at as pending_input_requested_at,
+  pending_input.pending_tool_calls as pending_input_tool_calls,
+  pending_input.input_requests as pending_input_requests,
+  pending_input.request_state as pending_input_request_state`;
 
 function mapPendingApproval(row: CloudAgentRunRow): CloudAgentRun['pendingApproval'] {
   const requestedAt = toIsoTimestamp(row.pending_approval_requested_at ?? null);
@@ -218,6 +358,30 @@ function mapPendingApproval(row: CloudAgentRunRow): CloudAgentRun['pendingApprov
         0,
         MAX_CLOUD_AGENT_PENDING_APPROVAL_ARGS_PREVIEW_LENGTH,
       ),
+    })),
+  };
+}
+
+function mapPendingInput(row: CloudAgentRunRow): CloudAgentRun['pendingInput'] {
+  const requestedAt = toIsoTimestamp(row.pending_input_requested_at ?? null);
+  if (!requestedAt) return undefined;
+  const calls = z
+    .array(PendingToolCallSchema)
+    .min(1)
+    .max(32)
+    .safeParse(row.pending_input_tool_calls);
+  if (!calls.success) return undefined;
+  const requests = InputRequestsMapSchema.safeParse(row.pending_input_requests ?? {});
+  const stateMap = RequestStateMapSchema.safeParse(row.pending_input_request_state ?? {});
+  if (!requests.success || !stateMap.success) return undefined;
+  return {
+    requestedAt,
+    toolCalls: calls.data.map((call) => ({
+      toolCallId: call.id,
+      name: call.qualifiedName,
+      connectorId: connectorIdFromQualifiedName(call.qualifiedName),
+      round: stateMap.data[call.id]?.round ?? 0,
+      inputRequests: requests.data[call.id] ?? {},
     })),
   };
 }
@@ -257,9 +421,11 @@ function mapSettledUsage(row: CloudAgentRunRow): CloudAgentRun['usage'] {
 
 function mapRun(row: CloudAgentRunRow): CloudAgentRun {
   const pendingApproval = mapPendingApproval(row);
+  const pendingInput = mapPendingInput(row);
   const usage = mapSettledUsage(row);
   return CloudAgentRunSchema.parse({
     ...(pendingApproval ? { pendingApproval } : {}),
+    ...(pendingInput ? { pendingInput } : {}),
     ...(usage ? { usage } : {}),
     id: row.id,
     userId: row.user_id,
@@ -379,19 +545,32 @@ export async function appendCloudAgentEvent(
 ): Promise<CloudAgentRun> {
   const envelope = AgentEventEnvelopeSchema.parse(input.envelope);
 
-  return db.transaction((tx) =>
+  const { run, notice } = await db.transaction((tx) =>
     appendCloudAgentEventWithinTransaction(tx, {
       userId: input.userId,
       runId: input.runId,
       envelope,
     }),
   );
+
+  // Announced after the commit, never inside it: a rolled-back journal write
+  // must not leave a push behind, and a push must not hold a transaction open.
+  if (notice) {
+    await announceAgentRunEvent({ userId: input.userId, runId: input.runId, event: notice });
+  }
+  return run;
+}
+
+interface AppendedCloudAgentEvent {
+  run: CloudAgentRun;
+  /** Set only when this append is the write that made the run terminal. */
+  notice: 'completed' | 'failed' | null;
 }
 
 async function appendCloudAgentEventWithinTransaction(
   tx: DatabaseAdapter,
   input: { userId: string; runId: string; envelope: AgentEventEnvelope },
-): Promise<CloudAgentRun> {
+): Promise<AppendedCloudAgentEvent> {
   const envelope = input.envelope;
   const nextState = envelope.event.type === 'task-state-changed' ? envelope.event.state : undefined;
 
@@ -411,55 +590,97 @@ async function appendCloudAgentEventWithinTransaction(
     ],
   );
 
+  // A replayed envelope loses the `(run_id, sequence)` race and never reaches
+  // the state update, so a retried workflow step cannot re-announce a terminal
+  // it already announced. The event row is the persisted de-duplication marker.
   if (inserted.length === 0) {
-    return requireRun(
-      await tx.query<CloudAgentRunRow>(
-        `select * from public.cloud_agent_runs where id = $1 and user_id = $2 limit 1`,
-        [input.runId, input.userId],
+    return {
+      run: requireRun(
+        await tx.query<CloudAgentRunRow>(
+          `select * from public.cloud_agent_runs where id = $1 and user_id = $2 limit 1`,
+          [input.runId, input.userId],
+        ),
       ),
-    );
+      notice: null,
+    };
   }
 
+  // `previous` locks the row and reads its committed pre-update snapshot, so
+  // concurrent appends serialise and only the first sees a non-terminal state.
   const rows = await tx.query<CloudAgentRunRow>(
-    `update public.cloud_agent_runs
-          set last_event_sequence = greatest(last_event_sequence, $3),
+    `with previous as (
+          select id, state from public.cloud_agent_runs
+           where id = $1 and user_id = $2
+           for update
+        )
+        update public.cloud_agent_runs as runs
+          set last_event_sequence = greatest(runs.last_event_sequence, $3),
               state = case
-                when $3 >= last_event_sequence then coalesce($4, state)
-                else state
+                when $3 >= runs.last_event_sequence then coalesce($4, runs.state)
+                else runs.state
               end,
               completed_at = case
-                when $3 < last_event_sequence then completed_at
+                when $3 < runs.last_event_sequence then runs.completed_at
                 when $4 in ('ready_for_review', 'completed', 'failed', 'cancelled', 'archived')
-                  then coalesce(completed_at, now())
+                  then coalesce(runs.completed_at, now())
                 when $4 is not null then null
-                else completed_at
+                else runs.completed_at
               end,
               updated_at = now()
-        where id = $1 and user_id = $2
-        returning *`,
+        from previous
+        where runs.id = previous.id and runs.user_id = $2
+        returning runs.*, previous.state as previous_state`,
     [input.runId, input.userId, envelope.sequence, nextState ?? null],
   );
-  return requireRun(rows);
+  const run = requireRun(rows);
+  return {
+    run,
+    notice: terminalNoticeFor({
+      nextState,
+      previousState: previousStateOf(rows[0]),
+      currentState: run.state,
+    }),
+  };
 }
 
 export async function transitionCloudAgentRun(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; state: AgentTaskState },
 ): Promise<CloudAgentRun> {
+  // The `previous` CTE locks the row and reads its pre-update snapshot, so a
+  // repeated transition into the same terminal state — and, on the workflow
+  // path, a settle that follows a journal write that already moved the run —
+  // notifies at most once.
   const rows = await db.query<CloudAgentRunRow>(
-    `update public.cloud_agent_runs
+    `with previous as (
+        select id, state from public.cloud_agent_runs
+         where id = $1 and user_id = $2
+         for update
+      )
+      update public.cloud_agent_runs as runs
         set state = $3,
             completed_at = case
               when $3 in ('ready_for_review', 'completed', 'failed', 'cancelled', 'archived')
-                then coalesce(completed_at, now())
+                then coalesce(runs.completed_at, now())
               else null
             end,
             updated_at = now()
-      where id = $1 and user_id = $2
-      returning *`,
+      from previous
+      where runs.id = previous.id and runs.user_id = $2
+      returning runs.*, previous.state as previous_state`,
     [input.runId, input.userId, input.state],
   );
-  return requireRun(rows);
+  const run = requireRun(rows);
+
+  const notice = terminalNoticeFor({
+    nextState: input.state,
+    previousState: previousStateOf(rows[0]),
+    currentState: input.state,
+  });
+  if (notice) {
+    await announceAgentRunEvent({ userId: input.userId, runId: input.runId, event: notice });
+  }
+  return run;
 }
 
 export async function recordCloudAgentRunSettledUsage(
@@ -535,9 +756,10 @@ export async function getCloudAgentRun(
   input: { userId: string; runId: string; afterSequence?: number; limit?: number },
 ): Promise<CloudAgentRunSnapshot | null> {
   const runRows = await db.query<CloudAgentRunRow>(
-    `select runs.*, ${PENDING_APPROVAL_COLUMNS}
+    `select runs.*, ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}
        from public.cloud_agent_runs runs
        ${PENDING_APPROVAL_LATERAL}
+       ${PENDING_INPUT_LATERAL}
       where runs.id = $1 and runs.user_id = $2
       limit 1`,
     [input.runId, input.userId],
@@ -576,9 +798,10 @@ export async function listCloudAgentRuns(
     : null;
   const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 25)));
   const rows = await db.query<CloudAgentRunRow>(
-    `select runs.*, ${PENDING_APPROVAL_COLUMNS}
+    `select runs.*, ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}
        from public.cloud_agent_runs runs
        ${PENDING_APPROVAL_LATERAL}
+       ${PENDING_INPUT_LATERAL}
       where runs.user_id = $1
         and runs.state = any($2::text[])
         and ($3::text is null or runs.request_id = $3)
@@ -719,7 +942,7 @@ export async function saveCloudAgentApprovalCheckpoint(
     );
   }
 
-  return db.transaction(async (tx) => {
+  const checkpoint = await db.transaction(async (tx) => {
     const ownedRun = await tx.query<{ id: string }>(
       `select id from public.cloud_agent_runs
         where id = $1 and user_id = $2
@@ -766,6 +989,8 @@ export async function saveCloudAgentApprovalCheckpoint(
       ],
     );
 
+    // A pause transaction ends with the run `awaiting_input`, so a terminal
+    // notice from a checkpoint event is never a terminal this run reached.
     for (const event of events) {
       await appendCloudAgentEventWithinTransaction(tx, {
         userId: input.userId,
@@ -783,6 +1008,14 @@ export async function saveCloudAgentApprovalCheckpoint(
     );
     return requireApprovalCheckpoint(checkpointRows);
   });
+
+  await announceAgentRunEvent({
+    userId: input.userId,
+    runId: input.runId,
+    event: 'approval_required',
+    toolName: pendingToolCalls[0]?.qualifiedName ?? null,
+  });
+  return checkpoint;
 }
 
 export async function claimCloudAgentApprovalCheckpoint(
@@ -927,6 +1160,288 @@ export async function releaseCloudAgentApprovalCheckpoint(
     );
     return checkpoint;
   });
+}
+
+function mapInputCheckpoint(row: CloudAgentApprovalCheckpointRow): CloudAgentInputCheckpoint {
+  const base = mapApprovalCheckpoint(row);
+  return {
+    ...base,
+    inputRequests: InputRequestsMapSchema.parse(row.input_requests ?? {}),
+    requestState: RequestStateMapSchema.parse(row.request_state ?? {}),
+  };
+}
+
+function requireInputCheckpoint(
+  rows: CloudAgentApprovalCheckpointRow[],
+  error: Error = new CloudAgentApprovalCheckpointNotFoundError(),
+): CloudAgentInputCheckpoint {
+  const row = rows[0];
+  if (!row) throw error;
+  return mapInputCheckpoint(row);
+}
+
+/**
+ * Persist a durable MCP `input_required` (MRTR) pause. This is the same
+ * server-owned pause boundary as {@link saveCloudAgentApprovalCheckpoint}: the
+ * validated transcript, event cursor, and paused call stay tenant-owned; the
+ * client only supplies the collected responses on resume. The event boundary
+ * must be exactly one `input-requested` per paused call, then
+ * `task-state-changed:awaiting_input`, then `lifecycle:paused`.
+ */
+export async function saveCloudAgentInputCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    runId: string;
+    sessionId: string;
+    turnId: string;
+    nextEventSequence: number;
+    completedSteps: number;
+    request: Record<string, unknown>;
+    messages: unknown[];
+    pendingToolCalls: unknown[];
+    inputRequests: Record<string, Record<string, unknown>>;
+    requestState: Record<string, { requestState?: string; round: number }>;
+    events: unknown[];
+  },
+): Promise<CloudAgentInputCheckpoint> {
+  const request = z.record(z.string(), z.unknown()).parse(input.request);
+  const messages = z.array(CheckpointMessageSchema).parse(input.messages);
+  const pendingToolCalls = z
+    .array(PendingToolCallSchema)
+    .min(1)
+    .max(32)
+    .parse(input.pendingToolCalls);
+  const inputRequests = InputRequestsMapSchema.parse(input.inputRequests);
+  const requestState = RequestStateMapSchema.parse(input.requestState);
+  const nextEventSequence = z.number().int().nonnegative().parse(input.nextEventSequence);
+  const completedSteps = z.number().int().nonnegative().parse(input.completedSteps);
+  const events = z.array(AgentEventEnvelopeSchema).min(3).max(34).parse(input.events);
+  const hasContinuousEventCursor = events.every(
+    (event, index) =>
+      event.sessionId === input.sessionId &&
+      event.turnId === input.turnId &&
+      (index === 0 || event.sequence === events[index - 1]!.sequence + 1),
+  );
+  if (!hasContinuousEventCursor || events[events.length - 1]!.sequence + 1 !== nextEventSequence) {
+    throw new CloudAgentInputResponseError(
+      'Input checkpoint events do not match the durable event cursor',
+    );
+  }
+  const inputEvents = events.slice(0, -2);
+  const awaitingInputEvent = events.at(-2)?.event;
+  const pausedEvent = events.at(-1)?.event;
+  const pendingIds = new Set(pendingToolCalls.map((call) => call.id));
+  const requestedIds = new Set(
+    inputEvents.flatMap((event) =>
+      event.event.type === 'input-requested' ? [event.event.toolCallId] : [],
+    ),
+  );
+  const hasCompleteInputBoundary =
+    inputEvents.length === pendingIds.size &&
+    requestedIds.size === pendingIds.size &&
+    [...requestedIds].every((id) => pendingIds.has(id)) &&
+    [...pendingIds].every(
+      (id) => inputRequests[id] !== undefined && requestState[id] !== undefined,
+    ) &&
+    awaitingInputEvent?.type === 'task-state-changed' &&
+    awaitingInputEvent.state === 'awaiting_input' &&
+    pausedEvent?.type === 'lifecycle' &&
+    pausedEvent.phase === 'paused';
+  if (!hasCompleteInputBoundary) {
+    throw new CloudAgentInputResponseError(
+      'Input checkpoint events do not form a complete input boundary',
+    );
+  }
+
+  const checkpoint = await db.transaction(async (tx) => {
+    const ownedRun = await tx.query<{ id: string }>(
+      `select id from public.cloud_agent_runs
+        where id = $1 and user_id = $2
+        for update`,
+      [input.runId, input.userId],
+    );
+    if (!ownedRun[0]) throw new CloudAgentRunNotFoundError();
+
+    await tx.query(
+      `update public.cloud_agent_approval_checkpoints
+          set state = 'resolved',
+              resolved_at = coalesce(resolved_at, now()),
+              lease_expires_at = null,
+              updated_at = now()
+        where run_id = $1 and user_id = $2 and state = 'resuming'`,
+      [input.runId, input.userId],
+    );
+
+    const versionRows = await tx.query<{ next_version: number | string }>(
+      `select coalesce(max(version), 0) + 1 as next_version
+         from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2`,
+      [input.runId, input.userId],
+    );
+    const version = z.coerce.number().int().positive().parse(versionRows[0]?.next_version);
+
+    const checkpointRows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `insert into public.cloud_agent_approval_checkpoints (
+         run_id, user_id, version, session_id, turn_id, next_event_sequence,
+         completed_steps, request, messages, pending_tool_calls, state,
+         checkpoint_kind, input_requests, request_state
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, 'pending',
+         'input', $11::jsonb, $12::jsonb)
+       returning *`,
+      [
+        input.runId,
+        input.userId,
+        version,
+        input.sessionId,
+        input.turnId,
+        nextEventSequence,
+        completedSteps,
+        request,
+        messages,
+        pendingToolCalls,
+        inputRequests,
+        requestState,
+      ],
+    );
+
+    // A pause transaction ends with the run `awaiting_input`, so a terminal
+    // notice from a checkpoint event is never a terminal this run reached.
+    for (const event of events) {
+      await appendCloudAgentEventWithinTransaction(tx, {
+        userId: input.userId,
+        runId: input.runId,
+        envelope: event,
+      });
+    }
+
+    await tx.query<CloudAgentRunRow>(
+      `update public.cloud_agent_runs
+          set state = 'awaiting_input', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2
+        returning *`,
+      [input.runId, input.userId],
+    );
+    return requireInputCheckpoint(checkpointRows);
+  });
+
+  await announceAgentRunEvent({
+    userId: input.userId,
+    runId: input.runId,
+    event: 'input_required',
+    toolName: pendingToolCalls[0]?.qualifiedName ?? null,
+  });
+  return checkpoint;
+}
+
+export async function claimCloudAgentInputCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    runId: string;
+    inputs: CloudAgentInputResponse[];
+    leaseSeconds?: number;
+  },
+): Promise<ClaimedCloudAgentInputCheckpoint> {
+  const inputs = z
+    .array(
+      z.object({
+        toolCallId: z.string().min(1).max(256),
+        inputResponses: z.record(z.string(), z.unknown()),
+      }),
+    )
+    .min(1)
+    .max(32)
+    .parse(input.inputs);
+  const leaseSeconds = Math.min(86_400, Math.max(60, Math.trunc(input.leaseSeconds ?? 900)));
+
+  return db.transaction(async (tx) => {
+    const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `select * from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2 and checkpoint_kind = 'input' and state = 'pending'
+          and created_at > now() - make_interval(hours => $3)
+        order by version desc
+        limit 1
+        for update`,
+      [input.runId, input.userId, APPROVAL_CHECKPOINT_TTL_HOURS],
+    );
+    if (!rows[0]) {
+      const expiredRows = await tx.query<{ id: string }>(
+        `select id from public.cloud_agent_approval_checkpoints
+          where run_id = $1 and user_id = $2 and checkpoint_kind = 'input' and state = 'pending'
+          limit 1`,
+        [input.runId, input.userId],
+      );
+      if (expiredRows[0]) throw new CloudAgentApprovalCheckpointExpiredError();
+    }
+    const checkpoint = requireInputCheckpoint(rows);
+    const pendingIds = new Set(checkpoint.pendingToolCalls.map((call) => call.id));
+    const inputIds = new Set(inputs.map((entry) => entry.toolCallId));
+    const exactMatch =
+      inputIds.size === inputs.length &&
+      inputIds.size === pendingIds.size &&
+      [...inputIds].every((id) => pendingIds.has(id));
+    if (!exactMatch) throw new CloudAgentInputResponseError();
+
+    const leaseToken = randomUUID();
+    const claimedRows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `update public.cloud_agent_approval_checkpoints
+          set state = 'resuming',
+              lease_token = $3,
+              lease_expires_at = now() + make_interval(secs => $4),
+              updated_at = now()
+        where id = $1 and user_id = $2 and state = 'pending'
+        returning *`,
+      [checkpoint.id, input.userId, leaseToken, leaseSeconds],
+    );
+    const claimed = requireInputCheckpoint(
+      claimedRows,
+      new CloudAgentApprovalCheckpointConflictError(),
+    );
+    const resumedRuns = await tx.query<CloudAgentRunRow>(
+      `update public.cloud_agent_runs
+          set state = 'running', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2
+          and state in ('queued', 'running', 'awaiting_input', 'paused')
+        returning *`,
+      [input.runId, input.userId],
+    );
+    if (!resumedRuns[0]) {
+      throw new CloudAgentApprovalCheckpointConflictError('Cloud agent run is no longer resumable');
+    }
+    if (!claimed.leaseToken) throw new CloudAgentApprovalCheckpointConflictError();
+    const resumptions: CloudAgentInputResumption[] = inputs.map((entry) => {
+      const stored = claimed.requestState[entry.toolCallId];
+      return {
+        toolCallId: entry.toolCallId,
+        inputResponses: entry.inputResponses,
+        ...(stored?.requestState ? { requestState: stored.requestState } : {}),
+        round: (stored?.round ?? 0) + 1,
+      };
+    });
+    return { checkpoint: claimed, resumptions, leaseToken: claimed.leaseToken };
+  });
+}
+
+// The lease lifecycle is kind-agnostic: an input checkpoint completes and
+// releases through the same versioned lease machinery as an approval one.
+export function completeCloudAgentInputCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    checkpointId: string;
+    leaseToken: string;
+    outcome?: 'resolved' | 'failed';
+  },
+): Promise<CloudAgentApprovalCheckpoint> {
+  return completeCloudAgentApprovalCheckpoint(db, input);
+}
+
+export function releaseCloudAgentInputCheckpoint(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string; checkpointId: string; leaseToken: string },
+): Promise<CloudAgentApprovalCheckpoint> {
+  return releaseCloudAgentApprovalCheckpoint(db, input);
 }
 
 export function isCloudAgentRunTerminal(state: AgentTaskState): boolean {
