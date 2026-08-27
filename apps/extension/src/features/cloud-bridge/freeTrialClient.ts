@@ -584,7 +584,9 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
           };
         }
 
-        const knownDeltaKeys = [
+        // The keys this client actually READS. It deliberately does not double
+        // as the list of keys the server may SEND.
+        const consumedDeltaKeys = [
           'content',
           'role',
           'tool_calls',
@@ -598,7 +600,17 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
           'x_code_result',
           'x_agent_event',
         ];
-        recognized = knownDeltaKeys.some((key) => key in deltaRecord);
+        // An `x_`-prefixed key is a vendor extension: newer server, older
+        // client. Treating an unknown one as a protocol error made every new
+        // server field a hard failure in every shipped extension — observed as
+        // "Malformed response from AGI Cloud." mid-run once the server began
+        // emitting x_agiwork_plan, x_research_plan, x_research_status,
+        // x_interactive_cards, x_tool_input_request, x_agi_workforce and
+        // x_stream_error, none of which this allowlist had. Unknown extension
+        // fields are recognized and ignored; only a MALFORMED frame is an error.
+        recognized =
+          consumedDeltaKeys.some((key) => key in deltaRecord) ||
+          Object.keys(deltaRecord).some((key) => key.startsWith('x_'));
       }
       recognized =
         recognized ||
