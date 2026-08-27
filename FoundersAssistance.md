@@ -985,6 +985,70 @@ distribution claims honest.
 
 ---
 
+## 41. Mobile store listing assets and contact details
+
+**Status:** `BLOCKED_BY_HUMAN`. Found 2026-08-27 while auditing submission
+readiness. These sit alongside §23 (credentials) and §12 (IAP products) — the
+same submission, three separate human dependencies.
+
+**Play Console will not accept the listing without these two graphics.**
+`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json` marks both
+`status: "__DESIGN_TO_PRODUCE__"` and `required: true`:
+
+- **Feature graphic**, 1024x500. Shown at the top of the Play listing.
+- **App icon**, 512x512. The listing icon, distinct from the in-app
+  `assets/icon.png` (which exists and is correct at 1024x1024).
+
+Neither can be generated from the app bundle; they are design work.
+
+**Three contact fields still hold the literal `__FOUNDER_TO_FILL__`.** App Store
+Connect requires a real contact phone number before a build can be submitted for
+review:
+
+- `LISTING-METADATA-IOS.json` -> `contact_information.phone`
+- `LISTING-METADATA-IOS.json` -> `app_review_information.review_contact_phone`
+- `LISTING-METADATA-ANDROID.json` -> `contact_details.phone`
+
+**Reviewer-facing IAP copy is now behind the code.** `REVIEWER-NOTES-IOS.md` and
+both listing JSONs are dated 2026-08-05 and state "no StoreKit product exists".
+Native billing shipped on 2026-08-11: `expo-iap@5.3.0` is bundled and
+`apps/mobile/src/features/billing/useMobileIap.ts` drives a real StoreKit 2 /
+Play Billing purchase flow, deployment-gated off. If App Review's binary scan
+detects StoreKit APIs while the metadata denies them, that is a Guideline 2.3.1
+inaccurate-metadata trigger. The documents need reconciling with the binary
+before submission; the code is correct, the disclosure is stale. Tracked as task
+2.5 in the parity wave ledger and owed as engineering work, not a founder ask --
+listed here only because it must not be submitted around.
+
+---
+
+## 42. Decide whether Mobile ships crash reporting
+
+**Not blocked, a decision.** `apps/mobile` deliberately bundles no crash or
+error-reporting SDK, and says so to users in
+`src/features/settings/cloud-privacy/index.tsx:24`: "No third-party analytics or
+crash-reporting SDK (such as Sentry or PostHog) is bundled in the app; any
+diagnostics stay on your device."
+
+`apps/web` (`instrumentation.ts`, `shared/lib/sentry.ts`) and `apps/desktop`
+(`src/services/errorTracking.ts`) both have Sentry wired, and the root
+`turbo.json` already passes `SENTRY_DSN` through. So the capability exists in the
+monorepo and is withheld from Mobile on purpose.
+
+The consequence is that field crashes on the surface with the least
+observability are invisible beyond what a user manually reports. Either is
+defensible; the choice should be explicit rather than inherited:
+
+1. Keep the privacy stance, and state it more prominently than one settings row.
+2. Wire a Mobile Sentry DSN, and update the privacy copy and the App Store
+   privacy nutrition labels to match -- the labels currently declare six
+   collected data types, none of them diagnostics.
+
+Do not wire it silently: the current copy is a promise to users, and the store
+metadata repeats it.
+
+---
+
 ## Not blocked, but worth a decision
 
 **`readme = "<file>"` is an invisible coupling.** A documentation sweep can
