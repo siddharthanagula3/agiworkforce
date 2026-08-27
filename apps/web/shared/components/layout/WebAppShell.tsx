@@ -434,7 +434,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
   };
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
+    <div className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
       {/* Destructive-action confirm (delete conversation / delete project). */}
       {destructiveConfirmDialog}
       {/* Desktop: persistent/collapsible sidebar. Narrow: replaced by the

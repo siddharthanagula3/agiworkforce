@@ -415,7 +415,7 @@ export function Sidebar(props: SidebarProps) {
 
   if (collapsed) {
     return (
-      <div className="flex w-16 flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] transition-all duration-300 ease-in-out">
+      <div className="flex w-16 flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out">
         <div className="flex flex-col items-center gap-4 p-3">
           <RailButton
             label={t('sidebar.expandSidebar', 'Expand sidebar')}
@@ -472,7 +472,7 @@ export function Sidebar(props: SidebarProps) {
 
       <div
         className={cn(
-          'relative flex flex-col border-r border-[hsl(var(--border))] bg-[hsl(var(--card))] transition-all duration-300 ease-in-out',
+          'relative flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out',
           className,
         )}
         style={{ width }}
