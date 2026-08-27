@@ -3,7 +3,17 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-const SRC_TAURI = resolve(process.cwd(), 'src-tauri');
+/**
+ * Resolved from this file, not from `process.cwd()`, so the suite behaves the
+ * same however it is invoked — from `apps/desktop`, from the repo root, or from
+ * a CI step that sets its own working directory.
+ *
+ * Note what this file can and cannot tell you: it reads the working tree, so a
+ * green run means the tree is coherent, never that the release is. The updater
+ * template that shipped dead through the whole 1.2.0 line would have passed
+ * here the moment someone edited it, committed or not.
+ */
+const SRC_TAURI = resolve(import.meta.dirname, '../../src-tauri');
 
 const conf = JSON.parse(readFileSync(resolve(SRC_TAURI, 'tauri.conf.json'), 'utf8')) as {
   productName: string;
