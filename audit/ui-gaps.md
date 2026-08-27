@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 4a325915245a76e6ff66c8ee41834050b0e5bbd95289dd09bbe5e48ba42d216e -->
+<!-- ui-gaps-csv-sha256: 669ab6bdc244012aeb22b46185d821254d2bc4a44855d481b0639a7fe87bc32a -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 0 P1, 126 P2, 40 P3.
+- Unresolved: 0 P0, 53 P1, 126 P2, 40 P3.
 
 | Surface | Gaps |
 | --- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status | Gaps |
 | --- | ---: |
-| Open | 166 |
+| Open | 219 |
 | In Progress | 0 |
 | Blocked | 0 |
 | Deferred | 0 |
-| Done | 90 |
-| Not Planned | 85 |
+| Done | 96 |
+| Not Planned | 26 |
 
 ## P0
 
@@ -535,8 +535,8 @@ Completed. Keep manual codes five-minute high-entropy bearer secrets, never log 
 
 ### GAP-023 — Family account linking is not planned for the current device-only age-settings scope
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** account-and-session-service
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · web · Parental controls
 
@@ -558,8 +558,8 @@ Not planned for the current v1 device-local trust model. Keep the explicit bound
 
 ### GAP-024 — Interactive Mobile plugin installation is declined until an account-bound marketplace lifecycle exists
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** plugin-registry-hosting
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Plugins marketplace
 
@@ -581,8 +581,8 @@ Not planned for the current marketplace contract. Keep the supported Managed Clo
 
 ### GAP-025 — Mobile code-session diffstat card is declined because the cited session surface was removed
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** run-file-change-contract
 - **Surface/type:** mobile · missing-control
 - **Reference:** Claude/Codex · iOS · Remote session structured diffstat card (files changed count, +/- lines, expandable file list) inside chat transcript
 
@@ -627,8 +627,8 @@ Completed as a deliberate capability-honest divergence. Do not add a same-accoun
 
 ### GAP-027 — Mobile states that paired Desktop folders remain Desktop-controlled
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** companion-workspace-handles
 - **Surface/type:** mobile · missing-screen
 - **Reference:** Codex · iOS · Remote — projects on the paired computer
 
@@ -673,8 +673,8 @@ Completed. Keep route payloads limited to stable allowlisted IDs, keep every sug
 
 ### GAP-029 — Scheduled tasks explicitly disclose prompt-only context
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** schedule-attachment-lifecycle
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Scheduled tasks attachment picker
 
@@ -834,8 +834,8 @@ Completed for channels the product can actually deliver. Keep Email non-interact
 
 ### GAP-036 — Unsupported project usage and marketing notification categories are declined until delivery producers exist
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** web-push-delivery
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Settings > Notifications
 
@@ -926,8 +926,8 @@ Completed with runtime-derived policy honesty. Keep complete tool discovery out 
 
 ### GAP-040 — Reusable multi-Desktop pairing is declined while companion authority is single-session and ephemeral
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** multi-device-companion-session
 - **Surface/type:** mobile · missing-control
 - **Reference:** Codex · iOS · Settings > Remote control
 
@@ -995,8 +995,8 @@ Completed for the account security state the product can verify today. Keep pass
 
 ### GAP-043 — Account storage quota totals are declined until the Cloud publishes an enforceable byte policy
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** storage-quota-service
 - **Surface/type:** mobile · missing-screen
 - **Reference:** ChatGPT · iOS · Settings > Storage
 
@@ -1087,8 +1087,8 @@ Completed. Keep Shared Links account-authenticated and keep device Calendar/Cont
 
 ### GAP-047 — A Mobile Plugins drawer destination is declined while the marketplace remains preview-only
 
-- **Status:** Not Planned
-- **Owner:** Mobile
+- **Status:** Open
+- **Owner:** plugin-registry-hosting
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Sidebar drawer
 
@@ -1133,8 +1133,8 @@ Not planned under the current request-scoped connector authorization. Reconsider
 
 ### GAP-049 — Post-pairing setup toggles are declined for the current ephemeral companion session
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** account-and-session-service
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · 'You're connected' post-pairing modal
 
@@ -1202,8 +1202,8 @@ Closed as a stale component-level finding. Keep quick actions in the shared comp
 
 ### GAP-052 — Reference-specific AGI Code transcript and session toggles are declined without runtime consumers
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** agi-code-session-settings
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Claude Code settings > Appearance + Local sessions
 
@@ -1225,7 +1225,7 @@ Not planned until a mounted coding-session runtime defines typed, native-enforce
 
 ### GAP-053 — Per-device coding authorization-token management is declined without an account token API
 
-- **Status:** Not Planned
+- **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · macOS desktop · Claude Code settings > Authorization tokens
@@ -1248,8 +1248,8 @@ Not planned until the account service publishes authenticated token inventory, s
 
 ### GAP-054 — Separate AGI Code diff themes and font are declined without a consuming diff renderer
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** code-appearance-preference
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · macOS desktop · Claude Code settings > General + Code appearance
 
@@ -1271,8 +1271,8 @@ Not planned until a distinct coding transcript/diff renderer owns these preferen
 
 ### GAP-055 — AGI Code worktree and browser-tool settings are declined without session ownership
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** browser-runtime-owner
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Claude Code settings > worktree location + Browser tools
 
@@ -1363,8 +1363,8 @@ Completed for the supported global approval contract. Keep the warning persisten
 
 ### GAP-059 — Per-conversation approval mode is declined while native approval policy is global
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** conversation-scoped-approval-policy
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Cowork home (new task composer)
 
@@ -1409,8 +1409,8 @@ Completed for local, opt-in narration. Keep microphone capture off by default, v
 
 ### GAP-061 — A unified Progress, Outputs, and Context rail is declined without a durable run journal
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** durable-run-journal
 - **Surface/type:** desktop · missing-ia
 - **Reference:** Claude · macOS desktop · Cowork task rail — Progress / Outputs / Context
 
@@ -1432,8 +1432,8 @@ Not planned until the executor emits a durable task-bound run journal with typed
 
 ### GAP-062 — Conversation recording attachments are declined without a persisted recording entity
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** recording-timeline-asset
 - **Surface/type:** desktop · missing-ia
 - **Reference:** Claude · macOS desktop · Cowork task — recording attached to the conversation
 
@@ -1455,8 +1455,8 @@ Not planned until a versioned recording entity defines storage, message attachme
 
 ### GAP-063 — Computer-off cross-device pickup claims are declined without a durable remote worker
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** local-to-cloud-task-handoff
 - **Surface/type:** desktop · missing-copy
 - **Reference:** Claude · macOS desktop · Cross-device Cowork task continuity onboarding modal
 
@@ -1501,8 +1501,8 @@ Closed as stale. Retain the shared composer as the single interaction owner and 
 
 ### GAP-065 — Interactive plugin catalog installation is declined while marketplace state is preview-only
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** plugin-registry-hosting
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Plugins marketplace
 
@@ -1524,8 +1524,8 @@ Not planned until a server-owned catalog and install/uninstall API, permissions,
 
 ### GAP-066 — Plugin and connector Finish setup state is declined without an authoritative setup lifecycle
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** integration-setup-lifecycle
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Plugins marketplace — Imported plugins
 
@@ -1547,8 +1547,8 @@ Not planned until each integration publishes authoritative installed, setup-requ
 
 ### GAP-067 — A Desktop pull-request inbox is declined without remote review ownership
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** remote-pr-provider
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Pull requests list
 
@@ -1593,8 +1593,8 @@ Not planned while processing is synchronous. Add a real state only if a future m
 
 ### GAP-069 — In-thread recording playback is declined without a durable timeline asset
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** recording-timeline-asset
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Claude · macOS desktop · Recording playback — expanded event timeline
 
@@ -1616,8 +1616,8 @@ Not planned until the recording-attachment contract described in GAP-062 exists 
 
 ### GAP-070 — Per-step recorder screenshots are declined without consented frame capture and storage
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** recording-timeline-asset
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Recording playback — screenshot frames per event
 
@@ -1662,8 +1662,8 @@ Not planned as a monolithic rail. Keep terminal in the bottom dock and mount eac
 
 ### GAP-072 — Scheduler starter templates are declined until Local and Cloud share a typed template contract
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** schedule-template-catalog
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Scheduled tasks — Suggestions
 
@@ -1685,7 +1685,7 @@ Not planned until a template contract declares supported target runtime, prompt,
 
 ### GAP-073 — Organization ID, in-app account deletion, and logout-all are declined without account APIs
 
-- **Status:** Not Planned
+- **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Account
@@ -1708,7 +1708,7 @@ Not planned until the account service owns organization identity, destructive de
 
 ### GAP-074 — Cross-surface Active Sessions is declined without a session inventory service
 
-- **Status:** Not Planned
+- **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Account — Active sessions table
@@ -1800,8 +1800,8 @@ Closed for the supported scope. Keep real memory policy controls available; add 
 
 ### GAP-078 — Desktop Chrome enablement and site-policy controls are declined because the extension owns enforcement
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** extension-policy-bridge
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Claude in Chrome
 
@@ -1823,8 +1823,8 @@ Not planned until a versioned authenticated bridge supports read, update, acknow
 
 ### GAP-079 — Local tool-runtime self-repair is declined without typed health and reinstall commands
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** native-desktop-lifecycle
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Configuration — Workspace Dependencies
 
@@ -1846,8 +1846,8 @@ Not planned until native owns structured diagnostics and a platform-specific rep
 
 ### GAP-080 — Trusted multi-device history is declined for single-session ephemeral pairing
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** account-and-session-service
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Connections
 
@@ -1869,8 +1869,8 @@ Not planned until a device authorization service provides independently revocabl
 
 ### GAP-081 — A remote-control master switch is declined while no durable listener exists
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** durable-device-authorization
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Connections > Control this Mac
 
@@ -1892,8 +1892,8 @@ Not planned for ephemeral pairing. Add a kill switch only with a durable inbound
 
 ### GAP-082 — Startup, global voice, menu-bar, and keep-awake toggles are declined without native lifecycle owners
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** native-desktop-lifecycle
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Settings > Desktop app > General
 
@@ -1938,8 +1938,8 @@ Closed as stale. Keep MCP server lifecycle inside MCPWorkspace and avoid duplica
 
 ### GAP-084 — Prevent-sleep is declined until native power assertions are implemented
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** native-desktop-lifecycle
 - **Surface/type:** desktop · missing-control
 - **Reference:** ChatGPT · macOS desktop · Settings > General
 
@@ -1961,7 +1961,7 @@ Not planned until native owns task-bound acquire/release, crash and quit cleanup
 
 ### GAP-085 — Menu-bar persistence is declined until tray and close semantics are native-backed
 
-- **Status:** Not Planned
+- **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** ChatGPT · macOS desktop · Settings > General
@@ -2007,8 +2007,8 @@ Completed. Keep keyboard behavior and accessible send labels driven from the sam
 
 ### GAP-087 — Queue versus Steer follow-ups are declined without executor semantics
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** run-queue-and-steer
 - **Surface/type:** desktop · missing-interaction
 - **Reference:** Codex · macOS desktop · Settings > General — Composer
 
@@ -2053,8 +2053,8 @@ Completed for the native event vocabulary. Add future categories only when a pro
 
 ### GAP-089 — Unbinding shortcuts is declined until shortcut ownership is reconciled
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** shortcut-dispatch-contract
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts
 
@@ -2099,8 +2099,8 @@ Completed. Keep instructional copy pinned to the actual conflict resolver if sho
 
 ### GAP-091 — Direct chat-switch shortcuts are declined without a canonical runtime dispatcher
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** conversation-order-contract
 - **Surface/type:** desktop · missing-interaction
 - **Reference:** Codex · macOS desktop · Settings > Keyboard shortcuts — chat switching
 
@@ -2145,8 +2145,8 @@ Not planned while both purposes are absent. Keep privacy text explicit that mode
 
 ### GAP-093 — A dictation dictionary is declined until transcription providers support a shared bias contract
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** transcription-bias-contract
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings > Voice — Dictation dictionary
 
@@ -2168,8 +2168,8 @@ Not planned until a typed vocabulary contract defines normalization, limits, per
 
 ### GAP-094 — A broad Desktop Browser settings page is declined without one browser runtime owner
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** browser-runtime-owner
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Settings › Browser
 
@@ -2191,8 +2191,8 @@ Not planned until a dedicated browser service owns session isolation, storage, c
 
 ### GAP-095 — Desktop per-site browser policy is declined until origin enforcement is shared
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** browser-runtime-owner
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Browser (permissions & developer mode)
 
@@ -2237,8 +2237,8 @@ Not planned beyond the supported inbound flow. Add tabs only alongside implement
 
 ### GAP-097 — Connections master allow is declined for the same ephemeral pairing boundary
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** durable-device-authorization
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Connections › Control this Mac
 
@@ -2260,8 +2260,8 @@ Not planned until durable inbound access exists. If introduced, the master switc
 
 ### GAP-098 — Agent Git policy settings are declined until push and PR consumers are authoritative
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** agent-git-policy-service
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Settings › Git
 
@@ -2283,8 +2283,8 @@ Not planned until an agent git service owns branch creation, guarded force-with-
 
 ### GAP-099 — Lifecycle hooks are declined until a sandboxed hook runtime exists
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** hook-and-mcp-reach
 - **Surface/type:** desktop · missing-screen
 - **Reference:** Codex · macOS desktop · Settings › Hooks (empty state)
 
@@ -2306,8 +2306,8 @@ Not planned until a reviewed hook runtime defines events, precedence, project tr
 
 ### GAP-100 — Shortcut Unassigned state is declined until renderer and native shortcut stores converge
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** shortcut-ownership-contract
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Settings › Keyboard shortcuts
 
@@ -2352,8 +2352,8 @@ Completed for the authoritative live MCP approval surface. Reuse the same modal-
 
 ### GAP-102 — Plugin disable switches are declined without authoritative installed-plugin state
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** plugin-enablement-enforcement
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Plugins
 
@@ -2375,7 +2375,7 @@ Not planned until the plugin lifecycle owns installed identity, scope, enabled s
 
 ### GAP-103 — Credits purchase and auto-reload are declined without billing product contracts
 
-- **Status:** Not Planned
+- **Status:** Done
 - **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Codex · macOS desktop · Settings › Usage & billing
@@ -2421,8 +2421,8 @@ Not planned for the current IA. Keep project membership in the Projects workspac
 
 ### GAP-105 — An MFA gate is declined until the account service publishes verified MFA state
 
-- **Status:** Not Planned
-- **Owner:** Desktop
+- **Status:** Open
+- **Owner:** account-and-session-service
 - **Surface/type:** desktop · missing-state
 - **Reference:** Codex · macOS desktop · Turn on Multi-Factor Authentication gate modal
 
@@ -2490,8 +2490,8 @@ Completed. Preserve a single native-backed access-policy projection so duplicate
 
 ### GAP-108 — Hosted cloud-browser settings are declined without a browser runtime
 
-- **Status:** Not Planned
-- **Owner:** Web
+- **Status:** Open
+- **Owner:** browser-runtime-owner
 - **Surface/type:** web · missing-screen
 - **Reference:** ChatGPT · web · Cloud browser
 
@@ -2605,8 +2605,8 @@ Not planned on the current contracts. Reconsider a unified activity index only a
 
 ### GAP-113 — A unified Directory is declined while catalogs have different authority and lifecycle
 
-- **Status:** Not Planned
-- **Owner:** Web
+- **Status:** Open
+- **Owner:** unified-directory-contract
 - **Surface/type:** web · missing-screen
 - **Reference:** Claude · web · Plugin directory browse (unified Directory modal)
 
@@ -2651,8 +2651,8 @@ Completed. Keep the shared deterministic policy as the single pattern owner, enf
 
 ### GAP-115 — Passkey and multi-device controls are explicitly unavailable pending account contracts
 
-- **Status:** Not Planned
-- **Owner:** Web
+- **Status:** Open
+- **Owner:** account-and-session-service
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Security and login
 
@@ -2674,8 +2674,8 @@ Not planned until account-owned APIs support credential identifiers, WebAuthn ch
 
 ### GAP-116 — Coding-session preferences are declined without a mounted Web code-session product
 
-- **Status:** Not Planned
-- **Owner:** Web
+- **Status:** Open
+- **Owner:** cloud-code-session-preferences
 - **Surface/type:** web · missing-screen
 - **Reference:** Claude · web · Settings > Claude Code appearance & behavior preferences
 
@@ -2697,7 +2697,7 @@ Not planned until a Web coding-session product owns repository/worktree state, r
 
 ### GAP-117 — Plugin installation remains explicitly closed until an account-owned marketplace exists
 
-- **Status:** Not Planned
+- **Status:** Done
 - **Owner:** Web
 - **Surface/type:** web · missing-state
 - **Reference:** Claude · web · Settings > Plugins empty state
@@ -2743,8 +2743,8 @@ Completed for Web. Keep the archived-only query paginated and owner-scoped, and 
 
 ### GAP-119 — Web Notifications exposes only the channel with a real sender
 
-- **Status:** Not Planned
-- **Owner:** Web
+- **Status:** Open
+- **Owner:** web-push-delivery
 - **Surface/type:** web · missing-control
 - **Reference:** ChatGPT · web · Settings › Notifications
 
@@ -2812,8 +2812,8 @@ Completed for the current voice runtime. Add persona, Model, Intelligence, Langu
 
 ### GAP-122 — Chrome keeps the attach menu image-only until file and agent-mode contracts exist
 
-- **Status:** Not Planned
-- **Owner:** Extension
+- **Status:** Open
+- **Owner:** extension-attachment-upload
 - **Surface/type:** extension · missing-control
 - **Reference:** ChatGPT · Chrome extension · Composer '+' attach menu
 
@@ -2950,8 +2950,8 @@ Completed. Keep Local, BYOK, and Managed Cloud ownership distinct; retain explic
 
 ### GAP-128 — VS Code keeps developer sessions local and hands hosted background tasks to Web
 
-- **Status:** Not Planned
-- **Owner:** Extension
+- **Status:** Open
+- **Owner:** cloud-run-list-client
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Cloud task handoff list
 
@@ -3019,8 +3019,8 @@ Completed. Preserve the honest unavailable-here copy for hosted background tasks
 
 ### GAP-131 — VS Code declines sandbox controls that the local runtime cannot read or enforce
 
-- **Status:** Not Planned
-- **Owner:** Extension
+- **Status:** Open
+- **Owner:** app-server-policy-contract
 - **Surface/type:** extension-vscode · missing-control
 - **Reference:** Codex · VS Code extension · Settings — Configuration (approval policy and sandbox)
 
@@ -3065,8 +3065,8 @@ Completed. Keep the path relative to the active extension host, preserve non-tru
 
 ### GAP-133 — VS Code keeps Hooks capability-honest until the runtime exposes inventory and mutation
 
-- **Status:** Not Planned
-- **Owner:** Extension
+- **Status:** Open
+- **Owner:** hook-and-mcp-reach
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Settings — Hooks (empty state)
 
@@ -3088,8 +3088,8 @@ Not planned until a versioned app-server capability returns hook identity, event
 
 ### GAP-134 — VS Code declines per-server MCP controls without a runtime inventory contract
 
-- **Status:** Not Planned
-- **Owner:** Extension
+- **Status:** Open
+- **Owner:** hook-and-mcp-reach
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Settings — MCP servers
 
@@ -3111,8 +3111,8 @@ Not planned until the app-server publishes a typed per-server inventory and muta
 
 ### GAP-135 — MCP provenance groups are declined until user and plugin servers have authoritative identities
 
-- **Status:** Not Planned
-- **Owner:** Extension
+- **Status:** Open
+- **Owner:** hook-and-mcp-reach
 - **Surface/type:** extension-vscode · missing-ia
 - **Reference:** Codex · VS Code extension · Settings — MCP servers, 'From plugins' section
 
@@ -3157,8 +3157,8 @@ Completed. Keep custom instructions private to VS Code Memento storage, preserve
 
 ### GAP-137 — VS Code keeps Plugins as an availability boundary until a local registry exists
 
-- **Status:** Not Planned
-- **Owner:** Extension
+- **Status:** Open
+- **Owner:** local-plugin-registry-contract
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Settings — Plugins list
 
