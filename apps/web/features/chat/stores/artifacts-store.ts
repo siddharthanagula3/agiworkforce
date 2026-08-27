@@ -29,6 +29,23 @@ export const _sharedArtifactStore = createArtifactStore({
   maxArtifacts: MAX_RETAINED_ARTIFACTS,
 });
 
+/**
+ * Id prefix for an artifact that is really a tool-generated FILE already stored
+ * in `media_assets`. Such a row exists twice by nature — under `<assetId>` in
+ * Library and `genfile-<assetId>` here — so anything listing artifacts
+ * account-wide must skip it or the same file appears in two places under two
+ * ids that can never dedupe.
+ */
+export const GENERATED_FILE_ARTIFACT_PREFIX = 'genfile-';
+
+export function generatedFileArtifactId(assetId: string): string {
+  return `${GENERATED_FILE_ARTIFACT_PREFIX}${assetId}`;
+}
+
+export function isGeneratedFileArtifactId(id: string): boolean {
+  return id.startsWith(GENERATED_FILE_ARTIFACT_PREFIX);
+}
+
 interface WebSideEntry {
   computeSession?: ArtifactData['computeSession'];
   generatedFile?: ArtifactData['generatedFile'];

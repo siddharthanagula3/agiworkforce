@@ -19,12 +19,12 @@ function build(hiddenIds: string[], isAdmin = false) {
 // the user with no route back to their conversations.
 describe('hiding sidebar destinations', () => {
   it('shows everything when nothing is hidden', () => {
-    expect(build([]).map((i) => i.id)).toContain('artifacts');
+    expect(build([]).map((i) => i.id)).toContain('library');
   });
 
   it('removes a hidden destination from the rail', () => {
-    const ids = build(['artifacts']).map((i) => i.id);
-    expect(ids).not.toContain('artifacts');
+    const ids = build(['library']).map((i) => i.id);
+    expect(ids).not.toContain('library');
     expect(ids).toContain('projects');
   });
 

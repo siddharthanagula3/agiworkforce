@@ -17,6 +17,7 @@ vi.mock('@/features/chat/hooks/use-artifact-index', () => ({
 let storeArtifacts: Artifact[] = [];
 
 vi.mock('@/features/chat/stores/artifacts-store', () => ({
+  isGeneratedFileArtifactId: (id: string) => id.startsWith('genfile-'),
   useArtifactsStore: (selector: (state: { artifacts: Artifact[] }) => unknown) =>
     selector({ artifacts: storeArtifacts }),
 }));
