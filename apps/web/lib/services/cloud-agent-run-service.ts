@@ -84,7 +84,7 @@ const NOTIFIED_TERMINAL_EVENTS: Partial<Record<AgentTaskState, 'completed' | 'fa
  * whether this write is the one that carried a run into a terminal state.
  *
  * Two writers move a run's state: the event journal
- * ({@link appendCloudAgentEventWithinTransaction}, which derives the state from
+ * ({@link appendCloudAgentEventsWithinTransaction}, which derives the state from
  * a `task-state-changed` envelope) and {@link transitionCloudAgentRun}. The
  * journal always writes first on the workflow path — the tool loop emits
  * `ready_for_review`/`failed` before the workflow settles — so a decision made
@@ -543,13 +543,44 @@ export async function appendCloudAgentEvent(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; envelope: AgentEventEnvelope },
 ): Promise<CloudAgentRun> {
-  const envelope = AgentEventEnvelopeSchema.parse(input.envelope);
+  return appendCloudAgentEvents(db, {
+    userId: input.userId,
+    runId: input.runId,
+    envelopes: [input.envelope],
+  });
+}
+
+/**
+ * Journal a whole batch of envelopes in ONE transaction.
+ *
+ * The streaming paths emit a `text-delta` envelope per provider SSE line, and
+ * journalling each one on its own cost a full RLS transaction — connect,
+ * `BEGIN; SET LOCAL ROLE app_rls`, `set_config`, INSERT, locked UPDATE, COMMIT,
+ * release — roughly six round trips per token, on the critical path of the
+ * stream, holding one of the pool's clients throughout. Callers coalesce the
+ * deltas (see `createCloudAgentEventJournal`) and land them here as a single
+ * multi-row INSERT plus one run-row update, which is what keeps a long answer
+ * from issuing thousands of serialized transactions against a pool of tens.
+ */
+export async function appendCloudAgentEvents(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string; envelopes: readonly AgentEventEnvelope[] },
+): Promise<CloudAgentRun> {
+  const envelopes = input.envelopes.map((envelope) => AgentEventEnvelopeSchema.parse(envelope));
+  if (envelopes.length === 0) {
+    return requireRun(
+      await db.query<CloudAgentRunRow>(
+        `select * from public.cloud_agent_runs where id = $1 and user_id = $2 limit 1`,
+        [input.runId, input.userId],
+      ),
+    );
+  }
 
   const { run, notice } = await db.transaction((tx) =>
-    appendCloudAgentEventWithinTransaction(tx, {
+    appendCloudAgentEventsWithinTransaction(tx, {
       userId: input.userId,
       runId: input.runId,
-      envelope,
+      envelopes,
     }),
   );
 
@@ -567,27 +598,40 @@ interface AppendedCloudAgentEvent {
   notice: 'completed' | 'failed' | null;
 }
 
-async function appendCloudAgentEventWithinTransaction(
-  tx: DatabaseAdapter,
-  input: { userId: string; runId: string; envelope: AgentEventEnvelope },
-): Promise<AppendedCloudAgentEvent> {
-  const envelope = input.envelope;
-  const nextState = envelope.event.type === 'task-state-changed' ? envelope.event.state : undefined;
+const EVENT_INSERT_COLUMNS_PER_ROW = 4;
 
-  const inserted = await tx.query<{ sequence: number }>(
+/** `run_id` and `user_id` are shared by every tuple in the multi-row insert. */
+const FIXED_EVENT_INSERT_PARAMS = 2;
+
+function buildEventInsertValues(envelopes: readonly AgentEventEnvelope[]): {
+  tuples: string;
+  params: unknown[];
+} {
+  const tuples: string[] = [];
+  const params: unknown[] = [];
+  for (const [index, envelope] of envelopes.entries()) {
+    const base = FIXED_EVENT_INSERT_PARAMS + index * EVENT_INSERT_COLUMNS_PER_ROW;
+    tuples.push(
+      `($1, $2, $${base + 1}, to_timestamp($${base + 2}::double precision / 1000.0), $${base + 3}, $${base + 4}::jsonb)`,
+    );
+    params.push(envelope.sequence, envelope.emittedAtMs, envelope.event.type, envelope);
+  }
+  return { tuples: tuples.join(', '), params };
+}
+
+async function appendCloudAgentEventsWithinTransaction(
+  tx: DatabaseAdapter,
+  input: { userId: string; runId: string; envelopes: readonly AgentEventEnvelope[] },
+): Promise<AppendedCloudAgentEvent> {
+  const { tuples, params } = buildEventInsertValues(input.envelopes);
+
+  const inserted = await tx.query<{ sequence: number | string }>(
     `insert into public.cloud_agent_events (
          run_id, user_id, sequence, emitted_at, event_type, envelope
-       ) values ($1, $2, $3, to_timestamp($4::double precision / 1000.0), $5, $6::jsonb)
+       ) values ${tuples}
        on conflict (run_id, sequence) do nothing
        returning sequence`,
-    [
-      input.runId,
-      input.userId,
-      envelope.sequence,
-      envelope.emittedAtMs,
-      envelope.event.type,
-      envelope,
-    ],
+    [input.runId, input.userId, ...params],
   );
 
   // A replayed envelope loses the `(run_id, sequence)` race and never reaches
@@ -605,6 +649,22 @@ async function appendCloudAgentEventWithinTransaction(
     };
   }
 
+  const persisted = new Set(inserted.map((row) => Number(row.sequence)));
+  const highestSequence = input.envelopes.reduce(
+    (highest, envelope) => Math.max(highest, envelope.sequence),
+    0,
+  );
+  // Only a `task-state-changed` envelope that actually landed may move the run,
+  // and when several are batched the last one wins — the batch is ordered.
+  const stateEnvelope = [...input.envelopes]
+    .reverse()
+    .find(
+      (envelope) =>
+        envelope.event.type === 'task-state-changed' && persisted.has(envelope.sequence),
+    );
+  const nextState =
+    stateEnvelope?.event.type === 'task-state-changed' ? stateEnvelope.event.state : undefined;
+
   // `previous` locks the row and reads its committed pre-update snapshot, so
   // concurrent appends serialise and only the first sees a non-terminal state.
   const rows = await tx.query<CloudAgentRunRow>(
@@ -616,21 +676,27 @@ async function appendCloudAgentEventWithinTransaction(
         update public.cloud_agent_runs as runs
           set last_event_sequence = greatest(runs.last_event_sequence, $3),
               state = case
-                when $3 >= runs.last_event_sequence then coalesce($4, runs.state)
+                when $4 is not null and $5 >= runs.last_event_sequence then $4
                 else runs.state
               end,
               completed_at = case
-                when $3 < runs.last_event_sequence then runs.completed_at
+                when $4 is null then runs.completed_at
+                when $5 < runs.last_event_sequence then runs.completed_at
                 when $4 in ('ready_for_review', 'completed', 'failed', 'cancelled', 'archived')
                   then coalesce(runs.completed_at, now())
-                when $4 is not null then null
-                else runs.completed_at
+                else null
               end,
               updated_at = now()
         from previous
         where runs.id = previous.id and runs.user_id = $2
         returning runs.*, previous.state as previous_state`,
-    [input.runId, input.userId, envelope.sequence, nextState ?? null],
+    [
+      input.runId,
+      input.userId,
+      highestSequence,
+      nextState ?? null,
+      stateEnvelope?.sequence ?? highestSequence,
+    ],
   );
   const run = requireRun(rows);
   return {
@@ -991,11 +1057,11 @@ export async function saveCloudAgentApprovalCheckpoint(
 
     // A pause transaction ends with the run `awaiting_input`, so a terminal
     // notice from a checkpoint event is never a terminal this run reached.
-    for (const event of events) {
-      await appendCloudAgentEventWithinTransaction(tx, {
+    if (events.length > 0) {
+      await appendCloudAgentEventsWithinTransaction(tx, {
         userId: input.userId,
         runId: input.runId,
-        envelope: event,
+        envelopes: events,
       });
     }
 
@@ -1307,11 +1373,11 @@ export async function saveCloudAgentInputCheckpoint(
 
     // A pause transaction ends with the run `awaiting_input`, so a terminal
     // notice from a checkpoint event is never a terminal this run reached.
-    for (const event of events) {
-      await appendCloudAgentEventWithinTransaction(tx, {
+    if (events.length > 0) {
+      await appendCloudAgentEventsWithinTransaction(tx, {
         userId: input.userId,
         runId: input.runId,
-        envelope: event,
+        envelopes: events,
       });
     }
 

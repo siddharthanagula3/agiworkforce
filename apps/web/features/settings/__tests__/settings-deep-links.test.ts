@@ -3,7 +3,25 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { SETTINGS_NAV, isSettingsNavKey } from '@agiworkforce/ui';
+import { SETTINGS_NAV, SETTINGS_NAV_GROUPS_WEB, isSettingsNavKey } from '@agiworkforce/ui';
+
+import {
+  WEB_SETTINGS_BUILT_IN_SECTIONS,
+  WEB_SETTINGS_CONTENT_SECTIONS,
+  isWebSettingsSection,
+} from '../lib/web-settings-sections';
+
+const DESKTOP_ONLY_SECTIONS = [
+  'appearance',
+  'models-keys',
+  'agents',
+  'connections',
+  'cowork',
+  'agi-code',
+  'agi-in-chrome',
+  'extensions',
+  'developer',
+] as const;
 
 // Every nav key renders /settings/<key> through SettingsSectionLink. Before the
 // catch-all, a dozen keys had no directory and a bookmarked or shared link to
@@ -34,6 +52,31 @@ describe('every settings section can be deep-linked', () => {
 
   it('rejects a traversal attempt rather than routing it', () => {
     expect(isSettingsNavKey('../admin')).toBe(false);
+  });
+
+  // `isSettingsNavKey` admits all thirty nav keys, nine of which exist only on
+  // Desktop. Routing on that answer opened a modal rendering the literal string
+  // `No content for section "developer".` at the user.
+  it.each(DESKTOP_ONLY_SECTIONS)('does not route the desktop-only %s section on web', (key) => {
+    expect(isSettingsNavKey(key)).toBe(true);
+    expect(isWebSettingsSection(key)).toBe(false);
+  });
+
+  it('routes every section the web nav rail offers', () => {
+    for (const group of SETTINGS_NAV_GROUPS_WEB) {
+      for (const item of group.items) {
+        expect(
+          isWebSettingsSection(item.key),
+          `${item.key} is in the web rail but not routable`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('routes exactly the sections the web modal can render', () => {
+    const routable = [...WEB_SETTINGS_CONTENT_SECTIONS, ...WEB_SETTINGS_BUILT_IN_SECTIONS];
+    for (const key of routable) expect(isWebSettingsSection(key)).toBe(true);
+    for (const key of routable) expect(isSettingsNavKey(key)).toBe(true);
   });
 
   it('has every section actually linked in the product point at a real key', () => {

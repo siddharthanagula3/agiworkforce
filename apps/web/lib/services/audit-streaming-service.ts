@@ -280,6 +280,17 @@ export async function drainAuditDestination(
   );
 
   if (events.length === 0) {
+    // Stamped even though nothing was sent: `last_attempt_at` is what rotates
+    // the drain's fixed per-run budget across destinations, so a quiet
+    // workspace that never advanced it would hold the head of the queue
+    // forever and starve everyone behind it. `last_status` is left alone so
+    // the console still shows the last real delivery outcome.
+    await db.query(
+      `update public.organization_audit_destinations
+          set last_attempt_at = now()
+        where organization_id = $1`,
+      [organizationId],
+    );
     return { organizationId, delivered: 0, status: 'nothing_due', error: null };
   }
 
@@ -346,11 +357,20 @@ export async function drainAuditDestination(
   return { organizationId, delivered: 0, status: 'failed', error };
 }
 
+/**
+ * Stalest destination first, not lowest id first.
+ *
+ * The caller takes a fixed prefix of this list, so a stable `organization_id`
+ * ordering meant the same head drained on every run forever and every
+ * destination past the cap received total silence at its SIEM — while the
+ * console reported it healthy. Ordering by when each was last attempted makes
+ * the fixed budget rotate over the whole tenant list instead.
+ */
 export async function listStreamingOrganizations(db: DatabaseAdapter): Promise<string[]> {
   const rows = await db.query<{ organization_id: string }>(
     `select organization_id from public.organization_audit_destinations
       where enabled = true and consecutive_failures < $1
-      order by organization_id`,
+      order by last_attempt_at asc nulls first, organization_id`,
     [AUDIT_STREAM_FAILURE_CEILING],
   );
   return rows.map((row) => row.organization_id);

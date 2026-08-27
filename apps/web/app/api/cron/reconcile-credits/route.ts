@@ -5,7 +5,7 @@ import Stripe from 'stripe';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { CreditService, type CreditSettlementQueueSummary } from '@/lib/services/credit-service';
 import { deliverDueVideoIncidentAlerts } from '@/lib/services/video-incident-alert-service';
 import {
@@ -19,6 +19,23 @@ import {
 } from '@/lib/services/cogs-ledger-service';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
+
+/**
+ * The SQL ceiling, not the default of 100.
+ *
+ * This drain is the only caller of `recover_stale_managed_usage_requests`, so
+ * its batch size is the platform's entire refund rate for reservations leaked
+ * by a killed turn — and this route runs once a day. At 100 the backlog grows
+ * monotonically past roughly a thousand daily-active users, and the visible
+ * symptom is a user who sent three messages being told their rolling limit is
+ * reached. `process_credit_settlement_queue` clamps to 500 itself; asking for
+ * more would be silently ignored.
+ *
+ * The cadence is the other half and it is not settable from here:
+ * `vercel.json` schedules this at `30 0 * * *`, and the function's own comment
+ * in migration 0056 claims it runs every minute. It should be sub-hourly.
+ */
+const SETTLEMENT_DRAIN_BATCH = 500;
 
 interface ReconcileSummary {
   processed: number;
@@ -136,7 +153,7 @@ async function runStripeReconciliation(): Promise<StripeReconciliationSummary | 
 
   return reconcileStripeSettlement({
     db: getNeonDb(),
-    stripe: new Stripe(stripeKey, { apiVersion: STRIPE_API_VERSION }),
+    stripe: new Stripe(stripeKey, STRIPE_CLIENT_OPTIONS),
   });
 }
 
@@ -148,7 +165,7 @@ async function runCogsImport(): Promise<StripeCogsImportSummary | null> {
 
   const until = new Date();
   return importStripeCogsAdjustments({
-    stripe: new Stripe(stripeKey, { apiVersion: STRIPE_API_VERSION }),
+    stripe: new Stripe(stripeKey, STRIPE_CLIENT_OPTIONS),
     since: new Date(until.getTime() - COGS_IMPORT_LOOKBACK_MS),
     until,
     db: getNeonDb(),
@@ -164,7 +181,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let summary: CreditSettlementQueueSummary | null = null;
   let creditError: unknown;
   try {
-    summary = await CreditService.processPendingSettlements(100);
+    summary = await CreditService.processPendingSettlements(SETTLEMENT_DRAIN_BATCH);
   } catch (error) {
     creditError = error;
     logger.error(

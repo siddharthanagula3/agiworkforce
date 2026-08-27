@@ -25,10 +25,12 @@ const delivered = vi.fn(async (_input: unknown) => {
 const settleFreeTrialRequest = vi.fn(async (_input: unknown) => {
   events.push('free-settled');
 });
-const appendCloudAgentEvent = vi.fn(async (_db: unknown, input: { envelope: unknown }) => {
-  events.push('event-persisted');
-  return { state: (input.envelope as { event: { state?: string } }).event.state ?? 'running' };
-});
+const appendCloudAgentEvents = vi.fn(
+  async (_db: unknown, input: { envelopes: readonly { event: { state?: string } }[] }) => {
+    events.push('event-persisted');
+    return { state: input.envelopes.at(-1)?.event.state ?? 'running' };
+  },
+);
 const transitionCloudAgentRun = vi.fn(async (_db: unknown, input: { state: string }) => ({
   state: input.state,
 }));
@@ -51,8 +53,8 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
-  appendCloudAgentEvent: (db: unknown, input: unknown) =>
-    appendCloudAgentEvent(db, input as { envelope: unknown }),
+  appendCloudAgentEvents: (db: unknown, input: unknown) =>
+    appendCloudAgentEvents(db, input as { envelopes: readonly { event: { state?: string } }[] }),
   transitionCloudAgentRun: (db: unknown, input: unknown) =>
     transitionCloudAgentRun(db, input as { state: string }),
   recordCloudAgentRunSettledUsage: (db: unknown, input: unknown) =>
@@ -319,7 +321,7 @@ describe('managed agent stream', () => {
 
   it('persists canonical activity before making it visible and preserves an awaiting-input terminal', async () => {
     events.length = 0;
-    appendCloudAgentEvent.mockClear();
+    appendCloudAgentEvents.mockClear();
     transitionCloudAgentRun.mockClear();
 
     const stream = buildManagedAgentStream({
@@ -339,7 +341,7 @@ describe('managed agent stream', () => {
 
     expect(output).toContain('x_agent_event');
     expect(events[0]).toBe('event-persisted');
-    expect(appendCloudAgentEvent).toHaveBeenCalledOnce();
+    expect(appendCloudAgentEvents).toHaveBeenCalledOnce();
     expect(transitionCloudAgentRun).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ state: 'ready_for_review' }),

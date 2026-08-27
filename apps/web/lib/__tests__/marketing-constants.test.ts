@@ -99,13 +99,29 @@ describe('surface availability', () => {
     expect(statuses.every((status) => status === COMING_SOON_LABEL)).toBe(false);
   });
 
-  it('states the three shipped surfaces as available, at the version each one actually ships', () => {
+  it('states the shipped surfaces as available, at the version each one actually ships', () => {
     expect(SURFACE_STATUS.web).not.toBe(COMING_SOON_LABEL);
     expect(SURFACE_STATUS.desktop).toContain(shippedVersion('apps/desktop/package.json'));
-    expect(SURFACE_STATUS.cli).toContain(shippedVersion('apps/cli/npm/package.json'));
   });
 
-  it('keeps the three surfaces with no release tag marked unreleased', () => {
+  // A version number in a manifest is not a release. This assertion used to read
+  // `expect(SURFACE_STATUS.cli).toContain(shippedVersion('apps/cli/npm/package.json'))`
+  // — which passed while the page claimed "Released · v1.7.1" for a crate that
+  // `apps/cli/Cargo.toml` marks `publish = false` and that 404s on the registry.
+  // The manifest is what a surface WOULD ship as; `publish = false` is whether it
+  // ships at all, so that is what the public claim has to follow.
+  it('does not call the CLI released while its crate refuses to publish', () => {
+    const cargo = readFileSync(resolve(repoRoot, 'apps/cli/Cargo.toml'), 'utf8');
+    const publishable = !/^\s*publish\s*=\s*false\s*$/m.test(cargo);
+
+    if (publishable) {
+      expect(SURFACE_STATUS.cli).toContain(shippedVersion('apps/cli/npm/package.json'));
+    } else {
+      expect(SURFACE_STATUS.cli).toBe(COMING_SOON_LABEL);
+    }
+  });
+
+  it('keeps the surfaces with no release tag marked unreleased', () => {
     expect(SURFACE_STATUS.mobile).toBe(COMING_SOON_LABEL);
     expect(SURFACE_STATUS.vscode).toBe(COMING_SOON_LABEL);
     expect(SURFACE_STATUS.chrome).toBe(COMING_SOON_LABEL);

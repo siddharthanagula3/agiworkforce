@@ -18,6 +18,9 @@ export async function register() {
       const result = validateEnvironment();
       logValidationResults(result);
 
+      const { assertPooledDatabaseEndpoint } = await import('./lib/server/db-pool-tuning');
+      assertPooledDatabaseEndpoint();
+
       if (result.valid) {
         console.debug('✅ Server initialization complete - environment validated');
       } else {
@@ -28,9 +31,7 @@ export async function register() {
         const allowInvalid = process.env['AGI_ALLOW_INVALID_ENV'] === '1';
         if (process.env['NODE_ENV'] === 'production' && !allowInvalid) {
           console.error(`❌ ${message}`);
-          throw new Error(
-            `${message}\nSet AGI_ALLOW_INVALID_ENV=1 to boot anyway (degraded).`,
-          );
+          throw new Error(`${message}\nSet AGI_ALLOW_INVALID_ENV=1 to boot anyway (degraded).`);
         }
 
         console.error(

@@ -2,15 +2,42 @@ import 'server-only';
 
 import { createDatabaseClient } from '@agiworkforce/data-layer';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { SERVICE_POOL_TUNING, WEBHOOK_POOL_TUNING } from '@/lib/server/db-pool-tuning';
 
 let db: DatabaseAdapter | null = null;
+let webhookDb: DatabaseAdapter | null = null;
 
 export function getNeonDb(): DatabaseAdapter {
   if (!db) {
     db = createDatabaseClient({
       provider: 'neon',
       applicationName: 'agi-web',
+      ...SERVICE_POOL_TUNING,
     });
   }
   return db;
+}
+
+/**
+ * A pool of its own for the Stripe webhook.
+ *
+ * The webhook opens one transaction per event and makes several Stripe API
+ * calls inside it, so it holds a checked-out client for as long as Stripe takes
+ * to answer. On the shared service pool that starves `assertAccountActive`,
+ * which runs on every cookie-authenticated request and is fail-closed — a slow
+ * Stripe hour became "Unable to verify account status" for users who never
+ * opened the billing page. Isolating it bounds the blast radius to billing.
+ *
+ * Costs nothing on instances that never receive a webhook: pg opens no
+ * connection until the first checkout.
+ */
+export function getStripeWebhookDb(): DatabaseAdapter {
+  if (!webhookDb) {
+    webhookDb = createDatabaseClient({
+      provider: 'neon',
+      applicationName: 'agi-web-stripe-webhook',
+      ...WEBHOOK_POOL_TUNING,
+    });
+  }
+  return webhookDb;
 }

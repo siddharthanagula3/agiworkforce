@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { NextRequest } from 'next/server';
 import { getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 
@@ -424,5 +426,67 @@ describe('verified-user bucketing binds Clerk tokens to an authorized party', ()
 
     expect(clerk.verifyToken).not.toHaveBeenCalled();
     expect(result.identifier).not.toBe('user:user_rl_3');
+  });
+});
+
+describe('run-following has a bucket of its own', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['VERCEL_ENV'];
+  });
+
+  // Run-following polls once every few seconds for the whole length of a turn.
+  // Sharing the 30/min `llm-completion` bucket meant one dropped stream refused
+  // the reconnect AND the user's next message, so a single user could lock
+  // themselves out of chat by having a stream drop once.
+  it('does not share the chat-send ceiling', async () => {
+    const { rateLimitConfigs } = await import('../rate-limit');
+
+    expect(rateLimitConfigs['agent-run-follow'].limit).toBeGreaterThan(
+      rateLimitConfigs['llm-completion'].limit,
+    );
+  });
+
+  it('fails open, because refusing a reconnect strands a run that is still going', async () => {
+    const { rateLimitConfigs } = await import('../rate-limit');
+
+    expect(rateLimitConfigs['agent-run-follow'].failClosed).toBe(false);
+  });
+
+  it('counts separately from the chat-send bucket for one identifier', async () => {
+    const { checkRateLimit } = await import('../rate-limit');
+
+    for (let call = 0; call < 30; call++) {
+      await checkRateLimit(req, 'llm-completion', 'user:follow-1');
+    }
+    const follow = await checkRateLimit(req, 'agent-run-follow', 'user:follow-1');
+
+    expect(follow.success).toBe(true);
+  });
+});
+
+describe('managed turn slot age-out', () => {
+  // A slot is normally released by the stream pipe's `finally`. Nothing runs a
+  // `finally` when the platform kills the function at its maxDuration, so the
+  // age-out is the only thing that frees the slot — and at 15 minutes it locked
+  // a free user out of chat six times longer than a turn can legally run.
+  it('ages out just above the chat route maxDuration, not minutes later', async () => {
+    const routeSource = readFileSync(
+      resolve(process.cwd(), 'app/api/llm/v1/chat/completions/route.ts'),
+      'utf8',
+    );
+    const routeMaxDurationSeconds = Number(
+      /export const maxDuration = (\d+)/.exec(routeSource)?.[1],
+    );
+    const limiterSource = readFileSync(resolve(process.cwd(), 'lib/rate-limit.ts'), 'utf8');
+    const ttlSeconds = Number(
+      /const MANAGED_TURN_SLOT_TTL_SECONDS = (\d+)/.exec(limiterSource)?.[1],
+    );
+
+    expect(routeMaxDurationSeconds).toBeGreaterThan(0);
+    expect(ttlSeconds).toBeGreaterThan(routeMaxDurationSeconds);
+    expect(ttlSeconds).toBeLessThan(routeMaxDurationSeconds * 2);
   });
 });

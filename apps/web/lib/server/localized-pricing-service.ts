@@ -3,7 +3,7 @@ import 'server-only';
 import Stripe from 'stripe';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
 import type { BillingInterval } from '@agiworkforce/types';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { getConfiguredPriceId, type ConfiguredCheckoutPlan } from '@/lib/pricing';
 import {
   getCurrencyForCountry,
@@ -47,7 +47,7 @@ let stripeClient: Stripe | null = null;
 
 function getStripe(): Stripe | null {
   if (!getOptionalEnv('STRIPE_SECRET_KEY')) return null;
-  stripeClient ??= new Stripe(requireEnv('STRIPE_SECRET_KEY'), { apiVersion: STRIPE_API_VERSION });
+  stripeClient ??= new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
   return stripeClient;
 }
 
