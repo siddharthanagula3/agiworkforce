@@ -16,6 +16,10 @@ const LazyLocalRuntimeSettings = lazy(() =>
   import('./LocalRuntimeSettings').then((m) => ({ default: m.LocalRuntimeSettings })),
 );
 
+const LazyDailyBudgetSettings = lazy(() =>
+  import('./DailyBudgetSettings').then((m) => ({ default: m.DailyBudgetSettings })),
+);
+
 function Fallback({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card/60 px-4 py-3 text-sm text-muted-foreground">
@@ -475,6 +479,10 @@ export function ModelsKeysTab({
           </Suspense>
         </div>
       </div>
+
+      <Suspense fallback={<Fallback label="Loading spend cap..." />}>
+        <LazyDailyBudgetSettings />
+      </Suspense>
 
       <div className="pt-6 border-t border-border">
         <h3 className="text-lg font-semibold mb-4">Settings Management</h3>

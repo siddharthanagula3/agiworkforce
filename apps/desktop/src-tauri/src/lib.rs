@@ -5,6 +5,16 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::type_complexity)]
 
+// A shipped build must not carry the webview inspector. The shell-script guard
+// only ever inspected the `tauri = ` dependency line, so a `--features devtools`
+// flag on the bundler command line passed it unseen and shipped an inspectable
+// installer. This fires in the compiler instead, where no build argument can
+// route around it; debug builds (`tauri dev`, `cargo clippy`) are unaffected.
+#[cfg(all(feature = "devtools", not(debug_assertions)))]
+compile_error!(
+    "the `devtools` feature enables the webview inspector and must not be enabled in a release build; drop it from the bundler's --features list"
+);
+
 use crate::core::agent::approval::ApprovalController;
 use crate::data::db::migrations;
 use crate::data::settings::SettingsService;
@@ -560,6 +570,10 @@ pub fn run() {
             // settings and ships in regular backups.
             match crate::core::llm::daily_budget::DailyBudgetGuard::new(db_conn_arc.clone()) {
                 Ok(guard) => {
+                    // The LLM router enforces the cap from below the command
+                    // layer, where no AppHandle is reachable, so the guard is
+                    // published both ways from this one construction.
+                    crate::core::llm::daily_budget::install_global(guard.clone());
                     app.manage(guard);
                     tracing::info!("DailyBudgetGuard initialized at default $25/day cap");
                 }
@@ -2297,6 +2311,7 @@ pub fn run() {
             crate::sys::commands::master_password::master_password_start_migration,
             crate::sys::commands::master_password::master_password_complete_migration,
             crate::sys::commands::daily_budget::budget_get_status,
+            crate::sys::commands::daily_budget::budget_set_cap_usd,
 
             // Background Agents (push to background with "&" prefix)
             crate::sys::commands::background_agents::background_agent_push,

@@ -321,7 +321,7 @@ function deliverDeepLink(url: string): void {
     console.warn(
       `[deep-link] dropped ${DEEP_LINK_SCHEME}://${deepLinkRoute(url)}: renderer mode ` +
         `"${RENDERER_MODE}" loads ${CLOUD_APP_ORIGIN} top-level with no preload, so no IPC ` +
-        'receiver is attached. Relaunch with AGI_CLOUD_RENDERER=bundled for native deep links.',
+        'receiver is attached. Unset AGI_CLOUD_RENDERER to restore native deep links.',
     );
     focusMainWindow();
     return;

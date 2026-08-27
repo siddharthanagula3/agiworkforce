@@ -231,6 +231,7 @@ export const REGISTERED_COMMANDS: ReadonlySet<string> = new Set([
   'browser_wait_for_navigation',
   'browser_wait_for_selector',
   'budget_get_status',
+  'budget_set_cap_usd',
   'cache_clear_all',
   'cache_clear_by_provider',
   'cache_clear_by_type',

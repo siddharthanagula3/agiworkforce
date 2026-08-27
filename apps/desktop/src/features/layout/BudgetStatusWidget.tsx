@@ -13,18 +13,17 @@ interface BudgetStatus {
   remaining_usd: number;
 }
 
+const HIGH_USAGE_PERCENT = 80;
+const AT_CAP_PERCENT = 100;
+
 const POLL_INTERVAL_MS = 30_000;
 
-export interface BudgetStatusWidgetProps {
-  userId: string;
-}
-
-export function BudgetStatusWidget({ userId }: BudgetStatusWidgetProps) {
+export function BudgetStatusWidget() {
   const [status, setStatus] = useState<BudgetStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isTauri || !userId) {
+    if (!isTauri) {
       return;
     }
     let cancelled = false;
@@ -32,7 +31,7 @@ export function BudgetStatusWidget({ userId }: BudgetStatusWidgetProps) {
 
     const poll = async (): Promise<void> => {
       try {
-        const next = await invoke<BudgetStatus>('budget_get_status', { userId });
+        const next = await invoke<BudgetStatus>('budget_get_status');
         if (cancelled) return;
         setStatus(next);
         setError(null);
@@ -53,7 +52,7 @@ export function BudgetStatusWidget({ userId }: BudgetStatusWidgetProps) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [userId]);
+  }, []);
 
   if (!isTauri || (!status && !error)) {
     return null;
@@ -80,9 +79,9 @@ export function BudgetStatusWidget({ userId }: BudgetStatusWidgetProps) {
 
   const usagePercent = status.cap_usd > 0 ? (status.spent_usd / status.cap_usd) * 100 : 0;
   const colorClass =
-    usagePercent >= 100
+    usagePercent >= AT_CAP_PERCENT
       ? 'text-destructive'
-      : usagePercent >= 80
+      : usagePercent >= HIGH_USAGE_PERCENT
         ? 'text-warning'
         : 'text-muted-foreground';
 
@@ -98,10 +97,10 @@ export function BudgetStatusWidget({ userId }: BudgetStatusWidgetProps) {
         </div>
       </TooltipTrigger>
       <TooltipContent side="top">
-        <p>Daily LLM spend cap (FIX-007)</p>
+        <p>Daily LLM spend cap</p>
         <p className="text-xs text-muted-foreground">
           ${status.spent_usd.toFixed(4)} spent of ${status.cap_usd.toFixed(2)} cap (
-          {usagePercent.toFixed(0)}%). Adjust the cap in Settings → Models → Budget.
+          {usagePercent.toFixed(0)}%). New calls are refused at the cap.
         </p>
       </TooltipContent>
     </Tooltip>

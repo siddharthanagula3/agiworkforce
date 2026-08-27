@@ -8,6 +8,7 @@ import {
 } from '../api/cloudApi';
 import { getTaskModelForProvider } from '../constants/llm';
 import { assertRegisteredCommand } from '../utils/ipc';
+import { REGISTERED_COMMANDS } from '../utils/registeredCommands';
 import {
   isCloudWeb,
   isDesktopUiDevLocal,
@@ -26,6 +27,8 @@ export {
 } from './runtimeEnvironment';
 
 const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
+const NATIVE_ONLY_FEATURE_MESSAGE =
+  'This feature runs only in the AGI Workforce desktop app. Switch to Local mode there, or download it from https://agiworkforce.com/download';
 const CLOUD_CHAT_DEFAULT_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? '';
 const NATIVE_AGENT_EXECUTION_COMMANDS = new Set([
   'agi_submit_goal',
@@ -2256,6 +2259,14 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return { valid: true } as T;
 
     default:
+      // Two very different failures land here. A name Rust does register is a
+      // native-only capability that this shell genuinely cannot run, and the
+      // user needs to be told that in their own terms. A name Rust does not
+      // register is a wiring bug, and the developer needs the raw name.
+      if (REGISTERED_COMMANDS.has(command)) {
+        console.error(`[Tauri] Native-only command reached the cloud shell: ${command}`);
+        throw new Error(NATIVE_ONLY_FEATURE_MESSAGE);
+      }
       console.error(`[Tauri] Unregistered command in test mode: ${command}`);
       throw new Error(
         `Command not registered in tauri-mock: ${command}. This indicates a frontend-backend wiring issue.`,
