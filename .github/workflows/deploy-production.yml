@@ -109,6 +109,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       web: ${{ steps.scope.outputs.web }}
+      sandbox: ${{ steps.sandbox.outputs.sandbox }}
     steps:
       - name: Checkout the CI-verified commit
         uses: actions/checkout@v6
@@ -135,6 +136,22 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/production-deploy-baseline.mjs >> "$GITHUB_OUTPUT"
+
+      # The artifact sandbox origin, measured the same way as the web surface
+      # above: from the commit this surface last actually SHIPPED from, resolved
+      # out of its own deploy job's history. A one-commit diff would strand a
+      # sandbox change that landed while CI was red — the next green commit's
+      # HEAD^..HEAD never mentions infrastructure/sandbox again. Fails open to
+      # deploy=true on any error, exactly as the web baseline does.
+      - name: Select the artifact sandbox surface
+        id: sandbox
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/production-deploy-scope.mjs --shipped sandbox >> "$GITHUB_OUTPUT"
 
   deploy-web:
     name: Deploy verified web artifact
@@ -336,4 +353,212 @@ jobs:
             echo "- URL: $DEPLOYMENT_URL"
             echo "- Serving path: $serving_path"
             echo "- Rollback: $rollback"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # infrastructure/sandbox is the separate origin that isolates every
+  # model-generated HTML, React and SVG artifact from the web app's session, and
+  # the CSP in its vercel.json is that isolation boundary. It had a .vercel link
+  # but no pipeline, so it reached production only when someone ran the CLI by
+  # hand — and its deployed CSP had already drifted from the repo. Same gate as
+  # every other surface here: `needs: scope`, whose `if` admits only a green,
+  # push-triggered CI run on main from this repository, and whose checkout is
+  # that exact commit.
+  deploy-sandbox:
+    name: Deploy artifact sandbox origin
+    needs: scope
+    if: needs.scope.outputs.sandbox == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # production-web is the environment that holds the Vercel credential for
+    # this team; env-drift.yml and clerk-bot-protection.yml reach it the same
+    # way. Only the token is inherited — see the project-link step below.
+    environment:
+      name: production-web
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PRODUCTION_SANDBOX_URL: >-
+        ${{ vars.PRODUCTION_SANDBOX_URL || 'https://sandbox.agiworkforce.com' }}
+    steps:
+      - name: Checkout the CI-verified commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Require the protected Vercel deployment contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::VERCEL_TOKEN is required in the production-web environment"
+            exit 1
+          fi
+
+      # Deliberately NOT inheriting the environment's VERCEL_PROJECT_ID: that one
+      # names the web project, and a sandbox deploy carrying it would publish the
+      # sandbox origin's files into agiworkforce-chat. The tracked
+      # infrastructure/sandbox/deploy-target.json is the only authority for which
+      # project this surface is, and the name assertion makes a silently
+      # retargeted file fail the job instead of deploying somewhere else.
+      #
+      # It is a tracked file rather than the CLI's own link directory because
+      # that directory is git-ignored: it exists only in whoever ran `vercel
+      # link`'s working tree, so reading it here would ENOENT on every fresh
+      # checkout. Project and org ids are configuration, not credentials.
+      - name: Resolve the sandbox project link
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE' >> "$GITHUB_ENV"
+          const fs = require('node:fs');
+
+          const link = JSON.parse(
+            fs.readFileSync('infrastructure/sandbox/deploy-target.json', 'utf8'),
+          );
+          if (link.projectName !== 'agiworkforce-sandbox') {
+            console.error(
+              `Refusing to deploy: infrastructure/sandbox is linked to ${link.projectName}`,
+            );
+            process.exit(1);
+          }
+          console.log(`VERCEL_ORG_ID=${link.orgId}`);
+          console.log(`VERCEL_PROJECT_ID=${link.projectId}`);
+          NODE
+
+      # 58.4.0 exactly, as deploy-web pins it. Newer globals die during packaging
+      # with a misleading `"maxDuration" is not a number`.
+      - name: Install pinned Vercel CLI
+        run: npm install --global vercel@58.4.0
+
+      # `vercel deploy` run anywhere inside this checkout picks up the repo's git
+      # metadata and attaches it to the deployment; vercel.json disables git
+      # deployments for main, so the deployment lands in state BLOCKED with no
+      # build and no logs. deploy-web escapes that by listing .git and .github in
+      # the root .vercelignore. infrastructure/sandbox has no .vercelignore of its
+      # own, so it is staged into RUNNER_TEMP instead, where no ancestor is a git
+      # worktree — and the check below proves that rather than assuming it.
+      - name: Stage the sandbox origin outside the git worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging="$RUNNER_TEMP/sandbox-origin"
+          rm -rf "$staging"
+          mkdir -p "$staging"
+          cp -R infrastructure/sandbox/. "$staging/"
+          rm -rf "$staging/.turbo"
+          # outputDirectory is "." for this project, so anything left in the
+          # staged tree is served from the public origin. The deploy target is
+          # build-time configuration; it has no business being fetchable.
+          rm -f "$staging/deploy-target.json"
+          if git -C "$staging" rev-parse --git-dir >/dev/null 2>&1; then
+            echo "::error::staged sandbox tree is still inside a git worktree; deploy would be BLOCKED"
+            exit 1
+          fi
+
+      - name: Pull production project settings
+        working-directory: ${{ runner.temp }}/sandbox-origin
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build the production artifact
+        working-directory: ${{ runner.temp }}/sandbox-origin
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy the prebuilt artifact
+        id: deploy
+        working-directory: ${{ runner.temp }}/sandbox-origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_url="$(
+            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
+          )"
+          echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "Deployed $deployment_url"
+
+      # The drift this task exists to close. Probes the public origin the web app
+      # actually frames, not the deployment's own *.vercel.app alias: the aliases
+      # sit behind Deployment Protection, and a promotion that never reached the
+      # domain is precisely the failure worth catching.
+      - name: Verify the promoted origin serves the repo's isolation headers
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const config = JSON.parse(fs.readFileSync('infrastructure/sandbox/vercel.json', 'utf8'));
+          const expected = new Map(
+            config.headers.flatMap((rule) => rule.headers.map(({ key, value }) => [key.toLowerCase(), value])),
+          );
+          const origin = process.env.PRODUCTION_SANDBOX_URL;
+          const normalize = (value) => value.replace(/\s+/g, ' ').trim();
+
+          async function drifted() {
+            const response = await fetch(origin, { redirect: 'manual' });
+            if (response.status >= 400) {
+              return [`${origin} answered ${response.status}`];
+            }
+            const differences = [];
+            for (const [key, value] of expected) {
+              const served = response.headers.get(key);
+              if (served === null || normalize(served) !== normalize(value)) {
+                differences.push(
+                  `${key}\n  repo:   ${normalize(value)}\n  served: ${served === null ? '(absent)' : normalize(served)}`,
+                );
+              }
+            }
+            return differences;
+          }
+
+          async function main() {
+            for (let attempt = 1; attempt <= 5; attempt += 1) {
+              const differences = await drifted();
+              if (differences.length === 0) {
+                console.log(`${origin} serves all ${expected.size} isolation headers from the repo`);
+                return;
+              }
+              if (attempt === 5) {
+                throw new Error(
+                  `${origin} does not serve the repo's isolation headers:\n${differences.join('\n')}`,
+                );
+              }
+              console.log(`Attempt ${attempt}: origin not in sync yet; retrying in 10s`);
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+          }
+
+          main().catch((error) => {
+            console.error(error.message);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Record deployment summary
+        if: ${{ !cancelled() && steps.deploy.outputs.url != '' }}
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOYMENT_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$VERIFY_OUTCOME" = "success" ]; then
+            isolation="repo isolation headers verified on $PRODUCTION_SANDBOX_URL"
+          else
+            isolation="FAILED ($VERIFY_OUTCOME); the artifact origin may not be enforcing the repo CSP"
+            echo "::error::$isolation"
+          fi
+          {
+            echo "## Artifact sandbox origin deployment"
+            echo
+            echo "- Commit: \`$DEPLOYMENT_SHA\`"
+            echo "- Artifact: prebuilt from infrastructure/sandbox, staged outside the git worktree"
+            echo "- URL: $DEPLOYMENT_URL"
+            echo "- Origin: $PRODUCTION_SANDBOX_URL"
+            echo "- Isolation headers: $isolation"
           } >> "$GITHUB_STEP_SUMMARY"
