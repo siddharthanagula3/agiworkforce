@@ -4344,7 +4344,6 @@ export default function WebChatPage() {
 
   return (
     <div
-      data-chat-theme="cool"
       className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
     >
       {/* Dialogs lifted from ChatSidebar to the page level */}
@@ -4432,7 +4431,6 @@ export default function WebChatPage() {
           onProjectPin={handleProjectPin}
           onProjectDelete={handleProjectDelete}
           onProjectCreate={handleProjectCreate}
-          className="bg-[var(--chat-sidebar-bg)] border-[var(--chat-border-strong)]"
         />
       </div>
 

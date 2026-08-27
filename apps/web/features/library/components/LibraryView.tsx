@@ -1,18 +1,26 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import {
   LibraryView as SharedLibraryView,
   type LibraryTransport,
+  type SurfaceFilter,
 } from '@agiworkforce/unified-chat';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { exportDocument } from '@features/chat/services/document-export-service';
 
 export { iconKindFor, generatedFileFromLibraryItem } from '@agiworkforce/unified-chat';
 
+function surfaceFromParam(value: string | null): SurfaceFilter {
+  return value === 'artifact' || value === 'file' ? value : 'all';
+}
+
 export function LibraryView() {
   const { isLoaded, isSignedIn } = useAuth();
+  const searchParams = useSearchParams();
+  const initialSurface = surfaceFromParam(searchParams?.get('surface') ?? null);
 
   const transport = useMemo<LibraryTransport>(
     () => ({
@@ -61,5 +69,5 @@ export function LibraryView() {
     [isLoaded, isSignedIn],
   );
 
-  return <SharedLibraryView transport={transport} />;
+  return <SharedLibraryView transport={transport} initialSurface={initialSurface} />;
 }

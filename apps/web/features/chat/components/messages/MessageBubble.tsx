@@ -92,7 +92,10 @@ import {
 } from '@agiworkforce/artifacts';
 import { getProviderModeForModel } from '../../lib/localByokHandoff';
 import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
-import { useArtifactsStore } from '../../stores/artifacts-store';
+import {
+  useArtifactsStore,
+  generatedFileArtifactId,
+} from '../../stores/artifacts-store';
 import {
   useChatStore,
   type GeneratedFileMetadataEntry,
@@ -902,7 +905,7 @@ const MessageBubbleComponent = function MessageBubble({
     for (const f of generatedFiles) {
       if (f.kind === 'image') {
         out.push({
-          id: `genfile-${f.id}`,
+          id: generatedFileArtifactId(f.id),
           type: 'image',
           language: generatedFileLanguage(f),
           title: f.fileName,
@@ -911,7 +914,7 @@ const MessageBubbleComponent = function MessageBubble({
         });
       } else if (f.kind === 'pdf') {
         out.push({
-          id: `genfile-${f.id}`,
+          id: generatedFileArtifactId(f.id),
           type: 'document',
           language: 'pdf',
           title: f.fileName,
@@ -923,7 +926,7 @@ const MessageBubbleComponent = function MessageBubble({
         if (typeof source === 'string') {
           const language = generatedFileLanguage(f);
           out.push({
-            id: `genfile-${f.id}`,
+            id: generatedFileArtifactId(f.id),
             type: generatedFileArtifactType(f),
             language,
             title: f.fileName,
@@ -1007,7 +1010,7 @@ const MessageBubbleComponent = function MessageBubble({
     return generatedFiles
       .filter((file) => file.kind === 'image' || !artifactFileIds.has(file.id))
       .map((f) => ({
-        id: `genfile-${f.id}`,
+        id: generatedFileArtifactId(f.id),
         name: f.fileName,
         type: f.mimeType,
         size: f.byteCount,

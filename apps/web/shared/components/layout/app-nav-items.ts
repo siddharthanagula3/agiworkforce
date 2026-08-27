@@ -22,7 +22,6 @@
 import {
   CalendarClock,
   FolderOpen,
-  Layers,
   LibraryBig,
   ListChecks,
   MessageSquare,
@@ -116,34 +115,21 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     isActive: (pathname) => isUnder(pathname, '/chat/projects'),
     hideable: true,
   },
-  // Artifacts — a finished, account-scoped artifacts gallery that had no entry
-  // point anywhere in the signed-in app. The only link to it in the tree pointed
-  // out of a dead shell (`WebShellV3`, zero mount points), so real user artifacts
-  // were reachable only by typing the URL. Claude parity: artifacts are
-  // first-class, independently addressable objects with their own primary-rail
-  // destination, not one row inside a generic Library.
-  //
-  // Points at `/chat/artifacts`, NOT `/gallery`. `/gallery` is the same gallery
-  // wrapped in the marketing Header + MarketingFooter, and it stays public for
-  // SEO and for signed-out visitors browsing the Inspiration tab — so sending the
-  // rail there dropped the user out of the product shell mid-session.
-  // `/chat/artifacts` mounts the same `GalleryClient` inside `WebAppShell`.
-  {
-    id: 'artifacts',
-    label: 'Artifacts',
-    icon: Layers,
-    href: '/chat/artifacts',
-    isActive: (pathname) => isUnder(pathname, '/chat/artifacts'),
-    hideable: true,
-  },
-  // Library — browse generated files without scrolling back to their origin
-  // message (ChatGPT-Library / mobile-LibraryScreen parity).
+  // Library — one destination for everything the account has produced or
+  // uploaded. Artifacts used to be a second rail entry over the same material:
+  // the server already tags every `media_assets` row `surface: 'artifact' |
+  // 'file'` in `classifyGeneratedFile`, and one generated file appeared in BOTH
+  // destinations under two ids that could never dedupe, so deleting it here left
+  // a stale card there. Library now carries that split as a filter instead, and
+  // `/chat/artifacts` redirects onto it. `/gallery` keeps the public,
+  // SEO-indexed gallery for signed-out visitors.
   {
     id: 'library',
     label: 'Library',
     icon: LibraryBig,
     href: '/chat/library',
-    isActive: (pathname) => isUnder(pathname, '/chat/library'),
+    isActive: (pathname) =>
+      isUnder(pathname, '/chat/library') || isUnder(pathname, '/chat/artifacts'),
     hideable: true,
   },
   // Skills — a shipped, indexed surface that marketing links to and that
@@ -221,8 +207,7 @@ export function buildAppNavItems(options: {
   const { pathname, navigate, onOpenCustomize, isAdmin = false, hiddenIds = [] } = options;
   return APP_NAV_DESTINATIONS.filter((destination) => !destination.adminOnly || isAdmin)
     .filter((destination) => !(destination.hideable && hiddenIds.includes(destination.id)))
-    .map(
-    (destination) => {
+    .map((destination) => {
       const { href } = destination;
       return {
         id: destination.id,
@@ -231,6 +216,5 @@ export function buildAppNavItems(options: {
         onClick: href === null ? onOpenCustomize : () => navigate(href),
         isActive: destination.isActive(pathname),
       };
-    },
-  );
+    });
 }

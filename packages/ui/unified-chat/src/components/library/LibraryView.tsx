@@ -42,6 +42,13 @@ import { Button } from '@agiworkforce/ui';
 
 type OriginFilter = 'all' | 'generated' | 'uploaded';
 type KindFilter = 'all' | 'image' | 'video' | 'file';
+export type SurfaceFilter = 'all' | 'artifact' | 'file';
+
+const SURFACE_FILTERS: Array<{ id: SurfaceFilter; label: string }> = [
+  { id: 'all', label: 'Everything' },
+  { id: 'artifact', label: 'Artifacts' },
+  { id: 'file', label: 'Files' },
+];
 
 const ORIGIN_FILTERS: Array<{ id: OriginFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -187,11 +194,18 @@ async function requireSuccessfulMutation(response: Response): Promise<void> {
 export interface LibraryViewProps {
   transport: LibraryTransport;
   initialQuery?: string;
+  /** Preselected surface tab, so `/chat/library?surface=artifact` opens on Artifacts. */
+  initialSurface?: SurfaceFilter;
 }
 
-export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) {
+export function LibraryView({
+  transport,
+  initialQuery = '',
+  initialSurface = 'all',
+}: LibraryViewProps) {
   const { isSignedIn } = transport;
   const isAuthReady = transport.isAuthReady !== false;
+  const [surface, setSurface] = useState<SurfaceFilter>(initialSurface);
   const [origin, setOrigin] = useState<OriginFilter>('all');
   const [kind, setKind] = useState<KindFilter>('all');
   const [searchInput, setSearchInput] = useState(initialQuery);
@@ -231,13 +245,14 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
       const params = new URLSearchParams();
       params.set('limit', String(LIBRARY_DEFAULT_PAGE_SIZE));
       if (offset > 0) params.set('offset', String(offset));
+      if (surface !== 'all') params.set('surface', surface);
       if (origin !== 'all') params.set('origin', origin);
       if (kind !== 'all') params.set('kind', kind);
       if (query) params.set('q', query);
       if (viewDeleted) params.set('deleted', 'true');
       return params;
     },
-    [origin, kind, query, viewDeleted],
+    [surface, origin, kind, query, viewDeleted],
   );
 
   const loadPage = useCallback(
@@ -510,7 +525,20 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
             className="w-full rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 pl-9 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-muted)] focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </label>
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Origin filters">
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Library filters"
+        >
+          {SURFACE_FILTERS.map((f) => (
+            <FilterChip
+              key={f.id}
+              label={f.label}
+              active={surface === f.id}
+              onClick={() => setSurface(f.id)}
+            />
+          ))}
+          <span className="mx-1 h-4 w-px bg-[var(--chat-border)]" aria-hidden />
           {ORIGIN_FILTERS.map((f) => (
             <FilterChip
               key={f.id}

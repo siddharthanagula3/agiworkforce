@@ -3,7 +3,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Code, Layers, Plus } from 'lucide-react';
-import { useArtifactsStore } from '@/features/chat/stores/artifacts-store';
+import {
+  useArtifactsStore,
+  isGeneratedFileArtifactId,
+} from '@/features/chat/stores/artifacts-store';
 import type { Artifact } from '@/features/chat/stores/artifacts-store';
 import { useArtifactIndex } from '@/features/chat/hooks/use-artifact-index';
 import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPreview';
@@ -1140,6 +1143,14 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
       });
     }
     for (const a of artifacts) {
+      // `genfile-<assetId>` rows are tool-generated FILES. The server already
+      // stored them in `media_assets` and classified them
+      // (`classifyGeneratedFile` -> surface: 'artifact' | 'file'), so Library
+      // lists them under `<assetId>`. Listing them here too put one file in two
+      // places under two ids that can never dedupe — deleting it in Library left
+      // this card behind, pointing at bytes that no longer exist. They still
+      // render inline in the conversation; only this second listing is gone.
+      if (isGeneratedFileArtifactId(a.id)) continue;
       byId.set(a.id, {
         id: a.id,
         title: a.title,
