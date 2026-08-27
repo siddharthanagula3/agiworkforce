@@ -752,7 +752,7 @@ export default function PrivacyPage() {
           <div className="agi-callout" style={{ marginTop: 28 }}>
             <h3 className="agi-callout-h">What deliberately survives deleting your account</h3>
             <p className="agi-callout-p">
-              &ldquo;Delete my account&rdquo; erases an enumerated list of 66 user-scoped tables and
+              &ldquo;Delete my account&rdquo; erases an enumerated list of 70 user-scoped tables and
               your stored files. A short list of things is kept on purpose, and you should know what
               before you decide, not after.
             </p>

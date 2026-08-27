@@ -1,10 +1,9 @@
 /**
  * @file capability-handshake-service.ts
  *
- * Builds the server-authoritative `EffectiveCapabilityDocument` (six-app
- * report finding A) for `GET /api/me` — the first real consumer of
- * `@agiworkforce/types` `capability-handshake/` (W5 discipline wave 1 stage
- * 2, `docs/plans/restructure-execution-program-2026-07-15.md`).
+ * Builds the server-authoritative `EffectiveCapabilityDocument` for
+ * `GET /api/me` — the first real consumer of `@agiworkforce/types`
+ * `capability-handshake/`.
  *
  * Pure function: no DB access, no network I/O. Every input is either passed
  * in by the caller (tier, surface, the deployment E2B flag the route already

@@ -30,6 +30,12 @@ import {
 } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
+  matchDenylistedUpload,
+  moderateManagedPrompt,
+  recordModerationEvent,
+  PLATFORM_POLICY_REFUSAL,
+} from '@/lib/moderation';
+import {
   canUseBillingPlanCapability,
   getModelMetadataById,
   getModelsForProvider,
@@ -922,6 +928,33 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     transparent_background,
   } = validationResult.data;
 
+  // Always-on platform safety floor, ahead of model resolution, billing
+  // reservation, and provider egress: a refused prompt must never be charged
+  // for and must never leave this process. Covers every operation the handler
+  // serves — generate and the edit paths (inpaint/outpaint/variation), which
+  // all reach a provider through this same prompt.
+  // NOTE: the helper's surface label has no 'managed-image' member yet, so
+  // these events are reported under the default surface.
+  const moderation = moderateManagedPrompt({
+    userId,
+    segments: negative_prompt ? [prompt, negative_prompt] : [prompt],
+  });
+  if (!moderation.allowed) {
+    return NextResponse.json(
+      {
+        error: {
+          message: moderation.refusal,
+          type: 'invalid_request_error',
+          code: 'content_policy_violation',
+        },
+      },
+      {
+        status: 422,
+        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+      },
+    );
+  }
+
   const catalogProvider = requestedModel
     ? resolveImageProviderFromCatalogModel(requestedModel)
     : null;
@@ -1165,6 +1198,96 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
+  // The other half of the safety floor: client-supplied image bytes. A benign
+  // prompt must not be a way to push prohibited imagery through the edit
+  // endpoints, so both refs are resolved and hash-checked here — ahead of the
+  // billing reservation and every provider call — and a refused upload is
+  // therefore never charged for and never leaves this process.
+  let editContext:
+    | {
+        operation: ManagedMediaImageOperation;
+        sourceBytes: Uint8Array;
+        maskBytes?: Uint8Array;
+        transparentBackground: boolean;
+      }
+    | undefined;
+  if (operation !== 'generate' && source_image) {
+    let sourceBytes: Uint8Array;
+    let maskBytes: Uint8Array | undefined;
+    try {
+      sourceBytes = await resolveImageRefBytes(source_image, userId);
+      maskBytes = mask_image ? await resolveImageRefBytes(mask_image, userId) : undefined;
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          userId,
+          provider,
+          operation,
+        },
+        'Image edit source could not be resolved',
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'The source image for this edit could not be read. Upload the image again and retry.',
+          images: [],
+          provider,
+          model: 'unknown',
+          latency_ms: Date.now() - startTime,
+        } satisfies ImageGenerationResponse,
+        {
+          status: 422,
+          headers: {
+            ...getCorsHeaders(request),
+            ...getSecurityHeaders(),
+          },
+        },
+      );
+    }
+
+    const suppliedUploads: ReadonlyArray<readonly [string, Uint8Array]> = maskBytes
+      ? [
+          ['source_image', sourceBytes],
+          ['mask_image', maskBytes],
+        ]
+      : [['source_image', sourceBytes]];
+    for (const [param, bytes] of suppliedUploads) {
+      const hashMatch = matchDenylistedUpload(bytes);
+      if (!hashMatch.matched) continue;
+      recordModerationEvent({
+        surface: 'upload',
+        action: 'block',
+        categories: ['known_illegal_media'],
+        ruleIds: [`managed-image.${param}.hash-denylist`],
+        userId,
+        contentSha256: hashMatch.sha256,
+        ...(hashMatch.listLabel ? { listLabel: hashMatch.listLabel } : {}),
+      });
+      return NextResponse.json(
+        {
+          error: {
+            message: PLATFORM_POLICY_REFUSAL,
+            type: 'invalid_request_error',
+            code: 'content_policy_violation',
+          },
+        },
+        {
+          status: 422,
+          headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+        },
+      );
+    }
+
+    editContext = {
+      operation,
+      sourceBytes,
+      ...(maskBytes ? { maskBytes } : {}),
+      transparentBackground: transparent_background,
+    };
+  }
+
   const estimatedCostCents = estimateImageCostCents(provider, n, quality, catalogModel.id);
   let reservation: ManagedUsageRequestReservation;
   let sourceSurface: 'web' | 'mobile' | 'desktop';
@@ -1239,25 +1362,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       'Starting image generation',
     );
     await markManagedUsageProviderStarted(reservation);
-
-    let editContext:
-      | {
-          operation: ManagedMediaImageOperation;
-          sourceBytes: Uint8Array;
-          maskBytes?: Uint8Array;
-          transparentBackground: boolean;
-        }
-      | undefined;
-    if (operation !== 'generate' && source_image) {
-      const sourceBytes = await resolveImageRefBytes(source_image, userId);
-      const maskBytes = mask_image ? await resolveImageRefBytes(mask_image, userId) : undefined;
-      editContext = {
-        operation,
-        sourceBytes,
-        ...(maskBytes ? { maskBytes } : {}),
-        transparentBackground: transparent_background,
-      };
-    }
 
     if (editContext && !supportsManagedMediaImageEdit(provider)) {
       throw new Error(

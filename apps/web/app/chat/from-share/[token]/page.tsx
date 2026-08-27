@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
 const MESSAGE_BATCH_SIZE = 200;
@@ -110,7 +111,7 @@ export default function ContinueSharedSessionPage() {
         router.replace(`/chat/${conversation.id}`);
       } catch (err) {
         setStatus('error');
-        setError(err instanceof Error ? err.message : 'Something went wrong.');
+        setError(toUserMessage(err, 'Something went wrong.'));
       }
     })();
   }, [token, router]);

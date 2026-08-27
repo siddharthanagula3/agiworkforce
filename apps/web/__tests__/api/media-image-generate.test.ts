@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -230,6 +231,7 @@ global.fetch = mockFetch;
 
 import { POST, OPTIONS } from '@/app/api/media/image/generate/route';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
+import { PLATFORM_POLICY_REFUSAL } from '@/lib/moderation';
 
 const BASE_URL = 'http://localhost/api/media/image/generate';
 
@@ -1303,6 +1305,84 @@ describe('POST /api/media/image/generate', () => {
         'The image provider did not respond before the request deadline. Please try again.',
       );
       expect(mockFetch).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('Upload safety floor', () => {
+    const DENYLISTED_BYTES = Buffer.from('known-illegal-image-bytes-fixture');
+    const DENYLISTED_B64 = DENYLISTED_BYTES.toString('base64');
+    const DENYLISTED_SHA256 = createHash('sha256').update(DENYLISTED_BYTES).digest('hex');
+    const BENIGN_B64 = Buffer.from('benign-image-bytes-fixture').toString('base64');
+
+    beforeEach(() => {
+      process.env['MODERATION_HASH_DENYLIST'] = `known-list:${DENYLISTED_SHA256}`;
+    });
+
+    afterEach(() => {
+      delete process.env['MODERATION_HASH_DENYLIST'];
+    });
+
+    it('refuses a denylisted source_image before reservation or provider dispatch', async () => {
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a perfectly benign instruction',
+          provider: 'openai',
+          operation: 'edit',
+          source_image: { b64_json: DENYLISTED_B64 },
+        }),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+      expect(data.error).toMatchObject({
+        message: PLATFORM_POLICY_REFUSAL,
+        type: 'invalid_request_error',
+        code: 'content_policy_violation',
+      });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+      expect(managedUsageMocks.finalize).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('refuses a denylisted mask_image even when the source image is clean', async () => {
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a perfectly benign instruction',
+          provider: 'openai',
+          operation: 'inpaint',
+          source_image: { b64_json: BENIGN_B64 },
+          mask_image: { b64_json: DENYLISTED_B64 },
+        }),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+      expect(data.error).toMatchObject({ code: 'content_policy_violation' });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('still dispatches an edit whose supplied bytes are not denylisted', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ b64_json: VALID_JPEG_BASE64 }] }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'warm up the background',
+          provider: 'openai',
+          operation: 'edit',
+          source_image: { b64_json: BENIGN_B64 },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledOnce();
+      expect(String(mockFetch.mock.calls[0]?.[0])).toContain('images/edits');
     });
   });
 
