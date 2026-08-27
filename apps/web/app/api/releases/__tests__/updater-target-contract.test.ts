@@ -13,6 +13,13 @@ import { describe, expect, it } from 'vitest';
  * lived in the URL template on the other side of the contract. So this file asserts
  * both halves against each other and derives the client's string the way the plugin
  * does, instead of restating what the route already believes.
+ *
+ * Note what this file can and cannot tell you: it reads the WORKING TREE, so a green
+ * run means the tree is coherent, never that the release is. This test went green
+ * against an uncommitted edit to tauri.conf.json and was read as proof the client fix
+ * had shipped, while HEAD still carried the broken template — correct selectors that
+ * nothing could reach. Nothing here, and nothing else in this repository, checks a
+ * release property against HEAD or against a built artifact.
  */
 
 const REPO_ROOT = path.resolve(__dirname, '../../../../../..');
@@ -54,9 +61,9 @@ function endpointTemplates(): string[] {
 
 function routeTargetKeys(): string[] {
   const source = readFileSync(ROUTE, 'utf8');
-  const table = source.match(/TARGET_PLATFORMS[^{]*\{([\s\S]*?)\}/u);
+  const table = source.match(/TARGET_PLATFORMS[^{]*\{([\s\S]*?)\}/u)?.[1];
   if (!table) throw new Error('TARGET_PLATFORMS table not found in the release route');
-  return [...table[1].matchAll(/'([^']+)'\s*:/gu)].map((match) => match[1]);
+  return [...table.matchAll(/'([^']+)'\s*:/gu)].flatMap((match) => match[1] ?? []);
 }
 
 function renderTarget(template: string, os: string, arch: string): string {
@@ -145,9 +152,8 @@ describe('updater asset selection matches what the pipeline builds', () => {
     }) as never;
 
   it('accepts the untagged universal macOS archive for both darwin targets', async () => {
-    const { selectSignedDesktopUpdaterAsset } = await import(
-      '@/lib/releases/github-desktop-releases'
-    );
+    const { selectSignedDesktopUpdaterAsset } =
+      await import('@/lib/releases/github-desktop-releases');
     const release = releaseWith('AGI.app.tar.gz');
 
     expect(selectSignedDesktopUpdaterAsset(release, 'darwin-aarch64')?.binary.name).toBe(
@@ -159,18 +165,16 @@ describe('updater asset selection matches what the pipeline builds', () => {
   });
 
   it('keeps darwin-universal strict, so an untagged archive is not mistaken for it', async () => {
-    const { selectSignedDesktopUpdaterAsset } = await import(
-      '@/lib/releases/github-desktop-releases'
-    );
+    const { selectSignedDesktopUpdaterAsset } =
+      await import('@/lib/releases/github-desktop-releases');
     expect(
       selectSignedDesktopUpdaterAsset(releaseWith('AGI.app.tar.gz'), 'darwin-universal'),
     ).toBeNull();
   });
 
   it('accepts the v2 NSIS installer and no longer requires the v1 zip', async () => {
-    const { selectSignedDesktopUpdaterAsset } = await import(
-      '@/lib/releases/github-desktop-releases'
-    );
+    const { selectSignedDesktopUpdaterAsset } =
+      await import('@/lib/releases/github-desktop-releases');
     expect(
       selectSignedDesktopUpdaterAsset(releaseWith('AGI_1.3.0_x64-setup.exe'), 'windows-x86_64')
         ?.binary.name,
@@ -178,9 +182,8 @@ describe('updater asset selection matches what the pipeline builds', () => {
   });
 
   it('returns null when a binary has no signature sibling', async () => {
-    const { selectSignedDesktopUpdaterAsset } = await import(
-      '@/lib/releases/github-desktop-releases'
-    );
+    const { selectSignedDesktopUpdaterAsset } =
+      await import('@/lib/releases/github-desktop-releases');
     const unsigned = {
       id: 1,
       tagName: 'v-desktop-1.3.0',
