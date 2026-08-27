@@ -985,6 +985,57 @@ distribution claims honest.
 
 ---
 
+## 45. Nothing verifies a release artifact — only the working tree
+
+**Status:** engineering work, but it needs your decision on scope first. Found
+2026-08-27 by the desktop lane, and it is the root cause of the item below it
+rather than another item beside it.
+
+**The finding.** Every guard in this repository reads the working tree.
+`check-no-devtools`, `verify-updater-key`, `releasePackagingContract`,
+`updater-target-contract`, and the whole `check:*` family compare one file on disk
+against another file on disk. That is the correct job for catching drift between two
+sources, and it is useless for answering the only question that matters at release
+time: **is the thing we shipped correct?**
+
+Nothing checks a property against HEAD. Nothing checks a property against a built
+artifact. There is no `check:release-binary` — not unwired, *absent*; the string does
+not appear anywhere in the repository.
+
+**What that cost, concretely.** The desktop auto-updater was dead on every platform
+for the entire 1.2.0 line. The client asked `/api/releases/darwin/1.2.0`; the route
+only knows `darwin-aarch64`; every client got a 204 and silently never updated. Every
+test over that route passed the whole time, because each one hand-wrote a target
+string the real client never sent.
+
+It got worse during the fix. The new contract test went green against an
+*uncommitted* edit to `tauri.conf.json` and was read — by me — as proof the client fix
+had shipped, while HEAD still carried the broken template. For about an hour the repo
+was in the worst possible state: correct server selectors, a client that could not
+reach them, and a green test asserting the contract held.
+
+**What would actually have caught it**, in rough order of value:
+
+1. A check that resolves the updater endpoint from **HEAD**, not the worktree, and
+   asserts the target it produces is one the route accepts. Cheap, and it closes the
+   exact hole above.
+2. `codesign --verify` and entitlement assertions against the real `.app`, in the
+   release workflow. This is the one that would have caught App Sandbox being enabled
+   on a Developer ID build — a defect that only exists in the signed artifact and is
+   invisible to every local check.
+3. An assertion that a published release actually carries the assets the updater
+   requires. `v-desktop-1.2.0` has three Linux artifacts, no macOS, no Windows, and no
+   `.sig` for any of them, so the updater returns null for every platform regardless
+   of how correct the matchers now are.
+
+**The decision you owe:** whether release verification runs against artifacts in CI
+(needs signing credentials in the workflow, and CI runners, neither of which exists
+today) or as a manual pre-publish checklist. Both are defensible. What is not
+defensible is the current position, where "all guards green" and "the release works"
+are unrelated statements and nobody has been told which one they are reading.
+
+---
+
 ## 43. Wire the git-history secret scanner
 
 **Status:** `BLOCKED_BY_HUMAN` for one decision, then it is engineering work.
