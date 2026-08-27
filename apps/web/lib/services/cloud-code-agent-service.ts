@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { CloudCodeSession, ProviderMessage } from '@agiworkforce/types';
 import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
+import { CLOUD_CODE_TURN_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
 import { logger } from '@/lib/logger';
@@ -15,8 +16,12 @@ import {
   type ManagedUsageRequestReservation,
 } from './managed-usage-request-service';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
-import { observedProviderUsageLedgerCents } from './managed-usage-accounting-service';
 import {
+  createObservedProviderUsage,
+  observedProviderUsageLedgerCents,
+} from './managed-usage-accounting-service';
+import {
+  CLOUD_CODE_AGENT_MAX_STEPS,
   runCloudCodeAgentTurn,
   type CloudCodeAgentEvent,
   type CloudCodeAgentResult,
@@ -34,6 +39,149 @@ import {
 const ESTIMATED_TURN_COST_CENTS = 25;
 
 const MINIMUM_BILLED_TURN_CENTS = 1;
+
+/**
+ * The wall-clock ceiling the platform enforces on the two routes that reach this
+ * service: `export const maxDuration = 300` in
+ * `app/api/code/sessions/[sessionId]/agent/route.ts` and in that route's
+ * `approvals/route.ts`. Next.js needs `maxDuration` to be a literal, so it
+ * cannot import this — the three values are kept in step by hand.
+ */
+const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = 300_000;
+
+/**
+ * What an agent turn is actually allowed to spend, and why it is not
+ * {@link CLOUD_CODE_TURN_BUDGET_MS}.
+ *
+ * `cloud-code-agent-loop.ts` defaults to that 600 s standalone budget, which is
+ * twice the platform ceiling above. Under that default the loop's own `timeout`
+ * guard is unreachable dead code: the function is killed at 300 s, and a
+ * platform kill runs no `finally`, no `catch`, nothing. The turn row is left at
+ * `state = 'running'` with a null `stop_reason`, the managed-usage reservation
+ * is never finalised, and the E2B sandbox is never paused or disposed — it just
+ * keeps costing money until something else reaps it.
+ *
+ * The ceiling is the one budget we do not control, so the loop budget moves
+ * under it and keeps the same teardown reserve the chat tool loop keeps for its
+ * own unwind (settle the reservation, write the terminal turn row, pause the
+ * sandbox). The loop now reaches its `timeout` return with time to spare, which
+ * is what makes every line of that unwind path run at all.
+ */
+export const CLOUD_CODE_AGENT_TURN_BUDGET_MS = Math.min(
+  CLOUD_CODE_TURN_BUDGET_MS,
+  CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS,
+);
+
+interface TurnDeadline {
+  /** The signal handed to the loop: aborts on client disconnect OR on budget. */
+  signal: AbortSignal;
+  /** True once the budget, rather than the client, caused the abort. */
+  expired: () => boolean;
+  dispose: () => void;
+}
+
+/**
+ * The loop only consults its own budget between steps, so a provider stream or a
+ * sandbox command that hangs sails straight past it and into the platform kill.
+ * Compose the request signal with a budget timer so the in-flight call is
+ * aborted too, and remember which of the two fired so a budget abort is not
+ * mislabelled as a client cancellation.
+ */
+function withTurnDeadline(requestSignal: AbortSignal, budgetMs: number): TurnDeadline {
+  const controller = new AbortController();
+  let expired = false;
+
+  const onRequestAbort = () => controller.abort(requestSignal.reason);
+  if (requestSignal.aborted) onRequestAbort();
+  else requestSignal.addEventListener('abort', onRequestAbort, { once: true });
+
+  const timer = setTimeout(() => {
+    expired = true;
+    controller.abort(new Error('Managed Code agent turn exceeded its time budget'));
+  }, budgetMs);
+  // A pending timer must not be what keeps the invocation alive. `unref` is a
+  // Node-only method the DOM `setTimeout` typing does not carry.
+  (timer as unknown as { unref?: () => void }).unref?.();
+
+  return {
+    signal: controller.signal,
+    expired: () => expired,
+    dispose: () => {
+      clearTimeout(timer);
+      requestSignal.removeEventListener('abort', onRequestAbort);
+    },
+  };
+}
+
+/**
+ * Give the sandbox back, whatever happened to the turn.
+ *
+ * `pause()` used to run un-guarded ahead of `dispose()`, so a pause that threw
+ * skipped disposal entirely and leaked the sandbox. Neither failure is worth
+ * turning a finished turn into a 500 either, so both are logged and swallowed.
+ */
+async function releaseSandbox(
+  executor: { pause?: () => Promise<unknown> | unknown; dispose: () => Promise<unknown> | unknown },
+  context: { turnId: string; sessionId: string },
+): Promise<void> {
+  try {
+    await executor.pause?.();
+  } catch (error) {
+    logger.error({ error, ...context }, 'Could not pause the Managed Code sandbox; disposing it');
+  }
+  try {
+    await executor.dispose();
+  } catch (error) {
+    logger.error({ error, ...context }, 'Could not dispose the Managed Code sandbox');
+  }
+}
+
+/**
+ * Move a turn row off `running`. Never throws: every caller is already unwinding
+ * something else, and a failure here must not mask the original error or skip
+ * the settlement that follows it.
+ */
+async function markTurnFailed(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  turnId: string,
+  errorMessage: string,
+  stopReason: 'error' | 'timeout',
+): Promise<void> {
+  try {
+    await db.query(
+      `update cloud_code_agent_turns
+          set state = 'failed', stop_reason = $4, error_message = $2, updated_at = now()
+        where id = $1 and user_id = $3`,
+      [turnId, errorMessage.slice(0, 2000), owner.userId, stopReason],
+    );
+  } catch (error) {
+    logger.error({ error, turnId, userId: owner.userId }, 'Could not record a failed Code turn');
+  }
+}
+
+/**
+ * Settle the reservation on a failure path. Never throws, for the same reason
+ * {@link markTurnFailed} does not: an unsettled reservation is a bug worth
+ * logging, not a reason to abandon the rest of the unwind.
+ */
+async function settleReservationQuietly(
+  reservation: ManagedUsageRequestReservation,
+  settlement: {
+    outcome: 'completed' | 'failed';
+    actualCostCents: number;
+    usage?: Record<string, unknown>;
+  },
+): Promise<void> {
+  try {
+    await finalizeManagedUsageRequest({ ...reservation, ...settlement });
+  } catch (error) {
+    logger.error(
+      { error, userId: reservation.userId },
+      'Could not settle the Managed Code turn reservation',
+    );
+  }
+}
 
 function settledTurnCostCents(provider: string, model: string, usage: CloudCodeTurnUsage): number {
   const reportedTokens =
@@ -74,6 +222,20 @@ export interface CloudCodeAgentTurnRecord {
   errorMessage?: string;
 }
 
+/**
+ * Map a loop stop reason onto one of the five `cloud_code_agent_turns.state`
+ * values.
+ *
+ * `timeout`, `max_steps` and `denied` used to fall through a `default` arm that
+ * returned `completed`, so a turn the clock cut off was persisted as
+ * `state = 'completed', stop_reason = 'timeout'` — a contradiction, and one that
+ * made an abandoned turn indistinguishable from a finished one to every query
+ * that filters on `state`. None of the three reached a conclusion, and the
+ * schema has no "incomplete" state, so `failed` is the honest answer.
+ *
+ * There is deliberately no `default`: a stop reason added later must be mapped
+ * here, and the unreachable trailing return is `failed`, never `completed`.
+ */
 function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
   switch (stopReason) {
     case 'done':
@@ -83,9 +245,36 @@ function turnStateFor(stopReason: CloudCodeAgentResult['stopReason']): string {
     case 'cancelled':
       return 'cancelled';
     case 'error':
+    case 'timeout':
+    case 'max_steps':
+    case 'denied':
       return 'failed';
+    default: {
+      // Compile-time exhaustiveness: a stop reason added later must be mapped
+      // above, and the runtime fallback is `failed`, never `completed`.
+      const unmapped: never = stopReason;
+      void unmapped;
+      return 'failed';
+    }
+  }
+}
+
+/**
+ * A turn that stopped short must say so in the row. The loop leaves
+ * `errorMessage` unset for the non-`error` stop reasons, which would persist a
+ * failed turn with a null explanation.
+ */
+function terminalErrorMessage(result: CloudCodeAgentResult): string | null {
+  if (result.errorMessage) return result.errorMessage.slice(0, 2000);
+  switch (result.stopReason) {
+    case 'timeout':
+      return 'Agent turn exceeded its time budget and was stopped.';
+    case 'max_steps':
+      return `Agent turn reached its ${CLOUD_CODE_AGENT_MAX_STEPS}-step limit before finishing.`;
+    case 'denied':
+      return 'Agent turn stopped: a required command was denied.';
     default:
-      return 'completed';
+      return null;
   }
 }
 
@@ -116,7 +305,12 @@ export async function executePersistedAgentTurn(
   try {
     return await runClaimedAgentTurn(input);
   } finally {
-    await releaseCloudCodeSessionAfterRun(input.db, input.owner, input.sessionId);
+    await releaseCloudCodeSessionAfterRun(
+      input.db,
+      input.owner,
+      input.sessionId,
+      claimed.leaseToken,
+    );
   }
 }
 
@@ -142,14 +336,12 @@ async function runClaimedAgentTurn(
       isFlagship,
     });
   } catch (error) {
-    await db.query(
-      `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
-        where id = $1 and user_id = $3`,
-      [
-        turnId,
-        error instanceof Error ? error.message.slice(0, 2000) : 'Usage reservation failed',
-        owner.userId,
-      ],
+    await markTurnFailed(
+      db,
+      owner,
+      turnId,
+      error instanceof Error ? error.message : 'Usage reservation failed',
+      'error',
     );
     throw error;
   }
@@ -162,17 +354,20 @@ async function runClaimedAgentTurn(
   );
   const executor = await getE2BExecutor(scope);
   if (!executor) {
-    await finalizeManagedUsageRequest({ ...reservation, outcome: 'failed', actualCostCents: 0 });
-    await db.query(
-      `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
-        where id = $1 and user_id = $3`,
-      [turnId, 'Managed Code environment could not be attached', owner.userId],
+    await settleReservationQuietly(reservation, { outcome: 'failed', actualCostCents: 0 });
+    await markTurnFailed(
+      db,
+      owner,
+      turnId,
+      'Managed Code environment could not be attached',
+      'error',
     );
     throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
   }
 
-  let result: CloudCodeAgentResult | undefined;
+  let result: CloudCodeAgentResult;
   let stepIndex = initialStepIndex;
+  const deadline = withTurnDeadline(input.signal, CLOUD_CODE_AGENT_TURN_BUDGET_MS);
 
   try {
     result = await runCloudCodeAgentTurn({
@@ -180,7 +375,11 @@ async function runClaimedAgentTurn(
       model,
       goal,
       runner: createCloudCodeToolRunner(executor, session.workspacePath),
-      signal: input.signal,
+      // The composed signal, not the raw request signal: the turn must abort on
+      // its own budget as well as on a client disconnect, so the unwind below
+      // runs inside the platform's window instead of being killed mid-turn.
+      signal: deadline.signal,
+      maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
       repositoryUrl: session.repositoryUrl,
       workspacePath: session.workspacePath,
       ...(input.priorMessages ? { priorMessages: input.priorMessages } : {}),
@@ -213,83 +412,127 @@ async function runClaimedAgentTurn(
         );
       },
     });
+
+    if (deadline.expired() && result.stopReason === 'cancelled') {
+      // The loop saw our budget abort, not a client disconnect. Persisting that
+      // as `cancelled` would blame the user for the clock.
+      result = { ...result, stopReason: 'timeout' };
+    }
   } catch (error) {
-    await finalizeManagedUsageRequest({ ...reservation, outcome: 'failed', actualCostCents: 0 });
-    await db.query(
-      `update cloud_code_agent_turns set state = 'failed', error_message = $2, updated_at = now()
-        where id = $1 and user_id = $3`,
-      [
+    if (!deadline.expired() || input.signal.aborted) {
+      await settleReservationQuietly(reservation, { outcome: 'failed', actualCostCents: 0 });
+      await markTurnFailed(
+        db,
+        owner,
         turnId,
-        error instanceof Error ? error.message.slice(0, 2000) : 'Agent turn failed',
-        owner.userId,
-      ],
+        error instanceof Error ? error.message : 'Agent turn failed',
+        'error',
+      );
+      throw error;
+    }
+    // A provider stream or sandbox command that hung past the budget: our own
+    // abort surfaced as a throw. That is a timeout, not a 500, and it falls
+    // through to the same terminal write and settlement as any other stop
+    // reason. Usage is empty because nothing measurable came back, which settles
+    // at the reservation estimate rather than forfeiting the spend.
+    logger.warn(
+      { turnId, sessionId, budgetMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS },
+      'Managed Code agent turn aborted on its own time budget',
     );
-    throw error;
+    result = {
+      stopReason: 'timeout',
+      stepsUsed: Math.max(0, stepIndex - initialStepIndex),
+      usage: createObservedProviderUsage(),
+      finalMessage: '',
+      messages: [],
+    };
   } finally {
-    await executor.pause?.();
-    await executor.dispose();
+    deadline.dispose();
+    await releaseSandbox(executor, { turnId, sessionId });
   }
 
   const state = turnStateFor(result.stopReason);
   const cumulativeSteps = initialStepIndex + result.stepsUsed;
 
-  await db.query(
-    `update cloud_code_agent_turns
-        set state = $2, steps_used = greatest(steps_used, $3), stop_reason = $4,
-            final_message = $5, error_message = $6, updated_at = now()
-      where id = $1 and user_id = $7`,
-    [
-      turnId,
-      state,
-      cumulativeSteps,
-      result.stopReason === 'awaiting_approval' ? null : result.stopReason,
-      result.finalMessage.slice(0, 100_000) || null,
-      result.errorMessage?.slice(0, 2000) ?? null,
-      owner.userId,
-    ],
-  );
+  // The terminal row and the settlement are two writes that must both happen.
+  // The row used to be written first and un-guarded, so a failure there returned
+  // before the reservation was ever finalised — the turn ended holding a live
+  // reservation and nobody knew. Record the failure, settle regardless, and only
+  // then answer for the row.
+  let terminalRowWritten = true;
+  try {
+    await db.query(
+      `update cloud_code_agent_turns
+          set state = $2, steps_used = greatest(steps_used, $3), stop_reason = $4,
+              final_message = $5, error_message = $6, updated_at = now()
+        where id = $1 and user_id = $7`,
+      [
+        turnId,
+        state,
+        cumulativeSteps,
+        result.stopReason === 'awaiting_approval' ? null : result.stopReason,
+        result.finalMessage.slice(0, 100_000) || null,
+        terminalErrorMessage(result),
+        owner.userId,
+      ],
+    );
+  } catch (error) {
+    terminalRowWritten = false;
+    logger.error(
+      { error, turnId, userId: owner.userId },
+      'Could not record the finished Code turn',
+    );
+  }
 
   let pendingApproval = result.pendingApproval;
-  if (pendingApproval) {
-    const approvalRows = await db.query<{ step_index: number }>(
-      `insert into cloud_code_agent_approvals
+  let approvalRecordingFailed = false;
+  if (terminalRowWritten && pendingApproval) {
+    const approvalRows = await db
+      .query<{ step_index: number }>(
+        `insert into cloud_code_agent_approvals
          (turn_id, step_index, command, reason, expires_at)
        select $1, coalesce(max(step_index), -1) + 1, $2, $3, now() + interval '30 minutes'
          from cloud_code_agent_approvals
         where turn_id = $1
        returning step_index`,
-      [turnId, pendingApproval.command, pendingApproval.reason],
-    );
+        [turnId, pendingApproval.command, pendingApproval.reason],
+      )
+      .catch((error) => {
+        logger.error({ error, turnId }, 'Could not record the Code approval request');
+        return [] as { step_index: number }[];
+      });
     const allocated = approvalRows[0]?.step_index;
     if (allocated === undefined) {
-      await db.query(
-        `update cloud_code_agent_turns
-            set state = 'failed', stop_reason = 'error', error_message = $2, updated_at = now()
-          where id = $1 and user_id = $3`,
-        [turnId, 'Approval request could not be recorded', owner.userId],
-      );
-      await finalizeManagedUsageRequest({
-        ...reservation,
-        outcome: 'failed',
-        actualCostCents: 0,
-      });
-      throw new CloudCodeUnavailableError('Approval request could not be recorded');
+      approvalRecordingFailed = true;
+      await markTurnFailed(db, owner, turnId, 'Approval request could not be recorded', 'error');
+    } else {
+      pendingApproval = { ...pendingApproval, stepIndex: allocated };
     }
-    pendingApproval = { ...pendingApproval, stepIndex: allocated };
   }
 
-  await finalizeManagedUsageRequest({
-    ...reservation,
-    outcome: result.stopReason === 'error' ? 'failed' : 'completed',
-    actualCostCents:
-      result.stopReason === 'error' ? 0 : settledTurnCostCents(provider, model, result.usage),
+  const settledAsFailure =
+    result.stopReason === 'error' || approvalRecordingFailed || !terminalRowWritten;
+  await settleReservationQuietly(reservation, {
+    outcome: settledAsFailure ? 'failed' : 'completed',
+    actualCostCents: settledAsFailure ? 0 : settledTurnCostCents(provider, model, result.usage),
     usage: { steps: cumulativeSteps, stopReason: result.stopReason },
   });
+
+  if (!terminalRowWritten) {
+    throw new CloudCodeUnavailableError('Agent turn finished but could not be recorded');
+  }
+  if (approvalRecordingFailed) {
+    throw new CloudCodeUnavailableError('Approval request could not be recorded');
+  }
 
   logger.info(
     { turnId, sessionId, stopReason: result.stopReason, steps: cumulativeSteps },
     'Cloud Code agent turn finished',
   );
+
+  // The same explanation that went into the row, so a client that only reads the
+  // response is not left with a bare `timeout` and no words.
+  const errorMessage = terminalErrorMessage(result);
 
   return {
     turnId,
@@ -297,7 +540,7 @@ async function runClaimedAgentTurn(
     stepsUsed: cumulativeSteps,
     finalMessage: result.finalMessage,
     ...(pendingApproval ? { pendingApproval } : {}),
-    ...(result.errorMessage ? { errorMessage: result.errorMessage } : {}),
+    ...(errorMessage ? { errorMessage } : {}),
   };
 }
 
@@ -310,7 +553,11 @@ export async function startCloudCodeAgentTurn(
   if (session.state === 'closed') {
     throw new CloudCodeConflictError('Closed Code sessions cannot run agent turns');
   }
-  if (session.state !== 'ready') {
+  // `running` falls through on purpose: claimCloudCodeSessionForRun is what
+  // adjudicates it, rejecting a live lease and reclaiming an expired one. A
+  // pre-check that rejected every `running` session would leave a turn killed
+  // mid-flight wedged forever, which is exactly what the lease exists to end.
+  if (session.state !== 'ready' && session.state !== 'running') {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
 

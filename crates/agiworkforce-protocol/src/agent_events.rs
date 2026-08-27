@@ -55,7 +55,7 @@ use crate::task_state::AgentTaskStateChanged;
 /// backward-incompatible change to the envelope or [`AgentEvent`] shape,
 /// mirroring `developer_session::DEVELOPER_SESSION_PROTOCOL_VERSION`'s
 /// precedent for a crate-level protocol version constant.
-pub const AGENT_EVENT_SCHEMA_VERSION: u32 = 3;
+pub const AGENT_EVENT_SCHEMA_VERSION: u32 = 4;
 
 /// The one envelope web SSE chunks, app-server `turn/*` notifications, and
 /// desktop stream events all translate into. Mirrors this crate's existing
@@ -198,6 +198,14 @@ pub enum AgentEvent {
     ApprovalRequested(AgentEventApprovalRequested),
     /// The explicit decision for a prior approval request.
     ApprovalResolved(AgentEventApprovalResolved),
+    /// A model-driven connector/MCP tool call paused with `input_required`
+    /// (MCP 2026-07-28): the remote server needs additional, bounded input
+    /// before the same call can continue. The run stays resumable; the host
+    /// collects the requested input and resumes the identical call.
+    InputRequested(AgentEventInputRequested),
+    /// The outcome of a prior [`AgentEventInputRequested`]: the caller either
+    /// supplied the requested input or cancelled the paused call.
+    InputResolved(AgentEventInputResolved),
     /// A durable file or rich artifact was produced and is ready to preview or
     /// download.
     ArtifactProduced(AgentEventArtifactProduced),
@@ -546,6 +554,42 @@ pub enum AgentEventApprovalDecision {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
+pub struct AgentEventInputRequested {
+    pub tool_call_id: String,
+    pub connector_id: String,
+    pub tool_name: String,
+    /// Remote-authored input-request definitions, verbatim JSON. UNTRUSTED and
+    /// host-bounded (count/size capped) before this event is emitted; the host
+    /// treats them as data to render a form, never as instructions to execute.
+    pub input_requests: serde_json::Value,
+    /// Opaque continuation token echoed back to the server on resume.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub request_state: Option<String>,
+    /// 0-based MRTR round; increments each time the same call re-pauses.
+    #[ts(type = "number")]
+    pub round: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventInputResolved {
+    pub tool_call_id: String,
+    pub outcome: AgentEventInputOutcome,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename_all = "kebab-case")]
+pub enum AgentEventInputOutcome {
+    Resolved,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct AgentEventArtifactProduced {
     pub artifact_id: String,
     pub name: String,
@@ -828,6 +872,34 @@ mod tests {
                 before_tokens: Some(180_000),
                 after_tokens: Some(42_000),
                 summary: Some("Context automatically compacted".to_string()),
+            },
+        )));
+    }
+
+    #[test]
+    fn input_required_pause_and_resolution_round_trip() {
+        assert_round_trips(&sample_envelope(AgentEvent::InputRequested(
+            AgentEventInputRequested {
+                tool_call_id: "call-connector-1".to_string(),
+                connector_id: "custom-abc123".to_string(),
+                tool_name: "create_ticket".to_string(),
+                input_requests: serde_json::json!({
+                    "priority": { "type": "string", "enum": ["low", "high"] }
+                }),
+                request_state: Some("opaque-continuation".to_string()),
+                round: 0,
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::InputResolved(
+            AgentEventInputResolved {
+                tool_call_id: "call-connector-1".to_string(),
+                outcome: AgentEventInputOutcome::Resolved,
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::InputResolved(
+            AgentEventInputResolved {
+                tool_call_id: "call-connector-1".to_string(),
+                outcome: AgentEventInputOutcome::Cancelled,
             },
         )));
     }

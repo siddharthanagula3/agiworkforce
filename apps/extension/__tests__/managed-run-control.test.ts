@@ -73,7 +73,7 @@ describe('Chrome managed run control', () => {
       cancelRun: vi.fn(),
       followRun: vi.fn(async (_runId, options) => {
         await options?.onEvent?.({
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'session-1',
           turnId: 'turn-1',
           sequence: 0,
@@ -81,7 +81,7 @@ describe('Chrome managed run control', () => {
           event: { type: 'text-delta', delta: 'Hello' },
         });
         await options?.onEvent?.({
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'session-1',
           turnId: 'turn-1',
           sequence: 1,
@@ -94,7 +94,7 @@ describe('Chrome managed run control', () => {
           },
         });
         await options?.onEvent?.({
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'session-1',
           turnId: 'turn-1',
           sequence: 2,

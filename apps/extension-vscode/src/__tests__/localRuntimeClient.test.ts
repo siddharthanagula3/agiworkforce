@@ -366,7 +366,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence: 0,
@@ -386,7 +386,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence: 1,
@@ -406,7 +406,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence: 2,
@@ -425,7 +425,7 @@ describe('LocalRuntimeClient', () => {
       `${JSON.stringify({
         method: 'turn/agent_event',
         params: {
-          schemaVersion: 3,
+          schemaVersion: 4,
           sessionId: 'thread-1',
           turnId: 'turn-1',
           sequence: 3,

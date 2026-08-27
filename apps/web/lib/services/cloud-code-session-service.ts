@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   CLOUD_CODE_NETWORK_ACCESS,
@@ -21,6 +22,39 @@ const DEFAULT_WORKSPACE_PATH = '/home/user';
 const REPOSITORY_WORKSPACE_PATH = '/home/user/project';
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * How long a run may hold a Code session before another run may take it over.
+ *
+ * A session is single-writer: a run flips it to `running` and flips it back in
+ * a `finally`. That `finally` does not run when the platform kills the function
+ * mid-turn, so without an expiry one killed turn wedges the session at
+ * `running` forever and every later turn 409s on advice ("wait and try again")
+ * that never comes true.
+ *
+ * The TTL must exceed the longest a legitimate turn can possibly hold the
+ * session, or two runs could drive one sandbox. The agent route declares
+ * `maxDuration = 300`, which is the platform's hard kill for a turn, and the
+ * command route's work is bounded far lower by CLOUD_CODE_COMMAND_DEADLINE_MS
+ * (60 s). The lease clock starts at the claim's `now()`, which is strictly
+ * *after* the request started, so lease expiry always lands at least 120 s past
+ * the point the platform has already killed the holder. That margin also
+ * absorbs skew between the database clock and the function's own.
+ *
+ * Downward, 420 s is the worst case a user waits after a killed turn before
+ * their session is usable again — bounded, instead of permanent.
+ */
+export const CLOUD_CODE_RUN_LEASE_SECONDS = 420;
+
+export interface CloudCodeRunClaim {
+  session: CloudCodeSession;
+  /**
+   * Fences every later write by this run. A run that was reclaimed cannot flip
+   * the session back to `ready` (or to `failed`) under the new holder, because
+   * the row's token has moved on.
+   */
+  leaseToken: string;
+}
 
 export interface CloudCodeOwner {
   userId: string;
@@ -86,6 +120,8 @@ interface SessionRow extends Record<string, unknown> {
   state: string;
   workspace_path: string;
   last_error: string | null;
+  run_lease_token: string | null;
+  run_lease_expires_at: string | Date | null;
   created_at: string | Date;
   updated_at: string | Date;
   closed_at: string | Date | null;
@@ -310,6 +346,8 @@ async function updateSessionState(
     `update cloud_code_sessions
         set state = $2,
             last_error = $3,
+            run_lease_token = null,
+            run_lease_expires_at = null,
             updated_at = now(),
             closed_at = case when $2 = 'closed' then now() else closed_at end
       where id = $1 and ${scoped.clause}
@@ -321,6 +359,15 @@ async function updateSessionState(
   return mapCloudCodeSession(row);
 }
 
+/**
+ * Every transition here leaves the session unleased, so `state = 'running'`
+ * always implies a live lease row. Acquiring a lease is the one exception and
+ * has its own statement in `claimCloudCodeSessionForRun`.
+ *
+ * `leaseToken`, when given, fences the write to the run that holds the session:
+ * a run that has already been reclaimed matches no row and returns null instead
+ * of trampling the new holder.
+ */
 async function transitionSessionState(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
@@ -328,16 +375,19 @@ async function transitionSessionState(
   expectedStates: CloudCodeSession['state'][],
   state: CloudCodeSession['state'],
   lastError: string | null,
+  leaseToken?: string,
 ): Promise<CloudCodeSession | null> {
   const scoped = ownerSql(owner, 5);
   const rows = await db.query<SessionRow>(
     `update cloud_code_sessions
         set state = $2,
             last_error = $3,
+            run_lease_token = null,
+            run_lease_expires_at = null,
             updated_at = now()
       where id = $1
         and state = any($4::text[])
-        and ${scoped.clause}
+        and ${scoped.clause}${leaseToken ? ' and run_lease_token = $7' : ''}
       returning *`,
     [
       sessionId,
@@ -345,6 +395,7 @@ async function transitionSessionState(
       lastError?.slice(0, MAX_ERROR_LENGTH) ?? null,
       expectedStates,
       ...scoped.params,
+      ...(leaseToken ? [leaseToken] : []),
     ],
   );
   return rows[0] ? mapCloudCodeSession(rows[0]) : null;
@@ -355,6 +406,7 @@ async function failSessionIfOpen(
   owner: CloudCodeOwner,
   sessionId: string,
   message: string,
+  leaseToken?: string,
 ): Promise<void> {
   await transitionSessionState(
     db,
@@ -363,6 +415,7 @@ async function failSessionIfOpen(
     ['provisioning', 'ready', 'running'],
     'failed',
     message,
+    leaseToken,
   );
 }
 
@@ -536,20 +589,60 @@ export async function createCloudCodeSession(
   }
 }
 
+/**
+ * Take the session for one run, under a lease that expires on its own.
+ *
+ * A claim succeeds when the session is `ready`, and also when it is `running`
+ * on a lease that has already expired — the signature of a turn the platform
+ * killed before its release could run. Reclaiming is safe because the new
+ * holder's token replaces the old one in the same statement: if the previous
+ * run somehow survives, every write it still attempts (release, or its failure
+ * handler) is fenced on its own now-stale token and becomes a no-op. It cannot
+ * mark the new run's session `ready` mid-turn, and it cannot mark it `failed`.
+ *
+ * The sandbox behind the session is addressed deterministically by
+ * (user, session), so a reclaiming run attaches to the same sandbox the dead
+ * run left rather than provisioning a second one.
+ */
 export async function claimCloudCodeSessionForRun(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   sessionId: string,
-): Promise<CloudCodeSession | null> {
-  return transitionSessionState(db, owner, sessionId, ['ready'], 'running', null);
+): Promise<CloudCodeRunClaim | null> {
+  const leaseToken = randomUUID();
+  const scoped = ownerSql(owner, 4);
+  const rows = await db.query<SessionRow>(
+    `update cloud_code_sessions
+        set state = 'running',
+            last_error = null,
+            run_lease_token = $2,
+            run_lease_expires_at = now() + make_interval(secs => $3),
+            updated_at = now()
+      where id = $1
+        and ${scoped.clause}
+        and (
+          state = 'ready'
+          or (
+            state = 'running'
+            -- A running row with no lease at all predates the lease columns, so
+            -- it is wedged by definition; treat it as stale, not as a holder.
+            and (run_lease_expires_at is null or run_lease_expires_at <= now())
+          )
+        )
+      returning *`,
+    [sessionId, leaseToken, CLOUD_CODE_RUN_LEASE_SECONDS, ...scoped.params],
+  );
+  const row = rows[0];
+  return row ? { session: mapCloudCodeSession(row), leaseToken } : null;
 }
 
 export async function releaseCloudCodeSessionAfterRun(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   sessionId: string,
+  leaseToken: string,
 ): Promise<CloudCodeSession | null> {
-  return transitionSessionState(db, owner, sessionId, ['running'], 'ready', null);
+  return transitionSessionState(db, owner, sessionId, ['running'], 'ready', null, leaseToken);
 }
 
 export async function runCloudCodeCommand(
@@ -570,45 +663,47 @@ export async function runCloudCodeCommand(
   if (session.state === 'closed') {
     throw new CloudCodeConflictError('Closed Code sessions cannot run commands');
   }
-  if (session.state === 'provisioning' || session.state === 'running') {
+  if (session.state === 'provisioning') {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
   if (session.state === 'failed') {
     throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
   }
 
-  const runningSession = await transitionSessionState(
-    db,
-    owner,
-    sessionId,
-    ['ready'],
-    'running',
-    null,
-  );
-  if (!runningSession) {
+  // `running` is deliberately not rejected here. The claim below is what
+  // adjudicates it: a live lease still loses, but a session left running by a
+  // killed turn becomes reclaimable once that lease expires.
+  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+  if (!claim) {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
   const scope = managedCloudCodeSessionScope(
     owner.userId,
     sessionId,
-    session.networkAccess,
+    claim.session.networkAccess,
     planTier,
   );
   const startedAt = new Date();
   const executor = await getE2BExecutor(scope);
   if (!executor?.runCommand) {
-    await failSessionIfOpen(db, owner, sessionId, 'Managed Code environment could not be attached');
+    await failSessionIfOpen(
+      db,
+      owner,
+      sessionId,
+      'Managed Code environment could not be attached',
+      claim.leaseToken,
+    );
     throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
   }
 
   try {
     const result = await executor.runCommand({
       command,
-      cwd: session.workspacePath,
+      cwd: claim.session.workspacePath,
       timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
     });
     const completedAt = new Date();
-    const scoped = ownerSql(owner, 2);
+    const scoped = ownerSql(owner, 3);
     const rows = await db.transaction(async (tx) => {
       const entryRows = await tx.query<TerminalEntryRow>(
         `insert into cloud_code_terminal_entries (
@@ -630,10 +725,17 @@ export async function runCloudCodeCommand(
       );
       const sessionRows = await tx.query<SessionRow>(
         `update cloud_code_sessions
-            set state = 'ready', last_error = null, updated_at = now()
-          where id = $1 and state = 'running' and ${scoped.clause}
+            set state = 'ready',
+                last_error = null,
+                run_lease_token = null,
+                run_lease_expires_at = null,
+                updated_at = now()
+          where id = $1
+            and state = 'running'
+            and run_lease_token = $2
+            and ${scoped.clause}
           returning *`,
-        [sessionId, ...scoped.params],
+        [sessionId, claim.leaseToken, ...scoped.params],
       );
       return { entry: entryRows[0], session: sessionRows[0] };
     });
@@ -648,6 +750,7 @@ export async function runCloudCodeCommand(
       owner,
       sessionId,
       error instanceof Error ? error.message : String(error),
+      claim.leaseToken,
     );
     throw error;
   } finally {

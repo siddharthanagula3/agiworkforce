@@ -26,7 +26,7 @@ const HARD_KILL_TIMEOUT_MS = 2_000;
 const SUPPORTED_PROTOCOL_VERSION = 7;
 const MINIMUM_SUPPORTED_CLI_VERSION = [1, 7, 1] as const;
 const MINIMUM_SUPPORTED_CLI_VERSION_LABEL = MINIMUM_SUPPORTED_CLI_VERSION.join('.');
-const AGENT_EVENT_SCHEMA_VERSION = 3;
+const AGENT_EVENT_SCHEMA_VERSION = 4;
 
 const errorSchema = z.object({
   code: z.number().int(),

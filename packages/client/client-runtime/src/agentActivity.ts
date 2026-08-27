@@ -521,6 +521,33 @@ export function applyAgentActivityEvent(
       return next;
     }
 
+    case 'input-requested': {
+      const id = `tool:${event.toolCallId}`;
+      const index = next.entries.findIndex((entry) => entry.id === id);
+      if (index >= 0) {
+        next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
+          ...entry,
+          status: 'awaiting-approval',
+        }));
+      }
+      next.status = 'awaiting-approval';
+      return next;
+    }
+
+    case 'input-resolved': {
+      const id = `tool:${event.toolCallId}`;
+      const index = next.entries.findIndex((entry) => entry.id === id);
+      const resolvedStatus = event.outcome === 'cancelled' ? 'cancelled' : 'running';
+      if (index >= 0) {
+        next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
+          ...entry,
+          status: resolvedStatus,
+        }));
+      }
+      next.status = resolvedStatus === 'cancelled' ? 'cancelled' : 'running';
+      return next;
+    }
+
     case 'text-delta':
     case 'reasoning-delta':
     case 'tool-use-start':

@@ -11,11 +11,17 @@ vi.mock('../lib/auth-gate', () => ({
   runAuthGate: (...args: unknown[]) => mockRunAuthGate(...args),
 }));
 
+const gateMocks = vi.hoisted(() => ({
+  managedCompute: vi.fn(() => null as unknown),
+  orgPolicy: vi.fn(async () => null as unknown),
+  spendLimit: vi.fn(async () => null as unknown),
+}));
+
 vi.mock('@/lib/managed-compute-gate', () => ({
-  buildManagedComputeGateResponse: () => null,
-  buildOrganizationPolicyGateResponse: async () => null,
+  buildManagedComputeGateResponse: gateMocks.managedCompute,
+  buildOrganizationPolicyGateResponse: gateMocks.orgPolicy,
   buildModelPolicyGateResponse: async () => null,
-  buildSpendLimitGateResponse: async () => null,
+  buildSpendLimitGateResponse: gateMocks.spendLimit,
 }));
 
 const mockProcessRequest = vi.fn();
@@ -40,7 +46,7 @@ vi.mock('@/lib/user-connector-tools', () => ({
 
 const workflowMocks = vi.hoisted(() => ({ start: vi.fn() }));
 vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
-  startCloudAgentWorkflowExecution: workflowMocks.start,
+  runCloudAgentTurn: workflowMocks.start,
 }));
 
 const db = { query: vi.fn(), transaction: vi.fn() };
@@ -212,6 +218,9 @@ function processedRequest() {
 describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    gateMocks.managedCompute.mockReturnValue(null);
+    gateMocks.orgPolicy.mockResolvedValue(null);
+    gateMocks.spendLimit.mockResolvedValue(null);
     db.query.mockResolvedValue([]);
     mockRunAuthGate.mockResolvedValue({
       ok: true,
@@ -222,6 +231,7 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
     checkpointMocks.claim.mockResolvedValue(claimedCheckpoint);
     mockProcessRequest.mockResolvedValue(processedRequest());
     workflowMocks.start.mockResolvedValue({
+      transport: 'durable',
       workflowRunId: 'wrun_resume_1',
       readable: new ReadableStream<Uint8Array>({
         start(controller) {
@@ -421,6 +431,124 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
     });
     expect(passedProcessed.llmRequest.effort).toBe('high');
     expect(passedProcessed.llmRequest.messages).toEqual(suspendedMessages);
+  });
+
+  /**
+   * AGI-39. Every one of these used to be a 503: the route started the durable
+   * workflow with no fallback, so a Workflow outage or an engaged kill-switch
+   * failed an already-authorized approval permanently, with the checkpoint lease
+   * consumed and the run parked.
+   */
+  describe('degraded transport still serves an authorized approval', () => {
+    beforeEach(() => {
+      workflowMocks.start.mockResolvedValue({
+        transport: 'inline',
+        workflowRunId: null,
+        degradedReason: 'workflow_start_failed',
+        readable: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        }),
+      });
+    });
+
+    it('answers 200 with the resumed stream rather than 503', async () => {
+      const response = await POST(makeRequest(resumeBody()));
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-AGI-Tool-Loop')).toBe('resume');
+      expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe(RUN_ID);
+      await expect(response.text()).resolves.toContain('[DONE]');
+    });
+
+    it('advertises no workflow run to reattach to, and names the transport', async () => {
+      const response = await POST(makeRequest(resumeBody()));
+      await response.text();
+
+      expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
+      expect(response.headers.get('X-AGI-Agent-Transport')).toBe('inline');
+    });
+
+    it('asks the transport for the inline fallback, not durable-only', async () => {
+      await (await POST(makeRequest(resumeBody()))).text();
+
+      expect(workflowMocks.start).toHaveBeenCalledWith(
+        expect.objectContaining({ onDurableUnavailable: 'inline' }),
+      );
+    });
+
+    it('keeps the checkpoint lease claimed, because the resume really ran', async () => {
+      await (await POST(makeRequest(resumeBody()))).text();
+
+      expect(checkpointMocks.release).not.toHaveBeenCalled();
+      expect(managedUsageMocks.finalizeRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * Degrading the TRANSPORT must never degrade AUTHORIZATION. Each gate below
+   * runs before a transport is chosen, and its refusal must still stand.
+   */
+  describe('authorization gates still refuse, whichever transport would serve', () => {
+    it('refuses an unauthenticated caller before claiming anything', async () => {
+      mockRunAuthGate.mockResolvedValue({
+        ok: false,
+        response: NextResponse.json({ error: 'unauthenticated' }, { status: 401 }),
+      });
+
+      const response = await POST(makeRequest(resumeBody()));
+
+      expect(response.status).toBe(401);
+      expect(checkpointMocks.claim).not.toHaveBeenCalled();
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+    });
+
+    it('refuses when managed compute is unavailable to this caller', async () => {
+      gateMocks.managedCompute.mockReturnValue(
+        NextResponse.json({ error: 'managed compute disabled' }, { status: 403 }),
+      );
+
+      const response = await POST(makeRequest(resumeBody()));
+
+      expect(response.status).toBe(403);
+      expect(checkpointMocks.claim).not.toHaveBeenCalled();
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+    });
+
+    it('refuses when workspace policy forbids the turn', async () => {
+      gateMocks.orgPolicy.mockResolvedValue(
+        NextResponse.json({ error: 'blocked by policy' }, { status: 403 }),
+      );
+
+      const response = await POST(makeRequest(resumeBody()));
+
+      expect(response.status).toBe(403);
+      expect(checkpointMocks.claim).not.toHaveBeenCalled();
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+    });
+
+    it('refuses when the workspace spend cap is reached', async () => {
+      gateMocks.spendLimit.mockResolvedValue(
+        NextResponse.json({ error: 'spend limit reached' }, { status: 402 }),
+      );
+
+      const response = await POST(makeRequest(resumeBody()));
+
+      expect(response.status).toBe(402);
+      expect(checkpointMocks.claim).not.toHaveBeenCalled();
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+    });
+
+    it('still refuses a forged approval when the transport would have degraded', async () => {
+      checkpointMocks.claim.mockRejectedValue(new CloudAgentApprovalDecisionError());
+
+      const response = await POST(makeRequest(resumeBody('call_forged')));
+
+      expect(response.status).toBe(400);
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+    });
   });
 
   it('overrides approval when the persisted connector permission blocks the tool', async () => {

@@ -7,6 +7,9 @@ const sendCloudMessage = vi.fn();
 const getCloudConversation = vi.fn();
 const updateConversation = vi.fn().mockResolvedValue(undefined);
 const saveMessage = vi.fn().mockResolvedValue({ id: 'message-1' });
+const cancelRun = vi.fn();
+const followRun = vi.fn();
+const getRun = vi.fn();
 
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
@@ -17,6 +20,7 @@ vi.mock('../../api/cloudApi', () => ({
   getCloudConversation: (...args: unknown[]) => getCloudConversation(...args),
   deleteCloudConversation: vi.fn(),
   updateCloudConversationTitle: vi.fn(),
+  createDesktopCloudAgentRunClient: () => ({ followRun, cancelRun, getRun }),
   createCloudChatPersistenceClient: () => ({
     updateConversation,
     saveMessage,
@@ -43,6 +47,26 @@ function collectEvents(runtime: WebRuntime): StreamEvent[] {
   const events: StreamEvent[] = [];
   runtime.onStream((event) => events.push(event));
   return events;
+}
+
+const MANAGED_RUN_ID = '019c3330-02b7-7000-8000-000000000010';
+const MANAGED_RUN_PATH = `/api/llm/v1/chat/completions/runs/${MANAGED_RUN_ID}`;
+
+type RunHandleCallback = (handle: { runId: string; runPath: string }) => void;
+
+interface SavedMessage {
+  id: string;
+  role: string;
+  content: string;
+  model: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Every assistant row handed to the persistence client, oldest first. */
+function assistantSaves(): SavedMessage[] {
+  return saveMessage.mock.calls
+    .map((call) => call[1] as SavedMessage)
+    .filter((input) => input.role === 'assistant');
 }
 
 describe('mapGeneratedFilesPayload', () => {
@@ -375,6 +399,144 @@ describe('WebRuntime x_generated_files stream handling', () => {
     await runtime.sendMessage('conv_1', 'hello');
 
     expect(events.some((e) => e.type === 'generated_files')).toBe(false);
+  });
+});
+
+/**
+ * Regression cover for `WebRuntime.stopGeneration`, which must behave like
+ * `CloudRuntime.stopGeneration`: cancel the server-owned Managed Cloud run,
+ * record the turn as *stopped* rather than *failed*, and never re-settle a turn
+ * that already ended. The desktop web runtime silently lacked all three for a
+ * release because only `CloudRuntime` was covered.
+ */
+describe('WebRuntime.stopGeneration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateConversation.mockResolvedValue(undefined);
+    saveMessage.mockResolvedValue({ id: 'message-1' });
+    cancelRun.mockResolvedValue({ id: MANAGED_RUN_ID, state: 'cancelled' });
+  });
+
+  it('cancels the server-owned run so a stopped task stops consuming budget', async () => {
+    const runtime = new WebRuntime();
+
+    sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+      const signal = args[6] as AbortSignal;
+      (args[14] as RunHandleCallback)({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+      await new Promise<void>((resolve) => {
+        signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+
+    const send = runtime.sendMessage('conv_stop_cancel', 'start a long task');
+    await vi.waitFor(() => expect(sendCloudMessage).toHaveBeenCalledOnce());
+
+    runtime.stopGeneration('conv_stop_cancel');
+    await send;
+
+    await vi.waitFor(() => expect(cancelRun).toHaveBeenCalledWith(MANAGED_RUN_ID));
+  });
+
+  it('records a user Stop as a stopped turn, not as a failure, when the request aborts', async () => {
+    const runtime = new WebRuntime();
+    const events = collectEvents(runtime);
+
+    sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+      const onChunk = args[3] as (text: string) => void;
+      const onError = args[5] as (err: Error) => void;
+      const signal = args[6] as AbortSignal;
+      (args[14] as RunHandleCallback)({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+      onChunk('partial answer');
+      await new Promise<void>((resolve) => {
+        signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+      const aborted = new Error('The user aborted a request.');
+      aborted.name = 'AbortError';
+      onError(aborted);
+    });
+
+    const send = runtime.sendMessage('conv_stop_abort', 'start a long task');
+    await vi.waitFor(() => expect(sendCloudMessage).toHaveBeenCalledOnce());
+
+    runtime.stopGeneration('conv_stop_abort');
+    await send;
+    await vi.waitFor(() => expect(assistantSaves()).toHaveLength(1));
+
+    expect(assistantSaves().map((saved) => saved.metadata?.['finishReason'])).toEqual(['stopped']);
+    const [stopped] = assistantSaves();
+    expect(stopped?.content).toBe('partial answer');
+    expect(stopped?.metadata).toMatchObject({ finishReason: 'stopped' });
+    expect(stopped?.metadata?.['streamError']).toBeUndefined();
+    expect(events.filter((event) => event.type === 'error')).toEqual([]);
+  });
+
+  it('leaves an already finished turn intact when a Stop arrives late', async () => {
+    const runtime = new WebRuntime();
+
+    sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+      const onChunk = args[3] as (text: string) => void;
+      const onDone = args[4] as () => Promise<void> | void;
+      (args[14] as RunHandleCallback)({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+      onChunk('final answer');
+      await onDone();
+    });
+
+    await runtime.sendMessage('conv_stop_late', 'hi');
+    await vi.waitFor(() => expect(assistantSaves()).toHaveLength(1));
+    const savesAfterFinish = saveMessage.mock.calls.length;
+
+    runtime.stopGeneration('conv_stop_late');
+    await Promise.resolve();
+
+    expect(saveMessage).toHaveBeenCalledTimes(savesAfterFinish);
+    expect(cancelRun).not.toHaveBeenCalled();
+    const [finished] = assistantSaves();
+    expect(finished?.content).toBe('final answer');
+    expect(finished?.metadata?.['finishReason']).toBeUndefined();
+  });
+
+  it('does not persist a stopped turn once sendMessage has returned without a done callback', async () => {
+    const runtime = new WebRuntime();
+
+    sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+      const onChunk = args[3] as (text: string) => void;
+      (args[14] as RunHandleCallback)({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+      onChunk('server closed the stream');
+    });
+
+    await runtime.sendMessage('conv_stop_after_return', 'hi');
+    const savesAfterReturn = saveMessage.mock.calls.length;
+
+    runtime.stopGeneration('conv_stop_after_return');
+    await Promise.resolve();
+
+    expect(saveMessage).toHaveBeenCalledTimes(savesAfterReturn);
+    expect(assistantSaves()).toEqual([]);
+    expect(cancelRun).not.toHaveBeenCalled();
+  });
+
+  it('still persists a genuine (non-abort) stream failure as a failed turn', async () => {
+    const runtime = new WebRuntime();
+    const events = collectEvents(runtime);
+
+    sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+      const onChunk = args[3] as (text: string) => void;
+      const onError = args[5] as (err: Error) => void;
+      (args[14] as RunHandleCallback)({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+      onChunk('partial answer');
+      onError(new Error('Managed Cloud upstream failed'));
+    });
+
+    await runtime.sendMessage('conv_stream_error', 'hi');
+    await vi.waitFor(() => expect(assistantSaves()).toHaveLength(1));
+
+    const [failed] = assistantSaves();
+    expect(failed?.metadata).toMatchObject({
+      finishReason: 'error',
+      streamError: { message: 'Managed Cloud upstream failed' },
+    });
+    expect(events).toContainEqual({ type: 'error', error: 'Managed Cloud upstream failed' });
+    expect(cancelRun).not.toHaveBeenCalled();
   });
 });
 

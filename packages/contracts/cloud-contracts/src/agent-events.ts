@@ -1,8 +1,7 @@
-
 import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 
-export const AGENT_EVENT_SCHEMA_VERSION = 3 as const;
+export const AGENT_EVENT_SCHEMA_VERSION = 4 as const;
 
 const NonEmptyStringSchema = z.string().min(1);
 const OptionalNonNegativeIntegerSchema = z.number().int().nonnegative().optional();
@@ -156,6 +155,45 @@ const ApprovalResolvedSchema = z.object({
   decision: z.enum(['approved', 'approved-for-session', 'denied', 'cancelled']),
 });
 
+// Remote input-request definitions are UNTRUSTED. The host caps their count
+// and serialized size before persisting or streaming them so a malicious
+// connector cannot inflate a checkpoint, an SSE frame, or the durable event log.
+const MAX_INPUT_REQUEST_ENTRIES = 32;
+const MAX_INPUT_REQUESTS_SERIALIZED_BYTES = 16_000;
+
+const BoundedInputRequestsSchema = JsonValueSchema.superRefine((value, ctx) => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    ctx.addIssue({ code: 'custom', message: 'inputRequests must be a JSON object' });
+    return;
+  }
+  const entryCount = Object.keys(value as Record<string, unknown>).length;
+  if (entryCount < 1 || entryCount > MAX_INPUT_REQUEST_ENTRIES) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `inputRequests must define between 1 and ${MAX_INPUT_REQUEST_ENTRIES} fields`,
+    });
+  }
+  if (JSON.stringify(value).length > MAX_INPUT_REQUESTS_SERIALIZED_BYTES) {
+    ctx.addIssue({ code: 'custom', message: 'inputRequests exceed the size limit' });
+  }
+});
+
+const InputRequestedSchema = z.object({
+  type: z.literal('input-requested'),
+  toolCallId: NonEmptyStringSchema,
+  connectorId: NonEmptyStringSchema,
+  toolName: NonEmptyStringSchema,
+  inputRequests: BoundedInputRequestsSchema,
+  requestState: z.string().optional(),
+  round: z.number().int().nonnegative(),
+});
+
+const InputResolvedSchema = z.object({
+  type: z.literal('input-resolved'),
+  toolCallId: NonEmptyStringSchema,
+  outcome: z.enum(['resolved', 'cancelled']),
+});
+
 const ArtifactProducedSchema = z.object({
   type: z.literal('artifact-produced'),
   artifactId: NonEmptyStringSchema,
@@ -210,6 +248,8 @@ export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion('typ
   SourceListSchema,
   ApprovalRequestedSchema,
   ApprovalResolvedSchema,
+  InputRequestedSchema,
+  InputResolvedSchema,
   ArtifactProducedSchema,
   ContextCompactedSchema,
   TaskStateChangedSchema,

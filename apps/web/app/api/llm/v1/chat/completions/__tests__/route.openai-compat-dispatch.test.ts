@@ -190,6 +190,24 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: rlsMocks.getUserScopedDb,
 }));
 
+// Only the reservation entry points are stubbed; `isFreePlanTier` and the policy
+// constants stay real. `isFreeTrialRequest` answers false by default so every
+// existing paid case below is unaffected.
+const freeTrialMocks = vi.hoisted(() => ({
+  isFreeTrial: vi.fn(() => false),
+  begin: vi.fn(),
+  applyBudget: vi.fn(() => ({ ok: true, maxOutputTokens: 4096 })),
+  settle: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  isFreeTrialRequest: freeTrialMocks.isFreeTrial,
+  beginFreeTrialRequest: freeTrialMocks.begin,
+  applyFreeTrialProviderBudget: freeTrialMocks.applyBudget,
+  settleFreeTrialRequest: freeTrialMocks.settle,
+}));
+
 vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
   startCloudAgentWorkflowExecution: workflowRouteMocks.start,
 }));
@@ -514,6 +532,86 @@ describe('Managed Web AGI Work dispatch', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
+  });
+
+  /**
+   * AGI-126. The durable branch used to read `processed.managedUsage && ...`, so
+   * the DEFAULT tier was the one tier that never got durability. A free-trial
+   * turn still created a `cloud_agent_runs` row, so it LOOKED durable to the runs
+   * list and the approval APIs, then died with the client connection — and a
+   * pause it recorded could never be resumed, because the resume routes could not
+   * build a workflow input without a managed reservation.
+   */
+  // AGI Work itself is Pro-gated, so the free tier's agentic turn is an ordinary
+  // streaming chat turn that happens to have MCP tools in its catalog — which is
+  // exactly the shape that opens a `cloud_agent_runs` row and can pause on an
+  // approval.
+  function arrangeFreeTrialToolTurn(): void {
+    arrangePaidAgenticTurn();
+    mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'free' });
+    freeTrialMocks.isFreeTrial.mockReturnValue(true);
+    freeTrialMocks.begin.mockImplementation(
+      async ({ userId, requestId }: { userId: string; requestId: string }) => ({
+        ok: true,
+        reservation: { kind: 'free_trial', userId, requestId, reservedMicrousd: 5_000 },
+      }),
+    );
+    freeTrialMocks.applyBudget.mockReturnValue({ ok: true, maxOutputTokens: 4096 });
+    workflowRouteMocks.loadMcpTools.mockResolvedValue([
+      {
+        qualifiedName: 'mcp__github__get_pull_request',
+        serverId: 'github',
+        toolName: 'get_pull_request',
+        description: 'Read a pull request',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ]);
+  }
+
+  it('runs a free-trial tool-using turn on the durable transport, like every other tier', async () => {
+    arrangeFreeTrialToolTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+
+    const response = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+
+    if (response.status !== 200) {
+      throw new Error(`free-trial turn refused: ${await response.text()}`);
+    }
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('wrun_durable_1');
+    expect(workflowRouteMocks.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the durable start a free-trial reservation and no managed one', async () => {
+    arrangeFreeTrialToolTurn();
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+
+    await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+
+    const started = workflowRouteMocks.start.mock.calls[0]![0] as {
+      processed: { freeTrial?: unknown; managedUsage?: unknown };
+    };
+    expect(started.processed.freeTrial).toMatchObject({
+      kind: 'free_trial',
+      userId: 'user-1',
+      reservedMicrousd: 5_000,
+    });
+    expect(started.processed.managedUsage).toBeUndefined();
+    // A free turn must never reserve managed credit on its way to durability.
+    expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it('still reverts a free-trial turn to the request-scoped stream when the kill-switch is off', async () => {
+    arrangeFreeTrialToolTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '0');
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+
+    const response = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
+    expect(workflowRouteMocks.start).not.toHaveBeenCalled();
   });
 
   it('leaves an ordinary chat turn with no tools off the durable transport entirely', async () => {

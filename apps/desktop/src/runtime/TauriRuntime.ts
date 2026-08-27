@@ -660,7 +660,7 @@ export class TauriRuntime implements ChatRuntime {
 
     const pushAgentEvent = (event: AgentEvent) => {
       const envelope: AgentEventEnvelope = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         sessionId: String(backendConversationId),
         turnId: frontendMessageId,
         sequence: agentEventSequence++,

@@ -2,7 +2,6 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { api } from './api';
-import { GATEWAY_URL } from '@/lib/constants';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { notificationAllowed } from './notificationGate';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -15,12 +14,20 @@ import {
 
 const BACKGROUND_FETCH_TASK = 'agent-status-check';
 
+/**
+ * Shape of `GET /api/mobile/agent-status` (apps/web). Each entry is one open
+ * pause on a cloud agent run — a tool call awaiting approval, or a connector
+ * question awaiting an answer — so the copy below covers both kinds.
+ */
 interface AgentStatusResponse {
   pendingApprovals: Array<{
     id: string;
-    agentName: string;
-    toolName: string;
-    description: string;
+    runId: string;
+    kind: 'approval' | 'input';
+    toolName: string | null;
+    toolCount: number;
+    model: string;
+    requestedAt: string | null;
   }>;
   runningAgents: number;
 }
@@ -62,7 +69,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
       }
 
       const result = await api.get<AgentStatusResponse>('/api/mobile/agent-status', {
-        baseUrl: GATEWAY_URL,
         timeout: 15_000,
         signal: controller.signal,
       });
@@ -81,7 +87,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
           await Notifications.scheduleNotificationAsync({
             content: {
               title: 'AGI Workforce',
-              body: `${result.pendingApprovals.length} agent action${result.pendingApprovals.length === 1 ? '' : 's'} need your approval`,
+              body: `${result.pendingApprovals.length} agent action${result.pendingApprovals.length === 1 ? ' is' : 's are'} waiting on you`,
               data: {
                 type: 'agent_approval_needed',
                 approvalId: approval.id,

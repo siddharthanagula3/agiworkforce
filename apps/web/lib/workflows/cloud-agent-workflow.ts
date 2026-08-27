@@ -20,11 +20,14 @@ import {
   getCloudAgentRun,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
+  saveCloudAgentInputCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 import {
+  cloudAgentWorkflowBillingKey,
   parseCloudAgentWorkflowInput,
+  rehydrateCloudAgentWorkflowRequest,
   type CloudAgentWorkflowInput,
 } from './cloud-agent-workflow-input';
 import { projectCloudAgentWorkflowChunk } from './cloud-agent-workflow-stream';
@@ -119,6 +122,12 @@ const ToolResultSchema = z
     source: SourceSchema.optional(),
     sources: z.array(SourceSchema).optional(),
     pngResults: z.array(z.string()).optional(),
+    inputRequired: z
+      .object({
+        inputRequests: z.record(z.string(), z.unknown()),
+        requestState: z.string().optional(),
+      })
+      .optional(),
   })
   .strict();
 
@@ -163,15 +172,18 @@ export async function executeCloudAgentWorkflowInvocation(
 
   const input = parseCloudAgentWorkflowInput(rawInput);
   const db = getNeonDb();
-  const processed = {
-    ...input.processed,
-    managedUsage: { db, ...input.billing },
-  } as ProcessedRequest;
+  // Rehydrate onto the side the discriminant names. A free-trial turn must come
+  // back as `processed.freeTrial` so the tool loop applies the free output cap
+  // rather than the managed per-step reservation -- durable is a transport
+  // choice, not a licence to skip the tier's budget.
+  const processed = rehydrateCloudAgentWorkflowRequest(input, db);
+  const billingLedgerKey = cloudAgentWorkflowBillingKey(input.billing);
   const connectorExecutor = input.mcpTools.some((tool) => tool.origin === 'connector')
     ? makeUserConnectorExecutor(input.userId, input.processed.organizationId ?? null)
     : undefined;
   let nextInput: CloudAgentWorkflowInput | null = null;
   let approvalCheckpointSaved = false;
+  let inputCheckpointSaved = false;
   let reportedFailure = false;
   let lastTaskState: AgentTaskState | undefined;
 
@@ -199,7 +211,7 @@ export async function executeCloudAgentWorkflowInvocation(
       executeCloudAgentOperation<ToolLoopProviderStepResult>(db, {
         userId: input.userId,
         runId: input.runId,
-        billingIdempotencyKey: input.billing.idempotencyKey,
+        billingIdempotencyKey: billingLedgerKey,
         operationKey,
         operationKind: 'provider',
         retrySafety: 'unsafe',
@@ -212,7 +224,7 @@ export async function executeCloudAgentWorkflowInvocation(
       executeCloudAgentOperation<ToolLoopToolResult>(db, {
         userId: input.userId,
         runId: input.runId,
-        billingIdempotencyKey: input.billing.idempotencyKey,
+        billingIdempotencyKey: billingLedgerKey,
         operationKey,
         operationKind: 'tool',
         retrySafety,
@@ -237,6 +249,23 @@ export async function executeCloudAgentWorkflowInvocation(
         events: checkpoint.events,
       });
       approvalCheckpointSaved = true;
+    },
+    onInputCheckpoint: async (checkpoint) => {
+      await saveCloudAgentInputCheckpoint(db, {
+        userId: input.userId,
+        runId: input.runId,
+        sessionId: checkpoint.sessionId,
+        turnId: checkpoint.turnId,
+        nextEventSequence: checkpoint.nextEventSequence,
+        completedSteps: checkpoint.completedSteps,
+        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        messages: checkpoint.messages,
+        pendingToolCalls: checkpoint.pendingToolCalls,
+        inputRequests: checkpoint.inputRequests,
+        requestState: checkpoint.requestState,
+        events: checkpoint.events,
+      });
+      inputCheckpointSaved = true;
     },
   });
 
@@ -264,13 +293,14 @@ export async function executeCloudAgentWorkflowInvocation(
 
   if (nextInput) return { kind: 'continue', input: nextInput };
 
-  const outcome: WorkflowTerminalOutcome = approvalCheckpointSaved
-    ? 'awaiting_input'
-    : lastTaskState === 'cancelled'
-      ? 'cancelled'
-      : reportedFailure || lastTaskState === 'failed'
-        ? 'failed'
-        : 'completed';
+  const outcome: WorkflowTerminalOutcome =
+    approvalCheckpointSaved || inputCheckpointSaved
+      ? 'awaiting_input'
+      : lastTaskState === 'cancelled'
+        ? 'cancelled'
+        : reportedFailure || lastTaskState === 'failed'
+          ? 'failed'
+          : 'completed';
   await settleWorkflowInvocation(input, outcome);
   return { kind: 'terminal', outcome };
 }

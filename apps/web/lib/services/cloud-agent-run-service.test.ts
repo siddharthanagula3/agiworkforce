@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
+// Pause and terminal boundaries now announce to mobile. The wiring itself is
+// covered in cloud-agent-run-notifications.test.ts; stub it here so these
+// cases keep asserting storage behaviour against a mocked database only.
+vi.mock('./agent-notification-service', () => ({
+  notifyAgentRunEvent: vi.fn(async () => ({ pushed: false })),
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -8,7 +14,10 @@ import {
   APPROVAL_CHECKPOINT_TTL_HOURS,
   appendCloudAgentEvent,
   claimCloudAgentApprovalCheckpoint,
+  claimCloudAgentInputCheckpoint,
   completeCloudAgentApprovalCheckpoint,
+  completeCloudAgentInputCheckpoint,
+  saveCloudAgentInputCheckpoint,
   createCloudAgentRun,
   findActiveCloudAgentRunForConversation,
   getCloudAgentRun,
@@ -53,7 +62,7 @@ function database(): DatabaseAdapter {
 }
 
 const envelope: AgentEventEnvelope = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   sessionId: '0190a000-0000-7000-8000-000000000099',
   turnId: 'agi.chat.web.send.turn-1',
   sequence: 2,
@@ -295,7 +304,7 @@ describe('cloud agent run service', () => {
 
     expect(db.query).toHaveBeenNthCalledWith(
       2,
-      expect.stringMatching(/when \$3 >= last_event_sequence/i),
+      expect.stringMatching(/when \$3 >= runs\.last_event_sequence/i),
       [RUN_ROW.id, 'user-1', 2, 'ready_for_review'],
     );
     expect(run.state).toBe('ready_for_review');
@@ -952,5 +961,267 @@ describe('cloud agent run service', () => {
       expect.stringMatching(/state = 'pending'[\s\S]*lease_token = null[\s\S]*state = 'resuming'/i),
       [CHECKPOINT_ROW.id, 'user-1', '0190a000-0000-7000-8000-000000000003'],
     );
+  });
+
+  describe('MRTR input checkpoints', () => {
+    const INPUT_EVENTS: AgentEventEnvelope[] = [
+      {
+        ...envelope,
+        sequence: 3,
+        event: {
+          type: 'input-requested',
+          toolCallId: 'call-1',
+          connectorId: 'github',
+          toolName: 'read_file',
+          inputRequests: { path: { type: 'string' } },
+          requestState: 'opaque-continuation',
+          round: 0,
+        },
+      },
+      {
+        ...envelope,
+        sequence: 4,
+        event: {
+          type: 'task-state-changed',
+          taskId: RUN_ROW.request_id,
+          state: 'awaiting_input',
+          previousState: 'running',
+          summary: 'The agent needs additional input before it can continue.',
+        },
+      },
+      {
+        ...envelope,
+        sequence: 5,
+        event: { type: 'lifecycle', phase: 'paused' },
+      },
+    ];
+
+    const INPUT_REQUESTS = { 'call-1': { path: { type: 'string' } } };
+    const REQUEST_STATE = { 'call-1': { requestState: 'opaque-continuation', round: 0 } };
+
+    const INPUT_CHECKPOINT_ROW = {
+      ...CHECKPOINT_ROW,
+      checkpoint_kind: 'input',
+      input_requests: INPUT_REQUESTS,
+      request_state: REQUEST_STATE,
+    };
+
+    function saveArgs(overrides: Record<string, unknown> = {}) {
+      return {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        sessionId: RUN_ROW.conversation_id!,
+        turnId: RUN_ROW.request_id,
+        nextEventSequence: 6,
+        completedSteps: 1,
+        request: CHECKPOINT_ROW.request,
+        messages: CHECKPOINT_ROW.messages,
+        pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,
+        inputRequests: INPUT_REQUESTS,
+        requestState: REQUEST_STATE,
+        events: INPUT_EVENTS,
+        ...overrides,
+      };
+    }
+
+    it('versions and stores a server-owned input checkpoint under the run lock', async () => {
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([{ id: RUN_ROW.id }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ next_version: 1 }])
+        .mockResolvedValueOnce([INPUT_CHECKPOINT_ROW])
+        .mockResolvedValueOnce([{ sequence: 3 }])
+        .mockResolvedValueOnce([{ ...RUN_ROW, last_event_sequence: 3 }])
+        .mockResolvedValueOnce([{ sequence: 4 }])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 4 }])
+        .mockResolvedValueOnce([{ sequence: 5 }])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 5 }])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input' }]);
+
+      const checkpoint = await saveCloudAgentInputCheckpoint(db, saveArgs());
+
+      expect(checkpoint.id).toBe(CHECKPOINT_ROW.id);
+      expect(checkpoint.inputRequests).toEqual(INPUT_REQUESTS);
+      expect(checkpoint.requestState).toEqual(REQUEST_STATE);
+      expect(db.query).toHaveBeenNthCalledWith(
+        4,
+        expect.stringMatching(/checkpoint_kind, input_requests, request_state[\s\S]*'input'/i),
+        expect.arrayContaining([INPUT_REQUESTS, REQUEST_STATE]),
+      );
+      expect(db.query).toHaveBeenNthCalledWith(
+        11,
+        expect.stringMatching(/state = 'awaiting_input'/i),
+        [RUN_ROW.id, 'user-1'],
+      );
+    });
+
+    it('rejects an incomplete input boundary before opening a transaction', async () => {
+      await expect(
+        saveCloudAgentInputCheckpoint(
+          db,
+          saveArgs({
+            events: [INPUT_EVENTS[0]!, INPUT_EVENTS[1]!, { ...INPUT_EVENTS[1]!, sequence: 5 }],
+          }),
+        ),
+      ).rejects.toThrow(/complete input boundary/i);
+      expect(db.transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects a boundary whose bounded definitions do not cover every paused call', async () => {
+      await expect(
+        saveCloudAgentInputCheckpoint(db, saveArgs({ inputRequests: {}, requestState: {} })),
+      ).rejects.toThrow(/complete input boundary/i);
+      expect(db.transaction).not.toHaveBeenCalled();
+    });
+
+    it('claims the latest pending input checkpoint and advances to the next round', async () => {
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([INPUT_CHECKPOINT_ROW])
+        .mockResolvedValueOnce([
+          {
+            ...INPUT_CHECKPOINT_ROW,
+            state: 'resuming',
+            lease_token: '0190a000-0000-7000-8000-000000000003',
+            lease_expires_at: '2026-07-18T20:00:00.000Z',
+          },
+        ])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'running' }]);
+
+      const claimed = await claimCloudAgentInputCheckpoint(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        inputs: [{ toolCallId: 'call-1', inputResponses: { path: 'README.md' } }],
+        leaseSeconds: 86_400,
+      });
+
+      expect(claimed.checkpoint.state).toBe('resuming');
+      expect(claimed.leaseToken).toBe('0190a000-0000-7000-8000-000000000003');
+      expect(claimed.resumptions).toEqual([
+        {
+          toolCallId: 'call-1',
+          inputResponses: { path: 'README.md' },
+          requestState: 'opaque-continuation',
+          round: 1,
+        },
+      ]);
+      expect(db.query).toHaveBeenNthCalledWith(
+        1,
+        expect.stringMatching(
+          /checkpoint_kind = 'input'[\s\S]*state = 'pending'[\s\S]*for update/i,
+        ),
+        [RUN_ROW.id, 'user-1', APPROVAL_CHECKPOINT_TTL_HOURS],
+      );
+    });
+
+    it('supports repeated MRTR rounds by scoping the next attempt round', async () => {
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([
+          {
+            ...INPUT_CHECKPOINT_ROW,
+            request_state: { 'call-1': { requestState: 't2', round: 2 } },
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            ...INPUT_CHECKPOINT_ROW,
+            request_state: { 'call-1': { requestState: 't2', round: 2 } },
+            state: 'resuming',
+            lease_token: '0190a000-0000-7000-8000-000000000003',
+            lease_expires_at: '2026-07-18T20:00:00.000Z',
+          },
+        ])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'running' }]);
+
+      const claimed = await claimCloudAgentInputCheckpoint(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        inputs: [{ toolCallId: 'call-1', inputResponses: { path: 'CHANGELOG.md' } }],
+      });
+
+      expect(claimed.resumptions[0]).toMatchObject({ round: 3, requestState: 't2' });
+    });
+
+    it('rejects a forged input tool call id before claiming the checkpoint', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([INPUT_CHECKPOINT_ROW]);
+
+      await expect(
+        claimCloudAgentInputCheckpoint(db, {
+          userId: 'user-1',
+          runId: RUN_ROW.id,
+          inputs: [{ toolCallId: 'call-forged', inputResponses: {} }],
+        }),
+      ).rejects.toMatchObject({ name: 'CloudAgentInputResponseError' });
+      expect(db.query).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a cross-user or missing input checkpoint as not found', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await expect(
+        claimCloudAgentInputCheckpoint(db, {
+          userId: 'other-user',
+          runId: RUN_ROW.id,
+          inputs: [{ toolCallId: 'call-1', inputResponses: {} }],
+        }),
+      ).rejects.toMatchObject({ name: 'CloudAgentApprovalCheckpointNotFoundError' });
+    });
+
+    it('rejects an input checkpoint that has aged past the claim window', async () => {
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: INPUT_CHECKPOINT_ROW.id }]);
+
+      await expect(
+        claimCloudAgentInputCheckpoint(db, {
+          userId: 'user-1',
+          runId: RUN_ROW.id,
+          inputs: [{ toolCallId: 'call-1', inputResponses: {} }],
+        }),
+      ).rejects.toMatchObject({ name: 'CloudAgentApprovalCheckpointExpiredError' });
+    });
+
+    it('settles the input checkpoint lease as failed when the run is cancelled', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([{ ...INPUT_CHECKPOINT_ROW, state: 'failed' }]);
+
+      const checkpoint = await completeCloudAgentInputCheckpoint(db, {
+        userId: 'user-1',
+        checkpointId: INPUT_CHECKPOINT_ROW.id,
+        leaseToken: '0190a000-0000-7000-8000-000000000003',
+        outcome: 'failed',
+      });
+
+      expect(checkpoint.state).toBe('failed');
+      expect(db.query).toHaveBeenCalledWith(
+        expect.stringMatching(/case when state = 'resuming' then \$3 else state end/i),
+        [INPUT_CHECKPOINT_ROW.id, 'user-1', 'failed', '0190a000-0000-7000-8000-000000000003'],
+      );
+    });
+
+    it('projects a pending input inbox so a surface can collect the responses', async () => {
+      vi.mocked(db.query)
+        .mockResolvedValueOnce([
+          {
+            ...RUN_ROW,
+            state: 'awaiting_input',
+            pending_input_requested_at: '2026-07-17T20:00:05.000Z',
+            pending_input_tool_calls: CHECKPOINT_ROW.pending_tool_calls,
+            pending_input_requests: INPUT_REQUESTS,
+            pending_input_request_state: REQUEST_STATE,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const snapshot = await getCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id });
+
+      expect(snapshot?.run.pendingInput?.toolCalls).toEqual([
+        {
+          toolCallId: 'call-1',
+          name: 'mcp__github__read_file',
+          connectorId: 'github',
+          round: 0,
+          inputRequests: { path: { type: 'string' } },
+        },
+      ]);
+    });
   });
 });

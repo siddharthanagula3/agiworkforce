@@ -106,7 +106,7 @@ async function* canonicalEventGenerator(): AsyncGenerator<Uint8Array> {
         {
           delta: {
             x_agent_event: {
-              schemaVersion: 3,
+              schemaVersion: 4,
               sessionId: 'conversation-1',
               turnId: 'turn-1',
               sequence: 0,

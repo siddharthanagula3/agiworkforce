@@ -3,6 +3,7 @@ use crate::automation::AutomationService;
 use crate::core::llm::LLMRouter;
 use crate::features::document::pdf::PdfHandler;
 use crate::sys::commands::chat::ChatAttachment;
+use agiworkforce_protocol::task_state::AgentTaskState;
 use anyhow::{anyhow, Result};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -140,6 +141,78 @@ struct AgentInstance {
     goal: Goal,
     core: AGICore,
     status: AgentStatus,
+}
+
+/// Maps an engine task state onto the orchestrator's terminal vocabulary, with
+/// the error note to record when the engine did not finish the work. `None`
+/// means the run is still live.
+///
+/// A successful run settles on `ReadyForReview`: the engine never emits
+/// `Completed` on its own, because that is a human acceptance, not an execution
+/// outcome.
+fn terminal_agent_state(task_state: AgentTaskState) -> Option<(AgentState, Option<&'static str>)> {
+    match task_state {
+        AgentTaskState::ReadyForReview | AgentTaskState::Completed | AgentTaskState::Archived => {
+            Some((AgentState::Completed, None))
+        }
+        AgentTaskState::Failed => Some((
+            AgentState::Failed,
+            Some("The agent stopped before finishing the task."),
+        )),
+        AgentTaskState::Cancelled => {
+            Some((AgentState::Failed, Some("The agent run was cancelled.")))
+        }
+        AgentTaskState::Queued
+        | AgentTaskState::Running
+        | AgentTaskState::AwaitingInput
+        | AgentTaskState::Paused => None,
+    }
+}
+
+fn unix_seconds() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// `AgentInstance::status.status` is seeded at spawn time and only ever moved by
+/// the orchestrator's own pause/resume/cancel calls — the engine that actually
+/// runs the goal reports its lifecycle through `AGICore`'s task state instead.
+/// Without this fold-back nothing ever writes `Completed`, so every reader that
+/// waits on it (the chat poll loop, `wait_for_all`, `cleanup_completed`) waits
+/// forever on a run that has already finished.
+///
+/// Only terminal engine states are adopted: non-terminal ones are left to the
+/// orchestrator's setters, whose `Paused` marker can legitimately lead the
+/// engine by an iteration boundary.
+fn sync_terminal_state(agent: &mut AgentInstance) {
+    if matches!(
+        agent.status.status,
+        AgentState::Completed | AgentState::Failed
+    ) {
+        return;
+    }
+
+    let task_state = match agent.core.get_task_state(&agent.goal.id) {
+        Some(task_state) => task_state,
+        None => return,
+    };
+
+    let (state, note) = match terminal_agent_state(task_state) {
+        Some(resolved) => resolved,
+        None => return,
+    };
+
+    agent.status.status = state;
+    if let Some(note) = note {
+        if agent.status.error.is_none() {
+            agent.status.error = Some(note.to_string());
+        }
+    }
+    if agent.status.completed_at.is_none() {
+        agent.status.completed_at = Some(unix_seconds());
+    }
 }
 
 pub struct AgentOrchestrator {
@@ -283,9 +356,10 @@ impl AgentOrchestrator {
     }
 
     pub async fn get_agent_result(&self, id: &str) -> Option<AgentResult> {
-        let agents = self.agents.lock().await;
+        let mut agents = self.agents.lock().await;
 
-        if let Some(agent) = agents.get(id) {
+        if let Some(agent) = agents.get_mut(id) {
+            sync_terminal_state(agent);
             let status = &agent.status;
 
             // Extract the result if available (borrowed logic from wait_for_all)
@@ -316,8 +390,9 @@ impl AgentOrchestrator {
     }
 
     pub async fn get_agent_status(&self, id: &str) -> Option<AgentStatus> {
-        let agents = self.agents.lock().await;
-        agents.get(id).map(|agent| {
+        let mut agents = self.agents.lock().await;
+        agents.get_mut(id).map(|agent| {
+            sync_terminal_state(agent);
             let mut status = agent.status.clone();
             if let Some(goal_context) = agent.core.get_goal_status(&agent.goal.id) {
                 let total_results = goal_context.tool_results.len();
@@ -334,10 +409,11 @@ impl AgentOrchestrator {
     }
 
     pub async fn list_active_agents(&self) -> Vec<AgentStatus> {
-        let agents = self.agents.lock().await;
+        let mut agents = self.agents.lock().await;
         let mut statuses = Vec::new();
 
-        for agent in agents.values() {
+        for agent in agents.values_mut() {
+            sync_terminal_state(agent);
             let mut status = agent.status.clone();
 
             if let Some(goal_context) = agent.core.get_goal_status(&agent.goal.id) {
@@ -499,6 +575,10 @@ impl AgentOrchestrator {
                     break;
                 }
 
+                for agent in agents.values_mut() {
+                    sync_terminal_state(agent);
+                }
+
                 // Find completed agents within the lock
                 let mut completed = Vec::new();
                 let agent_ids: Vec<String> = agents.keys().cloned().collect();
@@ -573,6 +653,10 @@ impl AgentOrchestrator {
     pub async fn cleanup_completed(&self) -> Result<usize> {
         let mut agents = self.agents.lock().await;
         let mut removed = 0;
+
+        for agent in agents.values_mut() {
+            sync_terminal_state(agent);
+        }
 
         let agent_ids: Vec<String> = agents.keys().cloned().collect();
 
@@ -671,6 +755,7 @@ impl AgentOrchestrator {
             success: false,
             summary: "Task execution timed out after 120 seconds.".to_string(),
         };
+        let mut settled = false;
 
         'poll: for _ in 0..max_attempts {
             if let Some(status) = self.get_agent_status(&agent_id).await {
@@ -712,13 +797,18 @@ impl AgentOrchestrator {
                         success: true,
                         summary,
                     };
+                    settled = true;
                     break 'poll;
                 }
                 if status.status == AgentState::Failed {
+                    let reason = status.error.unwrap_or_else(|| {
+                        "the agent stopped before finishing the task".to_string()
+                    });
                     result = OrchestratorResult {
                         success: false,
-                        summary: format!("Task failed: {}", status.error.unwrap_or_default()),
+                        summary: format!("Task failed: {}", reason),
                     };
+                    settled = true;
                     break 'poll;
                 }
             }
@@ -727,7 +817,56 @@ impl AgentOrchestrator {
 
         // Always remove the agent from the pool so the capacity slot is freed,
         // regardless of whether it completed, failed, or timed out.
-        self.agents.lock().await.remove(&agent_id);
+        let mut agents = self.agents.lock().await;
+        if !settled {
+            // Dropping the instance would not stop anything: the worker task
+            // holds its own clones of the engine's shared state, and its
+            // JoinHandle lives in that same state, so a dropped instance leaves
+            // a task nobody can reach still spending tools and model calls for
+            // up to the engine's own 300s bound. `process_instruction` returns
+            // no agent id either, so the caller could never collect a late
+            // result. Stop the run for real, then report that.
+            let stopped = match agents.get(&agent_id) {
+                Some(agent) => match agent.core.cancel_goal(&goal.id).await {
+                    Ok(()) => {
+                        tracing::warn!(
+                            "[Orchestrator] Agent {} exceeded the 120s poll budget; cancelled",
+                            agent_id
+                        );
+                        true
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            "[Orchestrator] Failed to cancel timed-out agent {}: {}",
+                            agent_id,
+                            error
+                        );
+                        false
+                    }
+                },
+                None => false,
+            };
+
+            result.summary = if stopped {
+                "Task execution timed out after 120 seconds. The agent was stopped, so no work \
+                 is still running in the background."
+                    .to_string()
+            } else {
+                "Task execution timed out after 120 seconds, and the agent could not be stopped. \
+                 It may still be running in the background."
+                    .to_string()
+            };
+
+            if let Some(ref app) = self.app_handle {
+                let _ = app.emit(
+                    "agent:cancelled",
+                    serde_json::json!({
+                        "agent_id": &agent_id,
+                    }),
+                );
+            }
+        }
+        agents.remove(&agent_id);
 
         Ok(result)
     }
@@ -749,6 +888,39 @@ mod tests {
 
         drop(_guard1);
         assert!(!resource_lock.is_file_locked(&path));
+    }
+
+    #[test]
+    fn ready_for_review_is_the_engine_signal_for_a_finished_run() {
+        assert_eq!(
+            terminal_agent_state(AgentTaskState::ReadyForReview),
+            Some((AgentState::Completed, None))
+        );
+        assert_eq!(
+            terminal_agent_state(AgentTaskState::Completed),
+            Some((AgentState::Completed, None))
+        );
+    }
+
+    #[test]
+    fn live_task_states_are_not_treated_as_terminal() {
+        for task_state in [
+            AgentTaskState::Queued,
+            AgentTaskState::Running,
+            AgentTaskState::AwaitingInput,
+            AgentTaskState::Paused,
+        ] {
+            assert_eq!(terminal_agent_state(task_state), None);
+        }
+    }
+
+    #[test]
+    fn failed_and_cancelled_carry_an_error_note() {
+        for task_state in [AgentTaskState::Failed, AgentTaskState::Cancelled] {
+            let (state, note) = terminal_agent_state(task_state).expect("terminal state expected");
+            assert_eq!(state, AgentState::Failed);
+            assert!(note.is_some());
+        }
     }
 
     #[test]

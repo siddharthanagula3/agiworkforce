@@ -29,6 +29,13 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { selectCheapestRequestFallback } from '@/lib/services/request-cost-fallback';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import { evaluateModelAccessForOrganization } from '@/lib/services/model-policy-gate';
+import { readModelPolicy } from '@/lib/services/model-policy-service';
+import {
+  evaluateModelAccess,
+  type ModelAccessAsk,
+  type ModelAccessDecision,
+  type ModelAccessPolicy,
+} from '@/lib/services/model-policy-evaluator';
 import { canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
@@ -130,6 +137,7 @@ import {
   enforceManagedContentSafetyPreference,
   ManagedContentSafetyPolicyError,
 } from '@/lib/services/managed-content-safety-service';
+import { loadSelectedMcpContext, McpContextError } from '@/lib/connectors/mcp-context-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
 
 export const ChatCompletionRequestSchema = z
@@ -197,6 +205,30 @@ export const ChatCompletionRequestSchema = z
       .object({
         supported: z.array(z.string().min(1).max(64)).max(16),
         canRespond: z.boolean(),
+      })
+      .strict()
+      .optional(),
+    mcp_context: z
+      .object({
+        prompt: z
+          .object({
+            connectorId: z.string().min(1).max(200),
+            name: z.string().min(1).max(128),
+            arguments: z.record(z.string(), z.string().max(8_192)).optional(),
+          })
+          .strict()
+          .optional(),
+        resources: z
+          .array(
+            z
+              .object({
+                connectorId: z.string().min(1).max(200),
+                uri: z.string().min(1).max(4_096),
+              })
+              .strict(),
+          )
+          .max(4)
+          .optional(),
       })
       .strict()
       .optional(),
@@ -547,6 +579,21 @@ export type ProcessedRequest = {
   fallbackReason: string | undefined;
   originalModel: string;
   fallbackModels?: string[];
+  /**
+   * The workspace model policy snapshot this request was admitted against,
+   * read ONCE by the processor and carried on the request so every later hop
+   * answers to the same row.
+   *
+   * `managed-failover.ts`'s OpenRouter route-retry is not drawn from
+   * `fallbackModels`, so the policy filtering applied to that plan never
+   * governed it; it needs the snapshot itself. Without this field there was
+   * nowhere for `route.ts` to get one, and its `createFailoverPlan` calls
+   * passed nothing — leaving that enforcement permanently ungoverned.
+   *
+   * `null` means UNGOVERNED, matching the evaluator's contract: personal
+   * scope, no policy row, or a read that deliberately failed open.
+   */
+  modelPolicy?: ModelAccessPolicy | null;
   subscriptionTier?: string;
   routePlanId?: string;
   retries?: number;
@@ -1087,11 +1134,81 @@ function checkModelTierAccess(model: string, subscriptionTier: string): boolean 
   return allowed;
 }
 
+/**
+ * Names both provider identities of a model for the policy evaluator.
+ *
+ * `resolveProviderFromModel` answers a DISPATCH question — which adapter will
+ * carry this request — and for the aggregator-routed vendors (MiniMax, Qwen,
+ * Zhipu; see lib/services/aggregator-routing.ts) it collapses the vendor away
+ * and returns `"openrouter"` the moment `OPENROUTER_API_KEY` is set. Feeding
+ * that alone to a policy written about VENDORS broke the gate in both
+ * directions at once: `blockedProviders: ['minimax']` matched nothing and
+ * MiniMax kept running, while `allowedProviders: ['minimax']` matched nothing
+ * and MiniMax was refused. Normalization cannot repair that — the two strings
+ * name different things, not the same thing spelled twice.
+ *
+ * So the ask carries both, sourced from the two places that actually know:
+ * the VENDOR from the canonical catalog (`getModelMetadataById(...).provider`,
+ * the same field a policy row is written against), the TRANSPORT from the
+ * dispatch layer. The evaluator's documented rule decides what each one may do
+ * — a block matches either, an allowlist is about the vendor.
+ *
+ * A model the catalog cannot resolve is asked about with a null vendor rather
+ * than skipped: a model rule still decides, and an allowlisted-provider policy
+ * denies the unknown id instead of waving it through.
+ */
+function resolveProviderIdentities(model: string): {
+  vendor: string | null;
+  transport: string | null;
+} {
+  let transport: string | null;
+  try {
+    transport = resolveProviderFromModel(model);
+  } catch {
+    transport = null;
+  }
+  const vendor = getModelMetadataById(model)?.provider ?? null;
+  return { vendor: vendor ?? transport, transport };
+}
+
+function modelAccessAskFor(model: string): ModelAccessAsk {
+  const { vendor, transport } = resolveProviderIdentities(model);
+  return { provider: vendor, modelId: model, transportProvider: transport };
+}
+
+/**
+ * Asks the workspace model policy about a model this request might rotate onto.
+ *
+ * Same pure evaluator the primary gate uses, against a policy snapshot read
+ * once per request — never a second policy read and never a second copy of the
+ * precedence rules.
+ */
+function evaluateCandidateModelAccess(
+  policy: ModelAccessPolicy | null,
+  model: string,
+): ModelAccessDecision {
+  return evaluateModelAccess(policy, modelAccessAskFor(model));
+}
+
+function modelPolicyDenialResponse(decision: ModelAccessDecision): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        message: decision.reason,
+        type: 'invalid_request_error',
+        code: decision.code,
+      },
+    },
+    { status: 403 },
+  );
+}
+
 function findCheaperFallbackModel(
   currentModel: string,
   currentProvider: string,
   estimatedPromptTokens: number,
   maxTokens: number,
+  isPolicyAllowed: (model: string) => boolean,
 ): { model: string; provider: string } | null {
   const currentCost = LLMCostCalculator.estimateCost(
     currentProvider,
@@ -1104,7 +1221,9 @@ function findCheaperFallbackModel(
   return selectCheapestRequestFallback({
     currentModelIds: new Set([canonicalCurrentModel, currentModel.toLowerCase()]),
     currentRequestCostCents: currentCost,
-    candidates: getEconomyFallbackModels(),
+    // Filtered BEFORE ranking, so a forbidden cheapest candidate yields the
+    // next allowed one rather than removing the downgrade altogether.
+    candidates: getEconomyFallbackModels().filter((candidate) => isPolicyAllowed(candidate.model)),
     estimateRequestCostCents: (fallback) =>
       LLMCostCalculator.estimateCost(
         fallback.provider,
@@ -1589,6 +1708,44 @@ export async function processRequest(
     };
   }
 
+  if (chatRequest.mcp_context) {
+    try {
+      const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
+      if (context) chatRequest.messages.unshift({ role: 'system', content: context });
+    } catch (error) {
+      if (error instanceof McpContextError) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: {
+                message: error.message,
+                type: 'invalid_request_error',
+                code: 'mcp_context_unavailable',
+                param: 'mcp_context',
+              },
+            },
+            { status: 422 },
+          ),
+        };
+      }
+      logger.error({ error, userId }, 'Selected MCP context could not be loaded');
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: 'Selected connector context could not be loaded.',
+              type: 'server_error',
+              code: 'mcp_context_unavailable',
+            },
+          },
+          { status: 503 },
+        ),
+      };
+    }
+  }
+
   if (managedMemoryPolicy.enabled) {
     try {
       const scoped = await scopedDbPromise;
@@ -1908,26 +2065,67 @@ export async function processRequest(
   // including the x-agi-organization-id override. Re-resolving here would add a
   // second round trip to the hot path for an answer already in hand.
   const scopedForPolicy = await scopedDbPromise;
+  // Both provider identities, spelled out at the call site: the VENDOR the
+  // catalog says owns this model and, separately, the TRANSPORT the dispatch
+  // layer resolved. See `resolveProviderIdentities` for why one string was not
+  // enough, and the evaluator for what each identity is allowed to decide.
+  const primaryIdentities = resolveProviderIdentities(chatRequest.model);
   const modelAccess = await evaluateModelAccessForOrganization(
     scopedForPolicy.db,
     scopedForPolicy.organizationId,
-    { provider: resolveProviderFromModel(chatRequest.model), modelId: chatRequest.model },
+    {
+      provider: primaryIdentities.vendor,
+      transportProvider: primaryIdentities.transport,
+      modelId: chatRequest.model,
+    },
   );
   if (!modelAccess.allowed) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: modelAccess.reason,
-            type: 'invalid_request_error',
-            code: modelAccess.code,
-          },
-        },
-        { status: 403 },
-      ),
-    };
+    return { ok: false, response: modelPolicyDenialResponse(modelAccess) };
   }
+
+  // The gate above covers only the router's FIRST pick. Two later hops choose a
+  // DIFFERENT model inside this same request — the cheaper-model downgrade when
+  // credits run short (below), and the managed-failover rotation that consumes
+  // the `fallbackModels` plan (managed-failover.ts) — and a policy enforced only
+  // on the happy path is not a policy. Read the row ONCE here and evaluate every
+  // candidate against that one snapshot, so each hop answers to exactly the
+  // policy the primary model answered to.
+  //
+  // `ungoverned` above already means there is nothing to enforce: personal
+  // scope, no policy row, or a read that failed — which model-policy-gate
+  // deliberately treats as allow, so that a briefly unreachable policy table
+  // does not stop every member's chat. Every candidate is ungoverned for the
+  // same reason, so only a genuinely governed workspace pays the extra read.
+  let workspaceModelPolicy: ModelAccessPolicy | null = null;
+  if (modelAccess.code !== 'ungoverned' && scopedForPolicy.organizationId) {
+    try {
+      workspaceModelPolicy = await readModelPolicy(
+        scopedForPolicy.db,
+        scopedForPolicy.organizationId,
+      );
+    } catch (error) {
+      logger.error(
+        { error, requestId, organizationId: scopedForPolicy.organizationId },
+        '[model-policy] candidate policy read failed; failover candidates ungoverned',
+      );
+    }
+  }
+
+  const fallbackAllowedByPolicy = (candidateModel: string): boolean => {
+    const decision = evaluateCandidateModelAccess(workspaceModelPolicy, candidateModel);
+    if (!decision.allowed) {
+      logger.warn(
+        {
+          requestId,
+          organizationId: scopedForPolicy.organizationId,
+          model: candidateModel,
+          code: decision.code,
+        },
+        'Fallback candidate dropped by workspace model policy',
+      );
+    }
+    return decision.allowed;
+  };
 
   if (requestedModel !== chatRequest.model) {
     logger.info(
@@ -2390,7 +2588,28 @@ export async function processRequest(
         provider,
         estimatedPromptTokens,
         maxTokens,
+        fallbackAllowedByPolicy,
       );
+
+      if (!fallbackModel && workspaceModelPolicy) {
+        // Name the control that actually closed the door. A cheaper model that
+        // exists and is affordable, and was removed only by the workspace
+        // policy, reported as a credit limit sends the member off to buy
+        // credits that cannot help them.
+        const forbidden = findCheaperFallbackModel(
+          chatRequest.model,
+          provider,
+          estimatedPromptTokens,
+          maxTokens,
+          () => true,
+        );
+        const decision = forbidden
+          ? evaluateCandidateModelAccess(workspaceModelPolicy, forbidden.model)
+          : null;
+        if (decision && !decision.allowed) {
+          return { ok: false, response: modelPolicyDenialResponse(decision) };
+        }
+      }
 
       if (fallbackModel) {
         const fallbackProvider = resolveProviderFromModel(fallbackModel.model);
@@ -2635,9 +2854,18 @@ export async function processRequest(
     usedFallback,
     fallbackReason,
     originalModel,
+    // Policy-filtered here rather than at rotation time: a candidate the
+    // workspace may not run never enters the failover plan, so no rotation can
+    // land on it. An empty list is a rotation-free request served by the
+    // primary model, which the gate above already admitted.
     fallbackModels: freeTrialEnabled
       ? []
-      : routeDecision.fallbacks.map((fallback) => fallback.modelKey),
+      : routeDecision.fallbacks
+          .map((fallback) => fallback.modelKey)
+          .filter((modelKey) => fallbackAllowedByPolicy(modelKey)),
+    // Carried, not re-read: the OpenRouter route-retry inside managed failover
+    // is outside the plan above and must answer to this same snapshot.
+    modelPolicy: workspaceModelPolicy,
     subscriptionTier: subscription.plan_tier,
     routePlanId: buildInterimRoutePlanId(routeDecision),
     resolvedTaskType,
