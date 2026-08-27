@@ -101,9 +101,9 @@ vi.mock('../screenshot', () => ({ captureToChat: vi.fn() }));
 vi.mock('../windowPolicy', () => ({ applyRemoteWindowPolicy: vi.fn() }));
 vi.mock('../accountBridge', () => ({ handleBridgeCommand: vi.fn() }));
 
-async function bootMain(mode: 'remote' | 'bundled') {
-  if (mode === 'bundled') process.env['AGI_CLOUD_RENDERER'] = 'bundled';
-  else delete process.env['AGI_CLOUD_RENDERER'];
+async function bootMain(mode: 'remote' | 'bundled' | 'unset') {
+  if (mode === 'unset') delete process.env['AGI_CLOUD_RENDERER'];
+  else process.env['AGI_CLOUD_RENDERER'] = mode;
   vi.resetModules();
   appHandlers.clear();
   webContentsSend.mockClear();
@@ -132,7 +132,16 @@ describe('deep-link delivery', () => {
     else process.env['AGI_CLOUD_RENDERER'] = originalMode;
   });
 
-  it('reports the drop instead of pushing into a renderer with no IPC bridge (default remote mode)', async () => {
+  it('delivers the callback over IPC when nothing sets the renderer mode', async () => {
+    await bootMain('unset');
+
+    openUrl(SSO_DEEP_LINK);
+
+    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, SSO_DEEP_LINK);
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('dropped');
+  });
+
+  it('reports the drop instead of pushing into a renderer with no IPC bridge', async () => {
     await bootMain('remote');
 
     expect(warn.mock.calls.flat().join(' ')).toContain('will be dropped');
@@ -146,7 +155,7 @@ describe('deep-link delivery', () => {
     );
     const warned = warn.mock.calls.flat().join(' ');
     expect(warned).toContain('agiworkforce-cloud://sso-callback');
-    expect(warned).toContain('AGI_CLOUD_RENDERER=bundled');
+    expect(warned).toContain('AGI_CLOUD_RENDERER');
     expect(warned).not.toContain('nonce-abc123');
   });
 
