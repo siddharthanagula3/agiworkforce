@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 import {
+  SURFACE_DEPLOY_JOBS,
   SYNC_PARITY_SOURCES,
   classifyDeployScope,
   formatGithubOutputs,
@@ -14,6 +15,7 @@ test('web-only changes do not spend unrelated expensive runners', () => {
   assert.deepEqual(classifyDeployScope(['apps/web/app/page.tsx']), {
     web: true,
     signaling: false,
+    sandbox: false,
     desktop: false,
     native: false,
     extension: false,
@@ -26,6 +28,7 @@ test('service and native paths select only their owning expensive lanes', () => 
   assert.deepEqual(classifyDeployScope(['services/signaling-server/src/index.ts']), {
     web: false,
     signaling: true,
+    sandbox: false,
     desktop: false,
     native: false,
     extension: false,
@@ -35,6 +38,7 @@ test('service and native paths select only their owning expensive lanes', () => 
   assert.deepEqual(classifyDeployScope(['apps/desktop/src-tauri/src/lib.rs']), {
     web: false,
     signaling: false,
+    sandbox: false,
     desktop: true,
     native: true,
     extension: false,
@@ -47,6 +51,7 @@ test('the image-build contract selects only the containerized signaling lane', (
   assert.deepEqual(classifyDeployScope(['.dockerignore']), {
     web: false,
     signaling: true,
+    sandbox: false,
     desktop: false,
     native: false,
     extension: false,
@@ -55,11 +60,110 @@ test('the image-build contract selects only the containerized signaling lane', (
   });
 });
 
+test('the artifact sandbox origin is its own deployable surface', () => {
+  const untouched = {
+    web: false,
+    signaling: false,
+    desktop: false,
+    native: false,
+    extension: false,
+    vscode: false,
+    mobile: false,
+  };
+
+  // The CSP in this vercel.json IS the isolation boundary for every
+  // model-generated artifact, so a change to it has to reach production through
+  // the pipeline rather than from whoever last ran the CLI on a laptop.
+  for (const file of [
+    'infrastructure/sandbox/vercel.json',
+    'infrastructure/sandbox/index.html',
+    'infrastructure/sandbox/package.json',
+  ]) {
+    assert.deepEqual(classifyDeployScope([file]), { ...untouched, sandbox: true }, file);
+  }
+
+  // And it does not ride along with unrelated surfaces.
+  for (const file of [
+    'apps/web/app/page.tsx',
+    'services/signaling-server/src/index.ts',
+    'apps/mobile/app/index.tsx',
+    'docs/current/ci-deployment-policy.md',
+  ]) {
+    assert.equal(classifyDeployScope([file]).sandbox, false, file);
+  }
+});
+
+test('the sandbox origin has a CI deploy path gated on the CI-verified commit', () => {
+  const workflow = fs.readFileSync('.github/workflows/deploy-production.yml', 'utf8');
+
+  // The scope key has to be published as a job output and consumed by the job,
+  // or the deploy silently never fires.
+  assert.match(workflow, /sandbox: \$\{\{ steps\.sandbox\.outputs\.sandbox \}\}/);
+  assert.match(workflow, /node scripts\/production-deploy-scope\.mjs --shipped sandbox/);
+  assert.match(workflow, /if: needs\.scope\.outputs\.sandbox == 'true'/);
+  assert.match(workflow, /needs: scope/);
+
+  // Deploying from anywhere inside the checkout attaches git metadata, which
+  // lands the deployment in state BLOCKED. The job must stage the tree out of
+  // the worktree and prove it did.
+  assert.match(workflow, /cp -R infrastructure\/sandbox\/\. "\$staging\/"/);
+  assert.match(workflow, /git -C "\$staging" rev-parse --git-dir/);
+
+  // Same pinned CLI as the web promotion; an unpinned global dies at packaging.
+  assert.match(workflow, /npm install --global vercel@58\.4\.0/);
+
+  // The deploy target is read from a TRACKED file in the repo, never inherited
+  // from the web environment's VERCEL_PROJECT_ID — a sandbox deploy carrying
+  // that one publishes these files into the web project.
+  const link = JSON.parse(fs.readFileSync('infrastructure/sandbox/deploy-target.json', 'utf8'));
+  assert.equal(link.projectName, 'agiworkforce-sandbox');
+  assert.match(link.projectId, /^prj_/);
+  assert.match(link.orgId, /^team_/);
+  assert.match(workflow, /infrastructure\/sandbox\/deploy-target\.json/);
+  assert.match(workflow, /link\.projectName !== 'agiworkforce-sandbox'/);
+
+  // outputDirectory is "." for this project, so the staged tree is what the
+  // public origin serves. The deploy target is build input, not an asset.
+  assert.match(workflow, /rm -f "\$staging\/deploy-target\.json"/);
+});
+
+test('no CI-executed path reads the git-ignored Vercel link directory', () => {
+  // .gitignore matches `.vercel`, so that directory exists only in the working
+  // tree of whoever last ran `vercel link`. A fresh CI checkout ENOENTs on it —
+  // and because this very file is the `scope` job's self-test, and deploy-web
+  // declares `needs: scope`, such a read takes the WEB promotion down with it.
+  // Split so this assertion cannot match itself.
+  const ignoredLinkDir = `.${'vercel'}/`;
+
+  for (const path of [
+    '.github/workflows/deploy-production.yml',
+    'scripts/production-deploy-scope.mjs',
+    'scripts/production-deploy-scope.test.mjs',
+  ]) {
+    assert.equal(fs.readFileSync(path, 'utf8').includes(ignoredLinkDir), false, path);
+  }
+});
+
+test('every surface baseline names a deploy job that actually exists', () => {
+  // selectSurfaceBaseline matches on the job's display name, so a renamed job
+  // reads as "never shipped". That fails open to deploying, but it also means
+  // the surface is never again measured from what it shipped.
+  const workflow = fs.readFileSync('.github/workflows/deploy-production.yml', 'utf8');
+  const jobNames = new Set(
+    [...workflow.matchAll(/^ {4}name: (.+)$/gm)].map((match) => match[1].trim()),
+  );
+
+  for (const [surface, jobName] of Object.entries(SURFACE_DEPLOY_JOBS)) {
+    assert.equal(jobNames.has(jobName), true, `${surface} -> ${jobName}`);
+  }
+});
+
 test('shared build inputs conservatively rebuild every deployable lane', () => {
   const scope = classifyDeployScope(['pnpm-lock.yaml']);
   assert.deepEqual(scope, {
     web: true,
     signaling: true,
+    sandbox: true,
     desktop: true,
     native: true,
     extension: true,
@@ -74,6 +178,7 @@ test('documentation-only changes do not allocate deploy or native work', () => {
   assert.deepEqual(classifyDeployScope(['docs/current/ci-deployment-policy.md']), {
     web: false,
     signaling: false,
+    sandbox: false,
     desktop: false,
     native: false,
     extension: false,
@@ -86,6 +191,7 @@ test('product-shell paths select their real E2E lane', () => {
   const expectedBase = {
     web: false,
     signaling: false,
+    sandbox: false,
     desktop: false,
     native: false,
     extension: false,

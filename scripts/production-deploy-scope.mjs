@@ -1,6 +1,19 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
+
+// The display name of the job that promotes each surface in
+// .github/workflows/deploy-production.yml. It is the key the shipped-baseline
+// lookup below matches on, so a renamed job would silently strand its surface —
+// production-deploy-scope.test.mjs asserts these still name real jobs.
+export const SURFACE_DEPLOY_JOBS = {
+  web: 'Deploy verified web artifact',
+  sandbox: 'Deploy artifact sandbox origin',
+};
+
+const DEPLOY_WORKFLOW_FILE = 'deploy-production.yml';
+const RUNS_TO_SCAN = 30;
 
 const SHARED_BUILD_FILES = new Set([
   '.npmrc',
@@ -38,6 +51,7 @@ export function classifyDeployScope(files, { all = false } = {}) {
     return {
       web: true,
       signaling: true,
+      sandbox: true,
       desktop: true,
       native: true,
       extension: true,
@@ -49,6 +63,7 @@ export function classifyDeployScope(files, { all = false } = {}) {
   const scope = {
     web: false,
     signaling: false,
+    sandbox: false,
     desktop: false,
     native: false,
     extension: false,
@@ -97,6 +112,15 @@ export function classifyDeployScope(files, { all = false } = {}) {
       isWithin(file, 'services/signaling-server')
     ) {
       scope.signaling = true;
+    }
+
+    // infrastructure/sandbox is the cross-origin renderer that isolates every
+    // model-generated artifact from the web app's session, and the CSP in its
+    // vercel.json IS that boundary. It is a deployable Vercel project that
+    // lives outside apps/, so — exactly like the signaling service above — it
+    // needs its own scope key rather than riding along with `web`.
+    if (sharedBuildFile || deployContract || isWithin(file, 'infrastructure/sandbox')) {
+      scope.sandbox = true;
     }
 
     if (sharedBuildFile || sharedPackage || deployContract || isWithin(file, 'apps/desktop')) {
@@ -166,7 +190,124 @@ export function selectSurfaceBaseline(runs, repository, jobName) {
   return null;
 }
 
+function log(message) {
+  process.stderr.write(`${message}\n`);
+}
+
+async function githubJson(pathAndQuery, token) {
+  const response = await fetch(`https://api.github.com${pathAndQuery}`, {
+    headers: {
+      accept: 'application/vnd.github+json',
+      authorization: `Bearer ${token}`,
+      'x-github-api-version': '2022-11-28',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub API ${pathAndQuery} returned ${response.status}`);
+  }
+  return response.json();
+}
+
+async function loadDeployRuns(repository, token, headSha) {
+  const query = new URLSearchParams({
+    branch: 'main',
+    event: 'push',
+    status: 'success',
+    per_page: String(RUNS_TO_SCAN),
+  });
+  const listed = await githubJson(
+    `/repos/${repository}/actions/workflows/${DEPLOY_WORKFLOW_FILE}/runs?${query}`,
+    token,
+  );
+
+  const runs = [];
+  for (const run of listed.workflow_runs ?? []) {
+    if (run.head_sha === headSha) continue;
+    const jobs = await githubJson(
+      `/repos/${repository}/actions/runs/${run.id}/jobs?per_page=100`,
+      token,
+    );
+    runs.push({ ...run, jobs: jobs.jobs ?? [] });
+  }
+  return runs;
+}
+
+function commitIsPresent(sha) {
+  try {
+    execFileSync('git', ['cat-file', '-e', `${sha}^{commit}`], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function changedFilesSince(baseline) {
+  return execFileSync('git', ['diff', '--name-only', baseline, 'HEAD'], {
+    encoding: 'utf8',
+  }).split(/\r?\n/);
+}
+
+// Measures a surface from the commit it last actually SHIPPED from rather than
+// from HEAD^. A commit that lands while CI is red never deploys, so a one-commit
+// diff strands it permanently: the next green commit's HEAD^..HEAD does not
+// mention the stranded paths. Every unknown answers `true` — not deploying is
+// the failure mode that hides, so this errs toward a redundant deploy.
+export async function selectShippedSurfaceScope(surface, environment = process.env) {
+  const jobName = SURFACE_DEPLOY_JOBS[surface];
+  if (!jobName) {
+    throw new Error(`Unknown deploy surface ${surface}`);
+  }
+
+  const repository = environment.GITHUB_REPOSITORY;
+  const token = environment.GITHUB_TOKEN;
+  const headSha = environment.GITHUB_SHA;
+
+  if (!repository || !token) {
+    log(`${surface}: no repository or token available; deploying.`);
+    return true;
+  }
+
+  const runs = await loadDeployRuns(repository, token, headSha);
+  const baseline = selectSurfaceBaseline(runs, repository, jobName);
+  if (!baseline) {
+    log(`${surface}: no run has ever deployed this surface; deploying.`);
+    return true;
+  }
+  if (!commitIsPresent(baseline)) {
+    log(`${surface}: baseline ${baseline} is not in this checkout; deploying.`);
+    return true;
+  }
+
+  const files = changedFilesSince(baseline);
+  const enabled = classifyDeployScope(files)[surface];
+  log(
+    `${surface}: baseline ${baseline.slice(0, 9)} → HEAD, ` +
+      `${files.filter(Boolean).length} file(s) changed, deploy=${enabled}`,
+  );
+  return enabled;
+}
+
 async function main() {
+  const shippedAt = process.argv.indexOf('--shipped');
+  if (shippedAt !== -1) {
+    const surface = process.argv[shippedAt + 1];
+    if (!surface || !SURFACE_DEPLOY_JOBS[surface]) {
+      throw new Error(`--shipped needs one of: ${Object.keys(SURFACE_DEPLOY_JOBS).join(', ')}`);
+    }
+    let enabled = true;
+    try {
+      enabled = await selectShippedSurfaceScope(surface);
+    } catch (error) {
+      log(
+        `${surface}: baseline selection failed ` +
+          `(${error instanceof Error ? error.message : String(error)}); deploying.`,
+      );
+      enabled = true;
+    }
+    console.log(`${surface}=${enabled ? 'true' : 'false'}`);
+    return;
+  }
+
   const all = process.argv.includes('--all');
   const input = all
     ? ''
