@@ -10,13 +10,26 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { isGitHubInstallationLinkingAvailable } from '@/lib/github-app';
 
 const PG_UNDEFINED_TABLE = '42P01';
+const PG_UNDEFINED_COLUMN = '42703';
 
 function isUndefinedTable(error: unknown): boolean {
   return (
     !!error &&
     typeof error === 'object' &&
     ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
+      /relation\s+.+\s+does not exist/i.test(
+        String((error as Record<string, unknown>)['message'] ?? ''),
+      ))
+  );
+}
+
+function isGithubOwnershipSchemaUnavailable(error: unknown): boolean {
+  if (isUndefinedTable(error)) return true;
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as Record<string, unknown>;
+  return (
+    candidate['code'] === PG_UNDEFINED_COLUMN &&
+    String(candidate['message'] ?? '').includes('ownership_verified_at')
   );
 }
 
@@ -48,10 +61,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       [userId],
     );
   } catch (err) {
-    if (isUndefinedTable(err)) {
+    if (isGithubOwnershipSchemaUnavailable(err)) {
       logger.warn(
         { userId },
-        'github_installations table not migrated; returning no installations',
+        'GitHub installation ownership schema is unavailable; returning no installations',
       );
       return NextResponse.json({ installations: [] });
     }
