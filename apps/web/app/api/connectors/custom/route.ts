@@ -25,6 +25,7 @@ import {
   getCustomRemoteMcpLimitErrorMessage,
   isUserResourceLimitError,
 } from '@/lib/services/free-plan-entitlements';
+import { getMcpStatelessRuntime } from '@/lib/connectors/mcp-runtime-cache';
 
 export const runtime = 'nodejs';
 
@@ -167,8 +168,17 @@ async function handlePost(request: NextRequest) {
   const shortId = await allocateShortId(db, userId);
 
   let toolCount = 0;
+  let capabilityCounts = {
+    tools: 0,
+    resources: 0,
+    resourceTemplates: 0,
+    prompts: 0,
+    apps: 0,
+  };
+  let protocolEra: 'modern' | 'legacy' = 'legacy';
+  let handle: Awaited<ReturnType<typeof connectMcpServer>> | undefined;
   try {
-    const handle = await connectMcpServer({
+    handle = await connectMcpServer({
       egressPolicy: MCP_EGRESS_POLICY,
       serverName: name,
       config: {
@@ -177,13 +187,29 @@ async function handlePost(request: NextRequest) {
         ...(authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {}),
         connectionTimeoutMs: 30_000,
       },
+      ...(await getMcpStatelessRuntime(
+        parsedUrl.toString(),
+        `user:${userId}:custom-url:${parsedUrl.toString()}`,
+      )),
     });
-    toolCount = handle.catalog.tools.length;
-    await handle.close();
+    protocolEra = handle.protocolEra ?? 'legacy';
+    toolCount = handle.catalog.tools.filter((tool) => tool.visibility !== 'app').length;
+    capabilityCounts = {
+      tools: toolCount,
+      resources: handle.catalog.resources?.length ?? 0,
+      resourceTemplates: handle.catalog.resourceTemplates?.length ?? 0,
+      prompts: handle.catalog.prompts?.length ?? 0,
+      apps: handle.catalog.apps?.length ?? 0,
+    };
+    if (Object.values(capabilityCounts).every((count) => count === 0)) {
+      throw new Error('The server did not advertise any supported MCP capabilities');
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn({ userId, name, message }, '[connectors/custom] connect-and-list failed');
     throw createError.serviceUnavailable(`Failed to connect to MCP server: ${message}`);
+  } finally {
+    if (handle) await Promise.resolve(handle.close()).catch(() => undefined);
   }
 
   const connectorToolLimit = getPlanMaxConnectorTools(planTier);
@@ -267,6 +293,8 @@ async function handlePost(request: NextRequest) {
         updatedAt: saved.updated_at,
       },
       toolCount,
+      capabilityCounts,
+      protocolEra,
     },
     { status: 201 },
   );

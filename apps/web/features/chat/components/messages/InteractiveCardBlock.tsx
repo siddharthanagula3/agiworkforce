@@ -10,12 +10,14 @@ import {
 import { cn } from '@shared/lib/utils';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
 import { MapSearchCard } from './cards/MapSearchCard';
+import { McpAppCard } from './cards/McpAppCard';
 
 const WEB_CARD_REGISTRY: InteractiveCardRegistry<React.ReactNode> = {
   'clarify.v1': ({ card, body, ctx }) => (
     <ClarifyCard card={card} body={body} ctx={ctx as ClarifyCardContext} />
   ),
   'map-search.v1': ({ body, ctx }) => <MapSearchCard body={body} ctx={ctx} />,
+  'mcp-app.v1': ({ body }) => <McpAppCard body={body} />,
 };
 
 function openMapSearchProviderUrl(value: string): void {

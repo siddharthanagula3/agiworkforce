@@ -1,24 +1,61 @@
-import { Client, isInputRequiredResult, ProtocolError } from '@modelcontextprotocol/client';
+import {
+  Client,
+  isInputRequiredResult,
+  ProtocolError,
+  type CacheableRequestOptions,
+  type ClientOptions,
+  type GetPromptResult,
+  type ReadResourceResult,
+} from '@modelcontextprotocol/client';
+import {
+  getToolUiResourceUri,
+  isToolVisibilityAppOnly,
+  isToolVisibilityModelOnly,
+  RESOURCE_MIME_TYPE,
+} from '@modelcontextprotocol/ext-apps/app-bridge';
 
 import { createPinnedFetch } from './pinned-fetch';
+import {
+  cancelTask,
+  getTask,
+  MCP_TASKS_EXTENSION_ID,
+  parseCreateTaskResult,
+  serverSupportsTasks,
+  updateTask,
+} from './tasks';
 import { resolveMcpTransport, type McpEgressPolicy } from './transport';
 import type {
   McpCallToolResult,
+  McpCatalogDiscoveryError,
+  McpCatalogPrompt,
+  McpCatalogResource,
+  McpCatalogResourceTemplate,
   McpCatalogTool,
+  McpClientCacheConfig,
+  McpDiscoveryConfig,
   McpServerCatalog,
   McpServerConfig,
+  McpTaskOperations,
   McpToolCatalog,
+  McpToolVisibility,
 } from './types';
 
 const CLIENT_NAME = 'agiworkforce';
 const CLIENT_VERSION = '0.0.1';
 const DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
-const CATALOG_VERSION = 1;
+const CATALOG_VERSION = 2;
 
 const VERSION_NEGOTIATION = { mode: 'auto' } as const;
 
 const MCP_TOOL_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const MCP_TOOL_NAME_MAX_LENGTH = 128;
+const CATALOG_ITEM_LIMITS = {
+  tools: 512,
+  resources: 512,
+  resourceTemplates: 256,
+  prompts: 256,
+  promptArguments: 64,
+} as const;
 
 export function isAcceptableMcpToolName(name: unknown): boolean {
   if (typeof name !== 'string') return false;
@@ -349,6 +386,11 @@ function toSafeServerName(name: string): string {
 
 export interface McpCallToolOptions {
   signal?: AbortSignal;
+  /** Surface an MCP 2026 input_required response for the UI instead of auto-fulfilling it. */
+  allowInputRequired?: boolean;
+  /** Responses and opaque state supplied when resuming a manual MRTR interaction. */
+  inputResponses?: Record<string, unknown>;
+  requestState?: string;
 }
 
 export interface McpServerHandle {
@@ -357,11 +399,18 @@ export interface McpServerHandle {
   catalog: McpServerCatalog;
   client: Client;
   protocolEra: 'modern' | 'legacy';
+  tasks?: McpTaskOperations;
   callTool(
     name: string,
     args: Record<string, unknown>,
     options?: McpCallToolOptions,
   ): Promise<McpCallToolResult>;
+  readResource(uri: string, options?: CacheableRequestOptions): Promise<ReadResourceResult>;
+  getPrompt(
+    name: string,
+    args?: Record<string, string>,
+    options?: McpCallToolOptions,
+  ): Promise<GetPromptResult>;
   close(): Promise<void>;
 }
 
@@ -373,10 +422,74 @@ export interface ConnectMcpServerParams {
   serverName: string;
   config: McpServerConfig;
   egressPolicy?: McpEgressOptions;
+  cache?: McpClientCacheConfig;
+  discovery?: McpDiscoveryConfig;
+  /** Official SDK client options, including MRTR handlers/capabilities and list-change listeners. */
+  clientOptions?: Omit<
+    ClientOptions,
+    'versionNegotiation' | 'responseCacheStore' | 'cachePartition' | 'defaultCacheTtlMs'
+  >;
+  /** Registers SDK request handlers (elicitation, sampling, roots) before connect. */
+  configureClient?: (client: Client) => void | Promise<void>;
+}
+
+export type McpConnectionRuntimeOptions = Omit<
+  ConnectMcpServerParams,
+  'serverName' | 'config' | 'egressPolicy'
+>;
+
+export interface BuildMcpCatalogOptions {
+  resolveRuntime?: (
+    serverName: string,
+    config: McpServerConfig,
+  ) => McpConnectionRuntimeOptions | Promise<McpConnectionRuntimeOptions>;
 }
 
 const publicPinnedFetch = createPinnedFetch();
 const localPinnedFetch = createPinnedFetch({ allowPrivateAddresses: true });
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function hasCapability(capabilities: Record<string, unknown>, name: string): boolean {
+  return Object.prototype.hasOwnProperty.call(capabilities, name);
+}
+
+function sanitizeCatalogText(
+  value: unknown,
+  maxBytes = MCP_DESCRIPTION_MAX_BYTES,
+): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const stripped = value.replace(CONTROL_MARKUP, '').trim();
+  if (stripped.length === 0) return undefined;
+  return truncateToBytes(stripped, maxBytes).text;
+}
+
+function resolveToolVisibility(tool: object): McpToolVisibility {
+  if (isToolVisibilityAppOnly(tool as never)) return 'app';
+  if (isToolVisibilityModelOnly(tool as never)) return 'model';
+  return 'both';
+}
+
+function resolveToolApp(
+  tool: object,
+  serverName: string,
+  toolName: string,
+  visibility: McpToolVisibility,
+) {
+  try {
+    const resourceUri = getToolUiResourceUri(tool as never);
+    return resourceUri ? { serverName, toolName, resourceUri, visibility } : undefined;
+  } catch (error) {
+    console.warn('[mcp] rejecting invalid MCP App resource URI', {
+      serverName,
+      toolName,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
 
 /**
  * Every HTTP(S) transport gets a DNS-pinned fetch unless the caller supplied its own. An
@@ -397,17 +510,57 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
   const transport = resolveMcpTransport(config, resolveEgressPolicy(params.egressPolicy));
   const client = new Client(
     { name: CLIENT_NAME, version: CLIENT_VERSION },
-    { versionNegotiation: VERSION_NEGOTIATION },
+    {
+      ...params.clientOptions,
+      capabilities: {
+        ...params.clientOptions?.capabilities,
+        extensions: {
+          ...params.clientOptions?.capabilities?.extensions,
+          [MCP_TASKS_EXTENSION_ID]: {},
+        },
+      },
+      versionNegotiation: VERSION_NEGOTIATION,
+      ...(params.cache?.store ? { responseCacheStore: params.cache.store } : {}),
+      ...(params.cache ? { cachePartition: params.cache.partition } : {}),
+      ...(params.cache?.defaultTtlMs === undefined
+        ? {}
+        : { defaultCacheTtlMs: params.cache.defaultTtlMs }),
+    },
   );
+
+  await params.configureClient?.(client);
 
   const timeoutMs = config.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
   try {
-    await withTimeout(client.connect(transport), timeoutMs, 'mcp.connect');
+    await withTimeout(
+      client.connect(
+        transport,
+        params.discovery?.prior ? { prior: params.discovery.prior } : undefined,
+      ),
+      timeoutMs,
+      'mcp.connect',
+    );
   } catch (err) {
     throw fenceThrownMcpError(err, serverName, 'connect');
   }
 
-  const protocolEra: 'modern' | 'legacy' = client.getDiscoverResult() ? 'modern' : 'legacy';
+  const discover = client.getDiscoverResult();
+  const protocolEra: 'modern' | 'legacy' =
+    client.getProtocolEra?.() ?? (discover ? 'modern' : 'legacy');
+  if (discover && params.discovery?.onDiscovered) {
+    try {
+      await params.discovery.onDiscovered(discover);
+    } catch (error) {
+      console.warn('[mcp] could not persist discovery result; continuing without shared reuse', {
+        serverName,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const capabilities = asRecord(client.getServerCapabilities?.());
+  const tasksSupported = protocolEra === 'modern' && serverSupportsTasks(capabilities);
+  const discoveryErrors: McpCatalogDiscoveryError[] = [];
 
   let listed: Awaited<ReturnType<Client['listTools']>>;
   try {
@@ -417,7 +570,14 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     throw fenceThrownMcpError(err, serverName, 'list_tools');
   }
   const tools: McpCatalogTool[] = [];
-  for (const t of listed.tools ?? []) {
+  const listedTools = listed.tools ?? [];
+  if (listedTools.length > CATALOG_ITEM_LIMITS.tools) {
+    discoveryErrors.push({
+      capability: 'tools',
+      message: `Catalog truncated to ${CATALOG_ITEM_LIMITS.tools} tools`,
+    });
+  }
+  for (const t of listedTools.slice(0, CATALOG_ITEM_LIMITS.tools)) {
     if (!isAcceptableMcpToolName(t.name)) {
       console.warn('[mcp] rejecting tool with non-canonical name', {
         serverName,
@@ -458,6 +618,10 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
             maxBytes: MCP_DESCRIPTION_MAX_BYTES,
           })
         : null;
+    const visibility = resolveToolVisibility(t);
+    const app = resolveToolApp(t, serverName, t.name, visibility);
+    const outputSchema = asRecord(t.outputSchema);
+    const annotations = asRecord(t.annotations);
     tools.push({
       serverName,
       safeServerName,
@@ -465,11 +629,152 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
       ...(title ? { title } : {}),
       ...(description ? { description } : {}),
       inputSchema: rawSchema,
+      ...(Object.keys(outputSchema).length > 0 ? { outputSchema } : {}),
+      ...(Object.keys(annotations).length > 0 ? { annotations } : {}),
+      ...(app ? { app } : {}),
+      visibility,
       fallbackDescription: `Tool ${t.name} on MCP server ${serverName}`,
     });
   }
 
-  const serverCatalog: McpServerCatalog = { serverName, safeServerName, tools };
+  const resources: McpCatalogResource[] = [];
+  const resourceTemplates: McpCatalogResourceTemplate[] = [];
+  if (hasCapability(capabilities, 'resources')) {
+    try {
+      const listedResources = await client.listResources();
+      const resourceItems = listedResources.resources ?? [];
+      if (resourceItems.length > CATALOG_ITEM_LIMITS.resources) {
+        discoveryErrors.push({
+          capability: 'resources',
+          message: `Catalog truncated to ${CATALOG_ITEM_LIMITS.resources} resources`,
+        });
+      }
+      for (const resource of resourceItems.slice(0, CATALOG_ITEM_LIMITS.resources)) {
+        if (typeof resource.uri !== 'string' || typeof resource.name !== 'string') continue;
+        const title = sanitizeCatalogText(resource.title, MCP_TITLE_MAX_BYTES);
+        const description = sanitizeCatalogText(resource.description);
+        resources.push({
+          serverName,
+          uri: resource.uri,
+          name: resource.name,
+          ...(title ? { title } : {}),
+          ...(description ? { description } : {}),
+          ...(typeof resource.mimeType === 'string' ? { mimeType: resource.mimeType } : {}),
+          ...(typeof resource.size === 'number' ? { size: resource.size } : {}),
+          isApp: resource.mimeType === RESOURCE_MIME_TYPE || resource.uri.startsWith('ui://'),
+        });
+      }
+    } catch (error) {
+      discoveryErrors.push({
+        capability: 'resources',
+        message: sanitizeCatalogText(thrownMessage(error)) ?? 'Resource discovery failed',
+      });
+    }
+    try {
+      const listedTemplates = await client.listResourceTemplates();
+      const templateItems = listedTemplates.resourceTemplates ?? [];
+      if (templateItems.length > CATALOG_ITEM_LIMITS.resourceTemplates) {
+        discoveryErrors.push({
+          capability: 'resourceTemplates',
+          message: `Catalog truncated to ${CATALOG_ITEM_LIMITS.resourceTemplates} resource templates`,
+        });
+      }
+      for (const template of templateItems.slice(0, CATALOG_ITEM_LIMITS.resourceTemplates)) {
+        if (typeof template.uriTemplate !== 'string' || typeof template.name !== 'string') continue;
+        const title = sanitizeCatalogText(template.title, MCP_TITLE_MAX_BYTES);
+        const description = sanitizeCatalogText(template.description);
+        resourceTemplates.push({
+          serverName,
+          uriTemplate: template.uriTemplate,
+          name: template.name,
+          ...(title ? { title } : {}),
+          ...(description ? { description } : {}),
+          ...(typeof template.mimeType === 'string' ? { mimeType: template.mimeType } : {}),
+        });
+      }
+    } catch (error) {
+      discoveryErrors.push({
+        capability: 'resourceTemplates',
+        message: sanitizeCatalogText(thrownMessage(error)) ?? 'Resource-template discovery failed',
+      });
+    }
+  }
+
+  const prompts: McpCatalogPrompt[] = [];
+  if (hasCapability(capabilities, 'prompts')) {
+    try {
+      const listedPrompts = await client.listPrompts();
+      const promptItems = listedPrompts.prompts ?? [];
+      if (promptItems.length > CATALOG_ITEM_LIMITS.prompts) {
+        discoveryErrors.push({
+          capability: 'prompts',
+          message: `Catalog truncated to ${CATALOG_ITEM_LIMITS.prompts} prompts`,
+        });
+      }
+      for (const prompt of promptItems.slice(0, CATALOG_ITEM_LIMITS.prompts)) {
+        if (typeof prompt.name !== 'string') continue;
+        const title = sanitizeCatalogText(prompt.title, MCP_TITLE_MAX_BYTES);
+        const description = sanitizeCatalogText(prompt.description);
+        prompts.push({
+          serverName,
+          name: prompt.name,
+          ...(title ? { title } : {}),
+          ...(description ? { description } : {}),
+          arguments: (prompt.arguments ?? [])
+            .slice(0, CATALOG_ITEM_LIMITS.promptArguments)
+            .filter((argument) => typeof argument.name === 'string')
+            .map((argument) => ({
+              name: argument.name,
+              ...(sanitizeCatalogText(argument.description)
+                ? { description: sanitizeCatalogText(argument.description) }
+                : {}),
+              ...(typeof argument.required === 'boolean' ? { required: argument.required } : {}),
+            })),
+        });
+      }
+    } catch (error) {
+      discoveryErrors.push({
+        capability: 'prompts',
+        message: sanitizeCatalogText(thrownMessage(error)) ?? 'Prompt discovery failed',
+      });
+    }
+  }
+
+  const apps = tools.flatMap((tool) => (tool.app ? [tool.app] : []));
+  const serverVersion = client.getServerVersion?.();
+  const protocolVersion = client.getNegotiatedProtocolVersion?.();
+  const serverCatalog: McpServerCatalog = {
+    serverName,
+    safeServerName,
+    protocolEra,
+    ...(protocolVersion ? { protocolVersion } : {}),
+    ...(serverVersion ? { serverInfo: serverVersion } : {}),
+    capabilities,
+    tasksSupported,
+    ...(discover ? { discover } : {}),
+    tools,
+    resources,
+    resourceTemplates,
+    prompts,
+    apps,
+    discoveryErrors,
+  };
+
+  const taskOperations: McpTaskOperations | undefined = tasksSupported
+    ? {
+        get: (taskId, options) =>
+          getTask(client, taskId, options?.signal ? { signal: options.signal } : undefined),
+        update: (taskId, inputResponses, options) =>
+          updateTask(
+            client,
+            taskId,
+            inputResponses,
+            options?.signal ? { signal: options.signal } : undefined,
+          ),
+        cancel: (taskId, options) =>
+          cancelTask(client, taskId, options?.signal ? { signal: options.signal } : undefined),
+      }
+    : undefined;
 
   return {
     serverName,
@@ -477,27 +782,49 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     catalog: serverCatalog,
     client,
     protocolEra,
+    ...(taskOperations ? { tasks: taskOperations } : {}),
     async callTool(
       name: string,
       args: Record<string, unknown>,
       options?: McpCallToolOptions,
     ): Promise<McpCallToolResult> {
+      const app = tools.find((tool) => tool.toolName === name)?.app;
       let res: Awaited<ReturnType<Client['callTool']>>;
       try {
         res = await client.callTool(
-          { name, arguments: args },
-          options?.signal ? { signal: options.signal } : undefined,
+          {
+            name,
+            arguments: args,
+            ...(options?.inputResponses ? { inputResponses: options.inputResponses } : {}),
+            ...(options?.requestState ? { requestState: options.requestState } : {}),
+          },
+          options
+            ? {
+                ...(options.signal ? { signal: options.signal } : {}),
+                ...(options.allowInputRequired ? { allowInputRequired: true } : {}),
+              }
+            : undefined,
         );
       } catch (err) {
         if (!(err instanceof ProtocolError)) {
           throw fenceThrownMcpError(err, serverName, 'call_tool', name);
         }
-        return { isError: true, content: fenceMcpProtocolError(err, serverName, name) };
+        return {
+          isError: true,
+          ...(app ? { app } : {}),
+          content: fenceMcpProtocolError(err, serverName, name),
+        };
       }
 
       if (isInputRequiredResult(res)) {
+        const inputRequired = {
+          inputRequests: asRecord(res.inputRequests),
+          ...(typeof res.requestState === 'string' ? { requestState: res.requestState } : {}),
+        };
         return {
           isError: true,
+          ...(app ? { app } : {}),
+          inputRequired,
           content: [
             fenceUntrustedToolResult({
               serverName,
@@ -505,17 +832,50 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
               attributes: [{ name: 'status', value: 'input_required' }],
               body:
                 'The server paused this call for additional input (MCP input_required). ' +
-                'This client cannot answer that request, so the call did not complete.',
+                'The call did not complete; the host must collect the requested input before it can continue.',
             }),
           ],
         };
       }
 
+      const task = await parseCreateTaskResult(res);
+      if (task) return { ...(app ? { app } : {}), task, content: [] };
+
       const isError = typeof res.isError === 'boolean' ? res.isError : undefined;
       return {
         ...(isError !== undefined ? { isError } : {}),
+        ...(res.structuredContent !== undefined
+          ? { structuredContent: res.structuredContent }
+          : {}),
+        ...(app ? { app } : {}),
         content: fenceMcpCallToolContent(res.content, serverName, name),
       };
+    },
+    async readResource(
+      uri: string,
+      options?: CacheableRequestOptions,
+    ): Promise<ReadResourceResult> {
+      return client.readResource({ uri }, options);
+    },
+    async getPrompt(
+      name: string,
+      args?: Record<string, string>,
+      options?: McpCallToolOptions,
+    ): Promise<GetPromptResult> {
+      return client.getPrompt(
+        {
+          name,
+          ...(args ? { arguments: args } : {}),
+          ...(options?.inputResponses ? { inputResponses: options.inputResponses } : {}),
+          ...(options?.requestState ? { requestState: options.requestState } : {}),
+        },
+        options
+          ? {
+              ...(options.signal ? { signal: options.signal } : {}),
+              ...(options.allowInputRequired ? { allowInputRequired: true } : {}),
+            }
+          : undefined,
+      );
     },
     async close(): Promise<void> {
       await client.close().catch(() => undefined);
@@ -526,17 +886,30 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
 export async function buildMcpToolCatalog(
   servers: Record<string, McpServerConfig>,
   egressPolicy: McpEgressOptions,
+  options?: BuildMcpCatalogOptions,
 ): Promise<{ catalog: McpToolCatalog; handles: McpServerHandle[] }> {
   const handles: McpServerHandle[] = [];
   const serverEntries: Record<string, McpServerCatalog> = {};
   const flatTools: McpCatalogTool[] = [];
+  const flatResources: McpCatalogResource[] = [];
+  const flatResourceTemplates: McpCatalogResourceTemplate[] = [];
+  const flatPrompts: McpCatalogPrompt[] = [];
 
   for (const [serverName, config] of Object.entries(servers)) {
     try {
-      const handle = await connectMcpServer({ serverName, config, egressPolicy });
+      const runtime = await options?.resolveRuntime?.(serverName, config);
+      const handle = await connectMcpServer({
+        serverName,
+        config,
+        egressPolicy,
+        ...runtime,
+      });
       handles.push(handle);
       serverEntries[serverName] = handle.catalog;
-      flatTools.push(...handle.catalog.tools);
+      flatTools.push(...handle.catalog.tools.filter((tool) => tool.visibility !== 'app'));
+      flatResources.push(...handle.catalog.resources);
+      flatResourceTemplates.push(...handle.catalog.resourceTemplates);
+      flatPrompts.push(...handle.catalog.prompts);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[mcp] failed to connect to server "${serverName}": ${message}`);
@@ -548,6 +921,10 @@ export async function buildMcpToolCatalog(
     generatedAt: Date.now(),
     servers: serverEntries,
     tools: flatTools,
+    resources: flatResources,
+    resourceTemplates: flatResourceTemplates,
+    prompts: flatPrompts,
+    apps: Object.values(serverEntries).flatMap((server) => server.apps),
   };
 
   return { catalog, handles };

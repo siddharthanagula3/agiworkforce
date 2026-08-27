@@ -160,6 +160,7 @@ describe('OAuth connector catalog gating', () => {
         }),
       },
       MCP_EGRESS_POLICY,
+      { resolveRuntime: expect.any(Function) },
     );
   });
 
@@ -199,6 +200,7 @@ describe('OAuth connector catalog gating', () => {
     expect(mockBuildMcpToolCatalog).toHaveBeenCalledWith(
       { linear: expect.objectContaining({ url: 'https://operator.example.com/mcp' }) },
       MCP_EGRESS_POLICY,
+      { resolveRuntime: expect.any(Function) },
     );
   });
 });

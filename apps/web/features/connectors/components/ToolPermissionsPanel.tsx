@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Check, Ban, HelpCircle, RotateCcw } from 'lucide-react';
+import { Check, Ban, HelpCircle, Loader2, RotateCcw } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -14,6 +14,7 @@ import { cn } from '@shared/lib/utils';
 import { getConnectorCapability } from '@/lib/connectors/catalog';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 import { useToolPermissionsStore, type PermissionLevel } from '../stores/tool-permissions-store';
+import { useConnectorCapabilities } from '../hooks/use-connector-capabilities';
 
 interface ConnectorInfo {
   id: string;
@@ -133,10 +134,20 @@ function PermissionLegend() {
 
 export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPermissionsPanelProps) {
   const resetConnectorPermissions = useToolPermissionsStore((s) => s.resetConnectorPermissions);
+  const { catalog, loading, error, retry } = useConnectorCapabilities(
+    connector?.id ?? null,
+    open && connector !== null,
+  );
 
   if (!connector) return null;
 
-  const tools = getConnectorCapability(connector.id)?.supportedActions ?? [];
+  const tools =
+    catalog?.tools.map((tool) => tool.name) ??
+    getConnectorCapability(connector.id)?.supportedActions ??
+    [];
+  const permissionConnectorId = catalog?.connectorId ?? connector.id;
+  const discovering = loading && tools.length === 0;
+  const discoveryFailed = error !== null && tools.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -156,14 +167,32 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* Legend */}
           <PermissionLegend />
 
-          {/* Tool list */}
-          {tools.length > 0 ? (
+          {discovering ? (
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/50 px-4 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Discovering connector tools…
+            </div>
+          ) : discoveryFailed ? (
+            <div className="rounded-lg border border-border bg-muted/50 px-4 py-5 text-center">
+              <p className="text-sm text-muted-foreground">Tool discovery could not be loaded.</p>
+              <button type="button" onClick={retry} className="mt-2 text-xs font-medium underline">
+                Retry
+              </button>
+            </div>
+          ) : tools.length > 0 ? (
             <div className="max-h-80 space-y-1.5 overflow-y-auto pr-0.5">
+              {error ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                  <span>Live tool discovery failed; showing known tools.</span>
+                  <button type="button" onClick={retry} className="font-medium underline">
+                    Retry
+                  </button>
+                </div>
+              ) : null}
               {tools.map((toolName) => (
-                <ToolRow key={toolName} connectorId={connector.id} toolName={toolName} />
+                <ToolRow key={toolName} connectorId={permissionConnectorId} toolName={toolName} />
               ))}
             </div>
           ) : (
@@ -174,13 +203,12 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
             </div>
           )}
 
-          {/* Reset button */}
           <div className="flex justify-end border-t border-border pt-2">
             <Button
               variant="ghost"
               size="sm"
               className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => resetConnectorPermissions(connector.id)}
+              onClick={() => resetConnectorPermissions(permissionConnectorId)}
             >
               <RotateCcw className="h-3 w-3" aria-hidden="true" />
               Reset all to default

@@ -147,6 +147,7 @@ describe('kind allowlist', () => {
       'clarify.v1',
       'itinerary.v1',
       'map-search.v1',
+      'mcp-app.v1',
     ]);
   });
 

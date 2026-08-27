@@ -141,6 +141,113 @@ describe('connectMcpServer — happy path lifecycle', () => {
     });
     expect(handle.safeServerName).toBe('my_server_v2');
   });
+
+  it('discovers tools, resources, templates, prompts, and MCP Apps from advertised capabilities', async () => {
+    vi.doMock('@modelcontextprotocol/client', async () => {
+      const actual = await vi.importActual<typeof import('@modelcontextprotocol/client')>(
+        '@modelcontextprotocol/client',
+      );
+      class FakeClient {
+        async connect(): Promise<void> {}
+        async close(): Promise<void> {}
+        getDiscoverResult(): undefined {
+          return undefined;
+        }
+        getProtocolEra(): 'modern' {
+          return 'modern';
+        }
+        getNegotiatedProtocolVersion(): string {
+          return '2026-07-28';
+        }
+        getServerVersion(): { name: string; version: string } {
+          return { name: 'everything-server', version: '1.0.0' };
+        }
+        getServerCapabilities(): Record<string, unknown> {
+          return { tools: {}, resources: {}, prompts: {}, extensions: {} };
+        }
+        async listTools(): Promise<{ tools: ToolListItem[] }> {
+          return {
+            tools: [
+              {
+                name: 'show_dashboard',
+                inputSchema: { type: 'object' },
+                _meta: {
+                  ui: {
+                    resourceUri: 'ui://dashboard/index.html',
+                    visibility: ['app'],
+                  },
+                },
+              } as ToolListItem,
+              { name: 'search', inputSchema: { type: 'object' } },
+            ],
+          };
+        }
+        async listResources(): Promise<{ resources: Array<Record<string, unknown>> }> {
+          return {
+            resources: [
+              { uri: 'docs://handbook', name: 'Handbook', mimeType: 'text/markdown' },
+              {
+                uri: 'ui://dashboard/index.html',
+                name: 'Dashboard',
+                mimeType: 'text/html;profile=mcp-app',
+              },
+            ],
+          };
+        }
+        async listResourceTemplates(): Promise<{
+          resourceTemplates: Array<Record<string, unknown>>;
+        }> {
+          return {
+            resourceTemplates: [
+              { uriTemplate: 'docs://{slug}', name: 'Document', mimeType: 'text/markdown' },
+            ],
+          };
+        }
+        async listPrompts(): Promise<{ prompts: Array<Record<string, unknown>> }> {
+          return {
+            prompts: [
+              {
+                name: 'review',
+                title: 'Review document',
+                arguments: [{ name: 'uri', required: true }],
+              },
+            ],
+          };
+        }
+        async callTool(): Promise<{ content: unknown[] }> {
+          return { content: [] };
+        }
+        async readResource(): Promise<{ contents: unknown[] }> {
+          return { contents: [] };
+        }
+        async getPrompt(): Promise<{ messages: unknown[] }> {
+          return { messages: [] };
+        }
+      }
+      return { ...actual, Client: FakeClient };
+    });
+
+    const { connectMcpServer } = await import('../connect');
+    const handle = await connectMcpServer({
+      serverName: 'everything',
+      config: { url: 'https://everything.example/mcp' },
+    });
+
+    expect(handle.catalog.protocolEra).toBe('modern');
+    expect(handle.catalog.protocolVersion).toBe('2026-07-28');
+    expect(handle.catalog.tools).toHaveLength(2);
+    expect(handle.catalog.resources).toHaveLength(2);
+    expect(handle.catalog.resourceTemplates).toHaveLength(1);
+    expect(handle.catalog.prompts).toHaveLength(1);
+    expect(handle.catalog.apps).toEqual([
+      {
+        serverName: 'everything',
+        toolName: 'show_dashboard',
+        resourceUri: 'ui://dashboard/index.html',
+        visibility: 'app',
+      },
+    ]);
+  });
 });
 
 describe('connectMcpServer — listTools failure', () => {

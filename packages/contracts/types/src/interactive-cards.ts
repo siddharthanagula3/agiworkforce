@@ -1,4 +1,3 @@
-
 import type { ChatExecutionMode } from './suite-contracts';
 
 export const INTERACTIVE_CARD_SCHEMA_VERSION = 1;
@@ -16,6 +15,7 @@ export const KNOWN_INTERACTIVE_CARD_KINDS = [
   'clarify.v1',
   'itinerary.v1',
   'map-search.v1',
+  'mcp-app.v1',
 ] as const;
 export type KnownInteractiveCardKind = (typeof KNOWN_INTERACTIVE_CARD_KINDS)[number];
 
@@ -211,6 +211,13 @@ export interface MapSearchCardBody {
   places?: MapSearchPlace[];
 }
 
+export interface McpAppCardBody {
+  payloadId: string;
+  connectorId: string;
+  toolName: string;
+  resourceUri: string;
+}
+
 export interface ItineraryToolInputStop {
   startTimeLabel: string;
   note: string;
@@ -252,6 +259,11 @@ export type KnownInteractiveCard =
       recognized: true;
       kind: 'map-search.v1';
       body: MapSearchCardBody;
+    })
+  | (InteractiveCardCommon & {
+      recognized: true;
+      kind: 'mcp-app.v1';
+      body: McpAppCardBody;
     });
 
 export interface UnrecognizedInteractiveCard extends InteractiveCardCommon {
