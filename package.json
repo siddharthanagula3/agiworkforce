@@ -127,7 +127,7 @@
     "check:generated-artifacts": "node scripts/check-generated-artifacts.mjs",
     "check:report-retention": "node scripts/check-report-retention.mjs",
     "check:non-md-artifacts": "node scripts/check-non-md-artifacts.mjs",
-    "check:neon-migrations": "node scripts/check-neon-migrations.mjs && node --test scripts/neon-migrate.test.mjs",
+    "check:neon-migrations": "node --test scripts/check-neon-migrations.test.mjs && node scripts/check-neon-migrations.mjs && node --test scripts/neon-migrate.test.mjs",
     "db:migrate": "node scripts/neon-migrate.mjs",
     "db:rls-probe": "node apps/web/scripts/rls-probe.mjs",
     "test:db-migrate": "node --test scripts/neon-migrate.test.mjs",
