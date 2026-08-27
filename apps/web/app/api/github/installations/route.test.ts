@@ -86,6 +86,31 @@ describe('GitHub installation listing ownership proof', () => {
     await expect(response.json()).resolves.toEqual({ installations: [] });
   });
 
+  it('degrades a missing ownership proof column to an empty list instead of 500', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+    mocks.query.mockRejectedValueOnce(
+      Object.assign(new Error('column "ownership_verified_at" does not exist'), {
+        code: '42703',
+      }),
+    );
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/github/installations'));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ installations: [] });
+  });
+
+  it('does not hide unrelated missing-column errors', async () => {
+    mocks.linkingAvailable.mockReturnValue(true);
+    mocks.query.mockRejectedValueOnce(
+      Object.assign(new Error('column "created_at" does not exist'), { code: '42703' }),
+    );
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/github/installations'));
+
+    expect(response.status).toBe(500);
+  });
+
   it('still 500s on a genuinely unexpected database error', async () => {
     mocks.linkingAvailable.mockReturnValue(true);
     mocks.query.mockRejectedValueOnce(new Error('connection terminated unexpectedly'));

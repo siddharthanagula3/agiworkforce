@@ -3,6 +3,8 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
+import { unshareConnector } from '@/lib/services/org-shared-connector-service';
+import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
 
 /**
  * Cuts off a member's live access when they leave a workspace.
@@ -29,6 +31,8 @@ export interface DeprovisionResult {
   sessionsFailed: number;
   deviceTokensRevoked: number;
   apiKeysRevoked: number;
+  /** Connectors of theirs the workspace was still invoking, now unshared. */
+  sharedConnectorsUnshared: number;
   /** Non-fatal problems. Deprovision reports what it could not reach. */
   errors: string[];
 }
@@ -153,6 +157,47 @@ export async function deprovisionMember(
     );
   }
 
+  // A connector the leaver shared into this workspace is the one credential the
+  // steps above cannot reach: the bearer token lives encrypted on the leaver's
+  // own `user_custom_connectors` row, and every member of the organization
+  // invokes it through the share row. Revoking sessions and keys does nothing
+  // to it — the org keeps calling the tool with the departed member's token
+  // until someone notices. Unlike `organization_project_access`, the share row
+  // has no FK to `organization_members`, so dropping the membership does not
+  // cascade it away either.
+  //
+  // Scoped to (this organization, connectors this member OWNS): shares they
+  // hold in other workspaces they are still a member of stay live, and another
+  // member's connector stays shared even if it reached this org through them.
+  // Unsharing is the whole remedy — the token itself is personal property that
+  // survives the offboarding exactly as their account does, and after the row
+  // is gone every execution path re-reads the share row and fails closed.
+  let sharedConnectorsUnshared = 0;
+  try {
+    const shares = await db.query<{ connector_row_id: string }>(
+      `select s.connector_row_id
+         from public.organization_shared_connectors s
+         join public.user_custom_connectors c on c.id = s.connector_row_id
+        where s.organization_id = $1
+          and c.user_id = $2`,
+      [organizationId, userId],
+    );
+    for (const share of shares) {
+      const removed = await unshareConnector(db, organizationId, share.connector_row_id);
+      if (!removed) continue;
+      sharedConnectorsUnshared += 1;
+      // Same follow-up the interactive unshare does: a warm instance would keep
+      // advertising the leaver's tools from its cached catalog until the TTL.
+      await evictOrgSharedConnectorCaches(organizationId, share.connector_row_id);
+    }
+  } catch (error) {
+    errors.push(
+      `Connectors shared with the workspace were not unshared: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
   const result: DeprovisionResult = {
     userId,
     organizationId,
@@ -160,6 +205,7 @@ export async function deprovisionMember(
     sessionsFailed: sessions.failed,
     deviceTokensRevoked,
     apiKeysRevoked,
+    sharedConnectorsUnshared,
     errors,
   };
 
