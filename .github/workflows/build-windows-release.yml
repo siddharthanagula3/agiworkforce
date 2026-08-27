@@ -275,7 +275,13 @@ jobs:
           CI: 'true'
         with:
           projectPath: apps/desktop
-          args: --config "${{ steps.windows-signing.outputs.tauri_config }}" --bundles nsis -- --no-default-features --features shell,updater,billing,devtools,vad,remote-databases
+          # `devtools` enables the webview inspector and is a hard compile_error in a
+          # release build (src-tauri/src/lib.rs). It was shipping in the Windows
+          # installer because the old guard only read the `tauri = ` dependency line
+          # and never saw a --features flag. `remote-databases` is left as-is: it is a
+          # Windows-only divergence from `default` that neither macOS nor Linux gets,
+          # which is a product decision rather than part of this build fix.
+          args: --config "${{ steps.windows-signing.outputs.tauri_config }}" --bundles nsis -- --no-default-features --features shell,updater,billing,vad,remote-databases
 
       - name: Verify Authenticode signatures before publication
         shell: pwsh
