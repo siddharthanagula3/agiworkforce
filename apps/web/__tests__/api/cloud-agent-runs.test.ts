@@ -36,7 +36,7 @@ const run = {
   updatedAt: '2026-07-17T20:00:01.000Z',
 };
 const event = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   sessionId: run.conversationId,
   turnId: run.requestId,
   sequence: 2,

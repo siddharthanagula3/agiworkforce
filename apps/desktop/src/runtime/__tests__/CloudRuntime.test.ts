@@ -471,7 +471,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 3,
+                    schemaVersion: 4,
                     sessionId: 'session-1',
                     turnId: 'turn-1',
                     sequence: 0,
@@ -487,7 +487,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 3,
+                    schemaVersion: 4,
                     sessionId: 'session-1',
                     turnId: 'turn-1',
                     sequence: 1,
@@ -617,7 +617,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 3,
+                    schemaVersion: 4,
                     sessionId: 'session-reject',
                     turnId: 'turn-reject',
                     sequence: 0,
@@ -678,7 +678,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 3,
+                    schemaVersion: 4,
                     sessionId: 'session-reconnect',
                     turnId: 'turn-reconnect',
                     sequence: 0,
@@ -699,7 +699,7 @@ describe('CloudRuntime', () => {
           options: TestFollowOptions,
         ): Promise<ManagedCloudAgentRunFollowResult> => {
           options.onEvent({
-            schemaVersion: 3,
+            schemaVersion: 4,
             sessionId: 'session-reconnect',
             turnId: 'turn-reconnect',
             sequence: 1,
@@ -707,7 +707,7 @@ describe('CloudRuntime', () => {
             event: { type: 'text-delta', delta: ' recovered' },
           });
           options.onEvent({
-            schemaVersion: 3,
+            schemaVersion: 4,
             sessionId: 'session-reconnect',
             turnId: 'turn-reconnect',
             sequence: 2,
@@ -769,7 +769,7 @@ describe('CloudRuntime', () => {
           options: TestFollowOptions,
         ): Promise<ManagedCloudAgentRunFollowResult> => {
           options.onEvent({
-            schemaVersion: 3,
+            schemaVersion: 4,
             sessionId: 'session-overlap',
             turnId: 'turn-overlap',
             sequence: 0,
@@ -777,7 +777,7 @@ describe('CloudRuntime', () => {
             event: { type: 'text-delta', delta: 'Already visible' },
           });
           options.onEvent({
-            schemaVersion: 3,
+            schemaVersion: 4,
             sessionId: 'session-overlap',
             turnId: 'turn-overlap',
             sequence: 1,
@@ -910,7 +910,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 3,
+                    schemaVersion: 4,
                     sessionId: 'session-cancel',
                     turnId: 'turn-cancel',
                     sequence: 0,
@@ -1035,7 +1035,7 @@ describe('CloudRuntime', () => {
           options: TestFollowOptions,
         ): Promise<ManagedCloudAgentRunFollowResult> => {
           options.onEvent({
-            schemaVersion: 3,
+            schemaVersion: 4,
             sessionId: 'session-reattach',
             turnId: 'turn-reattach',
             sequence: 5,

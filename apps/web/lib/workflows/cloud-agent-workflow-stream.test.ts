@@ -7,7 +7,7 @@ import { projectCloudAgentWorkflowChunk } from './cloud-agent-workflow-stream';
 describe('cloud agent workflow stream projection', () => {
   it('drops legacy wire data and projects canonical public text into one replayable event', () => {
     const envelope = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       sessionId: 'session-1',
       turnId: 'turn-1',
       sequence: 3,
@@ -37,7 +37,7 @@ describe('cloud agent workflow stream projection', () => {
           {
             delta: {
               x_agent_event: {
-                schemaVersion: 3,
+                schemaVersion: 4,
                 sessionId: 'session-1',
                 turnId: 'turn-1',
                 sequence: 4,

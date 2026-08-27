@@ -19,6 +19,29 @@ export const ToolApprovalResumeRequestSchema = z.object({
 });
 export type ToolApprovalResumeRequest = z.infer<typeof ToolApprovalResumeRequestSchema>;
 
+export const MAX_TOOL_INPUT_RESPONSES_SERIALIZED_LENGTH = 16_000;
+
+// One paused connector call's user-supplied responses to an MCP `input_required`
+// pause. The values are echoed verbatim to the remote server on resume, so the
+// host bounds their serialized size before accepting them.
+export const ToolInputResponseSchema = z.object({
+  tool_call_id: z.string().min(1).max(128),
+  input_responses: z
+    .record(z.string(), z.unknown())
+    .refine(
+      (value) => JSON.stringify(value).length <= MAX_TOOL_INPUT_RESPONSES_SERIALIZED_LENGTH,
+      'input_responses exceed the size limit',
+    ),
+});
+export type ToolInputResponseWire = z.infer<typeof ToolInputResponseSchema>;
+
+export const ToolInputResumeRequestSchema = z.object({
+  run_id: z.string().uuid(),
+  tool_inputs: z.array(ToolInputResponseSchema).min(1).max(32),
+  guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
+});
+export type ToolInputResumeRequest = z.infer<typeof ToolInputResumeRequestSchema>;
+
 export const CloudToolApprovalProjectionSchema = z.object({
   schemaVersion: z.literal(1),
   runId: z.string().uuid(),

@@ -7,7 +7,7 @@ import {
 } from '../agent-events';
 
 const BASE_ENVELOPE = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   sessionId: 'conversation-1',
   turnId: 'turn-1',
   sequence: 0,
@@ -16,7 +16,7 @@ const BASE_ENVELOPE = {
 
 describe('AgentEventEnvelopeSchema / parseAgentEventDelta', () => {
   it('pins the canonical run-activity schema version', () => {
-    expect(AGENT_EVENT_SCHEMA_VERSION).toBe(3);
+    expect(AGENT_EVENT_SCHEMA_VERSION).toBe(4);
   });
 
   it('parses the engine-authored task lifecycle without surface inference', () => {

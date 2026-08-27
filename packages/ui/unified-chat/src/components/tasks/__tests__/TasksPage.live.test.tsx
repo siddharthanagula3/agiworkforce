@@ -28,7 +28,7 @@ function makeRun(overrides: Partial<CloudAgentRun> = {}): CloudAgentRun {
 
 function event(sequence: number, value: AgentEventEnvelope['event']): AgentEventEnvelope {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     sessionId: 'conversation-1',
     turnId: 'turn-1',
     sequence,

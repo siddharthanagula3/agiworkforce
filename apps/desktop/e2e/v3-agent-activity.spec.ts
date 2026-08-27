@@ -89,7 +89,7 @@ function agentEvent(sequence: number, event: Record<string, unknown>) {
       {
         delta: {
           x_agent_event: {
-            schemaVersion: 3,
+            schemaVersion: 4,
             sessionId: 'session-agent-activity',
             turnId: 'turn-agent-activity',
             sequence,

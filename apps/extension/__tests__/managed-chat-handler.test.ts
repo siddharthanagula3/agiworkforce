@@ -125,7 +125,7 @@ describe('executeChromeManagedChat', () => {
             {
               type: 'agent-event',
               envelope: {
-                schemaVersion: 3,
+                schemaVersion: 4,
                 sessionId: 'session-1',
                 turnId: 'turn-1',
                 sequence: 1,

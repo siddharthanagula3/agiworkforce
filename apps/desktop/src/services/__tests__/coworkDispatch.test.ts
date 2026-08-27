@@ -265,6 +265,148 @@ describe('Cowork Dispatch runtime', () => {
     });
   });
 
+  it('cancels every running Desktop task when Mobile sends the Emergency Stop control', async () => {
+    const cancelTask = vi.fn().mockResolvedValue(undefined);
+    useAgentTaskStore.setState({
+      cancelTask,
+      tasks: [
+        { id: 'goal-queued', goal: 'Queued work', status: 'queued', createdAt: request.sentAt },
+        { id: 'goal-running', goal: 'Shell loop', status: 'running', createdAt: request.sentAt },
+        { id: 'goal-paused', goal: 'Paused work', status: 'paused', createdAt: request.sentAt },
+        { id: 'goal-done', goal: 'Finished work', status: 'completed', createdAt: request.sentAt },
+      ],
+    });
+    sendCompanionControl.mockClear();
+
+    window.dispatchEvent(
+      new CustomEvent('mobile-companion:control', {
+        detail: {
+          action: 'cancel',
+          payload: { action: 'cancel', scope: 'all', sentAt: request.sentAt },
+        },
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(sendCompanionControl).toHaveBeenCalledWith(
+        'emergency_stop',
+        expect.objectContaining({
+          scope: 'all',
+          requested: 3,
+          cancelled: 3,
+          failed: 0,
+        }),
+      );
+    });
+    expect(cancelTask.mock.calls.map(([taskId]) => taskId)).toEqual([
+      'goal-running',
+      'goal-queued',
+      'goal-paused',
+    ]);
+    expect(cancelTask).not.toHaveBeenCalledWith('goal-done');
+  });
+
+  it('keeps cancelling the remaining tasks when one Emergency Stop cancellation throws', async () => {
+    const cancelTask = vi.fn(async (taskId: string) => {
+      if (taskId === 'goal-running-a') throw new Error('backend refused');
+    });
+    useAgentTaskStore.setState({
+      cancelTask,
+      tasks: [
+        { id: 'goal-running-a', goal: 'First', status: 'running', createdAt: request.sentAt },
+        { id: 'goal-running-b', goal: 'Second', status: 'running', createdAt: request.sentAt },
+        { id: 'goal-running-c', goal: 'Third', status: 'running', createdAt: request.sentAt },
+      ],
+    });
+    sendCompanionControl.mockClear();
+
+    window.dispatchEvent(
+      new CustomEvent('mobile-companion:control', {
+        detail: {
+          action: 'cancel',
+          payload: { action: 'cancel', scope: 'all', sentAt: request.sentAt },
+        },
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(sendCompanionControl).toHaveBeenCalledWith(
+        'emergency_stop',
+        expect.objectContaining({
+          requested: 3,
+          cancelled: 2,
+          failed: 1,
+          failedTaskIds: ['goal-running-a'],
+          cancelledTaskIds: ['goal-running-b', 'goal-running-c'],
+        }),
+      );
+    });
+    expect(cancelTask.mock.calls.map(([taskId]) => taskId)).toEqual([
+      'goal-running-a',
+      'goal-running-b',
+      'goal-running-c',
+    ]);
+  });
+
+  it('reports an honest Emergency Stop result when nothing is running', async () => {
+    useAgentTaskStore.setState({
+      tasks: [
+        { id: 'goal-done', goal: 'Finished work', status: 'completed', createdAt: request.sentAt },
+      ],
+    });
+    sendCompanionControl.mockClear();
+
+    window.dispatchEvent(
+      new CustomEvent('mobile-companion:control', {
+        detail: {
+          action: 'cancel',
+          payload: { action: 'cancel', scope: 'all', sentAt: request.sentAt },
+        },
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(sendCompanionControl).toHaveBeenCalledWith(
+        'emergency_stop',
+        expect.objectContaining({
+          requested: 0,
+          cancelled: 0,
+          failed: 0,
+          message: 'No tasks were running on Desktop.',
+        }),
+      );
+    });
+    expect(useAgentTaskStore.getState().cancelTask).not.toHaveBeenCalled();
+  });
+
+  it('still routes a single-agent remote cancel to that one task', async () => {
+    useAgentTaskStore.setState({
+      tasks: [
+        { id: 'goal-running', goal: 'Shell loop', status: 'running', createdAt: request.sentAt },
+        { id: 'goal-other', goal: 'Other work', status: 'running', createdAt: request.sentAt },
+      ],
+    });
+
+    window.dispatchEvent(
+      new CustomEvent('mobile-companion:control', {
+        detail: {
+          action: 'cancel',
+          payload: {
+            kind: 'agent_command',
+            agentId: 'goal-running',
+            command: 'cancel',
+            sentAt: request.sentAt,
+          },
+        },
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(useAgentTaskStore.getState().cancelTask).toHaveBeenCalledWith('goal-running');
+    });
+    expect(useAgentTaskStore.getState().cancelTask).toHaveBeenCalledTimes(1);
+  });
+
   it('answers Mobile refresh requests with a bounded agent snapshot', async () => {
     useAgentTaskStore.setState({
       tasks: [

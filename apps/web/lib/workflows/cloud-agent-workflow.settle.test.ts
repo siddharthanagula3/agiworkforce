@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   usage: vi.fn(),
   finalize: vi.fn(),
+  settleFreeTrial: vi.fn(),
   autoMemory: vi.fn(),
   transition: vi.fn(),
   completeCheckpoint: vi.fn(),
@@ -33,6 +34,10 @@ vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
 }));
 vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   finalizeObservedManagedUsage: mocks.finalize,
+  calculateObservedProviderUsageCostDollars: () => 0.0042,
+}));
+vi.mock('@/lib/services/free-trial-service', () => ({
+  settleFreeTrialRequest: mocks.settleFreeTrial,
 }));
 vi.mock('@/lib/services/managed-auto-memory-service', () => ({
   recordManagedAutoMemoryTurn: mocks.autoMemory,
@@ -74,6 +79,7 @@ function makeInput(
       ...overrides,
     } as unknown as CloudAgentWorkflowInput['processed'],
     billing: {
+      kind: 'managed' as const,
       userId: 'user-1',
       idempotencyKey: 'agi.chat.desktop.turn-1',
       requestHash: 'hash-1',
@@ -286,5 +292,103 @@ describe('durable cloud agent workflow settlement', () => {
 
     expect(persistedTurn()).toBeNull();
     expect(mocks.assistantText).not.toHaveBeenCalled();
+  });
+
+  /**
+   * AGI-126. Making the DEFAULT tier durable is not the same as making it
+   * unlimited. Before the billing discriminant, `settleWorkflowInvocation`
+   * spread `input.billing` into a managed reservation unconditionally, so a
+   * durable free turn would have been finalized against a managed reservation
+   * that does not exist while its free reservation row was never released --
+   * the free budget would have leaked a little on every turn and the tier's
+   * cap would never have been reached.
+   */
+  describe('free-trial durable settlement', () => {
+    function freeInput(): CloudAgentWorkflowInput {
+      return {
+        ...makeInput(),
+        billing: {
+          kind: 'free_trial',
+          userId: 'user-1',
+          requestId: 'agi.chat.web.send.free-turn-1',
+          reservedMicrousd: 5_000,
+        },
+      };
+    }
+
+    it('releases the free reservation and never touches managed billing', async () => {
+      await settleWorkflowInvocation(freeInput(), 'completed');
+
+      expect(mocks.finalize).not.toHaveBeenCalled();
+      expect(mocks.settleFreeTrial).toHaveBeenCalledTimes(1);
+      expect(mocks.settleFreeTrial).toHaveBeenCalledWith({
+        reservation: {
+          kind: 'free_trial',
+          userId: 'user-1',
+          requestId: 'agi.chat.web.send.free-turn-1',
+          reservedMicrousd: 5_000,
+        },
+        outcome: 'completed',
+        provider: 'anthropic',
+        model: 'claude-test',
+        measuredCostDollars: 0.0042,
+        usage: {
+          promptTokens: 1_200,
+          completionTokens: 340,
+          totalTokens: 1_540,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          cacheCreation1hInputTokens: 0,
+        },
+      });
+    });
+
+    it('reads and records the operation ledger under the free request id', async () => {
+      await settleWorkflowInvocation(freeInput(), 'completed');
+
+      expect(mocks.usage).toHaveBeenCalledWith(db, {
+        userId: 'user-1',
+        runId: RUN_ID,
+        billingIdempotencyKey: 'agi.chat.web.send.free-turn-1',
+      });
+      // Free turns are budgeted in micro-USD, not billed in cents, so the run
+      // records no charged cost -- the same `null` the inline free path records.
+      expect(mocks.recordRunUsage).toHaveBeenCalledWith(db, {
+        userId: 'user-1',
+        runId: RUN_ID,
+        billingIdempotencyKey: 'agi.chat.web.send.free-turn-1',
+        usage: {
+          providerCalls: 2,
+          inputTokens: 1_200,
+          outputTokens: 340,
+          reasoningTokens: 96,
+          costCents: null,
+        },
+      });
+    });
+
+    it('settles a free turn parked on an approval so its budget is not held hostage', async () => {
+      await settleWorkflowInvocation(freeInput(), 'awaiting_input');
+
+      expect(mocks.settleFreeTrial).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'completed' }),
+      );
+      expect(mocks.finalize).not.toHaveBeenCalled();
+    });
+
+    it('propagates a cancelled free turn as cancelled, not as a completed charge', async () => {
+      await settleWorkflowInvocation(freeInput(), 'cancelled');
+
+      expect(mocks.settleFreeTrial).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'cancelled' }),
+      );
+    });
+
+    it('leaves the managed path untouched: a managed turn never settles as free', async () => {
+      await settleWorkflowInvocation(makeInput(), 'completed');
+
+      expect(mocks.settleFreeTrial).not.toHaveBeenCalled();
+      expect(mocks.finalize).toHaveBeenCalledTimes(1);
+    });
   });
 });

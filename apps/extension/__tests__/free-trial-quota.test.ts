@@ -1196,7 +1196,7 @@ describe('streamFreeChat — model routing', () => {
   it('emits the validated run handle and canonical activity event', async () => {
     const runId = '11111111-1111-4111-8111-111111111111';
     const envelope = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       sessionId: 'conversation-1',
       turnId: 'turn-1',
       sequence: 0,
@@ -1277,7 +1277,7 @@ describe('streamFreeChat — model routing', () => {
             },
             events: [
               {
-                schemaVersion: 3,
+                schemaVersion: 4,
                 sessionId: 'conversation-1',
                 turnId: 'turn-1',
                 sequence: 0,
@@ -1285,7 +1285,7 @@ describe('streamFreeChat — model routing', () => {
                 event: { type: 'text-delta', delta: 'Hello world' },
               },
               {
-                schemaVersion: 3,
+                schemaVersion: 4,
                 sessionId: 'conversation-1',
                 turnId: 'turn-1',
                 sequence: 1,

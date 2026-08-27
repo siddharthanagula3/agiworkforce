@@ -491,6 +491,105 @@ async function cancelTask(
   });
 }
 
+const CANCEL_ALL_SCOPE = 'all';
+
+/**
+ * Mobile's Emergency Stop sends `cancel` with `scope: 'all'` and no `taskId`
+ * (`sendEmergencyStop` in apps/mobile/services/companion.ts). The relay also
+ * rewrites a raw `emergency_stop` control to the same shape and defaults its
+ * scope to `all`, so both spellings must land on the cancel-all branch.
+ */
+function isCancelAllControl(action: string, payload: Record<string, unknown>): boolean {
+  const scope = payload['scope'];
+  if (action === 'emergency_stop') return scope === undefined || scope === CANCEL_ALL_SCOPE;
+  return action === 'cancel' && scope === CANCEL_ALL_SCOPE;
+}
+
+function isStoppableAgentTask(status: AgentTaskStatus): boolean {
+  const mobileStatus = mobileAgentStatus(status);
+  return mobileStatus === 'running' || mobileStatus === 'waiting';
+}
+
+interface CancelAllOutcome {
+  taskId: string;
+  cancelled: boolean;
+  error?: string;
+}
+
+async function cancelAllTasks(isCurrentSession: () => boolean): Promise<void> {
+  // Running work is cancelled first: an unattended shell or computer-use session
+  // is the reason this control exists, so it must not wait behind queued work.
+  const stoppable = useAgentTaskStore
+    .getState()
+    .tasks.filter((task) => isStoppableAgentTask(task.status))
+    .sort((left, right) => Number(right.status === 'running') - Number(left.status === 'running'));
+
+  // Every cancellation is attempted even when an earlier one throws: a kill
+  // switch that stops at the first error is not a kill switch.
+  const outcomes: CancelAllOutcome[] = await Promise.all(
+    stoppable.map(async (task): Promise<CancelAllOutcome> => {
+      try {
+        await useAgentTaskStore.getState().cancelTask(task.id);
+        return { taskId: task.id, cancelled: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn('[cowork-dispatch] emergency stop could not cancel', task.id, error);
+        return { taskId: task.id, cancelled: false, error: message };
+      }
+    }),
+  );
+  if (!isCurrentSession()) return;
+
+  const cancelledIds = outcomes.filter((outcome) => outcome.cancelled).map((o) => o.taskId);
+  const failures = outcomes.filter((outcome) => !outcome.cancelled);
+
+  for (const outcome of outcomes) {
+    const requestId = requestIdByTask.get(outcome.taskId);
+    if (!requestId) continue;
+    const dispatch = dispatchesByRequest.get(requestId);
+    if (outcome.cancelled) {
+      if (dispatch) dispatch.lastStatus = 'cancelled';
+      await sendTaskStatus(requestId, 'cancelled', {
+        taskId: outcome.taskId,
+        message: 'Task cancelled by Emergency Stop on Desktop.',
+      });
+    } else {
+      // The task is still running, so its lifecycle status is left untouched and
+      // the rejection reports only that the cancellation itself did not land.
+      await sendTaskStatus(requestId, 'rejected', {
+        taskId: outcome.taskId,
+        error: `Emergency Stop could not cancel this task: ${outcome.error ?? 'unknown error'}`,
+      });
+    }
+    if (!isCurrentSession()) return;
+  }
+
+  await sendCompanionControl('emergency_stop', {
+    action: 'emergency_stop',
+    version: 1,
+    scope: CANCEL_ALL_SCOPE,
+    requested: stoppable.length,
+    cancelled: cancelledIds.length,
+    failed: failures.length,
+    cancelledTaskIds: cancelledIds.slice(0, 50),
+    ...(failures.length > 0
+      ? {
+          failedTaskIds: failures.map((failure) => failure.taskId).slice(0, 50),
+          errorMessage: clipStatusText(
+            `${failures.length} task${failures.length === 1 ? '' : 's'} could not be cancelled and may still be running.`,
+          ),
+        }
+      : {}),
+    ...(stoppable.length === 0 ? { message: 'No tasks were running on Desktop.' } : {}),
+    stoppedAt: new Date().toISOString(),
+  });
+  if (!isCurrentSession()) return;
+
+  // The snapshot is the authoritative answer: anything that refused to cancel
+  // still shows as running on Mobile instead of being papered over.
+  await publishAgentSnapshot();
+}
+
 async function handleLegacyAgentCommand(payload: Record<string, unknown>): Promise<boolean> {
   if (payload['kind'] !== 'agent_command') return false;
   const agentId = boundedString(payload['agentId'], MAX_REQUEST_ID_LENGTH);
@@ -526,6 +625,14 @@ async function handleCompanionControl(
   if (!detail || typeof detail.action !== 'string' || !isRecord(detail.payload)) return;
 
   await acknowledgeCompanionControl(detail.action, detail.payload);
+  if (!isCurrentSession()) return;
+
+  // Checked before the single-agent cancel so the broader scope is not swallowed
+  // by the narrower one.
+  if (isCancelAllControl(detail.action, detail.payload)) {
+    await cancelAllTasks(isCurrentSession);
+    return;
+  }
   if (!isCurrentSession()) return;
 
   if (

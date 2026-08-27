@@ -790,6 +790,119 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     ]);
   });
 
+  function stepBudgetFixture(): { processed: ProcessedRequest; runCode: ReturnType<typeof vi.fn> } {
+    const toolStep = sseStreamFrom([
+      chunk({
+        tool_calls: [{ index: 0, id: 'call_1', function: { name: 'execute_code', arguments: '' } }],
+      }),
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            function: { arguments: JSON.stringify({ language: 'python', code: 'print(1+1)' }) },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    mockBuildToolLoopStream.mockResolvedValue(toolStep);
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: '2\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.chatRequest.code_execution = true;
+    return { processed, runCode };
+  }
+
+  it('checkpoints the run when the cumulative step budget is spent instead of killing it', async () => {
+    const { processed, runCode } = stepBudgetFixture();
+    const onStepBudgetCheckpoint = vi.fn().mockResolvedValue(undefined);
+
+    const output = await drain(
+      runToolLoop(processed, { approvalMode: 'auto', maxSteps: 1, onStepBudgetCheckpoint }),
+    );
+
+    expect(runCode).toHaveBeenCalledTimes(1);
+    expect(onStepBudgetCheckpoint).toHaveBeenCalledTimes(1);
+    const checkpoint = onStepBudgetCheckpoint.mock.calls[0]?.[0] as {
+      sessionId: string;
+      turnId: string;
+      completedSteps: number;
+      stepBudget: number;
+      messages: Array<{ role: string; tool_call_id?: string }>;
+      events: AgentEventEnvelope[];
+    };
+    expect(checkpoint.sessionId).toBe('req-1');
+    expect(checkpoint.turnId).toBe('req-1');
+    expect(checkpoint.completedSteps).toBe(1);
+    expect(checkpoint.stepBudget).toBe(1);
+    // The whole thread the run would otherwise have thrown away.
+    expect(checkpoint.messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'tool',
+    ]);
+    expect(checkpoint.messages[2]?.tool_call_id).toBe('call_1');
+    expect(checkpoint.events.map((entry) => entry.event.type)).toEqual([
+      'progress-update',
+      'task-state-changed',
+      'lifecycle',
+    ]);
+
+    // Paused, not failed: no error event and no terminal stop.
+    expect(output).not.toContain('max_agent_steps_reached');
+    const types = agentEvents(output).map((entry) => entry.event.type);
+    expect(types).not.toContain('error');
+    expect(types).not.toContain('stop');
+    expect(types.slice(-3)).toEqual(['progress-update', 'task-state-changed', 'lifecycle']);
+    const activity = agentEvents(output);
+    expect(activity[activity.length - 2]?.event).toMatchObject({
+      type: 'task-state-changed',
+      previousState: 'running',
+      state: 'awaiting_input',
+    });
+    expect(activity[activity.length - 1]?.event).toEqual({ type: 'lifecycle', phase: 'paused' });
+    expect(output).toContain('Paused at the 1-step execution limit');
+    expect(output).toContain('data: [DONE]');
+  });
+
+  it('refuses to pause again when a resume carried the spent steps without raising the budget', async () => {
+    const { processed } = stepBudgetFixture();
+    const onStepBudgetCheckpoint = vi.fn().mockResolvedValue(undefined);
+
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        maxSteps: 1,
+        initialCompletedSteps: 1,
+        onStepBudgetCheckpoint,
+      }),
+    );
+
+    // A second checkpoint would hand the caller the same dead resume forever.
+    expect(onStepBudgetCheckpoint).not.toHaveBeenCalled();
+    expect(mockBuildToolLoopStream).not.toHaveBeenCalled();
+    expect(output).toContain('max_agent_steps_reached');
+    expect(output).toContain('"retryable":false');
+    const activity = agentEvents(output);
+    expect(activity[activity.length - 1]?.event).toEqual({ type: 'stop', reason: 'error' });
+  });
+
+  it('still fails terminally at the step limit when the caller cannot store a checkpoint', async () => {
+    const { processed } = stepBudgetFixture();
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto', maxSteps: 1 }));
+
+    expect(output).toContain('max_agent_steps_reached');
+    expect(output).toContain('Agent stopped after reaching the 1-step execution limit.');
+    const activity = agentEvents(output);
+    expect(activity[activity.length - 1]?.event).toEqual({ type: 'stop', reason: 'error' });
+  });
+
   it('delegates provider and tool operations through replay-aware executors', async () => {
     const step1 = sseStreamFrom([
       chunk({

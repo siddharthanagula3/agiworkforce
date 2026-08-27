@@ -22,6 +22,11 @@ import 'server-only';
  *     provider resolution, adapter availability) — a stale plan entry is
  *     skipped, never served.
  *
+ * The OpenRouter route-retry below is NOT drawn from the candidate plan, so the
+ * policy filtering the request processor applies to `fallbackModels` does not
+ * govern it. It is checked against the policy snapshot directly (`modelPolicy`
+ * option), and a refusal falls through to the candidate rotation.
+ *
  * Deliberately NARROWER than the gateway in one dimension: requests carrying
  * tools (provider-native tool definitions ride `llmRequest.tools` in the
  * provider's own wire shape) may rotate only within the same provider. A
@@ -41,6 +46,7 @@ import { resolveProviderFromModel } from '@/lib/services/provider-adapter-servic
 import { canFailoverToOpenRouter } from '@/lib/services/aggregator-routing';
 import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { logger } from '@/lib/logger';
+import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/model-policy-evaluator';
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
 
@@ -114,6 +120,23 @@ export function createFailoverPlan(
   options: {
     signal: AbortSignal;
     isProviderDispatchable: (provider: string) => boolean;
+    /**
+     * The workspace model policy snapshot the request processor already read,
+     * handed in so the OpenRouter route-retry below can be governed by it.
+     *
+     * It is a SNAPSHOT, deliberately: this plan runs inside a live stream's
+     * failure path, and a database read there would put policy availability on
+     * the critical path of every upstream hiccup. The request processor reads
+     * the row once, before the first attempt, and every hop in the request —
+     * primary gate, cheaper-model downgrade, plan filtering, and now the
+     * route-retry — answers to that same one snapshot.
+     *
+     * `null` or omitted means UNGOVERNED, matching the evaluator's contract: no
+     * policy row, personal scope, or a read that deliberately failed open. It
+     * does NOT mean deny, because a briefly unreachable policy table must not
+     * take failover away from every workspace that has no policy at all.
+     */
+    modelPolicy?: ModelAccessPolicy | null;
   },
 ): { next: (error: unknown) => FailoverAttempt | null } {
   const remaining = [...(processed.fallbackModels ?? [])];
@@ -184,6 +207,38 @@ export function createFailoverPlan(
       (tool) => !(tool && typeof tool === 'object' && 'function' in tool),
     );
     if (hasVendorNativeTools) return null;
+    // The workspace may forbid OpenRouter outright. `next()` consults this
+    // route-retry BEFORE the candidate plan, and the retry does not draw from
+    // that plan, so filtering `fallbackModels` upstream never reached here: a
+    // workspace pinned to `allowedProviders: ['anthropic']` was still served
+    // through OpenRouter on any availability-class failure. Same pure evaluator
+    // the primary gate uses, against the snapshot already in hand.
+    //
+    // Note this asks about the SAME model on a DIFFERENT provider, which is the
+    // whole point of the route-retry — so an explicit model allow can still
+    // carry it through a provider block, exactly as the evaluator's documented
+    // precedence says it should.
+    const decision = evaluateModelAccess(options.modelPolicy ?? null, {
+      provider: 'openrouter',
+      modelId: processed.llmRequest.model,
+    });
+    if (!decision.allowed) {
+      // Deliberately WITHOUT consuming `routeRetryUsed`: a policy refusal is not
+      // a spent retry, and `next()` must fall through to the ordinary candidate
+      // rotation rather than failing the request. The plan's candidates were
+      // already filtered against this same policy upstream, so what the member
+      // gets is a permitted model, not an error.
+      logger.warn(
+        {
+          requestId: processed.requestId,
+          model: processed.llmRequest.model,
+          fromProvider: processed.provider,
+          code: decision.code,
+        },
+        'Managed failover: OpenRouter route-retry refused by workspace model policy',
+      );
+      return null;
+    }
     routeRetryUsed = true;
     const attemptView = {
       ...buildFailoverAttemptView(latestView, processed.llmRequest.model, 'openrouter'),

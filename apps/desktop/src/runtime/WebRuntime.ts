@@ -25,6 +25,7 @@ import {
   sendCloudMessage,
   CLOUD_API_BASE_URL,
   createCloudChatPersistenceClient,
+  createDesktopCloudAgentRunClient,
   type CloudChatMessageContent,
   type CloudConversation,
   type CloudMessage,
@@ -47,6 +48,20 @@ import {
   persistedAttachmentMetadata,
   resolveOwnedCloudFileUri,
 } from './persistedCloudMessage';
+
+/**
+ * The live turn for one conversation. Mirrors `ActiveCloudTurn` in
+ * `./CloudRuntime.ts`: `stopGeneration` needs the run handle to cancel the
+ * backend run, the sink to persist whatever streamed before the stop, and the
+ * `settled` flag so a late abort cannot re-settle a turn that already ended.
+ */
+interface ActiveWebTurn {
+  assistantMessageId: string;
+  model: string;
+  sink: ReturnType<typeof createCloudStreamDeltaSink>;
+  settled: boolean;
+  runReference?: ManagedCloudAgentRunReference;
+}
 
 function failedMessageProjection(
   projection: CloudStreamMessageProjection,
@@ -123,6 +138,7 @@ export class WebRuntime implements ChatRuntime {
   readonly supportsReasoningEffort = true;
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
+  private readonly _activeTurns = new Map<string, ActiveWebTurn>();
   private readonly _approvals = new CloudToolApprovalRegistry();
   private readonly _attachmentAssetIds = new Map<string, string>();
 
@@ -206,7 +222,19 @@ export class WebRuntime implements ChatRuntime {
     }
 
     const sink = createCloudStreamDeltaSink((event) => this.emit(event), CLOUD_API_BASE_URL);
-    let runReference: ManagedCloudAgentRunReference | undefined;
+    const activeTurn: ActiveWebTurn = {
+      assistantMessageId,
+      model,
+      sink,
+      settled: false,
+    };
+    this._activeTurns.set(conversationId, activeTurn);
+    const settleTurn = (): boolean => {
+      if (activeTurn.settled) return false;
+      activeTurn.settled = true;
+      this.clearActiveTurn(conversationId, activeTurn);
+      return true;
+    };
 
     try {
       await persistence.updateConversation(conversationId, {
@@ -230,20 +258,24 @@ export class WebRuntime implements ChatRuntime {
         model,
         sink.onChunk,
         async () => {
-          if (runReference) {
-            runReference = {
-              ...runReference,
-              lastSequence: Math.max(
-                runReference.lastSequence,
-                sink.getAgentActivity()?.lastSequence ?? -1,
-              ),
-              state: sink.isSuspended()
-                ? 'awaiting_input'
-                : sink.getStreamError()
-                  ? 'failed'
-                  : 'completed',
-            };
-          }
+          // A user-initiated Stop settles the turn first; a late `done` must not
+          // overwrite the persisted stopped turn.
+          if (!settleTurn()) return;
+          const runReference: ManagedCloudAgentRunReference | undefined = activeTurn.runReference
+            ? {
+                ...activeTurn.runReference,
+                lastSequence: Math.max(
+                  activeTurn.runReference.lastSequence,
+                  sink.getAgentActivity()?.lastSequence ?? -1,
+                ),
+                state: sink.isSuspended()
+                  ? 'awaiting_input'
+                  : sink.getStreamError()
+                    ? 'failed'
+                    : 'completed',
+              }
+            : undefined;
+          activeTurn.runReference = runReference;
           this._approvals.recordTurnOutcome(
             conversationId,
             runReference,
@@ -310,6 +342,14 @@ export class WebRuntime implements ChatRuntime {
           });
         },
         (err: Error) => {
+          // `stopGeneration` settles the turn and persists it as stopped before
+          // aborting, so the AbortError that follows is swallowed here rather
+          // than recorded as a failed turn.
+          if (activeTurn.settled || controller.signal.aborted) {
+            settleTurn();
+            return;
+          }
+          settleTurn();
           const projection = failedMessageProjection(sink.getMessageProjection(), err.message);
           const agentActivity = sink.getAgentActivity();
           void persistence
@@ -328,7 +368,7 @@ export class WebRuntime implements ChatRuntime {
                       }),
                     }
                   : {}),
-                ...(runReference ? { cloudAgentRun: runReference } : {}),
+                ...(activeTurn.runReference ? { cloudAgentRun: activeTurn.runReference } : {}),
                 ...projection,
               },
             })
@@ -355,7 +395,7 @@ export class WebRuntime implements ChatRuntime {
             }
           : undefined,
         (handle) => {
-          runReference = handle
+          activeTurn.runReference = handle
             ? {
                 ...handle,
                 lastSequence: sink.getAgentActivity()?.lastSequence ?? -1,
@@ -367,12 +407,15 @@ export class WebRuntime implements ChatRuntime {
         },
       );
     } catch (err) {
-      if (!controller.signal.aborted) {
+      if (!controller.signal.aborted && settleTurn()) {
         const message = err instanceof Error ? err.message : String(err);
         this.emit({ type: 'error', error: message });
       }
     } finally {
       this._abortControllers.delete(conversationId);
+      // Nothing settles this turn once `sendMessage` has returned; leaving it
+      // live would let a later Stop persist a stopped turn over a finished one.
+      settleTurn();
     }
   }
 
@@ -466,12 +509,70 @@ export class WebRuntime implements ChatRuntime {
     return this._approvals.hasLiveTurn(conversationId, projection);
   }
 
+  private clearActiveTurn(conversationId: string, turn: ActiveWebTurn): void {
+    if (this._activeTurns.get(conversationId) === turn) {
+      this._activeTurns.delete(conversationId);
+    }
+  }
+
+  /**
+   * Stop mirrors `CloudRuntime.stopGeneration`: settle the live turn first (so
+   * the AbortError that the in-flight fetch raises is swallowed instead of
+   * being persisted as a failure), cancel the backend Managed Cloud run so it
+   * stops consuming budget, then persist whatever streamed as a *stopped* turn.
+   */
   stopGeneration(conversationId: string): void {
     const controller = this._abortControllers.get(conversationId);
     if (controller) {
       controller.abort();
       this._abortControllers.delete(conversationId);
     }
+    const activeTurn = this._activeTurns.get(conversationId);
+    if (!activeTurn || activeTurn.settled) return;
+    activeTurn.settled = true;
+    this.clearActiveTurn(conversationId, activeTurn);
+    if (activeTurn.runReference) {
+      void createDesktopCloudAgentRunClient()
+        .cancelRun(activeTurn.runReference.runId)
+        .catch((err: unknown) => {
+          this.emit({
+            type: 'error',
+            error: `Could not stop the Cloud task: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          });
+        });
+    }
+    const activity = activeTurn.sink.getAgentActivity();
+    const metadata = {
+      ...(activity
+        ? {
+            agentActivity: finishAgentActivityLocally(activity, {
+              status: 'cancelled',
+              completedAtMs: Date.now(),
+            }),
+          }
+        : {}),
+      ...(activeTurn.runReference ? { cloudAgentRun: activeTurn.runReference } : {}),
+      ...activeTurn.sink.getMessageProjection(),
+      finishReason: 'stopped',
+    };
+    void createCloudChatPersistenceClient()
+      .saveMessage(conversationId, {
+        id: activeTurn.assistantMessageId,
+        role: 'assistant',
+        content: activeTurn.sink.getAccumulatedContent() || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+        model: activeTurn.model,
+        metadata,
+      })
+      .catch((persistenceError: unknown) => {
+        this.emit({
+          type: 'error',
+          error: `The Cloud task stopped, but its stopped state could not be saved: ${
+            persistenceError instanceof Error ? persistenceError.message : String(persistenceError)
+          }`,
+        });
+      });
   }
 
   onStream(callback: StreamCallback): () => void {

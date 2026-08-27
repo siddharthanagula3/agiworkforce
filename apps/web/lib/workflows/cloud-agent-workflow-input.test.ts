@@ -4,7 +4,10 @@ import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/req
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   buildCloudAgentWorkflowInput,
+  cloudAgentWorkflowBillingKey,
+  CloudAgentWorkflowBillingUnavailableError,
   parseCloudAgentWorkflowInput,
+  rehydrateCloudAgentWorkflowRequest,
 } from './cloud-agent-workflow-input';
 import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 
@@ -104,11 +107,44 @@ describe('cloud agent workflow input', () => {
     expect(input.processed).not.toHaveProperty('freeTrial');
     expect(input.processed.autoMemoryFacts).toEqual(['User prefers concise answers']);
     expect(input.billing).toEqual({
+      kind: 'managed',
       userId: 'user-1',
       idempotencyKey: 'agi.chat.web.request-1',
       requestHash: 'request-hash-1',
       leaseToken: '0190a000-0000-7000-8000-000000000002',
       estimatedCostCents: 12,
+    });
+    expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
+  });
+
+  // `reserveManagedUsageRequest` really returns `provider`, `model` and (when a
+  // quota feature applies) `quotaFeature` on every reservation it hands back.
+  // The billing schema used to be a `.strict()` object listing none of the three,
+  // so every REAL production reservation failed this parse: the initial turn
+  // caught the throw and silently never went durable, and the resume routes
+  // turned it into a 503 on every pending approval.
+  it('accepts the full reservation shape the managed usage service actually returns', () => {
+    const processed = makeProcessed();
+    processed.managedUsage = {
+      ...processed.managedUsage!,
+      provider: 'openai',
+      model: 'fixture-model',
+      quotaFeature: 'chat',
+    };
+
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed,
+      mcpTools: tools,
+      approvalMode: 'manual',
+    });
+
+    expect(input.billing).toMatchObject({
+      kind: 'managed',
+      provider: 'openai',
+      model: 'fixture-model',
+      quotaFeature: 'chat',
     });
     expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
   });
@@ -137,7 +173,38 @@ describe('cloud agent workflow input', () => {
     expect(restored.levelForConnectorTool('github', 'get_pull_request')).toBe('allow');
   });
 
-  it('rejects a workflow launch without a managed usage reservation', () => {
+  // AGI-126: a free-trial turn used to be refused here, which is what kept the
+  // DEFAULT tier off the durable transport entirely.
+  it('carries a free-trial reservation across the invocation boundary', () => {
+    const processed = makeProcessed();
+    delete processed.managedUsage;
+    processed.freeTrial = {
+      kind: 'free_trial',
+      userId: 'user-1',
+      requestId: 'agi-work-request-1',
+      reservedMicrousd: 4_200,
+    };
+
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed,
+      mcpTools: tools,
+      approvalMode: 'manual',
+    });
+
+    expect(input.billing).toEqual({
+      kind: 'free_trial',
+      userId: 'user-1',
+      requestId: 'agi-work-request-1',
+      reservedMicrousd: 4_200,
+    });
+    expect(input.processed).not.toHaveProperty('freeTrial');
+    expect(input.processed).not.toHaveProperty('managedUsage');
+    expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
+  });
+
+  it('rejects a workflow launch that carries no reservation at all', () => {
     const processed = makeProcessed();
     delete processed.managedUsage;
 
@@ -149,7 +216,96 @@ describe('cloud agent workflow input', () => {
         mcpTools: [],
         approvalMode: 'auto',
       }),
-    ).toThrow(/managed usage reservation/i);
+    ).toThrow(CloudAgentWorkflowBillingUnavailableError);
+  });
+
+  it('refuses a reservation the workflow user does not own, on either tier', () => {
+    const managed = makeProcessed();
+    expect(() =>
+      buildCloudAgentWorkflowInput({
+        runId: RUN_ID,
+        userId: 'attacker',
+        processed: managed,
+        mcpTools: [],
+        approvalMode: 'auto',
+      }),
+    ).toThrow(/does not own the billing reservation/i);
+
+    const free = makeProcessed();
+    delete free.managedUsage;
+    free.freeTrial = {
+      kind: 'free_trial',
+      userId: 'user-1',
+      requestId: 'agi-work-request-1',
+      reservedMicrousd: 10,
+    };
+    expect(() =>
+      buildCloudAgentWorkflowInput({
+        runId: RUN_ID,
+        userId: 'attacker',
+        processed: free,
+        mcpTools: [],
+        approvalMode: 'auto',
+      }),
+    ).toThrow(/does not own the billing reservation/i);
+  });
+
+  describe('rehydration decides which budget the tool loop enforces', () => {
+    it('puts a managed reservation back on processed.managedUsage only', () => {
+      const input = buildCloudAgentWorkflowInput({
+        runId: RUN_ID,
+        userId: 'user-1',
+        processed: makeProcessed(),
+        mcpTools: [],
+        approvalMode: 'auto',
+      });
+      const db = {} as never;
+
+      const rehydrated = rehydrateCloudAgentWorkflowRequest(input, db);
+
+      expect(rehydrated.managedUsage).toMatchObject({
+        db,
+        userId: 'user-1',
+        idempotencyKey: 'agi.chat.web.request-1',
+      });
+      expect(rehydrated.managedUsage).not.toHaveProperty('kind');
+      expect(rehydrated.freeTrial).toBeUndefined();
+      expect(cloudAgentWorkflowBillingKey(input.billing)).toBe('agi.chat.web.request-1');
+    });
+
+    // The metering proof for AGI-126. `tool-loop.ts` reads `processed.freeTrial`
+    // to apply the free output-budget cap and `processed.managedUsage` to reserve
+    // per provider step. Rehydrating a free reservation onto `managedUsage` — as
+    // the unconditional `{ db, ...input.billing }` spread did — makes a durable
+    // free turn skip the free cap entirely: durable AND unmetered.
+    it('puts a free-trial reservation back on processed.freeTrial only', () => {
+      const processed = makeProcessed();
+      delete processed.managedUsage;
+      processed.freeTrial = {
+        kind: 'free_trial',
+        userId: 'user-1',
+        requestId: 'agi-work-request-1',
+        reservedMicrousd: 4_200,
+      };
+      const input = buildCloudAgentWorkflowInput({
+        runId: RUN_ID,
+        userId: 'user-1',
+        processed,
+        mcpTools: [],
+        approvalMode: 'auto',
+      });
+
+      const rehydrated = rehydrateCloudAgentWorkflowRequest(input, {} as never);
+
+      expect(rehydrated.freeTrial).toEqual({
+        kind: 'free_trial',
+        userId: 'user-1',
+        requestId: 'agi-work-request-1',
+        reservedMicrousd: 4_200,
+      });
+      expect(rehydrated.managedUsage).toBeUndefined();
+      expect(cloudAgentWorkflowBillingKey(input.billing)).toBe('agi-work-request-1');
+    });
   });
 
   it.each([
