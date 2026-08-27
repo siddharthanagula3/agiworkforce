@@ -50,34 +50,24 @@ integrations are not shipped.
 
 ## Installation
 
-### Universal installer
-
-```bash
-curl -fsSL https://agiworkforce.com/install.sh | bash
-```
-
-### Homebrew (macOS / Linux)
-
-```bash
-brew install agiworkforce/tap/agiworkforce
-```
-
-### npm
-
 ```bash
 npm install -g @agiworkforce/cli
 ```
 
-This command is valid only after the public npm release publishes the wrapper
-and all platform packages (`@agiworkforce/cli-darwin-arm64`, etc.). The wrapper
-does not fall back to a random `agi` on `PATH`; it runs only the matching
-platform package, bundled `vendor/` binary, or `AGI_CLI_BINARY_PATH`.
+The wrapper runs only the matching `@agiworkforce/cli-<platform>` package, a
+bundled `vendor/` binary, or `AGI_CLI_BINARY_PATH`. It never falls back to
+some other `agi` that happens to be on `PATH`.
 
-### From source (Rust 1.94+)
+### From source
+
+Requires Rust 1.94+ and read access to the repository, which is private:
 
 ```bash
 cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi
 ```
+
+A shell installer and a Homebrew tap are planned. Neither is published yet, so
+this README does not list a command for them.
 
 ## Quick start
 
@@ -129,14 +119,16 @@ agi -m "<cloud-model>,<local-model>" exec "..."  # cloud first, fallback local
 
 ## MCP support
 
-AGI Workforce CLI is both an MCP client (consumes external MCP servers) and an MCP server (`agi mcp-server`). Configure in `.mcp.json` (project) or `~/.agiworkforce/.mcp.json` (global).
+AGI Workforce CLI is an MCP client: it consumes external MCP servers configured in
+`.mcp.json` (project) or `~/.agiworkforce/.mcp.json` (global).
+
+`agi mcp-server` speaks the protocol but currently answers `tools/list` with an
+empty set, so nothing can call it yet. It is not usable as an MCP server.
 
 ## Documentation
 
 - Project home: <https://agiworkforce.com>
 - GitHub: <https://github.com/siddharthanagula3/agiworkforce>
-- CLI architecture: <https://github.com/siddharthanagula3/agiworkforce/blob/main/apps/cli/ARCHITECTURE.md>
-- Single source of truth: <https://github.com/siddharthanagula3/agiworkforce/blob/main/AGI_WORKFORCE.md>
 
 ## License
 

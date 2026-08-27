@@ -37,6 +37,9 @@ const TICK_RATE_MS: u64 = 50;
 /// Duration the mode-cycle banner is shown after Shift+Tab.
 const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
+/// How long a first Ctrl-C keeps the session armed for exit.
+const EXIT_CONFIRM_WINDOW: Duration = Duration::from_secs(2);
+
 // ---------------------------------------------------------------------------
 // Interaction mode (Shift+Tab cycling)
 // ---------------------------------------------------------------------------
@@ -218,6 +221,10 @@ struct TuiApp {
     is_loading: bool,
     spinner_tick: u8,
     should_quit: bool,
+    /// When the last exit-intent keypress landed on an already-empty composer.
+    /// A second press inside `EXIT_CONFIRM_WINDOW` exits; otherwise the intent
+    /// lapses, so a stray keystroke minutes later cannot end the session.
+    exit_armed_at: Option<Instant>,
     model_name: String,
     provider_name: String,
     turn_count: u32,
@@ -390,6 +397,7 @@ impl TuiApp {
             is_loading: false,
             spinner_tick: 0,
             should_quit: false,
+            exit_armed_at: None,
             model_name,
             provider_name,
             turn_count,
@@ -847,7 +855,35 @@ fn run_turn_mcp_elicitation_modal(
 // Terminal setup
 // ---------------------------------------------------------------------------
 
+/// Leave the terminal usable if the TUI panics.
+///
+/// `restore_terminal` only runs on the normal return path, and the release
+/// profile builds with `panic = "abort"` and `strip = true`. Without this hook
+/// a panic drops the user back into a shell that is still in raw mode inside
+/// the alternate screen with a hidden cursor — no echo, no line editing, and no
+/// visible message — which needs a blind `reset` to recover. Undoing the three
+/// terminal state changes before chaining to the previous hook means the
+/// panic message actually lands on a working terminal.
+fn install_panic_restore_hook() {
+    static INSTALLED: std::sync::Once = std::sync::Once::new();
+    INSTALLED.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if super::tui_active() {
+                let mut stdout = io::stdout();
+                let _ = disable_raw_mode();
+                let _ = stdout.execute(DisableBracketedPaste);
+                let _ = stdout.execute(LeaveAlternateScreen);
+                let _ = stdout.execute(crossterm::cursor::Show);
+                super::set_tui_active(false);
+            }
+            previous(info);
+        }));
+    });
+}
+
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
+    install_panic_restore_hook();
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     stdout.execute(EnterAlternateScreen)?;
@@ -1206,7 +1242,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands · Shift+Tab to switch modes · Esc to quit.",
+            "  Type / for commands · Shift+Tab to switch modes · Esc clears, then quits.",
             Style::default().fg(ui_muted()),
         )));
     } else {
@@ -1396,6 +1432,10 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let prompt_width = prompt_char_width(prompt_char);
 
+    let exit_armed = app
+        .exit_armed_at
+        .is_some_and(|armed| armed.elapsed() <= EXIT_CONFIRM_WINDOW);
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(ui_muted()))
@@ -1411,7 +1451,11 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                "Message AGI...  Enter to send · Shift+Enter for newline · / for commands",
+                if exit_armed {
+                    "Press Ctrl-C again to exit"
+                } else {
+                    "Message AGI...  Enter to send · Shift+Enter for newline · / for commands"
+                },
                 Style::default().fg(ui_muted()),
             ),
         ]);
@@ -1928,6 +1972,15 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         .keybindings
         .matches(crate::keybindings::KeybindingAction::Quit, key)
     {
+        // Quit is bound to a single Esc. Ending the session on the first press
+        // means one stray keystroke destroys a half-written message, so a
+        // non-empty composer absorbs it: Esc clears, Esc again exits.
+        if !app.input.is_empty() {
+            app.input.clear();
+            app.cursor = 0;
+            app.exit_armed_at = None;
+            return InputAction::None;
+        }
         return InputAction::Quit;
     }
     if app
@@ -1940,8 +1993,24 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         .keybindings
         .matches(crate::keybindings::KeybindingAction::ClearInput, key)
     {
+        // Raw mode clears ISIG, so Ctrl-C arrives as a keypress and the process
+        // has no keyboard exit at idle other than Esc. Give it the conventional
+        // one: clear a composer that has something in it, and otherwise treat a
+        // repeat inside the window as the deliberate exit it almost always is.
+        if app.input.is_empty() {
+            if app
+                .exit_armed_at
+                .is_some_and(|armed| armed.elapsed() <= EXIT_CONFIRM_WINDOW)
+            {
+                app.exit_armed_at = None;
+                return InputAction::Quit;
+            }
+            app.exit_armed_at = Some(Instant::now());
+            return InputAction::None;
+        }
         app.input.clear();
         app.cursor = 0;
+        app.exit_armed_at = None;
         return InputAction::None;
     }
     if app
@@ -2767,15 +2836,28 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/diff" => {
-            let diff_output = std::process::Command::new("git")
-                .args(["diff", "--stat"])
-                .output()
-                .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                .unwrap_or_else(|_| "Failed to run git diff".to_string());
-            if diff_output.trim().is_empty() {
-                SlashResult::SystemMessage("No changes (working tree clean).".to_string())
-            } else {
-                SlashResult::SystemMessage(format!("Git diff:\n{diff_output}"))
+            // git writes "fatal: not a git repository" to stderr and exits
+            // non-zero with empty stdout, so reading stdout alone reports a
+            // clean tree for every directory that has no repository in it.
+            match std::process::Command::new("git").args(["diff", "--stat"]).output() {
+                Err(error) => SlashResult::SystemMessage(format!("Could not run git: {error}")),
+                Ok(output) if !output.status.success() => {
+                    let detail = String::from_utf8_lossy(&output.stderr);
+                    let detail = detail.trim();
+                    SlashResult::SystemMessage(if detail.is_empty() {
+                        "git diff failed.".to_string()
+                    } else {
+                        format!("git diff failed: {detail}")
+                    })
+                }
+                Ok(output) => {
+                    let diff_output = String::from_utf8_lossy(&output.stdout).to_string();
+                    if diff_output.trim().is_empty() {
+                        SlashResult::SystemMessage("No changes (working tree clean).".to_string())
+                    } else {
+                        SlashResult::SystemMessage(format!("Git diff:\n{diff_output}"))
+                    }
+                }
             }
         }
 
@@ -3036,10 +3118,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // alt-screen, which is exactly what RunLogin/RunAdvisor already do.
         "/voice" | "/v" => {
             let lang = if arg.is_empty() { "en" } else { arg };
-            if crate::voice::is_valid_language(lang) {
+            if crate::voice_languages::is_valid_language(lang) {
                 SlashResult::RunVoice(lang.to_string())
             } else {
-                let langs = crate::voice::supported_languages();
+                let langs = crate::voice_languages::supported_languages();
                 let codes: Vec<&str> = langs.iter().map(|(c, _)| *c).collect();
                 SlashResult::SystemMessage(format!(
                     "Unsupported language '{}'. Supported: {}",
@@ -3208,11 +3290,28 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/diff-review" => {
             use crate::tui::widgets::diff_review::{DiffReviewView, FileDiff};
             // Gather changed files from `git status --porcelain` synchronously.
-            let status_out = std::process::Command::new("git")
+            let status = std::process::Command::new("git")
                 .args(["status", "--porcelain"])
-                .output()
-                .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                .unwrap_or_default();
+                .output();
+            // Same trap as /diff: a non-zero git exit leaves stdout empty, which
+            // is indistinguishable from a clean tree unless the status is read.
+            let status_out = match status {
+                Ok(ref output) if output.status.success() => {
+                    String::from_utf8_lossy(&output.stdout).to_string()
+                }
+                Ok(output) => {
+                    let detail = String::from_utf8_lossy(&output.stderr);
+                    let detail = detail.trim();
+                    return SlashResult::SystemMessage(if detail.is_empty() {
+                        "git status failed.".to_string()
+                    } else {
+                        format!("git status failed: {detail}")
+                    });
+                }
+                Err(error) => {
+                    return SlashResult::SystemMessage(format!("Could not run git: {error}"));
+                }
+            };
             let changed_paths: Vec<String> = status_out
                 .lines()
                 .filter_map(|line| {
@@ -3256,7 +3355,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/focus" => {
-            SlashResult::SystemMessage("Focus mode: hide chrome and maximize composer width. Currently controlled via --no-status-bar flag at startup.".into())
+            SlashResult::SystemMessage(
+                "Focus mode is not implemented. Use /statusline to choose which status fields render.".into(),
+            )
         }
 
         "/advisor" => {
@@ -3270,20 +3371,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/team-onboarding" | "/onboarding" => {
-            let path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                .join(".claude")
-                .join("team-onboarding.md");
-            if path.exists() {
-                match std::fs::read_to_string(&path) {
-                    Ok(content) => SlashResult::SystemMessage(format!("# Team onboarding\n\n{content}")),
-                    Err(e) => SlashResult::SystemMessage(format!("Failed to read {}: {e}", path.display())),
-                }
-            } else {
-                SlashResult::SystemMessage(format!(
-                    "No team-onboarding guide found at {}. Run `agi onboarding` to generate one.",
-                    path.display()
-                ))
-            }
+            SlashResult::SystemMessage(crate::claude_parity::render_team_onboarding())
         }
 
         "/terminal-setup" | "/shell-setup" => {
@@ -3631,6 +3719,14 @@ pub async fn run(
     // pending) so it can't keep a browser-wait or connection alive after exit.
     if let Some(handle) = mcp_attach_join.take() {
         handle.abort();
+    }
+
+    // A turn cancelled with Esc/Ctrl-C reconciles history in memory but never
+    // reaches the end-of-turn persist, so quitting straight after a cancel
+    // leaves the file ending on a lone user message and `agi resume` reopens it
+    // with two user turns in a row. This is a no-op when persistence is off.
+    if let Err(error) = app.session.persist_managed_session() {
+        tracing::warn!("failed to persist the session on exit: {error:#}");
     }
 
     restore_terminal(&mut terminal)?;
@@ -5191,6 +5287,98 @@ mod tests {
         assert!(app.active_overlay.is_some());
         assert_eq!(app.input, "");
         assert_eq!(app.cursor, 0);
+    }
+
+    #[test]
+    fn esc_clears_a_written_composer_before_it_will_quit() {
+        let mut app = minimal_app();
+        app.input = "half a question".to_string();
+        app.cursor = app.input.len();
+
+        let action = handle_key_event(&mut app, make_key(crossterm::event::KeyCode::Esc));
+        assert!(
+            matches!(action, InputAction::None),
+            "the first Esc must not end a session that has unsent text in it"
+        );
+        assert_eq!(app.input, "");
+        assert_eq!(app.cursor, 0);
+
+        let action = handle_key_event(&mut app, make_key(crossterm::event::KeyCode::Esc));
+        assert!(
+            matches!(action, InputAction::Quit),
+            "Esc on an empty composer still quits"
+        );
+    }
+
+    #[test]
+    fn ctrl_c_exits_only_on_the_second_press() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = minimal_app();
+        let ctrl_c = || KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+
+        let action = handle_key_event(&mut app, ctrl_c());
+        assert!(
+            matches!(action, InputAction::None),
+            "one Ctrl-C arms the exit rather than taking it"
+        );
+        assert!(app.exit_armed_at.is_some());
+
+        let action = handle_key_event(&mut app, ctrl_c());
+        assert!(
+            matches!(action, InputAction::Quit),
+            "raw mode swallows SIGINT, so a repeated Ctrl-C is the keyboard exit"
+        );
+    }
+
+    #[test]
+    fn ctrl_c_clears_a_written_composer_and_disarms() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = minimal_app();
+        let action = handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        );
+        assert!(matches!(action, InputAction::None));
+        assert!(app.exit_armed_at.is_some());
+
+        app.input = "typed after arming".to_string();
+        app.cursor = app.input.len();
+        let action = handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        );
+        assert!(
+            matches!(action, InputAction::None),
+            "clearing text is not an exit, even while armed"
+        );
+        assert_eq!(app.input, "");
+        assert!(
+            app.exit_armed_at.is_none(),
+            "clearing must disarm, or the next Ctrl-C exits unexpectedly"
+        );
+    }
+
+    #[test]
+    fn an_expired_exit_arm_does_not_quit() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let mut app = minimal_app();
+        app.exit_armed_at =
+            Instant::now().checked_sub(EXIT_CONFIRM_WINDOW + Duration::from_secs(1));
+
+        let action = handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        );
+        assert!(
+            matches!(action, InputAction::None),
+            "a Ctrl-C from minutes ago must not combine with this one to exit"
+        );
+        assert!(app
+            .exit_armed_at
+            .is_some_and(|at| at.elapsed() < EXIT_CONFIRM_WINDOW));
     }
 
     #[test]

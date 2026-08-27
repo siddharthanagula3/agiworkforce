@@ -1682,11 +1682,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .ok_or_else(|| DeveloperSessionHostError::not_found("Running turn disappeared"))?;
         drop(running_turns);
         let process_owner = running.process_owner;
-        // `abort` only lands at an await point, and a turn that spawned
-        // subagents is parked in a synchronous thread join with none. Kill the
-        // process tree and cancel the subagents first — awaiting the aborted
-        // task before that waits for exactly the work the interrupt is meant
-        // to stop.
+        // Order matters: the turn task holds the session mutex across
+        // `agent.send`, and the two steps below need it. `abort` releases it
+        // only because `SubagentManager::wait_all` polls instead of blocking on
+        // `join` — without that await point this lock and that join wedge each
+        // other. Join last: awaiting the aborted task before the subagents are
+        // cancelled waits for exactly the work the interrupt is meant to stop.
         running.handle.abort();
         let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
             &[process_owner],
@@ -1804,10 +1805,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         for running in running_turns.values() {
             running.handle.abort();
         }
-        // Same ordering as `interrupt_turn`: a turn parked in a subagent's
-        // synchronous thread join has no await point for `abort` to land on,
-        // so the process tree and the subagent cancel flags have to come
-        // before the joins rather than after them.
+        // Same ordering as `interrupt_turn`, and the same dependency on
+        // `wait_all` yielding: the session locks below are unreachable until
+        // the aborted turns drop their guards, and one wedged session would
+        // otherwise stall shutdown for every other session in this loop.
         let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
             &process_owners,
             PROCESS_TREE_SHUTDOWN_TIMEOUT,
