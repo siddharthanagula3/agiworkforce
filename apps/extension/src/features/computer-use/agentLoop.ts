@@ -28,6 +28,12 @@ export interface AgentLoopOptions {
   resolveOwnedCredential?: () => Promise<string>;
   assertOwnership?: () => Promise<void> | void;
   onActionStateChange?: (active: boolean) => Promise<void> | void;
+  /**
+   * Called when Chrome tells us the user dismissed the debugging infobar for
+   * the driven tab. That control is the user's own stop button for browser
+   * control; the run must terminate, not re-attach and carry on.
+   */
+  onDebuggerDetachedByUser?: (tabId: number) => void;
   model?: string;
 }
 
@@ -290,7 +296,7 @@ export async function runAgentLoop(
   const maxSteps = options.maxSteps ?? 20;
 
   ensureOnDetachListener();
-  registerActiveTab(tabId);
+  registerActiveTab(tabId, options.onDebuggerDetachedByUser ?? null);
 
   let totalTokens = 0;
   const history: AgentMessage[] = [];

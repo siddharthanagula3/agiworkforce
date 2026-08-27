@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
@@ -53,7 +52,6 @@ function isCookieDomainAllowed(urlOrDomain: string): boolean {
 }
 
 describe('isCookieDomainAllowed — cookie domain blocklist', () => {
-
   it('blocks bank-related domains', () => {
     expect(isCookieDomainAllowed('https://mybank.com/login')).toBe(false);
     expect(isCookieDomainAllowed('bankofamerica.com')).toBe(false);

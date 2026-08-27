@@ -92,12 +92,28 @@ const automationState: AutomationState = {
 };
 let lastPointerTarget: Element | null = null;
 
-function initialize(): void {
+/**
+ * Whether this page's origin carries the user's approval.
+ *
+ * Read once per document and shared, because every startup call this gates
+ * wakes the service worker. Ungated, an extension declaring `http://*\/*`
+ * content scripts woke the worker twice on every page load of every site the
+ * user visits — and on a site the user never approved, both wakes could only
+ * end in the allowlist rejection.
+ */
+const originApproved: Promise<boolean> = (async () => {
+  if (!/^https?:/.test(location.protocol)) return false;
   try {
-    addAutomationIndicator();
+    const result = await chrome.storage.local.get(SITE_ALLOWLIST_STORAGE_KEY);
+    const list = result[SITE_ALLOWLIST_STORAGE_KEY];
+    return Array.isArray(list) && (list as string[]).includes(window.location.origin);
   } catch (err) {
-    logger.debug('addAutomationIndicator failed (non-fatal)', err);
+    logger.debug('Could not read the site allowlist — treating this origin as unapproved', err);
+    return false;
   }
+})();
+
+function initialize(): void {
   void setupInPagePanel(logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);
@@ -106,14 +122,17 @@ function initialize(): void {
     lastPointerTarget = target instanceof Element ? target : null;
   });
 
-  void checkConnectionStatus();
-  void notifyTabReady();
+  void originApproved.then((approved) => {
+    if (!approved) return;
+    void checkConnectionStatus();
+    void notifyTabReady();
 
-  try {
-    initWebMCP();
-  } catch (err) {
-    logger.debug('initWebMCP failed (non-fatal)', err);
-  }
+    try {
+      initWebMCP();
+    } catch (err) {
+      logger.debug('initWebMCP failed (non-fatal)', err);
+    }
+  });
 }
 
 function handleMessage(
@@ -164,7 +183,6 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
         return { success: true } as ExtensionResponse;
       }
       automationState.connectionStatus = newStatus;
-      updateIndicatorStatus();
       return { success: true } as ExtensionResponse;
     }
 
@@ -1776,73 +1794,8 @@ async function checkConnectionStatus(): Promise<void> {
     automationState.connectionStatus = statusResponse.nativeConnected
       ? 'connected'
       : 'disconnected';
-    updateIndicatorStatus();
   } catch {
     automationState.connectionStatus = 'disconnected';
-  }
-}
-
-let _indicatorShadow: ShadowRoot | null = null;
-
-function addAutomationIndicator(): void {
-  if (!document.body) return;
-
-  if (document.querySelector('[data-agi-workforce-indicator]')) return;
-
-  const host = document.createElement('div');
-  host.setAttribute('data-agi-workforce-indicator', 'true');
-  host.style.cssText =
-    'position:fixed;bottom:72px;right:20px;z-index:2147483647;pointer-events:none;';
-
-  const shadow = host.attachShadow({ mode: 'closed' });
-  _indicatorShadow = shadow;
-
-  const style = document.createElement('style');
-  style.textContent = `
-    .agi-indicator {
-      width: 40px;
-      height: 40px;
-      background: radial-gradient(circle, #21808d 0%, #da7756 100%);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 20px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(33, 128, 141, 0.3);
-      font-family: system-ui, -apple-system, sans-serif;
-      user-select: none;
-      pointer-events: all;
-      transition: background 0.3s;
-    }
-  `;
-
-  const indicator = document.createElement('div');
-  indicator.className = 'agi-indicator';
-  indicator.textContent = '⚙';
-  indicator.title = 'AGI Workforce Extension';
-
-  indicator.addEventListener('click', () => {
-    const isConnected = automationState.connectionStatus === 'connected';
-    logger.debug(
-      `Status: ${isConnected ? 'Connected' : 'Disconnected'} | URL: ${window.location.href}`,
-    );
-  });
-
-  shadow.appendChild(style);
-  shadow.appendChild(indicator);
-  document.body?.appendChild(host);
-}
-
-function updateIndicatorStatus(): void {
-  if (!_indicatorShadow) return;
-  const indicator = _indicatorShadow.querySelector<HTMLElement>('.agi-indicator');
-  if (indicator) {
-    const isConnected = automationState.connectionStatus === 'connected';
-    indicator.style.background = isConnected
-      ? 'radial-gradient(circle, #16a34a 0%, #22c55e 100%)'
-      : 'radial-gradient(circle, #dc2626 0%, #ef4444 100%)';
   }
 }
 

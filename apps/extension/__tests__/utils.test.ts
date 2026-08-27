@@ -284,7 +284,6 @@ describe('domUtils', () => {
   });
 
   describe('safeClick', () => {
-
     it('returns false and logs error when MouseEvent constructor throws (jsdom limitation)', () => {
       document.body.innerHTML = '<button id="btn">Click</button>';
       const btn = document.getElementById('btn')!;
