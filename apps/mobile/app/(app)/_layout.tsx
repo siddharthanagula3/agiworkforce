@@ -52,7 +52,7 @@ export default function AppLayout() {
         <Drawer.Screen name="projects/[id]" options={HIDDEN} />
 
         {/* Agent routes */}
-        <Drawer.Screen name="agents/[id]" options={HIDDEN} />
+        <Drawer.Screen name="tasks" options={HIDDEN} />
         <Drawer.Screen name="agents/index" options={HIDDEN} />
 
         {/* Companion */}

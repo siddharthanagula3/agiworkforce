@@ -12,7 +12,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen name="chat" />
       <Tabs.Screen name="projects" />
-      <Tabs.Screen name="agents" />
       <Tabs.Screen name="settings" />
     </Tabs>
   );

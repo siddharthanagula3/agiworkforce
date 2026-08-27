@@ -28,6 +28,7 @@ import { SCRIPTS_BLOCKED_NOTICE } from '../lib/artifact-preview-capability';
 import { useSameDocumentScriptSupport } from '../hooks/useSameDocumentScriptSupport';
 import { Button } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
+import { ChartArtifact } from './artifact-components/ChartArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
 import { ArtifactSandboxFrame } from './artifact-components/ArtifactSandboxFrame';
 import { MermaidArtifact, sanitizeSvg } from './ArtifactRenderer';
@@ -475,6 +476,7 @@ export function ArtifactPanel({
     artifact?.type === 'mermaid' ||
     artifact?.type === 'markdown' ||
     artifact?.type === 'document' ||
+    artifact?.type === 'chart' ||
     artifact?.type === 'image';
 
   const svgPreview = useMemo<{ src: string; error: string | null }>(() => {
@@ -734,6 +736,10 @@ export function ArtifactPanel({
         ) : viewMode === 'preview' && artifact.type === 'mermaid' ? (
           <div className="h-full overflow-auto p-4" data-testid="artifact-panel-mermaid-preview">
             <MermaidArtifact key={previewNonce} artifact={artifact} isDark />
+          </div>
+        ) : viewMode === 'preview' && artifact.type === 'chart' ? (
+          <div className="h-full overflow-auto p-4" data-testid="artifact-panel-chart-preview">
+            <ChartArtifact key={previewNonce} artifact={artifact} />
           </div>
         ) : viewMode === 'preview' && artifact.type === 'image' ? (
           <div className="flex h-full items-center justify-center overflow-auto bg-[var(--chat-surface-overlay)] p-4">

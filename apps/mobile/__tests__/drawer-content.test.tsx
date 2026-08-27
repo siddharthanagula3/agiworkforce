@@ -250,7 +250,7 @@ describe('DrawerContent', () => {
     fireEvent.press(getByLabelText('AGI Work. Cloud'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/agents');
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/tasks');
   });
 
   it('renders projects and recents', () => {

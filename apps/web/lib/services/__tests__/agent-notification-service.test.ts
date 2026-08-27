@@ -39,11 +39,18 @@ describe('notifyAgentRunEvent — consent', () => {
     expect(mocks.sendPush).toHaveBeenCalledOnce();
   });
 
-  it('stays silent when the account opted out', async () => {
+  it('sends to both transports when the account has expressed no preference', async () => {
+    await notifyAgentRunEvent(notice);
+
+    expect(mocks.sendPush.mock.calls[0]?.[2]).toEqual({ expo: true, web: true });
+  });
+
+  it('drops the mobile transport, not the browser, when the mobile opt-out is set', async () => {
     preferences({ [AGENT_PUSH_PREFERENCE_KEY]: false });
 
-    await expect(notifyAgentRunEvent(notice)).resolves.toEqual({ pushed: false });
-    expect(mocks.sendPush).not.toHaveBeenCalled();
+    await notifyAgentRunEvent(notice);
+
+    expect(mocks.sendPush.mock.calls[0]?.[2]).toEqual({ expo: false, web: true });
   });
 
   it('reports not pushed when the account has no registered device', async () => {
@@ -71,6 +78,7 @@ describe('notifyAgentRunEvent — payload the mobile client can route', () => {
         body: expect.any(String),
         data: expect.objectContaining({ type, priority, runId: notice.runId }),
       }),
+      expect.anything(),
     );
   });
 
@@ -98,6 +106,7 @@ describe('notifyAgentRunEvent — payload the mobile client can route', () => {
     expect(mocks.sendPush).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({ body: expect.stringContaining('mcp__github__read_file') }),
+      expect.anything(),
     );
   });
 
@@ -107,6 +116,7 @@ describe('notifyAgentRunEvent — payload the mobile client can route', () => {
     expect(mocks.sendPush).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({ body: 'Your agent is waiting for your approval.' }),
+      expect.anything(),
     );
   });
 });

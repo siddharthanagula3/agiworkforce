@@ -2,6 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { sendWebPushToUser } from './web-push-service';
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -63,7 +64,7 @@ async function invalidateTokens(tokens: readonly string[]): Promise<void> {
   }
 }
 
-export async function sendPushToUser(
+async function sendExpoPushToUser(
   userId: string,
   message: PushMessage,
 ): Promise<PushDeliveryResult> {
@@ -125,4 +126,59 @@ export async function sendPushToUser(
 
   await invalidateTokens(invalid);
   return { sent, invalidated: invalid.length };
+}
+
+const NO_DELIVERY: PushDeliveryResult = { sent: 0, invalidated: 0 };
+
+async function settle(
+  transport: string,
+  delivery: Promise<PushDeliveryResult>,
+): Promise<PushDeliveryResult> {
+  try {
+    return await delivery;
+  } catch (error) {
+    logger.warn({ error, transport }, '[push] transport threw instead of reporting');
+    return NO_DELIVERY;
+  }
+}
+
+/**
+ * Which transports this notice is allowed to use.
+ *
+ * The two are consented to separately — the mobile app registers a device and
+ * carries its own per-event preferences, a browser registers itself through
+ * the settings toggle — so a caller that has checked one opt-in has not
+ * checked the other and must say which one it checked.
+ */
+export interface PushTransports {
+  expo?: boolean;
+  web?: boolean;
+}
+
+/**
+ * Fans one notice out to every permitted transport the account has registered.
+ *
+ * The transports are independent on purpose: a user with a phone and a browser
+ * must still hear about the run when one of the two providers is down, so a
+ * failure is folded into the returned counts rather than raised. An `error` is
+ * reported only when a transport could not even look up its registrations —
+ * an unconfigured transport is an absent one, not a failed delivery.
+ */
+export async function sendPushToUser(
+  userId: string,
+  message: PushMessage,
+  transports: PushTransports = {},
+): Promise<PushDeliveryResult> {
+  const { expo: toExpo = true, web: toWeb = true } = transports;
+  const [expo, web] = await Promise.all([
+    toExpo ? settle('expo', sendExpoPushToUser(userId, message)) : NO_DELIVERY,
+    toWeb ? settle('web', sendWebPushToUser(userId, message)) : NO_DELIVERY,
+  ]);
+
+  const error = expo.error ?? web.error;
+  return {
+    sent: expo.sent + web.sent,
+    invalidated: expo.invalidated + web.invalidated,
+    ...(error ? { error } : {}),
+  };
 }

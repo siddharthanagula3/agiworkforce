@@ -29,6 +29,7 @@ use crate::config::CliConfig;
 use crate::context;
 use crate::models::{self, ContentBlock};
 use crate::models::{OllamaMode, Provider};
+use crate::platform::policy::{PolicyDecision, PolicyEngine};
 use crate::runtime::session::{ManagedSession, ManagedSessionAutoRouting};
 use crate::runtime::session_control::{
     ManagedSessionReference, ManagedSessionStore, ManagedSessionSummary,
@@ -61,6 +62,21 @@ const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // exact serialized message objects included in `thread/read`.
 const MAX_THREAD_READ_TRANSCRIPT_JSON_BYTES: usize = 3 * 1024 * 1024;
 const PROCESS_TREE_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
+/// Tools that build a second `AgentSession` this host never sees.
+///
+/// `subagent::run_subagent` constructs the child session itself and leaves
+/// `on_tool_approval` unset, so a child's approval prompt cannot reach the
+/// client: it falls back to a terminal dialog on a stdin that is this
+/// process's JSON-RPC transport. They are also the only tools that never reach
+/// `execute_tool`, which is where `.agiworkforce/policy.toml` is evaluated.
+const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
+/// Ceiling on turns running at once across every thread this host owns.
+///
+/// A subagent concurrency cap is per `SubagentManager`, and a manager belongs
+/// to one session, so the host-wide ceiling on subagent OS threads is this
+/// value times that cap. Without it the multiplier is however many threads a
+/// client chooses to drive at once.
+const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
 
 #[derive(Clone, Debug)]
 struct PreparedInput {
@@ -346,6 +362,35 @@ impl CliDeveloperSessionHost {
         agent.quiet = true;
 
         Ok(Arc::new(Mutex::new(agent)))
+    }
+
+    /// Withhold the subagent-spawning tools whenever a child session would run
+    /// outside this host's authority.
+    ///
+    /// The child never receives the per-turn approval sink, so it can only be
+    /// let through when the session already answers its own approvals; every
+    /// other mode would send the child's prompt to a stdin that carries the
+    /// JSON-RPC transport. The operator's workspace policy is applied here for
+    /// the same reason: these two tools bypass `execute_tool`, so a `deny` rule
+    /// written for them has no other place to bite.
+    fn apply_subagent_boundary_policy(&self, agent: &mut AgentSession) {
+        let policy = PolicyEngine::load_workspace(&self.workspace_root).ok();
+        let mut disallowed = agent
+            .disallowed_tools
+            .iter()
+            .filter(|spec| !SUBAGENT_SPAWN_TOOLS.contains(&spec.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        for tool in SUBAGENT_SPAWN_TOOLS {
+            let denied_by_policy = policy
+                .as_ref()
+                .is_some_and(|policy| policy.evaluate(tool, "") == PolicyDecision::Deny);
+            if denied_by_policy || !agent.skip_permissions {
+                disallowed.push(tool.to_string());
+            }
+        }
+        let allowed = agent.allowed_tools.clone().unwrap_or_default();
+        agent.apply_tool_filters(&allowed, &disallowed);
     }
 
     fn load_integrations_in_background(
@@ -1257,6 +1302,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "A turn is already running for this thread; use turn/steer or turn/interrupt",
             ));
         }
+        if running_turns.len() >= MAX_CONCURRENT_RUNNING_TURNS {
+            return Err(DeveloperSessionHostError::unavailable(format!(
+                "This app-server already has {MAX_CONCURRENT_RUNNING_TURNS} turns running; interrupt one before starting another"
+            )));
+        }
 
         {
             let mut agent = session.lock().await;
@@ -1316,6 +1366,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 snapshot.restore(&mut agent);
                 return Err(error);
             }
+            self.apply_subagent_boundary_policy(&mut agent);
         }
 
         let thread_id = params.thread_id;
@@ -1396,9 +1447,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 let delta_thread = task_thread_id.clone();
                 let delta_turn = task_turn_id.clone();
                 let delta_partial = task_partial.clone();
+                let turn_config = turn_config_pinned_to_session_route(&task_config, &agent);
                 let result = agent
                     .send(
-                        &task_config,
+                        &turn_config,
                         &input.text,
                         Box::new(move |chunk| {
                             match delta_partial.lock() {
@@ -1630,8 +1682,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .ok_or_else(|| DeveloperSessionHostError::not_found("Running turn disappeared"))?;
         drop(running_turns);
         let process_owner = running.process_owner;
+        // `abort` only lands at an await point, and a turn that spawned
+        // subagents is parked in a synchronous thread join with none. Kill the
+        // process tree and cancel the subagents first — awaiting the aborted
+        // task before that waits for exactly the work the interrupt is meant
+        // to stop.
         running.handle.abort();
-        let _ = running.handle.await;
+        let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
+            &[process_owner],
+            PROCESS_TREE_SHUTDOWN_TIMEOUT,
+        )
+        .await
+        .err();
         let (subagent_manager, memory_consolidation_tasks) =
             if let Some(session) = self.sessions.lock().await.get(&params.thread_id).cloned() {
                 let mut session = session.lock().await;
@@ -1646,12 +1708,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         if let Some(manager) = subagent_manager {
             manager.shutdown_all().await;
         }
-        let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
-            &[process_owner],
-            PROCESS_TREE_SHUTDOWN_TIMEOUT,
-        )
-        .await
-        .err();
+        let _ = running.handle.await;
         self.steering.lock().await.remove(&params.thread_id);
         self.cancel_pending_approvals(&params.turn_id).await;
 
@@ -1747,12 +1804,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         for running in running_turns.values() {
             running.handle.abort();
         }
-
-        let mut cancelled_turns = Vec::with_capacity(running_turns.len());
-        for (thread_id, running) in running_turns {
-            let _ = running.handle.await;
-            cancelled_turns.push((thread_id, running.turn_id, running.partial));
-        }
+        // Same ordering as `interrupt_turn`: a turn parked in a subagent's
+        // synchronous thread join has no await point for `abort` to land on,
+        // so the process tree and the subagent cancel flags have to come
+        // before the joins rather than after them.
+        let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
+            &process_owners,
+            PROCESS_TREE_SHUTDOWN_TIMEOUT,
+        )
+        .await
+        .err();
 
         let sessions = self
             .sessions
@@ -1779,12 +1840,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             manager.shutdown_all().await;
         }
 
-        let process_shutdown_error = crate::process_tree::terminate_owners_and_wait(
-            &process_owners,
-            PROCESS_TREE_SHUTDOWN_TIMEOUT,
-        )
-        .await
-        .err();
+        let mut cancelled_turns = Vec::with_capacity(running_turns.len());
+        for (thread_id, running) in running_turns {
+            let _ = running.handle.await;
+            cancelled_turns.push((thread_id, running.turn_id, running.partial));
+        }
 
         let mut first_persist_error = None;
         for (thread_id, _turn_id, partial) in cancelled_turns {
@@ -1819,6 +1879,21 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     fn subscribe(&self) -> broadcast::Receiver<AppServerNotification> {
         self.notifications.subscribe()
     }
+}
+
+/// Build the config a turn hands to the engine, with the process defaults
+/// replaced by this session's own route.
+///
+/// A subagent re-derives its provider from `config.default.{model,provider}`
+/// instead of from the session that spawned it, and `ToolExecOptions
+/// .privacy_mode` — the only gate on the network tools — is derived from that
+/// provider. Left at the process defaults, a Local session's child would route
+/// somewhere else and unlock tools the parent is not allowed to use.
+fn turn_config_pinned_to_session_route(base: &CliConfig, agent: &AgentSession) -> CliConfig {
+    let mut config = base.clone();
+    config.default.model = agent.model.clone();
+    config.default.provider = agent.current_routing_authority().provider;
+    config
 }
 
 async fn abort_and_join_tasks(tasks: Vec<tokio::task::JoinHandle<()>>) {
@@ -4105,5 +4180,323 @@ mod tests {
             "a concurrent BYOK session cleared the Local session's egress guard: {}",
             advisor_result.output
         );
+    }
+
+    fn tool_names(agent: &AgentSession) -> Vec<String> {
+        agent
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|definition| definition.name)
+            .collect()
+    }
+
+    fn boundary_host(workspace: &Path, store: &Path) -> CliDeveloperSessionHost {
+        CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.to_path_buf(),
+            ManagedSessionStore::new(store.to_path_buf()),
+            false,
+        )
+        .expect("host")
+    }
+
+    #[tokio::test]
+    async fn subagent_tools_are_withheld_while_a_child_cannot_reach_the_approval_client() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let mut agent = test_agent();
+
+        for mode in [
+            DeveloperAgentMode::Ask,
+            DeveloperAgentMode::Auto,
+            DeveloperAgentMode::Plan,
+        ] {
+            apply_agent_controls(&mut agent, Some(mode), None);
+            host.apply_subagent_boundary_policy(&mut agent);
+            let names = tool_names(&agent);
+            for tool in SUBAGENT_SPAWN_TOOLS {
+                assert!(
+                    !names.iter().any(|name| name == tool),
+                    "{mode:?} advertises `{tool}`, whose child session has no route back to the approval client"
+                );
+            }
+        }
+
+        // Bypass answers its own approvals, so the child never needs the sink
+        // the crossing cannot carry, and `task` comes back. (`agent` stays out
+        // of every schema list on its own: the catalog defers it.)
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
+        host.apply_subagent_boundary_policy(&mut agent);
+        let names = tool_names(&agent);
+        assert!(
+            names.iter().any(|name| name == "task"),
+            "Bypass must still expose `task` on the app-server"
+        );
+        assert!(
+            names.iter().any(|name| name == "read_file"),
+            "the boundary policy must not disturb the rest of the tool schema"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_workspace_policy_deny_withholds_the_subagent_tools_in_every_mode() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        std::fs::create_dir_all(workspace.path().join(".agiworkforce")).expect("policy dir");
+        std::fs::write(
+            workspace.path().join(".agiworkforce").join("policy.toml"),
+            "[[rules]]\ntool = \"task\"\ndecision = \"deny\"\n",
+        )
+        .expect("policy file");
+        let host = boundary_host(workspace.path(), store.path());
+        let mut agent = test_agent();
+
+        apply_agent_controls(&mut agent, Some(DeveloperAgentMode::Bypass), None);
+        host.apply_subagent_boundary_policy(&mut agent);
+        let names = tool_names(&agent);
+
+        assert!(
+            !names.iter().any(|name| name == "task"),
+            "a workspace `deny` rule for `task` was ignored at the app-server boundary"
+        );
+        assert!(
+            names.iter().any(|name| name == "run_command"),
+            "the deny rule for `task` must not withhold unrelated tools"
+        );
+    }
+
+    #[test]
+    fn a_turn_pins_its_subagents_to_the_session_route_instead_of_the_process_default() {
+        let context = context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: Vec::new(),
+            monorepo_type: None,
+            package_manager: None,
+            containerization: Vec::new(),
+            editor_configs: Vec::new(),
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let agent = AgentSession::new_checked(
+            "fixture-local-model:latest",
+            &context,
+            None,
+            Some("ollama"),
+        )
+        .expect("Local session");
+        assert_eq!(agent.privacy_mode, crate::agent::PrivacyMode::Local);
+
+        let mut base = CliConfig::default();
+        base.default.provider = crate::model_catalog::default_provider().to_string();
+        base.default.model = crate::model_catalog::default_model().to_string();
+
+        // This is the derivation `subagent::run_subagent` performs for its own
+        // session. Against the process defaults it resolves to nothing, so the
+        // child re-derives a route the parent never authorized.
+        assert!(crate::models::selection_provider_override(
+            &agent.model,
+            &base.default.model,
+            &base.default.provider,
+            None,
+        )
+        .is_none());
+
+        let pinned = turn_config_pinned_to_session_route(&base, &agent);
+        let child_provider = crate::models::selection_provider_override(
+            &agent.model,
+            &pinned.default.model,
+            &pinned.default.provider,
+            None,
+        );
+        assert_eq!(child_provider, Some("ollama"));
+
+        let child = AgentSession::new_checked(&agent.model, &context, None, child_provider)
+            .expect("child session");
+        assert_eq!(child.privacy_mode, agent.privacy_mode);
+    }
+
+    #[tokio::test]
+    async fn the_host_refuses_a_turn_once_its_running_turn_ceiling_is_reached() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let mut config = CliConfig::default();
+        config.default.provider = "agiworkforce".to_string();
+        config.default.model = "auto-premium".to_string();
+        let host = CliDeveloperSessionHost::new_with_store(
+            config,
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store_dir.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let thread = host
+            .start_thread(
+                ThreadStartParams {
+                    model: Some("auto-premium".to_string()),
+                    provider: None,
+                    cwd: Some(workspace.path().display().to_string()),
+                    title: None,
+                },
+                AppServerClientInfo {
+                    name: "agi_vscode_test".to_string(),
+                    title: "VS Code test".to_string(),
+                    version: "0.0.0".to_string(),
+                },
+            )
+            .await
+            .expect("start thread");
+
+        {
+            let mut running = host.running_turns.lock().await;
+            for index in 0..MAX_CONCURRENT_RUNNING_TURNS {
+                running.insert(
+                    format!("saturating-thread-{index}"),
+                    RunningTurn {
+                        turn_id: format!("saturating-turn-{index}"),
+                        handle: tokio::spawn(std::future::pending::<()>()),
+                        partial: Arc::new(StdMutex::new(String::new())),
+                        process_owner: crate::process_tree::ProcessTreeOwner::new(),
+                    },
+                );
+            }
+        }
+
+        let error = host
+            .start_turn(TurnStartParams {
+                thread_id: thread.id,
+                input: vec![text_input("one more concurrent subagent fan-out")],
+                model: None,
+                routing_task_type: None,
+                cwd: Some(workspace.path().display().to_string()),
+                agent_mode: None,
+                reasoning_effort: None,
+                context_files: None,
+            })
+            .await
+            .expect_err("a saturated host must refuse another turn");
+        assert_eq!(error.code(), -32010);
+
+        let mut running = host.running_turns.lock().await;
+        for (_, turn) in running.drain() {
+            turn.handle.abort();
+        }
+    }
+
+    /// A turn task shaped like one that spawned a subagent: its work runs on a
+    /// separate thread under the turn's process owner, and the task itself
+    /// parks on a synchronous join with no await point for `abort` to land on.
+    /// It leaves that join only once the process tree is gone.
+    #[cfg(unix)]
+    async fn parked_subagent_turn(
+        process_owner: crate::process_tree::ProcessTreeOwner,
+        pid_file: PathBuf,
+    ) -> tokio::task::JoinHandle<()> {
+        let script = format!(
+            "printf '%s\\n' \"$$\" > {}; sleep 30",
+            crate::sandbox::shell_quote(&pid_file.to_string_lossy())
+        );
+        let finished = Arc::new(AtomicBool::new(false));
+        let child_finished = finished.clone();
+        tokio::spawn(crate::process_tree::scope(process_owner, async move {
+            let mut command = tokio::process::Command::new("sh");
+            command.arg("-c").arg(script);
+            let _ = crate::process_tree::output(command, None, None).await;
+            child_finished.store(true, Ordering::Release);
+        }));
+
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !pid_file.exists() {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the parked turn never started its child process"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+
+        tokio::spawn(crate::process_tree::scope(process_owner, async move {
+            let waiter = std::thread::spawn(move || {
+                let deadline =
+                    std::time::Instant::now() + std::time::Duration::from_secs(PARKED_JOIN_CAP);
+                while !finished.load(Ordering::Acquire) && std::time::Instant::now() < deadline {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+            });
+            let _ = waiter.join();
+        }))
+    }
+
+    /// Backstop so a regression fails the assertion instead of wedging the
+    /// test binary on a worker thread that never unparks.
+    #[cfg(unix)]
+    const PARKED_JOIN_CAP: u64 = 20;
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn interrupt_cancels_a_turn_parked_in_a_blocking_subagent_join() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let pid_file = workspace.path().join("interrupt-parked-turn-pid");
+        let process_owner = crate::process_tree::ProcessTreeOwner::new();
+        let handle = parked_subagent_turn(process_owner, pid_file).await;
+
+        let thread_id = "thread-parked-interrupt".to_string();
+        let turn_id = "turn-parked-interrupt".to_string();
+        host.running_turns.lock().await.insert(
+            thread_id.clone(),
+            RunningTurn {
+                turn_id: turn_id.clone(),
+                handle,
+                partial: Arc::new(StdMutex::new(String::new())),
+                process_owner,
+            },
+        );
+
+        tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            host.interrupt_turn(TurnInterruptParams {
+                thread_id: thread_id.clone(),
+                turn_id,
+            }),
+        )
+        .await
+        .expect("interrupt waited for the work it was supposed to cancel")
+        .expect("interrupt the parked turn");
+
+        assert!(host.running_turns.lock().await.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn shutdown_cancels_a_turn_parked_in_a_blocking_subagent_join() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let pid_file = workspace.path().join("shutdown-parked-turn-pid");
+        let process_owner = crate::process_tree::ProcessTreeOwner::new();
+        let handle = parked_subagent_turn(process_owner, pid_file).await;
+
+        host.running_turns.lock().await.insert(
+            "thread-parked-shutdown".to_string(),
+            RunningTurn {
+                turn_id: "turn-parked-shutdown".to_string(),
+                handle,
+                partial: Arc::new(StdMutex::new(String::new())),
+                process_owner,
+            },
+        );
+
+        tokio::time::timeout(std::time::Duration::from_secs(10), host.shutdown())
+            .await
+            .expect("shutdown waited for the work it was supposed to cancel")
+            .expect("shutdown the host");
+
+        assert!(host.running_turns.lock().await.is_empty());
     }
 }

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { View, ScrollView } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, ScrollView, Pressable } from 'react-native';
+import { useRecyclingState } from '@shopify/flash-list';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -25,6 +26,7 @@ import {
   Clock,
   Camera,
   AlertCircle,
+  ChevronUp,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -36,6 +38,10 @@ export interface ExecutionStreamProps {
   taskId: string;
   onComplete?: () => void;
 }
+
+const EXECUTION_STREAM_PAGE_SIZE = 20;
+const TIMELINE_GUTTER_WIDTH = 20;
+const TIMELINE_MAX_HEIGHT = 300;
 
 function SpinningLoader({ size = 14, color }: { size?: number; color: string }) {
   const rotation = useSharedValue(0);
@@ -125,7 +131,7 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
       className="flex-row items-start gap-2.5 mb-2.5"
     >
       {/* Timeline connector + status dot */}
-      <View className="items-center" style={{ width: 20 }}>
+      <View className="items-center" style={{ width: TIMELINE_GUTTER_WIDTH }}>
         <View
           className="w-5 h-5 rounded-full items-center justify-center"
           style={{ backgroundColor: `${statusColor}18` }}
@@ -217,6 +223,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
   const agent = useAgentStore((state) => state.agents.find((a) => a.id === taskId));
   const scrollRef = useRef<ScrollView>(null);
   const prevStatusRef = useRef<string | undefined>(undefined);
+  const [visibleCount, setVisibleCount] = useRecyclingState(EXECUTION_STREAM_PAGE_SIZE, [taskId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -238,6 +245,9 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
   const elapsedLabel = formatDuration(agent?.startedAt ?? new Date().toISOString());
 
   const toolCalls = agent?.toolCalls ?? [];
+  const hiddenCount = Math.max(0, toolCalls.length - visibleCount);
+  const revealCount = Math.min(EXECUTION_STREAM_PAGE_SIZE, hiddenCount);
+  const visibleCalls = hiddenCount > 0 ? toolCalls.slice(hiddenCount) : toolCalls;
 
   if (!agent) {
     return (
@@ -293,16 +303,39 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
 
       {/* Tool call timeline */}
       {toolCalls.length > 0 ? (
-        <ScrollView
-          ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-          style={{ maxHeight: 300 }}
-          contentContainerStyle={{ paddingTop: 2 }}
-        >
-          {toolCalls.map((call, idx) => (
-            <ToolCallRow key={call.id} call={call} isLatest={idx === toolCalls.length - 1} />
-          ))}
-        </ScrollView>
+        <View>
+          {hiddenCount > 0 && (
+            <Pressable
+              onPress={() => setVisibleCount((count) => count + EXECUTION_STREAM_PAGE_SIZE)}
+              accessibilityRole="button"
+              accessibilityLabel={`Showing ${visibleCalls.length} of ${toolCalls.length} tool calls, show ${revealCount} earlier`}
+              className="flex-row items-center gap-1 mb-2"
+            >
+              <Text
+                className="text-[10px] uppercase tracking-wider flex-1"
+                style={{ color: colors.textMuted }}
+                numberOfLines={1}
+              >
+                Showing {visibleCalls.length} of {toolCalls.length} tool calls
+              </Text>
+              <Text className="text-[10px] font-medium" style={{ color: colors.agentActive }}>
+                Show {revealCount} earlier
+              </Text>
+              <ChevronUp size={10} color={colors.agentActive} />
+            </Pressable>
+          )}
+
+          <ScrollView
+            ref={scrollRef}
+            showsVerticalScrollIndicator={false}
+            style={{ maxHeight: TIMELINE_MAX_HEIGHT }}
+            contentContainerStyle={{ paddingTop: 2 }}
+          >
+            {visibleCalls.map((call, idx) => (
+              <ToolCallRow key={call.id} call={call} isLatest={idx === visibleCalls.length - 1} />
+            ))}
+          </ScrollView>
+        </View>
       ) : (
         <View className="items-center py-4">
           {agent.status === 'running' ? (

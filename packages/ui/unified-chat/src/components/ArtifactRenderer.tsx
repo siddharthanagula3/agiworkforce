@@ -26,6 +26,7 @@ import {
   toMarkdownTable,
 } from '../lib/tabular';
 import type { Artifact } from '../lib/types';
+import { ChartArtifact } from './artifact-components/ChartArtifact';
 import { EmailArtifact } from './artifact-components/EmailArtifact';
 import { PresentationArtifact } from './artifact-components/PresentationArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
@@ -440,11 +441,12 @@ export function isTabularType(type: string): boolean {
 export function ArtifactRenderer({
   artifact,
   className,
-  isDark = false,
+  isDark,
   onApplyCode,
   onExportNative,
   nativeExportFormats = ALL_NATIVE_EXPORT_FORMATS,
 }: ArtifactRendererProps) {
+  const darkMode = isDark ?? false;
   const [copied, setCopied] = useState(false);
   const isMountedRef = useRef(true);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -498,8 +500,7 @@ export function ArtifactRenderer({
   const supportsDocumentExport =
     ['code', 'presentation', 'mermaid', 'markdown', 'document'].includes(artifact.type) &&
     (nativeExportFormats.includes('pdf') || nativeExportFormats.includes('word'));
-  const supportsExcelExport =
-    isTabularType(artifact.type) && nativeExportFormats.includes('excel');
+  const supportsExcelExport = isTabularType(artifact.type) && nativeExportFormats.includes('excel');
   const supportsMarkdownExport = isTabularType(artifact.type);
 
   const handleCopyMarkdown = async () => {
@@ -689,19 +690,21 @@ export function ArtifactRenderer({
         {awaitingOutput ? (
           <div className="p-4 text-sm text-muted-foreground">Waiting for tool output...</div>
         ) : artifact.type === 'code' && artifact.language === 'mermaid' ? (
-          <MermaidArtifact artifact={artifact} isDark={isDark} />
+          <MermaidArtifact artifact={artifact} isDark={darkMode} />
         ) : artifact.type === 'code' ? (
           <CodeArtifact artifact={artifact} />
         ) : isTabularType(artifact.type) ? (
           <SpreadsheetArtifact artifact={artifact} />
+        ) : artifact.type === 'chart' ? (
+          <ChartArtifact artifact={artifact} isDark={isDark} className="border-0 rounded-none" />
         ) : artifact.type === 'mermaid' ? (
-          <MermaidArtifact artifact={artifact} isDark={isDark} />
+          <MermaidArtifact artifact={artifact} isDark={darkMode} />
         ) : artifact.type === 'svg' ||
           (typeof artifact.content === 'string' &&
             artifact.content.trimStart().startsWith('<svg')) ? (
           <SvgArtifact artifact={artifact} />
         ) : artifact.type === 'markdown' ? (
-          <MarkdownArtifact artifact={artifact} isDark={isDark} />
+          <MarkdownArtifact artifact={artifact} isDark={darkMode} />
         ) : artifact.type === 'react' || artifact.type === 'component' ? (
           <ReactPreview code={artifact.content} />
         ) : artifact.type === 'presentation' ? (
@@ -711,7 +714,7 @@ export function ArtifactRenderer({
         ) : artifact.type === 'html' ? (
           <HtmlArtifact artifact={artifact} />
         ) : artifact.type === 'document' ? (
-          <MarkdownArtifact artifact={artifact} isDark={isDark} />
+          <MarkdownArtifact artifact={artifact} isDark={darkMode} />
         ) : (
           <div className="p-4 text-sm text-muted-foreground">Unsupported artifact type</div>
         )}

@@ -115,19 +115,27 @@ function describeAgentRunEvent(notice: AgentRunNotice): { title: string; body: s
 export async function notifyAgentRunEvent(notice: AgentRunNotice): Promise<{ pushed: boolean }> {
   const none = { pushed: false };
   try {
-    if (!(await loadAgentPushPreference(notice.userId))) return none;
+    // `AGENT_PUSH_PREFERENCE_KEY` is the mobile app's own switch and governs
+    // only the mobile transport. A browser is registered from the web settings
+    // toggle and turned off from the same place, so it carries its own consent
+    // and is not silenced by a preference set on a phone.
+    const toExpo = await loadAgentPushPreference(notice.userId);
 
     const { title, body } = describeAgentRunEvent(notice);
-    const result = await sendPushToUser(notice.userId, {
-      title,
-      body,
-      data: {
-        type: MOBILE_NOTIFICATION_TYPE[notice.event],
-        priority: MOBILE_PRIORITY[notice.event],
-        route: MOBILE_ROUTE[notice.event],
-        runId: notice.runId,
+    const result = await sendPushToUser(
+      notice.userId,
+      {
+        title,
+        body,
+        data: {
+          type: MOBILE_NOTIFICATION_TYPE[notice.event],
+          priority: MOBILE_PRIORITY[notice.event],
+          route: MOBILE_ROUTE[notice.event],
+          runId: notice.runId,
+        },
       },
-    }).catch(() => null);
+      { expo: toExpo, web: true },
+    ).catch(() => null);
 
     return { pushed: (result?.sent ?? 0) > 0 };
   } catch (error) {

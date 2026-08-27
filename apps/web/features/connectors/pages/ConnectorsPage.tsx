@@ -25,7 +25,7 @@ import {
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
-import { getConnectorCapability } from '@/lib/connectors/catalog';
+import { getDeclaredConnectorActions } from '@/lib/connectors/catalog';
 import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
 import { OfficialConnectorLogo } from '../components/OfficialConnectorLogo';
 import {
@@ -41,6 +41,7 @@ import { ConnectorCapabilitiesPanel } from '../components/ConnectorCapabilitiesP
 import {
   CATEGORIES,
   CONNECTORS,
+  describeConnectorActions,
   getConnectorAvailabilityLabelFor,
   RISK_CLASS_COPY,
   type Connector,
@@ -132,14 +133,11 @@ interface ConnectorDetailPanelProps {
   onDisconnect: () => void;
 }
 
-function useConnectorTools(connectorId: string): string[] {
+function useConnectorTools(connectorId: string): readonly string[] {
   // Canonical registry only (audit CRIT-001). Non-empty exclusively for a
   // connector with a shipped adapter, so the Tools block below can no longer
   // render invented capability badges for an unbuilt integration.
-  return React.useMemo(
-    () => [...(getConnectorCapability(connectorId)?.supportedActions ?? [])],
-    [connectorId],
-  );
+  return React.useMemo(() => getDeclaredConnectorActions(connectorId), [connectorId]);
 }
 
 /**
@@ -397,24 +395,33 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
 
       <ConnectorCapabilitiesPanel connectorRef={connector.id} connected={connected} />
 
-      {/* Tools — only shown for connectors that actually work in this deployment,
-          so fabricated capability badges never render as product state. */}
-      {!connected && isAvailable && tools.length > 0 && (
+      {/* Badges only for a connector whose actions this repo declares. For every
+          other one the block says where the list comes from instead, because an
+          absent list means "nobody has asked the provider's server yet". */}
+      {!connected && isAvailable && (
         <div className="rounded-xl border border-border bg-muted/40 p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-semibold text-foreground">Tools ({tools.length})</span>
+            <span className="text-xs font-semibold text-foreground">
+              {tools.length > 0 ? `Tools (${tools.length})` : 'Tools'}
+            </span>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {tools.map((tool) => (
-              <Badge
-                key={tool}
-                variant="outline"
-                className="border-border px-2 py-0.5 text-[11px] text-muted-foreground"
-              >
-                {tool}
-              </Badge>
-            ))}
-          </div>
+          {tools.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {tools.map((tool) => (
+                <Badge
+                  key={tool}
+                  variant="outline"
+                  className="border-border px-2 py-0.5 text-[11px] text-muted-foreground"
+                >
+                  {tool}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {describeConnectorActions(connector.id)}
+            </p>
+          )}
         </div>
       )}
 

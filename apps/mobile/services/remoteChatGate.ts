@@ -29,7 +29,6 @@ export function getRemoteChatDisabledReason(
   flags: RemoteChatFeatureFlags = FEATURES,
   access: RemoteChatAccessState = {},
 ): string | null {
-  void flags.byokKeys;
   if (!flags.cloudChat) {
     return MOBILE_REMOTE_CHAT_DISABLED_MESSAGE;
   }
