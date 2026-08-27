@@ -57,7 +57,7 @@ function encodeCursor(cursor: CloudAgentRunCursor | null): string | null {
 }
 
 async function handleGet(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'llm-completion');
+  const rateLimitResponse = await withRateLimit(request, 'agent-run-follow');
   if (rateLimitResponse) return rateLimitResponse;
 
   const url = new URL(request.url);

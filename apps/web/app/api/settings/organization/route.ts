@@ -19,7 +19,7 @@ import {
   requireTeamAdminAccess,
   type TeamAdminAccess,
 } from '@/app/api/settings/team/team-admin-access';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import {
   resolvePurchasedSeatsForOwner,
   type OwnerPurchasedSeats,
@@ -33,7 +33,7 @@ import {
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
   if (!stripeClient) {
-    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), { apiVersion: STRIPE_API_VERSION });
+    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
   }
   return stripeClient;
 }

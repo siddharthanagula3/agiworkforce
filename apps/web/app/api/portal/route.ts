@@ -11,7 +11,7 @@ import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   getSubscriptionBillingOwnerPolicy,
@@ -27,9 +27,7 @@ if (!STRIPE_SECRET_KEY) {
 }
 
 const stripe = STRIPE_SECRET_KEY
-  ? new Stripe(STRIPE_SECRET_KEY, {
-      apiVersion: STRIPE_API_VERSION,
-    })
+  ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS)
   : null;
 
 function getValidatedOrigin(request: Request): string {

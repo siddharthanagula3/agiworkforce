@@ -86,7 +86,7 @@ const db = {
   transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(db)),
 };
 
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db, getStripeWebhookDb: () => db }));
 
 const PERIOD_START = Math.floor(Date.now() / 1000);
 const PERIOD_END = PERIOD_START + 30 * 24 * 60 * 60;

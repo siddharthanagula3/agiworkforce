@@ -38,7 +38,7 @@ async function resolveRunId(context: RouteContext): Promise<string> {
 }
 
 async function handleGet(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'llm-completion');
+  const rateLimitResponse = await withRateLimit(request, 'agent-run-follow');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId } = await getUserScopedDb(request);

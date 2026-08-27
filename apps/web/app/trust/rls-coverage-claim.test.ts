@@ -20,7 +20,11 @@ const API_ROOT = join(process.cwd(), 'app/api');
 const TRUST_PAGE = join(process.cwd(), 'app/trust/page.tsx');
 
 const RLS_CLIENTS = /getUserScopedDb|getRlsCapableDb/;
-const OWNER_CLIENT = /getNeonDb/;
+// `getStripeWebhookDb` is the same owner connection on a pool of its own, so it
+// belongs on the same side of the ledger. Naming it separately is a pool-sizing
+// decision, not a privilege one, and the public claim must not improve because
+// an accessor was renamed.
+const OWNER_CLIENT = /getNeonDb|getStripeWebhookDb/;
 
 function routeFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

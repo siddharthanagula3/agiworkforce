@@ -1276,6 +1276,7 @@ export default function WebChatPage() {
     // button). It is still needed here so opening a conversation does not flash
     // the empty-chat greeting before its transcript arrives.
     isLoading: isConversationLoading,
+    listError: conversationListError,
     createConversation,
     loadConversation,
     deleteConversation,
@@ -4343,9 +4344,7 @@ export default function WebChatPage() {
   );
 
   return (
-    <div
-      className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
-    >
+    <div className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
       {/* Dialogs lifted from ChatSidebar to the page level */}
       {/* Destructive-action confirm (delete conversation / delete project). One
           instance for the page; `confirmDestructive` fills in the copy. */}
@@ -4391,7 +4390,7 @@ export default function WebChatPage() {
           activeSessionId={displayedConversationId ?? undefined}
           collapsed={isNarrowViewport ? false : effectiveSidebarCollapsed}
           isLoading={isConversationSidebarPending}
-          error={conversations.length === 0 ? chatError : null}
+          error={conversationListError}
           mode="cloud"
           headerSlot={<SidebarWordmark />}
           onNewChat={() => {

@@ -358,14 +358,31 @@ export async function sweepOrganizationRetention(
   }
 }
 
+/**
+ * Least-recently-swept organization first, not lowest id first.
+ *
+ * The caller takes a fixed prefix of this list. Ordered by `organization_id`,
+ * the same head was swept every night forever and nothing past the cap was ever
+ * deleted — while the cron reported success, so the retention promise was
+ * quietly untrue for every workspace behind it. The evidence table already
+ * records every real sweep, so it is the ordering key; dry runs are excluded
+ * because a manual `?dryRun=1` must not push a workspace to the back of the
+ * queue without deleting anything.
+ */
 export async function listOrganizationsWithRetentionEnforced(
   db: DatabaseAdapter,
 ): Promise<string[]> {
   const rows = await db.query<{ organization_id: string }>(
-    `select organization_id
-       from public.organization_admin_policies
-      where retention_enforced = true
-      order by organization_id`,
+    `select policy.organization_id
+       from public.organization_admin_policies policy
+       left join lateral (
+         select max(sweep.created_at) as last_swept_at
+           from public.organization_retention_sweeps sweep
+          where sweep.organization_id = policy.organization_id
+            and sweep.dry_run = false
+       ) last_sweep on true
+      where policy.retention_enforced = true
+      order by last_sweep.last_swept_at asc nulls first, policy.organization_id`,
     [],
   );
   return rows.map((row) => row.organization_id);

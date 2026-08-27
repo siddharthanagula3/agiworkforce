@@ -152,7 +152,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
         [truncatedTitle, conversationId, userId, organizationId],
       );
 
-      scheduleConversationTitleGeneration(request, {
+      scheduleConversationTitleGeneration({
         db,
         conversationId,
         userId,

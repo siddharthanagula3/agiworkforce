@@ -93,6 +93,16 @@ interface UseConversationsReturn {
   activeConversationId: string | null;
   isLoading: boolean;
   error: string | null;
+  /**
+   * Failure of the conversation-LIST fetch specifically.
+   *
+   * `error` above is the store's single global chat error, which any stream or
+   * reaction failure also writes to. The sidebar renders its own load-failure
+   * copy from whatever it is handed, so passing the global error made an
+   * unrelated failure read as "Couldn't load conversations · Failed to update
+   * reaction" to a new user with an empty list.
+   */
+  listError: string | null;
   hasMoreConversations: boolean;
   isLoadingMoreConversations: boolean;
   fetchConversations: () => Promise<void>;
@@ -144,11 +154,13 @@ export function useConversations(): UseConversationsReturn {
   const [isFetchingConversations, setIsFetchingConversations] = useState(false);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [isOpeningConversation, setIsOpeningConversation] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const loadSequenceRef = useRef(0);
 
   const fetchConversations = useCallback(async () => {
     setIsFetchingConversations(true);
     setError(null);
+    setListError(null);
 
     try {
       if (!isLoaded || !isSignedIn) return;
@@ -170,7 +182,9 @@ export function useConversations(): UseConversationsReturn {
       nextOffsetRef.current = data.nextOffset;
       setHasMoreConversations(data.hasMore);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch conversations');
+      const message = err instanceof Error ? err.message : 'Failed to fetch conversations';
+      setError(message);
+      setListError(message);
     } finally {
       setIsFetchingConversations(false);
     }
@@ -459,11 +473,31 @@ export function useConversations(): UseConversationsReturn {
     fetchConversations();
   }, [fetchConversations, isLoaded, isSignedIn]);
 
+  // Without this the mount effect is the ONLY caller, so a list fetch that
+  // failed once stayed failed until a full page reload — the sidebar renders
+  // the message with no control to retry. Coming back to the tab or regaining
+  // the network is exactly when the fetch is worth repeating, and it costs one
+  // request only when the last attempt actually failed.
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !listError) return;
+    const retry = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      void fetchConversations();
+    };
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', retry);
+    return () => {
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', retry);
+    };
+  }, [fetchConversations, isLoaded, isSignedIn, listError]);
+
   return {
     conversations,
     activeConversationId,
     isLoading: isFetchingConversations || isCreatingConversation || isOpeningConversation,
     error,
+    listError,
     hasMoreConversations,
     isLoadingMoreConversations,
     fetchConversations,

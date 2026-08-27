@@ -16,7 +16,7 @@ import 'server-only';
  * the stage-1 truncated title simply stands.
  */
 
-import type { NextRequest } from 'next/server';
+import { after } from 'next/server';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
@@ -203,24 +203,22 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
 
 /**
  * Kick off title generation without making the message-save request wait for
- * it. Prefers the platform's `waitUntil` (keeps the background call alive
- * past the point the response is sent); falls back to a detached, self-caught
- * promise when unavailable — the same fallback `api/github/webhook/route.ts`
- * uses for its own best-effort background work.
+ * it. `after` is the framework's own way of keeping background work alive past
+ * the response — it holds the invocation open until the task settles, which a
+ * detached promise does not: the platform can suspend the instance at flush and
+ * the title is simply never written.
+ *
+ * This previously read a `waitUntil` member off the request, which NextRequest
+ * does not declare and never carries, so the fallback was the only branch ever
+ * taken.
  */
-export function scheduleConversationTitleGeneration(
-  request: NextRequest,
-  input: ScheduleTitleGenerationInput,
-): void {
-  const task = generateAndPersistTitle(input).catch((error: unknown) => {
-    logger.warn(
-      { error, conversationId: input.conversationId },
-      '[conversation-title] background task failed',
-    );
-  });
-  // `waitUntil` is a platform (Vercel) runtime extension, not part of the
-  // NextRequest type -- same cast api/github/webhook/route.ts uses for the
-  // same reason.
-  const ctx = (request as unknown as { waitUntil?: (p: Promise<unknown>) => void }).waitUntil;
-  if (ctx) ctx(task);
+export function scheduleConversationTitleGeneration(input: ScheduleTitleGenerationInput): void {
+  after(
+    generateAndPersistTitle(input).catch((error: unknown) => {
+      logger.warn(
+        { error, conversationId: input.conversationId },
+        '[conversation-title] background task failed',
+      );
+    }),
+  );
 }

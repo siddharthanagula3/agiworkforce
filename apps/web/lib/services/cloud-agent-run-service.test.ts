@@ -13,6 +13,7 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   APPROVAL_CHECKPOINT_TTL_HOURS,
   appendCloudAgentEvent,
+  appendCloudAgentEvents,
   claimCloudAgentApprovalCheckpoint,
   claimCloudAgentInputCheckpoint,
   completeCloudAgentApprovalCheckpoint,
@@ -266,7 +267,7 @@ describe('cloud agent run service', () => {
     expect(db.query).toHaveBeenNthCalledWith(
       2,
       expect.stringMatching(/update public\.cloud_agent_runs/i),
-      [RUN_ROW.id, 'user-1', 2, 'ready_for_review'],
+      [RUN_ROW.id, 'user-1', 2, 'ready_for_review', 2],
     );
     expect(run.state).toBe('ready_for_review');
   });
@@ -304,11 +305,70 @@ describe('cloud agent run service', () => {
 
     expect(db.query).toHaveBeenNthCalledWith(
       2,
-      expect.stringMatching(/when \$3 >= runs\.last_event_sequence/i),
-      [RUN_ROW.id, 'user-1', 2, 'ready_for_review'],
+      expect.stringMatching(/when \$4 is not null and \$5 >= runs\.last_event_sequence/i),
+      [RUN_ROW.id, 'user-1', 2, 'ready_for_review', 2],
     );
     expect(run.state).toBe('ready_for_review');
     expect(run.lastEventSequence).toBe(3);
+  });
+
+  it('journals a batch as one multi-row insert and one run update', async () => {
+    const deltas = [1, 2, 3].map((sequence) => ({
+      ...envelope,
+      sequence,
+      event: { type: 'text-delta' as const, delta: `chunk-${sequence}` },
+    }));
+    vi.mocked(db.query)
+      .mockResolvedValueOnce(deltas.map(({ sequence }) => ({ sequence })))
+      .mockResolvedValueOnce([{ ...RUN_ROW, last_event_sequence: 3 }]);
+
+    const run = await appendCloudAgentEvents(db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      envelopes: deltas,
+    });
+
+    expect(db.transaction).toHaveBeenCalledOnce();
+    expect(db.query).toHaveBeenCalledTimes(2);
+    expect(db.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/insert into public\.cloud_agent_events/i),
+      [
+        RUN_ROW.id,
+        'user-1',
+        ...deltas.flatMap((delta) => [delta.sequence, delta.emittedAtMs, delta.event.type, delta]),
+      ],
+    );
+    // No `task-state-changed` in the batch, so the state stays where it was and
+    // only `last_event_sequence` advances — to the batch's highest sequence.
+    expect(db.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/update public\.cloud_agent_runs/i),
+      [RUN_ROW.id, 'user-1', 3, null, 3],
+    );
+    expect(run.lastEventSequence).toBe(3);
+  });
+
+  it('ignores a state envelope in a batch whose own insert lost the sequence race', async () => {
+    const batch = [
+      { ...envelope, sequence: 1, event: { type: 'text-delta' as const, delta: 'hi' } },
+      envelope,
+    ];
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([{ sequence: 1 }])
+      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'running', last_event_sequence: 2 }]);
+
+    await appendCloudAgentEvents(db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      envelopes: batch,
+    });
+
+    expect(db.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/update public\.cloud_agent_runs/i),
+      [RUN_ROW.id, 'user-1', envelope.sequence, null, envelope.sequence],
+    );
   });
 
   it('returns only the owner run and events after the requested cursor', async () => {
@@ -741,11 +801,7 @@ describe('cloud agent run service', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ next_version: 1 }])
       .mockResolvedValueOnce([CHECKPOINT_ROW])
-      .mockResolvedValueOnce([{ sequence: 3 }])
-      .mockResolvedValueOnce([{ ...RUN_ROW, last_event_sequence: 3 }])
-      .mockResolvedValueOnce([{ sequence: 4 }])
-      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 4 }])
-      .mockResolvedValueOnce([{ sequence: 5 }])
+      .mockResolvedValueOnce(APPROVAL_EVENTS.map(({ sequence }) => ({ sequence })))
       .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 5 }])
       .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input' }]);
 
@@ -778,20 +834,23 @@ describe('cloud agent run service', () => {
       [RUN_ROW.id, 'user-1'],
     );
     expect(db.query).toHaveBeenNthCalledWith(
-      11,
+      7,
       expect.stringMatching(/state = 'awaiting_input'/i),
       [RUN_ROW.id, 'user-1'],
     );
+    // All three checkpoint events land in ONE insert, not one transaction each.
     expect(db.query).toHaveBeenNthCalledWith(
       5,
       expect.stringMatching(/insert into public\.cloud_agent_events/i),
       [
         RUN_ROW.id,
         'user-1',
-        APPROVAL_EVENTS[0]!.sequence,
-        APPROVAL_EVENTS[0]!.emittedAtMs,
-        APPROVAL_EVENTS[0]!.event.type,
-        APPROVAL_EVENTS[0],
+        ...APPROVAL_EVENTS.flatMap((event) => [
+          event.sequence,
+          event.emittedAtMs,
+          event.event.type,
+          event,
+        ]),
       ],
     );
   });
@@ -1030,11 +1089,7 @@ describe('cloud agent run service', () => {
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([{ next_version: 1 }])
         .mockResolvedValueOnce([INPUT_CHECKPOINT_ROW])
-        .mockResolvedValueOnce([{ sequence: 3 }])
-        .mockResolvedValueOnce([{ ...RUN_ROW, last_event_sequence: 3 }])
-        .mockResolvedValueOnce([{ sequence: 4 }])
-        .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 4 }])
-        .mockResolvedValueOnce([{ sequence: 5 }])
+        .mockResolvedValueOnce(INPUT_EVENTS.map(({ sequence }) => ({ sequence })))
         .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 5 }])
         .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input' }]);
 
@@ -1049,7 +1104,7 @@ describe('cloud agent run service', () => {
         expect.arrayContaining([INPUT_REQUESTS, REQUEST_STATE]),
       );
       expect(db.query).toHaveBeenNthCalledWith(
-        11,
+        7,
         expect.stringMatching(/state = 'awaiting_input'/i),
         [RUN_ROW.id, 'user-1'],
       );

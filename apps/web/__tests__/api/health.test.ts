@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { NextRequest } from 'next/server';
 
 const stripeMocks = vi.hoisted(() => ({
@@ -208,5 +210,29 @@ describe('Health Check API', () => {
       expect(data.checks.database.status).toBe('unhealthy');
       expect(data.checks.database.message).toBe('unavailable');
     });
+  });
+});
+
+describe('public health route load shape', () => {
+  // The checks make 1 + N Stripe API calls plus a database round trip and the
+  // answer is identical for every caller, so running them per request turned a
+  // public URL into a traffic-proportional load generator against the exact
+  // dependencies an incident is already straining. `no-store` on the response
+  // means no CDN can dedupe it either, so the memoisation has to be server-side.
+  it('serves from the memoised checks, not a fresh run per request', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'app/api/health/route.ts'),
+      'utf8',
+    );
+    expect(source).toContain('getCachedHealthChecks');
+    expect(source).not.toMatch(/\bawait runHealthChecks\(/);
+  });
+
+  it('declares its own duration ceiling instead of inheriting dashboard state', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'app/api/health/route.ts'),
+      'utf8',
+    );
+    expect(source).toMatch(/export const maxDuration = \d+/);
   });
 });

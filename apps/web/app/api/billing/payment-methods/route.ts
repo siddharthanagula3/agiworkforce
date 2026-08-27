@@ -10,12 +10,12 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 
 const stripe = STRIPE_SECRET_KEY
-  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
+  ? new Stripe(STRIPE_SECRET_KEY, STRIPE_CLIENT_OPTIONS)
   : null;
 
 async function handleGetPaymentMethods(request: NextRequest) {

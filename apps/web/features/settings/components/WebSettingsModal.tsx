@@ -54,6 +54,7 @@ import {
 } from '@/features/connectors/hooks/use-connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
+import type { WebSettingsContentSection } from '../lib/web-settings-sections';
 
 // Section components — real wired content, NOT route stubs
 import { GeneralSection } from '../sections/GeneralSection';
@@ -972,7 +973,11 @@ export function WebSettingsModal({
   // ── Section content map ────────────────────────────────────────────────────
   // Each value is the real wired Section component — NOT the route stub pages.
 
-  const sectionContent: Partial<Record<string, React.ReactNode>> = {
+  // Exhaustive on purpose: `WebSettingsContentSection` is what the deep-link
+  // route admits, so a key routed with no content here — or content here that
+  // the route rejects — fails to compile instead of rendering
+  // `No content for section "…"` at the user.
+  const sectionContent: Record<WebSettingsContentSection, React.ReactNode> = {
     general: <GeneralSection />,
     account: <AccountSection />,
     // Membership stays here because a plain member legitimately needs it — to

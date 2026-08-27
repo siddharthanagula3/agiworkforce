@@ -3,7 +3,7 @@ import 'server-only';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 
 export interface BillingInvoiceRecord {
   id: string;
@@ -28,7 +28,7 @@ export interface BillingInvoiceRecord {
 
 const stripeSecretKey = process.env['STRIPE_SECRET_KEY'];
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: STRIPE_API_VERSION })
+  ? new Stripe(stripeSecretKey, STRIPE_CLIENT_OPTIONS)
   : null;
 
 export async function listUserBillingInvoices(userId: string): Promise<BillingInvoiceRecord[]> {
