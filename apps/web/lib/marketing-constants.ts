@@ -18,7 +18,7 @@ export const COMING_SOON_LABEL = 'Coming soon';
 export const SURFACE_STATUS = {
   web: 'Available now',
   desktop: 'Linux assets · v1.2.0',
-  cli: 'Released · v1.7.1',
+  cli: COMING_SOON_LABEL,
   mobile: COMING_SOON_LABEL,
   vscode: COMING_SOON_LABEL,
   chrome: COMING_SOON_LABEL,
