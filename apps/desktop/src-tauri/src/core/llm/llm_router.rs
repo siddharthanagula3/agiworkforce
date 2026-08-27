@@ -16,6 +16,7 @@ use agiworkforce_model_registry::{
 
 use crate::core::llm::cache_manager::CacheManager;
 use crate::core::llm::cost_calculator::CostCalculator;
+use crate::core::llm::daily_budget;
 use crate::core::llm::prompt_tool_injection::build_tool_injection_prompt;
 use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::token_counter::TokenCounter;
@@ -98,6 +99,22 @@ impl Default for RetryConfig {
 /// that bypass `AutonomousAgent` entirely and would otherwise have no cost ceiling.
 pub(crate) const SESSION_COST_SAFETY_CAP: f64 = 50.0;
 
+/// Refuse a request once the profile's daily spend cap is reached.
+///
+/// `SESSION_COST_SAFETY_CAP` resets whenever the router is rebuilt, so on its
+/// own it bounds one run rather than one day. This is the ceiling that
+/// persists across restarts. It is a no-op until `lib.rs::setup` installs the
+/// guard, and when SQLite cannot be read the guard reports zero spend and the
+/// call proceeds — the cap bounds runaway loops, it is not an availability gate.
+fn enforce_daily_budget() -> Result<()> {
+    let Some(budget) = daily_budget::global() else {
+        return Ok(());
+    };
+    budget
+        .check_or_reject(daily_budget::LOCAL_PROFILE_BUDGET_KEY)
+        .map_err(|exceeded| anyhow!("{exceeded}"))
+}
+
 /// Record a completed streaming request. Unlike non-streaming preflight, this
 /// runs after provider delivery has begun, so the real charge is always added
 /// even when it crosses the defense-in-depth cap; the returned error then stops
@@ -109,6 +126,16 @@ fn record_completed_request_cost(
 ) -> Result<()> {
     if !request_cost.is_finite() || request_cost < 0.0 {
         return Err(anyhow!("Invalid streaming request cost"));
+    }
+
+    // Every completed request — streaming and not — funnels through here, so
+    // this is where the day's spend is credited. The session cap below resets
+    // with the router; the daily cap is what survives a restart, which is the
+    // loop an injected prompt would otherwise exploit.
+    if let Some(budget) = daily_budget::global() {
+        if let Err(e) = budget.record_actual(daily_budget::LOCAL_PROFILE_BUDGET_KEY, request_cost) {
+            tracing::warn!("Failed to record daily LLM spend: {e}");
+        }
     }
 
     let mut cumulative = cumulative_cost.lock();
@@ -1436,6 +1463,8 @@ impl LLMRouter {
                 ));
             }
         }
+
+        enforce_daily_budget()?;
 
         let provider = self
             .providers
@@ -2832,6 +2861,8 @@ impl LLMRouter {
                     SESSION_COST_SAFETY_CAP
                 ));
             }
+
+            enforce_daily_budget()?;
 
             let prompt_tokens = TokenCounter::estimate_prompt_tokens(&request.messages);
             let estimated_input_cost = self.cost_calculator.calculate(

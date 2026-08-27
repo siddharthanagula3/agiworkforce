@@ -2,20 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- App Sandbox boundary for the direct-distribution build -->
-    <key>com.apple.security.app-sandbox</key>
-    <true/>
+    <!-- App Sandbox is deliberately absent. It is a Mac App Store requirement,
+         not a Developer ID one, and a sandboxed process can never be granted
+         Accessibility, so AXIsProcessTrusted() would always return false and
+         every UI-automation surface would be dead in the signed build only.
+         The native messaging host also installs its manifest outside the
+         container. Keep the hardened runtime; do not reintroduce the sandbox. -->
 
     <!-- Network Access -->
     <key>com.apple.security.network.client</key>
     <true/>
     <key>com.apple.security.network.server</key>
-    <true/>
-
-    <!-- File Access -->
-    <key>com.apple.security.files.user-selected.read-write</key>
-    <true/>
-    <key>com.apple.security.files.downloads.read-write</key>
     <true/>
 
     <!-- Camera Access -->
@@ -42,12 +39,5 @@
          allow-dyld-environment-variables have been removed: they disable W^X
          memory protection, allow unsigned dylib injection, and enable DYLD_INSERT_LIBRARIES
          attacks respectively. None are required for normal app operation. -->
-
-    <!-- Accessibility (for UI automation - requires approval) -->
-    <key>com.apple.security.temporary-exception.apple-events</key>
-    <array>
-        <string>com.apple.systemevents</string>
-        <string>com.apple.finder</string>
-    </array>
 </dict>
 </plist>
