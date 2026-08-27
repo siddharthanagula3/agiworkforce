@@ -1,12 +1,19 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Modal, View, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
+import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
-import type { DisclosureCopy } from '@agiworkforce/compliance';
+import type { ChineseHqProviderId, DisclosureCopy } from '@agiworkforce/compliance';
 
 export const PRIVACY_POLICY_URL = 'https://agiworkforce.com/privacy';
 export const INDIA_DPDP_NOTICE_URL = 'https://agiworkforce.com/privacy/india';
+
+export const PROVIDER_TOGGLE_TEST_ID_PREFIX = 'disclosure-provider-toggle-';
+
+const PROVIDER_SECTION_TITLE = 'China-headquartered providers';
+const PROVIDER_SECTION_BODY =
+  'Each one is off until you turn it on here. Leaving them off keeps their models out of your chats — you can change this later in Settings, Privacy.';
 
 const PRIVACY_NOTICE_TITLE = 'What we collect';
 const PRIVACY_NOTICE_BODY = [
@@ -18,13 +25,27 @@ const PRIVACY_NOTICE_BODY = [
 interface Props {
   visible: boolean;
   copy: DisclosureCopy;
-  onAccept: () => void;
+  onAccept: (acceptedProviderIds: readonly ChineseHqProviderId[]) => void;
   onDecline: () => void;
 }
 
 export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: Props) {
   const colors = useThemeColors();
   const [legalExpanded, setLegalExpanded] = useState(false);
+  const [providerOptIns, setProviderOptIns] = useState<
+    Partial<Record<ChineseHqProviderId, boolean>>
+  >(() =>
+    Object.fromEntries(copy.chineseHqProviderRows.map((row) => [row.id, row.defaultEnabled])),
+  );
+
+  const acceptedProviderIds = useMemo(
+    () => copy.chineseHqProviderRows.filter((row) => providerOptIns[row.id]).map((row) => row.id),
+    [copy.chineseHqProviderRows, providerOptIns],
+  );
+
+  const handleAccept = useCallback(() => {
+    onAccept(acceptedProviderIds);
+  }, [acceptedProviderIds, onAccept]);
 
   return (
     <Modal
@@ -95,6 +116,41 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               </Pressable>
             </View>
 
+            {copy.chineseHqProviderRows.length > 0 && (
+              <View
+                testID="disclosure-provider-consent-card"
+                style={[
+                  styles.privacyCard,
+                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[styles.privacyTitle, { color: colors.textPrimary }]}
+                  accessibilityRole="header"
+                >
+                  {PROVIDER_SECTION_TITLE}
+                </Text>
+                <Text style={[styles.privacyBody, { color: colors.textSecondary }]}>
+                  {PROVIDER_SECTION_BODY}
+                </Text>
+                {copy.chineseHqProviderRows.map((row) => (
+                  <View key={row.id} style={styles.providerRow}>
+                    <Text style={[styles.providerLabel, { color: colors.textPrimary }]}>
+                      {row.displayName}
+                    </Text>
+                    <Switch
+                      testID={`${PROVIDER_TOGGLE_TEST_ID_PREFIX}${row.id}`}
+                      value={providerOptIns[row.id] === true}
+                      onValueChange={(next) =>
+                        setProviderOptIns((current) => ({ ...current, [row.id]: next }))
+                      }
+                      accessibilityLabel={`Route conversations through ${row.displayName}`}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+
             <Pressable
               onPress={() => setLegalExpanded((v) => !v)}
               accessibilityRole="button"
@@ -124,7 +180,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
           <View style={[styles.actions, { borderTopColor: colors.border }]}>
             <Pressable
               testID="disclosure-accept-btn"
-              onPress={onAccept}
+              onPress={handleAccept}
               accessibilityRole="button"
               accessibilityLabel={copy.acceptLabel}
               style={[styles.acceptBtn, { backgroundColor: colors.teal }]}
@@ -206,6 +262,17 @@ const styles = StyleSheet.create({
   privacyLink: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  providerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 40,
+  },
+  providerLabel: {
+    flex: 1,
+    fontSize: 14,
   },
   legalToggle: {
     paddingVertical: 4,

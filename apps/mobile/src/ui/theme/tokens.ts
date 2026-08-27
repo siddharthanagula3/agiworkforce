@@ -62,6 +62,10 @@ const mobileNativeColors = {
     voiceControlSurface: 'rgba(255, 255, 255, 0.10)',
     voiceTranscriptSurface: 'rgba(255, 255, 255, 0.04)',
     voiceAccentBorder: 'rgba(244, 244, 244, 0.20)',
+    voiceSheetSurface: 'rgba(12, 12, 16, 0.97)',
+    voiceOverlaySurface: 'rgba(15, 15, 15, 0.95)',
+    voiceTextMuted: 'rgba(255, 255, 255, 0.40)',
+    voiceTextSubtle: 'rgba(255, 255, 255, 0.30)',
   },
   dark: {
     terraCotta: '#f4f4f4',
@@ -126,6 +130,10 @@ const mobileNativeColors = {
     voiceControlSurface: 'rgba(255, 255, 255, 0.10)',
     voiceTranscriptSurface: 'rgba(255, 255, 255, 0.04)',
     voiceAccentBorder: 'rgba(244, 244, 244, 0.20)',
+    voiceSheetSurface: 'rgba(12, 12, 16, 0.97)',
+    voiceOverlaySurface: 'rgba(15, 15, 15, 0.95)',
+    voiceTextMuted: 'rgba(255, 255, 255, 0.40)',
+    voiceTextSubtle: 'rgba(255, 255, 255, 0.30)',
   },
 } as const;
 

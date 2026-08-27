@@ -1,4 +1,3 @@
-
 import { useEffect, useCallback } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import Animated, {
@@ -140,7 +139,7 @@ export function VoiceRecording({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(12,12,16,0.97)',
+    backgroundColor: colors.voiceSheetSurface,
     borderRadius: 20,
     paddingHorizontal: 24,
     paddingVertical: 28,
@@ -160,7 +159,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   timer: {
-    color: 'rgba(255,255,255,0.4)',
+    color: colors.voiceTextMuted,
     fontSize: 14,
     fontVariant: ['tabular-nums'],
     marginLeft: 4,
@@ -185,7 +184,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   hint: {
-    color: 'rgba(255,255,255,0.3)',
+    color: colors.voiceTextSubtle,
     fontSize: 12,
   },
   actions: {
@@ -198,7 +197,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.voiceControlSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -13,6 +13,21 @@ const listingIos = require('../store-listing/LISTING-METADATA-IOS.json') as {
   privacy_nutrition_labels: unknown;
 };
 
+const listingAndroid = require('../store-listing/LISTING-METADATA-ANDROID.json') as {
+  play_console_review_notes_file: string;
+  target_audience: { age_group: string };
+  data_safety: { data_shared: boolean; data_collected_types: Array<{ type: string }> };
+  in_app_products: { has_in_app_products: boolean; note: string };
+};
+
+const dataSafety = require('../store-listing/android/data-safety.json') as {
+  collectedData: Array<{
+    playDataType: string;
+    sharedWithThirdParties: boolean;
+    optional: boolean;
+  }>;
+};
+
 const packageJson = require('../package.json') as {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -71,7 +86,8 @@ type Listing = Record<string, unknown> & {
 };
 
 const LISTING_FILES = ['LISTING-METADATA-ANDROID.json', 'LISTING-METADATA-IOS.json'];
-const CLAIM_SURFACES = [...LISTING_FILES, 'REVIEWER-NOTES-IOS.md'];
+const REVIEWER_NOTES = ['REVIEWER-NOTES-IOS.md', 'REVIEWER-NOTES-ANDROID.md'];
+const CLAIM_SURFACES = [...LISTING_FILES, ...REVIEWER_NOTES];
 
 const REGULATION = /\bDPDP\b|\bAI Act\b|\bGDPR\b|\bCCPA\b|\bSOC ?2\b|\bISO ?27001\b|\bHIPAA\b/i;
 const COMPLIANCE_CLAIM = /\bcompl(?:y|ies|iant)\b|\bcertified\b/i;
@@ -86,6 +102,8 @@ const stringsIn = (value: unknown): string[] => {
   if (value && typeof value === 'object') return Object.values(value).flatMap(stringsIn);
   return [];
 };
+
+const collapseWhitespace = (text: string) => text.replace(/\s+/g, ' ');
 
 const surfaceText = (file: string) => {
   const raw = readFileSync(join(storeListingDir, file), 'utf8');
@@ -150,6 +168,11 @@ describe('iOS submission config', () => {
     expect(existsSync(notesPath)).toBe(true);
   });
 
+  it('points play_console_review_notes_file at a file that exists', () => {
+    const notesPath = join(repoRoot, listingAndroid.play_console_review_notes_file);
+    expect(existsSync(notesPath)).toBe(true);
+  });
+
   it('does not reference the deleted founder submission checklist', () => {
     const serialized = JSON.stringify(listingIos);
     expect(serialized).not.toContain('FOUNDER-SUBMISSION-CHECKLIST');
@@ -165,6 +188,128 @@ describe('iOS submission config', () => {
 
   it('keeps the residual Guideline 3.1.1 exposure recorded rather than silent', () => {
     expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/known-flaws\.md/);
+  });
+
+  it('discloses the native-purchase code that ships in the binary on every claim surface', () => {
+    const NATIVE_BILLING_DISCLOSURE = [
+      /\bexpo-iap\b/,
+      /\bMOBILE_IAP_ENABLED\b/,
+      /mobile-iap-catalog\.ts/,
+    ];
+    for (const file of CLAIM_SURFACES) {
+      const text = surfaceText(file);
+      for (const pattern of NATIVE_BILLING_DISCLOSURE) {
+        expect([file, String(pattern), pattern.test(text)]).toEqual([file, String(pattern), true]);
+      }
+      expect([file, /StoreKit|Play Billing/.test(text)]).toEqual([file, true]);
+    }
+  });
+
+  it('quotes each catalog-disabled reason against the branch that returns it', () => {
+    const catalog = readFileSync(
+      join(repoRoot, 'apps/web/lib/server/mobile-iap-catalog.ts'),
+      'utf8',
+    );
+    const reasons = {
+      flagOff: 'Native purchases are not enabled for this deployment.',
+      ios: 'App Store products have not been registered for this build.',
+      android: 'Google Play products have not been registered for this build.',
+    };
+    for (const reason of Object.values(reasons)) {
+      expect([reason, catalog.includes(reason)]).toEqual([reason, true]);
+    }
+
+    const platformReason = {
+      'LISTING-METADATA-IOS.json': reasons.ios,
+      'REVIEWER-NOTES-IOS.md': reasons.ios,
+      'LISTING-METADATA-ANDROID.json': reasons.android,
+      'REVIEWER-NOTES-ANDROID.md': reasons.android,
+    };
+    for (const [file, reason] of Object.entries(platformReason)) {
+      const text = collapseWhitespace(surfaceText(file));
+      expect([file, text.includes(collapseWhitespace(reasons.flagOff))]).toEqual([file, true]);
+      expect([file, text.includes(collapseWhitespace(reason))]).toEqual([file, true]);
+    }
+  });
+
+  it('discloses every external-link call site the reviewer notes claim to enumerate', () => {
+    const CALL_SITES: Array<[string, RegExp]> = [
+      ['cloud-billing invoices', /cloud-billing\/index\.tsx:497/],
+      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:335/],
+      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:155/],
+      ['paywall contact sales', /PaywallBottomSheet\.tsx:121/],
+      ['cloud-usage view on web', /cloud-usage\/index\.tsx:131/],
+      ['cloud-account change email', /cloud-account\/index\.tsx:98/],
+      ['workspace empty state', /workspace\.tsx:438/],
+      ['workspace rename or delete', /workspace\.tsx:545/],
+    ];
+    for (const file of REVIEWER_NOTES) {
+      const text = surfaceText(file);
+      for (const [label, pattern] of CALL_SITES) {
+        expect([file, label, pattern.test(text)]).toEqual([file, label, true]);
+      }
+    }
+    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/cloud-usage\/index\.tsx:131/);
+    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/workspace\.tsx:438/);
+  });
+
+  it('discloses the first-paint native-purchase loading block wherever the screen is enumerated', () => {
+    for (const file of [...CLAIM_SURFACES]) {
+      const text = surfaceText(file);
+      expect([file, /Loading native purchases/.test(text)]).toEqual([file, true]);
+      expect([file, /Workspace administration/.test(text)]).toEqual([file, true]);
+    }
+  });
+
+  it('names every plan-change row label the billing screen can render', () => {
+    const screen = readFileSync(
+      join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
+      'utf8',
+    );
+    for (const label of ['Upgrade plan', 'Adjust plan', 'Choose plan']) {
+      expect([label, screen.includes(`'${label}'`)]).toEqual([label, true]);
+      for (const file of REVIEWER_NOTES) {
+        expect([file, label, surfaceText(file).includes(label)]).toEqual([file, label, true]);
+      }
+    }
+  });
+});
+
+describe('Play data safety declarations', () => {
+  it('answers the sharing question the same way in both Android files', () => {
+    for (const entry of dataSafety.collectedData) {
+      expect([entry.playDataType, entry.sharedWithThirdParties]).toEqual([
+        entry.playDataType,
+        listingAndroid.data_safety.data_shared,
+      ]);
+    }
+  });
+
+  it('declares the same data types in both Android files', () => {
+    const inListing = listingAndroid.data_safety.data_collected_types
+      .map((entry) => entry.type)
+      .sort();
+    const inForm = dataSafety.collectedData.map((entry) => entry.playDataType).sort();
+    expect(inForm).toEqual(inListing);
+  });
+
+  it('marks collection optional in both files, because cloud sign-in is optional', () => {
+    for (const entry of dataSafety.collectedData) {
+      expect([entry.playDataType, entry.optional]).toEqual([entry.playDataType, true]);
+    }
+    for (const entry of listingAndroid.data_safety.data_collected_types as Array<{
+      type: string;
+      optional?: boolean;
+    }>) {
+      expect([entry.type, entry.optional]).toEqual([entry.type, true]);
+    }
+  });
+
+  it('targets the lowest age the shipped age gate admits', () => {
+    const ageGate = readFileSync(join(mobileRoot, 'src/features/auth/services/ageGate.ts'), 'utf8');
+    const fallback = /DEFAULT_RULE:\s*RegionAgeRule\s*=\s*\{[^}]*threshold:\s*(\d+)/.exec(ageGate);
+    expect(fallback).not.toBeNull();
+    expect(listingAndroid.target_audience.age_group).toBe(`${fallback![1]}+`);
   });
 
   it('carries no HealthKit claims in the privacy manifest', () => {

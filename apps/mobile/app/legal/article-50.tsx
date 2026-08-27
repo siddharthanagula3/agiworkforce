@@ -25,13 +25,32 @@ import {
   CHINESE_HQ_PROVIDER_IDS,
   chineseHqProviderDisplayName,
 } from '@agiworkforce/compliance';
+import { useCallback, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { readChineseHqConsent } from '@/services/providerConsent';
+
+export const PROVIDER_STATE_TEST_ID_PREFIX = 'article-50-provider-state-';
+
+const PROVIDER_SETTINGS_ROUTE = '/(app)/settings/cloud-privacy' as const;
+const PROVIDER_STATE_ON = 'On';
+const PROVIDER_STATE_OFF = 'Off';
 
 export default function Article50Screen() {
   const colors = useThemeColors();
+  const router = useRouter();
+  const [consent, setConsent] = useState(readChineseHqConsent);
+  useFocusEffect(
+    useCallback(() => {
+      setConsent(readChineseHqConsent());
+    }, []),
+  );
   const openSource = () => {
     void Linking.openURL(ARTICLE_50_SOURCE_URL);
+  };
+  const openProviderSettings = () => {
+    router.push(PROVIDER_SETTINGS_ROUTE);
   };
 
   return (
@@ -103,21 +122,44 @@ export default function Article50Screen() {
           >
             The following providers are headquartered in China. Routing your conversations through
             them is OFF by default. You can enable each one individually from the consent screen at
-            first run or later in Settings.
+            first run or later in Settings, Privacy. Their current state on this device is shown
+            below.
           </Text>
           <View className="gap-2">
             {CHINESE_HQ_PROVIDER_IDS.map((id) => (
               <View
                 key={id}
-                className="rounded-xl px-4 py-3"
+                testID={`${PROVIDER_STATE_TEST_ID_PREFIX}${id}`}
+                className="rounded-xl px-4 py-3 flex-row items-center justify-between"
                 style={{ backgroundColor: colors.accentSurface }}
               >
-                <Text style={{ color: colors.textPrimary, fontSize: 16 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 16, flex: 1 }}>
                   {chineseHqProviderDisplayName(id)}
+                </Text>
+                <Text
+                  style={{
+                    color: consent[id] ? colors.teal : colors.textMuted,
+                    fontSize: 14,
+                    fontWeight: '600',
+                  }}
+                >
+                  {consent[id] ? PROVIDER_STATE_ON : PROVIDER_STATE_OFF}
                 </Text>
               </View>
             ))}
           </View>
+          <Pressable
+            testID="article-50-manage-providers"
+            onPress={openProviderSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Open Settings, Privacy to change these providers"
+            className="rounded-2xl mt-3 py-4 items-center active:opacity-80"
+            style={{ backgroundColor: colors.accentSurface }}
+          >
+            <Text style={{ color: colors.teal, fontSize: 14, fontWeight: '600' }}>
+              Change these in Settings, Privacy
+            </Text>
+          </Pressable>
         </Section>
 
         <Pressable

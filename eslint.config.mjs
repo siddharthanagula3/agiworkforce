@@ -662,8 +662,6 @@ export default [
       'apps/mobile/src/**/*.test.tsx',
       'apps/mobile/src/**/__tests__/**',
       'apps/mobile/src/**/__mocks__/**',
-
-      'apps/mobile/src/features/voice/**',
     ],
     rules: {
       'no-restricted-syntax': [

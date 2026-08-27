@@ -19,6 +19,11 @@ import {
   type PaywallErrorState,
 } from '@/src/features/chat/utils/paywallRecovery';
 import {
+  providerConsentErrorMessage,
+  providerConsentErrorStateFromError,
+  type ProviderConsentErrorState,
+} from '@/src/features/chat/utils/providerConsentRecovery';
+import {
   cancelMobileCloudAgentRun,
   streamChat,
   streamToolApprovalResume,
@@ -143,6 +148,7 @@ interface ExecutionState {
   streamingReasoning: string;
   error: string | null;
   paywallError: PaywallErrorState | null;
+  providerConsentError: ProviderConsentErrorState | null;
   retryAttempts: Record<string, number>;
   isEditing: boolean;
 
@@ -160,6 +166,7 @@ interface ExecutionState {
   setSendError: (message: string) => void;
   clearPaywallError: () => void;
   setPaywallError: (paywallError: PaywallErrorState) => void;
+  clearProviderConsentError: () => void;
   resolveToolApproval: (
     conversationId: string,
     assistantMessageId: string,
@@ -692,6 +699,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   streamingReasoning: '',
   error: null,
   paywallError: null,
+  providerConsentError: null,
   retryAttempts: {},
   isEditing: false,
 
@@ -699,6 +707,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   setSendError: (message: string) => set({ error: message }),
   clearPaywallError: () => set({ paywallError: null }),
   setPaywallError: (paywallError) => set({ paywallError }),
+  clearProviderConsentError: () => set({ providerConsentError: null }),
 
   sendMessage: async (conversationId, content, model, attachments, options) => {
     const minorMode = isMinorMode();
@@ -729,6 +738,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       throw err;
     }
     queue.dequeue();
+    set({ providerConsentError: null });
 
     if (abortControllers.has(conversationId)) {
       const waiting = deferredSends.get(conversationId) ?? [];
@@ -1787,6 +1797,36 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 streamingContent: '',
                 streamingReasoning: '',
                 paywallError: paywallErrorStateFromApiError(error),
+              });
+              return;
+            }
+
+            const providerConsentError = providerConsentErrorStateFromError(error);
+            if (providerConsentError) {
+              const consentMessage = providerConsentErrorMessage(providerConsentError);
+              const consentMsgs = msgs.map((m) =>
+                m.id === assistantMessageId
+                  ? settleMessageAgentActivity(
+                      { ...m, content: currentContent || consentMessage, isStreaming: false },
+                      'failed',
+                      Date.now(),
+                      consentMessage,
+                    )
+                  : m,
+              );
+              currentMsgStore.setState((s) => ({
+                messages: { ...s.messages, [conversationId]: consentMsgs },
+              }));
+              if (executionMode === 'cloud') {
+                pushCloudAssistantUpdate(conversationId, consentMsgs, assistantMessageId);
+              }
+              set({
+                ...streamingFlags(),
+                streamingContent: '',
+                streamingReasoning: '',
+                error: consentMessage,
+                paywallError: null,
+                providerConsentError,
               });
               return;
             }

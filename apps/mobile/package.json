@@ -32,7 +32,7 @@
     "release:android:beta:submit": "bash scripts/release/submit-android.sh --profile beta",
     "release:android:prod": "bash scripts/release/android-prod.sh",
     "release:android:prod:submit": "bash scripts/release/submit-android.sh --profile production",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
     "lint": "eslint . --ext .ts,.tsx --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "test": "pnpm run test:node && jest --runInBand --forceExit",
     "test:node": "node --test scripts/ios-device-dev.test.mjs scripts/release/*.test.mjs",
@@ -42,6 +42,8 @@
     "screenshots": "tsx scripts/screenshots/pipeline.ts all",
     "screenshots:ios": "tsx scripts/screenshots/pipeline.ts ios",
     "screenshots:android": "tsx scripts/screenshots/pipeline.ts android",
+    "screenshots:required": "tsx scripts/screenshots/pipeline.ts iphone-17-pro-max && tsx scripts/screenshots/pipeline.ts ipad-pro-13 && tsx scripts/screenshots/pipeline.ts phone",
+    "screenshots:verify": "tsx scripts/screenshots/pipeline.ts iphone-17-pro-max --verify",
     "screenshots:composite": "tsx scripts/screenshots/compositor.ts --recompose-all"
   },
   "dependencies": {

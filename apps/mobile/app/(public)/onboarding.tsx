@@ -18,9 +18,11 @@ import {
   composeFirstRunDisclosure,
   isDisclosureSatisfied,
   recordDisclosureAcceptance,
+  type ChineseHqProviderId,
   type DisclosureCopy,
 } from '@agiworkforce/compliance';
 import { mmkvDisclosureLedger } from '@/services/complianceLedger';
+import { applyChineseHqProviderConsent } from '@/services/providerConsent';
 import {
   detectCapabilities,
   getDefaultModel,
@@ -250,18 +252,22 @@ export default function OnboardingScreen() {
     setDisclosureVisible(true);
   }, []);
 
-  const handleDisclosureAccept = useCallback(async () => {
-    if (!disclosureCopy) return;
-    setDisclosureVisible(false);
-    await recordDisclosureAcceptance({
-      ledger: mmkvDisclosureLedger,
-      copy: disclosureCopy,
-      surface: 'mobile',
-      managedCloudAccepted: true,
-      chineseHqProvidersAccepted: [],
-    });
-    setScreen('device-tier');
-  }, [disclosureCopy]);
+  const handleDisclosureAccept = useCallback(
+    async (acceptedProviderIds: readonly ChineseHqProviderId[]) => {
+      if (!disclosureCopy) return;
+      setDisclosureVisible(false);
+      await recordDisclosureAcceptance({
+        ledger: mmkvDisclosureLedger,
+        copy: disclosureCopy,
+        surface: 'mobile',
+        managedCloudAccepted: true,
+        chineseHqProvidersAccepted: acceptedProviderIds,
+      });
+      applyChineseHqProviderConsent(acceptedProviderIds);
+      setScreen('device-tier');
+    },
+    [disclosureCopy],
+  );
 
   const handleDisclosureDecline = useCallback(() => {
     setDisclosureVisible(false);

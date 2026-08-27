@@ -1,14 +1,35 @@
 #!/usr/bin/env tsx
 /* eslint-disable no-console -- CLI tool; stdout/log is the intended output channel */
 
-import { execSync, execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, existsSync, readdirSync, statSync, copyFileSync, rmSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, basename } from 'node:path';
 
-type Platform = 'ios' | 'android';
+import {
+  DEVICES,
+  SCREENSHOTS,
+  VERIFY_SCREENSHOT,
+  type DeviceClass,
+  type Platform,
+  type Screenshot,
+} from './catalog';
+
+const {
+  DETOX_IOS_UDID_ENV,
+  DETOX_ANDROID_AVD_ENV,
+  APP_BUNDLE_ID,
+  IOS_APP_BINARY,
+  ANDROID_APP_BINARY,
+} = require('../../detox.env') as typeof import('../../detox.env');
 
 const SIMCTL_RUNTIME_PREFIX = 'com.apple.CoreSimulator.SimRuntime.';
-const DETOX_IOS_UDID_ENV = 'DETOX_IOS_UDID';
+const ANDROID_BOOT_TIMEOUT_MS = 300_000;
+const ANDROID_BOOT_POLL_MS = 3_000;
+const ANDROID_BOOT_PROPERTY = 'sys.boot_completed';
+const VERIFY_DIR = 'verify';
+
+export type { DeviceClass, Platform };
+export { DEVICES, SCREENSHOTS };
 
 export interface SimctlDevice {
   udid: string;
@@ -27,111 +48,40 @@ export interface SimctlDeviceListing {
   devices: Record<string, SimctlDevice[]>;
 }
 
-export interface DeviceClass {
-  platform: Platform;
-  className: string;
-  simulator: string;
-  width: number;
-  height: number;
-}
-
-export const DEVICES: DeviceClass[] = [
-  {
-    platform: 'ios',
-    className: 'iphone-17-pro',
-    simulator: 'iPhone 17 Pro',
-    width: 1206,
-    height: 2622,
-  },
-  {
-    platform: 'ios',
-    className: 'iphone-17-pro-max',
-    simulator: 'iPhone 17 Pro Max',
-    width: 1320,
-    height: 2868,
-  },
-  {
-    platform: 'ios',
-    className: 'ipad-pro-13',
-    simulator: 'iPad Pro 13-inch (M5)',
-    width: 2048,
-    height: 2732,
-  },
-  {
-    platform: 'ios',
-    className: 'ipad-pro-11',
-    simulator: 'iPad Pro 11-inch (M5)',
-    width: 1668,
-    height: 2388,
-  },
-  {
-    platform: 'android',
-    className: 'phone',
-    simulator: 'pixel_8_api_34',
-    width: 1080,
-    height: 2400,
-  },
-];
-
-interface Screenshot {
-  id: string;
-  name: string;
-  spec: string;
-  heading: string;
-  subhead: string;
-}
-
-const SCREENSHOTS: Screenshot[] = [
-  {
-    id: '01',
-    name: 'local-demo-chat',
-    spec: '01-multi-provider.spec.ts',
-    heading: 'Local chat first',
-    subhead: 'Start privately, then sign in to unlock cloud.',
-  },
-  {
-    id: '02',
-    name: 'onboarding-local',
-    spec: '02-onboarding-local.spec.ts',
-    heading: 'Start without an account',
-    subhead: 'Local setup, device fit, and model readiness.',
-  },
-  {
-    id: '03',
-    name: 'first-message',
-    spec: '03-chat-first-message.spec.ts',
-    heading: 'Chat with local models',
-    subhead: 'Composer, model badge, and performance feedback.',
-  },
-  {
-    id: '04',
-    name: 'cloud-sign-in',
-    spec: '04-mode-toggle-to-sign-in.spec.ts',
-    heading: 'Sign in for Cloud',
-    subhead: 'Cloud chat opens to any signed-in account.',
-  },
-  {
-    id: '06',
-    name: 'voice-recording',
-    spec: '06-voice-record-and-send.spec.ts',
-    heading: 'Hold to speak',
-    subhead: 'Voice input feeds the same local chat workflow.',
-  },
-];
+type Variant = 'debug' | 'release';
 
 const ROOT = resolve(__dirname, '..', '..');
 const OUT = join(ROOT, 'store-listing', 'screenshots', 'captures');
+const COMPOSITOR = join(ROOT, 'scripts', 'screenshots', 'compositor.ts');
+const SPEC_DIR = join(ROOT, 'scripts', 'screenshots', 'specs');
 
 function ensureDir(p: string) {
   if (!existsSync(p)) mkdirSync(p, { recursive: true });
 }
 
 function ensureDetoxInstalled() {
-  try {
-    execSync('pnpm exec detox --version', { stdio: 'ignore' });
-  } catch {
+  const probe = spawnSync('pnpm', ['exec', 'detox', '--version'], { cwd: ROOT, stdio: 'ignore' });
+  if (probe.status !== 0) {
     throw new Error('Detox is not installed. Add detox@20 before running screenshot automation.');
   }
+}
+
+function appBinaryPath(platform: Platform, variant: Variant): string {
+  const relative = platform === 'ios' ? IOS_APP_BINARY[variant] : ANDROID_APP_BINARY[variant];
+  return join(ROOT, relative);
+}
+
+function ensureAppBuilt(platform: Platform, variant: Variant): string {
+  const binary = appBinaryPath(platform, variant);
+  if (existsSync(binary)) return binary;
+  const buildCommand =
+    platform === 'ios'
+      ? `pnpm exec detox build --configuration ios.sim.${variant}`
+      : `pnpm exec detox build --configuration android.emu.${variant}`;
+  throw new Error(
+    `No ${platform} ${variant} binary at ${binary}.\n` +
+      `Build it first (from apps/mobile): ${buildCommand}`,
+  );
 }
 
 function runtimeVersion(runtimeIdentifier: string): number[] {
@@ -176,6 +126,14 @@ export function resolveSimulatorUdid(listing: SimctlDeviceListing, simulatorName
   return matches[0].udid;
 }
 
+export function resolveAndroidAvd(available: readonly string[], avdName: string): string {
+  if (available.includes(avdName)) return avdName;
+  throw new Error(
+    `No Android AVD named "${avdName}". Available: ${available.length ? available.join(', ') : '(none)'}. ` +
+      'Create it in Android Studio > Device Manager, then re-run.',
+  );
+}
+
 function listAvailableSimulators(): SimctlDeviceListing {
   let raw: string;
   try {
@@ -198,6 +156,37 @@ function listAvailableSimulators(): SimctlDeviceListing {
   }
 }
 
+function listAvailableAvds(): string[] {
+  let raw: string;
+  try {
+    raw = execFileSync('emulator', ['-list-avds'], { encoding: 'utf8' });
+  } catch (error) {
+    throw new Error(
+      `Could not list Android AVDs via "emulator -list-avds": ${(error as Error).message}. ` +
+        'Install the Android SDK emulator and put it on PATH, then re-run.',
+    );
+  }
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.includes(' '));
+}
+
+function waitForAndroidBoot() {
+  execFileSync('adb', ['wait-for-device'], { stdio: 'inherit' });
+  const deadline = Date.now() + ANDROID_BOOT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const probe = spawnSync('adb', ['shell', 'getprop', ANDROID_BOOT_PROPERTY], {
+      encoding: 'utf8',
+    });
+    if (probe.stdout?.trim() === '1') return;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ANDROID_BOOT_POLL_MS);
+  }
+  throw new Error(
+    `Emulator did not report ${ANDROID_BOOT_PROPERTY}=1 within ${ANDROID_BOOT_TIMEOUT_MS / 1000}s.`,
+  );
+}
+
 function bootSimulator(device: DeviceClass): string | null {
   if (device.platform === 'ios') {
     const udid = resolveSimulatorUdid(listAvailableSimulators(), device.simulator);
@@ -206,34 +195,65 @@ function bootSimulator(device: DeviceClass): string | null {
     execFileSync('xcrun', ['simctl', 'bootstatus', udid, '-b'], { stdio: 'inherit' });
     return udid;
   }
-  execSync(`emulator -avd ${device.simulator} -no-snapshot -no-audio &`, { stdio: 'ignore' });
-  execSync('adb wait-for-device');
+  const avd = resolveAndroidAvd(listAvailableAvds(), device.simulator);
+  console.log(`  emulator avd ${avd}`);
+  const emulator = spawn('emulator', ['-avd', avd, '-no-snapshot', '-no-audio'], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  emulator.unref();
+  waitForAndroidBoot();
   return null;
 }
 
-function resolveSpec(s: Screenshot, d: DeviceClass): string {
-  void d;
-  return s.spec;
+function installApp(device: DeviceClass, udid: string | null, variant: Variant) {
+  const binary = ensureAppBuilt(device.platform, variant);
+  console.log(`  installing ${basename(binary)}`);
+  if (device.platform === 'ios') {
+    execFileSync('xcrun', ['simctl', 'install', udid ?? 'booted', binary], { stdio: 'inherit' });
+    return;
+  }
+  execFileSync('adb', ['install', '-r', '-t', binary], { stdio: 'inherit' });
 }
 
-function findScreenshotPng(dir: string): string | null {
+function findCapturedPng(dir: string, expectedFileName: string): string | null {
   if (!existsSync(dir)) return null;
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    const stat = statSync(full);
-    if (stat.isDirectory()) {
-      const found = findScreenshotPng(full);
-      if (found) return found;
-    } else if (entry.endsWith('.png')) {
-      return full;
+  const fallbacks: string[] = [];
+  const walk = (current: string): string | null => {
+    for (const entry of readdirSync(current).sort()) {
+      const full = join(current, entry);
+      if (statSync(full).isDirectory()) {
+        const found = walk(full);
+        if (found) return found;
+      } else if (entry === expectedFileName) {
+        return full;
+      } else if (entry.endsWith('.png')) {
+        fallbacks.push(full);
+      }
     }
+    return null;
+  };
+  const exact = walk(dir);
+  if (exact) return exact;
+  if (fallbacks.length > 0) {
+    throw new Error(
+      `Detox produced no "${expectedFileName}" under ${dir}. It wrote: ${fallbacks
+        .map((f) => basename(f))
+        .join(', ')}. The spec's device.takeScreenshot() name must equal "<id>-<name>".`,
+    );
   }
   return null;
 }
 
-function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string, udid: string | null) {
-  const detoxConfig = device.platform === 'ios' ? 'ios.sim.debug' : 'android.emu.debug';
-  const specPath = join(ROOT, 'scripts', 'screenshots', 'specs', spec);
+function runDetoxSpec(
+  device: DeviceClass,
+  shot: Screenshot,
+  rawOut: string,
+  udid: string | null,
+  variant: Variant,
+) {
+  const detoxConfig = device.platform === 'ios' ? `ios.sim.${variant}` : `android.emu.${variant}`;
+  const specPath = join(SPEC_DIR, shot.spec);
   if (!existsSync(specPath)) {
     throw new Error(`Screenshot spec not found: ${specPath}`);
   }
@@ -243,7 +263,7 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string, udid: s
     'screenshots',
     '.detox-artifacts',
     device.className,
-    spec.replace(/\.spec\.ts$/, ''),
+    shot.spec.replace(/\.spec\.ts$/, ''),
   );
   rmSync(artifactsDir, { recursive: true, force: true });
   mkdirSync(artifactsDir, { recursive: true });
@@ -251,6 +271,7 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string, udid: s
     ...process.env,
     DETOX_CAPTURE_PATH: rawOut,
     ...(udid ? { [DETOX_IOS_UDID_ENV]: udid } : {}),
+    ...(device.platform === 'android' ? { [DETOX_ANDROID_AVD_ENV]: device.simulator } : {}),
   };
   execFileSync(
     'pnpm',
@@ -263,11 +284,11 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string, udid: s
       '--reuse',
       '--artifacts-location',
       `${artifactsDir}/`,
-      `apps/mobile/scripts/screenshots/specs/${spec}`,
+      specPath,
     ],
-    { stdio: 'inherit', env },
+    { stdio: 'inherit', env, cwd: ROOT },
   );
-  const producedPng = findScreenshotPng(artifactsDir);
+  const producedPng = findCapturedPng(artifactsDir, basename(rawOut));
   if (!producedPng) {
     throw new Error(`Detox did not produce a screenshot under ${artifactsDir}`);
   }
@@ -276,43 +297,86 @@ function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string, udid: s
   rmSync(artifactsDir, { recursive: true, force: true });
 }
 
-function composite(rawPath: string, finalPath: string, s: Screenshot, device: DeviceClass) {
-  execSync(
-    `pnpm tsx apps/mobile/scripts/screenshots/compositor.ts ` +
-      `--raw "${rawPath}" --out "${finalPath}" ` +
-      `--heading "${s.heading}" --subhead "${s.subhead}" ` +
-      `--width ${device.width} --height ${device.height}`,
-    { stdio: 'inherit' },
+function composite(rawPath: string, finalPath: string, shot: Screenshot, device: DeviceClass) {
+  execFileSync(
+    'pnpm',
+    [
+      'exec',
+      'tsx',
+      COMPOSITOR,
+      '--raw',
+      rawPath,
+      '--out',
+      finalPath,
+      '--heading',
+      shot.heading,
+      '--subhead',
+      shot.subhead,
+      '--width',
+      String(device.width),
+      '--height',
+      String(device.height),
+    ],
+    { stdio: 'inherit', cwd: ROOT },
   );
 }
 
-function captureForDevice(device: DeviceClass) {
-  console.log(`\n=== ${device.platform}/${device.className} ===`);
+function captureForDevice(
+  device: DeviceClass,
+  shots: Screenshot[],
+  variant: Variant,
+  verifyOnly: boolean,
+) {
+  console.log(
+    `\n=== ${device.platform}/${device.className} (${device.width}x${device.height}) ===`,
+  );
+  console.log(`  ${device.storeSlot ?? 'not an uploadable store size — internal use only'}`);
+  ensureAppBuilt(device.platform, variant);
   const udid = bootSimulator(device);
+  installApp(device, udid, variant);
   const classDir = join(OUT, device.platform, device.className);
-  ensureDir(join(classDir, 'raw'));
-  ensureDir(join(classDir, 'final'));
+  ensureDir(join(classDir, verifyOnly ? VERIFY_DIR : 'raw'));
+  if (!verifyOnly) ensureDir(join(classDir, 'final'));
 
-  for (const s of SCREENSHOTS) {
-    const rawOut = join(classDir, 'raw', `${s.id}-${s.name}.png`);
-    const finalOut = join(classDir, 'final', `${s.id}-${s.name}.png`);
-    const spec = resolveSpec(s, device);
-    console.log(`  -> ${s.id}-${s.name} (${spec})`);
-    runDetoxSpec(device, spec, rawOut, udid);
-    composite(rawOut, finalOut, s, device);
+  for (const shot of shots) {
+    const fileName = `${shot.id}-${shot.name}.png`;
+    const rawOut = join(classDir, verifyOnly ? VERIFY_DIR : 'raw', fileName);
+    console.log(`  -> ${fileName} (${shot.spec})`);
+    runDetoxSpec(device, shot, rawOut, udid, variant);
+    if (verifyOnly) {
+      console.log(`  capture wiring OK: ${rawOut}`);
+      continue;
+    }
+    composite(rawOut, join(classDir, 'final', fileName), shot, device);
   }
 }
 
 function main() {
-  const target = process.argv[2] ?? 'all';
+  const argv = process.argv.slice(2);
+  const flags = new Set(argv.filter((a) => a.startsWith('--')));
+  const target = argv.find((a) => !a.startsWith('--')) ?? 'all';
+  const variant: Variant = flags.has('--debug') ? 'debug' : 'release';
+  const verifyOnly = flags.has('--verify');
+  const shots = verifyOnly ? [VERIFY_SCREENSHOT] : SCREENSHOTS;
+
   ensureDetoxInstalled();
   ensureDir(OUT);
   const filter = (d: DeviceClass) =>
     target === 'all' || target === d.platform || target === d.className;
-  for (const d of DEVICES.filter(filter)) {
-    captureForDevice(d);
+  const selected = DEVICES.filter(filter);
+  if (selected.length === 0) {
+    throw new Error(
+      `No device class matches "${target}". Known: all, ios, android, ${DEVICES.map((d) => d.className).join(', ')}`,
+    );
+  }
+  console.log(`configuration: ${variant}${verifyOnly ? ' (capture-wiring check only)' : ''}`);
+  for (const d of selected) {
+    captureForDevice(d, shots, variant, verifyOnly);
   }
   console.log('\nDone. Frames in apps/mobile/store-listing/screenshots/captures/');
+  for (const d of selected.filter((device) => device.storeSlot)) {
+    console.log(`  ${d.storeSlot}: ${d.platform}/${d.className}/final/`);
+  }
 }
 
 if (require.main === module) {
