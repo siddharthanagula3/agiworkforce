@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": "tsconfig.scripts.tsbuildinfo",
+    "typeRoots": ["./node_modules/@types"]
+  },
+  "include": ["scripts/screenshots/**/*.ts", "detox.env.js"],
+  "exclude": ["node_modules"]
+}

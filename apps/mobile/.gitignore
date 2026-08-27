@@ -8,8 +8,8 @@ expo-env.d.ts
 # Local Expo state — machine-specific, do not commit
 .expo/
 
-# Expo prebuild artifacts — canonical iOS dir is at repo-root /ios, not apps/mobile/ios
-# Running `expo prebuild` regenerates these locally; do not commit (would diverge from top-level)
+# Expo prebuild artifacts. `expo prebuild` regenerates both locally and Detox
+# builds into ios/build and android/app/build; neither is committed.
 /android/
 /ios/
 

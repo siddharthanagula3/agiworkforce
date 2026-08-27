@@ -1,4 +1,3 @@
-
 import { Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -11,6 +10,7 @@ import {
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { ExternalLink, FileText, EyeOff } from 'lucide-react-native';
 import { View } from 'react-native';
+import { ChineseHqProviderConsentGroup } from './ChineseHqProviderConsentGroup';
 
 const PRIVACY_ITEMS = [
   {
@@ -66,6 +66,8 @@ export default function CloudPrivacyScreen() {
           </View>
         ))}
       </View>
+
+      <ChineseHqProviderConsentGroup />
 
       {/* External links */}
       <SettingsGroup>

@@ -99,13 +99,22 @@ Why nothing can be bought:
 - The server (`apps/web/lib/server/mobile-iap-catalog.ts`) reports the catalog as
   enabled only when the deployment sets `MOBILE_IAP_ENABLED` **and** maps at
   least one logical product key to a real store ID in
-  `MOBILE_IAP_APPLE_PRODUCT_IDS_JSON`. The gate fails closed: if either is
-  missing or off, the catalog comes back disabled with the reason "Native
-  purchases are not enabled for this deployment." Our checked-in environment
-  templates ship `MOBILE_IAP_ENABLED=false` and define no product-ID map, and we
-  confirm the flag is off on the deployment this build points at before every
-  submission. (That last part is a deployment setting, not something the source
-  tree can prove on its own — we state it as our own commitment.)
+  `MOBILE_IAP_APPLE_PRODUCT_IDS_JSON`. The gate fails closed, in two separate
+  branches with two different reasons — we quote them exactly because you may see
+  either one:
+  - flag off or unset → `enabled: false`, reason **"Native purchases are not
+    enabled for this deployment."** (`mobile-iap-catalog.ts:63-69`). This is the
+    branch our deployments are in.
+  - flag on but no product key mapped → still `enabled: false`, reason **"App
+    Store products have not been registered for this build."**
+    (`mobile-iap-catalog.ts:77-86`).
+
+  Our checked-in environment templates ship `MOBILE_IAP_ENABLED=false` and define
+  no product-ID map, and we confirm the flag is off on the deployment this build
+  points at before every submission. (That last part is a deployment setting, not
+  something the source tree can prove on its own — we state it as our own
+  commitment.)
+
 - With that answer, Settings → Billing renders one inert notice — **"Native
   purchases are not configured"** — in place of the entire native-purchase area:
   no product row, no store price, no Restore Purchases action and no store
@@ -120,17 +129,38 @@ Why nothing can be bought:
   through StoreKit while the gate is off.
 
 You can confirm all of this from the app: sign in and open Settings → Billing.
-The screen is not empty — so that you are not surprised by what is on it, here is
-everything it renders: your current plan card, one plan-change row (covered under
-"What the plan-change row does today" below), an invoices row, the **"Native
-purchases are not configured"** notice, and — only for an account on an active plan billed
-through our website — two static explanatory blocks, "How plan upgrades are
-charged" and "Usage top-ups". Those two blocks are text with no button; the
-top-up one describes how a store purchase _would_ be priced if native purchases
-were ever enabled, and it is the only place on the screen the word "price"
-appears. What the screen never renders while the gate is off: a product row, a
-store price, a Restore Purchases action, or a store sheet. Every row on the
-screen that leaves the app is listed under "External links" below.
+The screen is not empty. So that nothing on it surprises you, here is every block
+it can render, in render order, from
+`src/features/settings/cloud-billing/index.tsx`:
+
+| Block                                                                                | Line       | When it renders                                                                                                               |
+| ------------------------------------------------------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| "Your plan, usage, and payment details" header                                       | `:214`     | Always.                                                                                                                       |
+| Current plan card                                                                    | `:229`     | Always. Free tier also gets a five-item feature list.                                                                         |
+| Plan-change row — **Upgrade plan** / **Adjust plan** / **Choose plan**               | `:323-329` | Only when the account has a higher self-serve tier and is not on a workspace plan. See "What the plan-change row does today". |
+| **Workspace administration** — opens `agiworkforce.com/settings/team`                | `:331-338` | Only on a Team or Enterprise plan (`canUseBillingPlanCapability(tier, 'team_admin')`). External link A2 below.               |
+| "Manage billing"                                                                     | `:339-346` | Never in 1.2.0 — `FEATURES.billing` is `false`.                                                                               |
+| "How plan upgrades are charged" and "Usage top-ups"                                  | `:350-363` | Only for an active plan billed through our website. Text, no button.                                                          |
+| **"Loading native purchases / Connecting securely to the App Store or Google Play"** | `:365-370` | **On first paint, for every signed-in Cloud account** — see below.                                                            |
+| "Native purchases are not configured"                                                | `:479-489` | After that first paint, in this build, always.                                                                                |
+| Invoices row — "View invoices" or the inert "No invoices yet"                        | `:492-501` | Always. Actionable only on a paid plan. External link A1 below.                                                              |
+
+Two of those need spelling out because they are easy to misread:
+
+- **The loading block is the first thing you will see.** `nativeIap.loading` is
+  `catalogLoading || (enabled && !storeConnected && error === null)`
+  (`src/features/billing/useMobileIap.ts:313`) and `catalogLoading` starts `true`
+  (`:63`), so a signed-in Cloud account always renders "Loading native purchases"
+  for the moment before the catalog answer arrives. It is a spinner-equivalent
+  placeholder, not an offer: no product, no price, no action. It is replaced by
+  "Native purchases are not configured" as soon as the gated catalog responds.
+- **The "Usage top-ups" block is the only place the word "price" appears** on the
+  screen, and it describes how a store purchase _would_ be priced if native
+  purchases were ever enabled.
+
+What the screen never renders while the gate is off: a product row, a store
+price, a Restore Purchases action, or a store sheet. Every row on the screen that
+leaves the app is listed under "External links" below.
 
 When the founder registers App Store Connect products and turns the flag on, we
 will update this file, `LISTING-METADATA-IOS.json`, and the App Store Connect
@@ -157,46 +187,100 @@ are not all the same, and one of them does open a browser:
   twice, manage it there before changing plans in this app."_ (The named source
   is "your organization" for an employer-provisioned plan.) Its buttons are
   **OK** and **Manage on web**; **Manage on web** opens
-  `agiworkforce.com/settings/billing` in the browser. That is external link (4)
-  below, and it is why we say four links and not three. If the subscription's
-  origin is not attributable, the alert carries only **OK** and opens nothing.
+  `agiworkforce.com/settings/billing` in the browser — link A3 below. If the
+  subscription's origin is not attributable, the alert carries only **OK** and
+  opens nothing.
 - **Native store purchase available** — unreachable in this build, because it
   requires the catalog gate above to be on.
 
+**If you review on a paid account we pre-provisioned for you, this is the branch
+you land in.** `getSubscriptionOwnerGuard` returns `blocked: true` for any
+entitled account (`src/features/billing/subscriptionSource.ts:60-66`), and
+`handleUpgrade` checks `blocked` before it ever opens the sheet
+(`src/features/settings/cloud-billing/index.tsx:173-177`). The row on such an
+account is labelled **Adjust plan**, not "Upgrade plan", and the first thing it
+does is show that alert. If the account we provision is on a Team or Enterprise
+plan, there is no plan-change row at all — `isWorkspacePlan` suppresses it
+(`:323`) and **Workspace administration** takes its place.
+
 Also on that screen:
 
-- `FEATURES.billing` is `false` (`lib/v1FeatureFlags.ts`), so the "Manage
-  billing" row and the Stripe billing-portal link do not render at all.
+- `FEATURES.billing` is `false` (`lib/v1FeatureFlags.ts:8`), so the "Manage
+  billing" row and the Stripe billing-portal link (`handleManageBilling`,
+  `:185-196`) do not render and cannot be reached at all.
 - On the free tier the Billing screen opens nothing externally: the invoices row
   is inert ("No invoices yet") and the workspace row is not rendered.
 
-Four external links do exist and we want to disclose them plainly rather than
-have you find them:
+## External links
 
-1. **View invoices** (Settings → Billing) opens `agiworkforce.com/billing` in
-   the browser. This row is rendered **only** for accounts that already hold a
-   paid plan; on the free tier it is an inert "No invoices yet" row with no
-   action. It is an account-management/billing-history destination for a
-   subscription that was purchased on the web.
-2. **Contact Sales** appears only when the gated feature requires the Team or
-   Enterprise plan. It opens `agiworkforce.com/contact-sales`, a lead form. No
-   price or checkout is presented in the app.
-3. **Workspace administration** appears only for Team plan administrators and
-   opens `agiworkforce.com/settings/team`.
-4. **Manage on web**, the second button on the "Subscription managed elsewhere"
-   alert described above, opens `agiworkforce.com/settings/billing`. It is
-   reachable only from the plan-change row, and only for an account that already
-   holds a subscription bought outside this app. It is the account-management
-   page for that existing subscription; it presents no price, no plan list and no
-   checkout, and its purpose is to stop the user being billed twice.
+We would rather over-disclose than have you find a link we did not mention, so
+this section is the complete enumeration, re-derived from the source on
+2026-08-27 by grepping every `openExternalUrl`, `openInAppBrowser`,
+`WebBrowser.openBrowserAsync` and `Linking.openURL` call site under `apps/mobile`
+outside `__tests__`.
+
+All of them are filtered by one allowlist. `openExternalUrl`
+(`lib/safeOpenURL.ts:31-43`) refuses anything that is not `https:` on
+`agiworkforce.com`, a subdomain of it, `stripe.com`, `apps.apple.com` or
+`play.google.com`, so no screen in the app can be made to open an arbitrary
+destination.
+
+**A. Billing and account-management destinations (the Guideline 3.1.1 surface).**
+Eight reachable call sites, seven distinct URLs. None presents a price, a plan
+list, or a checkout.
+
+| #   | Control                                               | Opens                                   | Call site                                                 | Who sees it                                                                                                                                                                                                                             |
+| --- | ----------------------------------------------------- | --------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`              | `src/features/settings/cloud-billing/index.tsx:497`       | Paid plans only; the free tier gets an inert "No invoices yet" row with no handler.                                                                                                                                                     |
+| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`        | `src/features/settings/cloud-billing/index.tsx:335`       | Team and Enterprise plans only.                                                                                                                                                                                                         |
+| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`     | `src/features/settings/cloud-billing/index.tsx:155`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For an Apple- or Google-recorded subscription the same button opens that store's own subscription page instead.                         |
+| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…` | `src/features/chat/components/PaywallBottomSheet.tsx:121` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`).                 |
+| A5  | **View on web** (Settings → Usage)                    | `agiworkforce.com/settings/usage`       | `src/features/settings/cloud-usage/index.tsx:131`         | Any signed-in Cloud account. It sits under the copy "Detailed usage ledger and credit tracking will be available once AGI Cloud billing is active" — that is a roadmap note, not an offer; the destination shows usage, not a purchase. |
+| A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`     | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                                        |
+| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`        | `app/(app)/settings/workspace.tsx:438`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                                          |
+| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`        | `app/(app)/settings/workspace.tsx:545`                    | Any account that has a workspace loaded.                                                                                                                                                                                                |
+
+**B. Non-billing destinations.** Four reachable `openExternalUrl` call sites:
+the privacy policy and terms from Settings → Privacy
+(`src/features/settings/cloud-privacy/index.tsx:75` and `:80`), password recovery
+from the sign-in screen (`agiworkforce.com/auth/reset-password`,
+`app/(auth)/reset-password.tsx:23`), and the desktop-pairing safety page
+(`agiworkforce.com/security`,
+`src/features/companion/components/PairingRiskDisclosure.tsx:23`).
+
+**C. Opened in an in-app Safari sheet, not the browser.** Settings → About opens
+`agiworkforce.com`, `/privacy` and `/terms` through `openInAppBrowser`
+(`app/(app)/about.tsx:224`, `:230`, `:236`), which presents
+`SFSafariViewController` as a page sheet rather than leaving the app. Assistant
+output that contains a link opens the same way and is never auto-followed
+(`src/features/chat/components/MessageContentRenderer.tsx:19-32`); a
+non-`http(s)` scheme requires a confirmation alert first.
+
+**D. Not `agiworkforce.com`.** Settings → Connectors → GitHub opens the GitHub
+App install flow at `${API_URL}/api/github/install/start`
+(`src/features/settings/cloud-connectors/index.tsx:690`, URL from
+`services/connectors.ts:7-9`) — an OAuth start on our own host. The legal screen
+`app/legal/article-50.tsx:34` opens the EU AI Act text at
+`artificialintelligenceact.eu`. A map result card opens Maps
+(`src/features/chat/components/InteractiveCardBlock.tsx:292`). `mailto:` to
+`support@agiworkforce.com`, and the iOS/Android device-settings intents, are the
+only other `Linking.openURL` targets in the app.
+
+**E. Present in source but not reachable in this iOS binary.** Two, named so you
+do not read them as omissions: the Stripe billing-portal link
+(`src/features/settings/cloud-billing/index.tsx:189`), dead behind
+`FEATURES.billing === false`; and **Add a member** in Settings → Workspace
+(`app/(app)/settings/workspace.tsx:134`), which takes the browser branch only
+when `Platform.OS !== 'ios'` (`:132`) — on iOS the same tap opens a native
+`Alert.prompt` instead.
 
 Users who subscribed to AGI on the web see their plan's features unlocked when
 they sign in here (multiplatform service). The app never advertises, prices, or
 initiates that purchase.
 
-If any of the four links above is a problem under Guideline 3.1.1, we will
-remove or gate them immediately — please tell us which one rather than rejecting
-the build, and we will turn it around the same day.
+If any link in section A is a problem under Guideline 3.1.1, we will remove or
+gate it immediately — please tell us which one rather than rejecting the build,
+and we will turn it around the same day.
 
 ## Account deletion
 
@@ -224,9 +308,27 @@ Source: `src/features/settings/cloud-account/index.tsx`.
 
 ## AI content disclosure
 
-Model output is labelled as AI-generated in the UI, and first run shows a
-disclosure screen naming the on-device model and any third-party cloud
-providers, addressing the EU AI Act Article 50 transparency duty.
+Three separate mechanisms, described exactly so you can check each one:
+
+- **First run** shows a blocking disclosure before the app is usable, stating
+  "You are interacting with an AI system." and naming the on-device model and any
+  third-party cloud provider. It carries the EU AI Act Article 50(1) and 50(2)
+  text verbatim (`packages/contracts/compliance/src/article50-disclosure.ts`) and
+  acceptance is recorded against a hash of the exact copy shown.
+- **Every completed assistant turn** carries a provenance footer naming its
+  source — "AGI Cloud", or "Local Mode · <model name>" for on-device inference —
+  and the turn's role label is the model name or "AGI", never a person's name
+  (`src/features/chat/components/ProvenanceFooter.tsx:10-14`, rendered from
+  `src/features/chat/components/MessageBubble.tsx:894-895`). The footer names the
+  system rather than printing the literal words "AI-generated".
+- **The Data Controls export** (Settings → Data Controls → Export Local Data)
+  wraps each conversation transcript in a machine-readable Article 50(2)
+  provenance marker naming the provider and model
+  (`services/dsarExport.ts:49-72`). The ordinary conversation export and share
+  in the chat screen — PDF, plain text, Markdown, copy-to-clipboard
+  (`services/fileCreation.ts`) — carries role labels only and does **not** add
+  that marker. We state the difference here rather than let the first-run copy be
+  read wider than the code supports.
 
 We do not claim full compliance with India's DPDP Act 2023. The itemised notice
 is published at https://agiworkforce.com/privacy/india, consent withdrawal and

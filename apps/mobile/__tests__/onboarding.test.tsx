@@ -88,9 +88,14 @@ const mockComposeFirstRunDisclosure = jest.fn().mockReturnValue({
   declineLabel: 'Not now',
   thirdPartyAiProviders: [],
   offersManagedCloud: false,
+  chineseHqProviderRows: [
+    { id: 'deepseek', displayName: 'DeepSeek (China)', defaultEnabled: false },
+    { id: 'moonshot', displayName: 'Moonshot AI / Kimi (China)', defaultEnabled: false },
+  ],
 });
 const mockRecordDisclosureAcceptance = jest.fn().mockResolvedValue(undefined);
 jest.mock('@agiworkforce/compliance', () => ({
+  ...jest.requireActual('@agiworkforce/compliance'),
   composeFirstRunDisclosure: (...args: unknown[]) => mockComposeFirstRunDisclosure(...args),
   isDisclosureSatisfied: (...args: unknown[]) => mockIsDisclosureSatisfied(...args),
   recordDisclosureAcceptance: (...args: unknown[]) => mockRecordDisclosureAcceptance(...args),
@@ -290,6 +295,42 @@ describe('Onboarding', () => {
         await Promise.resolve();
       });
       expect(mockRecordDisclosureAcceptance).toHaveBeenCalled();
+    });
+
+    it('records an empty China-HQ opt-in list when the toggles are left alone', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const { getByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(getByTestId('disclosure-accept-btn'));
+        await Promise.resolve();
+      });
+      expect(mockRecordDisclosureAcceptance).toHaveBeenCalledWith(
+        expect.objectContaining({ chineseHqProvidersAccepted: [] }),
+      );
+    });
+
+    it('threads a toggled-on China-HQ provider into the disclosure record', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const { getByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent(getByTestId('disclosure-provider-toggle-deepseek'), 'valueChange', true);
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(getByTestId('disclosure-accept-btn'));
+        await Promise.resolve();
+      });
+      expect(mockRecordDisclosureAcceptance).toHaveBeenCalledWith(
+        expect.objectContaining({ chineseHqProvidersAccepted: ['deepseek'] }),
+      );
     });
 
     it('states what AGI Cloud collects before the user can accept', async () => {

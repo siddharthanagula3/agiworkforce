@@ -285,6 +285,7 @@ export function SettingsSwitchRow({
   onValueChange,
   disabled,
   isLast,
+  testID,
 }: {
   label: string;
   description?: string;
@@ -294,6 +295,7 @@ export function SettingsSwitchRow({
   onValueChange: (value: boolean) => void;
   disabled?: boolean;
   isLast?: boolean;
+  testID?: string;
 }) {
   const colors = useThemeColors();
   const resolvedIconColor = iconColor ?? colors.textSecondary;
@@ -343,6 +345,7 @@ export function SettingsSwitchRow({
       </View>
       <View style={{ justifyContent: 'center', alignItems: 'center' }}>
         <Switch
+          testID={testID}
           value={value}
           onValueChange={onValueChange}
           disabled={disabled}

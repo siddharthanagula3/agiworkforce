@@ -55,6 +55,7 @@ import { useWaitlistStore } from '@/src/features/waitlist';
 import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
 import { TemporaryChatBanner } from '@/src/features/chat/components/TemporaryChatBanner';
 import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
+import { ProviderConsentBanner } from '@/src/features/chat/components/ProviderConsentBanner';
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
 import {
   summarizeSendPreview,
@@ -170,6 +171,8 @@ export default function ChatScreen() {
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const sendError = useChatStore((s) => s.error);
+  const providerConsentError = useChatStore((s) => s.providerConsentError);
+  const clearProviderConsentError = useChatStore((s) => s.clearProviderConsentError);
   const clearError = useChatStore((s) => s.clearError);
   const setSendError = useChatStore((s) => s.setSendError);
   const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
@@ -906,6 +909,19 @@ export default function ChatScreen() {
     [conversationMessages, handleSend, id, retryMessage, stopSpeaking],
   );
 
+  const handleProviderConsentEnabled = useCallback(() => {
+    clearProviderConsentError();
+    clearError();
+    if (!id) return;
+    const lastUser = [...conversationMessages].reverse().find((m) => m.role === 'user');
+    if (lastUser) retryMessage(id, lastUser.id);
+  }, [clearError, clearProviderConsentError, conversationMessages, id, retryMessage]);
+
+  const handleProviderConsentDismiss = useCallback(() => {
+    clearProviderConsentError();
+    clearError();
+  }, [clearError, clearProviderConsentError]);
+
   const handleEditMessage = useCallback(
     (messageId: string, newContent: string) => {
       if (!id) return;
@@ -1241,9 +1257,16 @@ export default function ChatScreen() {
         {/* Model-tier warning — shown when Opus-class model selected on free tier */}
         <ModelTierWarningBanner />
 
+        {/* Named-provider consent gate — specific, with an inline opt-in */}
+        <ProviderConsentBanner
+          state={providerConsentError}
+          onEnabled={handleProviderConsentEnabled}
+          onDismiss={handleProviderConsentDismiss}
+        />
+
         {/* Send/stream failure banner with retry — surfaces store.error (was silent) */}
         <SendErrorBanner
-          error={sendError}
+          error={providerConsentError ? null : sendError}
           onRetry={
             conversationMessages.some((m) => m.role === 'user')
               ? () => {

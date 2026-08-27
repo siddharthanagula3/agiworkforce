@@ -6,6 +6,7 @@ export {
   paywallActivityErrorFromApiError,
   paywallErrorStateFromApiError,
 } from '@/src/features/chat/utils/paywallRecovery';
+export type { ProviderConsentErrorState } from '@/src/features/chat/utils/providerConsentRecovery';
 
 export { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
 export { useChatExecutionStore } from './chat/chatExecutionStore';
@@ -19,6 +20,7 @@ import type { ForkConversationOptions } from './chat/chatMessageStore';
 import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 import type { SendMessageOptions } from './chat/chatExecutionStore';
 import type { PaywallErrorState } from '@/src/features/chat/utils/paywallRecovery';
+import type { ProviderConsentErrorState } from '@/src/features/chat/utils/providerConsentRecovery';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { CloudWorkMode } from '@agiworkforce/types';
 
@@ -34,6 +36,7 @@ export interface CombinedChatState {
   streamingReasoning: string;
   error: string | null;
   paywallError: PaywallErrorState | null;
+  providerConsentError: ProviderConsentErrorState | null;
   retryAttempts: Record<string, number>;
   isEditing: boolean;
   searchQuery: string;
@@ -144,6 +147,7 @@ export interface CombinedChatState {
   setSendError: (message: string) => void;
   clearPaywallError: () => void;
   setPaywallError: (paywallError: PaywallErrorState) => void;
+  clearProviderConsentError: () => void;
   searchConversations: (query: string) => void;
   setChatMode: (mode: ChatMode) => void;
   setWorkMode: (mode: CloudWorkMode) => void;
@@ -198,6 +202,7 @@ function buildCombinedState(
     streamingReasoning: exec.streamingReasoning,
     error: exec.error,
     paywallError: exec.paywallError,
+    providerConsentError: exec.providerConsentError,
     retryAttempts: exec.retryAttempts,
     isEditing: exec.isEditing,
     sendMessage: exec.sendMessage,
@@ -209,6 +214,7 @@ function buildCombinedState(
     setSendError: exec.setSendError,
     clearPaywallError: exec.clearPaywallError,
     setPaywallError: exec.setPaywallError,
+    clearProviderConsentError: exec.clearProviderConsentError,
     searchQuery: view.searchQuery,
     searchResults: view.searchResults,
     isSearching: view.isSearching,

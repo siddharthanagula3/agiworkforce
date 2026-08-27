@@ -87,7 +87,7 @@ export function RecordingOverlay({
       exiting={FadeOut.duration(150)}
       className="px-4 pt-3"
       style={{
-        backgroundColor: 'rgba(15, 15, 15, 0.95)',
+        backgroundColor: colors.voiceOverlaySurface,
         borderRadius: 20,
         paddingBottom: 16,
       }}
