@@ -114,6 +114,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     failed: swept.filter((r) => r.outcome === 'failed').length,
   };
 
+  // The list rotates by staleness, so a standing deferral means the per-run cap
+  // is below the enforced-workspace count and some workspace's retention window
+  // is longer in practice than the policy it published.
+  if (deferred > 0) {
+    logger.warn(summary, 'Retention sweep deferred organizations · raise the per-run cap');
+  }
   logger.info(summary, 'Workspace retention sweep completed');
   return NextResponse.json(summary);
 }

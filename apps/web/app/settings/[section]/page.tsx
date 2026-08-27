@@ -6,6 +6,8 @@ import { notFound } from 'next/navigation';
 import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
 import { isSettingsNavKey } from '@agiworkforce/ui';
 
+import { isWebSettingsSection } from '@/features/settings/lib/web-settings-sections';
+
 /**
  * Deep link for any settings section that has no hand-written route.
  *
@@ -18,13 +20,16 @@ import { isSettingsNavKey } from '@agiworkforce/ui';
  * An UNKNOWN key still 404s rather than silently opening General: a link to a
  * section that does not exist is a broken link, and quietly landing somewhere
  * else hides that from whoever shared it.
+ *
+ * So does a key that is real but DESKTOP-ONLY. `isSettingsNavKey` admits all
+ * thirty nav keys; the web modal renders twenty-one of them, and the other nine
+ * — appearance, models-keys, agents, connections, cowork, agi-code,
+ * agi-in-chrome, extensions, developer — used to open a modal showing the
+ * literal string `No content for section "developer".` A 404 is what a link to
+ * a section this surface does not have actually means.
  */
-export default function SettingsSectionPage({
-  params,
-}: {
-  params: Promise<{ section: string }>;
-}) {
+export default function SettingsSectionPage({ params }: { params: Promise<{ section: string }> }) {
   const { section } = use(params);
-  if (!isSettingsNavKey(section)) notFound();
+  if (!isSettingsNavKey(section) || !isWebSettingsSection(section)) notFound();
   return <SettingsModalRedirect section={section} />;
 }

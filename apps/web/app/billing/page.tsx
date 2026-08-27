@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import Stripe from 'stripe';
 import { isSelfServePaidPlanTier } from '@agiworkforce/types';
 import { requireEnv } from '@shared/utils/env';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { isStripeCheckoutSessionId } from '@/lib/server/stripe-resource-ids';
 import { UpgradeWelcome } from './UpgradeWelcome';
 
@@ -12,7 +12,7 @@ let stripeClient: Stripe | null = null;
 
 function getStripe(): Stripe {
   if (!stripeClient) {
-    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), { apiVersion: STRIPE_API_VERSION });
+    stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), STRIPE_CLIENT_OPTIONS);
   }
   return stripeClient;
 }

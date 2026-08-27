@@ -1,9 +1,19 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { runHealthChecks } from '@/lib/server/health-check';
+import { getCachedHealthChecks } from '@/lib/server/health-check';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
+
+export const runtime = 'nodejs';
+
+/**
+ * Stated here rather than left to dashboard-only state. This route is public
+ * and is the thing an external uptime monitor will poll; a cache miss still
+ * reaches Stripe and Neon, and an unbounded probe is the worst possible shape
+ * for a health endpoint during the incident it exists to reveal.
+ */
+export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'health-check');
@@ -11,7 +21,14 @@ export async function GET(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  const healthCheck = await runHealthChecks();
+  // Cached, not `runHealthChecks`: this route is public, uncacheable at the
+  // edge (`no-store` below), and the checks make 1 + N Stripe API calls plus a
+  // database round trip. Run per request they turn a public URL into a
+  // traffic-proportional load generator against the exact dependencies an
+  // incident is already straining. `timestamp` in the payload is the moment the
+  // checks actually ran, so a cached answer never claims to be fresher than it
+  // is, and an external monitor still sees the real result.
+  const healthCheck = await getCachedHealthChecks();
 
   const statusCode = healthCheck.status === 'unhealthy' ? 503 : 200;
 

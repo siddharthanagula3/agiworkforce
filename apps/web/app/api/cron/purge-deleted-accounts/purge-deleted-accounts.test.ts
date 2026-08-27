@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -46,18 +45,23 @@ interface Fixture {
 
 function primeDb(fixture: Fixture = {}): void {
   mocks.query.mockImplementation(async (sql: string) => {
+    // The due query is checked first because it now joins `erasure_tombstones`
+    // to rotate the queue, so it matches both fragments.
+    if (sql.includes('deletion_scheduled_for <= now()')) {
+      if (sql.includes('erasure_tombstones') && fixture.tombstones === undefined) {
+        throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
+      }
+      if (fixture.due === undefined) {
+        throw Object.assign(new Error('column does not exist'), { code: '42703' });
+      }
+      return fixture.due;
+    }
     if (sql.includes('erasure_tombstones')) {
       if (fixture.tombstones === undefined) {
         const missing = Object.assign(new Error('relation does not exist'), { code: '42P01' });
         throw missing;
       }
       return fixture.tombstones;
-    }
-    if (sql.includes('deletion_scheduled_for <= now()')) {
-      if (fixture.due === undefined) {
-        throw Object.assign(new Error('column does not exist'), { code: '42703' });
-      }
-      return fixture.due;
     }
     if (sql.includes('avatar_url')) return [{ avatar_url: null }];
     return [];
@@ -158,7 +162,7 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
 
     const sweep = mocks.query.mock.calls
       .map((call) => String(call[0]))
-      .find((sql) => sql.includes('public.erasure_tombstones'))!;
+      .find((sql) => sql.includes('from public.erasure_tombstones as tombstone'))!;
     expect(sweep).toContain('profile.id is not null');
     expect(sweep).toContain('tombstone.erased_at is null');
     expect(sweep).toContain("tombstone.last_swept_at < now() - interval '30 days'");
@@ -166,6 +170,31 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
     expect(sweep).toContain('(tombstone.erased_at is null) desc');
     expect(sweep).toContain('tombstone.last_swept_at asc\n');
     expect(sweep).toContain('limit 5');
+  });
+
+  it('rotates the due queue by last attempt so a poison account cannot hold the head', async () => {
+    primeDb({ due: [], tombstones: [] });
+
+    await GET(cronRequest());
+
+    const dueQuery = mocks.query.mock.calls
+      .map((call) => String(call[0]))
+      .find((sql) => sql.includes('deletion_scheduled_for <= now()'))!;
+    expect(dueQuery).toContain('left join public.erasure_tombstones as tombstone');
+    expect(dueQuery).toContain('order by tombstone.last_swept_at asc nulls first');
+  });
+
+  it('falls back to schedule order when the tombstone table is absent', async () => {
+    primeDb({ due: [{ id: 'user-1' }] });
+
+    const response = await GET(cronRequest());
+
+    expect(await response.json()).toMatchObject({ purged: 1, failed: 0 });
+    const dueQueries = mocks.query.mock.calls
+      .map((call) => String(call[0]))
+      .filter((sql) => sql.includes('deletion_scheduled_for <= now()'));
+    expect(dueQueries).toHaveLength(2);
+    expect(dueQueries[1]).not.toContain('erasure_tombstones');
   });
 
   it('sweeps the suppression list even where the deletion columns were never provisioned', async () => {

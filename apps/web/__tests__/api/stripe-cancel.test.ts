@@ -43,6 +43,9 @@ const mockDb = {
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => mockDb),
+  // The webhook runs on a pool of its own so a slow Stripe call cannot starve
+  // the clients every signed-in request needs for `assertAccountActive`.
+  getStripeWebhookDb: vi.fn(() => mockDb),
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({

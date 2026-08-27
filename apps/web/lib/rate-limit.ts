@@ -25,7 +25,20 @@ if (isProductionRuntime && !hasRedisEnv) {
   );
 }
 
-const redis = hasRedisEnv ? new Redis({ url: redisRestUrl!, token: redisRestToken! }) : null;
+/**
+ * One retry, not the client's default of five.
+ *
+ * `checkRateLimit` races every limiter call against an 800 ms budget and then
+ * decides fail-open/fail-closed. The SDK default retries five times over about
+ * 4.3 seconds, so during a Redis outage every call outlived the race and burned
+ * four more requests against a dead endpoint after the decision was already
+ * made.
+ */
+const REDIS_RETRIES = 1;
+
+const redis = hasRedisEnv
+  ? new Redis({ url: redisRestUrl!, token: redisRestToken!, retry: { retries: REDIS_RETRIES } })
+  : null;
 
 export const REDIS_OUTAGE_POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
 
@@ -234,6 +247,16 @@ export const rateLimitConfigs = {
     limit: 30,
     window: '1 m', // 30 LLM requests per minute per user
     failClosed: true, // Security-sensitive: LLM API calls are expensive
+  },
+  'agent-run-follow': {
+    // Reading a run's journal costs one indexed read, not a provider call, and
+    // it MUST NOT share the chat-send bucket: run-following polls once a second
+    // against a 30/min send limit, so one dropped stream refused the reconnect
+    // AND the user's next message. Sized above the client's poll rate with room
+    // for a second surface following the same run.
+    limit: 120,
+    window: '1 m',
+    failClosed: false, // Refusing a reconnect strands a run that is still going
   },
   'image-generation': {
     limit: 10,
@@ -654,7 +677,15 @@ function getRateLimiter(key: RateLimitKey, limit: number): Ratelimit {
   const rateLimiter = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(limit, config.window),
-    analytics: true,
+    // Off deliberately. Nothing in this repo reads the analytics tables, and
+    // ingest is a second Redis command per check that ZINCRBYs one member per
+    // distinct identifier per hour bucket with no EXPIRE and no trim anywhere
+    // in the path — the `retention` option is read-side only. That is unbounded
+    // storage growth keyed on cumulative distinct users (crawler IPs included
+    // for the IP-bucketed keys), and when the database reaches its size ceiling
+    // the writes fail, `checkRateLimit` throws, and the fail-closed keys 429
+    // every user on their first request of the day.
+    analytics: false,
     prefix: `agi-rl:${key}`,
   });
 
@@ -955,7 +986,21 @@ export async function withRateLimit(
   return null;
 }
 
-const MANAGED_TURN_SLOT_TTL_SECONDS = 15 * 60;
+/**
+ * The age-out for a slot whose owner never released it.
+ *
+ * This is a backstop, not a budget: the slot is normally released by the stream
+ * pipe's `finally`. What runs no `finally` is the platform killing the function
+ * at its `maxDuration`, an OOM, or an instance eviction — and at the previous
+ * fifteen minutes, a free user (`maxConcurrentTurns: 1`) whose tab closed
+ * mid-stream was refused a brand-new conversation for fifteen minutes, with
+ * retrying making it worse and only waiting making it better.
+ *
+ * Sized just above the chat route's own `maxDuration` of 300s, which is the
+ * longest a slot's holder can legally live: nothing can still be running at
+ * 360s, so ageing out then cannot release a slot that is genuinely in use.
+ */
+const MANAGED_TURN_SLOT_TTL_SECONDS = 360;
 
 export interface ManagedTurnSlot {
   release(): Promise<void>;

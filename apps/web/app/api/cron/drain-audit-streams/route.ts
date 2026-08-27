@@ -69,6 +69,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     skipped: results.filter((r) => r.status === 'skipped').length,
   };
 
+  // Deferral is normal for one busy run and a compliance problem if it
+  // persists: the list rotates by staleness, so a standing backlog means the
+  // per-run cap is below the real destination count and some SIEM is
+  // permanently behind.
+  if (summary.destinationsDeferred > 0) {
+    logger.warn(summary, 'Audit stream drain deferred destinations · raise the per-run cap');
+  }
   logger.info(summary, 'Audit stream drain completed');
   return NextResponse.json(summary);
 }

@@ -8,7 +8,7 @@ import { CreditService } from './credit-service';
 import type { SubscriptionRow, ProfileRow } from '@/lib/server/neon-types';
 import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { getPlanUsageBudgetCents, isPlanUsageUncapped } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
@@ -268,9 +268,7 @@ export class SubscriptionService {
       return null;
     }
 
-    const stripe = new Stripe(stripeKey, {
-      apiVersion: STRIPE_API_VERSION,
-    });
+    const stripe = new Stripe(stripeKey, STRIPE_CLIENT_OPTIONS);
 
     try {
       logger.info({ userId, email }, 'Attempting self-healing subscription sync');

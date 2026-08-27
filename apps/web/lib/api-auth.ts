@@ -26,15 +26,55 @@ export interface AuthOptions {
   apiKeyScope?: ApiKeyScope;
 }
 
+const ACCOUNT_STATUS_ATTEMPTS = 2;
+
+/**
+ * Per-attempt ceiling for the account-status lookup.
+ *
+ * This runs on EVERY cookie-authenticated request and is fail-closed, so its
+ * latency is the floor for every click in the product. The only bound the pool
+ * offers is `connectionTimeoutMillis` (10s), which means a starved pool used to
+ * turn one slow dependency into a twenty-second wait followed by a 503, on
+ * pages that have nothing to do with billing.
+ */
+const ACCOUNT_STATUS_DEADLINE_MS = 2_000;
+
+const DEADLINE_EXCEEDED = Symbol('account-status-deadline');
+
+async function withDeadline<T>(
+  work: Promise<T>,
+  ms: number,
+): Promise<T | typeof DEADLINE_EXCEEDED> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<typeof DEADLINE_EXCEEDED>((resolve) => {
+        timer = setTimeout(() => resolve(DEADLINE_EXCEEDED), ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export async function assertAccountActive(userId: string): Promise<void> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < ACCOUNT_STATUS_ATTEMPTS; attempt++) {
     let rows: { account_status: string | null }[];
     try {
-      rows = await getNeonDb().query<{ account_status: string | null }>(
-        'select account_status from profiles where id = $1 limit 1',
-        [userId],
+      const raced = await withDeadline(
+        getNeonDb().query<{ account_status: string | null }>(
+          'select account_status from profiles where id = $1 limit 1',
+          [userId],
+        ),
+        ACCOUNT_STATUS_DEADLINE_MS,
       );
+      if (raced === DEADLINE_EXCEEDED) {
+        lastError = new Error(`account_status lookup exceeded ${ACCOUNT_STATUS_DEADLINE_MS}ms`);
+        continue;
+      }
+      rows = raced;
     } catch (lookupError) {
       lastError = lookupError;
       continue;

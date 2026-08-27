@@ -5,6 +5,18 @@ import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
+// The route hands its background work to `next/server` `after`, which throws
+// unless it is called inside a request scope. These tests invoke the handler
+// directly, with no framework around it. The no-op keeps the behaviour the
+// assertions below depend on: `processReview()` is started eagerly as the
+// argument, so the work still runs.
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (task: unknown) => {
+    void task;
+  },
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));

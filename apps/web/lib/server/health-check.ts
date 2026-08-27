@@ -3,7 +3,7 @@ import 'server-only';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
-import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { STRIPE_CLIENT_OPTIONS } from '@/lib/stripe-config';
 import { getConfiguredStripePriceIds } from '@/lib/price-tier-mapping';
 import {
   cachedRenderInput,
@@ -60,9 +60,7 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     const stripeKey = process.env['STRIPE_SECRET_KEY'];
 
     if (stripeKey) {
-      const stripe = new Stripe(stripeKey, {
-        apiVersion: STRIPE_API_VERSION,
-      });
+      const stripe = new Stripe(stripeKey, STRIPE_CLIENT_OPTIONS);
 
       await stripe.products.list({ limit: 1 });
 

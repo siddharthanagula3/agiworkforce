@@ -85,7 +85,11 @@ describe('GET /api/cron/reconcile-credits', () => {
   it('processes a bounded durable settlement batch for an authorized cron', async () => {
     const response = await GET(cronRequest('cron-secret') as never);
     expect(response.status).toBe(200);
-    expect(processPending).toHaveBeenCalledWith(100);
+    // 500 is the ceiling `process_credit_settlement_queue` clamps to. This
+    // drain is the only caller of `recover_stale_managed_usage_requests`, so
+    // the batch size is the platform's whole refund rate for reservations a
+    // killed turn leaked; at 100 the backlog grows and never comes back down.
+    expect(processPending).toHaveBeenCalledWith(500);
     await expect(response.json()).resolves.toEqual({
       processed: 4,
       succeeded: 3,

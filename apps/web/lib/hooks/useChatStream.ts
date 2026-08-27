@@ -501,6 +501,14 @@ const CLARIFY_ANSWERED_PREAMBLE = 'The user answered the clarifying questions:';
 const CLARIFY_DISMISSED_PREAMBLE = 'The user declined the clarifying questions and said instead:';
 const CLARIFY_DISMISSED_SILENTLY = 'The user declined the clarifying questions without answering.';
 
+/**
+ * The client default is one poll per second — 60 requests a minute against a
+ * per-minute limiter, which leaves no headroom for a second surface following
+ * the same run and buys nothing: the journal is written in coalesced batches,
+ * so a faster poll returns the same rows more often.
+ */
+const DURABLE_RUN_POLL_INTERVAL_MS = 2_500;
+
 function describeSettledInteractiveCard(card: InteractiveCard): string | null {
   if (!card.recognized || card.kind !== RESPONDABLE_INTERACTIVE_CARD_KIND) return null;
   const { questions, state } = card.body;
@@ -1090,6 +1098,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     );
     const followed = await client.followRun(runHandle.runId, {
       afterSequence,
+      pollIntervalMs: DURABLE_RUN_POLL_INTERVAL_MS,
       onEvent: (envelope) => {
         if (envelope.event.type === 'text-delta' && envelope.event.delta) {
           const reconciled = reconcileManagedCloudPublicText(

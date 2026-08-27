@@ -22,6 +22,8 @@ import {
   saveCloudAgentApprovalCheckpoint,
   saveCloudAgentInputCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
+import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
+import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 import {
@@ -269,17 +271,14 @@ export async function executeCloudAgentWorkflowInvocation(
     },
   });
 
+  const journal = createCloudAgentEventJournal({ db, userId: input.userId, runId: input.runId });
   const writer = getWritable<Uint8Array>().getWriter();
   try {
     for await (const chunk of generator) {
       for (const projected of projectCloudAgentWorkflowChunk(chunk)) {
         await writer.write(new TextEncoder().encode(projected.sse));
         if (projected.envelope) {
-          await appendCloudAgentEvent(db, {
-            userId: input.userId,
-            runId: input.runId,
-            envelope: projected.envelope,
-          });
+          await journal.append(projected.envelope);
           if (projected.envelope.event.type === 'error') reportedFailure = true;
           if (projected.envelope.event.type === 'task-state-changed') {
             lastTaskState = projected.envelope.event.state;
@@ -287,7 +286,14 @@ export async function executeCloudAgentWorkflowInvocation(
         }
       }
     }
+    await journal.flush();
   } finally {
+    await journal.flush().catch((error: unknown) => {
+      logger.warn(
+        { error, runId: input.runId },
+        'Buffered cloud agent events could not be journaled at step exit',
+      );
+    });
     writer.releaseLock();
   }
 
