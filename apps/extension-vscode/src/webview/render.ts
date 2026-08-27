@@ -1,4 +1,3 @@
-
 import markdownit from 'markdown-it';
 import DOMPurify from 'dompurify';
 
@@ -38,6 +37,8 @@ md.renderer.rules.code_block = (tokens, index) => {
 
 export const PURIFY_CONFIG: DOMPurify.Config = {
   FORBID_TAGS: [
+    'img',
+    'picture',
     'svg',
     'math',
     'audio',

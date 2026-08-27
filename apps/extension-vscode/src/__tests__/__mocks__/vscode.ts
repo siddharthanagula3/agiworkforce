@@ -1,4 +1,3 @@
-
 import { vi } from 'vitest';
 
 class MockSecretStorage {
@@ -480,6 +479,7 @@ export const workspace = {
   onDidCloseTextDocument: vi.fn(() => new Disposable()),
   onDidChangeTextDocument: vi.fn(() => new Disposable()),
   onDidChangeWorkspaceFolders: vi.fn(() => new Disposable()),
+  onDidGrantWorkspaceTrust: vi.fn(() => new Disposable()),
   openTextDocument: vi.fn().mockResolvedValue(new MockTextDocument()),
   applyEdit: vi.fn().mockResolvedValue(true),
   registerTextDocumentContentProvider: vi.fn(() => new Disposable()),

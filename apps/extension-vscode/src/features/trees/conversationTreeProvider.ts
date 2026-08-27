@@ -1,7 +1,10 @@
-
 import * as vscode from 'vscode';
 import type { ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';
-import { type LocalRuntimeClient } from '../../integrations/localRuntimeClient';
+import {
+  CLI_NOT_EXECUTABLE_MARKER,
+  CLI_NOT_FOUND_MARKER,
+  type LocalRuntimeClient,
+} from '../../integrations/localRuntimeClient';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { isSameWorkspacePath } from '../../integrations/developerSessionValidation';
 import { getAllWorkspaceFolders } from '../../platform/workspaceFolders';
@@ -24,21 +27,53 @@ export class ConversationTreeItem extends vscode.TreeItem {
   }
 }
 
+const SESSION_LISTING_FAILURE_LABEL = 'Session history unavailable';
+
+export class ConversationTreeErrorItem extends vscode.TreeItem {
+  constructor(
+    public readonly folderName: string,
+    public readonly reason: string,
+  ) {
+    super(SESSION_LISTING_FAILURE_LABEL, vscode.TreeItemCollapsibleState.None);
+    this.description = folderName;
+    this.tooltip = new vscode.MarkdownString(
+      `${reason}\n\nThe AGI CLI could not list this workspace's developer sessions, so this list is incomplete. Select this item to open runtime setup.`,
+    );
+    this.iconPath = new vscode.ThemeIcon('warning');
+    this.accessibilityInformation = {
+      label: `${SESSION_LISTING_FAILURE_LABEL} for ${folderName}: ${reason}`,
+      role: 'treeitem',
+    };
+    this.contextValue = 'conversationListingFailure';
+    this.command = {
+      command: 'agi-workforce.openSettings',
+      title: 'Open Runtime Setup',
+      arguments: ['configuration'],
+    };
+  }
+}
+
 export interface ResolvedDeveloperSession {
   response: ThreadReadResponse;
   runtime: LocalRuntimeClient;
   cwd: string;
 }
 
-export class ConversationTreeProvider implements vscode.TreeDataProvider<ConversationTreeItem> {
+interface SessionListingFailure {
+  folderName: string;
+  reason: string;
+}
+
+export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<
-    ConversationTreeItem | undefined | null | void
+    vscode.TreeItem | undefined | null | void
   >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private readonly runtimeByThread = new Map<
     string,
     { runtime: LocalRuntimeClient; cwd: string }
   >();
+  private listingFailures: SessionListingFailure[] = [];
 
   constructor(private readonly runtimes: LocalRuntimePool) {}
 
@@ -46,23 +81,30 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     this._onDidChangeTreeData.fire();
   }
 
-  getTreeItem(element: ConversationTreeItem): vscode.TreeItem {
+  getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
     return element;
   }
 
-  async getChildren(element?: ConversationTreeItem): Promise<ConversationTreeItem[]> {
+  async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
     if (element !== undefined) return [];
-    return (await this.getThreads()).map((thread) => new ConversationTreeItem(thread));
+    const threads = await this.getThreads();
+    return [
+      ...this.listingFailures.map(
+        (failure) => new ConversationTreeErrorItem(failure.folderName, failure.reason),
+      ),
+      ...threads.map((thread) => new ConversationTreeItem(thread)),
+    ];
   }
 
   async getThreads(): Promise<ThreadSummary[]> {
     const folders = getAllWorkspaceFolders();
     this.runtimeByThread.clear();
+    this.listingFailures = [];
     if (folders.length === 0) return [];
     const pages = await Promise.all(
       folders.map(async (folder) => {
-        const runtime = this.runtimes.forWorkspace(folder.uri.fsPath);
         try {
+          const runtime = this.runtimes.forWorkspace(folder.uri.fsPath);
           const page = await runtime.listThreads({
             cwd: folder.uri.fsPath,
             limit: 100,
@@ -83,6 +125,10 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
           return ownedThreads;
         } catch (error) {
           console.warn(`[AGI Workforce] failed to list sessions for ${folder.uri.fsPath}`, error);
+          this.listingFailures.push({
+            folderName: folder.name,
+            reason: describeListingFailure(error),
+          });
           return [];
         }
       }),
@@ -129,6 +175,19 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<Convers
     this._onDidChangeTreeData.dispose();
     this.runtimeByThread.clear();
   }
+}
+
+const LISTING_FAILURE_REASON_MAX_LENGTH = 240;
+const LISTING_FAILURE_MARKERS = [CLI_NOT_FOUND_MARKER, CLI_NOT_EXECUTABLE_MARKER] as const;
+
+function describeListingFailure(error: unknown): string {
+  const raw = error instanceof Error ? error.message.trim() : String(error).trim();
+  if (raw === '') return 'The AGI CLI did not report why the listing failed.';
+  const marker = LISTING_FAILURE_MARKERS.find((candidate) => raw.startsWith(`${candidate}: `));
+  const message = marker === undefined ? raw : raw.slice(marker.length + 2);
+  return message.length <= LISTING_FAILURE_REASON_MAX_LENGTH
+    ? message
+    : `${message.slice(0, LISTING_FAILURE_REASON_MAX_LENGTH - 1)}…`;
 }
 
 function formatRelativeTime(timestamp: number): string {

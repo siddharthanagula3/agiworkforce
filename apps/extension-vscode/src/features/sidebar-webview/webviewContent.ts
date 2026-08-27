@@ -78,7 +78,7 @@ export function getWebviewContent(
     content="default-src 'none';
              style-src 'nonce-${nonce}' ${cspSource};
              script-src 'nonce-${nonce}' ${cspSource};
-             img-src ${cspSource} https:;
+             img-src ${cspSource};
              font-src ${cspSource};" />
   <title>AGI Workforce</title>
   <link rel="stylesheet" href="${codiconCssUri}" />
@@ -270,14 +270,30 @@ export function getWebviewContent(
       color: var(--warning);
     }
 
+    .runtime-status-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
     .runtime-status button {
-      align-self: flex-start;
       border: 0;
       border-radius: 5px;
       padding: 4px 8px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
       cursor: pointer;
+    }
+
+    .runtime-status button.runtime-status-secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+
+    .runtime-status button[disabled] {
+      cursor: default;
+      opacity: 0.6;
     }
 
     /* ── First-run onboarding ── */
@@ -1859,8 +1875,11 @@ export function getWebviewContent(
 
   <div class="runtime-status" id="runtimeStatus" role="status" aria-live="polite">
     <strong id="runtimeStatusTitle">Developer runtime needs setup</strong>
-    <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
-    <button type="button" id="runtimeSettingsBtn">Open setup</button>
+    <span id="runtimeStatusMessage">Checking the workspace developer runtime…</span>
+    <div class="runtime-status-actions">
+      <button type="button" id="runtimeSettingsBtn">Open setup</button>
+      <button type="button" class="runtime-status-secondary" id="runtimeRetryBtn">Try again</button>
+    </div>
   </div>
 
   <!-- ── Usage meter banner ── -->
@@ -2036,6 +2055,7 @@ export function getWebviewContent(
     const runtimeStatusTitleEl = document.getElementById('runtimeStatusTitle');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
+    const runtimeRetryBtn = document.getElementById('runtimeRetryBtn');
     const onboardingEl = document.getElementById('onboarding');
     const onboardingSteps = Array.from(document.querySelectorAll('[data-onboarding-step]'));
     const onboardingDots = Array.from(document.querySelectorAll('.onboarding-dot'));
@@ -2608,6 +2628,13 @@ export function getWebviewContent(
       });
     }
 
+    if (runtimeRetryBtn) {
+      runtimeRetryBtn.addEventListener('click', function() {
+        if (runtimeRetryBtn.disabled) return;
+        vscode.postMessage({ type: 'retryRuntime' });
+      });
+    }
+
     // Upgrade button — opens pricing page via extension host
     if (upgradeBtn) {
       upgradeBtn.addEventListener('click', function() {
@@ -2653,7 +2680,27 @@ export function getWebviewContent(
       }
     }
 
+    function setRuntimeRetryBusy(busy) {
+      if (!runtimeRetryBtn) return;
+      runtimeRetryBtn.disabled = busy;
+      runtimeRetryBtn.textContent = busy ? 'Checking…' : 'Try again';
+    }
+
+    function renderRuntimeProbing() {
+      if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl) return;
+      runtimeStatusTitleEl.textContent = 'Checking the developer runtime…';
+      runtimeStatusMessageEl.textContent =
+        'Starting the AGI CLI and asking it which models this workspace can reach.';
+      runtimeStatusEl.style.display = 'flex';
+      setRuntimeRetryBusy(true);
+    }
+
     function renderRuntimeAvailability(status, message) {
+      if (status === 'probing') {
+        renderRuntimeProbing();
+        return;
+      }
+      setRuntimeRetryBusy(false);
       runtimeBlock = status === 'ready' ? null : status;
       renderOnboardingWorkspaceState(status);
       var headline = document.getElementById('emptyStateHeadline');

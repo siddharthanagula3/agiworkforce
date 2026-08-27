@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
@@ -140,6 +139,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   public pushFollowUpBehavior(): void {
     this._stateManager.pushFollowUpBehavior();
+  }
+
+  public refreshRuntimeStatus(): void {
+    void this._stateManager.refreshRuntimeStatus();
   }
 
   public resetConversation(): void {

@@ -81,8 +81,17 @@ describe('agent configuration commands', () => {
     resolveRestart({ restartedWorkspaces: 1 });
     await command;
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      expect.stringContaining('restarted and ready'),
+      'AGI Workforce: Local runtime restarted in 1 workspace.',
     );
+  });
+
+  it('never claims the restarted runtime is ready — the sidebar re-probes and decides', async () => {
+    await handlers.get('agi-workforce.restartLocalRuntime')!();
+
+    const announced = vi
+      .mocked(vscode.window.showInformationMessage)
+      .mock.calls.map((call) => String(call[0]));
+    expect(announced.some((message) => /\bready\b/i.test(message))).toBe(false);
   });
 
   it('returns a structured failure after preserving the visible restart error', async () => {

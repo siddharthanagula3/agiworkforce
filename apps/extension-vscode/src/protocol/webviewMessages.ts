@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 export const AgentModeSchema = z.enum(['ask', 'auto', 'plan', 'bypass']);
@@ -41,6 +40,7 @@ const getModel = z.object({ type: z.literal('getModel') });
 const openSettings = z.object({ type: z.literal('openSettings') });
 const openWorkspace = z.object({ type: z.literal('openWorkspace') });
 const manageWorkspaceTrust = z.object({ type: z.literal('manageWorkspaceTrust') });
+const retryRuntime = z.object({ type: z.literal('retryRuntime') });
 const cancel = z.object({ type: z.literal('cancel') });
 const shareDiagnostics = z.object({ type: z.literal('shareDiagnostics') });
 const clearConversation = z.object({ type: z.literal('clearConversation') });
@@ -135,6 +135,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openSettings,
   openWorkspace,
   manageWorkspaceTrust,
+  retryRuntime,
   cancel,
   fileSearch,
   shareDiagnostics,
