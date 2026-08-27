@@ -1,4 +1,4 @@
-
+import type { ComputerUseCommandResponse } from '../../types';
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
 import { APPROVAL_TIMEOUT_MS } from '../computer-use/agentLoop';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
@@ -474,25 +474,74 @@ const KIND_EMOJI: Record<string, string> = {
 
 export type AutofillOutcome = 'escalation' | 'success' | 'error';
 
-const AUTOFILL_OUTCOME_PRESENTATION: Record<AutofillOutcome, { title: string; icon: string }> = {
-  escalation: {
-    title: 'Autofill stalled — switching to computer use',
-    icon: '\u{26A1}', // lightning bolt
-  },
-  success: {
-    title: 'Autofill complete',
-    icon: '\u{2713}', // check mark
-  },
-  error: {
-    title: 'Autofill could not run',
-    icon: '\u{26A0}', // warning sign
-  },
+/** `run_stopped` reports the end of a browser-control run, not an autofill. */
+export type PanelNoticeKind = AutofillOutcome | 'run_stopped';
+
+const BANNER_PRESENTATION: Record<PanelNoticeKind, { title: string; icon: string; style: string }> =
+  {
+    escalation: {
+      title: 'Autofill stalled — switching to computer use',
+      icon: '\u{26A1}', // lightning bolt
+      style: 'escalation',
+    },
+    success: {
+      title: 'Autofill complete',
+      icon: '\u{2713}', // check mark
+      style: 'success',
+    },
+    error: {
+      title: 'Autofill could not run',
+      icon: '\u{26A0}', // warning sign
+      style: 'error',
+    },
+    run_stopped: {
+      title: 'Browser control stopped',
+      icon: '\u{25A0}', // filled square
+      style: 'error',
+    },
+  };
+
+/**
+ * User-facing copy for each way a run can end. The background broadcasts a
+ * machine reason on `AGI_CU_STATE`; without this the panel silently dropped
+ * back to idle and the user was never told why the agent stopped driving.
+ */
+const CANCELLATION_REASON_COPY: Record<string, string> = {
+  account_changed: 'The signed-in AGI Cloud account changed, so the run was stopped.',
+  debugger_detached:
+    'You dismissed Chrome’s browser-debugging bar for this tab, so the run was stopped.',
+  panel_closed: 'The side panel closed, so the run was stopped.',
+  superseded: 'A newer run replaced this one.',
+  tab_intent_changed:
+    'The tab left the page this run was approved for, so the run was stopped before acting.',
+  tab_removed: 'The tab this run was driving was closed.',
+  user_cleared: 'The run was stopped when the log was cleared.',
+  user_stopped: 'You stopped the run.',
 };
+
+export function describeCancellationReason(reason: unknown): string | null {
+  return typeof reason === 'string' ? (CANCELLATION_REASON_COPY[reason] ?? null) : null;
+}
+
+/**
+ * How long the panel waits for any sign of life from an owned run before it
+ * asks the background whether the run still exists. MV3 evicts the service
+ * worker, and an evicted worker emits no terminal event, so without this the
+ * controls bar reads "agent running" forever.
+ */
+const RUN_ACTIVITY_TIMEOUT_MS = 90_000;
+
+const STOP_REFUSED_MESSAGE =
+  'The run could not be stopped and may still be driving the tab. Close the tab to be certain.';
+const RUN_LOST_MESSAGE =
+  'The background service stopped reporting on this run, so it is no longer being tracked here.';
+const RUN_RECOVERED_MESSAGE =
+  'A browser-control run started before this panel was reopened is still active. Use Stop to end it.';
 
 export interface ComputerUsePanelAPI {
   panelEl: HTMLElement;
   appendStep(step: AgentLoopStep & { screenshotBase64?: string }): void;
-  showHandoffBanner(reason: string, kind?: AutofillOutcome): void;
+  showHandoffBanner(reason: string, kind?: PanelNoticeKind): void;
   hideHandoffBanner(): void;
   clearLog(): void;
   isAskBeforeActing(): boolean;
@@ -506,6 +555,8 @@ export interface ComputerUsePanelAPI {
   refreshAuthChip(): void;
   setRunState(running: boolean, runId?: string, generation?: number): void;
   ownsRun(runId: unknown): boolean;
+  /** Rearms the eviction watchdog — call for every lifecycle event of an owned run. */
+  noteRunActivity(): void;
 }
 
 export function buildComputerUsePanel(): ComputerUsePanelAPI {
@@ -605,6 +656,20 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
 
   let activeRunId: string | null = null;
   let activeRunGeneration = 0;
+  let runActivityTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearRunActivityWatchdog(): void {
+    if (!runActivityTimer) return;
+    clearTimeout(runActivityTimer);
+    runActivityTimer = null;
+  }
+
+  function armRunActivityWatchdog(): void {
+    clearRunActivityWatchdog();
+    runActivityTimer = setTimeout(() => {
+      void reconcileRunState();
+    }, RUN_ACTIVITY_TIMEOUT_MS);
+  }
 
   function setRunState(running: boolean, runId?: string, generation?: number): void {
     if (
@@ -627,10 +692,68 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     controlsLabel.textContent = running
       ? 'AGI Cloud • agent running'
       : 'AGI Cloud • powered by AGI';
+    if (running) {
+      armRunActivityWatchdog();
+    } else {
+      clearRunActivityWatchdog();
+    }
   }
 
   function ownsRun(runId: unknown): boolean {
     return typeof runId === 'string' && activeRunId === runId;
+  }
+
+  function noteRunActivity(): void {
+    if (!activeRunId) return;
+    armRunActivityWatchdog();
+  }
+
+  async function readBackgroundRunState(): Promise<ComputerUseCommandResponse | null> {
+    try {
+      const response: unknown = await chrome.runtime.sendMessage({
+        type: 'GET_COMPUTER_USE_STATE',
+      });
+      return response && typeof response === 'object'
+        ? (response as ComputerUseCommandResponse)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Reconciles the panel against the background after a silence. An MV3 worker
+   * evicted mid-run never sends a terminal event, so the panel must ask rather
+   * than keep claiming the agent is running.
+   */
+  async function reconcileRunState(): Promise<void> {
+    const runId = activeRunId;
+    if (!runId) return;
+    const state = await readBackgroundRunState();
+    if (state?.running === true && state.runId === runId) {
+      armRunActivityWatchdog();
+      return;
+    }
+    setRunState(false, runId);
+    showHandoffBanner(RUN_LOST_MESSAGE, 'run_stopped');
+  }
+
+  /**
+   * A run outlives the panel document that started it. On boot, adopt whatever
+   * the background is still driving so Stop is reachable instead of the panel
+   * showing idle over a live run.
+   */
+  async function adoptBackgroundRun(): Promise<void> {
+    if (activeRunId) return;
+    const state = await readBackgroundRunState();
+    if (state?.running !== true || typeof state.runId !== 'string') return;
+    if (activeRunId) return;
+    setRunState(
+      true,
+      state.runId,
+      typeof state.runGeneration === 'number' ? state.runGeneration : undefined,
+    );
+    showHandoffBanner(RUN_RECOVERED_MESSAGE, 'run_stopped');
   }
 
   async function requestCancellation(
@@ -638,26 +761,41 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   ): Promise<void> {
     const runId = activeRunId;
     if (!runId) return;
-    setRunState(false, runId);
+    stopBtn.disabled = true;
+    stopBtn.textContent = 'Stopping…';
+    let response: unknown;
     try {
-      await chrome.runtime.sendMessage({
+      response = await chrome.runtime.sendMessage({
         type: 'CANCEL_COMPUTER_USE',
         runId,
         reason,
       });
     } catch {
-      // A service-worker restart has no surviving in-memory run.
+      // A service-worker restart has no surviving in-memory run to cancel.
+      setRunState(false, runId);
+      return;
     }
+    const cancellation = (
+      response && typeof response === 'object' ? response : {}
+    ) as ComputerUseCommandResponse;
+    if (cancellation.success === true && cancellation.running !== true) {
+      setRunState(false, runId);
+      return;
+    }
+    stopBtn.disabled = false;
+    stopBtn.textContent = 'Stop';
+    showHandoffBanner(cancellation.error ?? STOP_REFUSED_MESSAGE, 'run_stopped');
   }
 
   stopBtn.addEventListener('click', () => {
     void requestCancellation('user_stopped');
   });
   clearBtn.addEventListener('click', () => {
-    void requestCancellation('user_cleared');
     clearLog();
+    void requestCancellation('user_cleared');
   });
   window.addEventListener('pagehide', () => {
+    clearRunActivityWatchdog();
     const runId = activeRunId;
     if (!runId) return;
     activeRunId = null;
@@ -667,6 +805,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       reason: 'panel_closed',
     });
   });
+
+  void adoptBackgroundRun();
 
   // via the exported refreshAuthChip() helper wired to the tab-switch event.
   const authChip = document.createElement('span');
@@ -907,11 +1047,11 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  function showHandoffBanner(reason: string, kind: AutofillOutcome = 'escalation'): void {
-    const presentation = AUTOFILL_OUTCOME_PRESENTATION[kind];
+  function showHandoffBanner(reason: string, kind: PanelNoticeKind = 'escalation'): void {
+    const presentation = BANNER_PRESENTATION[kind];
     bannerTitle.textContent = presentation.title;
     bannerIcon.textContent = presentation.icon;
-    banner.setAttribute('data-kind', kind);
+    banner.setAttribute('data-kind', presentation.style);
     bannerSub.textContent = reason;
     banner.classList.add('visible');
   }
@@ -1042,5 +1182,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     refreshAuthChip,
     setRunState,
     ownsRun,
+    noteRunActivity,
   };
 }

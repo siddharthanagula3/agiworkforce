@@ -27,6 +27,7 @@
     "https://agiworkforce.com/*",
     "https://api.agiworkforce.com/*"
   ],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "content_security_policy": {
     "extension_pages": "default-src 'self'; script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.agiworkforce.com https://*.agiworkforce.com https://agiworkforce.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   },
@@ -67,10 +68,6 @@
       "description": "__MSG_commandOpenSidePanel__"
     },
     "capture_page": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+C",
-        "mac": "Command+Shift+C"
-      },
       "description": "__MSG_commandCapturePage__"
     }
   },
@@ -78,12 +75,6 @@
     "default_path": "src/side_panel.html"
   },
   "options_page": "src/options.html",
-  "web_accessible_resources": [
-    {
-      "resources": ["icons/providers/*.svg"],
-      "matches": ["https://*.agiworkforce.com/*"]
-    }
-  ],
   "minimum_chrome_version": "132",
   "offline_enabled": false
 }

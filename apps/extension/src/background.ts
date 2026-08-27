@@ -48,6 +48,7 @@ import {
 import {
   deliverPageCapture,
   pageCaptureFailureMessage,
+  PAGE_CAPTURE_UNAVAILABLE_MESSAGE,
   PAGE_CAPTURE_UNDELIVERED_TITLE,
 } from './features/background/page-capture';
 import {
@@ -134,10 +135,7 @@ import {
   sweepConversationSync,
   SYNC_SWEEP_ALARM,
 } from './features/cloud-bridge/conversationSync';
-import {
-  readCloudMirroringEnabled,
-  watchCloudMirroringEnabled,
-} from './features/privacy/cloudMirroring';
+import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
 import { resolveComputerUseModel } from './features/computer-use/cloudAgentClient';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import {
@@ -2091,6 +2089,74 @@ async function recoverScheduledTaskRun(
   }
 }
 
+export const MAINTENANCE_ALARM = 'agi-maintenance';
+const MAINTENANCE_PERIOD_MINUTES = 1;
+
+/**
+ * Alarms earlier versions registered unconditionally. Chrome keeps an alarm
+ * across worker restarts and browser restarts, so an upgraded install would go
+ * on firing them at a handler that no longer exists unless they are cleared.
+ */
+const RETIRED_ALARM_NAMES = ['keep-alive', SYNC_SWEEP_ALARM];
+
+let maintenanceAlarmArmed = false;
+
+function armMaintenanceAlarm(): void {
+  if (maintenanceAlarmArmed) return;
+  maintenanceAlarmArmed = true;
+  chrome.alarms.create(MAINTENANCE_ALARM, { periodInMinutes: MAINTENANCE_PERIOD_MINUTES }, () => {
+    if (chrome.runtime.lastError) {
+      maintenanceAlarmArmed = false;
+      logger.warn('Failed to create maintenance alarm', chrome.runtime.lastError.message);
+    }
+  });
+}
+
+function disarmMaintenanceAlarm(): void {
+  maintenanceAlarmArmed = false;
+  void chrome.alarms.clear(MAINTENANCE_ALARM);
+}
+
+/**
+ * One maintenance pass: retry interrupted scheduled runs, mirror any
+ * conversation still owing a sync, and resume native reconnection.
+ *
+ * @returns whether anything is still outstanding. This is what decides if the
+ *   worker gets woken again — the two unconditional one-minute alarms this
+ *   replaced woke it every minute for the life of the browser, with no panel
+ *   open, no run active, and usually nothing to do.
+ */
+async function runMaintenancePass(): Promise<boolean> {
+  let outstanding = false;
+
+  try {
+    await recoverScheduledTaskRuns();
+    outstanding = (await loadScheduledTaskRunJournals()).length > 0;
+  } catch (error) {
+    logger.warn('Failed to retry scheduled Managed Cloud recovery', error);
+    outstanding = true;
+  }
+
+  try {
+    if (await sweepConversationSync()) outstanding = true;
+  } catch (error) {
+    logger.debug('Conversation sync sweep failed', error);
+    outstanding = true;
+  }
+
+  if (!_bgCtx.nativeReconnectGaveUp && !state.isNativeConnected) {
+    void connectToNativeHost();
+    outstanding = true;
+  }
+
+  return outstanding;
+}
+
+async function settleMaintenanceAlarm(): Promise<void> {
+  if (await runMaintenancePass()) armMaintenanceAlarm();
+  else disarmMaintenanceAlarm();
+}
+
 async function recoverScheduledTaskRuns(): Promise<void> {
   const journals = await loadScheduledTaskRunJournals();
   if (journals.length === 0) return;
@@ -2418,8 +2484,16 @@ async function executeScheduledTask(
 // isAllowlistedSender(). Content scripts on arbitrary pages must NOT receive
 // responses to fingerprinting probes.
 // DISCOVERY_MESSAGE_TYPES now imported from `./background/policy` (audit 2026-05-19).
+export const SITE_NOT_APPROVED_MESSAGE =
+  'This site is not on your AGI Workforce approved-sites list. ' +
+  'Open the extension options and use the "Approved sites" section to add this origin, then reload.';
+
 let siteAllowlistCache = new Set<string>();
-chrome.storage.local
+let siteAllowlistLoaded = false;
+// Held rather than dropped: the message that wakes a dormant MV3 worker arrives
+// before this read resolves, and a floating promise left that first message
+// deciding against an empty set.
+const siteAllowlistReady: Promise<void> = chrome.storage.local
   .get(SITE_ALLOWLIST_STORAGE_KEY)
   .then((res) => {
     const list = res[SITE_ALLOWLIST_STORAGE_KEY];
@@ -2427,7 +2501,10 @@ chrome.storage.local
       siteAllowlistCache = new Set(list as string[]);
     }
   })
-  .catch(() => {});
+  .catch(() => {})
+  .finally(() => {
+    siteAllowlistLoaded = true;
+  });
 function cancelActiveRunUnlessOriginStillApproved(approvedOrigins: ReadonlySet<string>): void {
   const lease = computerUseRuns.getActive();
   if (!lease) return;
@@ -2621,18 +2698,49 @@ function handleMessage(
   }
 
   if (!isAllowlistedSender(sender, msg.type)) {
+    if (!siteAllowlistLoaded) {
+      // This message may be the one that woke a dormant worker, arriving before
+      // the cached allowlist read landed. Decide again once it does, rather
+      // than rejecting an approved origin on its first page load and making the
+      // user reload to get a working extension.
+      void siteAllowlistReady.then(() => {
+        if (!isAllowlistedSender(sender, msg.type)) {
+          logger.warn('Rejected message from non-allowlisted sender', {
+            url: sender?.tab?.url,
+            type: msg.type,
+          });
+          sendResponse({ success: false, error: SITE_NOT_APPROVED_MESSAGE } as ExtensionResponse);
+          return;
+        }
+        dispatchAuthorizedMessage(msg, sender, sendResponse);
+      });
+      return true;
+    }
     logger.warn('Rejected message from non-allowlisted sender', {
       url: sender?.tab?.url,
       type: msg.type,
     });
     sendResponse({
       success: false,
-      error:
-        'This site is not on your AGI Workforce allowlist. Open the extension popup and use the "Site allowlist" section to add this origin, then reload.',
+      error: SITE_NOT_APPROVED_MESSAGE,
     } as ExtensionResponse);
     return false;
   }
 
+  return dispatchAuthorizedMessage(msg, sender, sendResponse);
+}
+
+/**
+ * Every gate past the site allowlist, plus dispatch. Split out so the allowlist
+ * decision can be retried asynchronously on a cold worker wake without pushing
+ * the rest — notably OPEN_SIDE_PANEL, which must open inside the synchronous
+ * turn of the user gesture — behind an await in the common case.
+ */
+function dispatchAuthorizedMessage(
+  msg: ExtensionMessage,
+  sender: chrome.runtime.MessageSender,
+  sendResponse: (response?: ExtensionResponse) => void,
+): boolean {
   if (EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(msg.type)) {
     if (
       !isTrustedExtensionPageSender(
@@ -3649,6 +3757,9 @@ async function handleMessageAsync(
         return { success: false, error: 'conversationId is required' } as ExtensionResponse;
       }
       scheduleConversationSync(syncOwner, syncMsg.conversationId, syncMsg.streaming === true);
+      // The debounced flush lives in this worker. If it is evicted first, the
+      // alarm is what brings the mirror back around.
+      armMaintenanceAlarm();
       return { success: true } as ExtensionResponse;
     }
 
@@ -3730,7 +3841,7 @@ async function handleMessageAsync(
       if (!siteAllowlistCache.has(cuOrigin)) {
         return failStart(
           `AGI_START_COMPUTER_USE: tab origin "${cuOrigin}" is not on the site allowlist. ` +
-            'Add it via the extension popup before starting computer use.',
+            `${SITE_NOT_APPROVED_MESSAGE} Then start computer use again.`,
         );
       }
 
@@ -3888,6 +3999,10 @@ async function handleMessageAsync(
         assertOwnership: () => assertComputerUseOwnership(lease).then(() => undefined),
         resolveOwnedCredential: () => assertComputerUseOwnership(lease),
         onActionStateChange: (active) => updateComputerUseActionState(lease, active),
+        onDebuggerDetachedByUser: () => {
+          computerUseStartGeneration += 1;
+          cancelActiveComputerUseRun('debugger_detached', lease.runId);
+        },
         onBeforeAction,
         onProgress: (step) => {
           broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_STEP', step });
@@ -3940,6 +4055,20 @@ async function handleMessageAsync(
         running: true,
         runId: lease.runId,
         runGeneration: lease.generation,
+      } as ExtensionResponse;
+    }
+
+    case 'GET_COMPUTER_USE_STATE' as ExtensionMessage['type']: {
+      const activeLease = computerUseRuns.getActive();
+      if (!activeLease) {
+        return { success: true, running: false } as ExtensionResponse;
+      }
+      return {
+        success: true,
+        running: true,
+        runId: activeLease.runId,
+        runGeneration: activeLease.generation,
+        tabId: activeLease.tabId,
       } as ExtensionResponse;
     }
 
@@ -4565,6 +4694,10 @@ chrome.commands.onCommand.addListener((command) => {
 });
 
 async function captureCurrentPage(): Promise<void> {
+  if (!state.isNativeConnected) {
+    showNotification(PAGE_CAPTURE_UNDELIVERED_TITLE, PAGE_CAPTURE_UNAVAILABLE_MESSAGE);
+    return;
+  }
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -5289,40 +5422,16 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 
 initialize();
 
-chrome.alarms.create('keep-alive', { periodInMinutes: 1.0 }, () => {
-  if (chrome.runtime.lastError) {
-    logger.warn('Failed to create keep-alive alarm', chrome.runtime.lastError.message);
-  }
-});
+for (const retired of RETIRED_ALARM_NAMES) {
+  void chrome.alarms.clear(retired);
+}
 
-chrome.alarms.create(SYNC_SWEEP_ALARM, { periodInMinutes: 1.0 }, () => {
-  if (chrome.runtime.lastError) {
-    logger.warn('Failed to create conversation sync alarm', chrome.runtime.lastError.message);
-  }
-});
 watchCloudMirroringEnabled();
-void readCloudMirroringEnabled()
-  .then(() => sweepConversationSync())
-  .catch((error) => {
-    logger.debug('Conversation sync sweep on worker start failed', error);
-  });
+void settleMaintenanceAlarm();
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === SYNC_SWEEP_ALARM) {
-    void sweepConversationSync().catch((error) => {
-      logger.debug('Conversation sync sweep failed', error);
-    });
-    return;
-  }
-
-  if (alarm.name === 'keep-alive') {
-    logger.debug('Keeping service worker alive');
-    void recoverScheduledTaskRuns().catch((error) => {
-      logger.warn('Failed to retry scheduled Managed Cloud recovery', error);
-    });
-    if (!_bgCtx.nativeReconnectGaveUp && !state.isNativeConnected) {
-      void connectToNativeHost();
-    }
+  if (alarm.name === MAINTENANCE_ALARM) {
+    void settleMaintenanceAlarm();
     return;
   }
 

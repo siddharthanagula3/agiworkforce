@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from 'vitest';
 
 function isPermanentError(error: string): boolean {
@@ -11,7 +10,6 @@ function isPermanentError(error: string): boolean {
 }
 
 describe('isPermanentError heuristic', () => {
-
   it('identifies "Specified native messaging host not found" as permanent', () => {
     expect(isPermanentError('Specified native messaging host not found')).toBe(true);
   });

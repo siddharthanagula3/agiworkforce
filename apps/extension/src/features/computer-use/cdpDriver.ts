@@ -7,19 +7,48 @@ import {
 export const REDACTED_FIELD_PLACEHOLDER = '[redacted password]';
 
 const DOM_SUMMARY_MAX_CHARS = 8_000;
+const ELEMENT_LABEL_MAX_CHARS = 60;
+const DETACH_REASON_USER_CANCELED = 'canceled_by_user';
 
-const elementIndexMaps = new Map<number, Map<number, string>>();
-
-export function getElementIndexMap(tabId: number): ReadonlyMap<number, string> {
-  return elementIndexMaps.get(tabId) ?? new Map();
+/**
+ * One entry of the index map the model is told to act through.
+ *
+ * `selector` is a structural path built page-side and proven — page-side, at
+ * the moment it is built — to resolve to exactly one element. `signature` is a
+ * fingerprint of the element captured in that same pass. Resolution re-checks
+ * both: an index that no longer names exactly one element, or names an element
+ * whose fingerprint changed, is refused rather than clicked.
+ */
+export interface IndexedElement {
+  readonly selector: string;
+  readonly signature: string;
 }
 
-function setElementIndexMap(tabId: number, map: Map<number, string>): void {
+const elementIndexMaps = new Map<number, Map<number, IndexedElement>>();
+
+export function getElementIndexMap(tabId: number): ReadonlyMap<number, string> {
+  const indexed = elementIndexMaps.get(tabId);
+  if (!indexed) return new Map();
+  return new Map([...indexed].map(([index, entry]) => [index, entry.selector]));
+}
+
+function setElementIndexMap(tabId: number, map: Map<number, IndexedElement>): void {
   elementIndexMaps.set(tabId, map);
 }
 
-export function resolveIndexedSelector(tabId: number, index: number): string | null {
+export function resolveIndexedElement(tabId: number, index: number): IndexedElement | null {
   return elementIndexMaps.get(tabId)?.get(index) ?? null;
+}
+
+export function resolveIndexedSelector(tabId: number, index: number): string | null {
+  return resolveIndexedElement(tabId, index)?.selector ?? null;
+}
+
+function staleIndexMessage(tool: string, index: number): string {
+  return (
+    `${tool}: index ${index} not found in current snapshot — ` +
+    `call read_dom again to rebuild the index map.`
+  );
 }
 
 interface CdpScreenshotResult {
@@ -30,15 +59,29 @@ interface CdpBoxModel {
   content: [number, number, number, number, number, number, number, number];
 }
 
-interface CdpObjectResult {
-  result: { type: string; value?: unknown; objectId?: string };
-  exceptionDetails?: { text: string };
+interface CdpEvalException {
+  text: string;
+  exception?: { description?: string };
 }
 
-const activeDebuggerTabs = new Map<number, boolean>();
+interface CdpObjectResult {
+  result: { type: string; value?: unknown; objectId?: string };
+  exceptionDetails?: CdpEvalException;
+}
 
-export function registerActiveTab(tabId: number): void {
-  activeDebuggerTabs.set(tabId, true);
+function describeEvalException(details: CdpEvalException): string {
+  return details.exception?.description ?? details.text;
+}
+
+export type DebuggerDetachedByUserHandler = (tabId: number) => void;
+
+const activeDebuggerTabs = new Map<number, DebuggerDetachedByUserHandler | null>();
+
+export function registerActiveTab(
+  tabId: number,
+  onDetachedByUser: DebuggerDetachedByUserHandler | null = null,
+): void {
+  activeDebuggerTabs.set(tabId, onDetachedByUser);
 }
 
 export function unregisterActiveTab(tabId: number): void {
@@ -57,8 +100,10 @@ export function ensureOnDetachListener(): void {
       const tabId = source.tabId;
       if (tabId === undefined) return;
       if (!activeDebuggerTabs.has(tabId)) return;
-      if (reason === 'canceled_by_user') {
+      if (reason === DETACH_REASON_USER_CANCELED) {
+        const onDetachedByUser = activeDebuggerTabs.get(tabId) ?? null;
         unregisterActiveTab(tabId);
+        onDetachedByUser?.(tabId);
         return;
       }
       chrome.debugger.attach({ tabId }, '1.3', () => {
@@ -236,22 +281,110 @@ export async function waitForStable(
   // Timeout reached — return anyway; caller continues best-effort
 }
 
+/**
+ * Page-side fingerprint of an element, shared verbatim between the pass that
+ * builds the index map and the pass that resolves an index back to an element.
+ * The two must agree exactly, so they are interpolated from one source.
+ */
+const ELEMENT_SIGNATURE_JS = `((el) => [
+  el.localName,
+  el.getAttribute('role') || '',
+  el.getAttribute('type') || '',
+  el.getAttribute('name') || '',
+  (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '')
+    .replace(/\\s+/g, ' ')
+    .trim()
+    .slice(0, ${ELEMENT_LABEL_MAX_CHARS}),
+].join('|'))`;
+
+/**
+ * Page-side builder for a structural `html > tag:nth-of-type(n) > …` path.
+ *
+ * Every step is scoped by `>` to a parent that is itself uniquely addressed and
+ * picks one child by ordinal among that parent's children of the same type, so
+ * the result names exactly one element by construction. Returns null for a
+ * detached node, which the caller treats as "not indexable".
+ */
+const UNIQUE_PATH_JS = `((el) => {
+  const parts = [];
+  let node = el;
+  while (node && node !== document.documentElement) {
+    if (!node.parentElement) return null;
+    let nth = 1;
+    for (let sib = node.previousElementSibling; sib; sib = sib.previousElementSibling) {
+      if (sib.localName === node.localName) nth += 1;
+    }
+    parts.unshift(node.localName + ':nth-of-type(' + nth + ')');
+    node = node.parentElement;
+  }
+  if (node !== document.documentElement) return null;
+  parts.unshift('html');
+  return parts.join(' > ');
+})`;
+
+/**
+ * Resolves a selector to exactly one element, refusing anything else.
+ *
+ * A selector that matches zero elements, more than one element, or an element
+ * whose signature no longer matches the one captured when the index was built
+ * throws page-side. The alternative — acting on `matches[0]` — is a silent
+ * click on an element the model did not choose, on the user's live session.
+ */
+const RESOLVE_UNIQUE_ELEMENT_JS = `((selector, expectedSignature) => {
+  const matches = document.querySelectorAll(selector);
+  if (matches.length === 0) {
+    throw new Error('no element matches ' + selector + ' — the page changed since read_dom');
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      matches.length + ' elements match ' + selector +
+        ' — refusing to act on an ambiguous target; call read_dom again'
+    );
+  }
+  const el = matches[0];
+  if (expectedSignature !== null) {
+    const actual = ${ELEMENT_SIGNATURE_JS}(el);
+    if (actual !== expectedSignature) {
+      throw new Error(
+        'element at this index changed since read_dom (was "' + expectedSignature +
+          '", now "' + actual + '") — refusing to act on it; call read_dom again'
+      );
+    }
+  }
+  return el;
+})`;
+
+/**
+ * The exact page-side expression used to turn an index's stored selector back
+ * into a live element. Exported so a test can run the shipped string against a
+ * real DOM rather than assert against a restatement of it.
+ */
+export function buildIndexedElementExpression(
+  selector: string,
+  expectedSignature?: string,
+): string {
+  return `${RESOLVE_UNIQUE_ELEMENT_JS}(${JSON.stringify(selector)}, ${JSON.stringify(
+    expectedSignature ?? null,
+  )})`;
+}
+
 async function selectorToCoords(
   tabId: number,
   selector: string,
   signal?: AbortSignal,
+  expectedSignature?: string,
 ): Promise<{ x: number; y: number }> {
   const evalResult = await sendCommand<CdpObjectResult>(
     tabId,
     'Runtime.evaluate',
     {
-      expression: `document.querySelector(${JSON.stringify(selector)})`,
+      expression: buildIndexedElementExpression(selector, expectedSignature),
       returnByValue: false,
     },
     signal,
   );
   if (evalResult.exceptionDetails) {
-    throw new Error(`Selector eval error: ${evalResult.exceptionDetails.text}`);
+    throw new Error(`Selector eval error: ${describeEvalException(evalResult.exceptionDetails)}`);
   }
   const objectId = evalResult.result.objectId;
   if (!objectId) {
@@ -335,14 +468,11 @@ export async function click(
         x = coords.x;
         y = coords.y;
       } else if ('index' in target) {
-        const selector = resolveIndexedSelector(tabId, target.index);
-        if (!selector) {
-          throw new Error(
-            `click: index ${target.index} not found in current snapshot — ` +
-              `call read_dom again to rebuild the index map.`,
-          );
+        const indexed = resolveIndexedElement(tabId, target.index);
+        if (!indexed) {
+          throw new Error(staleIndexMessage('click', target.index));
         }
-        const coords = await selectorToCoords(tabId, selector, signal);
+        const coords = await selectorToCoords(tabId, indexed.selector, signal, indexed.signature);
         x = coords.x;
         y = coords.y;
       } else {
@@ -402,14 +532,11 @@ export async function type(
     tabId,
     async () => {
       if (targetIndex !== undefined) {
-        const selector = resolveIndexedSelector(tabId, targetIndex);
-        if (!selector) {
-          throw new Error(
-            `type: index ${targetIndex} not found in current snapshot — ` +
-              `call read_dom again to rebuild the index map.`,
-          );
+        const indexed = resolveIndexedElement(tabId, targetIndex);
+        if (!indexed) {
+          throw new Error(staleIndexMessage('type', targetIndex));
         }
-        const coords = await selectorToCoords(tabId, selector, signal);
+        const coords = await selectorToCoords(tabId, indexed.selector, signal, indexed.signature);
         await dispatchMouseClick(tabId, coords.x, coords.y, signal);
       }
       await sendCommand(tabId, 'Input.insertText', { text }, signal);
@@ -428,6 +555,8 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
         {
           expression: `(() => {
         const MAX = ${DOM_SUMMARY_MAX_CHARS};
+        const signatureOf = ${ELEMENT_SIGNATURE_JS};
+        const uniquePathOf = ${UNIQUE_PATH_JS};
         const lines = [];
 
         // Title + URL
@@ -440,16 +569,20 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
           ...document.querySelectorAll('button, a[href], input, textarea, select, [role="button"], [role="link"], [role="menuitem"], [role="tab"], [tabindex]')
         ];
 
-        // Build index→selector map as JSON for the caller to parse
+        // Build index→{selector,signature} map as JSON for the caller to parse.
+        // An element only receives an index once its own path has been proven
+        // here to resolve back to that exact element and nothing else, so an
+        // index the model is handed can never name two candidates.
         const indexMap = {};
-        lines.push('INTERACTABLE ELEMENTS (' + interactable.length + '):');
+        const headerAt = lines.length;
+        lines.push('');
         let budget = MAX - 500; // reserve 500 for header/footer
+        let idx = 0;
 
         for (let i = 0; i < interactable.length; i++) {
           if (budget <= 0) break;
           const el = interactable[i];
-          const idx = i + 1; // 1-based index
-          const tag = el.tagName.toLowerCase();
+          const tag = el.localName;
           const role = el.getAttribute('role') || '';
           const label = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent?.trim().slice(0, 80) || '';
           const name = el.getAttribute('name') || el.getAttribute('id') || '';
@@ -457,16 +590,19 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
           const href = el.getAttribute('href') || '';
           const placeholder = el.getAttribute('placeholder') || '';
 
-          // Build a unique CSS selector for the index map
-          let selector = tag;
-          if (el.id) {
-            selector = '#' + el.id;
-          } else if (name) {
-            selector = tag + '[name=' + JSON.stringify(name) + ']';
-          } else if (label) {
-            selector = tag + '[aria-label=' + JSON.stringify(label.slice(0, 60)) + ']';
+          const selector = uniquePathOf(el);
+          if (!selector) continue;
+          let resolvesUniquely = false;
+          try {
+            const matches = document.querySelectorAll(selector);
+            resolvesUniquely = matches.length === 1 && matches[0] === el;
+          } catch (err) {
+            resolvesUniquely = false;
           }
-          indexMap[idx] = selector;
+          if (!resolvesUniquely) continue;
+
+          idx += 1;
+          indexMap[idx] = { selector: selector, signature: signatureOf(el) };
 
           let line = '  [' + idx + '] ' + tag + (role ? '/' + role : '') + (elType ? ':' + elType : '');
           if (label) line += ' label=' + JSON.stringify(label);
@@ -477,6 +613,9 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
           lines.push(line);
           budget -= line.length + 1;
         }
+
+        lines[headerAt] = 'INTERACTABLE ELEMENTS (' + idx + ' addressable of ' +
+          interactable.length + ' found):';
 
         // Visible text with content fencing (P2-6)
         lines.push('');
@@ -496,17 +635,23 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
       );
 
       if (evalResult.exceptionDetails) {
-        return `[getPageContent error: ${evalResult.exceptionDetails.text}]`;
+        return `[getPageContent error: ${describeEvalException(evalResult.exceptionDetails)}]`;
       }
 
       const val = evalResult.result.value;
       if (typeof val !== 'string') return '[getPageContent: unexpected result type]';
 
       try {
-        const parsed = JSON.parse(val) as { summary: string; indexMap: Record<string, string> };
-        const newMap = new Map<number, string>();
-        for (const [k, v] of Object.entries(parsed.indexMap)) {
-          newMap.set(Number(k), v);
+        const parsed = JSON.parse(val) as {
+          summary: string;
+          indexMap: Record<string, Partial<IndexedElement>>;
+        };
+        const newMap = new Map<number, IndexedElement>();
+        for (const [key, entry] of Object.entries(parsed.indexMap)) {
+          const index = Number(key);
+          if (!Number.isInteger(index)) continue;
+          if (typeof entry?.selector !== 'string' || typeof entry.signature !== 'string') continue;
+          newMap.set(index, { selector: entry.selector, signature: entry.signature });
         }
         setElementIndexMap(tabId, newMap);
 

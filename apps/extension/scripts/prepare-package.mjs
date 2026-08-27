@@ -4,10 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnv } from 'vite';
-import {
-  readChromeBuildConfiguration,
-  validateReleaseManifest,
-} from './manifest-config.mjs';
+import { readChromeBuildConfiguration, validateReleaseManifest } from './manifest-config.mjs';
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageManifest = JSON.parse(

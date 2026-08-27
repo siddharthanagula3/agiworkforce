@@ -1,8 +1,8 @@
-
 import type { ManagedCloudOwner } from '../cloud-bridge/managedCloudAuthority';
 
 export type ComputerUseCancellationReason =
   | 'account_changed'
+  | 'debugger_detached'
   | 'panel_closed'
   | 'superseded'
   | 'tab_intent_changed'

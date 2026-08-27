@@ -1,6 +1,12 @@
-
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl } from '../src/background/policy';
+import {
+  ALLOWED_BRIDGE_HOSTS,
+  DEFAULT_AGI_BRIDGE_URL,
+  validateBridgeUrl,
+} from '../src/background/policy';
 
 describe('validateBridgeUrl — localhost URLs pass validation', () => {
   it('accepts http://localhost', () => {
@@ -168,5 +174,34 @@ describe('validateBridgeUrl — non-localhost IPs are rejected', () => {
 
   it('rejects 8.8.8.8 (public IP)', () => {
     expect(validateBridgeUrl('http://8.8.8.8')).toBeNull();
+  });
+});
+
+describe('the side panel persists the normalized URL, not what was typed', () => {
+  const sidePanel = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src/side_panel.ts'),
+    'utf8',
+  );
+  const saveHandler = sidePanel.slice(
+    sidePanel.indexOf('function drawerSaveBridgeUrl()'),
+    sidePanel.indexOf('drawerBridgeSaveBtn.addEventListener'),
+  );
+
+  it('offers a scheme fetch() can actually use as the placeholder', () => {
+    expect(sidePanel).toContain('placeholder: DEFAULT_AGI_BRIDGE_URL');
+    expect(DEFAULT_AGI_BRIDGE_URL).toBe('http://localhost:8787');
+    expect(validateBridgeUrl(DEFAULT_AGI_BRIDGE_URL)).toBe(DEFAULT_AGI_BRIDGE_URL);
+  });
+
+  it('stores, broadcasts and displays the validated form and never the raw text', () => {
+    expect(saveHandler).toContain('agi_bridge_url: validated');
+    expect(saveHandler).toContain("sendMessage({ type: 'BRIDGE_URL_CHANGED', url: persisted })");
+    expect(saveHandler).toContain('drawerBridgeInput.value = persisted;');
+    expect(saveHandler).not.toMatch(/agi_bridge_url:\s*raw\b/);
+    expect(saveHandler).not.toMatch(/url:\s*raw\b/);
+  });
+
+  it('normalizes exactly the value the placeholder used to show', () => {
+    expect(validateBridgeUrl('ws://localhost:8787')).toBe(DEFAULT_AGI_BRIDGE_URL);
   });
 });

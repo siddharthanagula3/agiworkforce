@@ -47,22 +47,42 @@ only the configured exact Clerk Frontend API and Sync Host origins to host
 permissions and `connect-src`; [`scripts/manifest-config.mjs`](scripts/manifest-config.mjs)
 validates those origins.
 
-| Capability                                | Why it exists                                                                                   | Principal exposure                                                                                                                      |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `activeTab`, `tabs`, `scripting`          | Read explicitly requested page context; inspect and operate tabs; inject bounded scripts.       | Page text, URL/title metadata, or DOM changes on the active/target page.                                                                |
-| `debugger`                                | Bounded Chrome DevTools Protocol computer-use actions.                                          | High privilege over an attached tab. Use is restricted to an approved origin and the driver detaches after the bounded action/run path. |
-| `cookies`                                 | Explicit extension-UI cookie tools.                                                             | Cookie confidentiality and integrity. Cookie messages are extension-page-only.                                                          |
-| `nativeMessaging`                         | Pair and exchange approved messages with AGI Desktop.                                           | Local-process boundary and native host installation/trust.                                                                              |
-| `storage`                                 | Conversations, allowlist, tasks, shortcuts, preferences, profiles, and transient session state. | Browser-profile persistence and Chrome Sync for the explicit boolean preference set.                                                    |
-| `alarms`, `notifications`, `contextMenus` | Scheduled tasks, completion notices, and user-invoked page actions.                             | Work can occur while the side panel is closed; task origin is checked again at fire time.                                               |
-| `sidePanel`, `tabGroups`                  | Primary UI and explicit tab organization features.                                              | Tab metadata and grouping state.                                                                                                        |
+| Capability                                | Why it exists                                                                                   | Principal exposure                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `activeTab`, `tabs`, `scripting`          | Read explicitly requested page context; inspect and operate tabs; inject bounded scripts.       | Page text, URL/title metadata, or DOM changes on the active/target page.                                                                                                                                                                                                                                                                                                  |
+| `debugger`                                | Bounded Chrome DevTools Protocol computer-use actions.                                          | High privilege over an attached tab. `chrome.debugger.attach` takes a bare tab id and needs no host permission, so the reach is bounded instead by a Chrome-granted host permission for the target origin (below) plus the stored consent record; the driver detaches after the bounded action/run path, and Chrome's own Cancel on the debugging bar terminates the run. |
+| `cookies`                                 | Explicit extension-UI cookie tools.                                                             | Cookie confidentiality and integrity. Cookie messages are extension-page-only.                                                                                                                                                                                                                                                                                            |
+| `nativeMessaging`                         | Pair and exchange approved messages with AGI Desktop.                                           | Local-process boundary and native host installation/trust.                                                                                                                                                                                                                                                                                                                |
+| `storage`                                 | Conversations, allowlist, tasks, shortcuts, preferences, profiles, and transient session state. | Browser-profile persistence and Chrome Sync for the explicit boolean preference set.                                                                                                                                                                                                                                                                                      |
+| `alarms`, `notifications`, `contextMenus` | Scheduled tasks, completion notices, and user-invoked page actions.                             | Work can occur while the side panel is closed; task origin is checked again at fire time.                                                                                                                                                                                                                                                                                 |
+| `sidePanel`, `tabGroups`                  | Primary UI and explicit tab organization features.                                              | Tab metadata and grouping state.                                                                                                                                                                                                                                                                                                                                          |
 
 Source host permissions cover loopback (`localhost`, `127.0.0.1`) and the
-documented AGI Web/API origins. The content script matches all ordinary
-`http://*/*` and `https://*/*` top-level frames. Incognito use is disabled. The
-broad content-script match is a material attack-surface choice: it enables page
-discovery/context features, but every visited page can observe the content
-script's page-world effects and can attempt to exercise its message handlers.
+documented AGI Web/API origins. Every other origin is reachable only through
+`optional_host_permissions` (`http://*/*`, `https://*/*`), which grant nothing
+at install: `requestBrowserControlHostPermission`
+([`browserControlConsent.ts`](src/features/computer-use/browserControlConsent.ts))
+raises Chrome's own site-access prompt for one exact origin at the moment the
+user confirms "Grant full browser control", and the grant is visible and
+withdrawable at `chrome://extensions`. Nothing is written to the consent record
+unless Chrome grants first, and both revoke paths remove the host permission
+alongside the record.
+
+The content script matches all ordinary `http://*/*` and `https://*/*`
+top-level frames. Incognito use is disabled. The broad content-script match is a
+material attack-surface choice: it enables page discovery/context features, but
+every visited page can observe the content script's page-world effects and can
+attempt to exercise its message handlers. On an origin that is not on the
+approved-sites list the content script now injects no UI and sends no startup
+message, so an unapproved page neither sees extension chrome nor wakes the
+service worker.
+
+No extension resource is exposed to web pages: there is no
+`web_accessible_resources` entry. Store-listing copy and the per-permission
+justifications that must accompany `debugger` are versioned in
+[`CHROME_WEB_STORE_LISTING.md`](CHROME_WEB_STORE_LISTING.md), and
+[`__tests__/manifest-contract.test.ts`](__tests__/manifest-contract.test.ts)
+freezes the permission and host lists against it.
 
 Extension pages use a restrictive CSP for scripts and objects and disallow
 framing. The current source CSP permits inline styles and `data:` images; code
@@ -192,18 +212,39 @@ pending delete.
   content script can invoke privileged background behavior. Computer use also
   re-reads the target tab and revalidates its origin before starting.
 - Allowlisting alone does not grant protocol-level control. Computer use
-  additionally requires the origin to appear in
-  `chrome.storage.local.agi_cu_browser_control_consent`, a separate record
-  written only by the options-page confirmation that names the risk in plain
-  words ("This grants full DevTools-Protocol control": attach the CDP debugger
-  and click, type, navigate, read the DOM, and screenshot inside the signed-in
-  session on that origin). `AGI_START_COMPUTER_USE` refuses before any lease,
-  CDP attach, or paid cloud call when the origin is absent, and refuses the same
-  way when the record cannot be read, so a storage failure denies rather than
+  additionally requires two independent grants for the origin, and
+  `hasBrowserControlConsent` returns true only when both hold:
+  1. `chrome.storage.local.agi_cu_browser_control_consent`, a record written
+     only by the options-page confirmation that names the risk in plain words
+     ("This grants full DevTools-Protocol control": attach the CDP debugger and
+     click, type, navigate, read the DOM, and screenshot inside the signed-in
+     session on that origin); and
+  2. a Chrome-enforced host permission for that exact origin, checked with
+     `chrome.permissions.contains`. The extension's own storage is invisible to
+     Chrome and to `chrome://extensions`, so it must never be the only thing
+     authorizing DevTools-Protocol reach.
+
+  `AGI_START_COMPUTER_USE` refuses before any lease, CDP attach, or paid cloud
+  call when either half is absent, and refuses the same way when the record or
+  the permission cannot be read, so a storage or API failure denies rather than
   grants. Removing an origin from the allowlist — from the current-site button
-  or the per-entry remove — revokes its browser-control record in the same step,
-  so a re-added site is confirmed again. Non-http(s) and malformed entries are
-  dropped on read, so a poisoned record cannot widen the grant.
+  or the per-entry remove — revokes its browser-control record and removes the
+  host permission in the same step, so a re-added site is confirmed again.
+  Non-http(s) and malformed entries are dropped on read, so a poisoned record
+  cannot widen the grant.
+
+- A run terminates when the user dismisses Chrome's debugging bar. The driver's
+  `chrome.debugger.onDetach` listener treats `canceled_by_user` as a
+  cancellation and aborts the run's `AbortController`; it does not re-attach.
+  Any other detach reason (an eviction, a target close) still re-attaches,
+  because that is not the user withdrawing consent.
+- An index the model acts through addresses exactly one element. The page-side
+  snapshot only assigns an index to an element whose structural path is proven,
+  in that same pass, to resolve to that element and nothing else, and every
+  resolution re-checks both uniqueness and a signature captured at snapshot
+  time. A stale, ambiguous or changed index fails the tool call loudly instead
+  of acting on the first match, so a misclick cannot land silently inside the
+  user's signed-in session.
 - Job-application autofill is an egress of the stored `agi_autofill_profile`
   (name, contact, location, profile URLs, employment, work authorization,
   salary, cover-letter and resume text, custom answers) into page-controlled

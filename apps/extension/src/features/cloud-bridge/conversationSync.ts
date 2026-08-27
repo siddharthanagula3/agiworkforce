@@ -75,17 +75,24 @@ export function scheduleConversationSync(
   scheduledFlushes.set(key, { owner: { ...owner }, conversationId, timer, streaming });
 }
 
-export async function sweepConversationSync(): Promise<void> {
+/**
+ * @returns whether any conversation still needs mirroring after the pass. The
+ *   caller uses it to decide whether the service worker has to be woken again;
+ *   a sweep that finds nothing must not keep a periodic alarm alive.
+ */
+export async function sweepConversationSync(): Promise<boolean> {
   try {
     const context = await getManagedCloudAuthContext();
-    if (!context) return;
+    if (!context) return false;
     await drainCloudDeletionTombstones(context.owner);
     const entries = await listConversationsNeedingCloudSync(context.owner);
     for (const entry of entries) {
       await flushConversation(context.owner, entry.id, false);
     }
+    return (await listConversationsNeedingCloudSync(context.owner)).length > 0;
   } catch (error) {
     logger.debug('Conversation sync sweep failed', error);
+    return true;
   }
 }
 

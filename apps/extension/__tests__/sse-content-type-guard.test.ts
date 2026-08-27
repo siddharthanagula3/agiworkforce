@@ -23,7 +23,10 @@ async function collect(gen: AsyncGenerator<unknown>) {
 describe('managed chat response must be an event stream', () => {
   const originalFetch = globalThis.fetch;
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn(async () => htmlResponse()));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => htmlResponse()),
+    );
   });
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -52,9 +55,7 @@ describe('managed chat response must be an event stream', () => {
           }),
       ),
     );
-    const chunks = await collect(
-      streamFreeChat([{ role: 'user', content: 'hi' }], 'a-token'),
-    );
+    const chunks = await collect(streamFreeChat([{ role: 'user', content: 'hi' }], 'a-token'));
     const error = chunks.find((c) => c.type === 'error');
     expect(error?.code).toBe('protocol_error');
     expect(error?.message).toContain('application/json');
