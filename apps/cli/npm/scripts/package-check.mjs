@@ -49,6 +49,30 @@ for (const platform of platforms) {
   );
 }
 
+// The README ships to every installer, so a claim in it is a promise. Each
+// entry below was advertised at some point and did not resolve: the installer
+// URL and the Homebrew tap 404, the two doc paths name files that are not in
+// the repo, and `agi mcp-server` answers tools/list with an empty set, so
+// calling the CLI an MCP server tells users to wire up something inert.
+// Re-add a line here only once the thing it describes actually works.
+const readme = readFileSync(join(npmDir, 'README.md'), 'utf8');
+const forbiddenReadmeClaims = [
+  ['agiworkforce.com/install.sh', 'no install.sh is published at that URL'],
+  ['brew install', 'the Homebrew tap does not exist'],
+  ['agiworkforce/tap', 'the Homebrew tap does not exist'],
+  ['ARCHITECTURE.md', 'apps/cli/ARCHITECTURE.md is not in the repository'],
+  ['AGI_WORKFORCE.md', 'AGI_WORKFORCE.md is not in the repository'],
+  ['and an MCP server', '`agi mcp-server` exposes no tools'],
+];
+for (const [needle, why] of forbiddenReadmeClaims) {
+  requireCondition(!readme.includes(needle), `README.md must not advertise "${needle}": ${why}`);
+}
+
+requireCondition(
+  readme.includes(`npm install -g ${pkg.name}`),
+  `README.md must document the one install path that resolves: npm install -g ${pkg.name}`,
+);
+
 if (process.argv.includes('--staged')) {
   const distDir = join(repoRoot, 'dist', 'cli');
   if (!existsSync(distDir) && process.env.CI !== 'true') {

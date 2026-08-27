@@ -59,7 +59,33 @@ pub mod teams;
 // using `crate::tools::*` continue to resolve unchanged.
 pub use features::exec::tools;
 pub mod tui;
+/// Audio capture and transcription. Off by default: `cpal` links `libasound.so.2`
+/// on Linux, which the dynamic loader resolves before `main`, so a build that
+/// carries it cannot start on a host without ALSA. The language table it used to
+/// own lives in `voice_languages` so `/voice` still validates either way.
+#[cfg(feature = "voice")]
 pub mod voice;
+pub mod voice_languages;
+
+/// Stand-in for `voice` in builds without the feature, so `/voice` reports why
+/// it is unavailable instead of the command vanishing from the registry.
+#[cfg(not(feature = "voice"))]
+pub mod voice {
+    use crate::agent::AgentSession;
+    use crate::config::CliConfig;
+    use anyhow::{bail, Result};
+
+    pub async fn run_voice_mode(
+        _session: &mut AgentSession,
+        _config: &CliConfig,
+        _voice_lang: &str,
+    ) -> Result<()> {
+        bail!(
+            "This build was compiled without voice support, so audio capture is unavailable. \
+             Install a build with the `voice` feature enabled to use /voice."
+        )
+    }
+}
 
 // Extended CLI modules — used by subcommand handlers
 pub mod app_server;
@@ -1850,6 +1876,15 @@ pub async fn run_main() -> Result<()> {
                         .map(|buf| buf.clone())
                         .unwrap_or_default();
                     session.finalize_cancelled_turn(&partial);
+                    // The repair `finalize_cancelled_turn` just made lives only
+                    // in memory, and the turn-end persist never runs on this
+                    // path. Without this write the session file ends on a lone
+                    // user message, so `agi resume` reopens it with two user
+                    // turns in a row. Report and continue: a failed write must
+                    // not change the interrupt's exit code.
+                    if let Err(error) = session.persist_managed_session() {
+                        tracing::warn!("failed to persist the cancelled turn: {error:#}");
+                    }
                     use std::io::Write as _;
                     let _ = io::stdout().flush();
                     if json_events {

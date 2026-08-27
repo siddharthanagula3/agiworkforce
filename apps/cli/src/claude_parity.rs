@@ -130,7 +130,8 @@ pub fn handle_shared_command(
             "Report issues at: https://github.com/agiworkforce/agiworkforce/issues".to_string(),
         ),
         "/focus" => ParityCommandResult::SystemMessage(
-            "Focus mode: hide chrome and maximize composer width. Currently controlled via --no-status-bar at startup.".to_string(),
+            "Focus mode is not implemented. Use /statusline to choose which status fields render."
+                .to_string(),
         ),
         "/advisor" => ParityCommandResult::NotHandled,
         "/team-onboarding" => ParityCommandResult::SystemMessage(render_team_onboarding()),
@@ -781,19 +782,33 @@ pub fn render_advisor(arg: &str) -> String {
     )
 }
 
+/// Path this command reads a team's onboarding guide from.
+///
+/// It used to read `$HOME/.claude/`, which is Claude Code's directory, not
+/// ours — so on a machine with both installed AGI rendered a file it does not
+/// own, and on every other machine it named a path nothing would ever create.
+fn team_onboarding_path() -> Option<std::path::PathBuf> {
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|dir| dir.join("team-onboarding.md"))
+}
+
 pub fn render_team_onboarding() -> String {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let path = std::path::PathBuf::from(home)
-        .join(".claude")
-        .join("team-onboarding.md");
+    let Some(path) = team_onboarding_path() else {
+        return "Could not resolve the AGI config directory to look for a team-onboarding guide."
+            .to_string();
+    };
     if path.exists() {
         return match std::fs::read_to_string(&path) {
             Ok(content) => format!("# Team onboarding\n\n{content}"),
             Err(e) => format!("Failed to read {}: {e}", path.display()),
         };
     }
+    // Nothing in the CLI writes this file; it is a guide a team author drops in
+    // by hand. Saying `agi onboarding` generates it, as this used to, sends the
+    // user to a command that does something else entirely.
     format!(
-        "No team-onboarding guide found at {}. Run `agi onboarding` to generate one.",
+        "No team-onboarding guide found.\n  Create {} to have it shown here.",
         path.display()
     )
 }
@@ -922,39 +937,15 @@ pub fn render_doctor(session: &AgentSession) -> String {
 }
 
 pub fn render_release_notes() -> String {
-    let path = std::path::Path::new("CHANGELOG.md");
-    let Ok(content) = std::fs::read_to_string(path) else {
-        return "Release notes\n  CHANGELOG.md was not found in the current working directory."
-            .to_string();
-    };
-
-    let mut section = Vec::new();
-    let mut in_first_section = false;
-    for line in content.lines() {
-        if line.starts_with("## ") {
-            if in_first_section {
-                break;
-            }
-            in_first_section = true;
-        }
-        if in_first_section {
-            section.push(line);
-        }
-    }
-
-    if section.is_empty() {
-        return "Release notes\n  No release sections found in CHANGELOG.md.".to_string();
-    }
-
-    let latest = section.join("\n");
-    let latest = if latest.chars().count() > 4_000 {
-        let mut truncated: String = latest.chars().take(4_000).collect();
-        truncated.push_str("\n... truncated ...");
-        truncated
-    } else {
-        latest
-    };
-    format!("Release notes\n{latest}")
+    // This used to read CHANGELOG.md from the current working directory and
+    // present it as AGI's release notes, so in any project that has one the
+    // user was shown their own changelog under our heading.
+    format!(
+        "Release notes\n  You are running {} v{}.\n  Notes for each release: {}/releases",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+        env!("CARGO_PKG_REPOSITORY"),
+    )
 }
 
 pub fn render_keybindings() -> String {
