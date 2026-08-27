@@ -27,6 +27,9 @@ vi.mock('@/lib/user-connector-tools', () => ({
   evictCustomConnectorCaches: vi.fn(),
   getUserCustomConnectorSummaries: vi.fn(async () => []),
 }));
+vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
+  getMcpStatelessRuntime: vi.fn(async () => ({})),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -46,7 +49,17 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getSubscription.mockResolvedValue({ plan_tier: 'free' });
-    mocks.connect.mockResolvedValue({ catalog: { tools: [] }, close: vi.fn() });
+    mocks.connect.mockResolvedValue({
+      protocolEra: 'modern',
+      catalog: {
+        tools: [{ toolName: 'search', visibility: 'model' }],
+        resources: [],
+        resourceTemplates: [],
+        prompts: [],
+        apps: [],
+      },
+      close: vi.fn(),
+    });
   });
 
   it('rejects a second custom remote MCP for a free user before network work', async () => {

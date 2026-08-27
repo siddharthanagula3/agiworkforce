@@ -116,14 +116,14 @@ describe('useChatStream — interactive cards', () => {
     expect(cards[0]?.cardId).toBe('toolu_01abc');
   });
 
-  it('advertises only the interactive card kind this Web client can render', async () => {
+  it('advertises only the interactive card kinds this Web client can render', async () => {
     mockSseStream([textEvent('Ready.')]);
     await send();
 
     const init = vi.mocked(fetch).mock.calls[0]?.[1];
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body['x_interactive_cards']).toEqual({
-      supported: ['map-search.v1'],
+      supported: ['map-search.v1', 'mcp-app.v1'],
       canRespond: false,
     });
   });

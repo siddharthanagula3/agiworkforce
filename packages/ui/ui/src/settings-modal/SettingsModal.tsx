@@ -227,6 +227,7 @@ function ConnectorDetail({
   onBack,
   error,
   disclosure,
+  capabilities,
   toolPermissions,
 }: {
   connector: SettingsConnector;
@@ -243,6 +244,8 @@ function ConnectorDetail({
    * routes or web-specific policy copy into a shell that Desktop also renders.
    */
   disclosure?: React.ReactNode;
+  /** Live capability catalog supplied by the owning surface. */
+  capabilities?: React.ReactNode;
   /**
    * Surface-supplied per-tool permission controls, shown only once the
    * connector is connected. Surface-owned for the same reason as `disclosure`:
@@ -340,6 +343,8 @@ function ConnectorDetail({
           revoke). Rendered before the Details block so it is above the fold at
           the moment the user is deciding. */}
       {disclosure}
+
+      {connection && capabilities}
 
       {/* Per-tool permissions are only meaningful once tools exist to govern,
           so they follow the connection rather than the catalog entry. */}
@@ -1534,6 +1539,7 @@ function suggestedConnectorIdsFor(role: string | null | undefined): readonly str
 function ConnectorsPanel({
   adapter,
   connectorDisclosure,
+  renderConnectorCapabilities,
   renderConnectorToolPermissions,
   workRole,
 }: {
@@ -1546,6 +1552,8 @@ function ConnectorsPanel({
    * the surface because the permission store and its API live there.
    */
   renderConnectorToolPermissions?: (connectorId: string) => React.ReactNode;
+  /** Renders a live Tools/Resources/Prompts/Apps catalog for a connected connector. */
+  renderConnectorCapabilities?: (connectorId: string) => React.ReactNode;
 }) {
   const { t } = useUiTranslation('settings');
   const [search, setSearch] = useState('');
@@ -1669,6 +1677,7 @@ function ConnectorsPanel({
           onBack={() => setDetailId(null)}
           error={rowErrors[detailConnector.id]}
           disclosure={connectorDisclosure}
+          capabilities={renderConnectorCapabilities?.(detailConnector.id)}
           toolPermissions={renderConnectorToolPermissions?.(detailConnector.id)}
         />
         {confirmDialog}
@@ -2520,6 +2529,8 @@ export interface SettingsModalProps {
    * belong to the surface, not to this shell.
    */
   renderConnectorToolPermissions?: (connectorId: string) => React.ReactNode;
+  /** Surface-owned live MCP capability catalog. */
+  renderConnectorCapabilities?: (connectorId: string) => React.ReactNode;
   /**
    * Per-section attention badges, keyed by nav key. A section with no entry —
    * or a zero count — renders exactly as before.
@@ -2541,6 +2552,7 @@ export function SettingsModal({
   connectorDisclosure,
   workRole,
   renderConnectorToolPermissions,
+  renderConnectorCapabilities,
   navBadges,
   title,
 }: SettingsModalProps) {
@@ -2578,6 +2590,7 @@ export function SettingsModal({
           <ConnectorsPanel
             adapter={adapter}
             connectorDisclosure={connectorDisclosure}
+            renderConnectorCapabilities={renderConnectorCapabilities}
             renderConnectorToolPermissions={renderConnectorToolPermissions}
             workRole={workRole}
           />

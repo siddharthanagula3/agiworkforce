@@ -117,6 +117,21 @@ describe('loadUserConnectorToolDefs — github built-in gate', () => {
     ).toBe(false);
   });
 
+  it('keeps the connector catalog available while the ownership column is being deployed', async () => {
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('github_installations')) {
+        return Promise.reject(
+          Object.assign(new Error('column "ownership_verified_at" does not exist'), {
+            code: '42703',
+          }),
+        );
+      }
+      return Promise.resolve([]);
+    });
+
+    await expect(loadUserConnectorToolDefs('user-1')).resolves.toEqual([]);
+  });
+
   it('returns [] for an empty userId without touching the DB', async () => {
     const defs = await loadUserConnectorToolDefs('');
     expect(defs).toEqual([]);
@@ -413,6 +428,71 @@ describe('makeUserConnectorExecutor', () => {
     expect(result).toEqual({ handled: true, content: 'page found', isError: false });
   });
 
+  it('surfaces an MCP input_required pause instead of treating the call as completed', async () => {
+    process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
+      connectors: [{ connectorId: 'notion', url: 'https://mcp.notion.example/mcp' }],
+    });
+    stubDb({ activeConnectors: ['notion'] });
+    const inputRequired = {
+      inputRequests: { priority: { type: 'string' } },
+      requestState: 'token-1',
+    };
+    const callTool = vi.fn().mockResolvedValue({
+      isError: true,
+      inputRequired,
+      content: [{ type: 'text', text: 'the connector needs more input' }],
+    });
+    mockConnectMcpServer.mockResolvedValue({ serverName: 'notion', callTool, close: vi.fn() });
+
+    const result = await makeUserConnectorExecutor('user-1')(
+      'notion',
+      'create_task',
+      {},
+      {
+        allowInputRequired: true,
+      },
+    );
+
+    expect(result.handled).toBe(true);
+    expect(result.isError).toBe(true);
+    expect(result.inputRequired).toEqual(inputRequired);
+    expect(callTool).toHaveBeenCalledWith(
+      'create_task',
+      {},
+      expect.objectContaining({ allowInputRequired: true }),
+    );
+  });
+
+  it('threads collected responses and the continuation token back to the same call on resume', async () => {
+    process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
+      connectors: [{ connectorId: 'notion', url: 'https://mcp.notion.example/mcp' }],
+    });
+    stubDb({ activeConnectors: ['notion'] });
+    const callTool = vi
+      .fn()
+      .mockResolvedValue({ isError: false, content: [{ type: 'text', text: 'created' }] });
+    mockConnectMcpServer.mockResolvedValue({ serverName: 'notion', callTool, close: vi.fn() });
+
+    const result = await makeUserConnectorExecutor('user-1')(
+      'notion',
+      'create_task',
+      { title: 'x' },
+      { allowInputRequired: true, inputResponses: { priority: 'high' }, requestState: 'token-1' },
+    );
+
+    expect(callTool).toHaveBeenCalledWith(
+      'create_task',
+      { title: 'x' },
+      expect.objectContaining({
+        allowInputRequired: true,
+        inputResponses: { priority: 'high' },
+        requestState: 'token-1',
+      }),
+    );
+    expect(result.content).toBe('created');
+    expect(result.inputRequired).toBeUndefined();
+  });
+
   it('fences a rejected connector call instead of pasting the server text into the model turn', async () => {
     process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
       connectors: [{ connectorId: 'hostile', url: 'https://mcp.hostile.example/mcp' }],
@@ -626,6 +706,11 @@ describe('makeUserConnectorExecutor', () => {
     expect(callAsA).not.toHaveBeenCalled();
     expect(callAsB).toHaveBeenCalledWith('whoami', {});
     expect(result).toEqual({ handled: true, content: 'credential owner: B', isError: false });
-    expect(mockConnectMcpServer).not.toHaveBeenCalled();
+    expect(mockConnectMcpServer).toHaveBeenCalledTimes(1);
+    expect(mockConnectMcpServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ url: 'https://b.mcp.example/mcp' }),
+      }),
+    );
   });
 });

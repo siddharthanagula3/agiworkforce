@@ -40,11 +40,16 @@ export async function probeMcpServer(
     egressPolicy: desktopLocalEgressPolicy,
   });
   try {
+    const { tools, resources, resourceTemplates, prompts, apps } = handle.catalog;
     return {
       version: 1,
       generatedAt: Date.now(),
       servers: { [serverName]: handle.catalog },
-      tools: handle.catalog.tools,
+      tools,
+      resources,
+      resourceTemplates,
+      prompts,
+      apps,
     };
   } finally {
     await handle.close();

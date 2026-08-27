@@ -47,6 +47,11 @@ import type {
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { ConnectorConsentSummary } from '@/features/connectors/components/ConnectorConsentSummary';
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
+import { ConnectorCapabilitiesPanel } from '@/features/connectors/components/ConnectorCapabilitiesPanel';
+import {
+  currentConnectorReturnPath,
+  withConnectorReturnPath,
+} from '@/features/connectors/hooks/use-connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 
@@ -571,10 +576,26 @@ export function WebSettingsModal({
         const body = (await res
           .clone()
           .json()
-          .catch(() => null)) as { error?: string; installStartPath?: string } | null;
-        if (res.status === 409 && body?.installStartPath && typeof window !== 'undefined') {
-          window.location.href = body.installStartPath;
-          return;
+          .catch(() => null)) as {
+          error?: string;
+          oauthStartPath?: string;
+          installStartPath?: string;
+        } | null;
+        if (res.status === 409 && typeof window !== 'undefined') {
+          if (body?.oauthStartPath) {
+            const target = withConnectorReturnPath(
+              body.oauthStartPath,
+              currentConnectorReturnPath(),
+            );
+            if (target) {
+              window.location.href = target;
+              return;
+            }
+          }
+          if (body?.installStartPath) {
+            window.location.href = body.installStartPath;
+            return;
+          }
         }
         throw new Error(body?.error ?? `Could not connect ${connector.name}.`);
       }
@@ -994,6 +1015,9 @@ export function WebSettingsModal({
           navGroups={WEB_SETTINGS_NAV_GROUPS}
           adapter={adapter}
           connectorDisclosure={<ConnectorConsentSummary />}
+          renderConnectorCapabilities={(connectorId) => (
+            <ConnectorCapabilitiesPanel connectorRef={connectorId} connected />
+          )}
           workRole={workRole}
           renderConnectorToolPermissions={(connectorId) => (
             <button

@@ -280,7 +280,7 @@ describe('useChatStream', () => {
   describe('canonical x_agent_event activity', () => {
     it('renders a retried canonical text event exactly once', async () => {
       const textEnvelope = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         sessionId: TEMP_CONVERSATION.id,
         turnId: 'turn-retried-text',
         sequence: 0,
@@ -326,7 +326,7 @@ describe('useChatStream', () => {
 
     it('settles activity the stream never stopped, so a finished turn stops saying "Working"', async () => {
       const base = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         sessionId: TEMP_CONVERSATION.id,
         turnId: 'turn-activity-unstopped',
       };
@@ -380,7 +380,7 @@ describe('useChatStream', () => {
 
     it('validates, reduces, and keeps canonical activity on the assistant message', async () => {
       const base = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         sessionId: TEMP_CONVERSATION.id,
         turnId: 'turn-activity-1',
       };
@@ -515,7 +515,7 @@ describe('useChatStream', () => {
       });
 
       const base = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         sessionId: conversation.id,
         turnId: 'turn-persisted-activity',
       };
@@ -683,7 +683,7 @@ describe('useChatStream', () => {
 
     it('keeps the validated run handle and replay cursor on the assistant message', async () => {
       const base = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         sessionId: TEMP_CONVERSATION.id,
         turnId: 'turn-run-reference',
       };
@@ -735,7 +735,7 @@ describe('useChatStream', () => {
 
     it('replays only missing journal events when the initial SSE connection drops', async () => {
       const base = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         sessionId: TEMP_CONVERSATION.id,
         turnId: 'turn-reconnect',
       };
@@ -1390,7 +1390,7 @@ describe('useChatStream', () => {
               if (pulls === 0) {
                 pulls += 1;
                 const activityBase = {
-                  schemaVersion: 3,
+                  schemaVersion: 4,
                   sessionId: PERSISTED_CONV.id,
                   turnId: 'turn-user-stopped',
                 };

@@ -70,6 +70,7 @@ describe('Web MCP configuration', () => {
         },
       },
       MCP_EGRESS_POLICY,
+      { resolveRuntime: expect.any(Function) },
     );
   });
 

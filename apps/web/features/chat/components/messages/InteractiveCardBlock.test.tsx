@@ -130,6 +130,31 @@ describe('InteractiveCardBlock', () => {
     open.mockRestore();
   });
 
+  it('renders a real mcp app card, the second kind this client advertises', () => {
+    const payloadId = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+    const mcpCard = clone(envelope) as Record<string, unknown>;
+    mcpCard['kind'] = 'mcp-app.v1';
+    mcpCard['cardId'] = `mcp-app-${payloadId}`;
+    mcpCard['producedBy'] = { toolCallId: payloadId, toolName: 'mcp__linear__create_issue' };
+    mcpCard['fallback'] = {
+      headline: 'Interactive connector result',
+      text: 'linear returned an MCP App.',
+    };
+    mcpCard['body'] = {
+      payloadId,
+      connectorId: 'linear',
+      toolName: 'create_issue',
+      resourceUri: 'ui://linear/create-issue',
+    };
+    const pending = vi.fn().mockReturnValue(new Promise(() => undefined));
+    vi.stubGlobal('fetch', pending);
+
+    render(<InteractiveCardBlock cards={[decodeDelta(mcpCard)]} />);
+    expect(screen.queryByTestId('interactive-card-fallback')).not.toBeInTheDocument();
+    expect(screen.getByTitle('create_issue interactive result')).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it('still renders the fallback for a recognized kind with no renderer yet', () => {
     const itinerary = clone(envelope) as Record<string, unknown>;
     itinerary['kind'] = 'itinerary.v1';

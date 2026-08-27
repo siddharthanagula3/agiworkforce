@@ -37,6 +37,7 @@ import { getGitHubCallbackNotice } from '../lib/github-callback-notice';
 import { getConnectorOAuthNotice } from '../lib/connector-oauth-notice';
 
 import { ToolPermissionsPanel } from '../components/ToolPermissionsPanel';
+import { ConnectorCapabilitiesPanel } from '../components/ConnectorCapabilitiesPanel';
 import {
   CATEGORIES,
   CONNECTORS,
@@ -146,15 +147,6 @@ function useConnectorTools(connectorId: string): string[] {
  * (app/api/connectors/route.ts). Every clause below is behavior in that route —
  * do not add a consequence the route does not implement.
  */
-/**
- * Whether `CONNECTOR_TOOLS[id]` holds real wire tool names — the keys the
- * permission store and the chat tool loop use — rather than human-readable
- * capability prose. Only GitHub qualifies today.
- */
-function hasWireToolNames(connectorId: string): boolean {
-  return connectorId === 'github';
-}
-
 function describeDisconnect(connector: Connector, source?: ConnectorSource): string {
   if (source === 'github-app') {
     return `Your GitHub App installations are unlinked from this account and the per-tool permissions you saved for ${connector.name} are deleted. The app itself stays installed on GitHub until you remove it there.`;
@@ -258,7 +250,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
                 at runtime by catalogToConnectorToolDefs, which no static table
                 can mirror.
               */}
-              {hasWireToolNames(connector.id) && (
+              {connected && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -403,9 +395,11 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
         {RISK_CLASS_COPY[connector.riskClass]}
       </p>
 
+      <ConnectorCapabilitiesPanel connectorRef={connector.id} connected={connected} />
+
       {/* Tools — only shown for connectors that actually work in this deployment,
           so fabricated capability badges never render as product state. */}
-      {(isAvailable || connected) && tools.length > 0 && (
+      {!connected && isAvailable && tools.length > 0 && (
         <div className="rounded-xl border border-border bg-muted/40 p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Tools ({tools.length})</span>
