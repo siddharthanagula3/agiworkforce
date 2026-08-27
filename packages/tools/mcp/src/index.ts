@@ -26,9 +26,41 @@ export type {
   McpServerCatalog,
   McpToolCatalog,
   McpCallToolResult,
+  McpCatalogResource,
+  McpCatalogResourceTemplate,
+  McpCatalogPrompt,
+  McpCatalogPromptArgument,
+  McpCatalogDiscoveryError,
+  McpAppDescriptor,
+  McpToolVisibility,
+  McpInputRequiredState,
+  McpClientCacheConfig,
+  McpDiscoveryConfig,
+  McpTaskOperations,
 } from './types';
+
+export {
+  MCP_TASKS_EXTENSION_ID,
+  cancelTask,
+  getTask,
+  parseCreateTaskResult,
+  serverSupportsTasks,
+  updateTask,
+} from './tasks';
+export type {
+  McpCancelTaskResult,
+  McpCreateTaskResult,
+  McpGetTaskResult,
+  McpUpdateTaskResult,
+} from './tasks';
 
 export { resolveMcpTransport, createEgressGuardedFetch } from './transport';
 export type { McpEgressPolicy, McpFetch } from './transport';
 export { connectMcpServer, buildMcpToolCatalog } from './connect';
-export type { McpServerHandle, McpCallToolOptions, ConnectMcpServerParams } from './connect';
+export type {
+  McpServerHandle,
+  McpCallToolOptions,
+  ConnectMcpServerParams,
+  McpConnectionRuntimeOptions,
+  BuildMcpCatalogOptions,
+} from './connect';

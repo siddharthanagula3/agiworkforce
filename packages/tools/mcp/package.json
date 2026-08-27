@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/ext-apps": "1.7.5",
+    "@modelcontextprotocol/ext-tasks": "github:modelcontextprotocol/ext-tasks#0d0a6bd4c258b35caa3c810a1dd506cf105b1501",
     "@modelcontextprotocol/node": "2.0.0",
     "hono": "^4.13.2"
   },

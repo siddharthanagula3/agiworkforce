@@ -83,6 +83,7 @@ import {
   buildApiMessageContent,
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
+import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 
 interface SendMessageOptions {
   model?: string;
@@ -101,6 +102,7 @@ interface SendMessageOptions {
   styleMode?: string;
   styleInstruction?: string;
   skillName?: string;
+  mcpContext?: McpContextSelection;
   research?: boolean;
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
@@ -1764,7 +1766,7 @@ export function useChatStream(): UseChatStreamReturn {
             assistant_message_id: assistantMessageId,
             stream: true,
             [INTERACTIVE_CARD_REQUEST_KEY]: {
-              supported: ['map-search.v1'],
+              supported: ['map-search.v1', 'mcp-app.v1'],
               canRespond: false,
             },
             temperature: options.temperature,
@@ -1785,6 +1787,19 @@ export function useChatStream(): UseChatStreamReturn {
             code_execution: options.codeExecution || undefined,
             office_creation: options.officeCreation || undefined,
             skill_name: options.skillName,
+            mcp_context: options.mcpContext
+              ? {
+                  ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),
+                  ...(options.mcpContext.resources
+                    ? {
+                        resources: options.mcpContext.resources.map(({ connectorId, uri }) => ({
+                          connectorId,
+                          uri,
+                        })),
+                      }
+                    : {}),
+                }
+              : undefined,
             work_mode: options.workMode,
             agi_work_goal: options.workMode === 'agiwork' ? options.agiWorkGoal : undefined,
             thinking_mode: thinkingEnabled,

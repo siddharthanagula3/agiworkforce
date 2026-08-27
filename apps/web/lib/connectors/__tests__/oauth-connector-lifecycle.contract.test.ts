@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -459,7 +458,8 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
   it('disconnect revokes at the provider, destroys the ciphertext, and stops tool calls', async () => {
     await completeAuthorization();
     await makeUserConnectorExecutor('user-1')('acme', 'list_records', {});
-    expect(mocks.closedHandles).toBe(0);
+    expect(mocks.closedHandles).toBe(1);
+    const closedAfterStatelessCall = mocks.closedHandles;
 
     const response = await CONNECTORS_DELETE(
       new NextRequest(`${APP_ORIGIN}/api/connectors?connectorId=acme`, { method: 'DELETE' }),
@@ -469,7 +469,7 @@ describe('CRIT-001 — an available connector completes the whole lifecycle', ()
     expect(mocks.fetches.some((f) => f.url.includes('/oauth/revoke'))).toBe(true);
     expect(mocks.grants[0]!['revoked_at']).not.toBeNull();
     expect(mocks.grants[0]!['access_token_enc']).toBeNull();
-    expect(mocks.closedHandles).toBeGreaterThan(0);
+    expect(mocks.closedHandles).toBe(closedAfterStatelessCall);
 
     expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
     const afterDisconnect = await makeUserConnectorExecutor('user-1')('acme', 'list_records', {});

@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 import {
   CLARIFY_HEADER_MAX_LENGTH,
@@ -392,6 +391,19 @@ export const MapSearchCardBodySchema = z
     }
   });
 
+export const McpAppCardBodySchema = z
+  .object({
+    payloadId: z.string().uuid(),
+    connectorId: z.string().min(1).max(200),
+    toolName: z.string().min(1).max(128),
+    resourceUri: z
+      .string()
+      .min(1)
+      .max(4_096)
+      .refine((value) => value.startsWith('ui://')),
+  })
+  .strict();
+
 export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | null {
   const envelope = InteractiveCardEnvelopeSchema.safeParse(
     (payload as { card?: unknown } | null | undefined)?.card,
@@ -411,7 +423,9 @@ export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | n
       ? ClarifyCardBodySchema.safeParse(rawBody)
       : kind === 'itinerary.v1'
         ? ItineraryCardBodySchema.safeParse(rawBody)
-        : MapSearchCardBodySchema.safeParse(rawBody);
+        : kind === 'map-search.v1'
+          ? MapSearchCardBodySchema.safeParse(rawBody)
+          : McpAppCardBodySchema.safeParse(rawBody);
   if (!parsed.success) return { ...common, recognized: false, kind };
 
   return { ...common, recognized: true, kind, body: parsed.data } as InteractiveCard;

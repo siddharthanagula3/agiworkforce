@@ -7,7 +7,6 @@ import {
   connectMcpServer,
   type McpCallToolResult,
   type McpServerConfig,
-  type McpServerHandle,
   type McpToolCatalog,
 } from '@agiworkforce/mcp';
 
@@ -15,6 +14,7 @@ import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import { logger } from '@/lib/logger';
 import { withSpan } from '@/lib/observability/span';
+import { getMcpStatelessRuntime } from '@/lib/connectors/mcp-runtime-cache';
 
 const httpSchema = z.object({
   type: z.literal('http'),
@@ -75,14 +75,12 @@ interface CatalogState {
   catalog: McpToolCatalog | null;
   expiresAt: number;
   building: Promise<McpToolCatalog> | null;
-  handles: Map<string, McpServerHandle>;
 }
 
 const _state: CatalogState = {
   catalog: null,
   expiresAt: 0,
   building: null,
-  handles: new Map(),
 };
 
 const CATALOG_TTL_MS = 60_000;
@@ -95,10 +93,14 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
   const servers = loadWebMcpConfig();
   if (servers.length === 0) {
     const empty: McpToolCatalog = {
-      version: 1,
+      version: 2,
       generatedAt: now,
       servers: {},
       tools: [],
+      resources: [],
+      resourceTemplates: [],
+      prompts: [],
+      apps: [],
     };
     _state.catalog = empty;
     _state.expiresAt = now + CATALOG_TTL_MS;
@@ -120,10 +122,14 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
 
   if (Object.keys(configs).length === 0) {
     const empty: McpToolCatalog = {
-      version: 1,
+      version: 2,
       generatedAt: now,
       servers: {},
       tools: [],
+      resources: [],
+      resourceTemplates: [],
+      prompts: [],
+      apps: [],
     };
     _state.catalog = empty;
     _state.expiresAt = now + CATALOG_TTL_MS;
@@ -132,14 +138,11 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
 
   _state.building = (async () => {
     try {
-      const { catalog, handles } = await buildMcpToolCatalog(configs, MCP_EGRESS_POLICY);
-
-      const old = Array.from(_state.handles.values());
-      _state.handles = new Map();
-      for (const h of handles) {
-        _state.handles.set(h.serverName, h);
-      }
-      await Promise.all(old.map((h) => h.close().catch(() => undefined)));
+      const { catalog, handles } = await buildMcpToolCatalog(configs, MCP_EGRESS_POLICY, {
+        resolveRuntime: (serverId, config) =>
+          getMcpStatelessRuntime(config.url!, `operator:${serverId}`),
+      });
+      await Promise.all(handles.map((handle) => handle.close().catch(() => undefined)));
 
       _state.catalog = catalog;
       _state.expiresAt = now + CATALOG_TTL_MS;
@@ -170,27 +173,31 @@ export async function executeWebMcpTool(
       },
     },
     async (span) => {
-      let handle = _state.handles.get(serverId);
-      if (!handle) {
-        const entry = loadWebMcpConfig().find((s) => s.id === serverId);
-        if (!entry) {
-          throw new Error(`[web-mcp] server "${serverId}" is not in the config`);
-        }
-        await assertResolvedPublicHostname(entry.transport.url);
-        handle = await connectMcpServer({
-          egressPolicy: MCP_EGRESS_POLICY,
-          serverName: serverId,
-          config: entryToConfig(entry),
-        });
-        _state.handles.set(serverId, handle);
-        span.setAttributes({ 'mcp.connection.cold_start': true });
+      const entry = loadWebMcpConfig().find((server) => server.id === serverId);
+      if (!entry) {
+        throw new Error(`[web-mcp] server "${serverId}" is not in the config`);
       }
-      options?.signal?.throwIfAborted();
-      const result = options?.signal
-        ? await handle.callTool(toolName, args, { signal: options.signal })
-        : await handle.callTool(toolName, args);
-      span.setAttributes({ 'mcp.tool.is_error': result.isError === true });
-      return result;
+      await assertResolvedPublicHostname(entry.transport.url);
+      const handle = await connectMcpServer({
+        egressPolicy: MCP_EGRESS_POLICY,
+        serverName: serverId,
+        config: entryToConfig(entry),
+        ...(await getMcpStatelessRuntime(entry.transport.url, `operator:${serverId}`)),
+      });
+      span.setAttributes({
+        'mcp.connection.cold_start': true,
+        'mcp.protocol.era': handle.protocolEra,
+      });
+      try {
+        options?.signal?.throwIfAborted();
+        const result = options?.signal
+          ? await handle.callTool(toolName, args, { signal: options.signal })
+          : await handle.callTool(toolName, args);
+        span.setAttributes({ 'mcp.tool.is_error': result.isError === true });
+        return result;
+      } finally {
+        await handle.close().catch(() => undefined);
+      }
     },
   );
 }

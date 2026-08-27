@@ -5,12 +5,15 @@ import { z } from 'zod';
 import {
   buildMcpToolCatalog,
   connectMcpServer,
+  type McpCallToolOptions,
   type McpCallToolResult,
+  type McpInputRequiredState,
   type McpServerConfig,
   type McpServerHandle,
   type McpToolCatalog,
 } from '@agiworkforce/mcp';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
+import type { InteractiveCard } from '@agiworkforce/types';
 
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
@@ -38,6 +41,8 @@ import {
 import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
+import { getMcpStatelessRuntime } from '@/lib/connectors/mcp-runtime-cache';
+import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
   buildConnectorAuthorizationRequiredPayload,
   serializeConnectorAuthorizationRequired,
@@ -60,6 +65,13 @@ export interface UserConnectorToolCatalog {
   limit: number | null;
 }
 
+export interface UserConnectorCapabilityCatalog {
+  connectorId: string;
+  connectorLabel: string;
+  source: 'github-adapter' | 'operator' | 'oauth' | 'custom' | 'organization';
+  catalog: McpToolCatalog;
+}
+
 function resolveConnectorToolLimit(planTier: string | null | undefined): number | null {
   if (!getBillingPlanProductLimits(planTier)) return MAX_CONNECTOR_TOOLS_PER_USER;
   return getPlanMaxConnectorTools(planTier);
@@ -70,6 +82,7 @@ const GITHUB_SERVER_ID = 'github';
 const CUSTOM_SERVER_PREFIX = 'custom-';
 
 const PG_UNDEFINED_TABLE = '42P01';
+const PG_UNDEFINED_COLUMN = '42703';
 
 function isUndefinedTable(error: unknown): boolean {
   return (
@@ -80,14 +93,42 @@ function isUndefinedTable(error: unknown): boolean {
   );
 }
 
+function isGithubOwnershipSchemaUnavailable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as Record<string, unknown>;
+  if (
+    candidate['code'] === PG_UNDEFINED_TABLE ||
+    /relation\s+.+\s+does not exist/i.test(String(candidate['message'] ?? ''))
+  ) {
+    return true;
+  }
+  return (
+    candidate['code'] === PG_UNDEFINED_COLUMN &&
+    String(candidate['message'] ?? '').includes('ownership_verified_at')
+  );
+}
+
 export interface ConnectorExecResult {
   handled: boolean;
   content: string;
   isError: boolean;
+  interactiveCard?: InteractiveCard;
+  /**
+   * Present when the remote server paused this call for additional input
+   * (MCP 2026-07-28 `input_required`). The host must not treat the call as
+   * completed; it suspends and collects the bounded, UNTRUSTED input requests.
+   */
+  inputRequired?: McpInputRequiredState;
 }
 
 export interface ConnectorExecOptions {
   signal?: AbortSignal;
+  /** Attended runs opt in to `input_required`; unattended runs must not. */
+  allowInputRequired?: boolean;
+  /** Responses to a prior `input_required` pause, echoed to the same call. */
+  inputResponses?: Record<string, unknown>;
+  /** Opaque continuation token from the prior pause. */
+  requestState?: string;
 }
 
 function callConnectorTool(
@@ -96,9 +137,21 @@ function callConnectorTool(
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
 ): Promise<McpCallToolResult> {
-  return options?.signal
-    ? handle.callTool(toolName, args, { signal: options.signal })
+  if (!options) return handle.callTool(toolName, args);
+  const callOptions: McpCallToolOptions = {
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.allowInputRequired ? { allowInputRequired: true } : {}),
+    ...(options.inputResponses ? { inputResponses: options.inputResponses } : {}),
+    ...(options.requestState ? { requestState: options.requestState } : {}),
+  };
+  return Object.keys(callOptions).length > 0
+    ? handle.callTool(toolName, args, callOptions)
     : handle.callTool(toolName, args);
+}
+
+async function closeMcpHandle(handle: McpServerHandle | undefined): Promise<void> {
+  if (typeof handle?.close !== 'function') return;
+  await Promise.resolve(handle.close()).catch(() => undefined);
 }
 
 const UNTRUSTED_TOOL_ERROR_TAG = 'untrusted_tool_error';
@@ -227,7 +280,13 @@ export async function getUserGithubInstallations(
       [userId],
     );
   } catch (error) {
-    if (isUndefinedTable(error)) return [];
+    if (isGithubOwnershipSchemaUnavailable(error)) {
+      logger.warn(
+        { userId },
+        'GitHub installation ownership schema is unavailable; omitting GitHub from connector catalog',
+      );
+      return [];
+    }
     throw error;
   }
   return rows
@@ -422,8 +481,6 @@ interface RemoteCatalogState {
 const _remoteCatalogCache = new Map<string, RemoteCatalogState>();
 const REMOTE_CATALOG_TTL_MS = 60_000;
 
-const _remoteHandles = new Map<string, McpServerHandle>();
-
 async function buildRemoteConnectorCatalog(
   entry: RemoteConnectorEntry,
 ): Promise<McpToolCatalog | null> {
@@ -454,12 +511,11 @@ async function buildRemoteConnectorCatalog(
         [entry.connectorId]: entryToMcpConfig(entry),
       },
       MCP_EGRESS_POLICY,
+      {
+        resolveRuntime: () => getMcpStatelessRuntime(entry.url, `operator:${entry.connectorId}`),
+      },
     );
-    for (const h of handles) {
-      const old = _remoteHandles.get(h.serverName);
-      _remoteHandles.set(h.serverName, h);
-      if (old && old !== h) await old.close().catch(() => undefined);
-    }
+    await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
     _remoteCatalogCache.set(entry.connectorId, {
       catalog,
       expiresAt: now + REMOTE_CATALOG_TTL_MS,
@@ -491,6 +547,84 @@ function mcpResultToText(result: { content: McpCallToolResult['content'] }): str
     .join('\n');
 }
 
+async function mcpResultToConnectorExec(params: {
+  userId: string;
+  connectorId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  result: McpCallToolResult;
+}): Promise<ConnectorExecResult> {
+  const text = mcpResultToText(params.result);
+  // An input_required pause is not a completed call: surface the bounded,
+  // UNTRUSTED input requests to the tool loop and persist nothing (no task
+  // binding, no app payload) — the same call resumes once input is collected.
+  if (params.result.inputRequired) {
+    return {
+      handled: true,
+      content: text || '(the connector paused this call for additional input)',
+      isError: params.result.isError === true,
+      inputRequired: params.result.inputRequired,
+    };
+  }
+  if (
+    params.result.task &&
+    !(await bindMcpTask({
+      userId: params.userId,
+      connectorId: params.connectorId,
+      task: params.result.task,
+    }))
+  ) {
+    return {
+      handled: true,
+      content:
+        'The connector started a task, but the host could not persist its secure task binding.',
+      isError: true,
+    };
+  }
+  let interactiveCard: InteractiveCard | undefined;
+  if (params.result.app) {
+    const payloadId = await saveMcpAppPayload({
+      userId: params.userId,
+      connectorId: params.connectorId,
+      resourceUri: params.result.app.resourceUri,
+      toolName: params.toolName,
+      toolInput: params.args,
+      toolResult: params.result,
+    });
+    if (payloadId) {
+      interactiveCard = {
+        schemaVersion: 1,
+        cardId: `mcp-app-${payloadId}`,
+        kind: 'mcp-app.v1',
+        recognized: true,
+        createdAt: new Date().toISOString(),
+        fallback: {
+          headline: 'Interactive connector result',
+          text: `${params.connectorId} returned an MCP App. Open this message in a compatible web client to interact with it.`,
+        },
+        producedBy: {
+          toolCallId: payloadId,
+          toolName: `mcp__${params.connectorId}__${params.toolName}`,
+        },
+        body: {
+          payloadId,
+          connectorId: params.connectorId,
+          toolName: params.toolName,
+          resourceUri: params.result.app.resourceUri,
+        },
+      };
+    }
+  }
+  return {
+    handled: true,
+    content:
+      text ||
+      (params.result.task ? `MCP task started: ${params.result.task.taskId}` : '(no output)'),
+    isError: params.result.isError === true,
+    ...(interactiveCard ? { interactiveCard } : {}),
+  };
+}
+
 function catalogToConnectorToolDefs(
   catalog: McpToolCatalog,
   serverLabel?: string,
@@ -507,25 +641,29 @@ function catalogToConnectorToolDefs(
 }
 
 async function executeRemoteConnectorTool(
+  userId: string,
   entry: RemoteConnectorEntry,
   toolName: string,
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
+  let handle: McpServerHandle | undefined;
   try {
-    let handle = _remoteHandles.get(entry.connectorId);
-    if (!handle) {
-      await assertResolvedPublicHostname(entry.url);
-      handle = await connectMcpServer({
-        egressPolicy: MCP_EGRESS_POLICY,
-        serverName: entry.connectorId,
-        config: entryToMcpConfig(entry),
-      });
-      _remoteHandles.set(entry.connectorId, handle);
-    }
+    await assertResolvedPublicHostname(entry.url);
+    handle = await connectMcpServer({
+      egressPolicy: MCP_EGRESS_POLICY,
+      serverName: entry.connectorId,
+      config: entryToMcpConfig(entry),
+      ...(await getMcpStatelessRuntime(entry.url, `operator:${entry.connectorId}`)),
+    });
     const result = await callConnectorTool(handle, toolName, args, options);
-    const text = mcpResultToText(result);
-    return { handled: true, content: text || '(no output)', isError: result.isError === true };
+    return mcpResultToConnectorExec({
+      userId,
+      connectorId: entry.connectorId,
+      toolName,
+      args,
+      result,
+    });
   } catch (err) {
     if (err instanceof EgressPolicyError) {
       logger.warn(
@@ -540,11 +678,6 @@ async function executeRemoteConnectorTool(
     }
     const challenge = detectConnectorAuthChallenge(err);
     if (challenge) {
-      const stale = _remoteHandles.get(entry.connectorId);
-      if (stale) {
-        _remoteHandles.delete(entry.connectorId);
-        await stale.close().catch(() => undefined);
-      }
       _remoteCatalogCache.delete(entry.connectorId);
       logger.warn(
         { connectorId: entry.connectorId, toolName, status: challenge.status },
@@ -562,6 +695,8 @@ async function executeRemoteConnectorTool(
       '[user-connector] remote connector tool execution failed',
     );
     return connectorToolErrorResult(err);
+  } finally {
+    await closeMcpHandle(handle);
   }
 }
 
@@ -687,8 +822,6 @@ interface CustomCatalogState {
 const _customCatalogCache = new Map<string, CustomCatalogState>();
 const CUSTOM_CATALOG_TTL_MS = 60_000;
 
-const _customHandles = new Map<string, McpServerHandle>();
-
 function customConnectorCacheKey(userId: string, rowId: string): string {
   return `${encodeURIComponent(userId)}:${encodeURIComponent(rowId)}`;
 }
@@ -696,11 +829,6 @@ function customConnectorCacheKey(userId: string, rowId: string): string {
 export async function evictCustomConnectorCaches(userId: string, rowId: string): Promise<void> {
   const cacheKey = customConnectorCacheKey(userId, rowId);
   _customCatalogCache.delete(cacheKey);
-  const handle = _customHandles.get(cacheKey);
-  if (handle) {
-    _customHandles.delete(cacheKey);
-    await handle.close().catch(() => undefined);
-  }
 }
 
 async function buildCustomConnectorCatalog(
@@ -736,12 +864,11 @@ async function buildCustomConnectorCatalog(
         [serverId]: customRowToMcpConfig(row),
       },
       MCP_EGRESS_POLICY,
+      {
+        resolveRuntime: () => getMcpStatelessRuntime(row.url, `user:${userId}:custom:${row.id}`),
+      },
     );
-    for (const h of handles) {
-      const old = _customHandles.get(cacheKey);
-      _customHandles.set(cacheKey, h);
-      if (old && old !== h) await old.close().catch(() => undefined);
-    }
+    await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
     _customCatalogCache.set(cacheKey, { catalog, expiresAt: now + CUSTOM_CATALOG_TTL_MS });
     return catalog;
   } catch (err) {
@@ -786,21 +913,23 @@ async function executeCustomConnectorTool(
     };
   }
 
+  let handle: McpServerHandle | undefined;
   try {
-    const cacheKey = customConnectorCacheKey(userId, row.id);
-    let handle = _customHandles.get(cacheKey);
-    if (!handle) {
-      await assertResolvedPublicHostname(row.url);
-      handle = await connectMcpServer({
-        egressPolicy: MCP_EGRESS_POLICY,
-        serverName: customServerId(row.short_id),
-        config: customRowToMcpConfig(row),
-      });
-      _customHandles.set(cacheKey, handle);
-    }
+    await assertResolvedPublicHostname(row.url);
+    handle = await connectMcpServer({
+      egressPolicy: MCP_EGRESS_POLICY,
+      serverName: customServerId(row.short_id),
+      config: customRowToMcpConfig(row),
+      ...(await getMcpStatelessRuntime(row.url, `user:${userId}:custom:${row.id}`)),
+    });
     const result = await callConnectorTool(handle, toolName, args, options);
-    const text = mcpResultToText(result);
-    return { handled: true, content: text || '(no output)', isError: result.isError === true };
+    return mcpResultToConnectorExec({
+      userId,
+      connectorId: customServerId(row.short_id),
+      toolName,
+      args,
+      result,
+    });
   } catch (err) {
     if (err instanceof EgressPolicyError) {
       logger.warn(
@@ -835,6 +964,8 @@ async function executeCustomConnectorTool(
       '[user-connector] custom connector tool execution failed',
     );
     return connectorToolErrorResult(err);
+  } finally {
+    await closeMcpHandle(handle);
   }
 }
 
@@ -843,7 +974,6 @@ function oauthConnectorCacheKey(userId: string, connectorId: string): string {
 }
 
 const _oauthCatalogCache = new Map<string, CustomCatalogState>();
-const _oauthHandles = new Map<string, McpServerHandle>();
 const OAUTH_CATALOG_TTL_MS = 60_000;
 
 interface ConnectorMcpTarget {
@@ -888,11 +1018,6 @@ export async function evictConnectorOAuthCaches(
 ): Promise<void> {
   const cacheKey = oauthConnectorCacheKey(userId, connectorId);
   _oauthCatalogCache.delete(cacheKey);
-  const handle = _oauthHandles.get(cacheKey);
-  if (handle) {
-    _oauthHandles.delete(cacheKey);
-    await handle.close().catch(() => undefined);
-  }
 }
 
 function connectRequiredResult(params: {
@@ -972,12 +1097,12 @@ async function buildOAuthConnectorCatalog(
         [target.connectorId]: oauthConnectorMcpConfig(target, accessToken, tokenType),
       },
       MCP_EGRESS_POLICY,
+      {
+        resolveRuntime: () =>
+          getMcpStatelessRuntime(target.mcpUrl, `user:${userId}:oauth:${target.connectorId}`),
+      },
     );
-    for (const h of handles) {
-      const old = _oauthHandles.get(cacheKey);
-      _oauthHandles.set(cacheKey, h);
-      if (old && old !== h) await old.close().catch(() => undefined);
-    }
+    await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
     _oauthCatalogCache.set(cacheKey, { catalog, expiresAt: now + OAUTH_CATALOG_TTL_MS });
     return catalog;
   } catch (err) {
@@ -994,7 +1119,7 @@ async function buildOAuthConnectorCatalog(
 }
 
 async function callOAuthConnectorTool(
-  userId: string,
+  _userId: string,
   target: ConnectorMcpTarget,
   accessToken: string,
   tokenType: string,
@@ -1002,23 +1127,29 @@ async function callOAuthConnectorTool(
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
 ): Promise<ConnectorExecResult> {
-  const cacheKey = oauthConnectorCacheKey(userId, target.connectorId);
-  let handle = _oauthHandles.get(cacheKey);
-  if (!handle) {
+  let handle: McpServerHandle | undefined;
+  try {
     await assertResolvedPublicHostname(target.mcpUrl);
     handle = await connectMcpServer({
       egressPolicy: MCP_EGRESS_POLICY,
       serverName: target.connectorId,
       config: oauthConnectorMcpConfig(target, accessToken, tokenType),
+      ...(await getMcpStatelessRuntime(
+        target.mcpUrl,
+        `user:${_userId}:oauth:${target.connectorId}`,
+      )),
     });
-    _oauthHandles.set(cacheKey, handle);
+    const result = await callConnectorTool(handle, toolName, args, options);
+    return mcpResultToConnectorExec({
+      userId: _userId,
+      connectorId: target.connectorId,
+      toolName,
+      args,
+      result,
+    });
+  } finally {
+    await closeMcpHandle(handle);
   }
-  const result = await callConnectorTool(handle, toolName, args, options);
-  return {
-    handled: true,
-    content: mcpResultToText(result) || '(no output)',
-    isError: result.isError === true,
-  };
 }
 
 async function executeOAuthConnectorTool(
@@ -1187,7 +1318,6 @@ async function getOrgSharedConnectorRows(
 }
 
 const _orgSharedCatalogCache = new Map<string, CustomCatalogState>();
-const _orgSharedHandles = new Map<string, McpServerHandle>();
 
 function orgSharedCacheKey(organizationId: string, rowId: string): string {
   return `${encodeURIComponent(organizationId)}:${encodeURIComponent(rowId)}`;
@@ -1199,11 +1329,6 @@ export async function evictOrgSharedConnectorCaches(
 ): Promise<void> {
   const cacheKey = orgSharedCacheKey(organizationId, rowId);
   _orgSharedCatalogCache.delete(cacheKey);
-  const handle = _orgSharedHandles.get(cacheKey);
-  if (handle) {
-    _orgSharedHandles.delete(cacheKey);
-    await handle.close().catch(() => undefined);
-  }
 }
 
 async function buildOrgSharedConnectorCatalog(
@@ -1238,12 +1363,12 @@ async function buildOrgSharedConnectorCatalog(
         [serverId]: customRowToMcpConfig(row),
       },
       MCP_EGRESS_POLICY,
+      {
+        resolveRuntime: () =>
+          getMcpStatelessRuntime(row.url, `organization:${row.organization_id}:shared:${row.id}`),
+      },
     );
-    for (const h of handles) {
-      const old = _orgSharedHandles.get(cacheKey);
-      _orgSharedHandles.set(cacheKey, h);
-      if (old && old !== h) await old.close().catch(() => undefined);
-    }
+    await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
     _orgSharedCatalogCache.set(cacheKey, { catalog, expiresAt: now + CUSTOM_CATALOG_TTL_MS });
     return catalog;
   } catch (err) {
@@ -1299,21 +1424,26 @@ async function executeOrgSharedConnectorTool(
     };
   }
 
+  let handle: McpServerHandle | undefined;
   try {
-    const cacheKey = orgSharedCacheKey(row.organization_id, row.id);
-    let handle = _orgSharedHandles.get(cacheKey);
-    if (!handle) {
-      await assertResolvedPublicHostname(row.url);
-      handle = await connectMcpServer({
-        egressPolicy: MCP_EGRESS_POLICY,
-        serverName: orgSharedServerId(row.org_short_id),
-        config: customRowToMcpConfig(row),
-      });
-      _orgSharedHandles.set(cacheKey, handle);
-    }
+    await assertResolvedPublicHostname(row.url);
+    handle = await connectMcpServer({
+      egressPolicy: MCP_EGRESS_POLICY,
+      serverName: orgSharedServerId(row.org_short_id),
+      config: customRowToMcpConfig(row),
+      ...(await getMcpStatelessRuntime(
+        row.url,
+        `organization:${row.organization_id}:shared:${row.id}`,
+      )),
+    });
     const result = await callConnectorTool(handle, toolName, args, options);
-    const text = mcpResultToText(result);
-    return { handled: true, content: text || '(no output)', isError: result.isError === true };
+    return mcpResultToConnectorExec({
+      userId,
+      connectorId: orgSharedServerId(row.org_short_id),
+      toolName,
+      args,
+      result,
+    });
   } catch (err) {
     if (err instanceof EgressPolicyError) {
       return {
@@ -1331,6 +1461,8 @@ async function executeOrgSharedConnectorTool(
       '[user-connector] shared connector tool call failed',
     );
     return connectorToolErrorResult(err);
+  } finally {
+    await closeMcpHandle(handle);
   }
 }
 
@@ -1397,6 +1529,298 @@ async function applyConnectorPolicy(
     );
   }
   return kept;
+}
+
+async function connectorPolicyAllows(
+  connectorId: string,
+  organizationId: string | null,
+  isCustom: boolean,
+): Promise<boolean> {
+  if (!organizationId) return true;
+  try {
+    const { readConnectorPolicySafely } = await import('@/lib/services/connector-policy-service');
+    const { evaluateConnectorAccess } = await import('@/lib/services/connector-policy-evaluator');
+    const policy = await readConnectorPolicySafely(getNeonDb(), organizationId);
+    return policy ? evaluateConnectorAccess(policy, { connectorId, isCustom }).allowed : true;
+  } catch (error) {
+    logger.error(
+      { error, organizationId, connectorId },
+      '[connector-policy] unavailable while loading connector capabilities',
+    );
+    return true;
+  }
+}
+
+function githubAdapterCatalog(): McpToolCatalog {
+  const tools = GITHUB_TOOL_DEFS.map((definition) => ({
+    serverName: GITHUB_SERVER_ID,
+    safeServerName: GITHUB_SERVER_ID,
+    toolName: definition.toolName,
+    description: definition.description,
+    inputSchema: definition.inputSchema,
+    visibility: 'model' as const,
+    fallbackDescription: definition.description,
+  }));
+  return {
+    version: 2,
+    generatedAt: Date.now(),
+    servers: {
+      [GITHUB_SERVER_ID]: {
+        serverName: GITHUB_SERVER_ID,
+        safeServerName: GITHUB_SERVER_ID,
+        protocolEra: 'legacy',
+        serverInfo: { name: 'AGI GitHub App adapter', version: '1' },
+        capabilities: { tools: {} },
+        tasksSupported: false,
+        tools,
+        resources: [],
+        resourceTemplates: [],
+        prompts: [],
+        apps: [],
+        discoveryErrors: [],
+      },
+    },
+    tools,
+    resources: [],
+    resourceTemplates: [],
+    prompts: [],
+    apps: [],
+  };
+}
+
+function filterCapabilityCatalogTools(
+  catalog: McpToolCatalog,
+  isToolDenied?: (connectorId: string, toolName: string) => boolean,
+): McpToolCatalog {
+  if (!isToolDenied) return catalog;
+  const allowed = (tool: { serverName: string; toolName: string }) =>
+    !isToolDenied(tool.serverName, tool.toolName);
+  const servers = Object.fromEntries(
+    Object.entries(catalog.servers).map(([id, server]) => [
+      id,
+      {
+        ...server,
+        tools: server.tools.filter(allowed),
+        apps: server.apps.filter((app) => allowed(app)),
+      },
+    ]),
+  );
+  return {
+    ...catalog,
+    servers,
+    tools: catalog.tools.filter(allowed),
+    apps: catalog.apps.filter((app) => allowed(app)),
+  };
+}
+
+/** Load one connected capability catalog for Settings and other host surfaces. */
+export async function loadUserConnectorCapabilityCatalog(
+  userId: string,
+  connectorRef: string,
+  options: LoadUserConnectorToolOptions = {},
+): Promise<UserConnectorCapabilityCatalog | null> {
+  if (!userId || !connectorRef) return null;
+  const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
+
+  let result: UserConnectorCapabilityCatalog | null = null;
+  if (connectorRef === GITHUB_SERVER_ID) {
+    if ((await getUserGithubInstallations(userId)).length > 0) {
+      result = {
+        connectorId: GITHUB_SERVER_ID,
+        connectorLabel: 'GitHub',
+        source: 'github-adapter',
+        catalog: githubAdapterCatalog(),
+      };
+    }
+  } else if (connectorRef.startsWith(CUSTOM_SERVER_PREFIX)) {
+    const suffix = connectorRef.slice(CUSTOM_SERVER_PREFIX.length);
+    const row = (await getUserCustomConnectorRows(userId)).find(
+      (candidate) => candidate.id === suffix || candidate.short_id === suffix,
+    );
+    if (row) {
+      const catalog = await buildCustomConnectorCatalog(userId, row);
+      if (catalog) {
+        result = {
+          connectorId: customServerId(row.short_id),
+          connectorLabel: row.name,
+          source: 'custom',
+          catalog,
+        };
+      }
+    }
+  } else if (connectorRef.startsWith(ORG_SHARED_SERVER_PREFIX) && organizationId) {
+    const suffix = connectorRef.slice(ORG_SHARED_SERVER_PREFIX.length);
+    const row = (await getOrgSharedConnectorRows(userId, organizationId)).find(
+      (candidate) => candidate.org_short_id === suffix,
+    );
+    if (row) {
+      const catalog = await buildOrgSharedConnectorCatalog(row);
+      if (catalog) {
+        result = {
+          connectorId: orgSharedServerId(row.org_short_id),
+          connectorLabel: row.name,
+          source: 'organization',
+          catalog,
+        };
+      }
+    }
+  } else {
+    const entry = loadConnectorMcpMap().get(connectorRef);
+    if (entry && (await getUserActiveConnectorIds(userId)).has(connectorRef)) {
+      const catalog = await buildRemoteConnectorCatalog(entry);
+      if (catalog) {
+        result = {
+          connectorId: connectorRef,
+          connectorLabel: connectorRef,
+          source: 'operator',
+          catalog,
+        };
+      }
+    } else if (getConnectorOAuthProvider(connectorRef)) {
+      const grants = await getUserConnectorOAuthGrantSummaries(userId);
+      if (grants.some((grant) => grant.connectorId === connectorRef)) {
+        const target = resolveConnectorMcpTarget(connectorRef);
+        const access = await resolveConnectorAccessToken(userId, connectorRef);
+        if (target && access.status === 'ready') {
+          const catalog = await buildOAuthConnectorCatalog(
+            userId,
+            target,
+            access.accessToken,
+            access.tokenType,
+          );
+          if (catalog) {
+            result = {
+              connectorId: connectorRef,
+              connectorLabel: target.displayName ?? connectorRef,
+              source: 'oauth',
+              catalog,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  if (!result) return null;
+  const isCustom = result.source === 'custom' || result.source === 'organization';
+  if (!(await connectorPolicyAllows(result.connectorId, organizationId, isCustom))) return null;
+  return {
+    ...result,
+    catalog: filterCapabilityCatalogTools(result.catalog, options.isToolDenied),
+  };
+}
+
+export interface UserConnectorMcpHandle {
+  connectorId: string;
+  connectorLabel: string;
+  handle: McpServerHandle;
+}
+
+/**
+ * Open one request-scoped client for a connected MCP server. The callback is
+ * the only place the handle is usable; it is always closed before this helper
+ * resolves so no serverless process retains connection state.
+ */
+export async function withUserConnectorMcpHandle<T>(
+  userId: string,
+  connectorRef: string,
+  operation: (connection: UserConnectorMcpHandle) => Promise<T>,
+  options: Pick<LoadUserConnectorToolOptions, 'organizationId'> = {},
+): Promise<T | null> {
+  if (!userId || !connectorRef || connectorRef === GITHUB_SERVER_ID) return null;
+  const organizationId = await resolveConnectorOrganizationId(userId, options.organizationId);
+  let descriptor:
+    | {
+        connectorId: string;
+        connectorLabel: string;
+        url: string;
+        authorizationContext: string;
+        config: McpServerConfig;
+        isCustom: boolean;
+      }
+    | undefined;
+
+  if (connectorRef.startsWith(CUSTOM_SERVER_PREFIX)) {
+    const suffix = connectorRef.slice(CUSTOM_SERVER_PREFIX.length);
+    const row = (await getUserCustomConnectorRows(userId)).find(
+      (candidate) => candidate.id === suffix || candidate.short_id === suffix,
+    );
+    if (row) {
+      descriptor = {
+        connectorId: customServerId(row.short_id),
+        connectorLabel: row.name,
+        url: row.url,
+        authorizationContext: `user:${userId}:custom:${row.id}`,
+        config: customRowToMcpConfig(row),
+        isCustom: true,
+      };
+    }
+  } else if (connectorRef.startsWith(ORG_SHARED_SERVER_PREFIX) && organizationId) {
+    const suffix = connectorRef.slice(ORG_SHARED_SERVER_PREFIX.length);
+    const row = (await getOrgSharedConnectorRows(userId, organizationId)).find(
+      (candidate) => candidate.org_short_id === suffix,
+    );
+    if (row) {
+      descriptor = {
+        connectorId: orgSharedServerId(row.org_short_id),
+        connectorLabel: row.name,
+        url: row.url,
+        authorizationContext: `organization:${row.organization_id}:shared:${row.id}`,
+        config: customRowToMcpConfig(row),
+        isCustom: true,
+      };
+    }
+  } else {
+    const entry = loadConnectorMcpMap().get(connectorRef);
+    if (entry && (await getUserActiveConnectorIds(userId)).has(connectorRef)) {
+      descriptor = {
+        connectorId: connectorRef,
+        connectorLabel: connectorRef,
+        url: entry.url,
+        authorizationContext: `operator:${connectorRef}`,
+        config: entryToMcpConfig(entry),
+        isCustom: false,
+      };
+    } else if (getConnectorOAuthProvider(connectorRef)) {
+      const grants = await getUserConnectorOAuthGrantSummaries(userId);
+      const target = resolveConnectorMcpTarget(connectorRef);
+      const access = grants.some((grant) => grant.connectorId === connectorRef)
+        ? await resolveConnectorAccessToken(userId, connectorRef)
+        : null;
+      if (target && access?.status === 'ready') {
+        descriptor = {
+          connectorId: connectorRef,
+          connectorLabel: target.displayName ?? connectorRef,
+          url: target.mcpUrl,
+          authorizationContext: `user:${userId}:oauth:${connectorRef}`,
+          config: oauthConnectorMcpConfig(target, access.accessToken, access.tokenType),
+          isCustom: false,
+        };
+      }
+    }
+  }
+
+  if (!descriptor) return null;
+  if (!(await connectorPolicyAllows(descriptor.connectorId, organizationId, descriptor.isCustom))) {
+    return null;
+  }
+
+  await assertResolvedPublicHostname(descriptor.url);
+  const handle = await connectMcpServer({
+    egressPolicy: MCP_EGRESS_POLICY,
+    serverName: descriptor.connectorId,
+    config: descriptor.config,
+    ...(await getMcpStatelessRuntime(descriptor.url, descriptor.authorizationContext)),
+  });
+  try {
+    return await operation({
+      connectorId: descriptor.connectorId,
+      connectorLabel: descriptor.connectorLabel,
+      handle,
+    });
+  } finally {
+    await closeMcpHandle(handle);
+  }
 }
 
 export async function loadUserConnectorToolCatalog(
@@ -1581,6 +2005,6 @@ export function makeUserConnectorExecutor(
       };
     }
 
-    return executeRemoteConnectorTool(entry, toolName, args, options);
+    return executeRemoteConnectorTool(userId, entry, toolName, args, options);
   };
 }
