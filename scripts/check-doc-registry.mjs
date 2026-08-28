@@ -136,7 +136,56 @@ function classify(file) {
   return 'markdown outside docs/ must be a README.md beside what it describes, or live under the surface’s docs/ directory';
 }
 
+// Two patterns this repository has actually produced and had to undo: a status
+// document that outlives the work it describes, and a directory of production
+// source kept as an archive. apps/desktop/archive reached 204 files and 40,549
+// lines before it was deleted; docs/work/guardian-implementation-status.md had
+// to be split apart because its status half went stale while its design half
+// was the only copy. Neither was caught by anything.
+const STATUS_DOC = /(^|\/)[a-z0-9-]*(status|progress|todo|tasks)\.md$/i;
+const STATUS_EXEMPT = new Set([
+  // Named for what it tracks, not a status snapshot: it is the spec lifecycle's
+  // task file, owned by a spec directory alongside spec.md and plan.md.
+  'tasks.md',
+]);
+
+// Grandfathered, with the reason. Removing this one was proposed twice and
+// refuted both times on evidence: its seventeen five-column matrices carry a
+// competitive-target column, a surfaces tuple and per-table source and
+// code-anchor footers that no machine source holds. The ratchet stops NEW status
+// documents; it does not relitigate a settled decision.
+const STATUS_BASELINE = new Set(['docs/work/implementation-status.md']);
+
+function checkStatusDocuments(files) {
+  for (const file of files) {
+    if (!STATUS_DOC.test(file)) continue;
+    if (STATUS_EXEMPT.has(path.basename(file))) continue;
+    if (STATUS_BASELINE.has(file)) continue;
+    if (file.startsWith('docs/specs/')) continue;
+    if (NON_DOC_MARKDOWN.some((prefix) => file.startsWith(prefix))) continue;
+    errors.push(
+      `${file} is a status document. Status goes stale silently: put executable work in a docs/specs/<feature>/tasks.md, machine-readable state in a registry, and history in git.`,
+    );
+  }
+}
+
+function checkArchiveDirectories(files) {
+  for (const file of files) {
+    if (/(^|\/)(archive|_archive|legacy|deprecated)\//i.test(file)) {
+      errors.push(
+        `${file} sits in an archive directory. Git is the archive — delete the tree instead of keeping a second copy of retired source.`,
+      );
+    }
+  }
+}
+
 checkRetiredRootCitations();
+
+const allTracked = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' })
+  .split('\n')
+  .filter(Boolean);
+checkStatusDocuments(trackedMarkdown());
+checkArchiveDirectories(allTracked);
 
 for (const file of trackedMarkdown()) {
   const problem = classify(file);

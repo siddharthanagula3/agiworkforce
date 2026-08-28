@@ -1343,68 +1343,9 @@ The scale report is organized under the visible sections **Spend**, **Throughput
 
        > **Triage 2026-08-09 — OPEN_DEFECT — one migration mentions partitioning. The append-only tables this task names (messages, usage, audit, agent events, notifications) are the ones that grow without bound, and a single partitioned table does not cover them.**
 
-  occurrences under `apps/web/app/api`. Offset-only pagination on a high-growth table is what this task forbids, and none remains on the web API surface.\*\*
-
 - [ ] **SCALE-GROW-004 — Enforce opaque cursor pagination.** No unbounded list or offset-only path on high-growth tables.
 
-      > **Triage 2026-08-09 — SATISFIED — zero `OFFSET # AGI Workforce — Audit Remediation Execution Plan
-
-Status: Current
-Owner: Platform lead
-Last updated: 2026-08-08
-
-## The three audit sources
-
-This remediation now has three independent inputs. They overlap heavily and
-contradict each other in places, which is useful — a finding that all three
-reach independently is worth more than one that appears once.
-
-| Source                                        | Scope                                                                           | Where it lives                                  |
-| --------------------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **This ledger** (5 artifacts: BL/SC/PP/CM/HC) | 535 verification items across 10 phases; the stop gate                          | this file                                       |
-| **Gap audit, 2026-08-08**                     | 21 GAP items, evidence-graded CONFIRMED / TRACKED / LIVE-PROOF-REQUIRED / STALE | folded into this ledger                         |
-| **Wave 6 — conformance**                      | 592 canonical concepts scored; 117 findings, 2 critical                         | artifact `5d12b3a1-9e2c-4140-a9df-0ca34e171a7b` |
-
-The gap audit's grading is the most useful convention of the three and should be
-adopted here: it separates "confirmed in current source" from "recorded by an
-older ledger and not revalidated" from "code exists, production configuration
-unproven". Most disagreement between the three sources is explained by that
-distinction rather than by anyone being wrong.
-
-Wave 6's central finding is worth repeating because it changes what the work
-_is_: only 36 of 592 concepts are genuinely conflated and 7 inverted. The
-codebase does not misunderstand its domain. The recurring defect is that **a
-correct abstraction exists and the code that should consume it doesn't** — a
-policy engine with zero call sites, an agent runtime used by 2 of 11 loops, a
-shipped realtime protocol with zero producers. That is wiring work, not design
-work, and it is a much better position to be in.
-
-## How this file relates to `ExecutionPlan.md`
-
-Two files, two roles, deliberately not merged.
-
-**This file is the requirements ledger.** Every finding from the five audit
-artifacts, with its task ID, resolution mode and acceptance criteria. It says
-what must become true, and Phase 9 is the stop gate.
-
-**`ExecutionPlan.md` is the work queue.** The subset verified against the
-current tree, carrying the `Writes:`/`Verify:` metadata a scheduler needs to run
-items in parallel without two agents clobbering the same file. It says what to
-do next.
-
-Merging them would lose one or the other: a ledger entry carries no collision
-key, and a queue item carries no acceptance criteria. When a queue item lands,
-mark the ledger task it satisfies and record the commit — the ledger is what
-Phase 9 reads, so an unmarked ledger entry is an open finding no matter how much
-code was written.
-
-**Both files have a real false-positive rate.** Two claims in these artifacts
-have already been disproved against source: the "empty Team panel" was a
-mid-frame render capture, and the Enterprise `$1,000,000` headroom is a
-documented deliberate design. `NOT APPLICABLE` below is a legitimate outcome and
-must be recorded with the same evidence a fix gets.
-
----
+      > **Triage 2026-08-09 — SATISFIED — zero `OFFSET` occurrences under `apps/web/app/api`. Offset-only pagination on a high-growth table is what this task forbids, and none remains on the web API surface.**
 
 - [ ] **SCALE-GROW-005 — Isolate tenants/cells.** Define routing, noisy-neighbor limits, backup/restore, and tenant move strategy.
 - [ ] **SCALE-GROW-006 — Capacity-test Neon/Postgres as the stateful bottleneck.** Connection limits, transaction contention, hot rows, RLS overhead, indexes, and failover.

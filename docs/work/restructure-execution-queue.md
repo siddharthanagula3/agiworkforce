@@ -163,8 +163,8 @@ Remaining program work, in order of dependency:
    flight; star/archive + branch schema fixes; desktop project scoping after
    W7; the 12 stale-model-ID `routing_logic_tests` reds in desktop core/llm).
 5. External release gates (founder-run or scheduled, cannot be faked):
-   apply+probe the unapplied `apps/web/db/neon` migrations from 0056 through
-   the current head (`0080_device_refresh_token_rotation.sql`) on prod Neon
+   apply+probe the unapplied `apps/web/db/neon` migrations through the current
+   head (`0152_restore_null_tolerant_usage_caps.sql` as of 2026-08-28) on prod Neon
    BEFORE merging this branch to `main` — re-read the directory listing rather
    than trusting this number, it moves every time a web slice lands; W7
    live-provider + desktop-device smoke; desktop restart-persistence smoke;
@@ -311,7 +311,10 @@ other in-flight work, which this slice did not create and did not touch.
 Follow-on slices, in dependency order (2 can be built in parallel with 1 but
 cannot ship before 4):
 
-1. CPST telemetry fields. Add `taskOutcome`, `retries`, `fallbackUsed`,
+1. CPST telemetry fields — LANDED 2026-08-28. `apps/web/lib/cpst-telemetry.ts`
+   declares every field below and `0129_cost_event_task_economics.sql` carries the
+   columns. Kept for the naming constraint recorded underneath it. Original item:
+   Add `taskOutcome`, `retries`, `fallbackUsed`,
    `verifierResult`, `routePlanId`, and `taskFamily` to the existing
    `usage jsonb` on `public.managed_usage_requests`
    (`apps/web/db/neon/0056_managed_usage_request_lifecycle.sql`) through the

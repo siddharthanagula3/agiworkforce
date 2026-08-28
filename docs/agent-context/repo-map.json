@@ -475,6 +475,20 @@
       ]
     },
     {
+      "path": "packages/ai/providers/minimax",
+      "kind": "package",
+      "canonicalOwner": "Provider platform",
+      "consumers": ["packages/ai/providers/factory"],
+      "deployability": "provider-adapter-library",
+      "trustBoundary": "MiniMax API egress",
+      "status": "active-single-composition-consumer",
+      "action": "keep",
+      "evidence": [
+        "packages/ai/providers/minimax/src/index.ts",
+        "packages/ai/providers/factory/src/index.ts"
+      ]
+    },
+    {
       "path": "packages/ai/providers/moonshot",
       "kind": "package",
       "canonicalOwner": "Provider platform",

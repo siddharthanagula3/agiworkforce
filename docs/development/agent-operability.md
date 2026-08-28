@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-28
+Last updated: 2026-08-28
 
 ## Goal
 
