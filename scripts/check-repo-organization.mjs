@@ -144,6 +144,13 @@ for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
   errors.push(`Unclassified root file: ${entry.name}`);
 }
 
+for (const allowed of allowedRootFiles) {
+  if (allowed === '.git') continue;
+  if (!fs.existsSync(path.join(root, allowed))) {
+    warnings.push(`Allowlisted root file does not exist: ${allowed}`);
+  }
+}
+
 if (!isProtectedCleanupPath('audit')) {
   errors.push('scripts/clean-repo.mjs must protect the live audit/ evidence ledger.');
 }
