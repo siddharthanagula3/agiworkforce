@@ -88,10 +88,12 @@ export function validateRequiredEnvVars(): ValidationResult {
     process.env['UPSTASH_REDIS_REST_TOKEN'] || process.env['KV_REST_API_TOKEN']
   );
   if (!hasRedisRestUrl || !hasRedisRestToken) {
-    warnings.push(
+    const message =
       'Missing Redis REST credentials for rate limiting: set UPSTASH_REDIS_REST_URL/_TOKEN ' +
-        'or KV_REST_API_URL/_TOKEN (rate limiting falls back to per-instance in-memory)',
-    );
+      'or KV_REST_API_URL/_TOKEN. lib/rate-limit.ts throws on import in production ' +
+      '(SEV-WEB-13), so the server will not boot without them.';
+    if (isProductionRuntime()) errors.push(message);
+    else warnings.push(message);
   }
 
   for (const varName of priceIdVars) {
