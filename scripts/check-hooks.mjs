@@ -53,7 +53,7 @@ for (const file of [
   '.husky/pre-commit',
   '.husky/pre-push',
   'commitlint.config.cjs',
-  'docs/engineering/naming-conventions.md',
+  'docs/standards/naming-conventions.md',
 ]) {
   requireFile(file);
 }
@@ -81,9 +81,9 @@ requirePackageScript('check:audit-inventory', 'scripts/check-audit-inventory.mjs
 requirePackageScript('check:executable-docs', 'scripts/check-executable-docs.mjs');
 requirePackageScript('check:llm-operability', 'pnpm check:hooks');
 
-requireIncludes('docs/engineering/naming-conventions.md', '.husky/commit-msg');
-requireIncludes('docs/engineering/naming-conventions.md', '.husky/pre-commit');
-requireIncludes('docs/engineering/naming-conventions.md', '.husky/pre-push');
+requireIncludes('docs/standards/naming-conventions.md', '.husky/commit-msg');
+requireIncludes('docs/standards/naming-conventions.md', '.husky/pre-commit');
+requireIncludes('docs/standards/naming-conventions.md', '.husky/pre-push');
 
 if (errors.length > 0) {
   console.error('Hook check failed:');

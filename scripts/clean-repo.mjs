@@ -17,7 +17,7 @@ export const KEEP = [
   'docs/compliance',
   'docs/decisions',
   'docs/development',
-  'docs/engineering',
+  'docs/development',
   'docs/generated',
   'docs/product',
   'docs/runbooks',

@@ -21,8 +21,8 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - `CHANGELOG.md` records completed work.
 - `docs/README.md` maps the documentation taxonomy; every tier is current by default.
 - `docs/agent-context/` is the machine-readable agent map.
-- `docs/engineering/naming-conventions.md` locks product, CLI, file, folder, package, branch, commit, version, and docs naming rules.
-- `docs/engineering/service-layer-architecture.md` locks the action/route orchestration vs reusable service mechanics rule.
+- `docs/standards/naming-conventions.md` locks product, CLI, file, folder, package, branch, commit, version, and docs naming rules.
+- `docs/standards/service-layer.md` locks the action/route orchestration vs reusable service mechanics rule.
 - `scripts/check-hooks.mjs` locks Husky hook wiring and commitlint policy.
 - `scripts/check-report-retention.mjs` locks report collection ownership and retention metadata.
 - `scripts/check-ci-guardrails.mjs` locks the CI baseline and makes advisory security gates explicit.
@@ -53,8 +53,8 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - User-facing CLI examples use `agi`; `agiworkforce` is kept only as a compatibility alias or internal package/path identifier.
 - New docs and evidence use lowercase kebab-case filenames, with `YYYY-MM-DD` suffixes only when the date is part of the artifact identity.
 - Do not add new root `TASKS.md`, `FIXME.md`, `PRD.md`, `ROADMAP.md`, or ad hoc report files.
-- Follow `docs/engineering/naming-conventions.md` before creating a new top-level folder, package, crate, service, release tag, branch, or root control file.
-- Follow `docs/engineering/service-layer-architecture.md` before extracting repeated mechanics from actions, routes, command handlers, or UI workflow handlers.
+- Follow `docs/standards/naming-conventions.md` before creating a new top-level folder, package, crate, service, release tag, branch, or root control file.
+- Follow `docs/standards/service-layer.md` before extracting repeated mechanics from actions, routes, command handlers, or UI workflow handlers.
 
 ## Hook Rules
 

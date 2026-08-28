@@ -23,7 +23,7 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 13. `shared-files.md` - collision policy for manifests, locks, root docs, CI, schemas, and migrations.
 14. `../engineering/naming-conventions.md` - product, CLI, files, folders, packages, branches, commits, versions, and hook policy.
 15. `../engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
-16. `../engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
+16. `../engineering/service-layer.md` - action/route orchestration vs reusable service mechanics.
 17. `bug-finding-guide.md` - workflow for finding bugs without getting lost in stale docs.
 18. `agent-task-templates.md` - standard prompts for exploration, implementation, review, and verification agents.
 

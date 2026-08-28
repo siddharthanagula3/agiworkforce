@@ -9,7 +9,8 @@
 /PLAN.md @siddhartha
 /CHANGELOG.md @siddhartha
 /docs/agent-context/ @siddhartha
-/docs/engineering/ @siddhartha
+/docs/development/ @siddhartha
+/docs/standards/ @siddhartha
 /audit/ @siddhartha
 /scripts/check-*.mjs @siddhartha
 

@@ -78,28 +78,22 @@ function walk(relativeDir, files = []) {
   return files;
 }
 
-requireFile('docs/engineering/service-layer-architecture.md');
+requireFile('docs/standards/service-layer.md');
 
-requireIncludes('docs/agent-context/README.md', 'service-layer-architecture.md');
-requireIncludes('docs/engineering/README.md', 'service-layer-architecture.md');
-requireIncludes('docs/engineering/agent-native-development.md', 'service-layer-architecture.md');
+requireIncludes('docs/agent-context/README.md', 'service-layer.md');
+requireIncludes('docs/development/README.md', 'service-layer.md');
+requireIncludes('docs/development/agent-native-development.md', 'service-layer.md');
 requireIncludes(
-  'docs/engineering/agent-harness-rollout.md',
+  'docs/development/harness-rollout.md',
   'Service-layer architecture is part of the harness',
 );
-requireIncludes('docs/development/agent-operability.md', 'service-layer-architecture.md');
+requireIncludes('docs/development/agent-operability.md', 'service-layer.md');
 
-requireIncludes(
-  'docs/engineering/service-layer-architecture.md',
-  'Actions/routes orchestrate domain rules.',
-);
-requireIncludes(
-  'docs/engineering/service-layer-architecture.md',
-  'Service functions own reusable mechanics.',
-);
-requireIncludes('docs/engineering/service-layer-architecture.md', '## Migration Checklist');
-requireIncludes('docs/engineering/service-layer-architecture.md', '## AGI-Specific Boundaries');
-requireIncludes('docs/engineering/service-layer-architecture.md', 'pnpm check:service-layer');
+requireIncludes('docs/standards/service-layer.md', 'Actions/routes orchestrate domain rules.');
+requireIncludes('docs/standards/service-layer.md', 'Service functions own reusable mechanics.');
+requireIncludes('docs/standards/service-layer.md', '## Migration Checklist');
+requireIncludes('docs/standards/service-layer.md', '## AGI-Specific Boundaries');
+requireIncludes('docs/standards/service-layer.md', 'pnpm check:service-layer');
 
 const packageJson = readJson('package.json');
 if (packageJson) {
