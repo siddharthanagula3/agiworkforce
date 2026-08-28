@@ -10,6 +10,7 @@ const workspaceRoot = path.resolve(configDir, '../..');
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  poweredByHeader: false,
   outputFileTracingRoot: workspaceRoot,
   turbopack: {
     root: workspaceRoot,
