@@ -24,6 +24,7 @@ const allowedRootFiles = new Set([
   '.vercelignore',
   'AGI_WORKFORCE.md',
   'ARCHITECTURE.md',
+  'CLAUDE.md',
   'BUILD.md',
   'CHANGELOG.md',
   'CONTRIBUTING.md',

@@ -72,6 +72,8 @@ const USER_OWNED_TABLES = new Set([
   'organization_shared_projects',
   'organization_project_access',
   'organization_shared_connectors',
+  'mcp_app_payloads',
+  'mcp_task_bindings',
 ]);
 
 const SCOPE_TOKENS = [
