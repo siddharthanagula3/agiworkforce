@@ -10,8 +10,8 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 
 ## Source Of Truth
 
-- `AGENTS.md` is the tool-neutral coding-agent entry point.
-- `CLAUDE.md` is a Claude-specific mirror.
+- `AGENTS.md` is the canonical, tool-neutral coding-agent contract.
+- `CLAUDE.md` is a thin Claude Code adapter over it and may not weaken it.
 - `docs/current/source-of-truth.md` is the first product definition and parity/gap read.
 - `docs/current/agi-product-requirements.md` is the long-form PRD for decision-complete product and Mobile v1 requirements.
 - `docs/current/parity-implementation-matrix.md` is the first feature/component implementation read.
@@ -39,8 +39,8 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 ## Documentation Rules
 
 - Current docs need `Status`, `Owner`, and `Last updated`.
-- Historical docs belong in `docs/archive`.
-- Working notes belong in `tasks` until promoted.
+- Historical docs belong in git history, not in the live tree.
+- Working notes belong in `docs/work` until promoted.
 - Evidence belongs in `audit`.
 - Generated reports belong in `reports` or `audit`, not root.
 - Report roots and direct child collections need `Status`, `Owner`, `Purpose`, and `Retention` metadata.

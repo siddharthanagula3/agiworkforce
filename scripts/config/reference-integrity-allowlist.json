@@ -22,7 +22,6 @@
   "knownContradictions": [],
   "debt": [
     "md-link::docs/current/README.md::../../TODO.md",
-    "md-link::docs/engineering/README.md::../../CONTRIBUTING.md",
     "md-link::docs/surfaces/desktop.md::cli.md",
     "md-link::docs/surfaces/desktop.md::web.md",
     "md-path::PLAN.md::docs/plans/monorepo-restructure-2026-07-08.md",
@@ -42,7 +41,6 @@
     "md-path::docs/agent-context/known-flaws.md::docs/plans/rust-engine-extraction-2026-07-09.md",
     "md-path::docs/cli/COMMAND_SURFACE.md::apps/cli/src/tui/chatwidget.rs",
     "md-path::docs/cli/COMMAND_SURFACE.md::apps/cli/src/tui/slash_command.rs",
-    "md-path::docs/current/agent-and-repo-operability.md::docs/archive",
     "md-path::docs/current/frontend-experience-contract.md::docs/research/competitor-capability-session-architecture-2026-07-15.md",
     "md-path::docs/current/parity-implementation-matrix.md::apps/github-app",
     "md-path::docs/current/parity-implementation-matrix.md::apps/slack-app",

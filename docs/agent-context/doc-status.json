@@ -1,7 +1,12 @@
 {
   "version": 2,
-  "lastUpdated": "2026-08-08",
+  "lastUpdated": "2026-08-28",
   "currentSourcesOfTruth": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "ARCHITECTURE.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "docs/current/README.md",
     "docs/current/source-of-truth.md",
     "docs/current/agi-product-requirements.md",
