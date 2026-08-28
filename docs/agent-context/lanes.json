@@ -24,7 +24,7 @@
       "PLAN.md",
       "CHANGELOG.md",
       "docs/agent-context/**",
-      "docs/engineering/**",
+      "docs/development/**",
       "packages/contracts/types/**",
       "apps/web/db/neon/**"
     ]
@@ -328,7 +328,7 @@
         "PLAN.md",
         "CHANGELOG.md",
         "docs/agent-context/**",
-        "docs/engineering/**",
+        "docs/development/**",
         "scripts/check-*.mjs"
       ],
       "readOnlyContextPaths": ["apps/**", "packages/**", "crates/**", "services/**"],

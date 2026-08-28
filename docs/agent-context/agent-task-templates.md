@@ -93,7 +93,7 @@ Required final output:
 - Never assign two agents to the same unresolved files unless one is read-only.
 - Ask workers to edit directly only inside their owned paths.
 - Integrate returned work with a human or lead-agent review before committing.
-- For long-running or parallel implementation, follow `docs/engineering/agent-native-development.md`.
+- For long-running or parallel implementation, follow `docs/development/agent-native-development.md`.
 
 ## Worktree Task
 

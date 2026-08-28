@@ -30,11 +30,11 @@
     "docs/agent-context/risk-map.json",
     "docs/agent-context/lanes.json",
     "docs/agent-context/shared-files.md",
-    "docs/engineering/naming-conventions.md",
-    "docs/engineering/agent-native-development.md",
-    "docs/engineering/agent-harness-rollout.md",
-    "docs/engineering/service-layer-architecture.md",
-    "docs/engineering/parallel-agent-playbook.md"
+    "docs/standards/naming-conventions.md",
+    "docs/development/agent-native-development.md",
+    "docs/development/harness-rollout.md",
+    "docs/standards/service-layer.md",
+    "docs/development/parallel-agent-playbook.md"
   ],
   "historicalOrCaution": [
     {
