@@ -154,6 +154,7 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   managed_usage_request_extensions: 'Cascades from managed_usage_requests.',
   free_daily_usage_reservations: 'Cascades from profiles.',
   website_auto_economy_trial_usage: 'Cascades from profiles.',
+  web_push_subscriptions: 'Cascades from profiles.',
   organization_project_access:
     'Cascades from organization_members. Grants this user issued to other members keep granted_by_user_id, which is not nullable.',
   erasure_tombstones:
