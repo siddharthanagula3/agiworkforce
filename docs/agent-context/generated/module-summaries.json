@@ -141,6 +141,12 @@
       "purpose": "LM Studio adapter for a local loopback model server."
     },
     {
+      "name": "@agiworkforce/providers-minimax",
+      "path": "packages/ai/providers/minimax",
+      "kind": "package",
+      "purpose": "unknown"
+    },
+    {
       "name": "@agiworkforce/providers-moonshot",
       "path": "packages/ai/providers/moonshot",
       "kind": "package",

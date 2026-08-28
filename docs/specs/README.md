@@ -1,6 +1,6 @@
 # docs/specs
 
-One directory per substantial feature or change: `NNN-feature-name/`.
+One directory per substantial feature or change, named for the feature.
 
 - `spec.md` — what, why, requirements, acceptance criteria, non-goals
 - `plan.md` — approach, affected surfaces, migrations, rollout, risks

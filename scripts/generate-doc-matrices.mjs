@@ -69,27 +69,48 @@ export function renderTrustModeMatrix(harnesses) {
 }
 
 export function renderProviderCapabilityMatrix(harnesses) {
-  const groups = Object.entries(harnesses.harnessGroups ?? {});
-  const rows = groups
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, group]) => {
-      const modes = (group.executionModes ?? group.modes ?? []).join(', ') || '—';
-      const surfaces = (group.surfaces ?? []).join(', ') || '—';
-      return `| \`${key}\` | ${group.apiFamily ?? '—'} | ${modes} | ${surfaces} |`;
-    });
+  // harnessGroups maps a group name to an ARRAY of harness ids; the per-harness
+  // record lives in harnesses.harnesses. Reading group values as objects yields
+  // undefined for every field, which is how this table rendered four rows of
+  // em-dashes and still claimed to be generated.
+  const groups = harnesses.harnessGroups ?? {};
+  const groupOf = new Map();
+  for (const [group, members] of Object.entries(groups)) {
+    for (const id of members ?? []) groupOf.set(id, group);
+  }
+
+  const entries = Object.entries(harnesses.harnesses ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const featureKeys = [
+    ...new Set(entries.flatMap(([, h]) => Object.keys(h.features ?? {}))),
+  ].sort();
+
+  const rows = entries.map(([id, h]) => {
+    const cells = featureKeys.map((f) => mark(h.features?.[f]?.implementation));
+    return `| \`${id}\` | ${h.provider ?? '—'} | ${h.apiFamily ?? '—'} | ${(h.trustModes ?? []).join(', ') || '—'} | ${groupOf.get(id) ?? '—'} | ${cells.join(' | ')} |`;
+  });
+
+  const header = `| Harness | Provider | API family | Trust modes | Group | ${featureKeys.join(' | ')} |`;
+  const divider = `| --- | --- | --- | --- | --- | ${featureKeys.map(() => '---').join(' | ')} |`;
 
   return [
     DO_NOT_EDIT,
     '',
     '# Provider capability matrix',
     '',
-    `Rendered from \`${SOURCE}\` — ${groups.length} harness groups.`,
+    `Rendered from \`${SOURCE}\` — ${entries.length} harnesses in ${Object.keys(groups).length} groups.`,
+    '',
+    'Each row is one provider route. The feature columns report what the catalog',
+    'says is **implemented** on that route, not what the provider is capable of.',
     '',
     'Routing policy, privacy claims and the ZDR position are prose in',
     '`docs/architecture/provider-routing.md`. This table only reports the wiring.',
     '',
-    '| Harness group | API family | Execution modes | Surfaces |',
-    '| --- | --- | --- | --- |',
+    `Legend: ${Object.entries(MARK)
+      .map(([k, v]) => `${v} ${k}`)
+      .join(' · ')}`,
+    '',
+    header,
+    divider,
     ...rows,
     '',
   ].join('\n');
