@@ -13,9 +13,7 @@
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
-  "dependencies": {
-    "@agiworkforce/types": "workspace:*"
-  },
+  "dependencies": {},
   "peerDependencies": {
     "@clerk/backend": ">=3.0.0",
     "@neondatabase/serverless": ">=1.0.0"

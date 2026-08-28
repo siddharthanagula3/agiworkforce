@@ -79,10 +79,6 @@
         "to": "@agiworkforce/types"
       },
       {
-        "from": "@agiworkforce/data-layer",
-        "to": "@agiworkforce/types"
-      },
-      {
         "from": "@agiworkforce/desktop-command-client",
         "to": "@agiworkforce/client-runtime"
       },
