@@ -136,12 +136,13 @@ const activeOperationalFiles = trackedTextFiles.filter((file) => {
     'docs/compliance/',
     'docs/design/',
     'docs/development/',
-    'docs/engineering/',
+    'docs/development/',
     'docs/enterprise/',
     'docs/generated/',
     'docs/launch/',
     'docs/marketing/',
     'docs/product/',
+    'docs/research/',
     'docs/specs/',
     'docs/standards/',
     'docs/surfaces/',
@@ -336,7 +337,7 @@ const activeReferencePaths = [
   'docs/README.md',
   ...walk('docs/surfaces'),
   ...walk('docs/decisions'),
-  ...walk('docs/engineering'),
+  ...walk('docs/development'),
   ...walk('docs/enterprise'),
   ...walk('docs/marketing'),
   ...walk('docs/design'),
@@ -773,7 +774,7 @@ const userFacingCliDocs = [
   'apps/cli/scripts/demo.sh',
   'docs/surfaces/cli.md',
   'docs/development/agent-operability.md',
-  'docs/engineering/naming-conventions.md',
+  'docs/standards/naming-conventions.md',
   'docs/decisions/CURRENT_DECISIONS.md',
 ].filter(exists);
 
@@ -885,13 +886,10 @@ requireIncludes(
   'registered_builtin_commands_have_tui_runtime_coverage',
 );
 requireIncludes('apps/mobile/src/features/schedules/index.ts', 'public API barrel');
-requireIncludes('docs/engineering/naming-conventions.md', 'Primary CLI command: `agi`.');
+requireIncludes('docs/standards/naming-conventions.md', 'Primary CLI command: `agi`.');
+requireIncludes('docs/standards/naming-conventions.md', 'Compatibility CLI alias: `agiworkforce`.');
 requireIncludes(
-  'docs/engineering/naming-conventions.md',
-  'Compatibility CLI alias: `agiworkforce`.',
-);
-requireIncludes(
-  'docs/engineering/naming-conventions.md',
+  'docs/standards/naming-conventions.md',
   'Use `PLAN.md` for active strategic plan and phase structure.',
 );
 requireIncludes('apps/cli/Cargo.toml', 'default-run = "agi"');
