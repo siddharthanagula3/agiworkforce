@@ -10,7 +10,7 @@
       "evidence": "CRIT-016 (verified still present): 51 files under apps/desktop/src-tauri/src use `reqwest::Client` directly while only `sys/security/egress_policy.rs` exists as an enforcement point. known-flaws BYOK-RUST-EGRESS-01 confirms the TS `guardedFetch` chokepoint is fetch-only so every Tauri Rust call bypasses it (rated latent-not-live only because the cloud-sync client is dormant). ENT-003 independently established that the single allowlist that does exist — `egress.byokDomainsAllowlist` in the licensing crate — is ADVISORY METADATA rather than an enforced block. known-flaws DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01 records a second Rust-side permissive tool-guard on the egress/host-denylist path still open after the UI fix. ExecutionPlan's final line records that native Rust egress still lacks a mandatory global boundary type, and its late-verification note records a remaining public-then-private DNS rebinding race in the Rust webhook/scrape transports (initial-URL and per-redirect checks landed; connect-time address pinning did not). ExecutionPlan #61 (BLOCKED) records 19 sites retyping provider hostnames instead of importing the canonical registry, so the policy has no single source to enforce against. known-flaws SSRF-DNS-01's closure note explicitly preserves 'broader absence of OS-level egress enforcement' as tracked-partial.",
       "fix": "One host-authoritative egress policy object is enforced at the transport layer for every outbound path — WebView, Rust reqwest, sidecars, tools, MCP, local runtimes — with connect-time address pinning so the checked address is the address dialed; the org BYOK domain allowlist becomes an enforced block rather than metadata; a guard rejects direct reqwest::Client construction outside the policy-owning module.",
       "sources": [
-        "AuditRemediationLedger.md (CRIT-016, ENT-003)",
+        "docs/work/audit-remediation-ledger.md (CRIT-016, ENT-003)",
         "known-flaws.md (BYOK-RUST-EGRESS-01, SSRF-DNS-01, DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01)",
         "ExecutionPlan.md (#61, late release-integration verification)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -33,7 +33,7 @@
       "verification": {
         "date": "2026-08-17",
         "method": "wave0-needs_human",
-        "finding": "No code change: byok_domains_allowlist has zero enforcement consumers (org_policy.rs:41 and org-policy.ts:39 only compare it for monotonic tightening) and no surface loads a signed org policy at all — `grep -r org_policy apps/desktop/src-tauri/src` is empty. The Desktop enforcement point exists (validate_provider_base_url, direct_api_provider.rs:251) but would guard against an allowlist no device ever receives. RESIDUAL: Founder/security owner must decide how a signed org policy reaches a device (license bundle, sign-in fetch, MDM), its refresh cadence, and the no-policy default. Recorded as FoundersAssistance.md item 36. The other open clause — sidecar, MCP, tool and local-runtime transports egressing outside the p"
+        "finding": "No code change: byok_domains_allowlist has zero enforcement consumers (org_policy.rs:41 and org-policy.ts:39 only compare it for monotonic tightening) and no surface loads a signed org policy at all — `grep -r org_policy apps/desktop/src-tauri/src` is empty. The Desktop enforcement point exists (validate_provider_base_url, direct_api_provider.rs:251) but would guard against an allowlist no device ever receives. RESIDUAL: Founder/security owner must decide how a signed org policy reaches a device (license bundle, sign-in fetch, MDM), its refresh cadence, and the no-policy default. Recorded as docs/work/founder-assistance.md item 36. The other open clause — sidecar, MCP, tool and local-runtime transports egressing outside the p"
       }
     },
     {
@@ -80,7 +80,7 @@
       "effort": "L",
       "evidence": "ExecutionPlan #89 (PARTIALLY REMEDIATED IN SOURCE 2026-08-13): chat attachments and project knowledge now presign into the private R2 bucket with opaque keys, scan before registration, and gate read/delete by owner, and new generated media writes owner-hashed private keys through /api/files/{id}. Still open: legacy public rows keep an explicit public fallback, avatars still upload directly to the public bucket with a permanent URL, legacy public generated objects retain public locations, and abandoned presigns can create untracked objects that account erasure cannot find. The published privacy policy states in the company's own words that anyone with the link can open a legacy file without signing in. FoundersAssistance #20 records the same two open decisions (avatar policy private-by-default vs public-with-inspection; bounded pending-upload cleanup lifecycle and legacy migration window) as awaiting a founder ruling.",
       "fix": "An avatar/public-media policy is ratified and applied (private-by-default recommended), legacy public objects are migrated behind /api/files/{id} within a stated window, a bounded pending-upload lifecycle rule or durable pending-row cron reaps abandoned presigns so no untracked object survives account erasure, and the privacy policy's legacy-link disclosure is retired once the migration completes.",
-      "sources": ["ExecutionPlan.md (#89)", "FoundersAssistance.md (#20)"],
+      "sources": ["ExecutionPlan.md (#89)", "docs/work/founder-assistance.md (#20)"],
       "code_refs": [
         "apps/web/app/api/files/[id]/route.ts",
         "apps/web/app/api/uploads/presign/route.ts",
@@ -207,7 +207,7 @@
       "evidence": "MATCH-010: no shared external-content envelope marking source, provenance, trust class and instruction isolation is used for web search, page content, files, connectors, MCP resources, browser DOM, terminal output or repo text, and no prompt-injection fixtures exist. Point fixes have landed for individual channels — desktop web-search results got a fence (ExecutionPlan #18), CLI rules files got a denylist (#16), project knowledge is injected with untrusted-data framing — but each was a separate ad hoc patch, which is why F25 (MCP descriptions) and PP-15 (browser DOM/accessibility content is not injection-scanned; only screenshots are) are still open on the same surface that owns terminal, file-delete and browser tools. phase4 PP-15 confirms the browser/computer-use path scans nothing but screenshots.",
       "fix": "One shared envelope type carries source, provenance and trust class for every external content channel and is applied at admission (search results, fetched pages, file contents, connector and MCP results, browser DOM/accessibility tree, terminal output, repo text), the trifecta gate reads trust class from the envelope rather than per-channel heuristics, and prompt-injection fixtures cover each channel.",
       "sources": [
-        "AuditRemediationLedger.md (MATCH-010)",
+        "docs/work/audit-remediation-ledger.md (MATCH-010)",
         "phase4-capability-audit.md (PP-15)",
         "ExecutionPlan.md (#18, #16)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -290,7 +290,7 @@
       "fix": "Surface is carried as a signed claim in the Clerk JWT template and read from the verified token; the advisory header is ignored for any entitlement or capability decision, and one canonical surface enum is shared by the TS contract and the SQL constraint.",
       "sources": [
         "known-flaws.md (DEV-SURFACE-WEB-CLAIM-01)",
-        "AuditRemediationLedger.md (MATCH-001)"
+        "docs/work/audit-remediation-ledger.md (MATCH-001)"
       ],
       "code_refs": ["apps/web/app/api/llm/v1/chat/completions"],
       "verified_against_code": true,
@@ -316,7 +316,10 @@
       "effort": "XL",
       "evidence": "ENT-002 (triaged 2026-08-09): zero role literals exist in the contracts package — roles are fixed in SQL and TypeScript rather than modeled as data — so custom roles, groups, policy inheritance, delegated admin, service accounts and break-glass are all absent. PP-27 records the same as 'four hardcoded roles instead of extensible RBAC/ABAC (or an explicit product-limit statement)'. This is the structural reason SEC-51's group→role mapping has nowhere to write to, and the reason SEC-57's owner/admin predicate keeps being hand-typed.",
       "fix": "Roles and their permissions are modeled as data in one canonical policy source consumed by both TS and SQL, with groups, inheritance and delegated admin expressible; or the four-role limit is stated explicitly as a product boundary in customer-facing material and the extensible claims are withdrawn.",
-      "sources": ["AuditRemediationLedger.md (ENT-002)", "phase4-capability-audit.md (PP-27)"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md (ENT-002)",
+        "phase4-capability-audit.md (PP-27)"
+      ],
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
@@ -334,7 +337,7 @@
       "evidence": "ENT-004 (triaged 2026-08-09): audit tables exist across 5 migrations but only one module under apps/web/app/api matches SIEM or audit-export, and correlation is blocked on SCALE-VER-006 because almost no traces are emitted to correlate against. phase4 PP-27 pins the delivery gap concretely: org-wide audit export is implemented only as a separate api-gateway route (/api/v1/enterprise mounted at services/api-gateway/src/app.ts:154) with zero callers anywhere in the repo — a service that is deployed nowhere and called by nothing. AuditRemediationLedger DOC-017 separately flags that SECURITY.md's audit-log immutability status may be inaccurate (the underlying immutability fix, AUDIT-IMMUT-01, did land via migration 0043).",
       "fix": "Org admins can export audit events from a reachable first-party surface with a documented retention window and a streaming/SIEM delivery option. The api-gateway enterprise route arm is void: that service was deleted 2026-08-17.",
       "sources": [
-        "AuditRemediationLedger.md (ENT-004, DOC-017)",
+        "docs/work/audit-remediation-ledger.md (ENT-004, DOC-017)",
         "phase4-capability-audit.md (PP-27)"
       ],
       "code_refs": [],
@@ -357,7 +360,7 @@
       "evidence": "ENT-006 (triaged 2026-08-09): zero migrations mention CMEK/BYOK encryption or IP allowlists; procurement-driven, and no customer-facing surface currently claims them. capability-gaps CAP-001 tracks customer-managed encryption keys as an unclear/deferred capability (two audit labels deduplicated into one), and CAP-004 tracks the organization IP allowlist as requiring tenant administration and a break-glass path. gap-audit §6 groups these with the other intentionally deferred enterprise blockers — not public-alpha blockers, but hard blockers for enterprise procurement. Depends on SEC-40 (no root-key management exists to build CMEK on) and SEC-52 (no tenant-admin role model to gate an IP allowlist with).",
       "fix": "Either the CMEK/BYOK, key-rotation, private-endpoint and IP-allowlist program is scoped and built against a committed enterprise scope on top of a real KMS root (SEC-40) and tenant admin model (SEC-52), or their absence is stated explicitly in procurement material so no claim outruns the implementation.",
       "sources": [
-        "AuditRemediationLedger.md (ENT-006)",
+        "docs/work/audit-remediation-ledger.md (ENT-006)",
         "capability-gaps.csv (CAP-001, CAP-004)",
         "gap-audit-2026-08-08.md (§6)"
       ],
@@ -383,7 +386,7 @@
       "evidence": "ENT-008 (triaged 2026-08-09): docs/security/ holds exactly one document (key-rotation.md) — no security architecture, threat model, pen-test status, subprocessor list or certification status. DOC-024: enterprise-ready and security-control claims are published without working identity/governance or an external audit and are not confirmed downgraded to match the ENT-001..008 reality. DOC-011: the AdminConsole's SSO/SCIM 'schema ready' language may overstate readiness. phase4 PP-27 records the inverse error at the same time — the public /enterprise page tells prospects SSO/SCIM status is unknown ('ask us') while the internal admin console correctly says they are 'Implemented — entitlement-gated' — so the claims are wrong in both directions, which is the signature of copy that is hand-maintained rather than generated. DPDP_PROGRESS's second and third passes fixed several concrete instances of this class (a false 'CI blocks on Semgrep' claim, a false CodeQL claim, an overstated Actions SHA-pinning claim, a wrong frame-src CSP claim), proving the pattern is systemic rather than incidental.",
       "fix": "Drop the resolved contradiction and keep this scoped to the missing procurement document set. One overclaim does survive and belongs to SEC-54 instead: enterprise/page.tsx:107 advertises self-serve audit export that has no first-party client.",
       "sources": [
-        "AuditRemediationLedger.md (ENT-008, DOC-011, DOC-024)",
+        "docs/work/audit-remediation-ledger.md (ENT-008, DOC-011, DOC-024)",
         "phase4-capability-audit.md (PP-27)",
         "DPDP_PROGRESS.md (§7.2, §7.3)"
       ],
@@ -420,7 +423,7 @@
       "evidence": "Sources disagree on scope. AuditRemediationLedger CRIT-005 states upload completion validates path/MIME/size but not malicious content before files can be served, shared, indexed or passed to tools, and requires a quarantine→scan→accepted state machine, a scanner interface, and archive-bomb/polyglot/path-traversal protection — status open. ExecutionPlan #19 records a narrower fix landing 2026-08-09 (f8b20a313), verified as 'appears fixed — image/svg+xml is scanned via scanSvg() in apps/web/lib/security/upload-scan.ts', addressing the specific gap where a broad image/ prefix at 25 MiB let unscanned SVG avatars and knowledge files through. gap-audit §8 also lists upload scanning as previously-a-gap-now-fixed for the chat-attachment completion path. So active-content scanning exists on at least two paths; the state machine, the pluggable scanner interface, and archive/polyglot handling are not evidenced anywhere. UPLOAD_SCAN_WEBHOOK_URL was among the undocumented env vars fixed in #24, implying an external-scanner hook exists but its production configuration is unverified.",
       "fix": "Every servable upload path passes through one quarantine→scan→accepted state machine behind a scanner interface, archive bombs, polyglots and traversal-shaped entries are rejected, and a test proves an unscanned object can never reach a served, shared, indexed or tool-visible state.",
       "sources": [
-        "AuditRemediationLedger.md (CRIT-005)",
+        "docs/work/audit-remediation-ledger.md (CRIT-005)",
         "ExecutionPlan.md (#19, #24)",
         "gap-audit-2026-08-08.md (§8)"
       ],
@@ -516,7 +519,7 @@
         "capability-gaps.csv (CAP-024)",
         "gap-audit-2026-08-08.md (GAP-P1-011)",
         "ExecutionPlan.md (#93)",
-        "AuditRemediationLedger.md (PP-26)"
+        "docs/work/audit-remediation-ledger.md (PP-26)"
       ],
       "code_refs": [
         "apps/web/lib/moderation/text-classifier.ts",
@@ -561,7 +564,7 @@
       "effort": "M",
       "evidence": "agiworkforce.com serves real users with test-mode Stripe keys; every 'paid' subscription row including founder accounts on basic/max_15x is a test subscription. Live and test catalogs diverge (Pro $20/mo test vs $29.99/mo live; Basic, Max 15x and Team do not exist live at all), so flipping STRIPE_SECRET_KEY alone would charge Pro at $29.99 against a $20 page. Stripe key mode is runtime Vercel/Stripe configuration and is not determinable from the repo.",
       "fix": "Founder decides whether the product takes money in public alpha; if going live, create live products/prices matching BILLING_PLAN_PRICING and repoint every STRIPE_PRICE_* variable in Vercel Production in the same change as the secret-key swap, then re-run the upgrade flow with a real card.",
-      "sources": ["FoundersAssistance.md #26"],
+      "sources": ["docs/work/founder-assistance.md #26"],
       "blocked_by": "Founder decision to go live plus creation of matching live Stripe products/prices",
       "code_refs": ["packages/contracts/types/src/billing-catalog.ts"],
       "merged_from": ["Production Stripe is in TEST mode — no real customer can be charged"],
@@ -589,9 +592,9 @@
       "evidence": "The localized pricing endpoint rejected every configured Pro/Max Price lookup because the supplied Stripe secret was test-mode while those Price IDs exist in live mode; Basic, Max 15x and Team Price IDs were absent locally. STRIPE_PRICE_TEAM_MONTHLY_USD, STRIPE_PRICE_TEAM_MONTHLY_INR, STRIPE_PRICE_TEAM_YEARLY_USD and STRIPE_PRICE_BASIC_MONTHLY_INR are missing or misnamed and logged on every production request. Separately, the Stripe CLI restricted key was refused product creation with more_permissions_required, so no live Team product exists; a temporary Prices-Write permission granted during the stale-price cleanup has not been revoked and is a standing risk on a live key.",
       "fix": "Nothing in code. Create the missing Prices, set the four env vars, verify TEAM_MONTHLY_USD unit_amount is $25.00, then revoke the temporary Prices-Write permission.",
       "sources": [
-        "FoundersAssistance.md #5",
-        "FoundersAssistance.md #18",
-        "FoundersAssistance.md #27",
+        "docs/work/founder-assistance.md #5",
+        "docs/work/founder-assistance.md #18",
+        "docs/work/founder-assistance.md #27",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "blocked_by": "Stripe Dashboard restricted-key permissions and product creation (founder action)",
@@ -625,8 +628,8 @@
       "evidence": "CRIT-003 originally recorded that checkout omitted automatic tax and tax-ID collection while terms placed tax obligations on users; gap-audit-2026-08-08 §8 records the code fix as landed. But automatic_tax:{enabled:true} silently returns 0% and under-collects VAT until Stripe Tax is enabled, an origin address is set, tax_behavior is set per Price, and jurisdictions are registered in the Stripe dashboard — none of which the repository can verify. BIZ-016 additionally records tax handling as incomplete for invoices, credit notes and refunds, and there is no test-mode coverage for taxable/non-taxable/invalid-address/refund/invoice flows.",
       "fix": "Complete the Stripe dashboard tax configuration (Stripe Tax on, origin address, per-Price tax_behavior, jurisdiction registrations), then add test-mode coverage for taxable, non-taxable, invalid-address, refund and invoice flows including credit notes.",
       "sources": [
-        "AuditRemediationLedger.md CRIT-003",
-        "AuditRemediationLedger.md BIZ-016",
+        "docs/work/audit-remediation-ledger.md CRIT-003",
+        "docs/work/audit-remediation-ledger.md BIZ-016",
         "gap-audit-2026-08-08.md §8",
         "ExecutionPlan.md Founder actions #7",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -661,7 +664,10 @@
       "effort": "XL",
       "evidence": "SCALE-SPEND-001: web search, embeddings/rerank, sandbox/code execution, browser/cloud compute, image, video, speech, storage, transfer and third-party tool costs are not recorded. BIZ-033 extends the same gap to full COGS: token cost plus search, sandbox, image/video/audio, storage, transfer, infra allocation, Stripe fees, refunds, chargeback reserve, discounts and support adjustments are not all captured.",
       "fix": "Define a cost event per non-token provider capability, emit it from each execution path, and aggregate into one COGS ledger covering provider spend, Stripe fees, refunds, chargeback reserve, discounts and support adjustments.",
-      "sources": ["AuditRemediationLedger.md SCALE-SPEND-001", "AuditRemediationLedger.md BIZ-033"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md SCALE-SPEND-001",
+        "docs/work/audit-remediation-ledger.md BIZ-033"
+      ],
       "merged_from": [
         "Non-token provider costs are not metered",
         "No real cost ledger covering full COGS"
@@ -683,8 +689,8 @@
       "evidence": "SCALE-SPEND-002 records that no single usage ledger exists with idempotent event IDs and a corrections/refunds path. SCALE-CON-002 notes idempotency keys are not present on all mutation entry points including payments and webhooks, which is the same missing primitive on the write side.",
       "fix": "Add run_id/task_id/project_id columns to credit_transactions and populate them at credit-service.ts:432, rather than building a second ledger.",
       "sources": [
-        "AuditRemediationLedger.md SCALE-SPEND-002",
-        "AuditRemediationLedger.md SCALE-CON-002",
+        "docs/work/audit-remediation-ledger.md SCALE-SPEND-002",
+        "docs/work/audit-remediation-ledger.md SCALE-CON-002",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "merged_from": ["No usage ledger attributing cost to run/task/user/project/tenant"],
@@ -704,7 +710,10 @@
       "effort": "L",
       "evidence": "SCALE-SPEND-006: no comparison of internal usage with provider/Stripe settlement data and no drift alerting. BIZ-013: Stripe state is not periodically reconciled, so missed or out-of-order webhooks may never be repaired from authoritative provider state.",
       "fix": "Add a scheduled reconciliation job that compares internal usage and subscription state against provider and Stripe settlement data, repairs drift from the authoritative source, and alerts on divergence beyond a threshold.",
-      "sources": ["AuditRemediationLedger.md SCALE-SPEND-006", "AuditRemediationLedger.md BIZ-013"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md SCALE-SPEND-006",
+        "docs/work/audit-remediation-ledger.md BIZ-013"
+      ],
       "merged_from": [
         "Provider invoices are not reconciled against internal usage",
         "Stripe state not periodically reconciled"
@@ -725,7 +734,10 @@
       "effort": "M",
       "evidence": "SCALE-SPEND-003: raw token price is optimised without tracking accepted-task cost, retries, escalations, human intervention, cache savings or failed-work cost. BIZ-037: accepted-task economics (cost per successful task, retry and escalation cost) are not implemented.",
       "fix": "Emit a task outcome dimension alongside cost events so cost per accepted task, retry cost, escalation cost and failed-work cost can be computed.",
-      "sources": ["AuditRemediationLedger.md SCALE-SPEND-003", "AuditRemediationLedger.md BIZ-037"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md SCALE-SPEND-003",
+        "docs/work/audit-remediation-ledger.md BIZ-037"
+      ],
       "merged_from": [
         "No quality-adjusted cost metrics (accepted-task cost, retries, escalations)",
         "No accepted-task economics"
@@ -747,8 +759,8 @@
       "evidence": "BIZ-006: no published endpoint returning plan, status, renewal, grace, capabilities, limits, reset times and policy source without exposing payment secrets. BIZ-007: Web, Desktop, Mobile, CLI, VS Code and Chrome are not proven to reach the same entitlement decision for the same account and capability. The mobile provider-switch tier divergence (mobile granted mid-thread switching at 'pro' while canonical logic restricted it to max/max_15x/enterprise) is the class of bug this would catch, and was fixed only after shipping.",
       "fix": "Extend the existing /api/me capability_handshake with limits + authoritative resetsAt + policySource rather than publishing a new endpoint, then add one contract test per surface asserting the same decision for a fixed account/capability pair.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-006",
-        "AuditRemediationLedger.md BIZ-007",
+        "docs/work/audit-remediation-ledger.md BIZ-006",
+        "docs/work/audit-remediation-ledger.md BIZ-007",
         "docs/agent-context/known-flaws.md MOBILE-PROVIDER-SWITCH-GATE-DIVERGENCE-01"
       ],
       "merged_from": [
@@ -771,7 +783,10 @@
       "effort": "S",
       "evidence": "CRIT-002: toEnforceableLimit() lacked a 'custom' arm so enterprise custom connector/project limits collapsed to zero (catalog enterprise.projects:'custom' -> 0 -> validation error at org-sharing-service.ts:278). The BillingPlanLimit type, exhaustive conversion, tests and a duplicate-converter guard landed in commit 2a163f6af, but migrating the API, UI, usage policy and CLI/desktop caches to the canonical representation is still open — only the web org-entitlement path is confirmed migrated. BIZ-005 adds that the policy source is still not surfaced to admins or users.",
       "fix": "Only the policy-source display half survives: surface catalog-default vs contract-override next to each limit in the org settings UI. The representation migration is guarded by an existing test.",
-      "sources": ["AuditRemediationLedger.md CRIT-002", "AuditRemediationLedger.md BIZ-005"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md CRIT-002",
+        "docs/work/audit-remediation-ledger.md BIZ-005"
+      ],
       "code_refs": [
         "apps/web/lib/services/org-entitlements.ts",
         "apps/web/lib/services/free-plan-entitlements.ts"
@@ -797,9 +812,9 @@
       "evidence": "BIZ-008: duplicate clicks or callbacks could create duplicate customers, subscriptions or credits. BIZ-009: redirect success alone should not be trusted to grant entitlement. Money-movement guards do exist (duplicate-subscription refusal, idempotency keys, refund clawback in stripe-webhook handlers), so the gap is proof rather than total absence.",
       "fix": "Only the missing test remains: assert that a checkout redirect with no webhook leaves entitlement unchanged. The keys the item asks for already exist.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-008",
-        "AuditRemediationLedger.md BIZ-009",
-        "AuditRemediationLedger.md BIZ-041"
+        "docs/work/audit-remediation-ledger.md BIZ-008",
+        "docs/work/audit-remediation-ledger.md BIZ-009",
+        "docs/work/audit-remediation-ledger.md BIZ-041"
       ],
       "code_refs": ["apps/web/app/api/stripe-webhook/lib/handlers.ts"],
       "merged_from": [
@@ -823,7 +838,7 @@
       "evidence": "BIZ-015: customer portal and invoice access authorization is not confirmed complete and the risk of cross-customer object IDs is not confirmed closed. GAP-215: desktop BillingSettings renders dl rows plus one 'Manage billing' button with no invoice table, no card display and no cancel control. GAP-249: no cancel-plan section or 'cancels on <date>' state. GAP-256: web payment methods and cancellation are Stripe-portal redirects rather than inline controls.",
       "fix": "Reuse the web invoices/payment-methods fetchers on desktop; the portal-authorization sub-claim needs a test asserting the portal session is created for the authenticated customer id only.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-015",
+        "docs/work/audit-remediation-ledger.md BIZ-015",
         "audit/ui-gaps.md GAP-215",
         "audit/ui-gaps.md GAP-249",
         "audit/ui-gaps.md GAP-256",
@@ -856,8 +871,8 @@
       "evidence": "BIZ-017: seat quantity, annual/monthly term, invitation, seat true-up, reduction, transfer, cancellation and pooled usage are not confirmed complete. BIZ-018: Team subscription is not confirmed bound to organization ownership and membership, creating personal/account ambiguity. A concrete instance already fired: a Team purchase made before org creation lost the paid seat count entirely, and with the seat floor raised to 2 this hit every new Team purchase. The path is also externally blocked because no live Team Stripe product exists (BILL-02).",
       "fix": "Bind the Team subscription to the organization record at purchase time, and implement seat true-up, reduction, transfer and pooled usage with reconciliation against Stripe quantity.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-017",
-        "AuditRemediationLedger.md BIZ-018",
+        "docs/work/audit-remediation-ledger.md BIZ-017",
+        "docs/work/audit-remediation-ledger.md BIZ-018",
         "ExecutionPlan.md #25",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -892,7 +907,10 @@
       "effort": "L",
       "evidence": "BIZ-019: contract entitlements, invoice/ACH/wire references, term dates, seat and usage commitments, renewal and support contacts are not confirmed complete or explicitly marked request-only. BIZ-021: no delegated billing/admin roles exist with audit, and billing administrators must not automatically receive content access — which is not confirmed enforced.",
       "fix": "Model contract entitlements and term data explicitly (or mark the path request-only in the UI), and introduce a billing-admin role that carries no content access, with an audit event on every billing mutation.",
-      "sources": ["AuditRemediationLedger.md BIZ-019", "AuditRemediationLedger.md BIZ-021"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md BIZ-019",
+        "docs/work/audit-remediation-ledger.md BIZ-021"
+      ],
       "merged_from": [
         "Enterprise contract onboarding incomplete",
         "No delegated billing/admin roles with audit"
@@ -914,9 +932,9 @@
       "evidence": "BIZ-025: billing period, weekly, five-hour, flagship, voice, Work, media, concurrency and provider-specific constraints are not all precisely defined across products. BIZ-026: reset times and warnings may rely on client clocks or approximations instead of the authoritative window. PP-25 records that reset times and rolling windows are not reconciled across surfaces.",
       "fix": "Define each rolling window once in the entitlement contract, return authoritative reset timestamps from the server, and make every surface render from that value rather than computing locally.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-025",
-        "AuditRemediationLedger.md BIZ-026",
-        "AuditRemediationLedger.md PP-25"
+        "docs/work/audit-remediation-ledger.md BIZ-025",
+        "docs/work/audit-remediation-ledger.md BIZ-026",
+        "docs/work/audit-remediation-ledger.md PP-25"
       ],
       "merged_from": [
         "Rolling usage windows not precisely defined across products",
@@ -939,9 +957,9 @@
       "evidence": "BIZ-028: per-project/team budgets and chargeback/showback are not confirmed implemented where advertised. PP-25 records the same absence of per-project/team usage and budgets. ENT-007 (primary home: enterprise controls) notes 19 modules under apps/web/app/api reference SLA/uptime vocabulary but quotas, budgets, chargeback and priority-support tiering do not follow from it.",
       "fix": "Add budget objects scoped to project and team, enforce them in the admission path built for BILL-09, and expose showback reporting per scope.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-028",
-        "AuditRemediationLedger.md PP-25",
-        "AuditRemediationLedger.md ENT-007"
+        "docs/work/audit-remediation-ledger.md BIZ-028",
+        "docs/work/audit-remediation-ledger.md PP-25",
+        "docs/work/audit-remediation-ledger.md ENT-007"
       ],
       "merged_from": ["No per-project/team budgets or chargeback/showback where advertised"],
       "verification": {
@@ -960,7 +978,10 @@
       "effort": "M",
       "evidence": "BIZ-032: there is no documented ownership or migration policy producing one effective entitlement across web and store purchases. Mobile currently ships read-only store-source routing (apps/mobile/src/features/billing/subscriptionSource.ts) and historical-row renewal/grace handling, which is only sufficient while no native purchase exists — a precondition BILL-44 is about to remove.",
       "fix": "Document and implement an ownership precedence rule for concurrent web and store subscriptions, plus a migration path when a user buys on the second channel, before native IAP is enabled.",
-      "sources": ["AuditRemediationLedger.md BIZ-032", "AuditRemediationLedger.md BIZ-031"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md BIZ-032",
+        "docs/work/audit-remediation-ledger.md BIZ-031"
+      ],
       "code_refs": [
         "apps/mobile/src/features/billing/subscriptionSource.ts:47-70",
         "apps/web/lib/services/subscription-service.ts:113-137"
@@ -983,9 +1004,9 @@
       "evidence": "BIZ-034: gross margin is not computed from settled revenue and attributable COGS, and exclusion of local/user-key activity from managed-cloud revenue and COGS is not confirmed. BIZ-035: estimate, accrued and settled values are not separated, so estimates may be presented as audited fact. BIZ-036: no margin dashboards or alerts exist by plan, model, provider, capability or cohort, and role-based access to sensitive provider pricing is not confirmed.",
       "fix": "Separate estimate/accrued/settled explicitly in the ledger, compute margin only from settled revenue and attributable COGS with local/BYOK activity excluded, and build dashboards and alerts with role-gated access to provider pricing.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-034",
-        "AuditRemediationLedger.md BIZ-035",
-        "AuditRemediationLedger.md BIZ-036"
+        "docs/work/audit-remediation-ledger.md BIZ-034",
+        "docs/work/audit-remediation-ledger.md BIZ-035",
+        "docs/work/audit-remediation-ledger.md BIZ-036"
       ],
       "merged_from": [
         "Gross margin not computed from settled revenue/attributable COGS",
@@ -1008,7 +1029,7 @@
       "effort": "M",
       "evidence": "BIZ-039: attribution, eligibility, anti-self-referral, reward settlement, expiration, reversal and privacy handling are all undefined for the referral_code field.",
       "fix": "Either implement the referral lifecycle end to end (attribution, eligibility, anti-self-referral, settlement, expiry, reversal) or remove the field and any UI that collects it.",
-      "sources": ["AuditRemediationLedger.md BIZ-039"],
+      "sources": ["docs/work/audit-remediation-ledger.md BIZ-039"],
       "merged_from": ["referral_code field is unused/unwired"],
       "verification": {
         "date": "2026-08-17",
@@ -1027,7 +1048,7 @@
       "evidence": "BIZ-040: brute force, replay, stacking and negative-balance prevention are not confirmed for gift and promo codes.",
       "fix": "Back code issuance and redemption with ledger entries, add rate limiting and single-use enforcement, define stacking rules explicitly, and assert redemption can never drive a negative balance.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-040",
+        "docs/work/audit-remediation-ledger.md BIZ-040",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "merged_from": ["Gift/promo codes lack ledger-backed issuance/redemption"],
@@ -1048,8 +1069,8 @@
       "evidence": "BIZ-041 (triaged 2026-08-09): usage abuse is substantially implemented (Redis-backed per-endpoint velocity limits, fail-closed in production, per-plan concurrency, signed 429 attribution/audit in apps/web/lib/rate-limit.ts) and money movement has some guards (duplicate-subscription refusal, idempotency keys, refund clawback, dispute handling). But there is NO radar.early_fraud_warning.created handling, no captcha or bot check anywhere, no fraud/risk/abuse table in apps/web/db/neon/, no duplicate-account or shared-payment-instrument detection, no refund-abuse policy beyond per-charge clawback, and no case-queue admin console (apps/web/app/api/admin/security/route.ts is read-only). BIZ-042 adds that blocks tied to these controls have no auditable reason codes or appeal/support path. CAP-013 records fraud rules as a contract-only risk state that must not be exposed until events and enforcement exist. Whether Clerk's CAPTCHA/Turnstile is enabled on sign-up could not be confirmed from the repository either way and is recorded as unverified.",
       "fix": "Founder sets risk appetite first; then handle early-fraud-warning webhooks, add a fraud/risk table and case queue, detect duplicate accounts and shared payment instruments, define a refund-abuse policy, and attach auditable reason codes plus an appeal path to every block. Separately confirm the Clerk CAPTCHA toggle and record the answer.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-041",
-        "AuditRemediationLedger.md BIZ-042",
+        "docs/work/audit-remediation-ledger.md BIZ-041",
+        "docs/work/audit-remediation-ledger.md BIZ-042",
         "audit/capability-gaps.csv CAP-013",
         "DPDP_PROGRESS.md §6",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -1083,10 +1104,10 @@
       "evidence": "BIZ-043: checkout, webhook, subscription, entitlement, usage, invoice and support events are not correlated. BIZ-044: current plan, source, last reconciliation, reset times, transaction references and a support code are not confirmed surfaced to customers. BIZ-045: no alerts exist for webhook lag, reconciliation drift, negative credits, duplicate grants, missing invoices, tax failure, high COGS or plan-gate anomalies. Observability breadth is a known constraint — SCALE-VER-006 records near-total absence of production tracing spans, though apps/web/lib/observability/span.ts now has production importers including the Stripe webhook route.",
       "fix": "Attach a correlation ID across the checkout-to-usage chain, expose a customer-safe billing diagnostics panel with a support code, and add alerts for the named failure modes.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-043",
-        "AuditRemediationLedger.md BIZ-044",
-        "AuditRemediationLedger.md BIZ-045",
-        "AuditRemediationLedger.md SCALE-VER-006"
+        "docs/work/audit-remediation-ledger.md BIZ-043",
+        "docs/work/audit-remediation-ledger.md BIZ-044",
+        "docs/work/audit-remediation-ledger.md BIZ-045",
+        "docs/work/audit-remediation-ledger.md SCALE-VER-006"
       ],
       "code_refs": [
         "apps/web/lib/observability/span.ts",
@@ -1135,7 +1156,7 @@
       "effort": "M",
       "evidence": "RBI's AFA/3DS requirement applies to every recurring SaaS charge above Rs 15,000 (verified against Stripe's India recurring-payments documentation, 2026-08-14). Max 15x at Rs 24,999/mo and Team at 8+ seats (Rs 15,992+) cannot auto-renew on an Indian card, and this applies to any provider including Razorpay/UPI AutoPay which caps lower still. Nothing is broken in production today only because no INR Price exists yet.",
       "fix": "Founder picks one of: price Max 15x INR at or under Rs 15,000, sell it annually or invoice-only, cap Indian Team self-serve at 7 seats routing 8+ to sales, or do not sell those tiers in India yet.",
-      "sources": ["FoundersAssistance.md #28a"],
+      "sources": ["docs/work/founder-assistance.md #28a"],
       "blocked_by": "Founder pricing decision",
       "code_refs": ["apps/web/lib/regional-pricing.ts"],
       "merged_from": ["Two published INR prices cannot legally auto-renew"],
@@ -1162,7 +1183,7 @@
       "effort": "S",
       "evidence": "STRIPE_PRICE_BASIC_MONTHLY_INR and STRIPE_PRICE_TEAM_MONTHLY_INR are read by lib/pricing.ts and unset in every environment because no active INR Price exists in Stripe; the only one that existed (Basic Rs 399) is archived. The system fails closed correctly (checkoutReady:false) so India currently sees USD pricing rather than a broken button.",
       "fix": "Once BILL-38's pricing decision is made, create the corresponding INR Prices in Stripe and set the env vars.",
-      "sources": ["FoundersAssistance.md #28c"],
+      "sources": ["docs/work/founder-assistance.md #28c"],
       "blocked_by": "Resolution of BILL-38's pricing decision",
       "code_refs": ["apps/web/lib/pricing.ts"],
       "merged_from": ["INR is published but not sellable"],
@@ -1189,7 +1210,7 @@
       "effort": "M",
       "evidence": "Only USD and INR have currency resolution paths, so EUR/GBP/JPY/BRL buyers are served plain USD pricing; adding one currency means editing three files across two packages. Only Basic and Team have per-currency Price ID slots — pro, max and max_15x have none. Separately, /api/billing/top-up previously hardcoded currency:'usd'; because a top-up is a PaymentIntent rather than an invoice Stripe would not have rejected it, it would have silently charged a second currency with undisclosed forex and cross-border fees. That was fixed 2026-08-14 (the route now reads the live subscription currency and refuses non-USD subscribers, failing closed if Stripe is unreachable), but the INR price of one top-up unit remains undecided because exchange rates vary Rs 57-125/$ across plans.",
       "fix": "Convert STRIPE_PRICE_IDS in apps/web/lib/pricing.ts to a `{plan: {currency: {interval: id}}}` shape so a sixth currency is one env var, not a three-file edit.",
-      "sources": ["FoundersAssistance.md #29d", "FoundersAssistance.md #28d"],
+      "sources": ["docs/work/founder-assistance.md #29d", "docs/work/founder-assistance.md #28d"],
       "blocked_by": "Founder decision on INR top-up unit pricing",
       "code_refs": ["apps/web/app/api/billing/top-up/route.ts"],
       "merged_from": [
@@ -1213,7 +1234,7 @@
       "effort": "S",
       "evidence": "Recorded as engineering work surfaced by the India billing investigation: 'The 7-seat Team threshold as a real checkout check, not a docs note.' Depends on the BILL-38 decision.",
       "fix": "Enforce the seat cap at checkout time for Indian Team self-serve purchases, routing 8+ seats to sales.",
-      "sources": ["FoundersAssistance.md #29d"],
+      "sources": ["docs/work/founder-assistance.md #29d"],
       "blocked_by": "Depends on BILL-38 pricing decision",
       "merged_from": ["7-seat Team threshold for India exists only as a documented decision"],
       "verification": {
@@ -1232,7 +1253,7 @@
       "effort": "S",
       "evidence": "Razorpay's international-payments documentation covers one-time collection only and does not confirm recurring subscriptions for a foreign entity; if one-time only it cannot replace Stripe for subscriptions. Cross-border pricing is quoted case-by-case (~3%+GST). Razorpay International is a payment service provider, not merchant of record, so the OIDAR GST registration and 18% remittance obligation stays with AGI Automation LLC — neither Stripe Tax nor Razorpay covers it, while a merchant-of-record alternative would, at higher cost and without UPI parity. Adding Razorpay also means a second billing provider: a second webhook surface, subscription lifecycle, reconciliation, and a fourth resolveSubscriptionBillingSource owner.",
       "fix": "Ask Razorpay sales the recurring-for-foreign-entity question first, then confirm the OIDAR GST position with an accountant, before any integration work begins.",
-      "sources": ["FoundersAssistance.md #28e"],
+      "sources": ["docs/work/founder-assistance.md #28e"],
       "blocked_by": "Razorpay sales answer on recurring support for foreign entities, plus accountant confirmation of the OIDAR GST position",
       "code_refs": ["apps/web/lib/services/subscription-service.ts"],
       "merged_from": ["Razorpay — what to ask sales before any code is written"],
@@ -1260,9 +1281,9 @@
       "evidence": "Sources disagree on framing: BIZ-031 records mobile IAP as deliberately not shipped (a founder product/legal decision that must not be closed as an audit fix), while FoundersAssistance #12 and #29 record it as fully implemented end to end and switched off behind MOBILE_IAP_ENABLED only because no store products or credentials exist. The implementation covers expo-iap client, server-side Apple/Google receipt verification, idempotent ledger, restore flow, renewal/cancellation/refund handling and store notification endpoints. Migration file 0112_mobile_native_iap.sql is present in the repo but its applied state is not visible. Enabling IAP is also what ships UPI on mobile, since Play Billing and Apple both support UPI natively and auto-convert regional prices; running AGI's own UPI checkout inside the iOS app would violate App Store guideline 3.1.1. Store listing copy currently states 'no in-app purchases in this version' and must be replaced with exact subscription and top-up disclosures at the same time.",
       "fix": "Work the founder checklist in order: Apple Paid Applications Agreement (gates the rest), Play Console merchant profile, 9 product IDs in both stores, store server credentials, apply migrations 0111 then 0112, set product-ID and verification env vars, update store listing copy, complete tax registration, run sandbox verification, then enable MOBILE_IAP_ENABLED.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-031",
-        "FoundersAssistance.md #12",
-        "FoundersAssistance.md #29",
+        "docs/work/audit-remediation-ledger.md BIZ-031",
+        "docs/work/founder-assistance.md #12",
+        "docs/work/founder-assistance.md #29",
         "docs/agent-context/known-flaws.md MOBILE-STORE-LISTING-NATIVE-BILLING-COPY",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -1382,7 +1403,7 @@
       "evidence": "BIZ-004: free, basic, pro, max, max_15x, team, enterprise, local and user-key modes are not all confirmed exhaustively gated. Two concrete escapes have already shipped from this gap — mobile granting mid-thread provider switching at 'pro' when canonical logic restricts it to max/max_15x/enterprise, and a mobile paywall with eight tiers and no max_15x entry so a real gated feature fell through to the generic fallback paywall.",
       "fix": "Change BILLING_PLAN_CAPABILITY_TIERS to `Record<BillingPlanCapability, Record<BillingPlanTier, boolean>>` so a new tier fails to compile until every capability has an explicit arm.",
       "sources": [
-        "AuditRemediationLedger.md BIZ-004",
+        "docs/work/audit-remediation-ledger.md BIZ-004",
         "docs/agent-context/known-flaws.md MOBILE-PROVIDER-SWITCH-GATE-DIVERGENCE-01",
         "ExecutionPlan.md #58"
       ],
@@ -1451,8 +1472,8 @@
       "evidence": "SCALE-GROW-007: no storage or transfer quotas exist per user, project or org, with no deterministic cleanup and no user-visible quota state. GAP-279: there is no account-level cloud storage quota screen with a Files/Images breakdown on web. GAP-043: mobile explicitly declines account storage quota totals because the cloud publishes no enforceable byte policy, and StorageScopeNotice states the following totals are device-only — an honest disclosure of the same missing policy. PP-09 separately records that file quotas, versions, retention and deletion propagation are all unconfirmed.",
       "fix": "Define an enforceable byte quota per user, project and org, enforce it at upload admission, implement deterministic cleanup, and surface remaining quota on web and mobile.",
       "sources": [
-        "AuditRemediationLedger.md SCALE-GROW-007",
-        "AuditRemediationLedger.md PP-09",
+        "docs/work/audit-remediation-ledger.md SCALE-GROW-007",
+        "docs/work/audit-remediation-ledger.md PP-09",
         "audit/ui-gaps.md GAP-279",
         "audit/ui-gaps.md GAP-043",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -1711,27 +1732,29 @@
       "severity": "MEDIUM",
       "status": "open",
       "effort": "S",
-      "evidence": "L-9: the two BREACH_RUNBOOK.md notification templates (Board and Data Principal) were drafted by an engineer from the statute text and have not been reviewed by counsel before any real send.",
+      "evidence": "L-9: the two docs/runbooks/personal-data-breach.md notification templates (Board and Data Principal) were drafted by an engineer from the statute text and have not been reviewed by counsel before any real send.",
       "fix": "Have counsel review and approve both templates before the runbook is used in a real incident.",
       "sources": [
         "DPDP_PROGRESS.md L-9",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "blocked_by": "Legal review",
-      "code_refs": ["BREACH_RUNBOOK.md"],
-      "merged_from": ["L-9 BREACH_RUNBOOK.md notification templates unreviewed by counsel"],
+      "code_refs": ["docs/runbooks/personal-data-breach.md"],
+      "merged_from": [
+        "L-9 docs/runbooks/personal-data-breach.md notification templates unreviewed by counsel"
+      ],
       "verified_against_code": true,
       "kind": "needs_human",
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
-        "finding": "BREACH_RUNBOOK.md:3-4,138-139,201 explicitly headers 'Legal review: pending-counsel — this template has not been reviewed by a lawyer.' Requires an actual counsel review/sign-off, not a code change."
+        "finding": "docs/runbooks/personal-data-breach.md:3-4,138-139,201 explicitly headers 'Legal review: pending-counsel — this template has not been reviewed by a lawyer.' Requires an actual counsel review/sign-off, not a code change."
       },
       "blocker": "Attorney review and sign-off on the two breach-notification templates — outside counsel",
       "classification": {
         "date": "2026-08-17",
         "bucket": "TRULY_BLOCKED",
-        "reason": "BREACH_RUNBOOK.md explicitly headers both templates as 'Legal review: pending-counsel — this template has not been reviewed by a lawyer.' No code change substitutes for a lawyer's sign-off."
+        "reason": "docs/runbooks/personal-data-breach.md explicitly headers both templates as 'Legal review: pending-counsel — this template has not been reviewed by a lawyer.' No code change substitutes for a lawyer's sign-off."
       }
     },
     {
@@ -1743,7 +1766,7 @@
       "effort": "L",
       "evidence": "Partially remediated in source on 2026-08-13: chat attachments and project knowledge now presign into the private R2 bucket with opaque keys, are scanned before registration, and gate read and delete by owner; new generated media writes owner-hashed private keys behind /api/files/{id}. Still open: legacy public rows keep an explicit fallback, avatars still upload directly to the public bucket with a permanent URL, legacy generated objects created before the change retain public locations, and no pending-upload cleanup lifecycle is approved — so an abandoned presign can create an untracked object that account erasure cannot find. The privacy policy itself still states anyone with the link can open a legacy file without signing in.",
       "fix": "Founder picks an avatar policy (private-by-default recommended), approves a bounded pending-upload cleanup lifecycle and a legacy migration window; then migrate legacy public objects, remove the public fallback, and update the privacy policy statement.",
-      "sources": ["ExecutionPlan.md #89", "FoundersAssistance.md #20"],
+      "sources": ["ExecutionPlan.md #89", "docs/work/founder-assistance.md #20"],
       "blocked_by": "Founder decision on avatar policy and the legacy migration/retention window",
       "code_refs": [
         "apps/web/app/api/files/[id]/route.ts",
@@ -1777,8 +1800,8 @@
       "evidence": "PP-26: zero-data-retention is not proven as an enforceable provider or plan capability; secret scanning runs only at support handoff rather than before ordinary chat and tool sends; and there are no user-visible new-device, session or anomaly alerts. Related: the desktop support-bundle redaction default (no conversation content) is unverified — 32 desktop modules reference the diagnostics machinery but nothing proves the generated bundle excludes message text.",
       "fix": "Either populate and consume zdrInclude at the routing decision, or delete the field — a zero-consumer 'zdrInclude' on a shared model-catalog type will be read as a shipped guarantee by the next person. Track the mobile/desktop composer coverage separately.",
       "sources": [
-        "AuditRemediationLedger.md PP-26",
-        "AuditRemediationLedger.md REL-010",
+        "docs/work/audit-remediation-ledger.md PP-26",
+        "docs/work/audit-remediation-ledger.md REL-010",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "merged_from": [
@@ -1833,7 +1856,7 @@
         "docs/agent-context/known-flaws.md 2026-08-04 enterprise identity narrative",
         "docs/agent-context/phase4-capability-audit.md PP-27",
         "audit/capability-gaps.csv CAP-028",
-        "AuditRemediationLedger.md CRIT-010"
+        "docs/work/audit-remediation-ledger.md CRIT-010"
       ],
       "blocked_by": "Founder must confirm or upgrade the Clerk plan with the Enhanced Authentication add-on",
       "code_refs": [
@@ -1872,9 +1895,9 @@
       "evidence": "ENT-005 (triaged 2026-08-09): zero migrations mention legal hold; retention, residency, DLP and eDiscovery are likewise absent. ENT-006: zero migrations mention CMEK/BYOK encryption or IP allowlists. The capability ledger records the same set as deferred rows — CAP-001 customer-managed encryption keys, CAP-004 organization IP allowlist, CAP-012 regional residency and EU inference, CAP-014 organization usage analytics, CAP-017 compliance export API, CAP-025 organization feature enablement, CAP-030 enforced tenant restrictions (stored policies are not consumed on sync, compute, provider or connector paths) and CAP-034 workspace/organization switcher. gap-audit §6 groups them as one enterprise-procurement program, explicitly not public-alpha blockers. PP-27 records the same list plus org-wide audit, billing, IP allowlist, legal hold and SIEM as not committed or built. The encryption and RBAC portions overlap the security slice.",
       "fix": "Treat as one scoped enterprise-compliance program with a committed customer requirement behind it, rather than piecemeal capability rows; sequence residency and retention first since they are the ones current legal copy comes closest to implying.",
       "sources": [
-        "AuditRemediationLedger.md ENT-005",
-        "AuditRemediationLedger.md ENT-006",
-        "AuditRemediationLedger.md PP-27",
+        "docs/work/audit-remediation-ledger.md ENT-005",
+        "docs/work/audit-remediation-ledger.md ENT-006",
+        "docs/work/audit-remediation-ledger.md PP-27",
         "audit/capability-gaps.csv CAP-001",
         "audit/capability-gaps.csv CAP-004",
         "audit/capability-gaps.csv CAP-012",
@@ -1955,9 +1978,9 @@
       "evidence": "SCALE-GROW-002: the primary database, object storage, search and vector indexes, caches, backups and analytics may not all receive deletion propagation. SCALE-GROW-001: messages, events, tool logs, files, embeddings, audit, usage, notifications and media lack data-volume forecasts and retention tiers. A related fix already landed for one leg of this (restored PITR data being re-subjected to erasure via a suppression list), which shows the propagation problem is real; PP-09 separately records deletion propagation for files as unconfirmed.",
       "fix": "Enumerate every store holding user data, define a retention tier per data class, and make the erasure path fan out to all of them with verifiable completion rather than deleting only primary rows.",
       "sources": [
-        "AuditRemediationLedger.md SCALE-GROW-002",
-        "AuditRemediationLedger.md SCALE-GROW-001",
-        "AuditRemediationLedger.md PP-09",
+        "docs/work/audit-remediation-ledger.md SCALE-GROW-002",
+        "docs/work/audit-remediation-ledger.md SCALE-GROW-001",
+        "docs/work/audit-remediation-ledger.md PP-09",
         "ExecutionPlan.md #87",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -1994,7 +2017,7 @@
         "Founder actions #13: Connectors catalog should ship or be de-listed"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "audit/ui-gaps.md",
         "phase4-capability-audit.md",
         "ExecutionPlan.md"
@@ -2028,7 +2051,7 @@
         "phase4 PP-04: Deep Research on Anthropic models silently runs the legacy single-turn path; Report tab permanently dead"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "known-flaws.md",
         "audit/capability-gaps.csv",
         "phase4-capability-audit.md",
@@ -2064,7 +2087,11 @@
         "phase4 PP-09: Web project-knowledge images upload and list successfully but the model never sees their content",
         "WEB-PROJECT-KNOWLEDGE-MANIFEST-ONLY-01: project knowledge extraction gated on unapplied migration 0064"
       ],
-      "sources": ["phase4-capability-audit.md", "known-flaws.md", "AuditRemediationLedger.md"],
+      "sources": [
+        "phase4-capability-audit.md",
+        "known-flaws.md",
+        "docs/work/audit-remediation-ledger.md"
+      ],
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
@@ -2090,7 +2117,7 @@
         "GAP-264: Scheduled tasks empty state has no suggested-template gallery"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "audit/ui-gaps.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -2123,7 +2150,7 @@
         "phase4 PP-13 gaps: no producers for clarify cards, no pause control, no per-task cost, no completion notification"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "audit/capability-gaps.csv",
         "gap-audit-2026-08-08.md",
         "phase4-capability-audit.md",
@@ -2184,7 +2211,7 @@
         "PP-20 web portion: no Web read-aloud voice picker",
         "WEB-VOICE-OUTPUT-01: no hands-free/full-duplex voice, no server/provider TTS option"
       ],
-      "sources": ["AuditRemediationLedger.md", "known-flaws.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "known-flaws.md"],
       "kind": "unbuilt_scope",
       "verification": {
         "date": "2026-08-17",
@@ -2206,7 +2233,7 @@
         "PP-31: Specialized verticals undecided or decorative",
         "DOC-021: Design/Science/Security vertical products not downgraded consistently"
       ],
-      "sources": ["AuditRemediationLedger.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md"],
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
@@ -2223,12 +2250,12 @@
       "effort": "M",
       "evidence": "GOOGLE_API_KEY is a Generative Language key, not a Maps Platform key — verified 2026-08-12 that Maps Static/Geocoding/Directions all return REQUEST_DENIED. OSRM's public demo server is documented development-only with no SLA and must not back a shipped feature, and drawing a straight line between endpoints was explicitly rejected as fake functionality. Dark map tiles need CARTO basemaps, a licensing decision. Mobile acceptance of the map-card path against the deployed backend is also outstanding (mobile slice).",
       "fix": "A routing credential is provisioned and the map card draws a real route; the dark-theme basemap licensing question is decided.",
-      "blocked_by": "FoundersAssistance.md #16 — needs an OpenRouteService or Google Maps Platform credential the environment lacks",
+      "blocked_by": "docs/work/founder-assistance.md #16 — needs an OpenRouteService or Google Maps Platform credential the environment lacks",
       "merged_from": [
         "FoundersAssistance #16: Provide a routing credential so map cards can draw a real route line",
         "ExecutionPlan TODO: Dark map tiles unavailable (OSM standard tiles are light-only)"
       ],
-      "sources": ["FoundersAssistance.md", "ExecutionPlan.md"],
+      "sources": ["docs/work/founder-assistance.md", "ExecutionPlan.md"],
       "kind": "needs_human",
       "verification": {
         "date": "2026-08-17",
@@ -2261,7 +2288,7 @@
         "phase4 PP-22: Share-link expiry is hardcoded to 7 days"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "phase4-capability-audit.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -2290,7 +2317,7 @@
         "phase4 PP-01: Desktop composer lacks a camera-capture item and the desktop assistant bubble has no report/flag control"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "phase4-capability-audit.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -2318,7 +2345,7 @@
         "PP-03: Web Search: no explicit mode toggle, filters unused, no vertical cards",
         "phase4 PP-03: Web composer lacks a persistent on-screen indicator of ambient web search"
       ],
-      "sources": ["AuditRemediationLedger.md", "phase4-capability-audit.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "phase4-capability-audit.md"],
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
@@ -2337,7 +2364,7 @@
       "fix": "If vertical result cards ship, each has a validated schema, a real server producer, persistence, and defined Local/Cloud behaviour; otherwise the product does not imply them.",
       "sources": [
         "ExecutionPlan.md (Mobile parity audit TODO)",
-        "AuditRemediationLedger.md (PP-03 vertical cards)",
+        "docs/work/audit-remediation-ledger.md (PP-03 vertical cards)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "verification": {
@@ -2383,7 +2410,7 @@
         "CAP-027: Project-only memory"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "audit/capability-gaps.csv",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -2509,7 +2536,7 @@
         "SCALE-FIN-003: Unreachable duplicate implementations not removed",
         "SCALE-FIN-001: Zero-import/zero-caller production modules not inventoried"
       ],
-      "sources": ["AuditRemediationLedger.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md"],
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
@@ -2531,7 +2558,7 @@
         "HARD-009: 300 ms debounce copied across seven surfaces/components",
         "HARD-012: Page size 50 repeated across Desktop/Web/Mobile; run-history page size 20 drifts"
       ],
-      "sources": ["AuditRemediationLedger.md", "ExecutionPlan.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "ExecutionPlan.md"],
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
@@ -2578,13 +2605,17 @@
         ".github/workflows/release-chrome-extension.yml",
         "apps/extension/CHROME_WEB_STORE_PUBLISH_RUNBOOK.md"
       ],
-      "blocked_by": "FoundersAssistance.md #9 and #14 — founder must supply the stable Chrome Web Store public key and a real Chrome profile for the acceptance pass",
+      "blocked_by": "docs/work/founder-assistance.md #9 and #14 — founder must supply the stable Chrome Web Store public key and a real Chrome profile for the acceptance pass",
       "merged_from": [
         "REL-006: Chrome extension is verified but never published to the store",
         "FoundersAssistance #9: Missing stable Chrome Web Store public key blocks release packaging",
         "FoundersAssistance #14: Verify exact-package Chrome presentation and signed-in chat continuity"
       ],
-      "sources": ["AuditRemediationLedger.md", "FoundersAssistance.md", "ExecutionPlan.md"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md",
+        "docs/work/founder-assistance.md",
+        "ExecutionPlan.md"
+      ],
       "kind": "needs_human",
       "verification": {
         "date": "2026-08-17",
@@ -2784,7 +2815,7 @@
       "evidence": "Triaged 2026-08-09: release-vscode-extension.yml contains exactly one publish reference; marketplace CI, publisher identity, Restricted Mode / Workspace Trust behaviour, remote-host tests, update and rollback paths, and telemetry disclosure are otherwise absent. Release-workflow mechanics overlap the infra/ci slice; the extension-specific behaviours (Restricted Mode, Workspace Trust, remote hosts) are this slice's.",
       "fix": "Add Restricted Mode / Workspace Trust and remote-host activation tests to the existing vscode-extension-e2e lane rather than to the release workflow; keep the release workflow as the publish path it already is.",
       "code_refs": [".github/workflows/release-vscode-extension.yml"],
-      "sources": ["AuditRemediationLedger.md (REL-005)"],
+      "sources": ["docs/work/audit-remediation-ledger.md (REL-005)"],
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
@@ -2823,7 +2854,7 @@
       "fix": "One host-owned egress boundary type that every Rust transport must construct through, with connect-time address pinning (or an OS firewall) closing the rebinding race, and a compile-time guard rejecting bare reqwest::Client construction outside it.",
       "effort": "XL",
       "sources": [
-        "AuditRemediationLedger.md (CRIT-016)",
+        "docs/work/audit-remediation-ledger.md (CRIT-016)",
         "docs/agent-context/known-flaws.md (BYOK-RUST-EGRESS-01, SSRF-DNS-01)",
         "ExecutionPlan.md (late release-integration verification)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -2925,7 +2956,7 @@
       "fix": "Correct known-flaws.md:536-541, then delete the unused sidecar slice in stores/ui.ts and its unifiedChatStore pass-throughs. Downgrade severity.",
       "effort": "S",
       "sources": [
-        "AuditRemediationLedger.md (CRIT-004)",
+        "docs/work/audit-remediation-ledger.md (CRIT-004)",
         "docs/agent-context/known-flaws.md (2026-08-05 Desktop ExecutionSidecar)",
         "docs/current/gap-audit-2026-08-08.md (Section 8, claims fixed)",
         "docs/agent-context/phase4-capability-audit.md (PP-15)"
@@ -2952,7 +2983,7 @@
       "fix": "Add a flatpak candidate path and a user-configurable browser-executable override; separately record a Wayland support decision. The macOS blocker is gone.",
       "effort": "S",
       "sources": [
-        "AuditRemediationLedger.md (CRIT-009)",
+        "docs/work/audit-remediation-ledger.md (CRIT-009)",
         "docs/agent-context/known-flaws.md (DESKTOP-LINUX-PLATFORM-GAP-01)",
         "docs/agent-context/phase4-capability-audit.md (PP-15)"
       ],
@@ -3037,7 +3068,7 @@
       "fix": "Add a voice_tts routing slot to the catalog with lifecycle/deprecation checks and resolve tts.rs defaults through it; decide the successor for the deprecated OpenAI TTS model and whether a realtime model type is added.",
       "effort": "M",
       "sources": [
-        "AuditRemediationLedger.md (HARD-013)",
+        "docs/work/audit-remediation-ledger.md (HARD-013)",
         "docs/agent-context/known-flaws.md (VOICE-TTS-NO-ROUTING-SLOT, VOICE-OPENAI-TTS-DEPRECATED-NO-SUCCESSOR, VOICE-REALTIME-FAMILY-ABSENT)"
       ],
       "merged_from": [
@@ -3097,7 +3128,7 @@
       "fix": "Name each deadline class separately in the shared constants module, point the remaining api/*.ts literals at it, add an assertion that a child deadline cannot exceed its parent, and add the magic-number guard.",
       "effort": "M",
       "sources": [
-        "AuditRemediationLedger.md (HARD-007, HARD-008, HARD-010, HARD-021)",
+        "docs/work/audit-remediation-ledger.md (HARD-007, HARD-008, HARD-010, HARD-021)",
         "ExecutionPlan.md (item #57)"
       ],
       "merged_from": [
@@ -3124,7 +3155,7 @@
       "fix": "One shortcut command registry that generates the settings UI, command palette, help text and native registration, with collision, migration and reset tests.",
       "effort": "L",
       "sources": [
-        "AuditRemediationLedger.md (HARD-015)",
+        "docs/work/audit-remediation-ledger.md (HARD-015)",
         "docs/agent-context/known-flaws.md (DESKTOP-SHORTCUTS-DEFAULTS-DUPLICATE-AND-DISCONNECTED-01)",
         "ExecutionPlan.md (item #53)",
         "audit/ui-gaps.md (GAP-089, GAP-091, GAP-100, GAP-212, GAP-225-227, GAP-242-244, GAP-247, GAP-252, GAP-326, GAP-330)"
@@ -3192,7 +3223,7 @@
       "effort": "L",
       "sources": [
         "docs/agent-context/phase4-capability-audit.md (PP-06)",
-        "AuditRemediationLedger.md (PP-06)",
+        "docs/work/audit-remediation-ledger.md (PP-06)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "merged_from": [
@@ -3271,9 +3302,9 @@
       "evidence": "No Ollama-reported model matches the canonical registry's tools+agentic requirement; a manual attempt with AGI_WDIO_OLLAMA_MODEL_ID generated malformed and invented tool identifiers. The model picker, Tasks creator disabled state, and Rust command boundary rejection are already implemented and verified — the gap is a certified model profile.",
       "fix": "Founder selects a concrete Local model for the 16GB target, then empirically certify structured planning, tool IDs, permissions, cancellation and memory-latency bounds and add it to the canonical registry.",
       "effort": "L",
-      "blocked_by": "founder choice of Local model + empirical certification (FoundersAssistance.md #17)",
+      "blocked_by": "founder choice of Local model + empirical certification (docs/work/founder-assistance.md #17)",
       "sources": [
-        "FoundersAssistance.md (#17)",
+        "docs/work/founder-assistance.md (#17)",
         "ExecutionPlan.md (Desktop Local Tasks capability honesty)"
       ],
       "code_refs": ["packages/ai/model-registry/catalog"],
@@ -3281,14 +3312,14 @@
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
-        "finding": "register.json:4237 'blocked_by: founder choice of Local model + empirical certification'; FoundersAssistance.md #17 still open, no model chosen/certified in catalog."
+        "finding": "register.json:4237 'blocked_by: founder choice of Local model + empirical certification'; docs/work/founder-assistance.md #17 still open, no model chosen/certified in catalog."
       },
       "verified_against_code": true,
       "decision": "Certify a specific compact local model now (e.g., a ~7-8B quantized instruction model runnable via the existing Ollama integration on 16GB devices) and fund the empirical certification work, versus leaving Desktop Local Tasks disabled indefinitely until a stronger on-device model becomes feasible",
       "classification": {
         "date": "2026-08-17",
         "bucket": "DECISION_NEEDED",
-        "reason": "Confirmed via FoundersAssistance.md #17: 'Founder action: choose a concrete Local model/build acceptable for the 16GB minimum device target.' No candidate model is chosen anywhere in packages/ai/model-registry/catalog. An engineer can execute the empirical certification once a model is named, but which specific local model to certify (license, footprint, quality/trust tradeoffs on a 16GB device) is a product decision with cost and trust-boundary consequences the founder should own."
+        "reason": "Confirmed via docs/work/founder-assistance.md #17: 'Founder action: choose a concrete Local model/build acceptable for the 16GB minimum device target.' No candidate model is chosen anywhere in packages/ai/model-registry/catalog. An engineer can execute the empirical certification once a model is named, but which specific local model to certify (license, footprint, quality/trust tradeoffs on a 16GB device) is a product decision with cost and trust-boundary consequences the founder should own."
       }
     },
     {
@@ -3302,7 +3333,7 @@
       "effort": "L",
       "sources": [
         "docs/agent-context/known-flaws.md (2026-07-21 DESKTOP-SETTINGS-PERSISTED-BUT-UNREAD, DESKTOP-MISC-CRITICAL-GAPS-01)",
-        "AuditRemediationLedger.md (PP-14)",
+        "docs/work/audit-remediation-ledger.md (PP-14)",
         "docs/agent-context/phase4-capability-audit.md (PP-14)",
         "ExecutionPlan.md (item #52)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -3362,7 +3393,7 @@
       "effort": "M",
       "sources": [
         "docs/agent-context/phase4-capability-audit.md (PP-14)",
-        "AuditRemediationLedger.md (PP-14, DOC-005)"
+        "docs/work/audit-remediation-ledger.md (PP-14, DOC-005)"
       ],
       "merged_from": ["DOC-005: Fabricated metrics remain in template automations and demos"],
       "code_refs": [
@@ -3388,7 +3419,7 @@
       "sources": [
         "docs/agent-context/phase4-capability-audit.md (PP-12b)",
         "audit/capability-gaps.csv (CAP-029, CAP-043)",
-        "AuditRemediationLedger.md (PP-12)"
+        "docs/work/audit-remediation-ledger.md (PP-12)"
       ],
       "merged_from": [
         "CAP-029: Mounted spreadsheet viewer",
@@ -3770,9 +3801,9 @@
       "evidence": "apps/mobile/scripts/release/preflight.sh production now reaches the credential checks (the upstream React Native runtime mismatch that blocked it is fixed) and stops at '[err] iOS store submission requires the non-secret numeric ascAppId'. Apple Team ID, two App Store Connect API keys, an IAP key and a CSR are already on the machine, but the Issuer ID is recorded nowhere. Android needs a new Play Console app, a service account JSON and release permissions.",
       "fix": "Copy the Issuer ID from App Store Connect Integrations, run pnpm release:asc-probe for ascAppId, set it in eas.json, place the API key in apps/mobile/secrets/, and create the Play Console app and service account until release:preflight passes.",
       "effort": "M",
-      "blocked_by": "founder: App Store Connect Issuer ID + Play Console app/service account (FoundersAssistance.md #23)",
+      "blocked_by": "founder: App Store Connect Issuer ID + Play Console app/service account (docs/work/founder-assistance.md #23)",
       "sources": [
-        "FoundersAssistance.md (#23)",
+        "docs/work/founder-assistance.md (#23)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "code_refs": [
@@ -3821,7 +3852,7 @@
       "verification": {
         "date": "2026-08-17",
         "method": "wave0-needs_human",
-        "finding": "The child-clearable clause shipped earlier today (confirmAgeGate refuses a downgrade, the gate renders a locked notice, Parental Controls drops the route back; proof apps/mobile/__tests__/minor-mode-not-child-clearable.test.tsx). The remaining clause — verifiable parental consent below 13/16/18 — is already logged as FoundersAssistance.md item 32 and cannot be built in code. RESIDUAL: Founder must pick: refuse sub-threshold users outright, or buy a verifiable-parental-consent vendor flow (contract + budget); counsel must confirm the per-region thresholds. Nothing further is buildable until then."
+        "finding": "The child-clearable clause shipped earlier today (confirmAgeGate refuses a downgrade, the gate renders a locked notice, Parental Controls drops the route back; proof apps/mobile/__tests__/minor-mode-not-child-clearable.test.tsx). The remaining clause — verifiable parental consent below 13/16/18 — is already logged as docs/work/founder-assistance.md item 32 and cannot be built in code. RESIDUAL: Founder must pick: refuse sub-threshold users outright, or buy a verifiable-parental-consent vendor flow (contract + budget); counsel must confirm the per-region thresholds. Nothing further is buildable until then."
       }
     },
     {
@@ -3833,10 +3864,10 @@
       "evidence": "Mobile purchase UI, the StoreKit/Google Play client, server-side receipt verification, an idempotent ledger, restore flow, renewal/cancellation/refund handling and store notification endpoints are implemented and locally tested, but stay fail-closed until both stores contain the exact 5 subscription + 4 consumable products and migrations 0111 then 0112 are applied. Blocked on: the Apple Paid Applications Agreement and Small Business Program, a Play Console merchant profile (permanent, cannot be changed later), 9 product IDs in both stores, store server credentials, updated listing copy, tax registration, and the Max 15x India price decision. Turning IAP on is also what ships UPI on mobile, since Play Billing and Apple both support UPI natively; running AGI's own UPI checkout inside the iOS app would violate guideline 3.1.1. The earlier ledger entry recording this as 'resolved — deliberately not shipped' is superseded.",
       "fix": "Work the 8-item founder checklist in order starting with the Apple Paid Applications Agreement (which gates items 2-5), apply migrations 0111 and 0112, run sandbox verification, then set MOBILE_IAP_ENABLED=true.",
       "effort": "L",
-      "blocked_by": "founder: store agreements, merchant profile, product registration, tax registration (FoundersAssistance.md #12, #29)",
+      "blocked_by": "founder: store agreements, merchant profile, product registration, tax registration (docs/work/founder-assistance.md #12, #29)",
       "sources": [
-        "FoundersAssistance.md (#12, #29)",
-        "AuditRemediationLedger.md (BIZ-031)",
+        "docs/work/founder-assistance.md (#12, #29)",
+        "docs/work/audit-remediation-ledger.md (BIZ-031)",
         "docs/agent-context/known-flaws.md (MOBILE-STORE-LISTING-NATIVE-BILLING-COPY)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -3904,7 +3935,7 @@
       "effort": "M",
       "sources": [
         "ExecutionPlan.md (Mobile parity audit TODO)",
-        "AuditRemediationLedger.md (MATCH-006, MATCH-004)"
+        "docs/work/audit-remediation-ledger.md (MATCH-006, MATCH-004)"
       ],
       "merged_from": ["MATCH-006: Mobile shadows TOOL_APPROVAL_RESUME_PATH with a local copy"],
       "code_refs": [
@@ -3998,8 +4029,8 @@
       "evidence": "The mobile workspace uses Expo 57 / RN 0.86 with real Apple Foundation Models and the ML Kit Prompt API over AICore, but the build machine has Xcode 26.6 only and no attached iOS 27 hardware, so physical-device certification for iOS 27 and the newest on-device model cannot honestly be claimed.",
       "fix": "Install Xcode 27, run a clean Release archive on the iOS 27 SDK, validate Local Mode and prompt-quality fixtures on physical iOS 27 and Android AICore hardware, then regenerate store screenshots.",
       "effort": "M",
-      "blocked_by": "founder/QA: physical iOS 27 device, Xcode 27, Android AICore hardware (FoundersAssistance.md #13)",
-      "sources": ["FoundersAssistance.md (#13)"],
+      "blocked_by": "founder/QA: physical iOS 27 device, Xcode 27, Android AICore hardware (docs/work/founder-assistance.md #13)",
+      "sources": ["docs/work/founder-assistance.md (#13)"],
       "code_refs": ["apps/mobile"],
       "kind": "needs_human",
       "verification": {
@@ -4399,7 +4430,7 @@
       "fix": "Tag v-cli-1.7.1 with NPM_TOKEN provisioned — the workflow already does the rest. The 'add a publish step' and 'reconcile versions' halves of the register's fix are already done.",
       "effort": "S",
       "sources": [
-        "AuditRemediationLedger.md (REL-004)",
+        "docs/work/audit-remediation-ledger.md (REL-004)",
         "docs/agent-context/phase4-capability-audit.md (PP-28)"
       ],
       "merged_from": [
@@ -4429,12 +4460,12 @@
       "evidence": "A verified run installed agi-workforce-0.3.0.vsix cleanly and found an AGI CLI, but its developer-session handshake did not support protocol 7: the sidebar stayed on 'Route pending', showed upgrade and path recovery, opened Runtime Settings, and sent no prompt — with no extension-host error. A real turn, activity, approval, Stop and post-thread boundary transition all require a released protocol-7 CLI.",
       "fix": "Publish a signed protocol-7 agi CLI (>=1.7.1) to every Marketplace platform with a documented install/update/rollback/uninstall path, then verify one real thread per trust boundary in a fresh profile.",
       "effort": "M",
-      "blocked_by": "publishing a signed protocol-7 CLI (FoundersAssistance.md #19); depends on CLI-02",
+      "blocked_by": "publishing a signed protocol-7 CLI (docs/work/founder-assistance.md #19); depends on CLI-02",
       "sources": [
-        "FoundersAssistance.md (#19)",
+        "docs/work/founder-assistance.md (#19)",
         "ExecutionPlan.md (VS Code extension manual release loop)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)",
-        "FoundersAssistance.md",
+        "docs/work/founder-assistance.md",
         "ExecutionPlan.md"
       ],
       "code_refs": ["apps/cli", "apps/extension-vscode"],
@@ -4562,7 +4593,7 @@
       "effort": "M",
       "sources": [
         "docs/agent-context/known-flaws.md (RUST-DEPENDENCY-ADVISORIES-01)",
-        "AuditRemediationLedger.md (Phase 9 stop-gate run)"
+        "docs/work/audit-remediation-ledger.md (Phase 9 stop-gate run)"
       ],
       "code_refs": ["deny.toml", "Cargo.lock"],
       "verified_against_code": true,
@@ -4582,8 +4613,11 @@
       "evidence": "airtable, canva, huggingface, linear, notion, posthog, sentry and todoist advertise client_id_metadata_document_supported and fetch AGI's published URL as client_id. The route exists in source at apps/web/app/.well-known/oauth-client-metadata/route.ts and works on localhost, but 404s in production because the branch has not shipped; linear, sentry, canva and todoist returned invalid_client when probed — a symptom of the missing deploy, not the flow.",
       "fix": "Ship the branch, confirm the well-known URL returns 200 with a matching client_id, complete one Linear consent end to end, and never change MCP_CLIENT_METADATA_PATH afterwards since it is the recorded client identity for all prior consents.",
       "effort": "M",
-      "blocked_by": "deploying the branch to production (FoundersAssistance.md #24)",
-      "sources": ["FoundersAssistance.md (#24)", "ExecutionPlan.md (MCP connectors section)"],
+      "blocked_by": "deploying the branch to production (docs/work/founder-assistance.md #24)",
+      "sources": [
+        "docs/work/founder-assistance.md (#24)",
+        "ExecutionPlan.md (MCP connectors section)"
+      ],
       "code_refs": ["apps/web/app/.well-known/oauth-client-metadata/route.ts"],
       "verified_against_code": true,
       "kind": "needs_human",
@@ -4607,8 +4641,11 @@
       "evidence": "A real registration attempt on 2026-08-14 was refused by each: asana 400 invalid_redirect_uri, dropbox 403 registration_not_supported (pre-registered partners only), figma 403 Forbidden, intercom 400 invalid_redirect_uri, square 400 invalid_redirect_uri, vercel 400 invalid_redirect_uri. They are correctly recorded as preregistered in mcp-endpoints.ts and not offered, avoiding a Connect button that fails on click.",
       "fix": "Apply to each vendor's partner programme to allowlist https://agiworkforce.com/api/connectors/oauth/callback, then flip the entry to dynamic or supply the issued client credentials.",
       "effort": "L",
-      "blocked_by": "per-vendor partner programme application (FoundersAssistance.md #25)",
-      "sources": ["FoundersAssistance.md (#25)", "ExecutionPlan.md (MCP connectors section)"],
+      "blocked_by": "per-vendor partner programme application (docs/work/founder-assistance.md #25)",
+      "sources": [
+        "docs/work/founder-assistance.md (#25)",
+        "ExecutionPlan.md (MCP connectors section)"
+      ],
       "code_refs": ["apps/web/lib/connectors/mcp-endpoints.ts"],
       "verified_against_code": true,
       "kind": "needs_human",
@@ -4634,7 +4671,7 @@
       "fix": "Define one external-content envelope in the contracts package, apply it at every ingestion point including connectors and MCP resources, and add prompt-injection fixtures per source class.",
       "effort": "L",
       "sources": [
-        "AuditRemediationLedger.md (MATCH-010)",
+        "docs/work/audit-remediation-ledger.md (MATCH-010)",
         "ExecutionPlan.md (item #18)",
         "docs/agent-context/phase4-capability-audit.md (PP-15)"
       ],
@@ -4658,7 +4695,7 @@
       "fix": "Add explicit connector mention and invocation to the shared composer backed by the capability registry, and decide the undecided catalog entries.",
       "effort": "L",
       "sources": [
-        "AuditRemediationLedger.md (PP-16)",
+        "docs/work/audit-remediation-ledger.md (PP-16)",
         "audit/ui-gaps.md (GAP-257, GAP-269)",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -4692,7 +4729,7 @@
         "scripts/check-no-hardcoded-endpoints.mjs:45"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "known-flaws.md",
         "ExecutionPlan.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -4727,7 +4764,7 @@
         "apps/desktop/src-tauri/src/features/speech/tts.rs",
         "packages/contracts/types/src/model-catalog.ts"
       ],
-      "sources": ["known-flaws.md", "AuditRemediationLedger.md", "ExecutionPlan.md"],
+      "sources": ["known-flaws.md", "docs/work/audit-remediation-ledger.md", "ExecutionPlan.md"],
       "merged_from": [
         "HARD-013 Voice TTS default can point to a removed model",
         "VOICE-TTS-NO-ROUTING-SLOT",
@@ -4751,7 +4788,7 @@
       "evidence": "VOICE-REALTIME-FAMILY-ABSENT (founder-gated): ModelType has no 'realtime' member, so adding realtime voice is a schema change across the TS union, the registry schema, and both generated Rust registries; it is additionally blocked on a realtime-provider and echo-cancellation decision. PP-20 restates the product-side consequence: whether the product is turn-based or true full-duplex is undecided, and if realtime is promised then barge-in, VAD, reconnect, session lease and transcript reconciliation are all unbuilt.",
       "fix": "Either the catalog gains a realtime model family carried consistently through the TS union, registry schema and both generated Rust registries with a named provider, or all realtime/full-duplex voice claims are removed from product copy.",
       "code_refs": ["packages/contracts/types/src/model-catalog.ts"],
-      "sources": ["known-flaws.md", "AuditRemediationLedger.md"],
+      "sources": ["known-flaws.md", "docs/work/audit-remediation-ledger.md"],
       "blocked_by": "Founder decision on a realtime voice provider and echo-cancellation approach",
       "merged_from": ["VOICE-REALTIME-FAMILY-ABSENT", "PP-20 realtime voice scope undecided"],
       "verified_against_code": true,
@@ -4832,7 +4869,11 @@
         "apps/web/app/api/llm/v1/chat/completions/lib/response-builder.ts:181",
         "apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts:150"
       ],
-      "sources": ["phase4-capability-audit.md", "AuditRemediationLedger.md", "ExecutionPlan.md"],
+      "sources": [
+        "phase4-capability-audit.md",
+        "docs/work/audit-remediation-ledger.md",
+        "ExecutionPlan.md"
+      ],
       "merged_from": [
         "PP-02 Model/reasoning controls: pin-to-model unwired, no version pinning, duplicate reasoning UIs",
         "phase4 Model-identity badge does not reflect server-side model substitution"
@@ -4913,7 +4954,7 @@
         "apps/desktop/src-tauri/src/sys/commands/chat/send_message_setup.rs:680-752"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "phase4-capability-audit.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -4944,7 +4985,7 @@
         "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1531-1556"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "phase4-capability-audit.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -4976,7 +5017,7 @@
         "apps/desktop/src-tauri/src/core/agi/checkpoint.rs"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "phase4-capability-audit.md",
         "known-flaws.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -5146,7 +5187,7 @@
         "apps/web/app/api/media/image/generate/route.ts:482-487",
         "apps/web/app/api/media/video/generate/route.ts:162"
       ],
-      "sources": ["phase4-capability-audit.md", "AuditRemediationLedger.md"],
+      "sources": ["phase4-capability-audit.md", "docs/work/audit-remediation-ledger.md"],
       "merged_from": [
         "phase4 PP-18 aspect-ratio labels mislabeled",
         "phase4 PP-19 preview-only video model selectable",
@@ -5221,7 +5262,7 @@
         "gap-audit-2026-08-08.md",
         "capability-gaps.csv",
         "phase4-capability-audit.md",
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "known-flaws.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -5304,7 +5345,11 @@
         "packages/contracts/cloud-contracts/src/cloud-agent-runs.ts:47-65",
         "apps/web/lib/services/schedule-notification-service.ts:104"
       ],
-      "sources": ["AuditRemediationLedger.md", "phase4-capability-audit.md", "capability-gaps.csv"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md",
+        "phase4-capability-audit.md",
+        "capability-gaps.csv"
+      ],
       "merged_from": [
         "PP-13 AGI Work: clarification round-trip broken, no durable pause/resume",
         "phase4 PP-13 residues",
@@ -5372,7 +5417,7 @@
       "fix": "Either inbound messaging apps are scoped into a phase with real app installs, or every surface stops implying Slack/Teams delivery works through them.",
       "sources": [
         "capability-gaps.csv",
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "verification": {
@@ -5396,7 +5441,7 @@
         "gap-audit-2026-08-08.md",
         "ExecutionPlan.md",
         "known-flaws.md",
-        "AuditRemediationLedger.md"
+        "docs/work/audit-remediation-ledger.md"
       ],
       "merged_from": [
         "GAP-P0-001 main CI is red and the exact head is not release-qualified",
@@ -5456,7 +5501,7 @@
       "sources": [
         "gap-audit-2026-08-08.md",
         "known-flaws.md",
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)",
         "docs/current/gap-audit-2026-08-08.md (GAP-P0-006)",
         "docs/agent-context/known-flaws.md (CI-RUST-REDS-01)"
@@ -5493,7 +5538,7 @@
         "apps/web/public/openapi.json",
         "scripts/check-ci-guardrails.mjs:473"
       ],
-      "sources": ["known-flaws.md", "ExecutionPlan.md", "AuditRemediationLedger.md"],
+      "sources": ["known-flaws.md", "ExecutionPlan.md", "docs/work/audit-remediation-ledger.md"],
       "merged_from": [
         "WEB-API-HOST-REWRITES-INERT-01",
         "MATCH-008 Half the routing config in vercel.json is inert/duplicated",
@@ -5527,7 +5572,7 @@
       "effort": "M",
       "evidence": "BASE-003 unwired gate: `pnpm format:check` fails on 733 files and no workflow or Claude post-save hook covers the whole repository. CLAUDE.md records that .claude/settings.json hooks auto-format saved files with Prettier, which formats what an agent touches but leaves the existing 733 untouched and unenforced in CI.",
       "fix": "Formatting is enforced repo-wide in CI on a formatted baseline, so a formatting drift fails the build rather than accumulating.",
-      "sources": ["AuditRemediationLedger.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md"],
       "verified_against_code": true,
       "kind": "defect",
       "verification": {
@@ -5549,7 +5594,7 @@
         "apps/mobile/scripts/release/preflight.sh",
         "apps/extension/CHROME_WEB_STORE_PUBLISH_RUNBOOK.md"
       ],
-      "sources": ["ExecutionPlan.md", "FoundersAssistance.md"],
+      "sources": ["ExecutionPlan.md", "docs/work/founder-assistance.md"],
       "blocked_by": "Founder must purchase an Apple Developer account, create publishing environments/secrets, escrow the Tauri key, supply the Chrome Web Store public key and the App Store Connect Issuer ID",
       "merged_from": [
         "ExecutionPlan founder item 2 publishing credentials missing",
@@ -5581,7 +5626,7 @@
       "evidence": "REL-008 triage: zero references to a clean-machine or fresh-install test exist in any workflow — every signal comes from a runner that already built the project, so 'works from a clean checkout' is asserted and never demonstrated. SCALE-BUILD-006 states the same risk from the build side: possible undeclared local files, generated outputs, hidden env or stale caches may be required to build. REL-002: desktop signing and notarization are strong (release-desktop.yml has 10 signing/notarization references and the runbook fails the job unless each step is proven) but SBOM and a clean-machine install test are still missing. REL-009, flagged as the item most likely to bite real existing users: release-desktop.yml has no upgrade-from-previous-version path, so schema, config and model-cache migration on upgrade — and rollback — are untested.",
       "fix": "A release is proven by installing the published artifact on a clean machine and by upgrading from the previous published version, with an SBOM produced for each build.",
       "code_refs": [".github/workflows/release-desktop.yml"],
-      "sources": ["AuditRemediationLedger.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md"],
       "merged_from": [
         "REL-008 No release testing from a clean machine/account",
         "REL-002 Desktop release: SBOM and clean-machine install test missing",
@@ -5612,10 +5657,10 @@
         "scripts/screenshots/pipeline.ts"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "known-flaws.md",
-        "FoundersAssistance.md",
-        "AuditRemediationLedger.md (REL-003)",
+        "docs/work/founder-assistance.md",
+        "docs/work/audit-remediation-ledger.md (REL-003)",
         "docs/agent-context/known-flaws.md (MOBILE-IOS-SCREENSHOTS-INCOMPLETE)"
       ],
       "blocked_by": "Physical iOS 27 hardware and Xcode 27 for the certification half",
@@ -5647,7 +5692,7 @@
       "sources": [
         "known-flaws.md",
         "ExecutionPlan.md",
-        "FoundersAssistance.md",
+        "docs/work/founder-assistance.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "blocked_by": "Founder decision on a paid Vercel plan and connecting the Git repository",
@@ -5719,7 +5764,12 @@
         "apps/web/db/neon/0111_credit_top_up_carry.sql",
         "apps/web/db/neon/0112_mobile_native_iap.sql"
       ],
-      "sources": ["known-flaws.md", "PLAN.md", "ExecutionPlan.md", "FoundersAssistance.md"],
+      "sources": [
+        "known-flaws.md",
+        "PLAN.md",
+        "ExecutionPlan.md",
+        "docs/work/founder-assistance.md"
+      ],
       "blocked_by": "Migration application on production Neon requires operator/founder execution",
       "merged_from": [
         "PROD-SEARCH-MIGRATION-0045-01",
@@ -5755,7 +5805,7 @@
         "apps/web/lib/cost-tracker.ts",
         "apps/web/app/api/llm/v1/chat/completions/lib/adapter-factory.ts"
       ],
-      "sources": ["AuditRemediationLedger.md", "ExecutionPlan.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "ExecutionPlan.md"],
       "merged_from": [
         "SCALE-VER-001 No continuous performance/load test suite",
         "SCALE-VER-006 Near-total absence of production tracing spans",
@@ -5780,7 +5830,7 @@
       "effort": "L",
       "evidence": "SCALE-IO-006: no enforced limits for history, tool schemas, retrieved chunks, SSE queues, browser snapshots, logs or artifacts. SCALE-IO-007: producers may overwhelm UI streams, queues, WebSockets/SSE, DB writers or external providers with no backpressure. A concrete instance is recorded in ExecutionPlan #48: the desktop 'Max iterations' slider (1-20) fed numAgents with no clamp so it actually spawned that many concurrent agents — fixed, but it illustrates that bounds are per-site rather than systemic. HARD-012 shows the pagination arm: page size 50 is repeated across Desktop/Web/Mobile while run-history drifts to 20, with no resource-specific pagination contract carrying server maximums.",
       "fix": "Each stream, queue, context assembly and payload has an enforced ceiling and a defined behaviour at that ceiling, so a fast producer degrades predictably instead of exhausting a consumer.",
-      "sources": ["AuditRemediationLedger.md", "ExecutionPlan.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "ExecutionPlan.md"],
       "merged_from": [
         "SCALE-IO-006 Context and payloads are not bounded",
         "SCALE-IO-007 No backpressure for producers",
@@ -5806,7 +5856,7 @@
         "apps/web/app/api/chat/sync/route.ts:92",
         "apps/web/db/neon/0101_sync_and_search_indexes.sql:56-67"
       ],
-      "sources": ["AuditRemediationLedger.md", "ExecutionPlan.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "ExecutionPlan.md"],
       "merged_from": [
         "SCALE-IO-002 Unnecessary serial work is not removed",
         "SCALE-IO-003 N+1 and unbounded DB access",
@@ -5830,7 +5880,11 @@
       "evidence": "GAP-P1-002 / CAP-039: the job queue is tracked as implemented-but-unwired and explicitly missing retries, backoff, leases and dead-letter handling for cloud agent runs, schedules, triggered tasks, refresh jobs, exports and long-running artifact or research work. VERIFIED: apps/desktop/src/stores/agentTaskStore.ts has no retry, backoff, lease or dead-letter logic — only a one-time 'runtime ended' terminal message. SCALE-CON-004: worker concurrency is not bounded per provider, tenant, user or task type, so no fair scheduling exists. This is the substrate AI-14 (checkpoints), AI-28 (triggers) and INFRA-33 (schedules) all depend on.",
       "fix": "One durable queue owns background work with leases, bounded retries and backoff, a dead-letter path, and per-tenant and per-provider concurrency limits, so a failed job is visibly retried or parked rather than lost.",
       "code_refs": ["apps/desktop/src/stores/agentTaskStore.ts"],
-      "sources": ["gap-audit-2026-08-08.md", "capability-gaps.csv", "AuditRemediationLedger.md"],
+      "sources": [
+        "gap-audit-2026-08-08.md",
+        "capability-gaps.csv",
+        "docs/work/audit-remediation-ledger.md"
+      ],
       "merged_from": [
         "GAP-P1-002 Durable job execution lacks a complete retry/DLQ model",
         "CAP-039 Retrying job queue with dead-letter handling",
@@ -5857,7 +5911,7 @@
         "apps/web/app/api/media/video/cancel/route.ts",
         "apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2234,2245"
       ],
-      "sources": ["AuditRemediationLedger.md", "ExecutionPlan.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "ExecutionPlan.md"],
       "merged_from": [
         "SCALE-CON-005 Cancellation propagation incomplete",
         "ExecutionPlan: no way to stop a video generation"
@@ -5879,7 +5933,7 @@
       "effort": "L",
       "evidence": "HARD-011: four HTTP retry implementations independently default to three attempts, with no single retry policy library providing idempotency awareness, status/error classification, jittered backoff, Retry-After handling, a retry budget, cancellation or telemetry — so unsafe writes may be retried without idempotency protection (compounding INFRA-29). SCALE-CON-006: no distributed locks, single-flight, jitter, circuit breakers or retry budgets are confirmed, so retry storms and token-refresh stampedes are unprevented. ExecutionPlan's mobile audit adds that mobile hand-rolls its cloud calls instead of using createManagedCloudChatClient, so retry/backoff, error mapping and save idempotency are duplicated or absent and will drift from Web and Desktop.",
       "fix": "One retry policy library — with idempotency awareness, error classification, jittered backoff, Retry-After, a budget, cancellation and telemetry — is the only retry path, and every surface consumes it rather than hand-rolling one.",
-      "sources": ["AuditRemediationLedger.md", "ExecutionPlan.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "ExecutionPlan.md"],
       "merged_from": [
         "HARD-011 Four HTTP retry implementations",
         "SCALE-CON-006 Retry storms/token-refresh stampedes not prevented",
@@ -5901,7 +5955,7 @@
       "effort": "M",
       "evidence": "SCALE-CON-001 triage (2026-08-09): SATISFIED for the web API surface — zero new Map() job/task/video/status holders remain under apps/web/app/api — but not proven for desktop and gateway surfaces, and the wave-6 pass flagged media and agent status still living in a process Map on desktop. PP-19 records the same defect for video specifically: process-local video task maps instead of durable tenant-scoped storage and queue. AI-28 records the trigger-registry instance (an in-memory HashMap losing every trigger on restart).",
       "fix": "No job, task or media status lives in process memory on any surface; all of it is in durable tenant-scoped storage so a restart or a second process cannot lose or diverge from it.",
-      "sources": ["AuditRemediationLedger.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md"],
       "merged_from": ["SCALE-CON-001 Process-local job state not fully migrated"],
       "verification": {
         "date": "2026-08-17",
@@ -5919,7 +5973,7 @@
       "effort": "XL",
       "evidence": "SCALE-GROW-005: no routing, noisy-neighbour limits, backup/restore or tenant-move strategy is defined. SCALE-GROW-006: Neon/Postgres is the stateful bottleneck but connection limits, transaction contention, hot rows, RLS overhead, indexes and failover are untested at capacity — and INFRA-27 records that the RLS adapter cost 6 round trips per user-scoped read, so RLS overhead is a live concern rather than a theoretical one. SCALE-GROW-007: no storage or transfer quotas exist per user, project or org, and there is no deterministic cleanup or user-visible quota state. GAP-P1-010's sibling finding and known-flaws' account-storage row confirm the user-facing half: the product states plainly that the account publishes no file-storage byte quota.",
       "fix": "Tenant isolation, capacity limits and per-tenant storage and transfer quotas are defined and load-tested, with a documented backup, restore and tenant-move path.",
-      "sources": ["AuditRemediationLedger.md", "ui-gaps.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "ui-gaps.md"],
       "merged_from": [
         "SCALE-GROW-005 No tenant/cell isolation strategy",
         "SCALE-GROW-006 Neon/Postgres not capacity-tested",
@@ -5953,7 +6007,7 @@
         "scripts/check-no-hardcoded-model-ids.mjs"
       ],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "merged_from": [
@@ -5991,7 +6045,7 @@
       ],
       "sources": [
         "ExecutionPlan.md",
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "known-flaws.md",
         "phase4-capability-audit.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
@@ -6029,7 +6083,7 @@
       "evidence": "SCALE-BUILD-001: Turborepo and Cargo dependency graphs are not verified to avoid skipping transitive consumers after a shared-contract change — the exact failure mode that lets a contract change ship without rebuilding its consumers. SCALE-BUILD-002: no tests prevent stale generated registry, schema or type outputs from a warm cache. SCALE-BUILD-004: there is no single model/route/schema generation pass feeding all required projections. SCALE-BUILD-005: nothing fails or warns on regressions in clean build, incremental build, bundle size, Rust binary size or release packaging. SCALE-BUILD-003 and P2-005: oversized modules are not split — apps/extension/src/side_panel.ts was recorded at ~9,359 lines and VERIFIED has since grown to 10,933, so the hotspot is worsening rather than being extracted.",
       "fix": "Split the item: the only concrete, actionable part is extracting side_panel.ts behind behaviour-preserving tests.",
       "code_refs": ["apps/extension/src/side_panel.ts"],
-      "sources": ["AuditRemediationLedger.md", "gap-audit-2026-08-08.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "gap-audit-2026-08-08.md"],
       "merged_from": [
         "SCALE-BUILD-001 Affected-only build correctness unverified",
         "SCALE-BUILD-002 No remote/local cache correctness tests",
@@ -6054,7 +6108,7 @@
       "effort": "M",
       "evidence": "SCALE-PURE-001: first-party, generated, vendored, build, fixture and audit asset classes are not fully separated, so metrics and searches may not exclude the correct classes — which silently corrupts every count an audit produces. SCALE-PURE-002: stale generated output and duplicate source-of-truth files are not fully removed, and regeneration may not produce a clean diff in all cases. This is why several counts across these ledgers disagree with each other (see DOCS-12).",
       "fix": "Each asset class is identifiable by path convention, tooling excludes the right classes by default, and regenerating any generated artifact produces an empty diff.",
-      "sources": ["AuditRemediationLedger.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md"],
       "merged_from": [
         "SCALE-PURE-001 Asset classes not fully separated",
         "SCALE-PURE-002 Stale generated output not fully removed"
@@ -6076,7 +6130,7 @@
       "evidence": "FoundersAssistance item 21: on 2026-08-13 the private bucket had no CORS configuration at all, so every attachment upload failed at preflight — this had never worked in a browser on any origin, production included — and the public bucket was missing chat. and *.vercel.app origins. Both buckets now carry a browser-direct-upload CORS rule, applied via the Cloudflare API and re-verified end to end. The residual gap is reproducibility: the object-scoped R2 key pair cannot call PutBucketCors (AccessDenied confirmed), so scripts/r2-apply-cors.mjs (VERIFIED present) needs an account-scoped Cloudflare API token to run unattended.",
       "fix": "An account-scoped Cloudflare token is stored so the CORS policy is reproducible from the repository and drift can be detected with --check, rather than depending on a one-time manual application.",
       "code_refs": ["scripts/r2-apply-cors.mjs"],
-      "sources": ["FoundersAssistance.md"],
+      "sources": ["docs/work/founder-assistance.md"],
       "blocked_by": "Founder must create a Cloudflare token scoped to Account · Workers R2 Storage · Edit",
       "kind": "needs_human",
       "verification": {
@@ -6130,7 +6184,7 @@
         "apps/web/public/openapi.json",
         "scripts/config/reference-integrity-allowlist.json"
       ],
-      "sources": ["gap-audit-2026-08-08.md", "AuditRemediationLedger.md"],
+      "sources": ["gap-audit-2026-08-08.md", "docs/work/audit-remediation-ledger.md"],
       "merged_from": [
         "GAP-P1-008 Public/developer API lacks one authoritative OpenAPI artifact",
         "PP-29 no explicit OpenAI-compatibility matrix"
@@ -6153,7 +6207,7 @@
       "evidence": "BASE-008 and the Phase-9 9C run: a prior audit found many Desktop visual, settings and GDPR tests silently skipping; the stop-gate run measured 75 skipped or ignored tests (40 Rust #[ignore], 35 .skip) still uninventoried and unjustified. Critically, that count only became visible after fixing a comment-line bug in check-llm-failure-guardrails.mjs that had been hiding bare #[ignore] entries — so the guard designed to surface skipped tests was itself under-reporting. The Phase-9 run named these 75 as the blocking next_task under rule 10 (no stop with skipped gates).",
       "fix": "Add a non-strict repo-wide count mode that prints the total and fails above a ratchet number checked into scripts/config/, and require the `llm-guardrail-allow:` annotation on every existing skip/ignore.",
       "code_refs": ["scripts/check-llm-failure-guardrails.mjs"],
-      "sources": ["AuditRemediationLedger.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md"],
       "merged_from": [
         "BASE-008 Skipped/ignored tests not inventoried",
         "Phase-9 9C 75 skipped/ignored tests"
@@ -6174,7 +6228,11 @@
       "effort": "M",
       "evidence": "REL-007 triage (2026-08-09): zero tests cover version skew or logout purge across surfaces, even though logout purge itself was fixed in this period (commit 46e81e69f clears credentials and query cache on web and desktop) — only the regression test is missing, so the fix is unprotected. ExecutionPlan #35 records what was actually broken: web logout called a no-op authService.logout() instead of clearing tokens, and desktop logoutCleanup.ts missed three or more keys that had no writer. FoundersAssistance item 14 records the untested half that matters most commercially: exact-package Chrome presentation and signed-in cross-surface chat continuity and deletion have never been verified with a real profile.",
       "fix": "Regression tests cover logout purge and version skew across surfaces, so a credential or cached record surviving sign-out fails a test rather than being rediscovered.",
-      "sources": ["AuditRemediationLedger.md", "ExecutionPlan.md", "FoundersAssistance.md"],
+      "sources": [
+        "docs/work/audit-remediation-ledger.md",
+        "ExecutionPlan.md",
+        "docs/work/founder-assistance.md"
+      ],
       "merged_from": [
         "REL-007 No cross-surface continuity tests",
         "FoundersAssistance #14 exact-package Chrome continuity unverified"
@@ -6231,7 +6289,7 @@
       ],
       "sources": [
         "phase4-capability-audit.md",
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "DPDP_PROGRESS.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -6257,7 +6315,7 @@
       "evidence": "SCALE-FIN-002 triage (2026-08-09): 20 'coming soon' / 'not implemented' / 'TODO: implement' markers remain across production web surfaces excluding tests — each a reachable user control that does not do what it says, the exact rule SCALE-FIN-005 forbids; the work is triaging each into ship, label-as-planned, or delete. SCALE-FIN-005 is unenforced: a production control may still return 501, toast 'coming soon', or silently no-op without being labelled preview or planned before the user acts. DOC-029 triage: scripts/check-marketing-models.mjs exists and passes in the guard chain, but it covers only model-ID claims, not the broader present-tense-planned-feature check the rule implies. This register is full of instances — AI-24 (Run code no-op), AI-28 (triggers with a green Active badge that never fire), INFRA-30 (a cancel route with no caller) — so the missing enforcement is the higher-leverage fix.",
       "fix": "Keep the item for the missing guard only. The guard to write is narrow: fail when a rendered control's label is present-tense while its handler returns 501 or no-ops — not a grep for the string 'coming soon'.",
       "code_refs": ["scripts/check-marketing-models.mjs"],
-      "sources": ["AuditRemediationLedger.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md"],
       "merged_from": [
         "SCALE-FIN-002 20 stub markers remain in production web surfaces",
         "SCALE-FIN-005 No-present-tense-stub rule not enforced",
@@ -6281,7 +6339,7 @@
       "fix": "A capability-state change lands code, tests, docs and ledger together or CI blocks it, so a ledger row's status can be trusted without re-verifying it against source.",
       "code_refs": [".github/pull_request_template.md", "docs/agent-context/known-flaws.md"],
       "sources": [
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "phase4-capability-audit.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
@@ -6310,7 +6368,7 @@
       "code_refs": ["docs/agent-context/repo-map.json", "docs/work/implementation-status.md"],
       "sources": [
         "gap-audit-2026-08-08.md",
-        "AuditRemediationLedger.md",
+        "docs/work/audit-remediation-ledger.md",
         "audit/parity-2026-08-15 or audit/competitive-gap-2026-08-15 (wave 2)"
       ],
       "merged_from": [
@@ -6342,7 +6400,7 @@
       "evidence": "A family of unconfirmed corrections: DOC-012 (browser-tool README consumer claims may be inaccurate), DOC-014 (CLI browser-control docs may overclaim capability), DOC-015 (VS Code 'cloud-only' and mode-description conflicts unresolved), DOC-013 (connector descriptions may not match actual adapters and actions — overlaps the integrations slice), and DOC-007 (AGI Work docs may misstate dispatch and schedule availability, which AI-28 and INFRA-33 show is materially overstated). VSCODE-CLOUDONLY-DESC-CONFLICT-01 adds a traced instance needing a product call: a locked decision set the marketplace description to 'Multi-provider AI coding assistant - 10+ providers' but current HEAD reads 'Multi-provider AI coding assistant for VS Code' with the provider-count claim removed by a later commit, so the locked decision and the shipped listing disagree.",
       "fix": "Each surface's documentation and marketplace listing is reconciled against what that client actually does, and a locked copy decision is either honoured or formally superseded rather than silently reverted.",
       "code_refs": ["apps/extension-vscode/package.json"],
-      "sources": ["AuditRemediationLedger.md", "known-flaws.md"],
+      "sources": ["docs/work/audit-remediation-ledger.md", "known-flaws.md"],
       "merged_from": [
         "DOC-012 Browser-tool README consumer claims",
         "DOC-013 Connector descriptions may not match adapters",
@@ -7122,9 +7180,9 @@
       "domain": "compliance/dpdp",
       "severity": "HIGH",
       "status": "open",
-      "evidence": "BREACH_RUNBOOK.md open-gaps table row 1: 'No designated incident commander or on-call rota. The founder owns every incident by default.' Stated consequence: 'The clock runs while someone works out who is responsible' — against DPDP's statutory Board-notification timing. Distinct from INFRA-24 (no alerting vendor pages anyone on a production outage): this is breach-response ownership, not outage paging.",
+      "evidence": "docs/runbooks/personal-data-breach.md open-gaps table row 1: 'No designated incident commander or on-call rota. The founder owns every incident by default.' Stated consequence: 'The clock runs while someone works out who is responsible' — against DPDP's statutory Board-notification timing. Distinct from INFRA-24 (no alerting vendor pages anyone on a production outage): this is breach-response ownership, not outage paging.",
       "fix": "Designate a named incident commander and an on-call rotation for security/privacy incidents specifically, and record it in the runbook and DPDP_PROGRESS.md.",
-      "sources": ["BREACH_RUNBOOK.md#open-gaps row 1"],
+      "sources": ["docs/runbooks/personal-data-breach.md#open-gaps row 1"],
       "blocked_by": "founder action per the runbook's own framing",
       "effort": "S",
       "verified_against_code": true,
@@ -7147,16 +7205,16 @@
       "domain": "compliance/dpdp",
       "severity": "MEDIUM",
       "status": "open",
-      "evidence": "BREACH_RUNBOOK.md open-gaps table row 3: 'No breach-notice page or in-product banner exists.' Consequence: 'The delivery method §5 assumes has to be built during the incident.'",
+      "evidence": "docs/runbooks/personal-data-breach.md open-gaps table row 3: 'No breach-notice page or in-product banner exists.' Consequence: 'The delivery method §5 assumes has to be built during the incident.'",
       "fix": "Build a dated public breach-notice page and an in-product sign-in banner ahead of any incident, so §5's delivery path exists before it is needed.",
-      "sources": ["BREACH_RUNBOOK.md#open-gaps row 3"],
+      "sources": ["docs/runbooks/personal-data-breach.md#open-gaps row 3"],
       "effort": "M",
       "verified_against_code": true,
       "kind": "defect",
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
-        "finding": "No breach-notice page exists under apps/web/app (only breach-runbook-counsel-gate.test.ts and a passing mention in privacy/india/page.tsx); no in-product sign-in banner found. This is buildable without waiting on the counsel-gated BREACH_RUNBOOK.md template content."
+        "finding": "No breach-notice page exists under apps/web/app (only breach-runbook-counsel-gate.test.ts and a passing mention in privacy/india/page.tsx); no in-product sign-in banner found. This is buildable without waiting on the counsel-gated docs/runbooks/personal-data-breach.md template content."
       }
     },
     {
@@ -7165,9 +7223,9 @@
       "domain": "compliance/dpdp",
       "severity": "LOW",
       "status": "open",
-      "evidence": "BREACH_RUNBOOK.md open-gaps table row 5: 'Vendor log retention is not set by us. Vercel and Neon retain on their own schedules.' Consequence: 'Evidence may expire before the investigation reaches it.'",
+      "evidence": "docs/runbooks/personal-data-breach.md open-gaps table row 5: 'Vendor log retention is not set by us. Vercel and Neon retain on their own schedules.' Consequence: 'Evidence may expire before the investigation reaches it.'",
       "fix": "Confirm each vendor's current retention window and, where the plan allows, extend it or export logs to storage under our control so incident evidence outlives realistic investigation timelines.",
-      "sources": ["BREACH_RUNBOOK.md#open-gaps row 5"],
+      "sources": ["docs/runbooks/personal-data-breach.md#open-gaps row 5"],
       "effort": "L",
       "verified_against_code": true,
       "kind": "defect",

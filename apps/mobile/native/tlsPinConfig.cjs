@@ -102,7 +102,7 @@ function provisionedPins(table) {
 // consults NSPinnedDomains, so signaling.agiworkforce.com is pinned here for
 // fetch traffic but NOT for the pairing socket (packages/platform/utils
 // signaling.ts). Android's network_security_config below does cover it, because
-// RN's Android WebSocket is OkHttp. Tracked in FoundersAssistance.md.
+// RN's Android WebSocket is OkHttp. Tracked in docs/work/founder-assistance.md.
 function iosPinnedDomains(pins) {
   const domains = {};
   for (const [host, digests] of Object.entries(pins)) {

@@ -134,7 +134,7 @@
       "ownedWritePaths": [
         "apps/web/app/admin/**",
         "apps/web/features/admin/**",
-        "docs/enterprise/**"
+        "docs/compliance/**"
       ],
       "readOnlyContextPaths": [
         "packages/contracts/types/src/enterprise/**",

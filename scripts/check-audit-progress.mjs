@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const LEDGER = 'AuditRemediationLedger.md';
+const LEDGER = 'docs/work/audit-remediation-ledger.md';
 const TASK_ID_SOURCE = '[A-Z][A-Z0-9]{1,15}-\\d{1,4}';
 const TASK_ID = new RegExp(`\\b(${TASK_ID_SOURCE})\\b`);
 const HEADING_DECLARATION = new RegExp(`^#{1,6}\\s+(${TASK_ID_SOURCE})\\b`);

@@ -206,7 +206,7 @@ async function main() {
       "// stays 'report-only', where a release build only logs the hosts enforcement would\n" +
       '// refuse. Ship that build, read those warnings, give every host it names a\n' +
       "// PINS_BY_HOST entry, and only then set PINNING_ROLLOUT to 'enforced' in a separate\n" +
-      '// commit and cut a native build. See FoundersAssistance.md, mobile TLS pinning.',
+      '// commit and cut a native build. See docs/work/founder-assistance.md, mobile TLS pinning.',
   );
   return failed > 0 ? 1 : 0;
 }
