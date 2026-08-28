@@ -1,4 +1,5 @@
 {
+  "$generated": "GENERATED FILE — do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "generatedFrom": "docs/agent-context/repo-map.json#workspaceUnits (unit list) + each unit's package.json description / Cargo.toml description / README.md ## Purpose|Scope section",
   "units": [
     {
@@ -72,6 +73,18 @@
       "path": "crates/agiworkforce-utils-image",
       "kind": "crate",
       "purpose": "unknown"
+    },
+    {
+      "name": "@agiworkforce/sandbox",
+      "path": "infrastructure/sandbox",
+      "kind": "deploy-target",
+      "purpose": "Cross-origin artifact renderer at sandbox.agiworkforce.com. Single static HTML — no build step."
+    },
+    {
+      "name": "@agiworkforce/agent-core",
+      "path": "packages/ai/agent-core",
+      "kind": "package",
+      "purpose": "Turn-loop orchestration shared by the desktop and CLI harnesses: context assembly, memory, and runaway limits over host-supplied transports."
     },
     {
       "name": "@agiworkforce/model-registry",
@@ -236,6 +249,18 @@
       "purpose": "unknown"
     },
     {
+      "name": "@agiworkforce/guardian-core",
+      "path": "packages/guardian/core",
+      "kind": "package",
+      "purpose": "Guardian findings pipeline: policy evaluation, fingerprinting, dedupe, ranking, and verification, independent of any delivery surface."
+    },
+    {
+      "name": "@agiworkforce/guardian-github",
+      "path": "packages/guardian/github",
+      "kind": "package",
+      "purpose": "GitHub delivery surface for Guardian: webhook intake, check runs, and PR summaries built on @agiworkforce/guardian-core."
+    },
+    {
       "name": "@agiworkforce/artifacts",
       "path": "packages/platform/artifacts",
       "kind": "package",
@@ -288,6 +313,12 @@
       "path": "packages/ui/design-tokens",
       "kind": "package",
       "purpose": "unknown"
+    },
+    {
+      "name": "@agiworkforce/i18n",
+      "path": "packages/ui/i18n",
+      "kind": "package",
+      "purpose": "Locale catalogues and message resolution shared by every surface; parity across locales is enforced by check:i18n-parity."
     },
     {
       "name": "@agiworkforce/ui",

@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/i18n",
   "version": "0.0.1",
+  "description": "Locale catalogues and message resolution shared by every surface; parity across locales is enforced by check:i18n-parity.",
   "private": true,
   "type": "module",
   "exports": {

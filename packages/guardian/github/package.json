@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/guardian-github",
   "version": "0.0.1",
+  "description": "GitHub delivery surface for Guardian: webhook intake, check runs, and PR summaries built on @agiworkforce/guardian-core.",
   "private": true,
   "type": "module",
   "exports": {
