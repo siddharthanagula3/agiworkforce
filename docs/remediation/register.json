@@ -169,7 +169,7 @@
       "severity": "MEDIUM",
       "status": "in-progress",
       "effort": "L",
-      "evidence": "cap-052-security-review (2026-08-05) sets the gate: an independent adversarial pass returned needs-revision, so the recommendation is NO-GO until RT-1 through RT-4 are resolved in the design and RT-5(a) is addressed. RT-1 (high): the path-of-least-resistance bridge bills published_artifacts.user_id, so an anonymous visitor looping /shared-artifact/[token] drains the publisher's session/weekly cap — wallet-DoS with the publisher as victim, and per-IP anonymous rate limiting parallelizes trivially. RT-2 (high): the proposed 'refuse null origin' condition contradicts the desktop artifact:// opaque-origin design, where authenticity rests on window identity; the condition must be restated per surface. RT-3: 'structurally absent on public' is architecturally impossible because one shared renderer drives both parents — it reduces to the disabled-not-absent pattern the condition warns against, so a regression test is needed instead. RT-4: publishArtifactRecord copies content verbatim so a bridge opt-in flag rides to the public copy, and idempotency keys are shape-validated only (/^[A-Za-z0-9._:-]{8,128}$/), so a loop mints a fresh key per iteration. RT-5(a): acquireManagedTurnSlot fails open on Redis error — the one control that would cap parallel fan-out — verified still present (`if (!redis) { … return { admitted: true } }`). Independent verification confirms nothing is built: grep for artifactInstanceId or any model-call verb returns zero hits. Separately, docs/current/parity-implementation-matrix.md:239 still names 'WEB-13 stays closed' as the hard precondition; no such finding exists (the only WEB-13 is an unrelated rate-limit incident).",
+      "evidence": "cap-052-security-review (2026-08-05) sets the gate: an independent adversarial pass returned needs-revision, so the recommendation is NO-GO until RT-1 through RT-4 are resolved in the design and RT-5(a) is addressed. RT-1 (high): the path-of-least-resistance bridge bills published_artifacts.user_id, so an anonymous visitor looping /shared-artifact/[token] drains the publisher's session/weekly cap — wallet-DoS with the publisher as victim, and per-IP anonymous rate limiting parallelizes trivially. RT-2 (high): the proposed 'refuse null origin' condition contradicts the desktop artifact:// opaque-origin design, where authenticity rests on window identity; the condition must be restated per surface. RT-3: 'structurally absent on public' is architecturally impossible because one shared renderer drives both parents — it reduces to the disabled-not-absent pattern the condition warns against, so a regression test is needed instead. RT-4: publishArtifactRecord copies content verbatim so a bridge opt-in flag rides to the public copy, and idempotency keys are shape-validated only (/^[A-Za-z0-9._:-]{8,128}$/), so a loop mints a fresh key per iteration. RT-5(a): acquireManagedTurnSlot fails open on Redis error — the one control that would cap parallel fan-out — verified still present (`if (!redis) { … return { admitted: true } }`). Independent verification confirms nothing is built: grep for artifactInstanceId or any model-call verb returns zero hits. Separately, docs/work/implementation-status.md:239 still names 'WEB-13 stays closed' as the hard precondition; no such finding exists (the only WEB-13 is an unrelated rate-limit incident).",
       "fix": "RT-1..RT-5 are folded into the design's conditions before any bridge code is written: execution is viewer-funded or platform-bounded with a per-artifact spend and call ceiling enforced in the reservation SQL function, capability tokens are short-lived and scoped, public and private renderers are distinct with a regression test asserting the public parent registers no model-call handler, publish strips any bridge flag, idempotency is semantically bound rather than shape-checked, and the concurrency limiter fails closed for bridge calls. The parity ledger cites this review directly instead of the nonexistent WEB-13.",
       "sources": [
         "cap-052-security-review.md (RT-1..RT-5, T1-T9)",
@@ -181,7 +181,7 @@
         "apps/web/lib/services/published-artifact-service.ts:282-305,377-392",
         "apps/web/lib/services/managed-usage-request-service.ts:14",
         "apps/web/lib/rate-limit.ts:1252-1258",
-        "docs/current/parity-implementation-matrix.md:239"
+        "docs/work/implementation-status.md:239"
       ],
       "blocked_by": "Security design sign-off on RT-1..RT-4 and RT-5(a) before implementation may begin",
       "merged_from": [
@@ -6307,10 +6307,7 @@
       "effort": "XL",
       "evidence": "gap-audit §9, flagged as dangerous for an autonomous coding loop: the repository has many 'current' documents — generated inventories, gap CSVs, known-flaw ledgers, audit reports, README claims, code comments — that do not always agree, so an agent can spend hours rebuilding something already shipped, or preserve a false 'Done' because a component file exists but is not mounted. The proposed generated CapabilityRecord registry (state, productionMounts, runtimeEntryPoints, tests, liveProof, owner) that README, parity, gap-CSV, release-notes and backlog views would all derive from does not exist. DOC-027 states the same requirement: public capability tables are not generated from a canonical capability registry. DOC-008 (parity matrices may misclassify shipped or removed features) and DOC-010 (docs may falsely claim the source-of-truth audit was removed while live audit artifacts remain) are two symptoms. This register replacing eleven overlapping documents is itself evidence of the gap.",
       "fix": "One generated capability registry records state, production mounts, runtime entry points, tests, live proof and owner, and every public table, parity matrix and backlog view is derived from it rather than maintained beside it.",
-      "code_refs": [
-        "docs/agent-context/repo-map.json",
-        "docs/current/parity-implementation-matrix.md"
-      ],
+      "code_refs": ["docs/agent-context/repo-map.json", "docs/work/implementation-status.md"],
       "sources": [
         "gap-audit-2026-08-08.md",
         "AuditRemediationLedger.md",
@@ -6325,7 +6322,7 @@
       "verification": {
         "date": "2026-08-17",
         "method": "wave0-skipped",
-        "finding": "Confirmed the finding without building: audit/capability-gaps.csv (guarded by scripts/check-capability-gaps.mjs) carries only id/concept/auditClass/effort/lane/decision/status/owner/tracking; docs/agent-context/generated/ holds contract-registry, dependency-graph and module-summaries; repo-map.json is hand-maintained. No registry records state, production mounts, runtime entry points, tests, live proof or owner. RESIDUAL: Remaining: (1) choose the one authored source for the six missing fields, (2) write the generator into docs/agent-context/generated/, (3) migrate every public table, parity matrix and backlog view (docs/current/parity-implementation-matrix.md first) to derive from it, (4) add a check that fails when"
+        "finding": "Confirmed the finding without building: audit/capability-gaps.csv (guarded by scripts/check-capability-gaps.mjs) carries only id/concept/auditClass/effort/lane/decision/status/owner/tracking; docs/agent-context/generated/ holds contract-registry, dependency-graph and module-summaries; repo-map.json is hand-maintained. No registry records state, production mounts, runtime entry points, tests, live proof or owner. RESIDUAL: Remaining: (1) choose the one authored source for the six missing fields, (2) write the generator into docs/agent-context/generated/, (3) migrate every public table, parity matrix and backlog view (docs/work/implementation-status.md first) to derive from it, (4) add a check that fails when"
       },
       "verified_against_code": true,
       "kind": "defect",
@@ -6667,11 +6664,11 @@
       "domain": "security/auth",
       "severity": "MEDIUM",
       "status": "open",
-      "evidence": "MS-18 (docs/current/parity-implementation-matrix.md, 2026-08-01 founder scope decisions): 'Requires promoting session keys to revocable device grants.' Founder-approved but unbuilt; the frontend-experience-contract's Remote control row records the host relay as missing on CLI/VS Code and the companion UI unmounted on Desktop, so no device-grant lifecycle (issue, list, revoke, expire) exists anywhere. Distinct from SEC-16 (dispatch control-frame HMAC key derived from relay-visible material) and DESK-51 (single-session ephemeral pairing declined by design for the mobile companion).",
+      "evidence": "MS-18 (docs/work/implementation-status.md, 2026-08-01 founder scope decisions): 'Requires promoting session keys to revocable device grants.' Founder-approved but unbuilt; the frontend-experience-contract's Remote control row records the host relay as missing on CLI/VS Code and the companion UI unmounted on Desktop, so no device-grant lifecycle (issue, list, revoke, expire) exists anywhere. Distinct from SEC-16 (dispatch control-frame HMAC key derived from relay-visible material) and DESK-51 (single-session ephemeral pairing declined by design for the mobile companion).",
       "fix": "Define a device-grant record (identity, scope, issued-at, expiry, revocation) as part of the host-relay contract before any remote developer-session control ships, and expose list/revoke in settings.",
       "sources": [
-        "docs/current/parity-implementation-matrix.md#2026-08-01 Founder Scope Decisions (MS-18)",
-        "docs/current/frontend-experience-contract.md §13 Remote control row"
+        "docs/work/implementation-status.md#2026-08-01 Founder Scope Decisions (MS-18)",
+        "docs/product/experience-contract.md §13 Remote control row"
       ],
       "blocked_by": "MS-3: no host-relay/remote-control contract exists yet",
       "effort": "XL",
@@ -6713,9 +6710,9 @@
       "domain": "security",
       "severity": "HIGH",
       "status": "in-progress",
-      "evidence": "GAP-4, docs/current/source-of-truth.md P0 Gap List item 4: 'Local to BYOK fork flow must be end-to-end on every surface: context selection, secret scan, payload preview, provider label, consent, and preserved Local original.' This is the mandated ceremony in CLAUDE.md's critical rules ('Local to BYOK must be an explicit fork/continuation with context selection, secret scan, payload preview, user consent, and visible provider label'), and the P0 list records it as unmet. Distinct from SEC-61, which covers only the narrower task-time BYOK consent ceremony for cloud vision picks from a Local workspace.",
+      "evidence": "GAP-4, docs/product/definition.md P0 Gap List item 4: 'Local to BYOK fork flow must be end-to-end on every surface: context selection, secret scan, payload preview, provider label, consent, and preserved Local original.' This is the mandated ceremony in CLAUDE.md's critical rules ('Local to BYOK must be an explicit fork/continuation with context selection, secret scan, payload preview, user consent, and visible provider label'), and the P0 list records it as unmet. Distinct from SEC-61, which covers only the narrower task-time BYOK consent ceremony for cloud vision picks from a Local workspace.",
       "fix": "Inventory each surface's Local→BYOK transition, implement the six required ceremony steps where missing, and add a cross-surface contract test that fails if any surface can move Local content to BYOK without all six.",
-      "sources": ["docs/current/source-of-truth.md P0 Gap List item 4 (GAP-4)"],
+      "sources": ["docs/product/definition.md P0 Gap List item 4 (GAP-4)"],
       "effort": "XL",
       "verified_against_code": true,
       "kind": "defect",
@@ -7046,7 +7043,7 @@
       "domain": "compliance/dpdp",
       "severity": "LOW",
       "status": "open",
-      "evidence": "MEMORY-010 (audit/parity-2026-08-15) plus the 'Temporary chat excludes memory — Partial' row in docs/current/parity-implementation-matrix.md#Memory And Personalization. apps/web/lib/runtime/WebChatRuntime.ts:181-189 unconditionally injects saved memory facts whenever Memory is enabled, with no isTemporary short-circuit, unlike the production path (request-processor.ts:976-996's enrichManagedMemoryContext, which correctly short-circuits). UnifiedChatPage.tsx:44-67 is currently unreachable (zero importers besides its own tests; /chat renders a different page), so the guarantee holds today only by accident of routing — any route change that makes it reachable silently breaks the temporary-chat promise on every surface that adopts it.",
+      "evidence": "MEMORY-010 (audit/parity-2026-08-15) plus the 'Temporary chat excludes memory — Partial' row in docs/work/implementation-status.md#Memory And Personalization. apps/web/lib/runtime/WebChatRuntime.ts:181-189 unconditionally injects saved memory facts whenever Memory is enabled, with no isTemporary short-circuit, unlike the production path (request-processor.ts:976-996's enrichManagedMemoryContext, which correctly short-circuits). UnifiedChatPage.tsx:44-67 is currently unreachable (zero importers besides its own tests; /chat renders a different page), so the guarantee holds today only by accident of routing — any route change that makes it reachable silently breaks the temporary-chat promise on every surface that adopts it.",
       "fix": "Delete apps/web/lib/runtime/WebChatRuntime.ts and its two test files. It is test-only code carrying a latent privacy-guarantee divergence; keeping it is the only thing that makes the finding real.",
       "code_refs": [
         "apps/web/lib/runtime/WebChatRuntime.ts:181-189",
@@ -7055,7 +7052,7 @@
       ],
       "sources": [
         "audit/parity-2026-08-15/gaps/domain-memory (MEMORY-010)",
-        "docs/current/parity-implementation-matrix.md#Memory And Personalization"
+        "docs/work/implementation-status.md#Memory And Personalization"
       ],
       "merged_from": ["MEMORY-010", "parity-matrix 'Temporary chat excludes memory'"],
       "effort": "S",
@@ -7278,7 +7275,7 @@
       "evidence": "parity-implementation-matrix CAP-051 (founder-approved 2026-08-05: mount the orphaned CanvasWorkspace whiteboard as design workspace v1) plus source-of-truth GAP-13 (canvas, artboards, layers/assets, properties panel, prototype/deck preview, versioning, export and trust labels must be designed before claiming parity). Matrix row 'Visual design workspace — Missing/Gated'.",
       "fix": "Mount CanvasWorkspace as the v1 slice per CAP-051; treat full artboard/layers/prototype parity as a separate scoped decision.",
       "sources": [
-        "docs/current/parity-implementation-matrix.md CAP-051; source-of-truth.md P0 Gap List item 13 (GAP-13)"
+        "docs/work/implementation-status.md CAP-051; source-of-truth.md P0 Gap List item 13 (GAP-13)"
       ],
       "merged_from": ["CAP-051", "GAP-13", "parity-matrix 'Visual design workspace'"],
       "effort": "XL",
@@ -7949,7 +7946,7 @@
       "status": "open",
       "evidence": "frontend-experience-contract.md §14 P1 item 1: 'Extract headless transcript/event/approval state from DOM renderers.' This is the structural precondition that makes the composer fork (UI-25), the chat-shell fork (UI-28) and the three markdown engines (UI-33) individually unfixable — each surface re-implements state alongside its renderer.",
       "fix": "Define one headless transcript/event/approval state layer and have every surface's renderer consume it, before or alongside the individual convergence items.",
-      "sources": ["docs/current/frontend-experience-contract.md §14 P1 item 1"],
+      "sources": ["docs/product/experience-contract.md §14 P1 item 1"],
       "effort": "XL",
       "verified_against_code": true,
       "kind": "decision_needed",
@@ -8395,8 +8392,8 @@
       "evidence": "source-of-truth.md P0 Gap List item 1 (GAP-1): Desktop AGI Work subpanels need demo-path verification and AGI Code must be mounted into the V3 shell or clearly gated before demo. parity-implementation-matrix.md's Desktop AGI Work row adds that AgiWorkProjects, AgiWorkArtifacts and AgiWorkScheduled are rendered from DesktopShellV3.tsx but the onboarding checklist, customize hub and a standalone task composer remain absent.",
       "fix": "Verify each AGI Work subpanel against a real demo path, then either mount AGI Code into the V3 shell or gate it honestly; build or explicitly decline the onboarding checklist, customize hub and standalone task composer rather than leaving them undecided.",
       "sources": [
-        "docs/current/source-of-truth.md P0 GAP-1",
-        "docs/current/parity-implementation-matrix.md Desktop Surface — AGI Work views"
+        "docs/product/definition.md P0 GAP-1",
+        "docs/work/implementation-status.md Desktop Surface — AGI Work views"
       ],
       "code_refs": ["apps/desktop/src/features/v3/DesktopShellV3.tsx"],
       "effort": "L",
@@ -8416,7 +8413,7 @@
       "evidence": "frontend-experience-contract.md §14 P0 item 1: the availability-claim half was completed 2026-07-17 — the settings control is now gated on a systemDictationAvailable probe and shows 'Not available in this build' when false — but building the feature itself is still open, tracked as known-flaw DESKTOP-SYSTEM-DICTATION-UNWIRED-01. VOICE-MEDIA-012 independently confirms system_dictation_available() is hardcoded false. Distinct from DESK-12 (push-to-talk / wake word have no event subscriber).",
       "fix": "Build the system-wide dictation capability behind the existing probe, or record the decision not to and remove the control entirely rather than leaving a permanently-false availability gate.",
       "sources": [
-        "docs/current/frontend-experience-contract.md §14 P0 item 1",
+        "docs/product/experience-contract.md §14 P0 item 1",
         "known-flaws DESKTOP-SYSTEM-DICTATION-UNWIRED-01",
         "audit/parity-2026-08-15 VOICE-MEDIA-012"
       ],
@@ -8437,7 +8434,7 @@
       "status": "open",
       "evidence": "parity-implementation-matrix.md 2026-08-05 Class-1 Closure Status, Desktop batch-1: '/git slash panel NOT actionable — surface archived, product decision pending.' Related to but distinct from DESK-37 (git/PR backend complete with zero callers, PR creation fakes success): here the user-facing entry point itself is archived with no decision recorded.",
       "fix": "Make and record the product decision: restore the /git panel against the existing git backend, or remove the slash command so it stops advertising an archived surface.",
-      "sources": ["docs/current/parity-implementation-matrix.md 2026-08-05 Class-1 Closure Status"],
+      "sources": ["docs/work/implementation-status.md 2026-08-05 Class-1 Closure Status"],
       "effort": "M",
       "verification": {
         "date": "2026-08-17",
@@ -8455,10 +8452,10 @@
       "evidence": "frontend-experience-contract.md §13 'Remote control' row: Web=Absent, Desktop='Host/companion UI not mounted', Mobile='Static/feature-off', CLI and VS Code='Host transport missing', Chrome='Native bridge is not Code remote control'; §14 P0 items 2-3 track defining one remote protocol from a CLI/Desktop host to a Mobile/Web projection and replacing Mobile's static Code shell. MS-3 (founder decision: 'Build the contract, not a placeholder screen') and MS-18 (promote session keys to revocable device grants) are the mobile-side halves, and CAP-049 (Desktop dispatch/scheduled-routines product) is explicitly blocked on the same contract. Broader than MOB-12 (dispatch is fire-and-forget) which concerns the existing pairing transport, not the missing developer-session protocol.",
       "fix": "Define one remote developer-session control protocol (host = CLI/Desktop, projection = Mobile/Web) including revocable persistent device grants, then replace Mobile's static Code shell and mount the Desktop companion host UI against it.",
       "sources": [
-        "docs/current/frontend-experience-contract.md §13 Remote control row, §14 P0 items 2-3",
-        "docs/current/parity-implementation-matrix.md MS-3",
-        "docs/current/parity-implementation-matrix.md MS-18",
-        "docs/current/parity-implementation-matrix.md CAP-049"
+        "docs/product/experience-contract.md §13 Remote control row, §14 P0 items 2-3",
+        "docs/work/implementation-status.md MS-3",
+        "docs/work/implementation-status.md MS-18",
+        "docs/work/implementation-status.md CAP-049"
       ],
       "merged_from": ["MS-3", "MS-18", "frontend-contract P0 items 2-3"],
       "effort": "XL",
@@ -8671,7 +8668,7 @@
       "status": "open",
       "evidence": "parity-implementation-matrix.md 2026-08-01 Founder Scope Decisions, MS-6: founder-approved Build item — expo-location plus a coarse-location preference, strictly excluded from Local Mode — with no implementation recorded.",
       "fix": "Implement per MS-6 with the Local-Mode exclusion enforced at the capability gate, or record the decision to drop it.",
-      "sources": ["docs/current/parity-implementation-matrix.md MS-6"],
+      "sources": ["docs/work/implementation-status.md MS-6"],
       "effort": "M",
       "verification": {
         "date": "2026-08-17",
@@ -8689,8 +8686,8 @@
       "evidence": "parity-implementation-matrix.md 2026-08-01 Founder Scope Decisions, MS-13; the 2026-08-05 Class-1 status separately lists the background-voice entitlement among mobile's remaining external-gated items.",
       "fix": "Add the UIBackgroundModes audio entitlement and a session that survives backgrounding, or record the decision to defer with the entitlement gate named.",
       "sources": [
-        "docs/current/parity-implementation-matrix.md MS-13",
-        "docs/current/parity-implementation-matrix.md 2026-08-05 Class-1 Closure Status"
+        "docs/work/implementation-status.md MS-13",
+        "docs/work/implementation-status.md 2026-08-05 Class-1 Closure Status"
       ],
       "blocked_by": "iOS background-audio entitlement (external gate)",
       "effort": "L",
@@ -8709,7 +8706,7 @@
       "status": "open",
       "evidence": "parity-implementation-matrix.md 2026-08-01 Founder Scope Decisions, MS-16: founder-approved Build item specifying the retry path first and then the toggle; no implementation recorded.",
       "fix": "Implement the retry path first as MS-16 specifies, and only then expose a user-facing fallback toggle.",
-      "sources": ["docs/current/parity-implementation-matrix.md MS-16"],
+      "sources": ["docs/work/implementation-status.md MS-16"],
       "effort": "M",
       "verification": {
         "date": "2026-08-17",
@@ -8726,7 +8723,7 @@
       "status": "open",
       "evidence": "parity-implementation-matrix.md 2026-08-01 Founder Scope Decisions, MS-4: needs a streaming media contract, and screen capture must never be available in Local Mode without explicit egress consent.",
       "fix": "Define the streaming media contract before any UI, with screen capture hard-gated behind explicit Local-Mode egress consent.",
-      "sources": ["docs/current/parity-implementation-matrix.md MS-4"],
+      "sources": ["docs/work/implementation-status.md MS-4"],
       "effort": "XL",
       "verification": {
         "date": "2026-08-17",
@@ -8743,9 +8740,7 @@
       "status": "open",
       "evidence": "parity-implementation-matrix.md 2026-08-01 Founder Scope Decisions, Superseded 2026-08-09: the founder overturned the earlier Plugins-as-Connectors scoping — mobile 'may no longer treat Plugins or Skills as out of scope merely because Connectors is present' — which reopens a build requirement that was previously closed as scoped-out.",
       "fix": "Scope and build real mobile Plugins and Skills surfaces (the Skills catalog screen already exists — see MOB-42) rather than relying on the Connectors surface to stand in for them.",
-      "sources": [
-        "docs/current/parity-implementation-matrix.md MS-2/MS-22 (superseded 2026-08-09)"
-      ],
+      "sources": ["docs/work/implementation-status.md MS-2/MS-22 (superseded 2026-08-09)"],
       "effort": "L",
       "verification": {
         "date": "2026-08-17",
@@ -8762,7 +8757,7 @@
       "status": "open",
       "evidence": "frontend-experience-contract.md §14 P1 item 6: 'Reconcile Mobile sync flags/naming with actual Cloud sync behavior.' Distinct from MOB-11 (mobile hand-rolls cloud chat calls instead of using the shared managed-cloud client) — this is about flag/name semantics diverging from what sync actually does, which makes the surface's own state claims untrustworthy.",
       "fix": "Audit each mobile sync flag against observed Cloud sync behavior and rename or rewire so the flag names describe what actually happens.",
-      "sources": ["docs/current/frontend-experience-contract.md §14 P1 item 6"],
+      "sources": ["docs/product/experience-contract.md §14 P1 item 6"],
       "effort": "M",
       "verified_against_code": true,
       "kind": "needs_human",
@@ -8890,7 +8885,7 @@
       "status": "open",
       "evidence": "parity-implementation-matrix.md CLI And AGI Code section: every row is marked Partial — interactive REPL/TUI; slash commands (some wired 2026-08-05); permissions (allow/ask/deny/workspace/network/bypass modes, per-tool audit); subagents (read-only /subagents and /task list views added 2026-08-05, full user/project subagent management still Partial); MCP/plugins/skills; sessions/worktrees (resume/fork/branch, PR creation/review, diff preview); voice. Only the subagent and voice rows have any specific closure evidence recorded; the rest carry no per-row detail and no owner.",
       "fix": "Decompose each Partial CLI row into a concrete missing-behaviour list during the dedicated CLI audit pass (CLI-22), then close or explicitly decline each; do not leave a matrix of undifferentiated 'Partial' as the CLI's only status record.",
-      "sources": ["docs/current/parity-implementation-matrix.md CLI And AGI Code"],
+      "sources": ["docs/work/implementation-status.md CLI And AGI Code"],
       "blocked_by": "CLI-22 (no dedicated CLI inventory exists to decompose against)",
       "effort": "L",
       "verification": {
@@ -9095,9 +9090,7 @@
       "status": "open",
       "evidence": "frontend-experience-contract.md §13, 'AGI Work run (composer mode)' row, Chrome column: 'Workflow UI is not Cloud Work.' The extension presents an AGI Work-shaped surface that does not reach the managed Cloud Work runtime, which is a capability-honesty mismatch rather than a missing feature.",
       "fix": "Either wire the extension's AGI Work surface to the real Cloud Work runtime, or relabel it as the local workflow feature it actually is.",
-      "sources": [
-        "docs/current/frontend-experience-contract.md §13 AGI Work run row, Chrome column"
-      ],
+      "sources": ["docs/product/experience-contract.md §13 AGI Work run row, Chrome column"],
       "effort": "M",
       "verification": {
         "date": "2026-08-17",
@@ -9132,7 +9125,7 @@
       "status": "open",
       "evidence": "frontend-experience-contract.md §13, Voice row, VS Code column = 'Absent'. Every other surface has at least dictation; VS Code has nothing. Note the same document's 2026-08-09 correction confirmed the CLI voice row was mismarked and CLI voice does exist, so the VS Code 'Absent' is the remaining genuine gap in that row.",
       "fix": "Decide explicitly whether VS Code should get dictation (reusing the CLI's voice path via the app-server host) or record it as a permanent non-goal for that surface.",
-      "sources": ["docs/current/frontend-experience-contract.md §13 Voice row"],
+      "sources": ["docs/product/experience-contract.md §13 Voice row"],
       "effort": "L",
       "verification": {
         "date": "2026-08-17",
@@ -9149,7 +9142,7 @@
       "status": "open",
       "evidence": "frontend-experience-contract.md §14 P1 item 3 and §12.5: 'Modularize VS Code's static webview content and remove/reconcile the second execution stack' — specifically, remove the secondary provider-stream settings path or explicitly isolate it as a separate feature. Two execution stacks in one extension is the same class of ownership hazard as EXT-01's side_panel.ts monolith, but on the VS Code surface.",
       "fix": "Split webviewContent.ts into domain modules, then either delete the secondary provider-stream settings path or isolate it behind an explicitly named feature boundary.",
-      "sources": ["docs/current/frontend-experience-contract.md §14 P1 item 3, §12.5"],
+      "sources": ["docs/product/experience-contract.md §14 P1 item 3, §12.5"],
       "code_refs": ["apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts"],
       "effort": "L",
       "verified_against_code": true,
@@ -9191,7 +9184,7 @@
       "status": "open",
       "evidence": "parity-implementation-matrix.md VS Code Extension section: editor context (@file picker, diagnostics/problems, terminal capture, images), diff review/apply (preview patch, accept/reject hunks, checkpoint/stash, apply cloud task locally), cloud/local continuation (cloud task delegation with local handoff/consent) and settings (models, approval mode, endpoint/provider, permissions, shortcuts) are each marked Partial with no detail on what specifically is missing. EXT-10/11/12 cover the composer, session-history and account/usage rows; these four have no corresponding register entry.",
       "fix": "Decompose each remaining Partial VS Code row into concrete missing behaviours and close or explicitly decline each; the diff review/apply row should be sequenced against EXT-31's checkpoint blocker.",
-      "sources": ["docs/current/parity-implementation-matrix.md VS Code Extension"],
+      "sources": ["docs/work/implementation-status.md VS Code Extension"],
       "effort": "L",
       "verification": {
         "date": "2026-08-17",
@@ -9513,7 +9506,7 @@
       "sources": [
         "audit/parity-2026-08-15/gaps/domain-memory.json MEMORY-003",
         "audit/competitive-gap-2026-08-15/domains/memory-personalization.json memory-12-gap",
-        "docs/current/parity-implementation-matrix.md",
+        "docs/work/implementation-status.md",
         "audit/parity-2026-08-15 MEMORY-003",
         "audit/competitive-gap-2026-08-15 memory-12-gap",
         "audit/ui-gaps GAP-077"
@@ -9667,11 +9660,11 @@
       "fix": "Extend the existing /api/search union with artifact and connector row types rather than defining a new index; chats, projects, messages and files are already covered and RLS-scoped.",
       "code_refs": ["apps/web/app/api/search/route.ts"],
       "sources": [
-        "docs/current/source-of-truth.md GAP-9",
-        "docs/current/parity-implementation-matrix.md (Global app search)",
-        "docs/current/frontend-experience-contract.md §14 P2 item 4",
-        "docs/current/source-of-truth.md P0 Gap List item 9 (GAP-9)",
-        "docs/current/parity-implementation-matrix.md 'Global app search'"
+        "docs/product/definition.md GAP-9",
+        "docs/work/implementation-status.md (Global app search)",
+        "docs/product/experience-contract.md §14 P2 item 4",
+        "docs/product/definition.md P0 Gap List item 9 (GAP-9)",
+        "docs/work/implementation-status.md 'Global app search'"
       ],
       "merged_from": [
         "GAP-9",
@@ -9702,8 +9695,8 @@
         "apps/desktop/src/features/mobile-companion/"
       ],
       "sources": [
-        "docs/current/frontend-experience-contract.md §13 Remote control row, §14 P0 items 2-3",
-        "docs/current/parity-implementation-matrix.md MS-3, MS-18, CAP-049"
+        "docs/product/experience-contract.md §13 Remote control row, §14 P0 items 2-3",
+        "docs/work/implementation-status.md MS-3, MS-18, CAP-049"
       ],
       "merged_from": ["frontend-P0-2", "frontend-P0-3", "MS-3", "MS-18", "CAP-049"],
       "effort": "XL",
@@ -9918,7 +9911,7 @@
       "code_refs": ["apps/desktop/src/features/settings/tabs/Capabilities/index.tsx:30"],
       "sources": [
         "audit/competitive-gap-2026-08-15/domains/connectors-plugins-skills-mcp-custom-assista.json CPS-17",
-        "docs/current/parity-implementation-matrix.md (Tool access mode)"
+        "docs/work/implementation-status.md (Tool access mode)"
       ],
       "effort": "M",
       "verification": {
@@ -10719,17 +10712,17 @@
       "domain": "extension",
       "severity": "MEDIUM",
       "status": "open",
-      "evidence": "docs/current/frontend-experience-contract.md §14 P1 item 3 and §12.5: 'Modularize VS Code's static webview content and remove/reconcile the second execution stack; remove the secondary provider-stream settings path or explicitly isolate it as a separate feature.' A duplicate execution path inside one extension is a live drift surface, not just a code-organization concern.",
+      "evidence": "docs/product/experience-contract.md §14 P1 item 3 and §12.5: 'Modularize VS Code's static webview content and remove/reconcile the second execution stack; remove the secondary provider-stream settings path or explicitly isolate it as a separate feature.' A duplicate execution path inside one extension is a live drift surface, not just a code-organization concern.",
       "fix": "Split webviewContent.ts by domain, then either delete the secondary provider-stream execution path or explicitly isolate and document it as a separate feature.",
       "code_refs": ["apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts"],
-      "sources": ["docs/current/frontend-experience-contract.md §14 P1 item 3, §12.5"],
+      "sources": ["docs/product/experience-contract.md §14 P1 item 3, §12.5"],
       "effort": "L",
       "verified_against_code": true,
       "kind": "defect",
       "verification": {
         "date": "2026-08-17",
         "method": "code-inspection",
-        "finding": "webviewContent.ts is still 4432 lines and unsplit; docs/current/source-of-truth.md:73 still documents an unreconciled second code-action/provider-stream execution path alongside the CLI app-server path."
+        "finding": "webviewContent.ts is still 4432 lines and unsplit; docs/product/definition.md:73 still documents an unreconciled second code-action/provider-stream execution path alongside the CLI app-server path."
       }
     },
     {
@@ -11499,7 +11492,7 @@
     "docs/agent-context/bug-finding-guide.md — contributed zero items; it is a pure process and workflow guide (search patterns, workflow steps) with no findings, TODOs or open items of its own.",
     "BASE-001 (no baseline record existed) — resolved; baseline recorded 2026-08-09. Its live residue (two divergent baselines, 8 unverified commits) is preserved in INFRA-47.",
     "BASE-002 (commands.json missing Rust/security gates) — resolved; rustClippy, rustFmtCheck, rustDependencyPolicy, rustDependencyAdvisories, secretScan, dependencyAuditJs, rustTest and rustTestSingle added and verified.",
-    "BASE-005 (evidence-directory convention) — resolved as NOT APPLICABLE; docs/current/agent-and-repo-operability.md already names audit/ and reports/, enforced by check-repo-organization.mjs and check-report-retention.mjs.",
+    "BASE-005 (evidence-directory convention) — resolved as NOT APPLICABLE; docs/development/agent-operability.md already names audit/ and reports/, enforced by check-repo-organization.mjs and check-report-retention.mjs.",
     "BASE-006 (stale google_batch_* wiring allowlist entries) — resolved as NOT APPLICABLE; grep -c google_batch on apps/desktop/wiring-allowlist.json returns 0. The separate catalog-metadata residue is kept as AI-03.",
     "BASE-007 (desktop wiring guard not verified from clean checkout) — resolved; check-wiring.mjs exits 0 with 1272 registrations, 1268 frontend calls, 1270 Rust command definitions.",
     "BASE-009 (no script failed release completion on open ledger tasks) — resolved; scripts/check-audit-progress.mjs added and wired into launch-readiness-check.sh step [9/9], verified present.",
@@ -11646,7 +11639,7 @@
     "duplication settings-and-nav[0] resolved half (nav-item array duplication between WebChatPage and WebAppShell) — RESOLVED same-day via app-nav-items.ts; recorded here so the fact that this class of drift already occurred once is not lost when the source is retired. Prior drift: '/chat rendered 6 entries and /chat/library rendered 7, Tasks was missing from chat, isActive hardcoded wrong.'",
     "docs/adr/wire-or-cut.md — approximately 100 CUT and WIRED entries (desktop planning preview, LLM council, image gallery/presets, subscription and email/voice wrappers, renderer Stripe command set, native cloud CRUD placeholders, legacy ai_* and updater command layers, orphan debug/background/GitHub/doctor wrappers, one-off schema scripts, CLI /background and placeholder task lifecycle, unread dock badge, phantom Slack runtime, unverified outer-isolation sandbox profile, general multi-backend web cache, team approval escalation router, MCP Tasks RPC, orphaned a11y utility UI, workflow marketplace with 63 fabricated statistics, legacy research fork, AGI checkpoint command layer, visual editor, experimental surface, duplicate computer-use views, reasoning accordion, credit alert modal, advanced-mode toggle, connector card, data-retention setting, project memory-scope dropdown, dead voice preference, and the wired-in Deep Research report/history, execution sidecar, dangerous-tool approvals, temporary chats, browser prompt-injection scanning, sales tax, style sync, pre-send secret warning, in-conversation search, composer budget indicator, share-link lifetime, artifact version restore, per-message usage, copyright and model-licence pages, response reporting, conversation printing, project knowledge dedup/quota/versioning, notebook uploads, project export and duplication, camera capture, chat defaults, shortcut consolidation, memory exclusions, project templates, json_object enforcement, embeddings endpoint, mobile push delivery, notification email channel and schedule-completion notifications) — RESOLVED, no action. Recorded in bulk so the retirement of wire-or-cut.md is not read as losing open work; every open or partially-open item from that ledger has been extracted individually above.",
     "docs/agent-context/risk-map.json AUDIT-IMMUT-01 (audit log immutability) — RESOLVED: 0043_audit_log_immutability.sql revokes UPDATE,DELETE on public.security_audit_logs from app_rls and converts cleanup_old_security_logs() and delete_user_data(text) to SECURITY DEFINER so 90-day retention and GDPR erasure still purge; applied to prod Neon after a disposable-branch rehearsal with app_rls verified INSERT+SELECT-only. Explicit instruction preserved: do NOT re-derive the REVOKE, it exists. The two residues (the blanket GRANT re-grant footgun at 0037_rls_user_isolation.sql:81, and delete_user_data(text) having EXECUTE still open to public) are security/compliance items outside this slice.",
-    "docs/current/frontend-experience-contract.md §13 correction note — two rows were previously mismarked and are RESOLVED: CLI voice is present, not absent (apps/cli/src/voice.rs with cpal capture, Whisper API/local binary and a Local-mode egress gate, reached from both the REPL and TUI via /voice), and Desktop developer sessions are mounted (CodeWorkspace lazy-mounted in DesktopShellV3.tsx, Local-only, since 2026-08-04). What remains missing for the latter is the remote projection, carried forward as AI-55.",
+    "docs/product/experience-contract.md §13 correction note — two rows were previously mismarked and are RESOLVED: CLI voice is present, not absent (apps/cli/src/voice.rs with cpal capture, Whisper API/local binary and a Local-mode egress gate, reached from both the REPL and TUI via /voice), and Desktop developer sessions are mounted (CodeWorkspace lazy-mounted in DesktopShellV3.tsx, Local-only, since 2026-08-04). What remains missing for the latter is the remote projection, carried forward as AI-55.",
     "Chrome Quick mode routing through the admitted auto-economy profile (frontend-experience-contract.md §14 P0 item 4) — RESOLVED 2026-07-16: Chrome Quick now travels with both side-panel send paths and routes the turn through the admitted auto-economy profile without mutating the saved model selection.",
     {
       "id": "SEC-01",

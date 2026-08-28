@@ -10,7 +10,7 @@ import { citedPaths, preconditionClauses } from './check-capability-precondition
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GUARD = join(REPO_ROOT, 'scripts', 'check-capability-preconditions.mjs');
-const LEDGER = 'docs/current/parity-implementation-matrix.md';
+const LEDGER = 'docs/work/implementation-status.md';
 
 function runOnSandbox(files) {
   const sandbox = mkdtempSync(join(tmpdir(), 'docs04-'));

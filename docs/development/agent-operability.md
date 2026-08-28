@@ -12,14 +12,14 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 
 - `AGENTS.md` is the canonical, tool-neutral coding-agent contract.
 - `CLAUDE.md` is a thin Claude Code adapter over it and may not weaken it.
-- `docs/current/source-of-truth.md` is the first product definition and parity/gap read.
-- `docs/current/agi-product-requirements.md` is the long-form PRD for decision-complete product and Mobile v1 requirements.
-- `docs/current/parity-implementation-matrix.md` is the first feature/component implementation read.
-- `docs/current/byok-open-model-provider-strategy.md` is the first BYOK/open-model provider read.
+- `docs/product/definition.md` is the first product definition and parity/gap read.
+- `docs/product/requirements.md` is the long-form PRD for decision-complete product and Mobile v1 requirements.
+- `docs/work/implementation-status.md` is the first feature/component implementation read.
+- `docs/architecture/byok-provider-strategy.md` is the first BYOK/open-model provider read.
 - `PLAN.md` is the active strategy and transition plan.
 - `TODO.md` is the active queue.
 - `CHANGELOG.md` records completed work.
-- `docs/current/` is the compact current docs layer.
+- `docs/README.md` maps the documentation taxonomy; every tier is current by default.
 - `docs/agent-context/` is the machine-readable agent map.
 - `docs/engineering/naming-conventions.md` locks product, CLI, file, folder, package, branch, commit, version, and docs naming rules.
 - `docs/engineering/service-layer-architecture.md` locks the action/route orchestration vs reusable service mechanics rule.
@@ -44,7 +44,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - Evidence belongs in `audit`.
 - Generated reports belong in `reports` or `audit`, not root.
 - Report roots and direct child collections need `Status`, `Owner`, `Purpose`, and `Retention` metadata.
-- If a doc is too long to be an entry point, summarize it in `docs/current` and archive the original.
+- If a doc is too long to be an entry point, summarize it in the tier that owns it and let git hold the long form.
 - Treat `tasks/**`, `reports/**`, `docs/archive/**`, dated audit subdirectories, and local screenshot corpora as evidence or working notes unless promoted by a current doc.
 
 ## Naming Rules

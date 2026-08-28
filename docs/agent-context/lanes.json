@@ -140,8 +140,8 @@
         "packages/contracts/types/src/enterprise/**",
         "apps/web/db/neon/**",
         "apps/web/app/api/admin/**",
-        "docs/current/commercial-and-launch.md",
-        "docs/current/technical-architecture.md"
+        "docs/product/commercial.md",
+        "docs/architecture/overview.md"
       ],
       "blockedPaths": ["packages/contracts/types/**", "apps/web/db/neon/**", "pnpm-lock.yaml"],
       "requiredChecks": ["pnpm --filter @agiworkforce/web typecheck", "pnpm check:llm-operability"],
@@ -255,7 +255,7 @@
       "readOnlyContextPaths": [
         "packages/contracts/types/**",
         "apps/cli/src/models/**",
-        "docs/current/byok-open-model-provider-strategy.md"
+        "docs/architecture/byok-provider-strategy.md"
       ],
       "blockedPaths": ["packages/contracts/types/**", "apps/**"],
       "requiredChecks": [
@@ -315,11 +315,7 @@
         "packages/platform/data-layer/**",
         "packages/contracts/compliance/**"
       ],
-      "readOnlyContextPaths": [
-        "apps/web/**",
-        "services/**",
-        "docs/current/technical-architecture.md"
-      ],
+      "readOnlyContextPaths": ["apps/web/**", "services/**", "docs/architecture/overview.md"],
       "blockedPaths": ["apps/**", "services/**"],
       "requiredChecks": ["pnpm check:boundaries"],
       "escalationOwners": ["Security/privacy lead", "Legal/compliance"]

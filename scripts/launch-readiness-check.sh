@@ -157,7 +157,7 @@ if [ "$FAILS" -eq 0 ]; then
   echo "  5. ./scripts/update-homebrew-tap.sh 1.0.0"
   echo "  6. Post launch threads from docs/marketing/"
   echo ""
-  echo "See docs/marketing/README.md and docs/current/commercial-and-launch.md for launch guidance."
+  echo "See docs/marketing/README.md and docs/product/commercial.md for launch guidance."
   exit 0
 else
   echo -e "${red}$FAILS check(s) failed.${nc} Fix before tagging."

@@ -21,3 +21,16 @@ exactly one home; this directory holds the rows that live under `docs/`.
 
 Documentation describes current reality unless it is explicitly historical. If a
 new document does not fit a tier, settle ownership before writing it.
+
+## Precedence
+
+Code, guards and tests outrank every document here — see `AGENTS.md` §2 for the
+full order. Within this directory:
+
+- Research under `research/` records what was observed on a date. It never
+  overrides code, current official documentation, or a locked decision.
+- `work/` is expected to go stale and never settles a question.
+- When two documents conflict, fix both and record the ruling in `decisions/`.
+
+There is no archive directory and one must not be created. History lives in git;
+material worth keeping belongs in the tier that owns it.

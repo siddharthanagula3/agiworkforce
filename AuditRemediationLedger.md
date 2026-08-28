@@ -385,7 +385,7 @@ The screenshot reports are preserved in the source tags, but execution is reorde
       escape clause fires: the repository already defines the location, so nothing new
       should be established.
 
-      Evidence: `docs/current/agent-and-repo-operability.md:44-48` names the contract —
+      Evidence: `docs/development/agent-operability.md:44-48` names the contract —
       evidence belongs in `audit/`, generated reports in `reports/` or `audit/reports/`,
       never at root. It is enforced, not just written down:
       `scripts/check-repo-organization.mjs:184-198` keeps `audit/` a required root that
@@ -1497,7 +1497,7 @@ The business-layer report shows that substantial billing, entitlement, and enter
       `apps/web/app/api/checkout/route.ts:213-214`.
 
       What actually closing BIZ-031 takes (product scope, not a patch): real App Store Connect
-      and Play products (MS-5 external gate, per `docs/current/parity-implementation-matrix.md:88`),
+      and Play products (MS-5 external gate, per `docs/work/implementation-status.md:88`),
       a StoreKit 2 / Play Billing client and restore flow on Mobile, a signed-transaction
       verification endpoint (BIZ-030), an Apple ASSN V2 webhook plus a Play RTDN Pub/Sub
       subscriber with signature verification and an event-id/dedupe ledger so DID_RENEW,
@@ -1608,7 +1608,7 @@ The business-layer report shows that substantial billing, entitlement, and enter
       `multi-provider-chat.ts`).
 
       Left in place deliberately: `docs/agent-context/known-flaws.md:576-579` and
-      `docs/current/parity-implementation-matrix.md:162` are accurate *historical*
+      `docs/work/implementation-status.md:162` are accurate *historical*
       records that the feature was cut, not stale capability claims; `audit/` files are
       the triage queue and keep their original evidence.
 

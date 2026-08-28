@@ -6,11 +6,11 @@ Last updated: 2026-08-13
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
-For feature-by-feature, option-by-option implementation detail, use `docs/current/parity-implementation-matrix.md`.
+For feature-by-feature, option-by-option implementation detail, use `docs/work/implementation-status.md`.
 
-For BYOK providers, hosted open-model APIs, open-weight model priorities, and Desktop model-selector rules, use `docs/current/byok-open-model-provider-strategy.md`.
+For BYOK providers, hosted open-model APIs, open-weight model priorities, and Desktop model-selector rules, use `docs/architecture/byok-provider-strategy.md`.
 
-For the long-form PRD, serial surface order, per-surface release bars, and decision-complete feature requirements, use `docs/current/agi-product-requirements.md`.
+For the long-form PRD, serial surface order, per-surface release bars, and decision-complete feature requirements, use `docs/product/requirements.md`.
 
 ## Product Definition
 
@@ -114,7 +114,7 @@ was true that day, not as current fact. Re-verify against official product docs
 before using any of it to justify scope. The parity target was source-backed by
 those docs plus the local Claude reference folder at
 `/Users/siddhartha/Desktop/claude_reference`. The most recent dated competitor
-re-verification lives in `docs/current/parity-implementation-matrix.md`
+re-verification lives in `docs/work/implementation-status.md`
 ("Competitor Deltas", verified 2026-07-09); where the two disagree, the newer
 dated entry wins.
 
@@ -411,10 +411,10 @@ These are the highest-risk gaps before calling v1 competitive.
 Agents should read current truth in this order:
 
 1. `AGENTS.md`
-2. `docs/current/source-of-truth.md`
-3. `docs/current/agi-product-requirements.md` for product/UX/surface release requirements
-4. `docs/current/parity-implementation-matrix.md`
-5. `docs/current/byok-open-model-provider-strategy.md` when touching model/provider/BYOK work
+2. `docs/product/definition.md`
+3. `docs/product/requirements.md` for product/UX/surface release requirements
+4. `docs/work/implementation-status.md`
+5. `docs/architecture/byok-provider-strategy.md` when touching model/provider/BYOK work
 6. `docs/agent-context/repo-map.json`
 7. `docs/agent-context/known-flaws.md`
 8. `docs/agent-context/commands.json`
@@ -436,7 +436,7 @@ Treat these as evidence or working notes, not source of truth:
 removed repo-wide on 2026-06-28 — do not cite them as existing. `audit/` was
 removed then too but has since been reintroduced and is live again: it is the
 current triage queue, and `audit/capability-gaps.csv` is cited as the source of
-truth by `docs/current/parity-implementation-matrix.md`. Cite it, but treat its
+truth by `docs/work/implementation-status.md`. Cite it, but treat its
 contents as a queue of claims to verify in code, never as evidence that work is
 done.)
 

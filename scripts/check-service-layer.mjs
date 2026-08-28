@@ -87,7 +87,7 @@ requireIncludes(
   'docs/engineering/agent-harness-rollout.md',
   'Service-layer architecture is part of the harness',
 );
-requireIncludes('docs/current/agent-and-repo-operability.md', 'service-layer-architecture.md');
+requireIncludes('docs/development/agent-operability.md', 'service-layer-architecture.md');
 
 requireIncludes(
   'docs/engineering/service-layer-architecture.md',
