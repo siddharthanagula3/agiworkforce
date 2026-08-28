@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/desktop-command-client",
   "version": "0.0.1",
+  "description": "Typed transport from the desktop renderer to the privileged Rust host.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/utils",
   "version": "0.0.1",
+  "description": "Pure helpers plus the privacy-handoff and signaling contracts shared across surfaces.",
   "private": true,
   "type": "module",
   "exports": {

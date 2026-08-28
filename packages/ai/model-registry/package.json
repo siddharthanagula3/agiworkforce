@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/model-registry",
   "version": "0.0.1",
+  "description": "Canonical model and harness metadata. Compiles catalog/ into models.json and the Rust mirror; the only place a model ID may be a literal.",
   "private": true,
   "type": "module",
   "main": "./generated/registry.ts",

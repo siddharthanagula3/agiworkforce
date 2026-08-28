@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/design-tokens",
   "version": "0.0.1",
+  "description": "The only sanctioned source of color, spacing and type values. Presentation-only.",
   "private": true,
   "type": "module",
   "exports": {

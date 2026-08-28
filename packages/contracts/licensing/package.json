@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/licensing",
   "version": "0.0.1",
+  "description": "Signed enterprise license and policy verification.",
   "private": true,
   "type": "module",
   "exports": {

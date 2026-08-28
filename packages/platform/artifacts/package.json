@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/artifacts",
   "version": "0.0.1",
+  "description": "Artifact derivation, client store, managed publish, and cloud merge and apply.",
   "private": true,
   "type": "module",
   "exports": {
