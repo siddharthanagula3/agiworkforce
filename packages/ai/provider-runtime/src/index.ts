@@ -70,10 +70,6 @@ export {
   type LatchedHeaders,
 } from './headers';
 
-export { detectGateway, gatewayEnforcesUserSideLimits, type GatewayId } from './gateway';
-
-export { buildFallbackChain, type FallbackStrategy, type FallbackChainOptions } from './fallback';
-
 export { CredentialFailoverState } from './failover';
 
 export {
