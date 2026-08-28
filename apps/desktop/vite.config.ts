@@ -353,7 +353,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         '**/playwright/**',
         '**/src-tauri/**',
         '**/wdio/**',
-        '**/archive/**',
       ],
       coverage: {
         provider: 'v8',

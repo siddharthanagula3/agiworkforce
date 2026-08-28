@@ -76,4 +76,4 @@ hands off selected, redacted context into a synced app chat.
 
 ## Not Current
 
-Historical PRD, roadmap, pricing, and strategy docs were removed with `docs/archive/` on 2026-06-28 and are retrievable only from git history. Nothing historical overrides this folder, `PLAN.md`, or `docs/decisions/CURRENT_DECISIONS.md`.
+Historical PRD, roadmap, pricing, and strategy docs were removed with `docs/archive/` on 2026-06-28 and are retrievable only from git history. Nothing historical overrides this folder, `PLAN.md`, or `docs/decisions/README.md`.

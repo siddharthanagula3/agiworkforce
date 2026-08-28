@@ -16,7 +16,6 @@ export const REPO_ROOTS = [
   'tools',
   'infrastructure',
   'examples',
-  'dev-scripts',
   '.github',
   '.claude',
 ];

@@ -11,7 +11,7 @@ source-of-truth docs are not enough. Use it with:
 - `docs/product/definition.md` for the compact product lock.
 - `docs/work/implementation-status.md` for feature-by-feature parity status.
 - `docs/architecture/byok-provider-strategy.md` for provider and model routing.
-- `docs/decisions/CURRENT_DECISIONS.md` for conflict resolution.
+- `docs/decisions/README.md` for conflict resolution.
 
 This document intentionally uses AGI-owned product language. OpenAI and
 Anthropic are competitive references, not sources of proprietary implementation,
@@ -1697,6 +1697,6 @@ When adding or changing requirements:
 2. Update `docs/product/definition.md` if the compact product lock changes.
 3. Update `docs/work/implementation-status.md` if feature status or
    parity requirements change.
-4. Update `docs/decisions/CURRENT_DECISIONS.md` if a conflict is resolved or a
+4. Update `docs/decisions/README.md` if a conflict is resolved or a
    new lock is created.
 5. Run doc/agent checks.

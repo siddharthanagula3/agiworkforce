@@ -1283,7 +1283,7 @@ mod tests {
 
     #[test]
     fn sonnet_5_bills_the_founder_standard_rate_on_every_date() {
-        // Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md,
+        // Founder pin — Decision #22 (docs/decisions/README.md,
         // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
         // MTok (cache read $0.30, 5m write $3.75) on EVERY date. Anthropic's
         // introductory window is a provider-COST fact for the registry's

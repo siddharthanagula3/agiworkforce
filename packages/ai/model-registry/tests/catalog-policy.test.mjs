@@ -250,7 +250,7 @@ const ANTHROPIC_STANDARD_RATES = {
 test('never prices the default Anthropic route below the standard rates on any date', () => {
   const model = curation.models[anthropicDefaultModelKey];
   const decision =
-    'Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed 2026-08-05): the default Anthropic route bills ' +
+    'Decision #22 (docs/decisions/README.md, reaffirmed 2026-08-05): the default Anthropic route bills ' +
     'users the founder-selected standard $3/$15 per MTok (cache read $0.30, 5m write $3.75, 1h ' +
     "write $6.00) on EVERY date. A provider's introductory window is a provider-cost fact for " +
     'verificationLog, not a product price. Record it there and leave the billed rates alone.';
@@ -283,7 +283,7 @@ test('never prices the default Anthropic route below the standard rates on any d
 
 test('publishes the standard default Anthropic rates in the compiled registry on any date', () => {
   const decision =
-    'Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed 2026-08-05): the default Anthropic route bills ' +
+    'Decision #22 (docs/decisions/README.md, reaffirmed 2026-08-05): the default Anthropic route bills ' +
     'users the founder-selected standard rates on EVERY date.';
   const pricing = registry.pricing[anthropicDefaultModelKey];
   const compiledStandard = {
