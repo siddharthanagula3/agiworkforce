@@ -16,9 +16,14 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import {
+  issuePairToken as mintPairToken,
+  verifyPairToken as checkPairToken,
+} from './pair-token.js';
+import {
   deleteSessionByCode,
   getSessionByCode,
   getSessionExpiresAtByCode,
+  extendSessionExpiry,
   insertSession,
 } from './db.js';
 import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from './client-ip.js';
@@ -122,28 +127,18 @@ function buildPairTokenSecret(): string {
   return SIGNALING_SECRET ?? COMPARE_KEY.toString('hex');
 }
 
-function issuePairToken(code: string, role: Role, expiresAt: number): string {
-  const payload = `${code}|${role}|${expiresAt}`;
-  return createHmac('sha256', buildPairTokenSecret()).update(payload).digest('hex');
+function issuePairToken(code: string, role: Role, createdAt: number): string {
+  return mintPairToken(buildPairTokenSecret(), code, role, createdAt);
 }
 
 function verifyPairToken(
   presented: string | undefined,
   code: string,
   role: Role,
-  expiresAt: number,
+  createdAt: number,
 ): boolean {
   if (!REQUIRE_PAIR_TOKEN) return true;
-  if (!presented || presented.length === 0) return false;
-  let presentedBuf: Buffer;
-  try {
-    presentedBuf = Buffer.from(presented, 'hex');
-  } catch {
-    return false;
-  }
-  const expected = Buffer.from(issuePairToken(code, role, expiresAt), 'hex');
-  if (presentedBuf.length !== expected.length) return false;
-  return timingSafeEqual(presentedBuf, expected);
+  return checkPairToken(buildPairTokenSecret(), presented, code, role, createdAt);
 }
 
 const DEFAULT_TTL_SECONDS = Number(
@@ -546,13 +541,13 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
     return res.status(500).json({ error: result.error });
   }
 
-  const { code, expiresAt } = result;
+  const { code, createdAt, expiresAt } = result;
 
   logger.info({ correlationId, code, expiresAt }, 'Pairing session created');
   metrics.recordPairingRequest(true);
 
-  const desktopPairToken = issuePairToken(code, 'desktop', expiresAt);
-  const mobilePairToken = issuePairToken(code, 'mobile', expiresAt);
+  const desktopPairToken = issuePairToken(code, 'desktop', createdAt);
+  const mobilePairToken = issuePairToken(code, 'mobile', createdAt);
 
   return res.json({
     code,
@@ -630,7 +625,7 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
   return res.json({
     code,
     role: parsedBody.data.role,
-    pairToken: issuePairToken(code, parsedBody.data.role, sessionData.expires_at),
+    pairToken: issuePairToken(code, parsedBody.data.role, sessionData.created_at),
     expiresAt: sessionData.expires_at,
     wsUrl: publicWsUrl,
   });
@@ -1137,7 +1132,7 @@ async function handleRegister(
     return;
   }
 
-  if (!verifyPairToken(message.pairToken, message.code, message.role, session.expiresAt)) {
+  if (!verifyPairToken(message.pairToken, message.code, message.role, session.createdAt)) {
     logger.warn(
       {
         correlationId,
@@ -1195,10 +1190,18 @@ async function handleRegister(
     const longExpiry = Date.now() + SESSION_LONG_TTL_MS;
     if (session.expiresAt < longExpiry) {
       session.expiresAt = longExpiry;
-      logger.info(
-        { code: message.code, newExpiresAt: longExpiry },
-        'Session TTL extended to 24h (both peers connected)',
-      );
+      const { error } = await extendSessionExpiry(message.code, longExpiry);
+      if (error) {
+        logger.error(
+          { code: message.code, newExpiresAt: longExpiry, error },
+          'Session TTL extended in memory but not persisted; a restart will expire this pair',
+        );
+      } else {
+        logger.info(
+          { code: message.code, newExpiresAt: longExpiry },
+          'Session TTL extended to 24h (both peers connected)',
+        );
+      }
     }
 
     notifyParticipant(participant, {
@@ -1329,7 +1332,7 @@ function generateCode(): string {
 async function insertSessionWithRetry(
   ttlSeconds: number,
   metadata: Record<string, unknown> | undefined,
-): Promise<{ code: string; expiresAt: number } | { error: string }> {
+): Promise<{ code: string; createdAt: number; expiresAt: number } | { error: string }> {
   const now = Date.now();
   const expiresAt = now + ttlSeconds * 1000;
 
@@ -1343,7 +1346,7 @@ async function insertSessionWithRetry(
     const { error } = await insertSession(code, now, expiresAt, metadata ?? {});
 
     if (!error) {
-      return { code, expiresAt };
+      return { code, createdAt: now, expiresAt };
     }
 
     if (error.code === DB_ERROR_CODES.UNIQUE_VIOLATION) {

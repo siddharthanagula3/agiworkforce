@@ -110,6 +110,14 @@ export async function deleteSessionByCode(code: string): Promise<{ error: DbErro
   return queryNoReturn('DELETE FROM signaling_sessions WHERE code = $1', [code]);
 }
 
+export async function extendSessionExpiry(
+  code: string,
+  expiresAt: number,
+): Promise<{ error: DbError | null }> {
+  const sql = 'UPDATE signaling_sessions SET expires_at = $2 WHERE code = $1 AND expires_at < $2';
+  return queryNoReturn(sql, [code, expiresAt]);
+}
+
 export async function insertSession(
   code: string,
   createdAt: number,
