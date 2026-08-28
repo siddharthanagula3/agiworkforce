@@ -10,7 +10,7 @@ These files are high-contention. Feature agents should not edit them unless the 
 
 - Root workspace manifests: `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `Cargo.toml`, `Cargo.lock`.
 - Root config: `.gitignore`, `.gitattributes`, `tsconfig.base.json`, `eslint.config.mjs`, `.github/**`.
-- Root source-of-truth docs: `AGENTS.md`, `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `BUILD.md`.
+- Root source-of-truth docs: `AGENTS.md`, `ARCHITECTURE.md`, `PLAN.md`, `CHANGELOG.md`.
 - Tool-specific agent adapters: `CLAUDE.md` and hidden tool folders such as `.claude/`, `.codex/`, `.cursor/`, `.opencode/`, `.agents/`.
 - Agent operating system: `docs/agent-context/**`, `docs/development/**`.
 - Shared contracts: `packages/contracts/types/**`.

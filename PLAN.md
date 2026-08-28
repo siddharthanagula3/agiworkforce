@@ -2,7 +2,7 @@
 
 Status: Active
 Owner: Founder + platform lead
-Last updated: 2026-08-01
+Last updated: 2026-08-28
 Detailed plan: retired. `docs/plans/monorepo-restructure-2026-07-08.md` was
 deleted once its phases landed; the mechanical restructure it described is
 complete (see the phase note below) and `docs/architecture/overview.md`
@@ -14,8 +14,8 @@ now carries the package/crate ownership it defined.
 > **surface production quality**: Desktop Cloud and Mobile Cloud to the standard
 > Web already meets, and the VS Code and Chrome extensions to the frontend UI/UX
 > standard of ChatGPT's equivalents. The executable queue for that phase lives in
-> the **Exact Resume Point** section of this file. The objective and boundaries
-> below still govern; only the sequencing has moved on.
+> `docs/work/restructure-execution-queue.md`. The objective and boundaries below
+> still govern; only the sequencing has moved on.
 
 ## Objective
 
@@ -81,7 +81,7 @@ apps/web/db/neon canonical database migrations
 infrastructure/  deployment, environment definitions, and isolated sandbox renderer
 scripts/         supported repository automation
 tests/           genuinely cross-surface and system-level verification
-docs/            current architecture, decisions, plans, research, and runbooks
+docs/            durable knowledge; see docs/README.md for the tier map
 ```
 
 The macro layout is retained. The restructure consolidates ownership inside

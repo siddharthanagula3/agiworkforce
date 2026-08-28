@@ -9,10 +9,10 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 ## Read Order
 
 1. Root `AGENTS.md` - canonical operating rules for all coding agents and the entry point before this folder.
-2. `../current/source-of-truth.md` - product definition, v1 target, current position, parity baseline, P0 gaps, docs rule, and verification rule.
-3. `../current/agi-product-requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
-4. `../current/parity-implementation-matrix.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
-5. `../current/byok-open-model-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and Desktop model-selector rules.
+2. `../product/definition.md` - product definition, v1 target, current position, parity baseline, P0 gaps, docs rule, and verification rule.
+3. `../product/requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
+4. `../work/implementation-status.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
+5. `../architecture/byok-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and Desktop model-selector rules.
 6. `repo-map.json` - where product and platform code lives.
 7. `known-flaws.md` - open issues and stale claims agents should not rediscover as new.
 8. `commands.json` - exact commands by surface.
@@ -21,9 +21,9 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 11. `doc-status.json` - which docs are current, historical, or working notes.
 12. `lanes.json` - write-lane map for 15+ parallel implementation agents.
 13. `shared-files.md` - collision policy for manifests, locks, root docs, CI, schemas, and migrations.
-14. `../engineering/naming-conventions.md` - product, CLI, files, folders, packages, branches, commits, versions, and hook policy.
-15. `../engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
-16. `../engineering/service-layer.md` - action/route orchestration vs reusable service mechanics.
+14. `../standards/naming-conventions.md` - product, CLI, files, folders, packages, branches, commits, versions, and hook policy.
+15. `../development/harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
+16. `../standards/service-layer.md` - action/route orchestration vs reusable service mechanics.
 17. `bug-finding-guide.md` - workflow for finding bugs without getting lost in stale docs.
 18. `agent-task-templates.md` - standard prompts for exploration, implementation, review, and verification agents.
 

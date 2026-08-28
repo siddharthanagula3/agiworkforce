@@ -233,6 +233,12 @@ dist-web
 # Build artifacts (Vite SPA output)
 apps/web/public/chat
 
+# Expo local state. Every other ignore surface already excludes it —
+# .dockerignore:33, .claudeignore:9, apps/mobile/.gitignore:9 — and its absence
+# here is why a stray root .expo/ from an expo command run at the repo root got
+# committed. The real project's copy lives at apps/mobile/.expo/.
+.expo/
+
 # Claude Code local files
 CLAUDE.local.md
 .claude/settings.local.json

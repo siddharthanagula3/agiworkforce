@@ -17,7 +17,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - `docs/work/implementation-status.md` is the first feature/component implementation read.
 - `docs/architecture/byok-provider-strategy.md` is the first BYOK/open-model provider read.
 - `PLAN.md` is the active strategy and transition plan.
-- `TODO.md` is the active queue.
+- `docs/work/` holds the dated execution queues.
 - `CHANGELOG.md` records completed work.
 - `docs/README.md` maps the documentation taxonomy; every tier is current by default.
 - `docs/agent-context/` is the machine-readable agent map.
