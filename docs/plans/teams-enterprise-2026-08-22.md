@@ -4,7 +4,7 @@ Status: Active
 Owner: Enterprise/platform lead
 Last updated: 2026-08-22
 
-Companion read: `AGENTS.md`, `docs/current/source-of-truth.md`,
+Companion read: `AGENTS.md`, `docs/product/definition.md`,
 `docs/agent-context/known-flaws.md`, `PLAN.md`.
 
 This plan governs Teams and Enterprise work only. Every status below is cited to

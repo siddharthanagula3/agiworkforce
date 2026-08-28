@@ -92,7 +92,7 @@ export const MIGRATION_GUIDE = `
    server route, plus an RLS-fenced read to confirm row filtering. Then
    migrate hot paths to adapter.query/execute with parameterized SQL.
 
-Full guide: docs/current/source-of-truth.md and docs/current/technical-architecture.md.
+Full guide: docs/product/definition.md and docs/architecture/overview.md.
 `.trim();
 
 type NeonModule = typeof import('@neondatabase/serverless');

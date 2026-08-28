@@ -15,7 +15,6 @@ export const KEEP = [
   'docs/agent-context',
   'docs/architecture',
   'docs/compliance',
-  'docs/current',
   'docs/decisions',
   'docs/development',
   'docs/engineering',

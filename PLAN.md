@@ -5,7 +5,7 @@ Owner: Founder + platform lead
 Last updated: 2026-08-01
 Detailed plan: retired. `docs/plans/monorepo-restructure-2026-07-08.md` was
 deleted once its phases landed; the mechanical restructure it described is
-complete (see the phase note below) and `docs/current/technical-architecture.md`
+complete (see the phase note below) and `docs/architecture/overview.md`
 now carries the package/crate ownership it defined.
 
 > **Phase note (2026-07-26).** The mechanical restructure below is complete —
@@ -326,7 +326,7 @@ control doc.
 
 Active goal (2026-08-01, latest): **six apps, nothing unwired, zero stubs,
 zero partial** — the completion standard and its four scope decisions are
-recorded in `docs/current/parity-implementation-matrix.md` §2026-08-01
+recorded in `docs/work/implementation-status.md` §2026-08-01
 Completion Standard. Desktop first, then the rest; server contracts get built
 on both sides; `audit/inventory.json` is corrected against verified code at the
 end and the checker then enforces it.
@@ -334,7 +334,7 @@ end and the checker then enforces it.
 Founder decisions (2026-08-01, evening): build 11 of the 13 undecided missing
 surfaces (all except Finances; Plugins resolves to Connectors permanently) —
 the full list with external gates is recorded in
-`docs/current/parity-implementation-matrix.md` §2026-08-01 Founder Scope
+`docs/work/implementation-status.md` §2026-08-01 Founder Scope
 Decisions. Additionally: sonnet-5 low/medium effort follows the catalog (tests
 updated and green), and the branch is authorized for a plain push to origin
 (no PR). Reversed later the same evening: the model picker stays in the "+"
