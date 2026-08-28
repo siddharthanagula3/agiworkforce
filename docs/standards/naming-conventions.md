@@ -40,18 +40,23 @@ User-facing surface and mode labels use the AGI-prefixed family. Never ship Clau
 
 Keep only these active control files at repo root:
 
-- `AGI_WORKFORCE.md` - compact platform entry point and locked product/architecture summary.
-- `PLAN.md` - active strategy and transition plan.
-- `TODO.md` - retired (commit `906fe5cda`); the active execution queue lives in `PLAN.md` §Exact Resume Point.
+- `AGENTS.md` - the canonical, tool-neutral agent contract.
+- `CLAUDE.md` - a thin Claude Code adapter over it.
+- `ARCHITECTURE.md` - the compact repository map.
+- `PLAN.md` - active strategy and phase structure.
 - `CHANGELOG.md` - completed work log.
-- `README.md`, `BUILD.md`, `CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`, `LICENSE`, `NOTICE`.
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`, `THIRD_PARTY_LICENSES.md`.
+
+`scripts/check-repo-organization.mjs` holds the enforced allowlist; this list
+describes it and must not drift from it. `TODO.md`, `BUILD.md`, `NOTICE` and
+`AGI_WORKFORCE.md` were named here long after they stopped existing.
 
 Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.md`, or ad hoc dated reports. Put them in the folders below.
 
 ## Planning And Work Logs
 
 - Use `PLAN.md` for active strategic plan and phase structure.
-- Add current executable tasks to `PLAN.md` §Exact Resume Point (root `TODO.md` is retired).
+- Put dated executable queues in `docs/work/`, not at the repository root.
 - Use `CHANGELOG.md` for completed work.
 - Do not add `TASKS.md`, `FIXME.md`, or `AUDIT_LOG.md` at root.
 - Use inline `TODO(<owner-or-area>):` comments only for small local follow-up notes that are next to the affected code.

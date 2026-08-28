@@ -72,6 +72,39 @@ const NON_DOC_FILES = new Map([
   ],
 ]);
 
+// Root files that were removed and must not be cited as if they were still
+// live. check:reference-integrity cannot see these: it builds its matcher from
+// REPO_ROOTS, so a backticked bare root filename never matches, which is how six
+// documents went on calling TODO.md "the active queue" months after it was
+// deleted. A citation is allowed only on a line that marks the file as gone.
+const RETIRED_ROOT_FILES = ['TODO.md', 'BUILD.md', 'AGI_WORKFORCE.md', 'ONBOARDING.md'];
+const RETIRED_OK =
+  /retired|no longer|stopped existing|was deleted|were removed|was removed|do not create|does not exist/i;
+
+function checkRetiredRootCitations() {
+  const scanned = execFileSync('git', ['ls-files', '*.md'], { cwd: root, encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+    .filter((file) => file !== 'CHANGELOG.md');
+
+  for (const file of scanned) {
+    const lines = fs.readFileSync(path.join(root, file), 'utf8').split('\n');
+    lines.forEach((line, index) => {
+      // Prose wraps, so the marker that excuses a citation may sit on the next
+      // line. Read a small window rather than the single line.
+      const window = lines.slice(Math.max(0, index - 1), index + 2).join(' ');
+      if (RETIRED_OK.test(window)) return;
+      for (const retired of RETIRED_ROOT_FILES) {
+        if (line.includes(`\`${retired}\``)) {
+          errors.push(
+            `${file}:${index + 1} cites \`${retired}\` as current, but it was removed from the root`,
+          );
+        }
+      }
+    });
+  }
+}
+
 function trackedMarkdown() {
   return execFileSync('git', ['ls-files', '*.md'], { cwd: root, encoding: 'utf8' })
     .split('\n')
@@ -102,6 +135,8 @@ function classify(file) {
 
   return 'markdown outside docs/ must be a README.md beside what it describes, or live under the surface’s docs/ directory';
 }
+
+checkRetiredRootCitations();
 
 for (const file of trackedMarkdown()) {
   const problem = classify(file);

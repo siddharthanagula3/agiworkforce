@@ -300,5 +300,5 @@ agi doctor --json
 ## License
 
 Proprietary. AGI Workforce CLI is part of the AGI Workforce platform; the
-whole platform is proprietary, not open source. See the root `NOTICE` for
+whole platform is proprietary, not open source. See the root `THIRD_PARTY_LICENSES.md` for
 third-party attribution.

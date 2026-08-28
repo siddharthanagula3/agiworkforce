@@ -20,8 +20,8 @@ Current sources of truth:
 - `docs/product/commercial.md` - Local/BYOK/Managed launch posture, waitlist, payment, and enterprise gates.
 - `docs/development/agent-operability.md` - repo/docs/agent workflow rules.
 - `PLAN.md` - active transition plan.
-- `PLAN.md` §Exact Resume Point - active execution queue (root `TODO.md` was retired in commit `906fe5cda`).
-- `AGI_WORKFORCE.md` - broad platform snapshot and entry point.
+- `docs/work/restructure-execution-queue.md` - the dated execution queue (root `TODO.md` was retired in commit `906fe5cda`).
+- `ARCHITECTURE.md` - the compact repository map.
 
 Archived source material:
 
@@ -34,10 +34,10 @@ Archived source material:
    Evidence: `docs/product/suite.md` (the 2026-05-20 application-suite thesis docs were removed from the working tree — git history only; the decision stands per this index).
 
 2. Public brand is AGI. The formal platform name is AGI Workforce. Repo paths, package names, crates, database identifiers, and internal identifiers stay `agiworkforce`.
-   Evidence: `AGI_WORKFORCE.md`, `README.md`, `docs/standards/naming-conventions.md` (the cited `memory/locks/` file never landed in-repo; this index is the lock).
+   Evidence: `ARCHITECTURE.md`, `README.md`, `docs/standards/naming-conventions.md` (the cited `memory/locks/` file never landed in-repo; this index is the lock).
 
 3. The six-surface product boundary is Web, Desktop, Mobile, CLI, VS Code, and Chrome.
-   Evidence: `docs/product/suite.md`, `docs/surfaces/*.md`, `PLAN.md`.
+   Evidence: `docs/product/suite.md`, `docs/architecture/desktop.md`, `PLAN.md`.
 
 4. Normal synced app chat is shared by Web, Mobile Cloud, and both Desktop Cloud shells. Chrome remains cloud-only and keeps `chrome.storage.local` authoritative, but every conversation whose turns all carry Managed Cloud provenance automatically mirrors into the same signed-in account conversation store so it is available on Web, Mobile Cloud, Tauri Cloud, and Electron Cloud. Unknown-provenance or any Local/BYOK turn fails closed and permanently disqualifies that Chrome conversation. CLI and VS Code remain local/workspace/task scoped unless the user explicitly hands off selected, redacted context. (Founder decision, 2026-08-13; supersedes Chrome's separate-store rule.)
    Evidence: `docs/product/suite.md`, `docs/architecture/trust-boundaries.md`, `apps/extension/docs/threat-model.md`.
@@ -55,16 +55,16 @@ Archived source material:
    Evidence: `docs/architecture/overview.md`, `docs/product/commercial.md`.
 
 9. Do not hardcode model IDs or provider capabilities. Use the shared model catalogs and provider metadata.
-   Evidence: `packages/contracts/types/src/models.json`, `AGI_WORKFORCE.md` (the cited `memory/locks/` file never landed in-repo; this index is the lock).
+   Evidence: `packages/contracts/types/src/models.json`, `ARCHITECTURE.md` (the cited `memory/locks/` file never landed in-repo; this index is the lock).
 
 10. Auto-routing must be explicit and explainable; silent model substitution is a rejected anti-pattern.
     Evidence: `docs/product/suite.md` (the cited `memory/locks/` auto-routing file never landed in-repo; this index is the lock).
 
 11. One chat layout across six surfaces remains a non-regression rule.
-    Evidence: `docs/product/suite.md`, `docs/design/design-spec-2026-05-15.md`, `docs/surfaces/*.md`.
+    Evidence: `docs/product/suite.md`, `docs/architecture/desktop.md`.
 
 12. `@agiworkforce/provider-protocol` is the canonical app-level cross-provider contract.
-    Evidence: `AGI_WORKFORCE.md`, `packages/ai/provider-protocol/`, `docs/architecture/overview.md`.
+    Evidence: `ARCHITECTURE.md`, `packages/ai/provider-protocol/`, `docs/architecture/overview.md`.
 
 13. Enterprise managed compute requires organization policy, audit logs, support workflow, usage ledger, provider cost snapshots, managed-credit controls, and release-fix traceability before public claims.
     Evidence: `docs/product/commercial.md`, `packages/contracts/types/src/enterprise/`, `apps/web/db/neon/` (the enterprise control-plane doc was retired in `906fe5cda`; git history only).
@@ -75,7 +75,7 @@ Archived source material:
 15. The primary CLI command is `agi`. `agiworkforce` remains a compatibility alias, not the preferred user-facing command. User docs and command examples should prefer `agi`; packages, crates, release archives, repo URLs, and existing `~/.agiworkforce` state paths keep `agiworkforce` unless a separate migration plan is approved.
     Evidence: `docs/standards/naming-conventions.md`, `apps/cli/Cargo.toml`, `apps/cli/npm/package.json`, `scripts/install.sh`.
 
-16. Repo naming follows the locked engineering convention: root `PLAN.md` for strategy and (in its Exact Resume Point section) the active execution queue — root `TODO.md` was retired in commit `906fe5cda` — `CHANGELOG.md` for completed work, current docs in `docs/current`, plans in `docs/plans`, and evidence ledgers in the live root `audit/` directory. The former `reports/`, `tasks/`, and `docs/archive/` roots were removed on 2026-06-28 (git history only).
+16. Repo naming follows the locked engineering convention: root `PLAN.md` for strategy, `docs/work/` for dated execution queues — root `TODO.md` was retired in commit `906fe5cda` — `CHANGELOG.md` for completed work, durable knowledge in the `docs/` taxonomy described by `docs/README.md`, and evidence ledgers in the live root `audit/` directory. The former `reports/`, `tasks/`, and `docs/archive/` roots were removed on 2026-06-28 (git history only).
     Evidence: `docs/standards/naming-conventions.md`, `docs/development/agent-operability.md`, `scripts/check-structure-conventions.mjs`.
 
 17. The cloud foundation is Clerk for managed identity and Neon for Postgres. The migration off Supabase is complete: no `@supabase`/Supabase client usage remains in app/package/service code, there is no root `supabase/` directory, and the canonical migrations live in `apps/web/db/neon`. Do not reintroduce Supabase or switch providers by docs-only claims. (Updated 2026-06-27: superseded the prior "production stays on Supabase until verified" wording, which was stale.)
