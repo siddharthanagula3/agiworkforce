@@ -2,6 +2,7 @@
 publish = false
 name = "agiworkforce-utils-absolute-path"
 version = "0.1.0"
+description = "Filesystem path validation and absolute-path guarantees."
 edition = "2024"
 
 [lints]

@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/provider-runtime",
   "version": "0.0.1",
+  "description": "One streaming client for every provider: egress, retry, failover, fallback and watchdog.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

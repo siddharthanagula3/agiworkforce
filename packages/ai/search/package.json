@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/search",
   "version": "0.0.1",
+  "description": "Registry-derived web-search harness availability. Reports what is wired; executes no search itself.",
   "private": true,
   "type": "module",
   "exports": {

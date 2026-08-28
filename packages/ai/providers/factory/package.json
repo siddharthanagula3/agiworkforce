@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/providers-factory",
   "version": "0.0.1",
+  "description": "Constructs provider adapters from caller-owned credentials; never holds keys itself.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

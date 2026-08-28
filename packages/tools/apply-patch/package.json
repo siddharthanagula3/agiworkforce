@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/apply-patch",
   "version": "0.0.1",
+  "description": "Applies patches through a privileged filesystem mutation path with explicit bounds.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

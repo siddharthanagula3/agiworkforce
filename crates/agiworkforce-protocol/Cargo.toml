@@ -5,6 +5,7 @@ edition = "2024"
 name = "agiworkforce-protocol"
 version = "0.1.0"
 
+description = "Developer session contracts and sandbox protocol. Exports ts-rs bindings into packages/contracts/types."
 [lints]
 workspace = true
 

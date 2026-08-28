@@ -30,7 +30,7 @@
       "name": "agiworkforce-licensing",
       "path": "crates/agiworkforce-licensing",
       "kind": "crate",
-      "purpose": "unknown"
+      "purpose": "Signed enterprise license and policy verification."
     },
     {
       "name": "agiworkforce-llm",
@@ -54,7 +54,7 @@
       "name": "agiworkforce-protocol",
       "path": "crates/agiworkforce-protocol",
       "kind": "crate",
-      "purpose": "unknown"
+      "purpose": "Developer session contracts and sandbox protocol. Exports ts-rs bindings into packages/contracts/types."
     },
     {
       "name": "agiworkforce-sandbox-policy",
@@ -66,13 +66,13 @@
       "name": "agiworkforce-utils-absolute-path",
       "path": "crates/agiworkforce-utils-absolute-path",
       "kind": "crate",
-      "purpose": "unknown"
+      "purpose": "Filesystem path validation and absolute-path guarantees."
     },
     {
       "name": "agiworkforce-utils-image",
       "path": "crates/agiworkforce-utils-image",
       "kind": "crate",
-      "purpose": "unknown"
+      "purpose": "Image decode, transform and cache used by the desktop and CLI."
     },
     {
       "name": "@agiworkforce/sandbox",
@@ -90,19 +90,19 @@
       "name": "@agiworkforce/model-registry",
       "path": "packages/ai/model-registry",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Canonical model and harness metadata. Compiles catalog/ into models.json and the Rust mirror; the only place a model ID may be a literal."
     },
     {
       "name": "@agiworkforce/provider-protocol",
       "path": "packages/ai/provider-protocol",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Normalizes provider requests and responses to one wire shape, including OpenAI-compatible translation."
     },
     {
       "name": "@agiworkforce/provider-runtime",
       "path": "packages/ai/provider-runtime",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "One streaming client for every provider: egress, retry, failover, fallback and watchdog."
     },
     {
       "name": "providers",
@@ -114,79 +114,79 @@
       "name": "@agiworkforce/providers-anthropic",
       "path": "packages/ai/providers/anthropic",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Anthropic API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/providers-deepseek",
       "path": "packages/ai/providers/deepseek",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "DeepSeek API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/providers-factory",
       "path": "packages/ai/providers/factory",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Constructs provider adapters from caller-owned credentials; never holds keys itself."
     },
     {
       "name": "@agiworkforce/providers-google",
       "path": "packages/ai/providers/google",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Google AI API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/providers-lmstudio",
       "path": "packages/ai/providers/lmstudio",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "LM Studio adapter for a local loopback model server."
     },
     {
       "name": "@agiworkforce/providers-moonshot",
       "path": "packages/ai/providers/moonshot",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Moonshot API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/providers-ollama",
       "path": "packages/ai/providers/ollama",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Ollama adapter for deployment-local model egress."
     },
     {
       "name": "@agiworkforce/providers-openai",
       "path": "packages/ai/providers/openai",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "OpenAI API adapter and the OpenAI-compatible wire translation other adapters reuse."
     },
     {
       "name": "@agiworkforce/providers-openrouter",
       "path": "packages/ai/providers/openrouter",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "OpenRouter API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/providers-perplexity",
       "path": "packages/ai/providers/perplexity",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Perplexity API adapter, including citation passthrough."
     },
     {
       "name": "@agiworkforce/providers-qwen",
       "path": "packages/ai/providers/qwen",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Qwen API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/providers-xai",
       "path": "packages/ai/providers/xai",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "xAI API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/providers-zhipu",
       "path": "packages/ai/providers/zhipu",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Zhipu API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/routing",
@@ -198,55 +198,55 @@
       "name": "@agiworkforce/search",
       "path": "packages/ai/search",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Registry-derived web-search harness availability. Reports what is wired; executes no search itself."
     },
     {
       "name": "@agiworkforce/client-runtime",
       "path": "packages/client/client-runtime",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Client runtime detection, command dispatch, shared state, and the offline queue."
     },
     {
       "name": "@agiworkforce/desktop-command-client",
       "path": "packages/client/desktop-command-client",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Typed transport from the desktop renderer to the privileged Rust host."
     },
     {
       "name": "@agiworkforce/sync",
       "path": "packages/client/sync",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Managed-cloud delta validation and local apply, with a bigint cursor; pinned to the Rust apply by golden fixtures."
     },
     {
       "name": "@agiworkforce/cloud-contracts",
       "path": "packages/contracts/cloud-contracts",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Managed-cloud wire schemas, endpoint paths and stream deltas — one wire truth for every surface."
     },
     {
       "name": "@agiworkforce/compliance",
       "path": "packages/contracts/compliance",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Provider disclosure and jurisdiction policy used by the published legal set."
     },
     {
       "name": "@agiworkforce/licensing",
       "path": "packages/contracts/licensing",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Signed enterprise license and policy verification."
     },
     {
       "name": "@agiworkforce/trust-boundaries",
       "path": "packages/contracts/trust-boundaries",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Classifies AGI-owned Managed Cloud hosts. Pure classification; performs no network access."
     },
     {
       "name": "@agiworkforce/types",
       "path": "packages/contracts/types",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Cross-surface contracts, generated protocol bindings, and the trust-boundary invariants everything else depends on."
     },
     {
       "name": "@agiworkforce/guardian-core",
@@ -264,7 +264,7 @@
       "name": "@agiworkforce/artifacts",
       "path": "packages/platform/artifacts",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Artifact derivation, client store, managed publish, and cloud merge and apply."
     },
     {
       "name": "@agiworkforce/data-layer",
@@ -276,19 +276,19 @@
       "name": "@agiworkforce/local-llm",
       "path": "packages/platform/local-llm",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "On-device model loading and inference for Local mode."
     },
     {
       "name": "@agiworkforce/utils",
       "path": "packages/platform/utils",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Pure helpers plus the privacy-handoff and signaling contracts shared across surfaces."
     },
     {
       "name": "@agiworkforce/apply-patch",
       "path": "packages/tools/apply-patch",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Applies patches through a privileged filesystem mutation path with explicit bounds."
     },
     {
       "name": "@agiworkforce/browser-tool",
@@ -300,19 +300,19 @@
       "name": "@agiworkforce/mcp",
       "path": "packages/tools/mcp",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "MCP client transport and tool metadata for external servers."
     },
     {
       "name": "@agiworkforce/skills",
       "path": "packages/tools/skills",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Parses, merges and integrity-checks untrusted skill metadata; backs skills-lock.json."
     },
     {
       "name": "@agiworkforce/design-tokens",
       "path": "packages/ui/design-tokens",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "The only sanctioned source of color, spacing and type values. Presentation-only."
     },
     {
       "name": "@agiworkforce/i18n",
@@ -324,19 +324,19 @@
       "name": "@agiworkforce/ui",
       "path": "packages/ui/ui",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Shared presentation primitives with no business logic."
     },
     {
       "name": "@agiworkforce/unified-chat",
       "path": "packages/ui/unified-chat",
       "kind": "package",
-      "purpose": "unknown"
+      "purpose": "Surface-neutral chat UI, stores and hooks shared by desktop, web, Chrome and VS Code."
     },
     {
       "name": "@agiworkforce/signaling-server",
       "path": "services/signaling-server",
       "kind": "service",
-      "purpose": "unknown"
+      "purpose": "Pairing, signaling and authenticated WebSocket relay for cross-device sessions."
     },
     {
       "name": "skill-vetting",

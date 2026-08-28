@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/cloud-contracts",
   "version": "0.0.1",
+  "description": "Managed-cloud wire schemas, endpoint paths and stream deltas — one wire truth for every surface.",
   "private": true,
   "type": "module",
   "exports": {

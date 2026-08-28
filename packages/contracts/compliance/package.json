@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/compliance",
   "version": "0.0.1",
+  "description": "Provider disclosure and jurisdiction policy used by the published legal set.",
   "private": true,
   "license": "PROPRIETARY",
   "type": "module",

@@ -2,6 +2,7 @@
 publish = false
 name = "agiworkforce-licensing"
 version = "0.1.0"
+description = "Signed enterprise license and policy verification."
 edition = "2024"
 
 [lints]
