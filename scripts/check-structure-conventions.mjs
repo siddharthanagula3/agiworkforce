@@ -764,7 +764,7 @@ const userFacingCliDocs = [
   'docs/surfaces/cli.md',
   'docs/development/agent-operability.md',
   'docs/standards/naming-conventions.md',
-  'docs/decisions/CURRENT_DECISIONS.md',
+  'docs/decisions/README.md',
 ].filter(exists);
 
 const legacyCommandPattern =

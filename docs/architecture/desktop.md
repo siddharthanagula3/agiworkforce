@@ -178,7 +178,7 @@ CAP-049 is about that missing surface and the host-relay contract, not about the
 - [docs/product/suite.md](../product/suite.md) - Desktop role in Web/Mobile/Desktop chat sync and local compute.
 - [docs/architecture/overview.md](../architecture/overview.md) - runtime, generated-file, and provider boundaries.
 - [docs/development/agent-operability.md](../development/agent-operability.md) - current docs and agent workflow rules.
-- [docs/decisions/CURRENT_DECISIONS.md](../decisions/CURRENT_DECISIONS.md) - current trust-boundary and application-suite decisions.
+- [docs/decisions/README.md](../decisions/README.md) - current trust-boundary and application-suite decisions.
 - Historical Tauri command and layout details live only in git history.
 
 ## Memory references

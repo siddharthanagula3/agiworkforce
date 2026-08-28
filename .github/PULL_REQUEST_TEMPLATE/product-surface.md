@@ -39,4 +39,4 @@ If Local can move to BYOK or Managed, explain the explicit fork/preview/consent 
 
 - [ ] Relevant README.
 - [ ] `PLAN.md` / `TODO.md`, if roadmap changed.
-- [ ] `docs/decisions/CURRENT_DECISIONS.md`, if a decision changed.
+- [ ] `docs/decisions/README.md`, if a decision changed.

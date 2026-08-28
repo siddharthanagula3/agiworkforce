@@ -885,7 +885,7 @@ mod tests {
 
     #[test]
     fn founder_standard_anthropic_route_prices_the_standard_rates_on_every_date() {
-        // Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md,
+        // Founder pin — Decision #22 (docs/decisions/README.md,
         // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
         // MTok (cache read $0.30, 5m write $3.75, 1h write $6.00) on EVERY date.
         // Anthropic's introductory window is a provider-COST fact for the

@@ -1900,10 +1900,11 @@ cannot reach a BYOK provider. The store-side ceremony is enforced too:
 null otherwise (`apps/desktop/src/stores/chat/chatStore.ts:496`), proven by
 `apps/desktop/src/stores/chat/__tests__/chatStore.test.ts`.
 
-What is missing is the way in. The desktop ceremony dialog exists but sits in
-`apps/desktop/archive/features/chat/LocalByokHandoffDialog.tsx`, outside the
-tsconfig `include`, and `forkConversationForByok` has no production caller — so
-no user can start a fork. Meanwhile the Local model picker lists configured BYOK
+What is missing is the way in. The desktop ceremony dialog was written but never
+wired: it lived at apps/desktop/archive/features/chat/LocalByokHandoffDialog.tsx
+until the archive was deleted on 2026-08-28, and is recoverable from git history
+at 001a0bb87. `forkConversationForByok` has no production caller — so no user can
+start a fork. Meanwhile the Local model picker lists configured BYOK
 models (`apps/desktop/src/App.tsx:889`), so selecting one is a control that can
 only fail. As of 2026-08-17 that failure at least explains itself and names the
 fork (`local_only_no_candidate_message`, tested in

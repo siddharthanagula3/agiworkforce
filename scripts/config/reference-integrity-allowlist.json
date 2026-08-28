@@ -51,7 +51,7 @@
     "md-path::docs/work/implementation-status.md::apps/web/stores",
     "md-path::docs/product/definition.md::apps/web/lib/modelRouter.ts",
     "md-path::docs/architecture/trust-boundaries.md::docs/research/competitor-capability-session-architecture-2026-07-15.md",
-    "md-path::docs/decisions/CURRENT_DECISIONS.md::docs/design/design-spec-2026-05-15.md",
+    "md-path::docs/decisions/README.md::docs/design/design-spec-2026-05-15.md",
     "md-path::docs/architecture/execution-plan-contract.md::apps/cli/src/routing/strategy.rs",
     "md-path::docs/research/autonomous-company-roadmap.md::packages/contracts/types/src/feedback.ts",
     "md-path::docs/research/autonomous-company-roadmap.md::services/ops-triage",
