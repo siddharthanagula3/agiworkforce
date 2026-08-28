@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ function runOnLedger(ledger) {
   const dir = mkdtempSync(join(tmpdir(), 'base009-'));
   try {
     if (ledger !== undefined) {
+      mkdirSync(join(dir, 'docs', 'work'), { recursive: true });
       writeFileSync(join(dir, 'docs/work/audit-remediation-ledger.md'), ledger, 'utf8');
     }
     return spawnSync(process.execPath, [GATE], { cwd: dir, encoding: 'utf8' });

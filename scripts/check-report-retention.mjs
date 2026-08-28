@@ -53,8 +53,19 @@ function childEntries(relativeRoot) {
   });
 }
 
+// reports/ and audit/reports/ were both retired on 2026-06-28. Skipping an
+// absent root left this guard reporting "passed" while checking nothing, so an
+// absent root is now the assertion: evidence roots stay retired, and if one
+// comes back it must arrive with the retention contract already satisfied.
+const RETIRED_ROOTS = new Set(['reports', 'audit/reports']);
+
 for (const reportRoot of reportRoots) {
   if (!exists(reportRoot.path)) {
+    if (!RETIRED_ROOTS.has(reportRoot.path)) {
+      errors.push(
+        `${reportRoot.path} is a configured report root but does not exist; create it or remove it from reportRoots`,
+      );
+    }
     continue;
   }
 
