@@ -184,7 +184,7 @@ export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapte
     case 'auth0':
     case 'cognito':
       throw new DataLayerConfigError(
-        `Auth provider "${provider}" is documented in docs/current/technical-architecture.md but no adapter ships yet. ` +
+        `Auth provider "${provider}" is documented in docs/architecture/overview.md but no adapter ships yet. ` +
           `See docs/archive/2026-05-21-docs-consolidation/SCALING.md §"Auth provider migration" for the legacy implementation path.`,
       );
   }
@@ -206,7 +206,7 @@ export function createStorageClient(opts: CreateStorageClientOptions = {}): Stor
     case 'r2':
     case 'b2':
       throw new DataLayerConfigError(
-        `Storage provider "${provider}" is documented in docs/current/technical-architecture.md but no adapter ships yet. ` +
+        `Storage provider "${provider}" is documented in docs/architecture/overview.md but no adapter ships yet. ` +
           `See docs/archive/2026-05-21-docs-consolidation/SCALING.md §"Storage migration" for the legacy implementation path.`,
       );
   }
@@ -228,7 +228,7 @@ export function createRealtimeClient(opts: CreateRealtimeClientOptions = {}): Re
     case 'ably':
     case 'self-hosted':
       throw new DataLayerConfigError(
-        `Realtime provider "${provider}" is documented in docs/current/technical-architecture.md but no adapter ships yet. ` +
+        `Realtime provider "${provider}" is documented in docs/architecture/overview.md but no adapter ships yet. ` +
           `See docs/archive/2026-05-21-docs-consolidation/SCALING.md §"Realtime migration" for the legacy implementation path.`,
       );
   }

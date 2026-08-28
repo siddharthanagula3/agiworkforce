@@ -67,7 +67,7 @@ use the aggregate factory; provider-specific code uses leaf package public expor
 - `<provider>/src/index.ts` - public adapter export.
 - `<provider>/package.json` - package boundary and commands.
 - `factory/src/index.ts` - cross-deployable adapter-construction registry.
-- Shared provider strategy: `docs/current/byok-open-model-provider-strategy.md`. (The root `audit/` directory is live again as the evidence-ledger and triage root; treat its entries as claims to verify against provider code, never as proof that work is done.)
+- Shared provider strategy: `docs/architecture/byok-provider-strategy.md`. (The root `audit/` directory is live again as the evidence-ledger and triage root; treat its entries as claims to verify against provider code, never as proof that work is done.)
 
 ## Commands
 

@@ -1466,7 +1466,7 @@ pre-existing on `main` unless noted.
   `906fe5cda` deleted `docs/plans/monorepo-restructure-2026-07-08.md` (and
   `docs/plans/rust-engine-extraction-2026-07-09.md`) while `PLAN.md:6`,
   `PLAN.md` ("Active Workstream" wave reference),
-  `docs/current/technical-architecture.md:9`, and a CHANGELOG entry still cite
+  `docs/architecture/overview.md:9`, and a CHANGELOG entry still cite
   them — the active restructure currently has no readable detailed plan
   document. No guardrail catches dangling doc citations.
 - **`REPO-CODEOWNERS-TODOMD-GHOST-ENTRY-01` (open, coupled pair):** root
@@ -3551,7 +3551,7 @@ properties.
 apps/web consumer redirect has not started is no longer current.
 `apps/web/components/ui/` no longer exists in the worktree and Web consumes
 `@agiworkforce/ui` directly (~128 importing files);
-`docs/current/technical-architecture.md` records the P3 adoption with roughly
+`docs/architecture/overview.md` records the P3 adoption with roughly
 eight web-divergent primitives decision-gated. Treat the row's web-side action
 as complete apart from those decision-gated primitives; the desktop shim
 history recorded in the row remains accurate.

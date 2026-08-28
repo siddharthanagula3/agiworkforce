@@ -6,7 +6,7 @@ Last updated: 2026-08-09
 
 This is the implementation-facing parity matrix for AGI. It turns the high-level source of truth into feature, option, component, contract, and surface requirements that technical agents can execute without inventing their own product.
 
-Use this with `docs/current/source-of-truth.md`. If they conflict, update both in the same change.
+Use this with `docs/product/definition.md`. If they conflict, update both in the same change.
 
 ## How To Use
 
@@ -45,7 +45,7 @@ Surface abbreviations:
 
 ## 2026-07-16 Mounted Frontend Reconciliation
 
-The detailed current frontend contract is `docs/current/frontend-experience-contract.md`.
+The detailed current frontend contract is `docs/product/experience-contract.md`.
 
 The table below records production mounts and end-to-end reality found by the 2026-07-16 source audit. It supersedes older optimistic row text elsewhere in this file when they conflict. A source file, mock route, feature flag, or component is not capability evidence without a production mount and runtime path.
 

@@ -6,7 +6,7 @@ Date: 2026-08-05
 Scope: Design document under `docs/design/`. This review does not build the
 bridge and does not modify any runtime code.
 Decision gate: The parity ledger's Creation-four approvals bullet
-(`docs/current/parity-implementation-matrix.md`, "Creation-four approvals
+(`docs/work/implementation-status.md`, "Creation-four approvals
 (founder, 2026-08-05)") makes this review a hard precondition for CAP-052.
 This document IS that precondition.
 

@@ -3789,7 +3789,7 @@
     "item": "cost-breakdown",
     "surface": "admin-and-billing",
     "status": "missing",
-    "evidence": "A public provider-cost breakdown is intentionally not a product capability under docs/current/source-of-truth.md: managed-usage clients may receive only bounded percentages and reset times, never internal provider cost, ledger cents, token conversion, allowance operands, or dollar value. The former Web billing `LLMUsage`, `totalCost`, token-named percentage fields, and provider-icon mapping were removed instead of fabricating private economics. The supported live usage dashboard remains tracked separately under usage-dashboard."
+    "evidence": "A public provider-cost breakdown is intentionally not a product capability under docs/product/definition.md: managed-usage clients may receive only bounded percentages and reset times, never internal provider cost, ledger cents, token conversion, allowance operands, or dollar value. The former Web billing `LLMUsage`, `totalCost`, token-named percentage fields, and provider-icon mapping were removed instead of fabricating private economics. The supported live usage dashboard remains tracked separately under usage-dashboard."
   },
   {
     "item": "plans-free-pro-max-team-enterprise",

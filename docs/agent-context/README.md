@@ -31,7 +31,7 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 
 - Treat `AGENTS.md` as canonical. Tool-specific files such as `CLAUDE.md` must point back to it.
 - If a bug is already listed in `known-flaws.md`, update its status instead of creating a duplicate finding.
-- If a source-of-truth conflict appears, prefer `docs/current/source-of-truth.md`, `docs/decisions/CURRENT_DECISIONS.md`, `PLAN.md`, and this folder over older launch plans.
+- If a source-of-truth conflict appears, prefer `docs/product/definition.md`, `docs/decisions/CURRENT_DECISIONS.md`, `PLAN.md`, and this folder over older launch plans.
 - Keep JSON files parseable without comments.
 - Split parallel agent work by disjoint write paths from `lanes.json` and record verification evidence before committing.
 - Do not edit shared files from feature lanes; route them through the integrator or a lane that owns shared files.

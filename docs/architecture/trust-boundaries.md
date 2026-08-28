@@ -61,4 +61,4 @@ AGI's exact product decision remains founder-owned and stricter where stated abo
 Evidence:
 
 - `docs/research/competitor-capability-session-architecture-2026-07-15.md`
-- `docs/current/frontend-experience-contract.md`
+- `docs/product/experience-contract.md`

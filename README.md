@@ -194,7 +194,7 @@ The `core/skills/` module supports loadable skills from local files, marketplace
 
 ## Security and Privacy
 
-> Trust-boundary model: **[`docs/current/trust-mode-surface-matrix.md`](docs/current/trust-mode-surface-matrix.md)**. Key custody and rotation: **[`docs/security/`](docs/security/)**. The repository has no published vulnerability-reporting policy yet.
+> Trust-boundary model: **[`docs/architecture/trust-boundaries.md`](docs/architecture/trust-boundaries.md)**. Key custody and rotation: **[`docs/security/`](docs/security/)**. The repository has no published vulnerability-reporting policy yet.
 
 - **Trust boundary enforcement** — Local, BYOK, and Managed Cloud are separate trust boundaries. Local chats never silently route to cloud providers. BYOK transitions require explicit user consent with payload preview and secret scanning.
 - **Encrypted local storage** — Desktop uses SQLCipher-encrypted SQLite for local data. Credentials stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service).
@@ -351,16 +351,16 @@ pnpm check:readme-facts       # README counts, versions, and provider names vs s
 
 The production gate, protected variables, path filters, and private-repository
 runner budget are documented in
-[`docs/current/ci-deployment-policy.md`](docs/current/ci-deployment-policy.md).
+[`docs/development/ci-and-deploys.md`](docs/development/ci-and-deploys.md).
 
 ## Current Status
 
 **Active development — pre-v1.0 MVP.**
 
 The long-form serial surface order lives in
-[`docs/current/agi-product-requirements.md`](docs/current/agi-product-requirements.md).
+[`docs/product/requirements.md`](docs/product/requirements.md).
 It is superseded for day-to-day sequencing by the ordered release gate in
-[`docs/current/parity-implementation-matrix.md`](docs/current/parity-implementation-matrix.md)
+[`docs/work/implementation-status.md`](docs/work/implementation-status.md)
 (2026-08-09): image/video generation on Web, Mobile, and both Desktop shells;
 then tool loop, artifact rendering, and web search on Web, Mobile, and Desktop;
 then skills, plugins, and connectors on Web, Mobile, Desktop, CLI, and VS Code.
@@ -378,7 +378,7 @@ maturity the parity matrix measures, not a shipped-feature claim.
 | VS Code Extension | 0.3.0   | Partial — IDE integration                                                        |
 
 Per-capability status is tracked row by row in
-[`docs/current/parity-implementation-matrix.md`](docs/current/parity-implementation-matrix.md).
+[`docs/work/implementation-status.md`](docs/work/implementation-status.md).
 Versions here are read from each surface manifest and enforced by
 `pnpm check:readme-facts`.
 
@@ -386,10 +386,10 @@ Managed Cloud is in public alpha and open by default (founder decision, 2026-06-
 
 ## Contributing
 
-- **For a system overview:** [`docs/current/technical-architecture.md`](docs/current/technical-architecture.md) — surfaces, trust boundaries, shared layers, and request flow.
-- **For product intent:** [`docs/current/source-of-truth.md`](docs/current/source-of-truth.md), then [`docs/current/agi-product-requirements.md`](docs/current/agi-product-requirements.md).
+- **For a system overview:** [`docs/architecture/overview.md`](docs/architecture/overview.md) — surfaces, trust boundaries, shared layers, and request flow.
+- **For product intent:** [`docs/product/definition.md`](docs/product/definition.md), then [`docs/product/requirements.md`](docs/product/requirements.md).
 - **For coding agents:** [docs/agent-context/](docs/agent-context/) — machine-readable maps, risk areas, commands, and known flaws.
-- **For builds and deployment:** [`docs/current/ci-deployment-policy.md`](docs/current/ci-deployment-policy.md).
+- **For builds and deployment:** [`docs/development/ci-and-deploys.md`](docs/development/ci-and-deploys.md).
 
 ## License
 

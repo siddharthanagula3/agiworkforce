@@ -87,7 +87,7 @@ test('the artifact sandbox origin is its own deployable surface', () => {
     'apps/web/app/page.tsx',
     'services/signaling-server/src/index.ts',
     'apps/mobile/app/index.tsx',
-    'docs/current/ci-deployment-policy.md',
+    'docs/development/ci-and-deploys.md',
   ]) {
     assert.equal(classifyDeployScope([file]).sandbox, false, file);
   }
@@ -175,7 +175,7 @@ test('shared build inputs conservatively rebuild every deployable lane', () => {
 });
 
 test('documentation-only changes do not allocate deploy or native work', () => {
-  assert.deepEqual(classifyDeployScope(['docs/current/ci-deployment-policy.md']), {
+  assert.deepEqual(classifyDeployScope(['docs/development/ci-and-deploys.md']), {
     web: false,
     signaling: false,
     sandbox: false,

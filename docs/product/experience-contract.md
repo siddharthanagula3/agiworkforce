@@ -8,7 +8,7 @@ This is the canonical frontend architecture and experience contract for AGI acro
 
 It does not authorize cloning proprietary source, icons, copy, screenshots, or exact visual design.
 
-If a visible control conflicts with the effective runtime capability, the control is the bug. If this document conflicts with `docs/current/source-of-truth.md` or `docs/current/trust-mode-surface-matrix.md`, those documents win and this file must be corrected.
+If a visible control conflicts with the effective runtime capability, the control is the bug. If this document conflicts with `docs/product/definition.md` or `docs/architecture/trust-boundaries.md`, those documents win and this file must be corrected.
 
 ## 1. Product composition
 
@@ -586,7 +586,7 @@ This table is not a release claim. `packages/ai/model-registry/catalog/harnesses
 
 CORRECTED 2026-08-09 (four cells the 2026-07-16 snapshot got wrong or that later
 work superseded; mirrors the same corrections in
-`docs/current/parity-implementation-matrix.md`):
+`docs/work/implementation-status.md`):
 
 - The single "Work/Cowork run: Missing/Missing/Missing" row conflated two
   capabilities and is split, matching the parity matrix's 2026-08-06 split.
@@ -692,8 +692,8 @@ A frontend capability is complete only when:
 ## 17. Evidence
 
 - `docs/research/competitor-capability-session-architecture-2026-07-15.md`
-- `docs/current/parity-implementation-matrix.md`
-- `docs/current/trust-mode-surface-matrix.md`
+- `docs/work/implementation-status.md`
+- `docs/architecture/trust-boundaries.md`
 - `docs/agent-context/known-flaws.md`
 - `packages/ai/model-registry/catalog/harnesses.json`
 - `packages/contracts/types/src/sessions/taxonomy.ts`

@@ -8,9 +8,9 @@ This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
 source-of-truth docs are not enough. Use it with:
 
-- `docs/current/source-of-truth.md` for the compact product lock.
-- `docs/current/parity-implementation-matrix.md` for feature-by-feature parity status.
-- `docs/current/byok-open-model-provider-strategy.md` for provider and model routing.
+- `docs/product/definition.md` for the compact product lock.
+- `docs/work/implementation-status.md` for feature-by-feature parity status.
+- `docs/architecture/byok-provider-strategy.md` for provider and model routing.
 - `docs/decisions/CURRENT_DECISIONS.md` for conflict resolution.
 
 This document intentionally uses AGI-owned product language. OpenAI and
@@ -154,7 +154,7 @@ Not allowed:
 
 ### 2.7 Source Of Truth
 
-Current product truth lives in `docs/current`. Historical docs and generated
+Current product truth lives in `docs/product`. Historical docs and generated
 reports are evidence only unless current docs explicitly promote them.
 
 Completion claims require evidence. A feature is not complete because a component
@@ -1625,7 +1625,7 @@ For every PRD requirement marked complete, record:
 Future agents must:
 
 - Read `AGENTS.md`.
-- Read `docs/current/source-of-truth.md`.
+- Read `docs/product/definition.md`.
 - Read this PRD when doing product or UX work.
 - Read the parity matrix for feature implementation.
 - Read provider strategy for model/BYOK work.
@@ -1694,8 +1694,8 @@ truth still points to a single read path.
 When adding or changing requirements:
 
 1. Update this PRD.
-2. Update `docs/current/source-of-truth.md` if the compact product lock changes.
-3. Update `docs/current/parity-implementation-matrix.md` if feature status or
+2. Update `docs/product/definition.md` if the compact product lock changes.
+3. Update `docs/work/implementation-status.md` if feature status or
    parity requirements change.
 4. Update `docs/decisions/CURRENT_DECISIONS.md` if a conflict is resolved or a
    new lock is created.

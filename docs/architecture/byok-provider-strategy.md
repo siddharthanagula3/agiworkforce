@@ -6,7 +6,7 @@ Last updated: 2026-08-05
 
 This document defines how AGI should think about BYOK providers, open-weight models, hosted open-model APIs, and local model runtimes before implementation agents add or rank models.
 
-Use this with `docs/current/source-of-truth.md`, `docs/current/parity-implementation-matrix.md`, and `packages/contracts/types/src/models.json`.
+Use this with `docs/product/definition.md`, `docs/work/implementation-status.md`, and `packages/contracts/types/src/models.json`.
 
 ## Core Decision
 
