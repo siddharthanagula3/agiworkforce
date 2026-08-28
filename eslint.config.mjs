@@ -88,7 +88,6 @@ export default [
       'apps/web/scripts/**',
       'apps/mobile/scripts/**',
       'apps/cli/scripts/**',
-      'apps/cli/docs/parity/**',
       'apps/extension-vscode/scripts/**',
       'packages/react-native-worklets/**',
       'docs/archive/**',
