@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/skills",
   "version": "0.0.1",
+  "description": "Parses, merges and integrity-checks untrusted skill metadata; backs skills-lock.json.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

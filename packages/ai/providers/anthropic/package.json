@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/providers-anthropic",
   "version": "0.0.1",
+  "description": "Anthropic API adapter behind @agiworkforce/provider-protocol.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

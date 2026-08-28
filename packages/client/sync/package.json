@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/sync",
   "version": "0.0.1",
+  "description": "Managed-cloud delta validation and local apply, with a bigint cursor; pinned to the Rust apply by golden fixtures.",
   "private": true,
   "type": "module",
   "exports": {

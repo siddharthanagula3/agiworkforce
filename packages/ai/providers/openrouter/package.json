@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/providers-openrouter",
   "version": "0.0.1",
+  "description": "OpenRouter API adapter behind @agiworkforce/provider-protocol.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

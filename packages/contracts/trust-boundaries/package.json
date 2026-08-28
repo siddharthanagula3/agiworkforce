@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/trust-boundaries",
   "version": "0.0.1",
+  "description": "Classifies AGI-owned Managed Cloud hosts. Pure classification; performs no network access.",
   "private": true,
   "type": "module",
   "exports": {

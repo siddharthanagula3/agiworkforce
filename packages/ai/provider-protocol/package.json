@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/provider-protocol",
   "version": "0.0.1",
+  "description": "Normalizes provider requests and responses to one wire shape, including OpenAI-compatible translation.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

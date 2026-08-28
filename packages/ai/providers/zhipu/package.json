@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/providers-zhipu",
   "version": "0.0.1",
+  "description": "Zhipu API adapter behind @agiworkforce/provider-protocol.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

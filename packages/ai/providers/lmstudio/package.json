@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/providers-lmstudio",
   "version": "0.0.1",
+  "description": "LM Studio adapter for a local loopback model server.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

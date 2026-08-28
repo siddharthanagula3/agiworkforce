@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/signaling-server",
   "version": "1.0.0",
+  "description": "Pairing, signaling and authenticated WebSocket relay for cross-device sessions.",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/mcp",
   "version": "0.0.1",
+  "description": "MCP client transport and tool metadata for external servers.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

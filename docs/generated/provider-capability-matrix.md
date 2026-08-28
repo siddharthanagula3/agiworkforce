@@ -10,9 +10,9 @@ Rendered from `packages/ai/model-registry/catalog/harnesses.json` — 4 harness 
 Routing policy, privacy claims and the ZDR position are prose in
 `docs/architecture/provider-routing.md`. This table only reports the wiring.
 
-| Harness group   | API family | Execution modes | Surfaces |
-| --------------- | ---------- | --------------- | -------- |
-| `byok-text`     | —          | —               | —        |
-| `local-text`    | —          | —               | —        |
-| `managed-media` | —          | —               | —        |
-| `managed-text`  | —          | —               | —        |
+| Harness group | API family | Execution modes | Surfaces |
+| --- | --- | --- | --- |
+| `byok-text` | — | — | — |
+| `local-text` | — | — | — |
+| `managed-media` | — | — | — |
+| `managed-text` | — | — | — |

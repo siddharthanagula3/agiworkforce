@@ -16,19 +16,19 @@ either.
 
 Legend: ✅ implemented · ◐ partial · — unwired · · planned
 
-| Surface               | Trust mode    | Status | codeExecution | imageGeneration | memory | toolDiscovery | webSearch |
-| --------------------- | ------------- | ------ | ------------- | --------------- | ------ | ------------- | --------- |
-| `chrome/browser-task` | local         | ✅     | —             | —               | —      | —             | —         |
-| `chrome/managed-chat` | managed_cloud | ✅     | —             | —               | —      | —             | ✅        |
-| `cli/byok-chat`       | byok          | ✅     | —             | —               | —      | —             | —         |
-| `cli/local-chat`      | local         | ◐      | —             | —               | —      | —             | —         |
-| `cli/managed-chat`    | managed_cloud | ✅     | —             | —               | —      | —             | —         |
-| `desktop/byok-chat`   | byok          | ✅     | —             | —               | —      | —             | —         |
-| `desktop/cloud-chat`  | managed_cloud | ✅     | ◐             | ✅              | ◐      | ◐             | ✅        |
-| `desktop/local-chat`  | local         | ◐      | —             | —               | —      | —             | —         |
-| `mobile/cloud-chat`   | managed_cloud | ✅     | —             | ✅              | ◐      | —             | ✅        |
-| `mobile/local-chat`   | on_device     | ◐      | —             | —               | —      | —             | —         |
-| `vscode/byok-chat`    | byok          | —      | —             | —               | —      | —             | —         |
-| `vscode/local-chat`   | local         | —      | —             | —               | —      | —             | —         |
-| `vscode/managed-chat` | managed_cloud | ✅     | —             | —               | —      | —             | —         |
-| `web/cloud-chat`      | managed_cloud | ✅     | ◐             | ✅              | ◐      | ✅            | ✅        |
+| Surface | Trust mode | Status | codeExecution | imageGeneration | memory | toolDiscovery | webSearch |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `chrome/browser-task` | local | ✅ | — | — | — | — | — |
+| `chrome/managed-chat` | managed_cloud | ✅ | — | — | — | — | ✅ |
+| `cli/byok-chat` | byok | ✅ | — | — | — | — | — |
+| `cli/local-chat` | local | ◐ | — | — | — | — | — |
+| `cli/managed-chat` | managed_cloud | ✅ | — | — | — | — | — |
+| `desktop/byok-chat` | byok | ✅ | — | — | — | — | — |
+| `desktop/cloud-chat` | managed_cloud | ✅ | ◐ | ✅ | ◐ | ◐ | ✅ |
+| `desktop/local-chat` | local | ◐ | — | — | — | — | — |
+| `mobile/cloud-chat` | managed_cloud | ✅ | — | ✅ | ◐ | — | ✅ |
+| `mobile/local-chat` | on_device | ◐ | — | — | — | — | — |
+| `vscode/byok-chat` | byok | — | — | — | — | — | — |
+| `vscode/local-chat` | local | — | — | — | — | — | — |
+| `vscode/managed-chat` | managed_cloud | ✅ | — | — | — | — | — |
+| `web/cloud-chat` | managed_cloud | ✅ | ◐ | ✅ | ◐ | ✅ | ✅ |

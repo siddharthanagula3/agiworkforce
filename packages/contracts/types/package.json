@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/types",
   "version": "0.0.1",
+  "description": "Cross-surface contracts, generated protocol bindings, and the trust-boundary invariants everything else depends on.",
   "private": true,
   "type": "module",
   "exports": {

@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/local-llm",
   "version": "0.0.1",
+  "description": "On-device model loading and inference for Local mode.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

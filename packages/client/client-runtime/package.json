@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/client-runtime",
   "version": "0.0.1",
+  "description": "Client runtime detection, command dispatch, shared state, and the offline queue.",
   "private": true,
   "type": "module",
   "exports": {
