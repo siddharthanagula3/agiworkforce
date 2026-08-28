@@ -59,7 +59,10 @@ function readSource(...segments: string[]): string {
 }
 
 function foundersAssistanceEntry(marker: string): string {
-  const doc = fs.readFileSync(path.join(MOBILE_ROOT, '..', '..', 'FoundersAssistance.md'), 'utf8');
+  const doc = fs.readFileSync(
+    path.join(MOBILE_ROOT, '..', '..', 'docs/work/founder-assistance.md'),
+    'utf8',
+  );
   return doc.split(/^## /m).find((section) => section.includes(marker)) ?? '';
 }
 

@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 669ab6bdc244012aeb22b46185d821254d2bc4a44855d481b0639a7fe87bc32a -->
+<!-- ui-gaps-csv-sha256: 126101a6d33431ebab6cc08936d6ffd70c1b6c48fad067e395f5ef1b3cf9b151 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -23,22 +23,22 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
 - Unresolved: 0 P0, 53 P1, 126 P2, 40 P3.
 
-| Surface | Gaps |
-| --- | ---: |
-| mobile | 114 |
-| desktop | 142 |
-| web | 43 |
-| extension | 5 |
-| extension-vscode | 37 |
+| Surface          | Gaps |
+| ---------------- | ---: |
+| mobile           |  114 |
+| desktop          |  142 |
+| web              |   43 |
+| extension        |    5 |
+| extension-vscode |   37 |
 
-| Status | Gaps |
-| --- | ---: |
-| Open | 219 |
-| In Progress | 0 |
-| Blocked | 0 |
-| Deferred | 0 |
-| Done | 96 |
-| Not Planned | 26 |
+| Status      | Gaps |
+| ----------- | ---: |
+| Open        |  219 |
+| In Progress |    0 |
+| Blocked     |    0 |
+| Deferred    |    0 |
+| Done        |   96 |
+| Not Planned |   26 |
 
 ## P0
 
@@ -799,7 +799,7 @@ Mobile now boots the shared i18next runtime before the navigator appears and exp
 
 **Evidence**
 
-apps/mobile/src/i18n/index.ts owns device-language detection, preference validation, encrypted-MMKV read/write, the shared @agiworkforce/i18n corpus, and safe restoration. app/_layout.tsx awaits restoration after MMKV initialization so the first navigable frame uses the chosen language. settings/general/index.tsx renders the translated General, Language, and Storage labels plus active native language; settings/app-language/index.tsx renders the searchable Match device and 12-locale radio list. The authenticated drawer registers the hidden route and navigation types include it. app-language-settings.test.tsx verifies General navigation, default selection, explicit choice, and native-name search; mobile-i18n.test.ts verifies corpus translation, persistence, device fallback, and invalid-value handling.
+apps/mobile/src/i18n/index.ts owns device-language detection, preference validation, encrypted-MMKV read/write, the shared @agiworkforce/i18n corpus, and safe restoration. app/\_layout.tsx awaits restoration after MMKV initialization so the first navigable frame uses the chosen language. settings/general/index.tsx renders the translated General, Language, and Storage labels plus active native language; settings/app-language/index.tsx renders the searchable Match device and 12-locale radio list. The authenticated drawer registers the hidden route and navigation types include it. app-language-settings.test.tsx verifies General navigation, default selection, explicit choice, and native-name search; mobile-i18n.test.ts verifies corpus translation, persistence, device fallback, and invalid-value handling.
 
 **Suggested fix**
 
@@ -3304,11 +3304,11 @@ Replace the slider with a radio list of the model's supportedEfforts (label + on
 
 **Gap**
 
-NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/code-sessions/index.tsx) was deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). There is no standalone Code screen left to add a Devices section to; only a leftover test filename (__tests__/artifacts-code-sessions.test.tsx) still references 'code-sessions', and it tests an artifacts gallery screen, not a Code screen. Do not treat this row as verified-open until re-audited against whatever, if anything, replaced device-awareness inside Companion. Original complaint, preserved verbatim: Reference's Code tab shows a 'Devices' label and a card listing recently connected devices (or 'No recently connected devices') above the sessions list, letting the user see which desktop/mobile devices have been used for remote code sessions. agiworkforce's Code screen went straight from the header into the session list/empty state with no device-awareness section, before that screen was removed entirely.
+NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/code-sessions/index.tsx) was deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). There is no standalone Code screen left to add a Devices section to; only a leftover test filename (**tests**/artifacts-code-sessions.test.tsx) still references 'code-sessions', and it tests an artifacts gallery screen, not a Code screen. Do not treat this row as verified-open until re-audited against whatever, if anything, replaced device-awareness inside Companion. Original complaint, preserved verbatim: Reference's Code tab shows a 'Devices' label and a card listing recently connected devices (or 'No recently connected devices') above the sessions list, letting the user see which desktop/mobile devices have been used for remote code sessions. agiworkforce's Code screen went straight from the header into the session list/empty state with no device-awareness section, before that screen was removed entirely.
 
 **Evidence**
 
-STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/__tests__/artifacts-code-sessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
+STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/**tests**/artifacts-code-sessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
 
 **Suggested fix**
 
@@ -4132,15 +4132,15 @@ Add an 'Automatically use → Web search' switch in General (or make the Capabil
 
 **Gap**
 
-The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '__default__' project key with no UI), so users must re-set it repeatedly.
+The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '**default**' project key with no UI), so users must re-set it repeatedly.
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('__default__')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('**default**')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
 
 **Suggested fix**
 
-Add an 'Intelligence' row in General bound to the existing agentControlStore '__default__' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
+Add an 'Intelligence' row in General bound to the existing agentControlStore '**default**' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
 
 **Reference screenshot(s)**
 
@@ -4205,7 +4205,7 @@ The reference lets users make voice the default launch surface ('Start ChatGPT w
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx; apps/mobile/app/(app)/(tabs)/chat.tsx (voice overlay opened only via handleOpenVoiceMode); grep 'start with voice|launch.*voice' — no match
+apps/mobile/src/features/settings/voice/index.tsx; apps/mobile/app/(app)/(tabs)/chat.tsx (voice overlay opened only via handleOpenVoiceMode); grep 'start with voice|launch.\*voice' — no match
 
 **Suggested fix**
 
@@ -4987,7 +4987,7 @@ Reference models browsing permission as a default ('Always ask') plus per-site o
 
 **Evidence**
 
-apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines 336-346; apps/desktop/src/features/browser/* (BrowserViewer, BrowserActionLog) has no permission UI; grep -i 'always ask|per-site|cookies' across those dirs — no match
+apps/desktop/src/features/settings/AgentExecutionSettings.tsx lines 336-346; apps/desktop/src/features/browser/\* (BrowserViewer, BrowserActionLog) has no permission UI; grep -i 'always ask|per-site|cookies' across those dirs — no match
 
 **Suggested fix**
 
@@ -5056,7 +5056,7 @@ The reference shows a device card with a manual refresh icon and a proper empty 
 
 **Evidence**
 
-apps/desktop/src/stores/connectionStore.ts (single MobileCompanionState session, no device roster); apps/desktop/src/features/mobile-companion/* contains no device list component
+apps/desktop/src/stores/connectionStore.ts (single MobileCompanionState session, no device roster); apps/desktop/src/features/mobile-companion/\* contains no device list component
 
 **Suggested fix**
 
@@ -5079,7 +5079,7 @@ Reference offers 'Keep this Mac awake -- Prevent sleep when computer is plugged 
 
 **Evidence**
 
-Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let _sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
+Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let \_sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
 
 **Suggested fix**
 
@@ -5102,7 +5102,7 @@ The reference pairs remote control with a 'Keep this Mac awake -- Prevent sleep 
 
 **Evidence**
 
-Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let _sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
+Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let \_sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
 
 **Suggested fix**
 
@@ -5493,7 +5493,7 @@ Reference has a 'Picture in picture' group with 'Always hide picture in picture 
 
 **Evidence**
 
-apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.*overlay' across apps/desktop/src — no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
+apps/desktop/src/features/execution-sidecar/ComputerUseOverlay.tsx and features/overlay/ActionOverlay.tsx exist; searched 'picture in picture', 'pip' and 'hide.\*overlay' across apps/desktop/src — no setting found; ComputerUseSettings.tsx only offers 'Hide Apps During Task' (line 450)
 
 **Suggested fix**
 
@@ -5539,7 +5539,7 @@ Reference offers 'Keep this Mac awake -- prevent sleep when the computer is plug
 
 **Evidence**
 
-Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let _sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
+Re-verified 2026-08-21: the original grep was scoped to apps/desktop/src (the TypeScript frontend) and never touched apps/desktop/src-tauri/src (the Rust backend), where a real sleep-prevention primitive already exists: sys/power.rs defines SleepPrevention (macOS: spawns 'caffeinate -s -w <PID>'; Windows: SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)). It is not dead code -- its only call site is core/agent/background_agent.rs:1141 ('let \_sleep_guard = SleepPrevention::enable();'), which holds it for the duration of a background AGENT RUN, not for the duration of a Companion/remote-pairing connection. The row's specific claim -- a phone-paired session silently drops when the host sleeps while no agent is actively running -- is still accurate, since nothing currently ties SleepPrevention to remote-session lifecycle, but the OS-level mechanism a fix would need already exists and does not have to be built from scratch.
 
 **Suggested fix**
 
@@ -5995,7 +5995,7 @@ Build the underlying location-context and training-opt-in pipelines, then re-add
 
 **Gap**
 
-Needs a founder decision, 2026-08-21. Buildable — projects, instructions and knowledge files all exist — but it means creating a row in a real account at signup the user did not ask for, and writes to production per signup. Recorded in FoundersAssistance.md rather than shipped unilaterally.
+Needs a founder decision, 2026-08-21. Buildable — projects, instructions and knowledge files all exist — but it means creating a row in a real account at signup the user did not ask for, and writes to production per signup. Recorded in docs/work/founder-assistance.md rather than shipped unilaterally.
 
 **Evidence**
 
@@ -6183,7 +6183,7 @@ Blocked on a sync channel, verified 2026-08-21. The extension already has workin
 
 **Evidence**
 
-Searched apps/web for 'Enable Claude in Chrome', 'site permission', 'default policy' style copy — no matches; settings nav list has no 'Chrome'/extension entry (see apps/web/app/settings/* directory listing).
+Searched apps/web for 'Enable Claude in Chrome', 'site permission', 'default policy' style copy — no matches; settings nav list has no 'Chrome'/extension entry (see apps/web/app/settings/\* directory listing).
 
 **Suggested fix**
 
@@ -6229,7 +6229,7 @@ The reference screenshot is captured on claude.ai (web) yet shows the exact list
 
 **Evidence**
 
-grep -i 'installed on your computer|desktop.*extension' under apps/web — no relevant settings-page match (only marketing copy pages)
+grep -i 'installed on your computer|desktop.\*extension' under apps/web — no relevant settings-page match (only marketing copy pages)
 
 **Suggested fix**
 
@@ -6317,7 +6317,7 @@ Add web settings sections for Storage (per-type usage + clear), Safety and Paren
 
 **Gap**
 
-CODE CLAIM IS STALE — verified against production 2026-08-21. Installing works and matters: installWebPlugin runs and listEnabledPluginIdsForUser gates real skill availability in the request-processor, tool-loop and /api/skills; production holds 1 real installation. What is true is that plugin_registry_entries has only 4 rows, so the catalogue LOOKS like a dead preview. Content gap, not engineering — recorded in FoundersAssistance.md.
+CODE CLAIM IS STALE — verified against production 2026-08-21. Installing works and matters: installWebPlugin runs and listEnabledPluginIdsForUser gates real skill availability in the request-processor, tool-loop and /api/skills; production holds 1 real installation. What is true is that plugin_registry_entries has only 4 rows, so the catalogue LOOKS like a dead preview. Content gap, not engineering — recorded in docs/work/founder-assistance.md.
 
 **Evidence**
 
@@ -6367,7 +6367,7 @@ Closed 2026-08-21 for the parts that are real. An account-level default effort a
 
 **Evidence**
 
-apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings — no match
+apps/web/features/chat/components/Composer/**tests**/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings — no match
 
 **Suggested fix**
 
@@ -6455,7 +6455,7 @@ Add a Settings > Storage page (web) showing total uploaded-attachment storage vs
 
 **Gap**
 
-Premise is STALE, verified 2026-08-21. The CreditAlertModal this cites, and its "no credit top-ups, ever" text, no longer exist. Self-serve purchase SHIPS via startTopUpCheckout. What remains is AUTOMATIC RECHARGE, which has no server-side counterpart — recorded in FoundersAssistance.md as needing a decision, because it is a standing authorisation to charge a saved card while the user is absent.
+Premise is STALE, verified 2026-08-21. The CreditAlertModal this cites, and its "no credit top-ups, ever" text, no longer exist. Self-serve purchase SHIPS via startTopUpCheckout. What remains is AUTOMATIC RECHARGE, which has no server-side counterpart — recorded in docs/work/founder-assistance.md as needing a decision, because it is a standing authorisation to charge a saved card while the user is absent.
 
 **Evidence**
 
@@ -6685,11 +6685,11 @@ Add a 'Goal' item to the plus menu that stores a workspace-scoped objective (alo
 
 **Gap**
 
-Claude Code exposes a native VS Code checkbox setting ('claudeCode.useTerminal'). UPDATED 2026-08-21: the core claim (no useTerminal-equivalent key) still holds, but this row's supporting evidence was WRONG, not just stale -- apps/extension-vscode/package.json exists and always did; the original 'no package.json found' claim was a search error. The file has a full contributes.configuration block with 20 real settings (model, agent.mode/effort/thinking, composer.followUpBehavior, desktopBridge.*, inlineCompletions.*, telemetry, etc.), all genuinely discoverable via VS Code's native Settings search -- the extension is not missing settings-UI infrastructure, it is missing this one specific key.
+Claude Code exposes a native VS Code checkbox setting ('claudeCode.useTerminal'). UPDATED 2026-08-21: the core claim (no useTerminal-equivalent key) still holds, but this row's supporting evidence was WRONG, not just stale -- apps/extension-vscode/package.json exists and always did; the original 'no package.json found' claim was a search error. The file has a full contributes.configuration block with 20 real settings (model, agent.mode/effort/thinking, composer.followUpBehavior, desktopBridge._, inlineCompletions._, telemetry, etc.), all genuinely discoverable via VS Code's native Settings search -- the extension is not missing settings-UI infrastructure, it is missing this one specific key.
 
 **Evidence**
 
-apps/extension-vscode/package.json exists (confirmed via `find apps/extension-vscode -maxdepth 1 -iname package.json`) with contributes.configuration.properties listing 20 agiWorkforce.* settings. Grepped every property name plus apps/extension-vscode/src/platform/config.ts's MutableConfigValues (the file's own doc comment: the single source of truth for every mutable setting the extension reads) -- neither contains a useTerminal-equivalent key.
+apps/extension-vscode/package.json exists (confirmed via `find apps/extension-vscode -maxdepth 1 -iname package.json`) with contributes.configuration.properties listing 20 agiWorkforce.\* settings. Grepped every property name plus apps/extension-vscode/src/platform/config.ts's MutableConfigValues (the file's own doc comment: the single source of truth for every mutable setting the extension reads) -- neither contains a useTerminal-equivalent key.
 
 **Suggested fix**
 
@@ -6892,7 +6892,7 @@ Narrow scope: the bar+reset+empty-state structure this row asked for is built. I
 
 **Gap**
 
-Reference converts a '// TODO: IMPLEMENT SCHEMA' comment into an agent task with one click from the editor. agiworkforce's CodeLens provider only attaches to function/class declaration lines and explicitly returns false for any line starting with //, #, * or /*, so TODO comments carry no affordance at all.
+Reference converts a '// TODO: IMPLEMENT SCHEMA' comment into an agent task with one click from the editor. agiworkforce's CodeLens provider only attaches to function/class declaration lines and explicitly returns false for any line starting with //, #, _ or /_, so TODO comments carry no affordance at all.
 
 **Evidence**
 
@@ -7749,7 +7749,7 @@ Closed 2026-08-21. A virtual pet companion is a novelty with nothing load-bearin
 
 **Evidence**
 
-apps/mobile/src/features/companion/* is a desktop-mobile device-pairing feature, not a virtual pet; searched '\bpet\b', 'Select pet', 'virtual pet' across apps/web, apps/mobile, apps/desktop — zero relevant matches
+apps/mobile/src/features/companion/\* is a desktop-mobile device-pairing feature, not a virtual pet; searched '\bpet\b', 'Select pet', 'virtual pet' across apps/web, apps/mobile, apps/desktop — zero relevant matches
 
 **Suggested fix**
 

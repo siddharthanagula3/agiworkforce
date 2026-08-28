@@ -4,8 +4,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
-const RUNBOOK_PATH = path.join(REPO_ROOT, 'BREACH_RUNBOOK.md');
-const FOUNDER_TRACKER = 'FoundersAssistance.md';
+const RUNBOOK_PATH = path.join(REPO_ROOT, 'docs/runbooks/personal-data-breach.md');
+const FOUNDER_TRACKER = 'docs/work/founder-assistance.md';
 const FOUNDER_TRACKER_PATH = path.join(REPO_ROOT, FOUNDER_TRACKER);
 
 const RUNBOOK = readFileSync(RUNBOOK_PATH, 'utf8');
@@ -23,7 +23,7 @@ function reviewStatus(): string {
   const match = RUNBOOK.match(/^Legal review:\s*(\S+)\s*$/m);
   if (!match) {
     throw new Error(
-      `BREACH_RUNBOOK.md must carry a "Legal review:" header field set to ${PENDING} or ${APPROVED}`,
+      `docs/runbooks/personal-data-breach.md must carry a "Legal review:" header field set to ${PENDING} or ${APPROVED}`,
     );
   }
   return match[1]!;
@@ -121,10 +121,10 @@ describe('breach runbook counsel gate', () => {
   it(`resolves the ${FOUNDER_TRACKER} founder action the open gap points at`, () => {
     if (reviewStatus() !== PENDING) return;
     expect(sectionBody('## Open gaps')).toContain(FOUNDER_TRACKER);
-    const entry = trackerEntryNaming('BREACH_RUNBOOK.md');
+    const entry = trackerEntryNaming('docs/runbooks/personal-data-breach.md');
     expect(
       entry,
-      `the Open gaps table says counsel review is tracked in ${FOUNDER_TRACKER}, so that file must carry an entry naming BREACH_RUNBOOK.md — otherwise the review nobody can do in code is tracked nowhere`,
+      `the Open gaps table says counsel review is tracked in ${FOUNDER_TRACKER}, so that file must carry an entry naming docs/runbooks/personal-data-breach.md — otherwise the review nobody can do in code is tracked nowhere`,
     ).not.toBeNull();
     const body = normalize(entry ?? '');
     expect(body, 'the founder entry must cover both unreviewed templates').toContain('§4');

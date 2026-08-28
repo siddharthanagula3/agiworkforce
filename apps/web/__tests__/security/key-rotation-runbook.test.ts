@@ -54,6 +54,6 @@ describe('key rotation runbook is one procedure, not three loose pieces', () => 
 
   it('carries no deferral pointing at a planning document', () => {
     expect(RUNBOOK).not.toContain('ExecutionPlan.md');
-    expect(RUNBOOK).not.toContain('FoundersAssistance.md');
+    expect(RUNBOOK).not.toContain('docs/work/founder-assistance.md');
   });
 });

@@ -162,7 +162,7 @@ for the drill.
 ## Open gaps
 
 These cannot be closed by a commit. They are tracked as founder actions in
-`RELEASE.md`.
+`docs/work/release-readiness-2026-08-25.md`.
 
 - **No pager.** No PagerDuty/Opsgenie/BetterStack account exists, so the alert
   is an email, not a page: nothing wakes anyone at 03:00 and nothing escalates

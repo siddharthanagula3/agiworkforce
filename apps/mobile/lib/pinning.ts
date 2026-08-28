@@ -200,7 +200,7 @@ function reportPinningStatusAtStartup(): PinningStartupState {
       '[pinning] TLS pins are not provisioned (placeholder values present). ' +
         'Requests to pinned hosts stay on platform TLS with no pin check; the app still launches. ' +
         'Provision real SPKI pins before public launch ' +
-        '(runbook at the top of lib/pinning.ts, tracked in FoundersAssistance.md).',
+        '(runbook at the top of lib/pinning.ts, tracked in docs/work/founder-assistance.md).',
     );
   }
   if (state === 'staged') {
