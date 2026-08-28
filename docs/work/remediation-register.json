@@ -2603,7 +2603,7 @@
       "fix": "Provision the CHROME_EXTENSION_PUBLIC_KEY repo variable from the Web Store dashboard and cut a v-chrome-* tag. No workflow code needed.",
       "code_refs": [
         ".github/workflows/release-chrome-extension.yml",
-        "apps/extension/CHROME_WEB_STORE_PUBLISH_RUNBOOK.md"
+        "apps/extension/docs/chrome-web-store-publish-runbook.md"
       ],
       "blocked_by": "docs/work/founder-assistance.md #9 and #14 — founder must supply the stable Chrome Web Store public key and a real Chrome profile for the acceptance pass",
       "merged_from": [
@@ -5592,7 +5592,7 @@
       "fix": "Every release surface has its publishing environment and credentials provisioned, and the signing key is escrowed so neither loss nor leak is a single-point catastrophe.",
       "code_refs": [
         "apps/mobile/scripts/release/preflight.sh",
-        "apps/extension/CHROME_WEB_STORE_PUBLISH_RUNBOOK.md"
+        "apps/extension/docs/chrome-web-store-publish-runbook.md"
       ],
       "sources": ["ExecutionPlan.md", "docs/work/founder-assistance.md"],
       "blocked_by": "Founder must purchase an Apple Developer account, create publishing environments/secrets, escrow the Tauri key, supply the Chrome Web Store public key and the App Store Connect Issuer ID",

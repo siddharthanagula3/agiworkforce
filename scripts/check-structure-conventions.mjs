@@ -343,7 +343,7 @@ const activeReferencePaths = [
   ...walk('packages/ui/unified-chat/src'),
   'apps/web/app/api/me/route.ts',
   'apps/desktop/src-tauri/src/sys/commands/migration.rs',
-  'apps/extension/THREAT_MODEL.md',
+  'apps/extension/docs/threat-model.md',
   'apps/mobile/src/features/onboarding/components/ByokConsentModal.tsx',
 ].filter((file, index, all) => exists(file) && all.indexOf(file) === index);
 

@@ -16,7 +16,7 @@ const desktopPackage = JSON.parse(
   fs.readFileSync(path.join(repositoryRoot, 'apps/desktop/package.json'), 'utf8'),
 ) as { scripts: Record<string, string> };
 const macosRunbook = fs.readFileSync(
-  path.join(repositoryRoot, 'apps/desktop/MACOS_RELEASE_RUNBOOK.md'),
+  path.join(repositoryRoot, 'apps/desktop/docs/macos-release-runbook.md'),
   'utf8',
 );
 

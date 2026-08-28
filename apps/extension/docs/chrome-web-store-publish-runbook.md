@@ -48,7 +48,7 @@ do not substitute for these checks.
 - **Permissions and privacy:** manually compare every packaged permission, host,
   approved-site capture disclosure, debugger use, native messaging boundary,
   Managed Cloud endpoint, local storage record, and deletion behavior with
-  `manifest.json`, `THREAT_MODEL.md`, the Store Privacy tab, and listing copy.
+  `manifest.json`, `docs/threat-model.md`, the Store Privacy tab, and listing copy.
 
 Record the Chrome version, OS, account/plan state, tagged commit, ZIP SHA-256,
 Store item ID, and pass/fail evidence. A failure must be fixed and the entire
