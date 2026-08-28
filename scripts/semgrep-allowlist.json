@@ -47,8 +47,7 @@
       "rule": "typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml",
       "paths": [
         "apps/desktop/src/features/canvas/ArtifactPreview.tsx",
-        "apps/web/shared/components/seo/SEOHead.tsx",
-        "apps/desktop/archive/features/tool-calling/ToolResultCard.tsx"
+        "apps/web/shared/components/seo/SEOHead.tsx"
       ],
       "owner": "@siddhartha",
       "expires": "2027-02-28",

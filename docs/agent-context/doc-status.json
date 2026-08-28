@@ -18,7 +18,7 @@
     "docs/architecture/overview.md",
     "docs/product/commercial.md",
     "docs/development/agent-operability.md",
-    "docs/decisions/CURRENT_DECISIONS.md",
+    "docs/decisions/README.md",
     "docs/agent-context/README.md",
     "docs/agent-context/known-flaws.md"
   ],

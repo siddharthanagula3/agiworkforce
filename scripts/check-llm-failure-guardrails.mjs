@@ -30,7 +30,7 @@ const EXEMPT_FILES = new Set([
   'scripts/check-llm-failure-guardrails.mjs',
   'scripts/check-llm-failure-guardrails.test.mjs',
 ]);
-const EXEMPT_PATH_PREFIXES = ['docs/archive/', 'apps/desktop/archive/'];
+const EXEMPT_PATH_PREFIXES = [];
 const TAXONOMY_PATH = 'docs/agent-context/llm-failure-taxonomy.json';
 const SKIP_RATCHET_PATH = 'scripts/config/skipped-test-ratchet.json';
 

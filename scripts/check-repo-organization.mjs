@@ -94,7 +94,6 @@ const allowedRootDirs = new Set([
   'apps',
   'audit',
   'crates',
-  'dev-scripts',
   'docs',
   'examples',
   'infrastructure',

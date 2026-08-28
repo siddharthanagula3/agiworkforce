@@ -48,7 +48,7 @@ const PROVENANCE_VERBS =
   /\b(?:ported|moved|migrated|extracted|replaces?|replaced|formerly|previously|superseded|supersedes|lifted|copied|deleted|removed|retired|renamed|was\s+at|used\s+to|no\s+longer|instead\s+of)\b/i;
 
 const EXCLUDED_FILES = new Set(['CHANGELOG.md']);
-const EXCLUDED_PREFIXES = ['audit/', 'apps/desktop/archive/', 'node_modules/'];
+const EXCLUDED_PREFIXES = ['audit/', 'node_modules/'];
 // The remediation register is a 991 KB machine-generated ledger of historical
 // findings; every path it cites is evidence of where a defect was, not a live
 // reference. Excluding the file rather than all of docs/work keeps the rest of
