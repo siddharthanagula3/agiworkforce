@@ -100,6 +100,11 @@ for (const file of listFilesRecursive('tasks/team-status')) {
 
 const allowedLiveNonMarkdownPrefixes = [
   'docs/agent-context/',
+  'apps/cli/docs/qa/',
+  'apps/desktop/docs/qa/',
+  'apps/extension/docs/qa/',
+  'apps/extension-vscode/docs/preview/',
+  'apps/mobile/docs/qa/',
   'docs/remediation/',
   'docs/generated/',
   'docs/specs/',
@@ -112,7 +117,18 @@ const allowedLiveNonMarkdownFiles = new Set([
   'audit/ui-gaps.csv',
 ]);
 
-for (const scanRoot of ['docs', 'audit', 'reports', 'tasks']) {
+const SCAN_ROOTS = [
+  'docs',
+  'audit',
+  'apps/cli/docs',
+  'apps/desktop/docs',
+  'apps/extension/docs',
+  'apps/extension-vscode/docs',
+  'apps/mobile/docs',
+  'apps/web/docs',
+];
+
+for (const scanRoot of SCAN_ROOTS) {
   for (const file of listFilesRecursive(scanRoot)) {
     if (file.endsWith('.md')) continue;
 
