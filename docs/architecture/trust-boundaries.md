@@ -14,6 +14,17 @@ Vocabulary:
 
 ## The matrix
 
+This table is **policy**: which trust modes each surface is permitted to expose.
+A check mark means allowed, not shipped.
+
+Implementation status is generated from the harness catalog into
+[`docs/generated/trust-mode-surface-matrix.md`](../generated/trust-mode-surface-matrix.md)
+and will disagree with this table wherever a permitted mode is not finished yet.
+Five profiles disagree today — `desktop/local-chat`, `mobile/local-chat` and
+`cli/local-chat` are `partial`, and `vscode/byok-chat` and `vscode/local-chat`
+are `unwired` — while this table shows all five as permitted. Both are correct
+answers to different questions, and neither should be edited to match the other.
+
 | Surface     | Local LLMs |      BYOK      | Managed Cloud (subscription) | Cloud chat sync                                    |
 | ----------- | :--------: | :------------: | :--------------------------: | -------------------------------------------------- |
 | **Mobile**  |     ✅     | ❌ **no BYOK** |              ✅              | ✅ shared with web + desktop                       |
