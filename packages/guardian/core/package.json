@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/guardian-core",
   "version": "0.0.1",
+  "description": "Guardian findings pipeline: policy evaluation, fingerprinting, dedupe, ranking, and verification, independent of any delivery surface.",
   "private": true,
   "type": "module",
   "exports": {

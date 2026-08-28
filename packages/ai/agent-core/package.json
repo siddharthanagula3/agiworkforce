@@ -1,6 +1,7 @@
 {
   "name": "@agiworkforce/agent-core",
   "version": "0.0.1",
+  "description": "Turn-loop orchestration shared by the desktop and CLI harnesses: context assembly, memory, and runaway limits over host-supplied transports.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
