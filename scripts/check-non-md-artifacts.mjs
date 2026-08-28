@@ -102,12 +102,10 @@ for (const file of listFilesRecursive('tasks/team-status')) {
 const allowedLiveNonMarkdownPrefixes = [
   'docs/agent-context/',
   'docs/api/',
+  'docs/generated/',
   'docs/remediation/',
-  'docs/design/ui-ux-reference-2026-07/',
-  'docs/spec/artifacts/',
-  'audit/desktop-ui-computer-use/screenshots/',
-  'audit/demo-readiness/screenshots/',
-  'reports/generated/',
+  'docs/specs/',
+  'docs/work/',
 ];
 const allowedLiveNonMarkdownFiles = new Set([
   'audit/inventory.json',
