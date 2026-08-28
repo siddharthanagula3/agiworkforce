@@ -165,7 +165,7 @@ Use `docs/agent-context/task-manifest.schema.json` for machine-shaped task manif
 5. Lockfiles and root docs update once.
 6. Reviewers inspect high-risk diffs.
 7. Verifiers run targeted checks, then repo-wide guardrails.
-8. Integrator commits and records `CHANGELOG.md` / `TODO.md`.
+8. Integrator commits and records `CHANGELOG.md`.
 
 ## Collision Protocol
 

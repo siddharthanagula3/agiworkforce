@@ -420,7 +420,7 @@ Agents should read current truth in this order:
 8. `docs/agent-context/commands.json`
 9. nearest path-scoped `AGENTS.md`
 10. `docs/decisions/README.md` when a decision conflict appears
-11. `PLAN.md` and `TODO.md` when planning or queueing work
+11. `PLAN.md` for strategy and `docs/work/` for dated queues
 
 Everything else is supporting context, evidence, or historical material unless a current doc explicitly promotes it.
 

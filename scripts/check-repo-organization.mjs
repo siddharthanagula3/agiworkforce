@@ -81,7 +81,6 @@ const allowedRootDirs = new Set([
   '.claude',
   '.code-review-graph',
   '.codex',
-  '.expo',
   '.git',
   '.github',
   '.husky',

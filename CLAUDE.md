@@ -28,9 +28,10 @@ adds what is specific to Claude Code.
 
 ## Local-only tooling
 
-These are developer-machine conveniences, not repository behavior. `.claude/*`
-is gitignored (`.gitignore:216`), so a fresh clone, CI, and every non-Claude
-agent run without them:
+`.gitignore:216` ignores `.claude/*`, then negates `README.md`, `agents/`,
+`commands/` and `rules/` — so scoped rules are tracked and shared, while the two
+hooks below are developer-machine conveniences that a fresh clone, CI, and every
+non-Claude agent run without:
 
 - `.claude/hooks/block-lock-files.sh` blocks writes to `pnpm-lock.yaml` and
   `Cargo.lock`. The underlying rule is real and stated in `AGENTS.md` §12 —
