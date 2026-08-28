@@ -42,7 +42,14 @@ function requireMatches(relativePath, pattern, description) {
 }
 
 function requireNotIncludes(relativePath, forbidden) {
-  if (!exists(relativePath)) return;
+  // A missing file used to return silently, which turned every assertion over a
+  // moved or deleted file into a permanent no-op that still reported green.
+  if (!exists(relativePath)) {
+    errors.push(
+      `${relativePath} is asserted not to include ${JSON.stringify(forbidden)} but does not exist; delete the assertion or fix the path`,
+    );
+    return;
+  }
   const body = readText(relativePath);
   if (body.includes(forbidden)) {
     errors.push(`${relativePath} must not include ${JSON.stringify(forbidden)}`);
@@ -204,8 +211,6 @@ requireIncludes(
   'Verify manually selected ref passed CI',
 );
 requireNotIncludes('.github/workflows/deploy-signaling-server.yml', "github.event_name == 'push'");
-requireNotIncludes('scripts/deploy/push-prod-env-to-vercel.sh', 'vercel --prod');
-requireNotIncludes('scripts/setup-global-deployment.sh', 'flyctl deploy');
 
 const vercelConfig = JSON.parse(readText('vercel.json'));
 if (vercelConfig.git?.deploymentEnabled?.main !== false) {
