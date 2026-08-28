@@ -14,8 +14,8 @@ the process, not the rules.
 
 1. [`../agent-context/`](../agent-context/) — machine-readable maps, risk areas,
    commands, known flaws, and task templates.
-2. [`agent-native-development.md`](./agent-native-development.md) — how humans
-   and coding agents split work, use worktrees, and verify changes.
+2. [`agent-workflow.md`](./agent-workflow.md) — how humans and coding agents
+   split work, use worktrees, and verify changes, including parallel lanes.
 3. [`harness-rollout.md`](./harness-rollout.md) — context, hooks, skills,
    plugins, LSP/MCP, and subagent rollout order.
 4. [`../standards/service-layer.md`](../standards/service-layer.md) — action and

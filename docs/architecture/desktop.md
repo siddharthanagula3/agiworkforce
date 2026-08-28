@@ -56,7 +56,7 @@ apps/desktop/
 ├── src-tauri/                      Rust backend
 │   ├── src/
 │   │   ├── main.rs
-│   │   └── ...                     749 .rs files
+│   │   └── ...                     750 .rs files
 │   ├── Cargo.toml                  workspace member; depends only on sandbox-policy crate
 │   ├── tauri.conf.json             app metadata; bundle identifier com.agiworkforce.desktop
 │   ├── rust-toolchain.toml         Rust 1.94.0 pin
@@ -167,9 +167,9 @@ CAP-049 is about that missing surface and the host-relay contract, not about the
 
 ## Gotchas
 
-- **Two stale claims in older docs.** Older MEMORY.md said "84 stores" and "97 component subdirs" — actual today is **118 stores** and **74 component subdirs**. Audit verified.
+- **Counts in prose go stale.** This file has carried three different store counts. Measure before citing one: `git ls-files 'apps/desktop/src/stores/*' | wc -l`.
 - **Retired chat folder:** `apps/desktop/src/components/UnifiedAgenticChat/` is removed. Do not recreate it. Desktop-owned chat code now lives in `apps/desktop/src/features/chat/`; the component name `UnifiedAgenticChat` can still appear inside that feature folder and tests.
-- **`apps/desktop/src/constants/models.json` is a mirror.** Never edit this file directly. SSOT is `packages/contracts/types/src/models.json`. There's a build-time sync (or should be — verify).
+- **There is no desktop model mirror.** `apps/desktop/src/constants/models.json` does not exist; the catalog is resolved through `packages/contracts/types/src/model-catalog.ts` like every other surface.
 - **macOS code-signing identity:** `D2PR62RLT4`. Don't change without owner approval.
 - **Bundle identifier:** `com.agiworkforce.desktop`. Don't change — would break update channel.
 

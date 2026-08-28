@@ -31,10 +31,9 @@
     "docs/agent-context/lanes.json",
     "docs/agent-context/shared-files.md",
     "docs/standards/naming-conventions.md",
-    "docs/development/agent-native-development.md",
+    "docs/development/agent-workflow.md",
     "docs/development/harness-rollout.md",
-    "docs/standards/service-layer.md",
-    "docs/development/parallel-agent-playbook.md"
+    "docs/standards/service-layer.md"
   ],
   "historicalOrCaution": [
     {
