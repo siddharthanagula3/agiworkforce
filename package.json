@@ -197,7 +197,8 @@
     "check:doc-freshness": "node scripts/check-doc-freshness.mjs",
     "check:agent-docs": "node scripts/check-agent-docs.mjs",
     "generate:doc-matrices": "node scripts/generate-doc-matrices.mjs",
-    "check:doc-matrices": "node scripts/check-doc-matrices.mjs"
+    "check:doc-matrices": "node scripts/check-doc-matrices.mjs",
+    "generate:repo-tree": "node scripts/generate-repo-tree.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
