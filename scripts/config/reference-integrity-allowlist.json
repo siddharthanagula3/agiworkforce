@@ -28,7 +28,7 @@
   "debt": [
     "md-link::docs/architecture/desktop.md::cli.md",
     "md-link::docs/architecture/desktop.md::web.md",
-    "md-path::PLAN.md::docs/plans/monorepo-restructure-2026-07-08.md",
+    "md-path::docs/work/restructure-execution-queue.md::docs/plans/monorepo-restructure-2026-07-08.md",
     "md-path::docs/decisions/wire-or-cut.md::apps/desktop/src/api/council.ts",
     "md-path::docs/decisions/wire-or-cut.md::apps/desktop/src/api/planning.ts",
     "md-path::docs/agent-context/known-flaws.md::apps/desktop/src-tauri/src/sys/commands/ai_native.rs",

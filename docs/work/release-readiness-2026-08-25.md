@@ -66,7 +66,6 @@ rejected and superseded by the W1-01 commit above.
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | -------------------- | ------ |
 | REL-073 | Vacuous CI test tier — `Test Priority Levels 3-4` (and level-2) pass without running any test (fake gate)                                                                                   | ci        | high-integrity/minor | yes    |
 | REL-074 | Stale doc cleanup — `docs/remediation/{register.json,WAVES.md}`, `docs/agent-context/HANDOFF.md`, `docs/current/gap-audit-2026-08-08.md`, and the 3797-line `known-flaws.md` are superseded | docs      | cleanup              | yes    |
-| REL-075 | `check:reference-integrity` red — ~15 dead refs (deleted `check:agent-context`, `AGENTS.md` links) + 4 stale allowlist entries                                                              | tooling   | cleanup              | yes    |
 | REL-076 | Stale code comments citing deleted docs (UNIFIED_LAUNCH_PLAN/PLAN.md sections, ExecutionPlan.md, PUBLIC-ALPHA-CUTOVER, AUDIT-FIX/SYS-21 ticket tags) across web/desktop/mobile/packages     | multi     | cleanup              | yes    |
 | REL-077 | Incident-response health-probe cron still daily; project is on Pro so it can tighten                                                                                                        | web/infra | minor                | yes    |
 | REL-078 | CodeQL: committed `codeql-config.yml` is inert (default setup ignores it) — delete or document                                                                                              | ci        | minor                | manual |
@@ -100,20 +99,21 @@ wire it in, or cut it for release. None is currently reachable by users.
 
 ## Done log (VERIFIED this session)
 
-| Item                                                    | Commit      |
-| ------------------------------------------------------- | ----------- |
-| Migration 0145 apostrophe build-blocker                 | `eeefe1d14` |
-| Remove agent-doc apparatus (CLAUDE.md + AGENTS.md tree) | `0dbae4f2b` |
-| Consolidated master list                                | `bc821354e` |
-| REL-014/020/022 agent + Excel/Word tool safety          | `da3556c13` |
-| REL-018/025 silent lost-turn + non-stream persistence   | `83b5c44db` |
-| REL-021 shared-session continuation route               | `860edf448` |
-| REL-041/042 CLI dead links + dead startup code          | `18c09706f` |
-| Stale-doc purge (103 files)                             | `4d1d714b5` |
-| Leftover audit snapshots + stale checker refs           | `85e1895c7` |
-| Dead audit scripts + stale CI config                    | `cb080ecbe` |
-| REL-072 mobile Companion agent-detail reachable         | `8641860df` |
-| W1-03 connector OAuth open redirect (F1)                | `998119a06` |
-| W1-05 /tasks server-side auth gate (F5)                 | `e13298dd6` |
-| W2-01 signaling trusted-proxy client IP (F6)            | `1a9759610` |
-| W1-01 chat sandbox egress containment                   | `7f80f8b21` |
+| Item                                                           | Commit      |
+| -------------------------------------------------------------- | ----------- |
+| Migration 0145 apostrophe build-blocker                        | `eeefe1d14` |
+| REL-075 reference-integrity green (113 declared, 0 undeclared) | `b415ea26e` |
+| Remove agent-doc apparatus (CLAUDE.md + AGENTS.md tree)        | `0dbae4f2b` |
+| Consolidated master list                                       | `bc821354e` |
+| REL-014/020/022 agent + Excel/Word tool safety                 | `da3556c13` |
+| REL-018/025 silent lost-turn + non-stream persistence          | `83b5c44db` |
+| REL-021 shared-session continuation route                      | `860edf448` |
+| REL-041/042 CLI dead links + dead startup code                 | `18c09706f` |
+| Stale-doc purge (103 files)                                    | `4d1d714b5` |
+| Leftover audit snapshots + stale checker refs                  | `85e1895c7` |
+| Dead audit scripts + stale CI config                           | `cb080ecbe` |
+| REL-072 mobile Companion agent-detail reachable                | `8641860df` |
+| W1-03 connector OAuth open redirect (F1)                       | `998119a06` |
+| W1-05 /tasks server-side auth gate (F5)                        | `e13298dd6` |
+| W2-01 signaling trusted-proxy client IP (F6)                   | `1a9759610` |
+| W1-01 chat sandbox egress containment                          | `7f80f8b21` |

@@ -82,7 +82,7 @@ requireFile('docs/standards/service-layer.md');
 
 requireIncludes('docs/agent-context/README.md', 'service-layer.md');
 requireIncludes('docs/development/README.md', 'service-layer.md');
-requireIncludes('docs/development/agent-native-development.md', 'service-layer.md');
+requireIncludes('docs/development/agent-workflow.md', 'service-layer.md');
 requireIncludes(
   'docs/development/harness-rollout.md',
   'Service-layer architecture is part of the harness',
