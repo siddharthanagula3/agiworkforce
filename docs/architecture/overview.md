@@ -131,7 +131,7 @@ Enterprise readiness now spans:
 - canonical database tables in root `apps/web/db/neon`,
 - API gateway enterprise routes,
 - Web admin readiness route,
-- docs under `docs/enterprise`.
+- docs under `docs/compliance`.
 
 Enterprise managed compute remains gated on metering, fraud, refund, chargeback, provider terms, and audit/export controls.
 

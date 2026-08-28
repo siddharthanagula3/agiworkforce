@@ -2,7 +2,7 @@
  * Task-family eval corpus — SEED.
  *
  * Design source of truth:
- * `docs/design/execution-plan-contract-and-cpst-2026-08-05.md` §6, which states
+ * `docs/architecture/execution-plan-contract.md` §6, which states
  * plainly that there is **no eval corpus and no `evals` directory in the repo
  * today** and that the corpus is a prerequisite for Stage 2, not a parallel
  * nice-to-have. This file is the first instalment of that prerequisite.

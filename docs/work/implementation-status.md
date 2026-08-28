@@ -236,7 +236,7 @@ Decided by the founder on 2026-08-05:
   `CanvasWorkspace` whiteboard (CAP-051; full artboard/layers/prototype/deck
   parity remains a separate future decision); AI-powered artifacts (CAP-052 —
   approved despite security sensitivity;
-  `docs/design/cap-052-artifact-runtime-bridge-security-review-2026-08-05.md`
+  `docs/security/artifact-runtime-bridge-review.md`
   is that security design review and is a hard precondition: its §4
   conditions 1-7 and its §5 red-team items RT-1..RT-4 plus RT-5(a) are the
   open-condition set that must close. Condition 5 carries the original clause —

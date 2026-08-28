@@ -2,7 +2,7 @@
  * Session stickiness and escalation-only switching for the task-family stage.
  *
  * Design source of truth:
- * `docs/design/execution-plan-contract-and-cpst-2026-08-05.md` §2.3 (session
+ * `docs/architecture/execution-plan-contract.md` §2.3 (session
  * stickiness is already policy — `auto.continuity` is all-true — and what is
  * missing is measuring whether honouring it was the cheaper choice), §3 field
  * 11 (`fallbackPolicy.escalateOnly: true` is the default for this router work:

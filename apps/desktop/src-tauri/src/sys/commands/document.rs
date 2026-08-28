@@ -106,7 +106,7 @@ pub async fn document_create_word(
 /// cannot parse an existing .docx (docx_rs is write-only) and builds a NEW
 /// document from the edits alone, discarding the source. Exposing that as
 /// "edit your document" would silently destroy the user's content. See
-/// docs/adr/wire-or-cut.md.
+/// docs/decisions/wire-or-cut.md.
 #[tauri::command]
 pub async fn document_edit_excel(
     file_path: String,

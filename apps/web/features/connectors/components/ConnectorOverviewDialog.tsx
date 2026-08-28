@@ -93,7 +93,7 @@ export function ConnectorOverviewDialog({
           </p>
 
           {/* Plain-language consent summary — every line traceable, see
-              docs/legal/agent-authority-and-connector-scopes.md */}
+              docs/security/agent-authority-and-connector-scopes.md */}
           <ConnectorConsentSummary />
 
           <div className="rounded-xl border border-border bg-muted/50 p-3.5">

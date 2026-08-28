@@ -275,7 +275,7 @@ impl ToolExecutor {
     ///
     /// Only Excel gets an edit tool. `WordEditor` cannot parse an existing
     /// .docx and would silently replace the document with just the edits — see
-    /// docs/adr/wire-or-cut.md.
+    /// docs/decisions/wire-or-cut.md.
     pub(crate) async fn execute_document_edit_excel_tool(
         &self,
         args: &HashMap<String, Value>,

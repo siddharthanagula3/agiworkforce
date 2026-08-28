@@ -3,7 +3,7 @@
 Status: Draft (design-only; no runtime code changed)
 Author: Security design review (subagent)
 Date: 2026-08-05
-Scope: Design document under `docs/design/`. This review does not build the
+Scope: Design document under `docs/security/`. This review does not build the
 bridge and does not modify any runtime code.
 Decision gate: The parity ledger's Creation-four approvals bullet
 (`docs/work/implementation-status.md`, "Creation-four approvals

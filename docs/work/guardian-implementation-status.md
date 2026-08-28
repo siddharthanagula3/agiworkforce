@@ -19,9 +19,9 @@ control-plane orchestration pending.**
   `apps/web/app/api/github/*` (HMAC, rate limit, installation tokens,
   `github_installations`, spend caps, prompt-injection fences) — Guardian
   extends it rather than duplicating it.
-- `docs/guardian/ADR-001-architecture.md` — two-plane architecture, event
+- `docs/decisions/0001-guardian-architecture.md` — two-plane architecture, event
   model, safety invariants, rollout.
-- `docs/guardian/LICENSING.md` — component inventory + commercial assessments.
+- `docs/compliance/guardian-third-party-licensing.md` — component inventory + commercial assessments.
 
 ### Phase 1 — shipped this iteration
 

@@ -40,8 +40,7 @@
 /apps/web/db/neon/ @siddhartha
 
 # Enterprise/security/compliance claims.
-/docs/enterprise/ @siddhartha
+/docs/compliance/ @siddhartha
 /docs/security/ @siddhartha
-/docs/legal/ @siddhartha
 /packages/contracts/compliance/ @siddhartha
 /packages/contracts/licensing/ @siddhartha

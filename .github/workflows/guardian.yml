@@ -4,7 +4,7 @@
 # pull-request update, publishes per-category Check Runs on the exact reviewed
 # SHA, and maintains ONE editable summary comment per PR.
 #
-# Design constraints (see docs/guardian/ADR-001-architecture.md):
+# Design constraints (see docs/decisions/0001-guardian-architecture.md):
 # - Shadow mode: category checks conclude success/neutral, never failure;
 #   only "AGI Guardian / Final Policy" may ever fail, and only once the
 #   repository config opts into blocking mode.

@@ -425,7 +425,7 @@ impl ComputerUseAgent {
                     // appear the moment someone does set it.
                     //
                     // Real human-in-the-loop confirmation needs a shared signal
-                    // threaded into this loop — see docs/adr/wire-or-cut.md.
+                    // threaded into this loop — see docs/decisions/wire-or-cut.md.
                     let waited_from = Instant::now();
                     while session.is_paused()
                         && !session.is_cancelled()

@@ -87,9 +87,8 @@ if (!exists(codeownersPath)) {
     '/crates/',
     '/services/',
     '/apps/web/db/neon/',
-    '/docs/enterprise/',
+    '/docs/compliance/',
     '/docs/security/',
-    '/docs/legal/',
     '/packages/contracts/compliance/',
   ]) {
     if (!body.includes(requiredPath)) {

@@ -7,7 +7,6 @@ const root = process.cwd();
 const errors = [];
 
 const ledgerPath = 'docs/agent-context/non-md-artifact-status.json';
-const archiveRoot = 'docs/archive/2026-06-05-doc-reset';
 
 function absolute(relativePath) {
   return path.join(root, relativePath);
@@ -76,7 +75,7 @@ const blockedLiveDirs = [
 
 for (const dir of blockedLiveDirs) {
   if (exists(dir) && hasFiles(dir)) {
-    errors.push(`${dir} is historical evidence; archive it under ${archiveRoot}`);
+    errors.push(`${dir} is historical evidence; delete it — git history is the archive`);
   }
 }
 
@@ -89,21 +88,20 @@ const blockedLiveFiles = [
 
 for (const file of blockedLiveFiles) {
   if (exists(file)) {
-    errors.push(`${file} is historical evidence; archive it under ${archiveRoot}`);
+    errors.push(`${file} is historical evidence; delete it — git history is the archive`);
   }
 }
 
 for (const file of listFilesRecursive('tasks/team-status')) {
   if (file.endsWith('.txt')) {
-    errors.push(`${file} is raw historical output; archive it under ${archiveRoot}`);
+    errors.push(`${file} is raw historical output; delete it — git history is the archive`);
   }
 }
 
 const allowedLiveNonMarkdownPrefixes = [
   'docs/agent-context/',
-  'docs/api/',
-  'docs/generated/',
   'docs/remediation/',
+  'docs/generated/',
   'docs/specs/',
   'docs/work/',
 ];
@@ -116,7 +114,6 @@ const allowedLiveNonMarkdownFiles = new Set([
 
 for (const scanRoot of ['docs', 'audit', 'reports', 'tasks']) {
   for (const file of listFilesRecursive(scanRoot)) {
-    if (file.startsWith('docs/archive/')) continue;
     if (file.endsWith('.md')) continue;
 
     if (file.endsWith('/.DS_Store') || path.basename(file) === '.DS_Store') {

@@ -73,7 +73,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 
 - Markdown docs: lowercase kebab-case, except root all-caps convention files such as `README.md`, `CHANGELOG.md`, `AGENTS.md`, `CODEOWNERS`.
 - Active plan docs: `docs/plans/<topic>.md`.
-- Historical archive folders (if a future archiving need arises; `docs/archive/` does not currently exist — removed 2026-06-28): `docs/archive/YYYY-MM-DD-<reason>/`.
+- There is no archive directory and one must not be created. Historical material lives in git history.
 - Durable findings belong in `docs/agent-context/known-flaws.md`; decision/evidence ledgers live under the live root `audit/` directory (e.g. `capability-gaps.csv`, `inventory.json`).
 - Research summaries: `docs/research/<topic>-YYYY-MM-DD.md`.
 - Design prompts and generated design specs: `docs/design/<topic>-YYYY-MM-DD.md`.

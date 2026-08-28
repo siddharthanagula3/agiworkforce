@@ -3,7 +3,7 @@
   "registeredWithoutFrontendCaller": [
     {
       "command": "document_edit_excel",
-      "reason": "Agent-selected tool, not a renderer command. The LLM tool executor calls the Rust function directly (core/llm/tool_executor/document_tools.rs) after tool_guard approval; there is deliberately no invoke() call site because no UI drives spreadsheet editing. Registered so the same entry point is reachable if a UI is added. No document_edit_word counterpart exists on purpose \u2014 see docs/adr/wire-or-cut.md."
+      "reason": "Agent-selected tool, not a renderer command. The LLM tool executor calls the Rust function directly (core/llm/tool_executor/document_tools.rs) after tool_guard approval; there is deliberately no invoke() call site because no UI drives spreadsheet editing. Registered so the same entry point is reachable if a UI is added. No document_edit_word counterpart exists on purpose \u2014 see docs/decisions/wire-or-cut.md."
     },
     {
       "command": "llm_list_llamacpp_models",
@@ -121,7 +121,7 @@
     },
     {
       "command": "execute_code",
-      "reason": "WIRE: Sandboxed multi-language runner, already gated - sys/commands/code_execution.rs:59-75 calls request_confirmation_simple before running anything. Its only client is canvasRunCodeViaTauri in apps/desktop/src/stores/editingStore.ts, and the whole canvas tree (features/canvas, features/dynamic-canvas) is unmounted, so this decision rides on the canvas wire-or-cut call in docs/adr/wire-or-cut.md. Separately: it is absent from apps/desktop/.hitl-required-tools.yaml, so nothing in CI guards that confirmation gate."
+      "reason": "WIRE: Sandboxed multi-language runner, already gated - sys/commands/code_execution.rs:59-75 calls request_confirmation_simple before running anything. Its only client is canvasRunCodeViaTauri in apps/desktop/src/stores/editingStore.ts, and the whole canvas tree (features/canvas, features/dynamic-canvas) is unmounted, so this decision rides on the canvas wire-or-cut call in docs/decisions/wire-or-cut.md. Separately: it is absent from apps/desktop/.hitl-required-tools.yaml, so nothing in CI guards that confirmation gate."
     },
     {
       "command": "get_architectural_decisions",
