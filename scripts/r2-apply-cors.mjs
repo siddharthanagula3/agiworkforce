@@ -93,7 +93,7 @@ async function main() {
 
   if (!token) {
     console.error('✖ CLOUDFLARE_API_TOKEN is not set (needs "Workers R2 Storage: Edit").');
-    console.error('  See FoundersAssistance.md — R2 CORS for browser uploads.');
+    console.error('  See docs/work/founder-assistance.md — R2 CORS for browser uploads.');
     process.exit(2);
   }
   if (!accountId) {

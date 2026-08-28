@@ -1608,7 +1608,7 @@ primary sources.
 
 ---
 
-## 30. Counsel review of the two breach-notification templates in `BREACH_RUNBOOK.md`
+## 30. Counsel review of the two breach-notification templates in `docs/runbooks/personal-data-breach.md`
 
 **Status:** `BLOCKED_BY_HUMAN`. The engineering side is finished. What is left is
 a lawyer reading two pages of wording and one line being changed in a file.
@@ -1616,7 +1616,7 @@ a lawyer reading two pages of wording and one line being changed in a file.
 **Blocks:** nothing operationally, and that is deliberate — read "This is not a
 hold" before treating it as a gate.
 
-`BREACH_RUNBOOK.md` §4 (intimation to the Data Protection Board) and §5
+`docs/runbooks/personal-data-breach.md` §4 (intimation to the Data Protection Board) and §5
 (intimation to each affected Data Principal) were drafted from the text of the
 Digital Personal Data Protection Act, 2023 by an engineer. No lawyer has read
 either one. That wording is what goes to a regulator and to affected users on
@@ -1643,10 +1643,10 @@ that scoping table is where those claims are sourced from.
 
 **Exact steps**
 
-1. Send the reviewer `BREACH_RUNBOOK.md` §3, §4 and §5. Ask two things
+1. Send the reviewer `docs/runbooks/personal-data-breach.md` §3, §4 and §5. Ask two things
    specifically: whether the §5 "NOT involved" claims are safe to make as
    written, and whether either template omits anything the Board expects.
-2. On sign-off, in `BREACH_RUNBOOK.md`: change `Legal review: pending-counsel`
+2. On sign-off, in `docs/runbooks/personal-data-breach.md`: change `Legal review: pending-counsel`
    to `Legal review: counsel-approved`, add an `Approved by:` line naming the
    reviewer and the date beneath it, update the `Status:` line so it no longer
    says the runbook is unreviewed, and delete the two pre-send notices from §4

@@ -13,7 +13,7 @@ function runOnLedger(ledger) {
   const dir = mkdtempSync(join(tmpdir(), 'base009-'));
   try {
     if (ledger !== undefined) {
-      writeFileSync(join(dir, 'AuditRemediationLedger.md'), ledger, 'utf8');
+      writeFileSync(join(dir, 'docs/work/audit-remediation-ledger.md'), ledger, 'utf8');
     }
     return spawnSync(process.execPath, [GATE], { cwd: dir, encoding: 'utf8' });
   } finally {
