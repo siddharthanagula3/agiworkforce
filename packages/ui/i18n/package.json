@@ -14,8 +14,5 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
-  "dependencies": {
-    "i18next": "^26.0.8",
-    "react-i18next": "^17.0.6"
-  }
+  "dependencies": {}
 }
