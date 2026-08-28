@@ -33,6 +33,7 @@ const SHARED_BUILD_FILES = new Set([
 export const SYNC_PARITY_SOURCES = [
   'packages/client/sync',
   'apps/desktop/src-tauri/src/data/cloud_sync.rs',
+  'packages/ai/routing',
 ];
 
 function normalizePath(file) {

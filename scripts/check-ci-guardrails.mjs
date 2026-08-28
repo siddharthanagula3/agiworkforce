@@ -102,6 +102,10 @@ requireIncludes('.github/workflows/ci.yml', 'fetch-depth: 0');
 requireIncludes('.github/workflows/ci.yml', 'pnpm audit --audit-level=critical');
 requireIncludes('.github/workflows/ci.yml', 'pnpm audit --audit-level=high');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run lint --affected');
+requireIncludes(
+  '.github/workflows/ci.yml',
+  'cargo test -p agiworkforce-model-registry --test auto_route_conformance',
+);
 requireIncludes('.github/workflows/ci.yml', 'pnpm check:module-reachability');
 requireIncludes('.github/workflows/ci.yml', 'run: pnpm check:no-hex-mobile');
 requireIncludes(
