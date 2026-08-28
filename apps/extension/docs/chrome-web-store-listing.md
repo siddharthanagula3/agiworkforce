@@ -6,9 +6,9 @@ file does. `__tests__/manifest-contract.test.ts` freezes the permission and host
 lists this document justifies, so adding a permission fails the build until the
 justification below is written.
 
-Publishing checklist lives in [`CHROME_WEB_STORE_PUBLISH_RUNBOOK.md`](CHROME_WEB_STORE_PUBLISH_RUNBOOK.md).
+Publishing checklist lives in [`chrome-web-store-publish-runbook.md`](chrome-web-store-publish-runbook.md).
 The security boundary each justification asserts is specified in
-[`THREAT_MODEL.md`](THREAT_MODEL.md).
+[`threat-model.md`](threat-model.md).
 
 ## Single purpose
 

@@ -497,7 +497,7 @@ Primary paths: `apps/extension-vscode/src`.
 | Native bridge        | Codex Chrome native app and AGI Desktop bridge.                        | Pairing, HMAC/session secret, reconnect, native host status, Desktop handoff, cloud invite unlock only behind gate. | Partial.           |
 | Permissions/settings | Chrome permissions, file URL access, browser history, memory controls. | Explicit install permission copy, file URL toggle instructions, browser-history prompt, memories on/off behavior.   | Partial.           |
 
-Primary paths: `apps/extension/src`, `apps/extension/native-host`, `apps/extension/THREAT_MODEL.md`.
+Primary paths: `apps/extension/src`, `apps/extension/native-host`, `apps/extension/docs/threat-model.md`.
 
 ## Billing, Usage, Waitlist, And Commercial Gates
 

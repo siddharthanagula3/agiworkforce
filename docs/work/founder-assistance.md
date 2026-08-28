@@ -217,7 +217,7 @@ from the Chrome Web Store dashboard and set it as the repository/developer
 environment value `CHROME_EXTENSION_PUBLIC_KEY` (it is public identity material,
 not a private signing key). Then rerun the package command and confirm the
 resulting item ID matches `CWS_EXTENSION_ID`. Follow
-`apps/extension/CHROME_WEB_STORE_PUBLISH_RUNBOOK.md`; do not paste a private key
+`apps/extension/docs/chrome-web-store-publish-runbook.md`; do not paste a private key
 or rotate the published item identity.
 
 ---

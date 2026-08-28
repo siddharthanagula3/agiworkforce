@@ -13,7 +13,7 @@ const manifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 'utf8'
  * Frozen because `debugger` is the most heavily scrutinised permission in Web
  * Store review and every entry here has to be defensible in the store listing.
  * Adding one is a deliberate act with a justification to write, not a diff that
- * slips through — see CHROME_WEB_STORE_LISTING.md.
+ * slips through — see docs/chrome-web-store-listing.md.
  */
 const EXPECTED_PERMISSIONS = [
   'activeTab',
@@ -67,7 +67,7 @@ describe('Chrome manifest trust contract', () => {
   });
 
   it('carries a written justification for every permission it declares', () => {
-    const listing = readFileSync(join(APP_ROOT, 'CHROME_WEB_STORE_LISTING.md'), 'utf8');
+    const listing = readFileSync(join(APP_ROOT, 'docs/chrome-web-store-listing.md'), 'utf8');
     for (const permission of EXPECTED_PERMISSIONS) {
       expect(listing, `no store justification for "${permission}"`).toContain(`\`${permission}\``);
     }

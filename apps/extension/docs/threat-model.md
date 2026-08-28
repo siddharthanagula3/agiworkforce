@@ -80,7 +80,7 @@ service worker.
 No extension resource is exposed to web pages: there is no
 `web_accessible_resources` entry. Store-listing copy and the per-permission
 justifications that must accompany `debugger` are versioned in
-[`CHROME_WEB_STORE_LISTING.md`](CHROME_WEB_STORE_LISTING.md), and
+[`chrome-web-store-listing.md`](chrome-web-store-listing.md), and
 [`__tests__/manifest-contract.test.ts`](__tests__/manifest-contract.test.ts)
 freezes the permission and host lists against it.
 

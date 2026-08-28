@@ -90,7 +90,7 @@ const BOUNDARY_LEDGER = [
     k: 'Chat-memory sync',
     v: 'No default global sync. Chats stay in local extension storage.',
   },
-  { k: 'Security story', v: 'Threat model maintained in the repo (THREAT_MODEL.md)' },
+  { k: 'Security story', v: 'Threat model maintained in the repo (docs/threat-model.md)' },
   { k: 'Status', v: 'Chat scoped to the Desktop bridge · computer use scoped to Managed Cloud' },
 ];
 
