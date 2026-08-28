@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-08-03",
+  "lastUpdated": "2026-08-28",
   "canonicalAgentDoc": "AGENTS.md",
   "surfaces": [
     {
@@ -161,162 +161,179 @@
   },
   "workspaceUnits": [
     {
-      "path": "packages/client/desktop-command-client",
-      "kind": "package",
-      "canonicalOwner": "Desktop platform",
-      "consumers": ["apps/desktop"],
+      "path": "crates/agiworkforce-agent-core",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform",
+      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
       "deployability": "library",
-      "trustBoundary": "renderer-to-privileged-host command transport",
+      "trustBoundary": "agent turn loop, budget and tool scheduling",
       "status": "active",
       "action": "keep",
-      "evidence": [
-        "packages/client/desktop-command-client/src/index.ts",
-        "packages/client/desktop-command-client/src/chat.ts",
-        "apps/desktop/src"
-      ]
+      "evidence": ["crates/agiworkforce-agent-core/Cargo.toml", "cargo metadata"]
     },
     {
-      "path": "packages/tools/apply-patch",
-      "kind": "package",
-      "canonicalOwner": "Tooling and security",
-      "consumers": ["apps/desktop"],
+      "path": "crates/agiworkforce-app-server",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform and CLI",
+      "consumers": ["apps/cli"],
+      "deployability": "embedded-local-server-library",
+      "trustBoundary": "CLI-hosted JSON-RPC and WebSocket developer session",
+      "status": "active-single-host",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-app-server/Cargo.toml", "apps/cli/Cargo.toml"]
+    },
+    {
+      "path": "crates/agiworkforce-command-registry",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform and CLI",
+      "consumers": ["apps/cli"],
       "deployability": "library",
-      "trustBoundary": "privileged filesystem mutation",
+      "trustBoundary": "developer command contracts",
+      "status": "active-single-host",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-command-registry/Cargo.toml", "apps/cli/Cargo.toml"]
+    },
+    {
+      "path": "crates/agiworkforce-execpolicy",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform and security",
+      "consumers": ["apps/cli", "apps/desktop/src-tauri", "crates/agiworkforce-protocol"],
+      "deployability": "library-and-internal-cli",
+      "trustBoundary": "shell execution policy",
       "status": "active",
       "action": "keep",
-      "evidence": ["packages/tools/apply-patch/src/index.ts"]
+      "evidence": ["crates/agiworkforce-execpolicy/Cargo.toml", "cargo metadata"]
     },
     {
-      "path": "packages/tools/browser-tool",
-      "kind": "package",
-      "canonicalOwner": "Browser automation and security",
-      "consumers": ["apps/extension"],
-      "deployability": "library",
-      "trustBoundary": "isolated browser profile and computer-use actions",
-      "status": "active-single-consumer",
-      "action": "keep",
-      "evidence": ["packages/tools/browser-tool/src/index.ts", "apps/extension/package.json"]
-    },
-    {
-      "path": "packages/contracts/compliance",
-      "kind": "package",
-      "canonicalOwner": "Compliance and privacy",
-      "consumers": ["apps/mobile"],
-      "deployability": "policy-library",
-      "trustBoundary": "provider disclosure and jurisdiction policy",
-      "status": "active-single-consumer",
-      "action": "keep",
-      "evidence": ["packages/contracts/compliance/src/index.ts", "apps/mobile/package.json"]
-    },
-    {
-      "path": "packages/platform/data-layer",
-      "kind": "package",
-      "canonicalOwner": "Backend and data",
-      "consumers": ["apps/web"],
-      "deployability": "server-library",
-      "trustBoundary": "tenant-scoped database access",
-      "status": "active",
-      "action": "keep",
-      "evidence": ["packages/platform/data-layer/src/factory.ts"]
-    },
-    {
-      "path": "packages/ui/design-tokens",
-      "kind": "package",
-      "canonicalOwner": "Frontend platform",
-      "consumers": [
-        "apps/desktop",
-        "apps/web",
-        "apps/mobile",
-        "apps/extension",
-        "apps/extension-vscode",
-        "packages/ui/unified-chat"
-      ],
-      "deployability": "build-time-style-library",
-      "trustBoundary": "presentation-only",
-      "status": "active",
-      "action": "keep",
-      "evidence": [
-        "packages/ui/design-tokens/package.json",
-        "apps/web/app/globals.css",
-        "apps/desktop/src/styles/globals.css"
-      ]
-    },
-    {
-      "path": "packages/contracts/cloud-contracts",
-      "kind": "package",
-      "canonicalOwner": "Managed cloud contracts",
-      "consumers": [
-        "apps/web",
-        "apps/desktop",
-        "apps/mobile",
-        "packages/platform/artifacts",
-        "packages/client/sync"
-      ],
-      "deployability": "cross-surface-contract-library",
-      "trustBoundary": "managed-cloud wire schemas, endpoint paths, stream deltas and typed clients",
-      "status": "active-canonical-owner",
-      "action": "keep",
-      "evidence": [
-        "packages/contracts/cloud-contracts/src/index.ts",
-        "packages/contracts/cloud-contracts/package.json"
-      ]
-    },
-    {
-      "path": "packages/platform/artifacts",
-      "kind": "package",
-      "canonicalOwner": "Artifact domain",
-      "consumers": ["apps/desktop", "apps/mobile", "apps/web", "packages/client/sync"],
-      "deployability": "cross-surface-domain-library",
-      "trustBoundary": "artifact derivation, client state, managed publish and cloud merge/apply",
-      "status": "active-canonical-owner",
-      "action": "keep",
-      "evidence": [
-        "packages/platform/artifacts/src/index.ts",
-        "packages/platform/artifacts/src/artifact-store.ts",
-        "packages/platform/artifacts/src/artifact-sync.ts"
-      ]
-    },
-    {
-      "path": "packages/client/sync",
-      "kind": "package",
-      "canonicalOwner": "Cross-surface synchronization",
-      "consumers": ["apps/desktop", "apps/mobile"],
-      "deployability": "cross-surface-domain-library",
-      "trustBoundary": "typed managed-cloud delta validation and local apply mechanics",
-      "status": "active-canonical-owner",
-      "action": "keep",
-      "evidence": [
-        "packages/client/sync/src/index.ts",
-        "packages/client/sync/src/cursor.ts",
-        "packages/client/sync/src/settings.ts"
-      ]
-    },
-    {
-      "path": "packages/contracts/trust-boundaries",
-      "kind": "package",
-      "canonicalOwner": "Security and privacy platform",
-      "consumers": ["apps/desktop", "apps/mobile"],
-      "deployability": "platform-neutral-policy-library",
-      "trustBoundary": "classification of AGI-owned Managed Cloud hosts; no network I/O",
-      "status": "active-canonical-owner",
-      "action": "keep",
-      "evidence": [
-        "packages/contracts/trust-boundaries/src/egress-policy.ts",
-        "packages/contracts/trust-boundaries/package.json"
-      ]
-    },
-    {
-      "path": "packages/contracts/licensing",
-      "kind": "package",
+      "path": "crates/agiworkforce-licensing",
+      "kind": "crate",
       "canonicalOwner": "Enterprise platform and security",
       "consumers": [],
       "deployability": "offline-verification-library",
       "trustBoundary": "signed enterprise license and policy verification",
-      "status": "active-partial-adoption",
+      "status": "verified-cross-language-unadopted",
+      "action": "compatibility",
+      "target": ["apps/cli", "apps/desktop/src-tauri"],
+      "evidence": [
+        "crates/agiworkforce-licensing/src/tests.rs",
+        "packages/contracts/licensing/src/__fixtures__"
+      ]
+    },
+    {
+      "path": "crates/agiworkforce-llm",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform and provider platform",
+      "consumers": ["apps/cli", "apps/desktop/src-tauri", "crates/agiworkforce-agent-core"],
+      "deployability": "library",
+      "trustBoundary": "BYOK and local provider egress, stream decoding",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-llm/Cargo.toml", "cargo metadata"]
+    },
+    {
+      "path": "crates/agiworkforce-mcp",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform and tooling",
+      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
+      "deployability": "library",
+      "trustBoundary": "local MCP processes, remote MCP transport and OAuth",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-mcp/Cargo.toml", "cargo metadata"]
+    },
+    {
+      "path": "crates/agiworkforce-model-registry",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform and model platform",
+      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
+      "deployability": "generated-data-library",
+      "trustBoundary": "canonical model metadata projection",
+      "status": "active-generated",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-model-registry/Cargo.toml", "cargo metadata"]
+    },
+    {
+      "path": "crates/agiworkforce-protocol",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform",
+      "consumers": ["apps/cli", "crates/agiworkforce-app-server", "crates/agiworkforce-mcp"],
+      "deployability": "library",
+      "trustBoundary": "developer session contracts and sandbox protocol",
+      "status": "active-overloaded-shared-kernel",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-protocol/Cargo.toml", "cargo metadata"]
+    },
+    {
+      "path": "crates/agiworkforce-sandbox-policy",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform and security",
+      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
+      "deployability": "policy-library",
+      "trustBoundary": "local sandbox policy",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-sandbox-policy/Cargo.toml", "cargo metadata"]
+    },
+    {
+      "path": "crates/agiworkforce-utils-absolute-path",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform",
+      "consumers": ["crates/agiworkforce-execpolicy", "crates/agiworkforce-protocol"],
+      "deployability": "library",
+      "trustBoundary": "filesystem path validation",
+      "status": "active-reused",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-utils-absolute-path/Cargo.toml", "cargo metadata"]
+    },
+    {
+      "path": "crates/agiworkforce-utils-image",
+      "kind": "crate",
+      "canonicalOwner": "Rust platform",
+      "consumers": ["apps/cli", "crates/agiworkforce-protocol"],
+      "deployability": "library",
+      "trustBoundary": "image decode, transform and cache",
+      "status": "active-reused",
+      "action": "keep",
+      "evidence": ["crates/agiworkforce-utils-image/Cargo.toml", "cargo metadata"]
+    },
+    {
+      "path": "infrastructure/sandbox",
+      "kind": "deploy-target",
+      "canonicalOwner": "Web platform",
+      "consumers": ["apps/web"],
+      "deployability": "static-site",
+      "trustBoundary": "cross-origin artifact renderer isolated from the app origin",
+      "status": "active",
       "action": "keep",
       "evidence": [
-        "packages/contracts/licensing/src/verify.ts",
-        "packages/contracts/licensing/src/org-policy.ts"
+        "infrastructure/sandbox/index.html",
+        "infrastructure/sandbox/vercel.json",
+        "packages/contracts/types/src/artifact-csp.ts"
+      ]
+    },
+    {
+      "path": "packages/ai/agent-core",
+      "kind": "package",
+      "canonicalOwner": "AI platform",
+      "consumers": ["apps/desktop", "apps/cli"],
+      "deployability": "library",
+      "trustBoundary": "none; turn-loop orchestration over host-supplied transports",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["packages/ai/agent-core/src", "crates/agiworkforce-agent-core/src/lib.rs"]
+    },
+    {
+      "path": "packages/ai/model-registry",
+      "kind": "package",
+      "canonicalOwner": "Model platform",
+      "consumers": ["apps/desktop", "packages/contracts/types", "packages/ai/routing"],
+      "deployability": "build-time-registry-and-generated-library",
+      "trustBoundary": "canonical model and harness metadata",
+      "status": "active-generated-source-of-truth",
+      "action": "keep",
+      "evidence": [
+        "packages/ai/model-registry/scripts/compile.mjs",
+        "packages/ai/model-registry/generated/registry.ts"
       ]
     },
     {
@@ -375,45 +392,6 @@
       ]
     },
     {
-      "path": "packages/platform/local-llm",
-      "kind": "package",
-      "canonicalOwner": "Mobile platform",
-      "consumers": ["apps/mobile"],
-      "deployability": "native-mobile-library",
-      "trustBoundary": "on-device model loading and inference",
-      "status": "active-platform-specific",
-      "action": "keep",
-      "evidence": [
-        "packages/platform/local-llm/src/selector.ts",
-        "packages/platform/local-llm/src/tier3.ts"
-      ]
-    },
-    {
-      "path": "packages/tools/mcp",
-      "kind": "package",
-      "canonicalOwner": "Tooling platform",
-      "consumers": ["apps/desktop", "apps/web"],
-      "deployability": "library",
-      "trustBoundary": "external MCP server transport and tool metadata",
-      "status": "active",
-      "action": "keep",
-      "evidence": ["packages/tools/mcp/src/connect.ts"]
-    },
-    {
-      "path": "packages/ai/model-registry",
-      "kind": "package",
-      "canonicalOwner": "Model platform",
-      "consumers": ["apps/desktop", "packages/contracts/types", "packages/ai/routing"],
-      "deployability": "build-time-registry-and-generated-library",
-      "trustBoundary": "canonical model and harness metadata",
-      "status": "active-generated-source-of-truth",
-      "action": "keep",
-      "evidence": [
-        "packages/ai/model-registry/scripts/compile.mjs",
-        "packages/ai/model-registry/generated/registry.ts"
-      ]
-    },
-    {
       "path": "packages/ai/providers",
       "kind": "package-group",
       "canonicalOwner": "Provider platform",
@@ -423,20 +401,6 @@
       "status": "active-grouping-directory",
       "action": "keep",
       "evidence": ["packages/ai/providers/*/package.json"]
-    },
-    {
-      "path": "packages/ai/providers/factory",
-      "kind": "package",
-      "canonicalOwner": "Provider platform",
-      "consumers": ["apps/web"],
-      "deployability": "provider-adapter-composition-library",
-      "trustBoundary": "provider adapter construction with caller-owned credentials and egress policy",
-      "status": "active",
-      "action": "keep",
-      "evidence": [
-        "packages/ai/providers/factory/src/index.ts",
-        "apps/web/lib/services/provider-adapter-service.ts"
-      ]
     },
     {
       "path": "packages/ai/providers/anthropic",
@@ -465,6 +429,20 @@
       "evidence": [
         "packages/ai/providers/deepseek/src/index.ts",
         "packages/ai/providers/factory/src/index.ts"
+      ]
+    },
+    {
+      "path": "packages/ai/providers/factory",
+      "kind": "package",
+      "canonicalOwner": "Provider platform",
+      "consumers": ["apps/web"],
+      "deployability": "provider-adapter-composition-library",
+      "trustBoundary": "provider adapter construction with caller-owned credentials and egress policy",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/ai/providers/factory/src/index.ts",
+        "apps/web/lib/services/provider-adapter-service.ts"
       ]
     },
     {
@@ -681,15 +659,93 @@
       ]
     },
     {
-      "path": "packages/tools/skills",
+      "path": "packages/client/desktop-command-client",
       "kind": "package",
-      "canonicalOwner": "Tooling platform",
-      "consumers": ["apps/desktop", "apps/mobile", "apps/web"],
+      "canonicalOwner": "Desktop platform",
+      "consumers": ["apps/desktop"],
       "deployability": "library",
-      "trustBoundary": "untrusted skill metadata parsing and merge",
+      "trustBoundary": "renderer-to-privileged-host command transport",
       "status": "active",
       "action": "keep",
-      "evidence": ["packages/tools/skills/src/loader.ts", "packages/tools/skills/src/merge.ts"]
+      "evidence": [
+        "packages/client/desktop-command-client/src/index.ts",
+        "packages/client/desktop-command-client/src/chat.ts",
+        "apps/desktop/src"
+      ]
+    },
+    {
+      "path": "packages/client/sync",
+      "kind": "package",
+      "canonicalOwner": "Cross-surface synchronization",
+      "consumers": ["apps/desktop", "apps/mobile"],
+      "deployability": "cross-surface-domain-library",
+      "trustBoundary": "typed managed-cloud delta validation and local apply mechanics",
+      "status": "active-canonical-owner",
+      "action": "keep",
+      "evidence": [
+        "packages/client/sync/src/index.ts",
+        "packages/client/sync/src/cursor.ts",
+        "packages/client/sync/src/settings.ts"
+      ]
+    },
+    {
+      "path": "packages/contracts/cloud-contracts",
+      "kind": "package",
+      "canonicalOwner": "Managed cloud contracts",
+      "consumers": [
+        "apps/web",
+        "apps/desktop",
+        "apps/mobile",
+        "packages/platform/artifacts",
+        "packages/client/sync"
+      ],
+      "deployability": "cross-surface-contract-library",
+      "trustBoundary": "managed-cloud wire schemas, endpoint paths, stream deltas and typed clients",
+      "status": "active-canonical-owner",
+      "action": "keep",
+      "evidence": [
+        "packages/contracts/cloud-contracts/src/index.ts",
+        "packages/contracts/cloud-contracts/package.json"
+      ]
+    },
+    {
+      "path": "packages/contracts/compliance",
+      "kind": "package",
+      "canonicalOwner": "Compliance and privacy",
+      "consumers": ["apps/mobile"],
+      "deployability": "policy-library",
+      "trustBoundary": "provider disclosure and jurisdiction policy",
+      "status": "active-single-consumer",
+      "action": "keep",
+      "evidence": ["packages/contracts/compliance/src/index.ts", "apps/mobile/package.json"]
+    },
+    {
+      "path": "packages/contracts/licensing",
+      "kind": "package",
+      "canonicalOwner": "Enterprise platform and security",
+      "consumers": [],
+      "deployability": "offline-verification-library",
+      "trustBoundary": "signed enterprise license and policy verification",
+      "status": "active-partial-adoption",
+      "action": "keep",
+      "evidence": [
+        "packages/contracts/licensing/src/verify.ts",
+        "packages/contracts/licensing/src/org-policy.ts"
+      ]
+    },
+    {
+      "path": "packages/contracts/trust-boundaries",
+      "kind": "package",
+      "canonicalOwner": "Security and privacy platform",
+      "consumers": ["apps/desktop", "apps/mobile"],
+      "deployability": "platform-neutral-policy-library",
+      "trustBoundary": "classification of AGI-owned Managed Cloud hosts; no network I/O",
+      "status": "active-canonical-owner",
+      "action": "keep",
+      "evidence": [
+        "packages/contracts/trust-boundaries/src/egress-policy.ts",
+        "packages/contracts/trust-boundaries/package.json"
+      ]
     },
     {
       "path": "packages/contracts/types",
@@ -739,6 +795,177 @@
       ]
     },
     {
+      "path": "packages/guardian/core",
+      "kind": "package",
+      "canonicalOwner": "Guardian",
+      "consumers": ["packages/guardian/github"],
+      "deployability": "library",
+      "trustBoundary": "none; findings policy, dedupe, fingerprint, rank and verify",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/guardian/core/src/policy.ts",
+        "packages/guardian/core/src/verify.ts",
+        ".agi-guardian.yml"
+      ]
+    },
+    {
+      "path": "packages/guardian/github",
+      "kind": "package",
+      "canonicalOwner": "Guardian",
+      "consumers": [".github/workflows/guardian.yml"],
+      "deployability": "library",
+      "trustBoundary": "github app webhook and check-run surface",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/guardian/github/src/webhook.ts",
+        "packages/guardian/github/src/checks.ts",
+        ".github/workflows/guardian.yml"
+      ]
+    },
+    {
+      "path": "packages/platform/artifacts",
+      "kind": "package",
+      "canonicalOwner": "Artifact domain",
+      "consumers": ["apps/desktop", "apps/mobile", "apps/web", "packages/client/sync"],
+      "deployability": "cross-surface-domain-library",
+      "trustBoundary": "artifact derivation, client state, managed publish and cloud merge/apply",
+      "status": "active-canonical-owner",
+      "action": "keep",
+      "evidence": [
+        "packages/platform/artifacts/src/index.ts",
+        "packages/platform/artifacts/src/artifact-store.ts",
+        "packages/platform/artifacts/src/artifact-sync.ts"
+      ]
+    },
+    {
+      "path": "packages/platform/data-layer",
+      "kind": "package",
+      "canonicalOwner": "Backend and data",
+      "consumers": ["apps/web"],
+      "deployability": "server-library",
+      "trustBoundary": "tenant-scoped database access",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["packages/platform/data-layer/src/factory.ts"]
+    },
+    {
+      "path": "packages/platform/local-llm",
+      "kind": "package",
+      "canonicalOwner": "Mobile platform",
+      "consumers": ["apps/mobile"],
+      "deployability": "native-mobile-library",
+      "trustBoundary": "on-device model loading and inference",
+      "status": "active-platform-specific",
+      "action": "keep",
+      "evidence": [
+        "packages/platform/local-llm/src/selector.ts",
+        "packages/platform/local-llm/src/tier3.ts"
+      ]
+    },
+    {
+      "path": "packages/platform/utils",
+      "kind": "package",
+      "canonicalOwner": "Platform lead",
+      "consumers": [
+        "apps/desktop",
+        "apps/web",
+        "apps/mobile",
+        "apps/extension",
+        "apps/extension-vscode",
+        "packages/ui/unified-chat"
+      ],
+      "deployability": "cross-surface-utility-library",
+      "trustBoundary": "pure helpers plus privacy handoff and signaling contracts",
+      "status": "active-broad",
+      "action": "keep",
+      "evidence": ["packages/platform/utils/package.json", "packages/platform/utils/src/index.ts"]
+    },
+    {
+      "path": "packages/tools/apply-patch",
+      "kind": "package",
+      "canonicalOwner": "Tooling and security",
+      "consumers": ["apps/desktop"],
+      "deployability": "library",
+      "trustBoundary": "privileged filesystem mutation",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["packages/tools/apply-patch/src/index.ts"]
+    },
+    {
+      "path": "packages/tools/browser-tool",
+      "kind": "package",
+      "canonicalOwner": "Browser automation and security",
+      "consumers": ["apps/extension"],
+      "deployability": "library",
+      "trustBoundary": "isolated browser profile and computer-use actions",
+      "status": "active-single-consumer",
+      "action": "keep",
+      "evidence": ["packages/tools/browser-tool/src/index.ts", "apps/extension/package.json"]
+    },
+    {
+      "path": "packages/tools/mcp",
+      "kind": "package",
+      "canonicalOwner": "Tooling platform",
+      "consumers": ["apps/desktop", "apps/web"],
+      "deployability": "library",
+      "trustBoundary": "external MCP server transport and tool metadata",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["packages/tools/mcp/src/connect.ts"]
+    },
+    {
+      "path": "packages/tools/skills",
+      "kind": "package",
+      "canonicalOwner": "Tooling platform",
+      "consumers": ["apps/desktop", "apps/mobile", "apps/web"],
+      "deployability": "library",
+      "trustBoundary": "untrusted skill metadata parsing and merge",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["packages/tools/skills/src/loader.ts", "packages/tools/skills/src/merge.ts"]
+    },
+    {
+      "path": "packages/ui/design-tokens",
+      "kind": "package",
+      "canonicalOwner": "Frontend platform",
+      "consumers": [
+        "apps/desktop",
+        "apps/web",
+        "apps/mobile",
+        "apps/extension",
+        "apps/extension-vscode",
+        "packages/ui/unified-chat"
+      ],
+      "deployability": "build-time-style-library",
+      "trustBoundary": "presentation-only",
+      "status": "active",
+      "action": "keep",
+      "evidence": [
+        "packages/ui/design-tokens/package.json",
+        "apps/web/app/globals.css",
+        "apps/desktop/src/styles/globals.css"
+      ]
+    },
+    {
+      "path": "packages/ui/i18n",
+      "kind": "package",
+      "canonicalOwner": "Frontend platform",
+      "consumers": [
+        "apps/web",
+        "apps/desktop",
+        "apps/mobile",
+        "apps/extension",
+        "apps/extension-vscode"
+      ],
+      "deployability": "library",
+      "trustBoundary": "none; locale catalogues and message resolution",
+      "status": "active",
+      "action": "keep",
+      "evidence": ["packages/ui/i18n/src", "scripts/check-i18n-parity.mjs"]
+    },
+    {
       "path": "packages/ui/ui",
       "kind": "package",
       "canonicalOwner": "Frontend platform",
@@ -767,160 +994,6 @@
         "apps/desktop/package.json",
         "apps/web/package.json"
       ]
-    },
-    {
-      "path": "packages/platform/utils",
-      "kind": "package",
-      "canonicalOwner": "Platform lead",
-      "consumers": [
-        "apps/desktop",
-        "apps/web",
-        "apps/mobile",
-        "apps/extension",
-        "apps/extension-vscode",
-        "packages/ui/unified-chat"
-      ],
-      "deployability": "cross-surface-utility-library",
-      "trustBoundary": "pure helpers plus privacy handoff and signaling contracts",
-      "status": "active-broad",
-      "action": "keep",
-      "evidence": ["packages/platform/utils/package.json", "packages/platform/utils/src/index.ts"]
-    },
-    {
-      "path": "crates/agiworkforce-agent-core",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform",
-      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
-      "deployability": "library",
-      "trustBoundary": "agent turn loop, budget and tool scheduling",
-      "status": "active",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-agent-core/Cargo.toml", "cargo metadata"]
-    },
-    {
-      "path": "crates/agiworkforce-app-server",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform and CLI",
-      "consumers": ["apps/cli"],
-      "deployability": "embedded-local-server-library",
-      "trustBoundary": "CLI-hosted JSON-RPC and WebSocket developer session",
-      "status": "active-single-host",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-app-server/Cargo.toml", "apps/cli/Cargo.toml"]
-    },
-    {
-      "path": "crates/agiworkforce-command-registry",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform and CLI",
-      "consumers": ["apps/cli"],
-      "deployability": "library",
-      "trustBoundary": "developer command contracts",
-      "status": "active-single-host",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-command-registry/Cargo.toml", "apps/cli/Cargo.toml"]
-    },
-    {
-      "path": "crates/agiworkforce-execpolicy",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform and security",
-      "consumers": ["apps/cli", "apps/desktop/src-tauri", "crates/agiworkforce-protocol"],
-      "deployability": "library-and-internal-cli",
-      "trustBoundary": "shell execution policy",
-      "status": "active",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-execpolicy/Cargo.toml", "cargo metadata"]
-    },
-    {
-      "path": "crates/agiworkforce-licensing",
-      "kind": "crate",
-      "canonicalOwner": "Enterprise platform and security",
-      "consumers": [],
-      "deployability": "offline-verification-library",
-      "trustBoundary": "signed enterprise license and policy verification",
-      "status": "verified-cross-language-unadopted",
-      "action": "compatibility",
-      "target": ["apps/cli", "apps/desktop/src-tauri"],
-      "evidence": [
-        "crates/agiworkforce-licensing/src/tests.rs",
-        "packages/contracts/licensing/src/__fixtures__"
-      ]
-    },
-    {
-      "path": "crates/agiworkforce-llm",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform and provider platform",
-      "consumers": ["apps/cli", "apps/desktop/src-tauri", "crates/agiworkforce-agent-core"],
-      "deployability": "library",
-      "trustBoundary": "BYOK and local provider egress, stream decoding",
-      "status": "active",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-llm/Cargo.toml", "cargo metadata"]
-    },
-    {
-      "path": "crates/agiworkforce-mcp",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform and tooling",
-      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
-      "deployability": "library",
-      "trustBoundary": "local MCP processes, remote MCP transport and OAuth",
-      "status": "active",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-mcp/Cargo.toml", "cargo metadata"]
-    },
-    {
-      "path": "crates/agiworkforce-model-registry",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform and model platform",
-      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
-      "deployability": "generated-data-library",
-      "trustBoundary": "canonical model metadata projection",
-      "status": "active-generated",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-model-registry/Cargo.toml", "cargo metadata"]
-    },
-    {
-      "path": "crates/agiworkforce-protocol",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform",
-      "consumers": ["apps/cli", "crates/agiworkforce-app-server", "crates/agiworkforce-mcp"],
-      "deployability": "library",
-      "trustBoundary": "developer session contracts and sandbox protocol",
-      "status": "active-overloaded-shared-kernel",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-protocol/Cargo.toml", "cargo metadata"]
-    },
-    {
-      "path": "crates/agiworkforce-sandbox-policy",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform and security",
-      "consumers": ["apps/cli", "apps/desktop/src-tauri"],
-      "deployability": "policy-library",
-      "trustBoundary": "local sandbox policy",
-      "status": "active",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-sandbox-policy/Cargo.toml", "cargo metadata"]
-    },
-    {
-      "path": "crates/agiworkforce-utils-absolute-path",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform",
-      "consumers": ["crates/agiworkforce-execpolicy", "crates/agiworkforce-protocol"],
-      "deployability": "library",
-      "trustBoundary": "filesystem path validation",
-      "status": "active-reused",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-utils-absolute-path/Cargo.toml", "cargo metadata"]
-    },
-    {
-      "path": "crates/agiworkforce-utils-image",
-      "kind": "crate",
-      "canonicalOwner": "Rust platform",
-      "consumers": ["apps/cli", "crates/agiworkforce-protocol"],
-      "deployability": "library",
-      "trustBoundary": "image decode, transform and cache",
-      "status": "active-reused",
-      "action": "keep",
-      "evidence": ["crates/agiworkforce-utils-image/Cargo.toml", "cargo metadata"]
     },
     {
       "path": "services/signaling-server",
