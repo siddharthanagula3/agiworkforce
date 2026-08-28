@@ -18,6 +18,11 @@ Legend: `Yes` means AGI may expose the capability when provider credentials and 
 | Vercel AI Gateway or AGI-managed proxy | Depends on upstream | Yes              | Partial        | Partial | Partial      | Partial        | Partial          | Partial           | Managed only | Managed only; never default for Local or strict BYOK.                                               |
 | Local Ollama/LMStudio                  | No                  | Yes              | Model-specific | Partial | No           | Model-specific | Local files only | Partial           | Local only   | Local privacy boundary, not provider ZDR.                                                           |
 
+The harness wiring behind these rules is generated into
+[`docs/generated/provider-capability-matrix.md`](../generated/provider-capability-matrix.md).
+Routing policy, privacy claims and the ZDR position stay here as prose; they
+are not derivable from the catalog.
+
 ## Enforcement Rules
 
 - Local and BYOK routes must default to no provider-side storage unless a user explicitly enables a provider feature that requires it.
