@@ -97,7 +97,7 @@ Archived source material:
     Evidence: `docs/product/definition.md` (billing plan table), `packages/contracts/types/src/billing-catalog.ts`, `apps/web/lib/pricing.ts` (the originally cited tier-metering plan, unit-economics doc, and products README were retired in `906fe5cda`; git history only. Team $25/$240 confirmed by founder 2026-08-05).
 
 23. Routing thesis (founder, 2026-08-05): Different model, provider, reasoning-effort, tool-harness, and deployment configurations occupy different points on the quality–cost–latency frontier. AGI Workforce selects and governs the cheapest configuration that meets a measurable task-specific quality threshold. Implementation contract: routing selects an ExecutionPlan (model snapshot, provider endpoint, reasoning effort, service tier, execution location, harness version, cache policy, verifier, fallback policy, budget, approval policy), never a bare model name; quality thresholds are task-family-specific and measured (CPST plus the eval corpus, per the design doc); hard constraints — trust mode, capability, tier entitlement, latency lane, tenant policy — filter candidates before any cost ranking; auto-routing stays explicit and explainable per Decision #10.
-    Evidence: `docs/design/execution-plan-contract-and-cpst-2026-08-05.md`, `crates/agiworkforce-model-registry/src/lib.rs`, `docs/work/implementation-status.md` (2026-08-05 founder decisions section).
+    Evidence: `docs/architecture/execution-plan-contract.md`, `crates/agiworkforce-model-registry/src/lib.rs`, `docs/work/implementation-status.md` (2026-08-05 founder decisions section).
 
 ## Outdated Or Historical
 

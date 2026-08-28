@@ -92,10 +92,7 @@ import {
 } from '@agiworkforce/artifacts';
 import { getProviderModeForModel } from '../../lib/localByokHandoff';
 import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
-import {
-  useArtifactsStore,
-  generatedFileArtifactId,
-} from '../../stores/artifacts-store';
+import { useArtifactsStore, generatedFileArtifactId } from '../../stores/artifacts-store';
 import {
   useChatStore,
   type GeneratedFileMetadataEntry,
@@ -2355,7 +2352,7 @@ const MessageBubbleComponent = function MessageBubble({
                             Token breakdown for the turn. `tokensUsed` comes
                             from the PERSISTED message row via `toChatMessage`
                             (no terminal usage stream frame exists — one was
-                            built and reverted, see docs/adr/wire-or-cut.md
+                            built and reverted, see docs/decisions/wire-or-cut.md
                             "Per-message token/cost"), so it appears after the
                             turn is saved. `cost` has no producer at all today:
                             managed cost stays server-side, so the dollar line

@@ -117,7 +117,7 @@
     },
     {
       "name": "Enterprise Control Plane",
-      "path": "docs/enterprise",
+      "path": "docs/compliance",
       "owner": "Enterprise/platform lead",
       "purpose": "Admin policy, identity, audit, support, usage ledger, managed-credit launch gates, and enterprise docs",
       "primaryChecks": [

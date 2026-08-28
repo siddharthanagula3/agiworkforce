@@ -134,18 +134,13 @@ const activeOperationalFiles = trackedTextFiles.filter((file) => {
     'docs/agent-context/',
     'docs/architecture/',
     'docs/compliance/',
-    'docs/design/',
     'docs/development/',
     'docs/development/',
-    'docs/enterprise/',
     'docs/generated/',
-    'docs/launch/',
-    'docs/marketing/',
     'docs/product/',
     'docs/research/',
     'docs/specs/',
     'docs/standards/',
-    'docs/surfaces/',
     'docs/work/',
   ].some((prefix) => file.startsWith(prefix));
 });
@@ -297,9 +292,7 @@ for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
 }
 
 if (exists('docs/planning')) {
-  errors.push(
-    'Use docs/plans for active plans or docs/archive for historical plans; docs/planning is retired.',
-  );
+  errors.push('Use docs/specs for active plans; historical plans live in git history.');
 }
 
 const retiredTopLevelDocs = [
@@ -335,12 +328,8 @@ const activeReferencePaths = [
   'ONBOARDING.md',
   'AGI_WORKFORCE.md',
   'docs/README.md',
-  ...walk('docs/surfaces'),
   ...walk('docs/decisions'),
   ...walk('docs/development'),
-  ...walk('docs/enterprise'),
-  ...walk('docs/marketing'),
-  ...walk('docs/design'),
   ...walk('docs/research'),
   ...walk('docs/architecture'),
   ...walk('docs/compliance'),
@@ -365,7 +354,7 @@ for (const file of activeReferencePaths) {
     for (const marker of [`docs/${docName}`, `../${docName}`, `/docs/${docName}`]) {
       if (body.includes(marker)) {
         errors.push(
-          `${file} references retired active doc path ${marker}; use docs/current or docs/archive/2026-05-21-docs-consolidation instead.`,
+          `${file} references retired active doc path ${marker}; use the docs/ taxonomy in AGENTS.md instead.`,
         );
       }
     }
@@ -800,7 +789,7 @@ const workspaceFilterFiles = [
   'apps/web/scripts/build-with-chat.sh',
   'scripts/verify-surfaces.sh',
   'scripts/launch-verify.sh',
-  'docs/plans/domain-first-reorg.md',
+  'docs/specs/domain-first-reorg.md',
   'docs/surfaces/web.md',
 ].filter(exists);
 
@@ -848,8 +837,8 @@ for (const file of walk('apps/extension')) {
   }
 }
 
-if (exists('docs/surfaces/desktop.md')) {
-  const desktopSurfaceDoc = readText('docs/surfaces/desktop.md');
+if (exists('docs/architecture/desktop.md')) {
+  const desktopSurfaceDoc = readText('docs/architecture/desktop.md');
   const staleDesktopChatClaims = [
     'from `UnifiedAgenticChat/`',
     '`apps/desktop/src/components/UnifiedAgenticChat/` is partially dead',
@@ -859,30 +848,30 @@ if (exists('docs/surfaces/desktop.md')) {
   for (const staleClaim of staleDesktopChatClaims) {
     if (desktopSurfaceDoc.includes(staleClaim)) {
       errors.push(
-        `docs/surfaces/desktop.md contains stale Desktop chat migration claim: ${staleClaim}`,
+        `docs/architecture/desktop.md contains stale Desktop chat migration claim: ${staleClaim}`,
       );
     }
   }
 }
 
-if (exists('docs/cli/COMMAND_SURFACE.md')) {
-  const commandSurfaceDoc = readText('docs/cli/COMMAND_SURFACE.md');
+if (exists('docs/standards/cli-command-surface.md')) {
+  const commandSurfaceDoc = readText('docs/standards/cli-command-surface.md');
   if (commandSurfaceDoc.includes('Known explicitly advertised-but-unhandled')) {
     errors.push(
-      'docs/cli/COMMAND_SURFACE.md must classify TUI slash-command coverage through direct arms and shared parity fallback, not a stale unhandled list.',
+      'docs/standards/cli-command-surface.md must classify TUI slash-command coverage through direct arms and shared parity fallback, not a stale unhandled list.',
     );
   }
 }
 
 requireIncludes('apps/web/features/index.ts', 'canonical Web product-domain root');
-requireIncludes('docs/plans/domain-first-reorg.md', '`apps/web/features/`');
-requireIncludes('docs/plans/domain-first-reorg.md', '`apps/mobile/src/features');
-requireIncludes('docs/plans/domain-first-reorg.md', '`apps/desktop/src/features');
-requireIncludes('docs/surfaces/desktop.md', 'Retired chat folder');
-requireIncludes('docs/surfaces/desktop.md', 'apps/desktop/src/features/chat/');
-requireIncludes('docs/cli/COMMAND_SURFACE.md', 'Shared Claude-parity fallback');
+requireIncludes('docs/specs/domain-first-reorg.md', '`apps/web/features/`');
+requireIncludes('docs/specs/domain-first-reorg.md', '`apps/mobile/src/features');
+requireIncludes('docs/specs/domain-first-reorg.md', '`apps/desktop/src/features');
+requireIncludes('docs/architecture/desktop.md', 'Retired chat folder');
+requireIncludes('docs/architecture/desktop.md', 'apps/desktop/src/features/chat/');
+requireIncludes('docs/standards/cli-command-surface.md', 'Shared Claude-parity fallback');
 requireIncludes(
-  'docs/cli/COMMAND_SURFACE.md',
+  'docs/standards/cli-command-surface.md',
   'registered_builtin_commands_have_tui_runtime_coverage',
 );
 requireIncludes('apps/mobile/src/features/schedules/index.ts', 'public API barrel');

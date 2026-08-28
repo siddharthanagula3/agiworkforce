@@ -735,7 +735,7 @@
     "item": "crash-dump-upload",
     "surface": "apps/desktop",
     "status": "missing",
-    "evidence": "Native crash-dump upload is intentionally absent. The Desktop panic hook in apps/desktop/src-tauri/src/lib.rs records panic location/message only to the redacted local tracing/log pipeline. The dormant optional Rust Sentry dependency/feature was removed because no release enabled it, packaged GUI processes had no reliable runtime DSN, and startup-time native capture could not honor the renderer-owned opt-in/trust-boundary state. The separate hand-rolled Sentry HTTP sender was removed from error_reporting.rs; its commands now retain diagnostics locally. Consent-gated Managed-mode renderer exception reporting remains built in apps/desktop/src/services/errorTracking.ts. docs/adr/wire-or-cut.md records the product boundary."
+    "evidence": "Native crash-dump upload is intentionally absent. The Desktop panic hook in apps/desktop/src-tauri/src/lib.rs records panic location/message only to the redacted local tracing/log pipeline. The dormant optional Rust Sentry dependency/feature was removed because no release enabled it, packaged GUI processes had no reliable runtime DSN, and startup-time native capture could not honor the renderer-owned opt-in/trust-boundary state. The separate hand-rolled Sentry HTTP sender was removed from error_reporting.rs; its commands now retain diagnostics locally. Consent-gated Managed-mode renderer exception reporting remains built in apps/desktop/src/services/errorTracking.ts. docs/decisions/wire-or-cut.md records the product boundary."
   },
   {
     "item": "proxy-config",
@@ -1503,7 +1503,7 @@
     "item": "background-task-ctrl-b",
     "surface": "apps/cli",
     "status": "missing",
-    "evidence": "The unreachable promise was cut rather than fabricated: `background`, alias `bg`, and `tasks` are absent from crates/agiworkforce-command-registry/src/lib.rs, both apps/cli/src/claude_parity.rs and apps/cli/src/tui/tui_app.rs have no dispatch arm for them, and docs/cli/COMMAND_SURFACE.md advertises none of them. crates/agiworkforce-command-registry/tests/slash_palette_golden.rs asserts all three names stay absent. No Ctrl-B binding or detached-run contract exists, so current-turn backgrounding is honestly Missing instead of a reachable Stub; docs/adr/wire-or-cut.md records the cut."
+    "evidence": "The unreachable promise was cut rather than fabricated: `background`, alias `bg`, and `tasks` are absent from crates/agiworkforce-command-registry/src/lib.rs, both apps/cli/src/claude_parity.rs and apps/cli/src/tui/tui_app.rs have no dispatch arm for them, and docs/standards/cli-command-surface.md advertises none of them. crates/agiworkforce-command-registry/tests/slash_palette_golden.rs asserts all three names stay absent. No Ctrl-B binding or detached-run contract exists, so current-turn backgrounding is honestly Missing instead of a reachable Stub; docs/decisions/wire-or-cut.md records the cut."
   },
   {
     "item": "process-manager",
@@ -2583,7 +2583,7 @@
     "item": "background-subagent-execution",
     "surface": "packages/core-agent",
     "status": "missing",
-    "evidence": "The placeholder `/background` and `/bg` command surface was removed from the shared registry, TUI, classic shared handler, tests, and command documentation, so no reachable UI claims detached execution. The actual subagent batch path in apps/cli/src/agent/chat.rs remains synchronous and waits for all workers before returning. `/tasks` continues to expose only real session task-registry entries. Detached subagent execution is therefore honestly Missing pending a durable run/reattach contract, with the cut recorded in docs/adr/wire-or-cut.md."
+    "evidence": "The placeholder `/background` and `/bg` command surface was removed from the shared registry, TUI, classic shared handler, tests, and command documentation, so no reachable UI claims detached execution. The actual subagent batch path in apps/cli/src/agent/chat.rs remains synchronous and waits for all workers before returning. `/tasks` continues to expose only real session task-registry entries. Detached subagent execution is therefore honestly Missing pending a durable run/reattach contract, with the cut recorded in docs/decisions/wire-or-cut.md."
   },
   {
     "item": "foreground-blocking-subagent",
@@ -3261,13 +3261,13 @@
     "item": "saml",
     "surface": "packages/auth",
     "status": "missing",
-    "evidence": "First-party SAML authentication is absent. Migration 0076 and apps/web/app/api/admin/sso/route.ts provide guarded identity-provider metadata storage, but the repository has no SAML authorization redirect, assertion-consumer service, metadata exchange runtime, signature/assertion validation, session issuance, or SAML sign-in entry point. The admin page explicitly describes that configuration as schema-ready while runtime is deferred, and CAP-028 plus docs/adr/wire-or-cut.md place the runtime in Phase 3. Configuration metadata is an adjacent foundation, not a partial implementation of SAML authentication."
+    "evidence": "First-party SAML authentication is absent. Migration 0076 and apps/web/app/api/admin/sso/route.ts provide guarded identity-provider metadata storage, but the repository has no SAML authorization redirect, assertion-consumer service, metadata exchange runtime, signature/assertion validation, session issuance, or SAML sign-in entry point. The admin page explicitly describes that configuration as schema-ready while runtime is deferred, and CAP-028 plus docs/decisions/wire-or-cut.md place the runtime in Phase 3. Configuration metadata is an adjacent foundation, not a partial implementation of SAML authentication."
   },
   {
     "item": "scim",
     "surface": "packages/auth",
     "status": "partial",
-    "evidence": "A first-party SCIM 2.0 service provider ships at apps/web/app/api/scim/v2 (ServiceProviderConfig, ResourceTypes, Schemas, Users and Groups with GET/POST/PUT/PATCH/DELETE), backed by apps/web/lib/server/scim/* and migration 0084_scim_provisioning.sql (scim_tokens, scim_provisioned_users, scim_groups, scim_group_members, directory_sync_events). Bearer tokens are CSPRNG-generated, Argon2id-hashed, prefix-indexed, revocable and never logged. Every request re-checks canUseBillingPlanCapability(plan,'enterprise_controls') against the issuing admin and fails closed. Provisioning writes organization_members with provisioning_source='scim'; deprovisioning removes the membership and can never touch an owner. Filter (eq on allowlisted attributes), 1-based pagination, ListResponse/Error envelopes and both Okta and Entra PATCH shapes are implemented; bulk, sort and ETag are advertised as unsupported rather than stubbed. Remaining gap, hence partial: a pending SCIM resource for a person with no AGI account is linked on the next SCIM write rather than at sign-in, because sign-in-time linking requires a shared identity path outside this change. See docs/enterprise/directory-sync.md."
+    "evidence": "A first-party SCIM 2.0 service provider ships at apps/web/app/api/scim/v2 (ServiceProviderConfig, ResourceTypes, Schemas, Users and Groups with GET/POST/PUT/PATCH/DELETE), backed by apps/web/lib/server/scim/* and migration 0084_scim_provisioning.sql (scim_tokens, scim_provisioned_users, scim_groups, scim_group_members, directory_sync_events). Bearer tokens are CSPRNG-generated, Argon2id-hashed, prefix-indexed, revocable and never logged. Every request re-checks canUseBillingPlanCapability(plan,'enterprise_controls') against the issuing admin and fails closed. Provisioning writes organization_members with provisioning_source='scim'; deprovisioning removes the membership and can never touch an owner. Filter (eq on allowlisted attributes), 1-based pagination, ListResponse/Error envelopes and both Okta and Entra PATCH shapes are implemented; bulk, sort and ETag are advertised as unsupported rather than stubbed. Remaining gap, hence partial: a pending SCIM resource for a person with no AGI account is linked on the next SCIM write rather than at sign-in, because sign-in-time linking requires a shared identity path outside this change. See docs/compliance/directory-sync.md."
   },
   {
     "item": "mfa-totp",
@@ -3369,7 +3369,7 @@
     "item": "managed-enterprise-settings",
     "surface": "packages/settings",
     "status": "missing",
-    "evidence": "A managed enterprise-settings product capability is absent. Migration 0076 provides an RLS-backed organization_admin_policies foundation and services/api-gateway/src/routes/enterprise.ts exposes a member-readable GET that returns the stored row or fail-closed defaults, but it has no write route. AdminConsolePage renders compile-time DEFAULT_ENTERPRISE_ADMIN_POLICY values rather than loading organization policy, and no Web, Desktop, Mobile, CLI, VS Code, or Chrome runtime subscribes to or enforces that row. docs/adr/wire-or-cut.md explicitly classifies managed overrides, model restrictions, defaults push, and their distribution/precedence/enforcement path as cut claims. A dormant schema plus read projection is not partial managed settings."
+    "evidence": "A managed enterprise-settings product capability is absent. Migration 0076 provides an RLS-backed organization_admin_policies foundation and services/api-gateway/src/routes/enterprise.ts exposes a member-readable GET that returns the stored row or fail-closed defaults, but it has no write route. AdminConsolePage renders compile-time DEFAULT_ENTERPRISE_ADMIN_POLICY values rather than loading organization policy, and no Web, Desktop, Mobile, CLI, VS Code, or Chrome runtime subscribes to or enforces that row. docs/decisions/wire-or-cut.md explicitly classifies managed overrides, model restrictions, defaults push, and their distribution/precedence/enforcement path as cut claims. A dormant schema plus read projection is not partial managed settings."
   },
   {
     "item": "user-settings",
@@ -3573,7 +3573,7 @@
     "item": "crash-reporting",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "Remote crash/error reporting is built on the product surfaces that advertise it and explicitly bounded elsewhere. Web initializes @sentry/nextjs only in configured production runtimes, with client consent and centralized PII scrubbing in apps/web/lib/sentry-shared.ts plus instrumentation-client.ts/instrumentation.ts. Desktop renderer reporting in apps/desktop/src/services/errorTracking.ts requires the error-reporting opt-in and rejects Local/BYOK trust boundaries; tests pin both gates. Native Desktop crashes, Mobile, Chrome, and VS Code remain local-only by explicit product policy rather than carrying dormant or bypassing upload code: the unused native Sentry feature and hand-rolled HTTP sender were removed, Mobile discloses its local-only diagnostics in cloud-privacy/index.tsx, and neither extension advertises remote collection. The surface matrix and reconsideration requirements are recorded in docs/adr/wire-or-cut.md."
+    "evidence": "Remote crash/error reporting is built on the product surfaces that advertise it and explicitly bounded elsewhere. Web initializes @sentry/nextjs only in configured production runtimes, with client consent and centralized PII scrubbing in apps/web/lib/sentry-shared.ts plus instrumentation-client.ts/instrumentation.ts. Desktop renderer reporting in apps/desktop/src/services/errorTracking.ts requires the error-reporting opt-in and rejects Local/BYOK trust boundaries; tests pin both gates. Native Desktop crashes, Mobile, Chrome, and VS Code remain local-only by explicit product policy rather than carrying dormant or bypassing upload code: the unused native Sentry feature and hand-rolled HTTP sender were removed, Mobile discloses its local-only diagnostics in cloud-privacy/index.tsx, and neither extension advertises remote collection. The surface matrix and reconsideration requirements are recorded in docs/decisions/wire-or-cut.md."
   },
   {
     "item": "i18n",
@@ -3729,7 +3729,7 @@
     "item": "sso-enforcement",
     "surface": "admin-and-billing",
     "status": "missing",
-    "evidence": "SSO enforcement is absent. Migration 0076 and the admin SSO route store guarded provider metadata, but apps/web/app/api/settings/organization/route.ts explicitly rejects enforceSSO and no login, session, organization-access, or recovery path consumes an enforcement flag. The fail-closed rejection is covered by route.capability-honesty.test.ts. CAP-028 and docs/adr/wire-or-cut.md defer the sign-in runtime to Phase 3, while AdminConsolePage discloses that boundary. SSO metadata configuration is not partial enforcement."
+    "evidence": "SSO enforcement is absent. Migration 0076 and the admin SSO route store guarded provider metadata, but apps/web/app/api/settings/organization/route.ts explicitly rejects enforceSSO and no login, session, organization-access, or recovery path consumes an enforcement flag. The fail-closed rejection is covered by route.capability-honesty.test.ts. CAP-028 and docs/decisions/wire-or-cut.md defer the sign-in runtime to Phase 3, while AdminConsolePage discloses that boundary. SSO metadata configuration is not partial enforcement."
   },
   {
     "item": "audit-log-viewer",

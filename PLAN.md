@@ -355,7 +355,7 @@ commits.
 
 2026-08-05: THE ROUTER GETS AN OBJECTIVE — EXECUTIONPLAN AND CPST ARE
 SPECIFIED, NOTHING IS IMPLEMENTED. The design spec landed as
-`docs/design/execution-plan-contract-and-cpst-2026-08-05.md` (docs-only slice;
+`docs/architecture/execution-plan-contract.md` (docs-only slice;
 no code, schema, curation, or generated file was touched). It specifies one
 `ExecutionPlan` value carrying model snapshot, provider endpoint, reasoning
 effort, service tier, execution location, harness version, tool bundle,

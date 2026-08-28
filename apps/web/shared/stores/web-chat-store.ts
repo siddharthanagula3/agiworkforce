@@ -182,7 +182,7 @@ export interface MessageMetadata {
    * Per-turn usage, lifted from the PERSISTED `web_messages.input_tokens` /
    * `output_tokens` columns by `toChatMessage` on conversation load. There is
    * no terminal `x_usage` stream frame — one was built and reverted for
-   * breaking response-builder byte parity (docs/adr/wire-or-cut.md,
+   * breaking response-builder byte parity (docs/decisions/wire-or-cut.md,
    * "Per-message token/cost") — so these arrive with the persisted row, not
    * mid-stream, and stay absent for temporary chats.
    */

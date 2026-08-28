@@ -108,7 +108,6 @@ const MIGRATION_GUIDE = `
 4. Set AGI_DATABASE_URL=postgresql://user:pwd@host:5432/db?sslmode=require.
 5. Replace this skeleton — see the JSDoc reference implementation.
 
-Full guide: docs/archive/2026-05-21-docs-consolidation/SCALING.md §"Self-hosted Postgres / RDS"
 `.trim();
 
 export class PostgresDatabaseAdapter implements DatabaseAdapter {

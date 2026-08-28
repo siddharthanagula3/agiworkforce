@@ -65,7 +65,7 @@ and it gates the task-family ordering stage. Off is the honest default: turning
 it on changes which model a request lands on, and the shadow-mode evidence that
 would justify that change (a CPST baseline per family, a measured router
 decision latency, a written list of shadow/live disagreements) does not exist
-yet. See `docs/design/execution-plan-contract-and-cpst-2026-08-05.md` Section 5.
+yet. See `docs/architecture/execution-plan-contract.md` Section 5.
 
 ## Security, Privacy, Data Boundaries
 

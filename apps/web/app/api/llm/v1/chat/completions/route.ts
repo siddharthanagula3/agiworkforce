@@ -136,7 +136,7 @@ async function refundFailedReservation(
         outcome: 'failed',
         actualCostCents: 0,
         // CPST Stage-0 telemetry, MANAGED CLOUD ONLY
-        // (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3).
+        // (docs/architecture/execution-plan-contract.md §4.3).
         // This is the one unambiguous terminal failure signal on the web path:
         // the attempt died and its reservation is being released, so the task
         // did not succeed. Additive keys only; the release contract itself is

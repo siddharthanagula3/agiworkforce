@@ -5,7 +5,7 @@ version: 1
 
 # shadow: findings publish as neutral check runs and advisory comments only.
 # Promote to `advisory`, then `blocking`, only after precision is proven
-# against the evaluation corpus (docs/guardian/IMPLEMENTATION_STATUS.md).
+# against the evaluation corpus (docs/work/guardian-implementation-status.md).
 mode: shadow
 
 triggers:

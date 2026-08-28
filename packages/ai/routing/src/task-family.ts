@@ -2,7 +2,7 @@
  * Deterministic task-family fast path.
  *
  * Design source of truth:
- * `docs/design/execution-plan-contract-and-cpst-2026-08-05.md` §6 ("8–12 task
+ * `docs/architecture/execution-plan-contract.md` §6 ("8–12 task
  * families, drawn from and NARROWING the canonical 11-value `RoutingTaskType`
  * taxonomy") and §5 Stage 1/Stage 2.
  *

@@ -200,7 +200,7 @@ describe('public billing truth', () => {
 });
 
 describe('App Store listing truth', () => {
-  const listingPath = '../../docs/launch/store-listings/app-store.md';
+  const listingPath = '../../docs/work/app-store-listing.md';
 
   it('prices each plan bullet at exactly what that plan charges', () => {
     const byLabel = new Map(

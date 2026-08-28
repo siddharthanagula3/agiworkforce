@@ -1479,7 +1479,7 @@
       "evidence": "CAP-052 is gated NO-GO by its own security review, and the unresolved conditions are substantially billing-system changes. RT-1 (high): the path-of-least-resistance bridge would bill published_artifacts.user_id, which satisfies reserveManagedUsageRequest's userId contract with no code smell, so an anonymous visitor looping /shared-artifact/[token] drains the publisher's session and weekly caps, parallelised across IPs because anonymous rate limiting is per-IP. T4/C2: there is no per-artifact spend or call ceiling — verified, grep for artifactInstanceId across apps/ returns zero hits — so an artifact can burn a viewer's entire allowance; the fix is a Postgres migration to reserve_managed_usage_request_with_limits, not an in-code check. RT-4: publishArtifactRecord copies content verbatim so a bridge opt-in flag would ride to the public copy unstripped, and IDEMPOTENCY_KEY_PATTERN is shape-only (/^[A-Za-z0-9._:-]{8,128}$/, verified) so a loop minting fresh keys bills each iteration. The security design gate itself has its primary home in the security slice.",
       "fix": "Before any bridge code: add an artifactInstanceId/origin dimension and per-artifact call and spend ceilings via migration, prohibit publisher-billing on the anonymous token surface absolutely, strip any bridge flag on publish, and bind idempotency keys semantically rather than by shape.",
       "sources": [
-        "docs/design/cap-052-artifact-runtime-bridge-security-review-2026-08-05.md T2/T4/T7/T9/RT-1/RT-4",
+        "docs/security/artifact-runtime-bridge-review.md T2/T4/T7/T9/RT-1/RT-4",
         "audit/capability-gaps.csv CAP-052"
       ],
       "blocked_by": "Security design sign-off on RT-1 through RT-5 before implementation begins",
@@ -4854,7 +4854,7 @@
       "evidence": "PLAN.md 2026-08-05: 'THE ROUTER GETS AN OBJECTIVE — EXECUTIONPLAN AND CPST ARE SPECIFIED, NOTHING IS IMPLEMENTED... no code, schema, curation, or generated file was touched.' Eight open questions are recorded as unknown, including which of two already-diverged resolvers is canonical (OQ-1, see AI-08) and what identifies a model snapshot. Four dependent slices are queued and none started: (1) CPST telemetry fields — taskOutcome, retries, fallbackUsed, verifierResult, routePlanId, taskFamily — added to managed_usage_requests usage jsonb as a pass-through at existing reserve/finalize call sites, with a two-week non-null-rate exit criterion; (2) rules-based eligibility plus a session-sticky escalation-only Pareto router; (3) an eval corpus (see AI-11); (4) shadow-mode execution logging preferred routes without acting on them.",
       "fix": "Routing decisions are driven by a declared objective with measured outcomes: telemetry lands first, then eligibility and Pareto selection, then shadow-mode comparison — each stage gated on the previous one producing real data rather than on the spec alone.",
       "code_refs": [
-        "docs/design/execution-plan-contract-and-cpst-2026-08-05.md",
+        "docs/architecture/execution-plan-contract.md",
         "apps/web/db/neon/0056_managed_usage_request_lifecycle.sql",
         "apps/web/lib/services/managed-usage-accounting-service.ts",
         "packages/ai/routing/src/model-switch-cache.ts",
@@ -6124,7 +6124,7 @@
       "severity": "MEDIUM",
       "status": "in-progress",
       "effort": "M",
-      "evidence": "GAP-P1-008: docs/api/openapi.yaml is referenced but not present in the tree — VERIFIED absent — and the API surface is instead documented ad hoc in docs/api/rate-limits.md and route contracts, with no contract tests comparing routes to a published spec. apps/web/public/openapi.json does exist (VERIFIED), so there are two competing candidate artifacts and no declared owner. PP-29 records the downstream consequence: structured outputs are advertised as compatible but hard-rejected, an embedding catalog is unused, retired /api/agents paths remain in clients and docs, and there is no explicit OpenAPI-compatibility matrix.",
+      "evidence": "GAP-P1-008: docs/api/openapi.yaml is referenced but not present in the tree — VERIFIED absent — and the API surface is instead documented ad hoc in docs/standards/api-rate-limits.md and route contracts, with no contract tests comparing routes to a published spec. apps/web/public/openapi.json does exist (VERIFIED), so there are two competing candidate artifacts and no declared owner. PP-29 records the downstream consequence: structured outputs are advertised as compatible but hard-rejected, an embedding catalog is unused, retired /api/agents paths remain in clients and docs, and there is no explicit OpenAPI-compatibility matrix.",
       "fix": "One published OpenAPI artifact is the contract, generated from or verified against the real routes by a contract test, so an advertised capability cannot diverge from what the API accepts.",
       "code_refs": [
         "apps/web/public/openapi.json",
@@ -6437,7 +6437,7 @@
       ],
       "sources": [
         "audit/parity-2026-08-15/gaps/domain-models (MODELS-002)",
-        "docs/adr/wire-or-cut.md#2026-07-30 Enterprise Local Policy Runtime Boundary"
+        "docs/decisions/wire-or-cut.md#2026-07-30 Enterprise Local Policy Runtime Boundary"
       ],
       "merged_from": ["MODELS-002", "wire-or-cut Enterprise Local Policy Runtime Boundary"],
       "effort": "L",
@@ -6954,13 +6954,13 @@
       "domain": "billing",
       "severity": "MEDIUM",
       "status": "open",
-      "evidence": "docs/adr/wire-or-cut.md#2026-08-06 'Notifications: the first send paths'. A backlog of six email channels was scoped; only mobile push and schedule-completion email were wired. The ledger records why the rest were deliberately deferred and why that deferral is itself a risk: 'billing emails carry financial retention/disclosure obligations and security emails are the channel an attacker most wants to suppress or spoof — neither built as a by-product of the notification transport work.' The transport primitive (notification-email-service.ts, extracted from the support-email path) now exists, so the gap is the missing senders and their content policy, not the plumbing.",
+      "evidence": "docs/decisions/wire-or-cut.md#2026-08-06 'Notifications: the first send paths'. A backlog of six email channels was scoped; only mobile push and schedule-completion email were wired. The ledger records why the rest were deliberately deferred and why that deferral is itself a risk: 'billing emails carry financial retention/disclosure obligations and security emails are the channel an attacker most wants to suppress or spoof — neither built as a by-product of the notification transport work.' The transport primitive (notification-email-service.ts, extracted from the support-email path) now exists, so the gap is the missing senders and their content policy, not the plumbing.",
       "fix": "Build the billing (invoice, payment failure, plan change), usage/budget (threshold, cap reached) and security (new device, password/MFA change, session revoked) senders on the existing sendTransactionalEmail primitive, with retention and spoof-resistance requirements decided per channel before shipping.",
       "code_refs": [
         "apps/web/lib/services/notification-email-service.ts",
         "apps/web/lib/services/schedule-notification-service.ts"
       ],
-      "sources": ["docs/adr/wire-or-cut.md#2026-08-06 Notifications: the first send paths"],
+      "sources": ["docs/decisions/wire-or-cut.md#2026-08-06 Notifications: the first send paths"],
       "effort": "M",
       "verified_against_code": true,
       "kind": "unbuilt_scope",
@@ -7188,9 +7188,9 @@
       "domain": "compliance/dpdp",
       "severity": "MEDIUM",
       "status": "open",
-      "evidence": "docs/adr/wire-or-cut.md#2026-07-30 Crash-reporting Runtime Boundary. The optional Rust Sentry feature was compiled out of every release and initialized before renderer-owned consent state was available, so both native egress paths were removed. The ledger records the preconditions for any future native uploader: a typed runtime consent bridge, Managed-mode enforcement, packaged configuration, symbol upload, and end-to-end release verification — none of which exists. Recorded so a future crash-reporting effort does not re-introduce pre-consent native egress. Distinct from DPDP-07 (desktop telemetry constructed enabled, bypassing the consent gate and surviving Delete All Data), which is a live defect in a different subsystem.",
+      "evidence": "docs/decisions/wire-or-cut.md#2026-07-30 Crash-reporting Runtime Boundary. The optional Rust Sentry feature was compiled out of every release and initialized before renderer-owned consent state was available, so both native egress paths were removed. The ledger records the preconditions for any future native uploader: a typed runtime consent bridge, Managed-mode enforcement, packaged configuration, symbol upload, and end-to-end release verification — none of which exists. Recorded so a future crash-reporting effort does not re-introduce pre-consent native egress. Distinct from DPDP-07 (desktop telemetry constructed enabled, bypassing the consent gate and surviving Delete All Data), which is a live defect in a different subsystem.",
       "fix": "Do not re-enable native crash-dump upload until a typed runtime consent bridge exists and Managed-mode enforcement, packaged config, symbol upload and release verification are all proven; product crash reporting on Web/Desktop renderer already fails closed and is unaffected.",
-      "sources": ["docs/adr/wire-or-cut.md#2026-07-30 Crash-reporting Runtime Boundary"],
+      "sources": ["docs/decisions/wire-or-cut.md#2026-07-30 Crash-reporting Runtime Boundary"],
       "effort": "L",
       "verification": {
         "date": "2026-08-17",
@@ -7699,7 +7699,7 @@
       "evidence": "wire-or-cut.md 2026-08-06 late web items: Cmd+F in-conversation search was wired (ChatMessageList now owns it, fixing a virtualized-list truncation), but the note states explicitly that 'per-match text highlighting inside the bubble is NOT included — needs a new prop threaded through the markdown renderer, tracked separately.'",
       "fix": "Thread a match-highlight prop through MarkdownContent so matched spans render highlighted in the bubble.",
       "sources": [
-        "docs/adr/wire-or-cut.md 2026-08-06 Wave 2 late web items — In-conversation search"
+        "docs/decisions/wire-or-cut.md 2026-08-06 Wave 2 late web items — In-conversation search"
       ],
       "verification": {
         "date": "2026-08-17",
@@ -8290,7 +8290,7 @@
       "fix": "settings_v2: either migrate settingsStore.ts onto it and delete the old path, or delete settings_v2 entirely. checkpoint_*: delete outright — coding_checkpoint_* already covers the live use case; sweep checkpoint_store.rs/checkpoint_manager.rs in the same pass.",
       "sources": [
         "audit/parity-2026-08-15 gaps/domain-dead-code DEAD-CODE-014",
-        "docs/adr/wire-or-cut.md 2026-08-06 Wave 2 Orphan Sweep",
+        "docs/decisions/wire-or-cut.md 2026-08-06 Wave 2 Orphan Sweep",
         "audit/parity-2026-08-15/gaps/domain-dead-code.json DEAD-CODE-014"
       ],
       "code_refs": [
@@ -8474,7 +8474,9 @@
       "status": "open",
       "evidence": "wire-or-cut.md 2026-07-30 Desktop Companion Pairing Target Boundary: phone QR and manual-code pairing were wired, but no independently authorized computer peer, target selection, routing, persistent device identity or revocation lifecycle exists, so a Computer tab would advertise a nonexistent transport and it remains deliberately absent. Distinct from DESK-51 (mobile-companion pairing single-session by design, wontfix).",
       "fix": "Do not ship a Computer tab until the transport exists; sequence behind the remote developer-session control protocol (DESK-99), which would supply the device identity and revocation lifecycle.",
-      "sources": ["docs/adr/wire-or-cut.md 2026-07-30 Desktop Companion Pairing Target Boundary"],
+      "sources": [
+        "docs/decisions/wire-or-cut.md 2026-07-30 Desktop Companion Pairing Target Boundary"
+      ],
       "blocked_by": "DESK-99 (no remote developer-session control protocol / device identity lifecycle)",
       "effort": "L",
       "verification": {
@@ -8492,7 +8494,7 @@
       "status": "open",
       "evidence": "wire-or-cut.md 2026-08-06 Wave 2/3 final items: WordEditor::edit_document CANNOT parse an existing .docx and its own tracing::warn! states source content 'is not preserved' — it builds a new document from the edits alone. Exposing it as 'edit your document' would silently destroy the user's file, so it is deliberately not registered as a Tauri command. The sibling ExcelEditor was wired (document_edit_excel, RiskLevel::High approval). Distinct from DESK-40 (attachment docx/xlsx/pptx parsing unimplemented on the read path).",
       "fix": "Delete the module or replace docx_rs with a library that can read an existing .docx before revisiting; do not register the command in its current form.",
-      "sources": ["docs/adr/wire-or-cut.md 2026-08-06 Wave 2/3 final items"],
+      "sources": ["docs/decisions/wire-or-cut.md 2026-08-06 Wave 2/3 final items"],
       "effort": "L",
       "verification": {
         "date": "2026-08-17",
@@ -8509,7 +8511,7 @@
       "status": "open",
       "evidence": "wire-or-cut.md 2026-07-29 Desktop IPC Baseline: the /execute-plan slash handler was cut as dead code with the note that 'shared slash-command reconciliation is tracked separately in Ticket 1D'; nothing in the ledger records Ticket 1D as closed.",
       "fix": "Locate or re-open Ticket 1D and reconcile the slash-command registries across the desktop renderer, shared unified-chat and CLI so the three lists cannot drift again.",
-      "sources": ["docs/adr/wire-or-cut.md 2026-07-29 Desktop IPC Baseline — Ticket 1D"],
+      "sources": ["docs/decisions/wire-or-cut.md 2026-07-29 Desktop IPC Baseline — Ticket 1D"],
       "effort": "M",
       "verification": {
         "date": "2026-08-17",
@@ -8834,8 +8836,8 @@
       "evidence": "wire-or-cut.md 2026-07-30 CLI Placeholder Surface: the advertised /background (/bg) command was removed because it only returned an unavailable message, and the placeholder task lifecycle (six deferred task-registry tools that created empty output files and accepted caller-authored status transitions) was deleted outright. The ledger states subagent batches remain foreground-only until a durable detached-run contract exists — that contract has not been built. Related to CLI-07 (/task cancel rejected despite subagent.cancel() existing).",
       "fix": "Design and implement a durable detached-run contract (process supervision, stdout capture, exit status, polling, termination) before re-advertising any backgrounding command.",
       "sources": [
-        "docs/adr/wire-or-cut.md 2026-07-30 CLI Placeholder Surface",
-        "docs/adr/wire-or-cut.md#2026-07-30 CLI Placeholder Surface"
+        "docs/decisions/wire-or-cut.md 2026-07-30 CLI Placeholder Surface",
+        "docs/decisions/wire-or-cut.md#2026-07-30 CLI Placeholder Surface"
       ],
       "effort": "XL",
       "code_refs": ["apps/cli/src/agent/", "apps/cli/src/subagent.rs"],
@@ -9107,7 +9109,7 @@
       "status": "open",
       "evidence": "wire-or-cut.md 2026-07-30 VS Code Checkpoint Boundary: the authoritative app-server host advertises checkpoints as unavailable and exposes no checkpoint/restore RPC, and the extension's command-parity contract forbids checkpoint/worktree/rewind controls; recorded as Missing. The orphaned patch-batch snapshot undo (apply, snapshot storage, batch undo) was cut in the same pass as unreferenced. Related to but distinct from EXT-11's Rewind stub.",
       "fix": "Do not add checkpoint UI until the app-server host exposes a checkpoint/restore RPC; when it does, revisit the command-parity contract in the same change.",
-      "sources": ["docs/adr/wire-or-cut.md 2026-07-30 VS Code Checkpoint Boundary"],
+      "sources": ["docs/decisions/wire-or-cut.md 2026-07-30 VS Code Checkpoint Boundary"],
       "blocked_by": "app-server host exposes no checkpoint/restore RPC",
       "effort": "L",
       "verification": {
@@ -9383,8 +9385,8 @@
       "evidence": "wire-or-cut.md 2026-08-06 Wave 2/3 final items: the OPA loop's pause polled is_paused() with no timeout and no resume channel; the branch is currently unreachable but a 300s bound was added defensively. Real human-in-the-loop resume needs a shared signal threaded into the loop and remains deferred. Related to DESK-06 (approval requests emitted but not renderable or resumable) but specific to the computer-use OPA loop rather than the tool-approval UI.",
       "fix": "Thread a shared resume signal into the computer-use loop so a confirmed pause can be genuinely resumed, rather than relying on an unreachable branch with a defensive timeout.",
       "sources": [
-        "docs/adr/wire-or-cut.md 2026-08-06 Wave 2/3 final items",
-        "docs/adr/wire-or-cut.md#2026-08-06 Wave 2/3 final items"
+        "docs/decisions/wire-or-cut.md 2026-08-06 Wave 2/3 final items",
+        "docs/decisions/wire-or-cut.md#2026-08-06 Wave 2/3 final items"
       ],
       "effort": "M",
       "code_refs": ["apps/desktop/src-tauri/src/core/agi/"],
@@ -9406,7 +9408,7 @@
       "status": "open",
       "evidence": "wire-or-cut.md 2026-07-30 Crash-reporting Runtime Boundary: the optional Rust Sentry feature was compiled out of every release and initialized before renderer-owned consent state was available, so both native egress paths were removed. A future native uploader requires a typed runtime consent bridge, Managed-mode enforcement, packaged configuration, symbol upload and end-to-end release verification — none of which exists. Product crash reporting for Web and the Desktop renderer remains wired and fails closed.",
       "fix": "Build the typed runtime consent bridge and Managed-mode enforcement before re-introducing any native crash upload; until then, record that native desktop crashes are unreported.",
-      "sources": ["docs/adr/wire-or-cut.md 2026-07-30 Crash-reporting Runtime Boundary"],
+      "sources": ["docs/decisions/wire-or-cut.md 2026-07-30 Crash-reporting Runtime Boundary"],
       "effort": "L",
       "verification": {
         "date": "2026-08-17",
@@ -10371,10 +10373,10 @@
       "domain": "desktop",
       "severity": "LOW",
       "status": "open",
-      "evidence": "docs/adr/wire-or-cut.md, 2026-07-29 Desktop IPC Baseline: the Desktop slash execute-plan handler was cut as dead code with the note that 'shared slash-command reconciliation is tracked separately in Ticket 1D'. Nothing in that ledger records Ticket 1D being closed, and the ledger is being retired.",
+      "evidence": "docs/decisions/wire-or-cut.md, 2026-07-29 Desktop IPC Baseline: the Desktop slash execute-plan handler was cut as dead code with the note that 'shared slash-command reconciliation is tracked separately in Ticket 1D'. Nothing in that ledger records Ticket 1D being closed, and the ledger is being retired.",
       "fix": "Locate or re-open Ticket 1D and reconcile the slash-command registries across the shared package, Desktop and CLI, or record explicitly that it was subsumed.",
       "code_refs": ["packages/ui/unified-chat/src/lib/slashCommands.ts"],
-      "sources": ["docs/adr/wire-or-cut.md#2026-07-29 Desktop IPC Baseline"],
+      "sources": ["docs/decisions/wire-or-cut.md#2026-07-29 Desktop IPC Baseline"],
       "effort": "M",
       "verification": {
         "date": "2026-08-17",
@@ -10389,13 +10391,13 @@
       "domain": "desktop",
       "severity": "LOW",
       "status": "open",
-      "evidence": "docs/adr/wire-or-cut.md, 2026-08-06 Wave 2 Orphan Sweep: fourteen AGI checkpoint commands and their TS clients were cut, and the ledger records that core/agi/checkpoint_store.rs and checkpoint_manager.rs 'now have no consumer beyond a doc comment and a re-export; left in place rather than widening the cut.' Distinct from DESK-78's checkpoint_* command duplication.",
+      "evidence": "docs/decisions/wire-or-cut.md, 2026-08-06 Wave 2 Orphan Sweep: fourteen AGI checkpoint commands and their TS clients were cut, and the ledger records that core/agi/checkpoint_store.rs and checkpoint_manager.rs 'now have no consumer beyond a doc comment and a re-export; left in place rather than widening the cut.' Distinct from DESK-78's checkpoint_* command duplication.",
       "fix": "Delete both modules and the re-export, or state which future subsystem is expected to consume them.",
       "code_refs": [
         "apps/desktop/src-tauri/src/core/agi/checkpoint_store.rs",
         "apps/desktop/src-tauri/src/core/agi/checkpoint_manager.rs"
       ],
-      "sources": ["docs/adr/wire-or-cut.md#2026-08-06 Wave 2 Orphan Sweep"],
+      "sources": ["docs/decisions/wire-or-cut.md#2026-08-06 Wave 2 Orphan Sweep"],
       "effort": "S",
       "verification": {
         "date": "2026-08-17",
@@ -11637,7 +11639,7 @@
     "duplication components[7] (Library = shared core plus thin platform adapters) — NO ACTION: DELIBERATE and done correctly; web's and desktop's LibraryView adapters each carry a doc comment explaining they supply only what differs on their platform and delegate to the single shared LibraryView via a shared LibraryTransport interface. Cited by the audit as the reference pattern.",
     "duplication extension-surfaces[3] (/features/plugins and /plugins both existing) and [4] (five redirect-only alias routes into /apps, /connectors, /skills) — NO ACTION on route structure: DELIBERATE, matching the site's consistent /features/X marketing-page family pattern; sitemap.ts explicitly lists the redirect-only routes as intentionally excluded. The narrative contradiction between the two plugins pages is carried forward as DOCS-25.",
     "duplication settings-and-nav[0] resolved half (nav-item array duplication between WebChatPage and WebAppShell) — RESOLVED same-day via app-nav-items.ts; recorded here so the fact that this class of drift already occurred once is not lost when the source is retired. Prior drift: '/chat rendered 6 entries and /chat/library rendered 7, Tasks was missing from chat, isActive hardcoded wrong.'",
-    "docs/adr/wire-or-cut.md — approximately 100 CUT and WIRED entries (desktop planning preview, LLM council, image gallery/presets, subscription and email/voice wrappers, renderer Stripe command set, native cloud CRUD placeholders, legacy ai_* and updater command layers, orphan debug/background/GitHub/doctor wrappers, one-off schema scripts, CLI /background and placeholder task lifecycle, unread dock badge, phantom Slack runtime, unverified outer-isolation sandbox profile, general multi-backend web cache, team approval escalation router, MCP Tasks RPC, orphaned a11y utility UI, workflow marketplace with 63 fabricated statistics, legacy research fork, AGI checkpoint command layer, visual editor, experimental surface, duplicate computer-use views, reasoning accordion, credit alert modal, advanced-mode toggle, connector card, data-retention setting, project memory-scope dropdown, dead voice preference, and the wired-in Deep Research report/history, execution sidecar, dangerous-tool approvals, temporary chats, browser prompt-injection scanning, sales tax, style sync, pre-send secret warning, in-conversation search, composer budget indicator, share-link lifetime, artifact version restore, per-message usage, copyright and model-licence pages, response reporting, conversation printing, project knowledge dedup/quota/versioning, notebook uploads, project export and duplication, camera capture, chat defaults, shortcut consolidation, memory exclusions, project templates, json_object enforcement, embeddings endpoint, mobile push delivery, notification email channel and schedule-completion notifications) — RESOLVED, no action. Recorded in bulk so the retirement of wire-or-cut.md is not read as losing open work; every open or partially-open item from that ledger has been extracted individually above.",
+    "docs/decisions/wire-or-cut.md — approximately 100 CUT and WIRED entries (desktop planning preview, LLM council, image gallery/presets, subscription and email/voice wrappers, renderer Stripe command set, native cloud CRUD placeholders, legacy ai_* and updater command layers, orphan debug/background/GitHub/doctor wrappers, one-off schema scripts, CLI /background and placeholder task lifecycle, unread dock badge, phantom Slack runtime, unverified outer-isolation sandbox profile, general multi-backend web cache, team approval escalation router, MCP Tasks RPC, orphaned a11y utility UI, workflow marketplace with 63 fabricated statistics, legacy research fork, AGI checkpoint command layer, visual editor, experimental surface, duplicate computer-use views, reasoning accordion, credit alert modal, advanced-mode toggle, connector card, data-retention setting, project memory-scope dropdown, dead voice preference, and the wired-in Deep Research report/history, execution sidecar, dangerous-tool approvals, temporary chats, browser prompt-injection scanning, sales tax, style sync, pre-send secret warning, in-conversation search, composer budget indicator, share-link lifetime, artifact version restore, per-message usage, copyright and model-licence pages, response reporting, conversation printing, project knowledge dedup/quota/versioning, notebook uploads, project export and duplication, camera capture, chat defaults, shortcut consolidation, memory exclusions, project templates, json_object enforcement, embeddings endpoint, mobile push delivery, notification email channel and schedule-completion notifications) — RESOLVED, no action. Recorded in bulk so the retirement of wire-or-cut.md is not read as losing open work; every open or partially-open item from that ledger has been extracted individually above.",
     "docs/agent-context/risk-map.json AUDIT-IMMUT-01 (audit log immutability) — RESOLVED: 0043_audit_log_immutability.sql revokes UPDATE,DELETE on public.security_audit_logs from app_rls and converts cleanup_old_security_logs() and delete_user_data(text) to SECURITY DEFINER so 90-day retention and GDPR erasure still purge; applied to prod Neon after a disposable-branch rehearsal with app_rls verified INSERT+SELECT-only. Explicit instruction preserved: do NOT re-derive the REVOKE, it exists. The two residues (the blanket GRANT re-grant footgun at 0037_rls_user_isolation.sql:81, and delete_user_data(text) having EXECUTE still open to public) are security/compliance items outside this slice.",
     "docs/product/experience-contract.md §13 correction note — two rows were previously mismarked and are RESOLVED: CLI voice is present, not absent (apps/cli/src/voice.rs with cpal capture, Whisper API/local binary and a Local-mode egress gate, reached from both the REPL and TUI via /voice), and Desktop developer sessions are mounted (CodeWorkspace lazy-mounted in DesktopShellV3.tsx, Local-only, since 2026-08-04). What remains missing for the latter is the remote projection, carried forward as AI-55.",
     "Chrome Quick mode routing through the admitted auto-economy profile (frontend-experience-contract.md §14 P0 item 4) — RESOLVED 2026-07-16: Chrome Quick now travels with both side-panel send paths and routes the turn through the admitted auto-economy profile without mutating the saved model selection.",
