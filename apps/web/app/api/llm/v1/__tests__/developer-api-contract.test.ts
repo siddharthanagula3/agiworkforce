@@ -139,7 +139,7 @@ describe('published OpenAPI spec', () => {
 });
 
 describe('published rate-limit table', () => {
-  const doc = readFileSync(path.join(repoRoot, 'docs/api/rate-limits.md'), 'utf8');
+  const doc = readFileSync(path.join(repoRoot, 'docs/standards/api-rate-limits.md'), 'utf8');
 
   const documentedKeys: Record<string, keyof typeof rateLimitConfigs> = {
     '`GET /models`': 'default',

@@ -2,7 +2,7 @@
  * Task-family eligibility floor + Pareto (cost-ranked) candidate ordering.
  *
  * Design source of truth:
- * `docs/design/execution-plan-contract-and-cpst-2026-08-05.md` §3.2 invariant 1
+ * `docs/architecture/execution-plan-contract.md` §3.2 invariant 1
  * ("A plan never widens admission … the plan describes the survivor"),
  * invariant 4 ("Absent policy is not permissive"), and §5 Stage 2.
  *

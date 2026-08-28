@@ -351,7 +351,7 @@ The screenshot reports are preserved in the source tags, but execution is reorde
         and the Claude post-save hook do not cover the repo.
       - `pnpm check:licenses` → "THIRD_PARTY_LICENSES.md not found"
         (`scripts/check-licenses.mjs:146`). The file was deleted in `906fe5cda` and
-        never restored, while `AGENTS.md:88`, `docs/legal/README.md:68` and
+        never restored, while `AGENTS.md:88`, `docs/compliance/README.md:68` and
         `docs/agent-context/known-flaws.md:2762` still describe it as the place
         third-party license obligations are recorded. Its pre-deletion content is
         recoverable (`git show 906fe5cda^:THIRD_PARTY_LICENSES.md`). Restoring it is

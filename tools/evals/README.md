@@ -26,7 +26,7 @@ Three corpora, in `datasets/`:
 Both thresholds are **declared acceptance targets, not measured baselines and
 not benchmark claims**. Nothing in this repo has yet recorded a per-family
 quality baseline; the CPST design doc
-(`docs/design/execution-plan-contract-and-cpst-2026-08-05.md` §5.1, §6) asks for
+(`docs/architecture/execution-plan-contract.md` §5.1, §6) asks for
 one and is explicit that its numbers must be re-derived from real data. `0.9` on
 the golden corpus is the tolerance for rows a strong model still gets wrong;
 `1.0` on the safety corpora is the only defensible target for a corpus this

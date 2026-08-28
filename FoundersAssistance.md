@@ -1050,7 +1050,7 @@ sources, and it is useless for answering the only question that matters at relea
 time: **is the thing we shipped correct?**
 
 Nothing checks a property against HEAD. Nothing checks a property against a built
-artifact. There is no `check:release-binary` — not unwired, *absent*; the string does
+artifact. There is no `check:release-binary` — not unwired, _absent_; the string does
 not appear anywhere in the repository.
 
 **What that cost, concretely.** The desktop auto-updater was dead on every platform
@@ -1060,7 +1060,7 @@ test over that route passed the whole time, because each one hand-wrote a target
 string the real client never sent.
 
 It got worse during the fix. The new contract test went green against an
-*uncommitted* edit to `tauri.conf.json` and was read — by me — as proof the client fix
+_uncommitted_ edit to `tauri.conf.json` and was read — by me — as proof the client fix
 had shipped, while HEAD still carried the broken template. For about an hour the repo
 was in the worst possible state: correct server selectors, a client that could not
 reach them, and a green test asserting the contract held.
@@ -1653,7 +1653,7 @@ that scoping table is where those claims are sourced from.
    and §5.
 3. Drop the "not been reviewed by counsel" row from the runbook's Open gaps
    table, close `L-9` in `DPDP_PROGRESS.md`, and close `DPDP-26` in
-   `docs/remediation/register.json`.
+   `docs/work/remediation-register.json`.
 4. Run `pnpm --filter @agiworkforce/web test app/__tests__/breach-runbook-counsel-gate.test.ts`.
    That test holds steps 2 and 3 together — a half-applied approval, where the
    header claims counsel signed off but the templates still carry the pending
@@ -1706,7 +1706,7 @@ The code side is done and no longer needs an engineer:
    (`GRIEVANCE_RESPONSE_TARGET_DAYS`, published as 30 days, our commitment and
    not a statutory period).
 4. Close `F-1`, `F-2` and `F-4` in `DPDP_PROGRESS.md` and `DPDP-23` in
-   `docs/remediation/register.json`, then run
+   `docs/work/remediation-register.json`, then run
    `pnpm --filter @agiworkforce/web test lib/__tests__/legal-constants.grievance.test.tsx`.
 
 ---

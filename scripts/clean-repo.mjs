@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const TRACKED_STALE = ['reports', 'tasks', '_archive', 'docs/archive'];
+export const TRACKED_STALE = ['reports', 'tasks', '_archive'];
 
 const CACHE_STALE = ['.tmp', '.tmp_capture', '.playwright-mcp', '.remember', '.firecrawl'];
 
