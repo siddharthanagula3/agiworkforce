@@ -658,65 +658,66 @@ impl ExtensionBridge {
 fn extension_message_to_native_payload(message: ExtensionMessage) -> Result<Value> {
     let payload = match message {
         ExtensionMessage::ExecuteScript { script } => {
-            json!({ "type": "EXECUTE_SCRIPT", "script": script, "tab_id": null })
+            json!({ "type": "execute_script", "script": script, "tab_id": null })
         }
         ExtensionMessage::GetElement { selector } => {
-            json!({ "type": "GET_TEXT", "selector": selector, "tab_id": null })
+            json!({ "type": "get_text", "selector": selector, "tab_id": null })
         }
         ExtensionMessage::Click { selector } => {
-            json!({ "type": "CLICK", "selector": selector, "tab_id": null })
+            json!({ "type": "click", "selector": selector, "tab_id": null })
         }
         ExtensionMessage::Type { selector, text } => {
-            json!({ "type": "TYPE", "selector": selector, "text": text, "tab_id": null })
+            json!({ "type": "type", "selector": selector, "text": text, "tab_id": null })
         }
         ExtensionMessage::Navigate { url } => json!({
-            "type": "EXECUTE_SCRIPT",
+            "type": "execute_script",
             "script": "navigateTo",
             "args": [url],
             "tab_id": null
         }),
         ExtensionMessage::Hover { selector } => {
-            json!({ "type": "HOVER", "selector": selector, "tab_id": null })
+            json!({ "type": "hover", "selector": selector, "tab_id": null })
         }
         ExtensionMessage::WaitForSelector {
             selector,
             timeout_ms,
         } => {
-            json!({ "type": "WAIT_FOR_SELECTOR", "selector": selector, "timeout": timeout_ms, "tab_id": null })
+            json!({ "type": "wait_for_selector", "selector": selector, "timeout_ms": timeout_ms, "tab_id": null })
         }
-        ExtensionMessage::GetDomSnapshot => json!({ "type": "GET_PAGE_INFO", "tab_id": null }),
-        ExtensionMessage::GetUrl => json!({ "type": "GET_PAGE_INFO", "tab_id": null }),
-        ExtensionMessage::GetTitle => json!({ "type": "GET_PAGE_INFO", "tab_id": null }),
+        ExtensionMessage::GetDomSnapshot => json!({ "type": "get_page_info", "tab_id": null }),
+        ExtensionMessage::GetUrl => json!({ "type": "get_page_info", "tab_id": null }),
+        ExtensionMessage::GetTitle => json!({ "type": "get_page_info", "tab_id": null }),
         ExtensionMessage::GetAttribute {
             selector,
             attribute,
         } => {
-            json!({ "type": "GET_ATTRIBUTE", "selector": selector, "attribute": attribute, "tab_id": null })
+            json!({ "type": "get_attribute", "selector": selector, "attribute": attribute, "tab_id": null })
         }
         ExtensionMessage::SelectOption { selector, value } => {
-            json!({ "type": "SELECT_OPTION", "selector": selector, "value": value, "tab_id": null })
+            json!({ "type": "select_option", "selector": selector, "value": value, "tab_id": null })
         }
         ExtensionMessage::SetChecked { selector, checked } => json!({
-            "type": if checked { "CHECK" } else { "UNCHECK" },
+            "type": "set_checked",
+            "checked": checked,
             "selector": selector,
             "tab_id": null
         }),
         ExtensionMessage::Focus { selector } => {
-            json!({ "type": "FOCUS", "selector": selector, "tab_id": null })
+            json!({ "type": "focus", "selector": selector, "tab_id": null })
         }
         ExtensionMessage::ScrollIntoView { selector } => json!({
-            "type": "EXECUTE_SCRIPT",
+            "type": "execute_script",
             "script": "scrollIntoView",
             "args": [selector, { "behavior": "auto", "block": "center" }],
             "tab_id": null
         }),
-        ExtensionMessage::GetCookies => json!({ "type": "GET_COOKIES", "url": null }),
+        ExtensionMessage::GetCookies => json!({ "type": "get_cookies", "url": null }),
         ExtensionMessage::SetCookie {
             name,
             value,
             domain,
         } => json!({
-            "type": "SET_COOKIE",
+            "type": "set_cookie",
             "cookie": {
                 "name": name,
                 "value": value,
@@ -727,35 +728,35 @@ fn extension_message_to_native_payload(message: ExtensionMessage) -> Result<Valu
                 "expires": null
             }
         }),
-        ExtensionMessage::ClearCookies => json!({ "type": "CLEAR_COOKIES", "url": null }),
+        ExtensionMessage::ClearCookies => json!({ "type": "clear_cookies", "url": null }),
         ExtensionMessage::GetLocalStorage { key } => json!({
-            "type": "EXECUTE_SCRIPT",
+            "type": "execute_script",
             "script": "getLocalStorage",
             "args": [key],
             "tab_id": null
         }),
         ExtensionMessage::SetLocalStorage { key, value } => json!({
-            "type": "EXECUTE_SCRIPT",
+            "type": "execute_script",
             "script": "setLocalStorage",
             "args": [key, value],
             "tab_id": null
         }),
         ExtensionMessage::ClearLocalStorage => json!({
-            "type": "EXECUTE_SCRIPT",
+            "type": "execute_script",
             "script": "clearLocalStorage",
             "tab_id": null
         }),
         ExtensionMessage::CaptureScreenshot { format, quality } => {
-            json!({ "type": "CAPTURE_SCREENSHOT", "tab_id": null, "format": format, "quality": quality })
+            json!({ "type": "screenshot", "tab_id": null, "format": format, "quality": quality })
         }
         ExtensionMessage::DiscoverWebMCPTools => {
-            json!({ "type": "WEBMCP_DISCOVER_TOOLS", "tab_id": null })
+            json!({ "type": "webmcp_discover_tools", "tab_id": null })
         }
         ExtensionMessage::CallWebMCPTool {
             tool_name,
             arguments,
         } => {
-            json!({ "type": "WEBMCP_CALL_TOOL", "toolName": tool_name, "arguments": arguments, "tab_id": null })
+            json!({ "type": "webmcp_call_tool", "toolName": tool_name, "arguments": arguments, "tab_id": null })
         }
     };
 
@@ -1145,7 +1146,7 @@ mod tests {
         })
         .expect("payload should be generated");
 
-        assert_eq!(payload.get("type").and_then(Value::as_str), Some("CLICK"));
+        assert_eq!(payload.get("type").and_then(Value::as_str), Some("click"));
         assert_eq!(
             payload.get("selector").and_then(Value::as_str),
             Some("#submit")
@@ -1159,12 +1160,12 @@ mod tests {
 
         assert_eq!(
             payload.get("type").and_then(Value::as_str),
-            Some("GET_PAGE_INFO")
+            Some("get_page_info")
         );
     }
 
     #[test]
-    fn test_set_checked_payload_uses_check_or_uncheck() {
+    fn set_checked_payload_carries_the_checked_flag() {
         let checked = extension_message_to_native_payload(ExtensionMessage::SetChecked {
             selector: "#newsletter".to_string(),
             checked: true,
@@ -1176,11 +1177,84 @@ mod tests {
         })
         .expect("unchecked payload should be generated");
 
-        assert_eq!(checked.get("type").and_then(Value::as_str), Some("CHECK"));
+        assert_eq!(
+            checked.get("type").and_then(Value::as_str),
+            Some("set_checked")
+        );
+        assert_eq!(checked.get("checked").and_then(Value::as_bool), Some(true));
         assert_eq!(
             unchecked.get("type").and_then(Value::as_str),
-            Some("UNCHECK")
+            Some("set_checked")
         );
+        assert_eq!(
+            unchecked.get("checked").and_then(Value::as_bool),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn every_reachable_extension_message_deserializes_as_a_native_message() {
+        use crate::integrations::native_messaging::NativeMessage;
+
+        let messages = vec![
+            ExtensionMessage::ExecuteScript {
+                script: "return 1".to_string(),
+            },
+            ExtensionMessage::GetElement {
+                selector: "#a".to_string(),
+            },
+            ExtensionMessage::Click {
+                selector: "#a".to_string(),
+            },
+            ExtensionMessage::Type {
+                selector: "#a".to_string(),
+                text: "hi".to_string(),
+            },
+            ExtensionMessage::Navigate {
+                url: "https://example.com".to_string(),
+            },
+            ExtensionMessage::Hover {
+                selector: "#a".to_string(),
+            },
+            ExtensionMessage::WaitForSelector {
+                selector: "#a".to_string(),
+                timeout_ms: 1000,
+            },
+            ExtensionMessage::GetDomSnapshot,
+            ExtensionMessage::GetUrl,
+            ExtensionMessage::GetTitle,
+            ExtensionMessage::GetAttribute {
+                selector: "#a".to_string(),
+                attribute: "href".to_string(),
+            },
+            ExtensionMessage::SelectOption {
+                selector: "#a".to_string(),
+                value: "v".to_string(),
+            },
+            ExtensionMessage::SetChecked {
+                selector: "#a".to_string(),
+                checked: true,
+            },
+            ExtensionMessage::Focus {
+                selector: "#a".to_string(),
+            },
+            ExtensionMessage::ScrollIntoView {
+                selector: "#a".to_string(),
+            },
+            ExtensionMessage::CaptureScreenshot {
+                format: "png".to_string(),
+                quality: 80,
+            },
+        ];
+
+        for message in messages {
+            let label = format!("{message:?}");
+            let payload = extension_message_to_native_payload(message)
+                .unwrap_or_else(|e| panic!("{label} produced no payload: {e}"));
+            serde_json::from_value::<NativeMessage>(payload.clone()).unwrap_or_else(|e| {
+                panic!("{label} emitted {payload} which NativeMessage rejects: {e}")
+            });
+        }
     }
 
     #[test]
