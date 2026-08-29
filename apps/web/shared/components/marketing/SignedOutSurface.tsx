@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
 export interface SignedOutSurfaceProps {
   /** Small label above the heading, e.g. "Skills". */
@@ -32,33 +34,29 @@ export function SignedOutSurface({
   secondary,
 }: SignedOutSurfaceProps) {
   return (
-    <main className="mx-auto flex min-h-[70vh] w-full max-w-2xl flex-col justify-center gap-6 px-6 py-16">
-      <div className="flex flex-col gap-3">
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          {eyebrow}
-        </p>
-        <h1 className="text-balance text-3xl font-semibold tracking-tight text-foreground">
-          {heading}
-        </h1>
-        <p className="max-w-prose text-[15px] leading-relaxed text-muted-foreground">{children}</p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Link
-          href={signInHref}
-          className="inline-flex h-10 items-center rounded-lg bg-foreground px-4 text-sm font-medium text-background transition-opacity hover:opacity-90"
-        >
-          {signInLabel}
-        </Link>
-        {secondary && (
-          <Link
-            href={secondary.href}
-            className="inline-flex h-10 items-center rounded-lg border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-          >
-            {secondary.label}
-          </Link>
-        )}
-      </div>
-    </main>
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="agi-fl-hero agi-fl-hero--copy" aria-labelledby="agi-signed-out-title">
+          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
+          <p className="agi-fl-eyebrow">{eyebrow}</p>
+          <h1 id="agi-signed-out-title" className="agi-fl-h1">
+            <span className="agi-fl-h1-line">{heading}</span>
+          </h1>
+          <p className="agi-fl-lede">{children}</p>
+          <div className="agi-fl-cta-row">
+            <Link href={signInHref} className="agi-fl-cta agi-fl-cta--primary">
+              {signInLabel}
+            </Link>
+            {secondary && (
+              <Link href={secondary.href} className="agi-fl-cta agi-fl-cta--secondary">
+                {secondary.label}
+              </Link>
+            )}
+          </div>
+        </section>
+        <MarketingFooter />
+      </main>
+    </div>
   );
 }

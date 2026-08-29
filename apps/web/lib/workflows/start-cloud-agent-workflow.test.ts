@@ -133,6 +133,7 @@ describe('cloud agent workflow starter', () => {
     await expect(startCloudAgentWorkflowExecution(baseInput())).resolves.toEqual({
       workflowRunId: 'wrun_123',
       readable,
+      cancel: expect.any(Function),
     });
 
     expect(workflowMocks.start).toHaveBeenCalledWith(expect.any(Function), [{ version: 1 }]);
@@ -179,7 +180,12 @@ describe('runCloudAgentTurn transport selection', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it('uses the durable transport when the platform accepts the turn', async () => {
-    const readable = new ReadableStream<Uint8Array>();
+    const readable = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: open\n\n'));
+        controller.close();
+      },
+    });
     workflowMocks.start.mockResolvedValue({
       runId: 'wrun_durable',
       getReadable: () => readable,
@@ -187,13 +193,25 @@ describe('runCloudAgentTurn transport selection', () => {
     });
     workflowMocks.attach.mockResolvedValue(undefined);
 
-    await expect(runCloudAgentTurn(turnInput())).resolves.toEqual({
-      transport: 'durable',
-      workflowRunId: 'wrun_durable',
-      readable,
-    });
+    const result = await runCloudAgentTurn(turnInput());
+    expect(result.transport).toBe('durable');
+    expect(result.workflowRunId).toBe('wrun_durable');
+    expect(result.degradedReason).toBeUndefined();
     expect(workflowMocks.runToolLoop).not.toHaveBeenCalled();
   });
+
+  it('serves the turn inline when the durable stream never opens', async () => {
+    workflowMocks.start.mockResolvedValue({
+      runId: 'wrun_stalled',
+      getReadable: () => new ReadableStream<Uint8Array>({ start() {} }),
+      cancel: vi.fn(),
+    });
+    workflowMocks.attach.mockResolvedValue(undefined);
+
+    const result = await runCloudAgentTurn(turnInput());
+    expect(result.transport).toBe('inline');
+    expect(result.degradedReason).toBe('workflow_stream_stalled');
+  }, 20_000);
 
   it('serves the turn inline when the durable platform refuses it', async () => {
     workflowMocks.start.mockRejectedValue(new Error('workflow storage unavailable'));

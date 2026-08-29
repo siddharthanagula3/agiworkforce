@@ -18,7 +18,7 @@ const WHILE_YOU_WAIT = [
     href: '/login?redirectTo=%2F',
   },
   {
-    title: 'Run AGI Locally',
+    title: 'Run AGI locally',
     body: 'Free forever, offline-capable, and never silently routed to the cloud.',
     href: '/local',
   },

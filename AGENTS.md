@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-08-28
+Last updated: 2026-08-29
 
 The canonical, tool-neutral operating contract for every coding agent in this
 repository. `CLAUDE.md` is a thin adapter over this file and may not weaken it.
@@ -63,6 +63,21 @@ Consumers resolve IDs through `packages/contracts/types/src/model-catalog.ts`.
 An inline model-ID literal fails ESLint `no-restricted-syntax` in TS/JS and
 `scripts/check-no-hardcoded-models.sh` in Rust. Swapping a model must never
 require editing a consumer.
+
+**Which generation of a family is live is owned by
+`packages/ai/model-registry/catalog/model-families.json`, not by the routing
+tables.** Provider defaults, provider task routing, canonicalization targets,
+tier lists, and Auto routing slots reference a family slot (`family:<provider>/<family>`)
+that resolves at compile time to that slot's active model. A newer release in an
+existing family is a one-record promotion — never a sweep through the routing
+tables. `pnpm models:families` evaluates every slot against the promotion gates
+(provider availability, family and tier identity, lifecycle, capability
+coverage, and cost/context/benchmark regression thresholds);
+`pnpm models:families:promote --slot <id> --apply` promotes and verifies, and
+`pnpm models:families:rollback --slot <id> --apply` restores the retained
+predecessor. A preview model never takes a stable slot, a higher version number
+alone never qualifies, and each promotion retains the previous model, a bounded
+fallback chain, and its gate evidence.
 
 Keep documentation availability separate from account, region, and route
 availability. Do not describe web search, memory, MCP, sandboxing, code

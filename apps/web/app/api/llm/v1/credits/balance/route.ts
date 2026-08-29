@@ -99,6 +99,7 @@ async function handleGetBalance(request: NextRequest) {
       reset_at: resetAt,
       seconds_until_reset: freeUsage ? secondsUntilReset : secondsUntilMonthlyReset,
       has_usage_remaining: freeUsage?.hasUsageRemaining ?? (allocated > 0 && remaining > 0),
+      ...(isFreePlan ? {} : { usage_allocation: allocated > 0 ? 'provisioned' : 'pending' }),
     },
   };
 

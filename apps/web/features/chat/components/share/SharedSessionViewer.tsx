@@ -37,12 +37,9 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Top banner */}
-      <div className="border-b border-border bg-blue-50 px-4 py-3 text-center text-sm text-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+      <div className="border-b border-border bg-primary/10 px-4 py-3 text-center text-sm text-foreground">
         Read-only shared session.{' '}
-        <a
-          href="/signup"
-          className="font-medium underline hover:text-blue-900 dark:hover:text-white"
-        >
+        <a href="/signup" className="font-medium underline underline-offset-2 hover:text-primary">
           Sign in to create your own
         </a>
       </div>
@@ -67,7 +64,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
           <Link
             href={`/chat/from-share/${token}`}
             prefetch={false}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Open in AGI
           </Link>
@@ -83,7 +80,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
           >
             <div
               className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
-                message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-muted text-foreground'
+                message.role === 'user' ? 'user-bubble' : 'bg-muted text-foreground'
               }`}
             >
               {message.tool_calls && message.tool_calls.length > 0 && (

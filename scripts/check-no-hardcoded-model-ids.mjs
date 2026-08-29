@@ -7,10 +7,15 @@ import process from 'node:process';
 import { URL, fileURLToPath } from 'node:url';
 import { TextDecoder } from 'node:util';
 
+import {
+  loadFamilyCatalog,
+  resolveFamilyRefsDeep,
+} from '../packages/ai/model-registry/scripts/families.mjs';
 import { getLocalModelCatalog } from '../packages/platform/local-llm/src/catalog.ts';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
+const FAMILY_CATALOG_DIR = 'packages/ai/model-registry/catalog';
 const CURATION_PATH = 'packages/ai/model-registry/catalog/models.curation.json';
 const SYNCED_PATH = 'packages/ai/model-registry/catalog/models.synced.json';
 const RETIRED_MODELS_PATH = 'packages/ai/model-registry/catalog/retired-models.json';
@@ -25,6 +30,7 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
   LOCAL_MODEL_CATALOG_PATH,
   SPEECH_ARTIFACT_REGISTRY_PATH,
   'packages/ai/model-registry/catalog/harnesses.json',
+  'packages/ai/model-registry/catalog/model-families.json',
   'packages/ai/model-registry/catalog/routing-policies.json',
   'packages/ai/model-registry/generated/registry.json',
   'packages/ai/model-registry/generated/registry.ts',
@@ -196,7 +202,13 @@ function addToken(tokenSources, value, source) {
 }
 
 export function loadCanonicalModelIdTokens(repoRoot = REPO_ROOT) {
-  const curation = readJson(repoRoot, CURATION_PATH);
+  const authoredCuration = readJson(repoRoot, CURATION_PATH);
+  const familyCatalog = loadFamilyCatalog(path.join(repoRoot, FAMILY_CATALOG_DIR));
+  const curation = {
+    ...authoredCuration,
+    providers: resolveFamilyRefsDeep(authoredCuration.providers, familyCatalog),
+    tierAllowedModels: resolveFamilyRefsDeep(authoredCuration.tierAllowedModels, familyCatalog),
+  };
   const synced = readJson(repoRoot, SYNCED_PATH);
   const retired = readJson(repoRoot, RETIRED_MODELS_PATH);
   const speechArtifacts = readJson(repoRoot, SPEECH_ARTIFACT_REGISTRY_PATH);

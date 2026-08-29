@@ -99,7 +99,7 @@ export default function PressPage() {
                 Email the Press Contact
               </a>
               <Link href="/trust" className="agi-fl-cta agi-fl-cta--secondary">
-                See the Trust Posture
+                See the trust posture
               </Link>
             </div>
           </div>
@@ -244,7 +244,7 @@ export default function PressPage() {
               Read About AGI
             </Link>
             <Link href="/trust" className="agi-fl-cta agi-fl-cta--ghost">
-              See the Trust Posture
+              See the trust posture
             </Link>
           </div>
         </section>

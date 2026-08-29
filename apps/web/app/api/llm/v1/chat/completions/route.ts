@@ -42,6 +42,14 @@ import { createFailoverPlan } from './lib/managed-failover';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { withSseHeartbeat } from './lib/sse-heartbeat';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
+import { claimLiveDurableStream } from '@/lib/workflows/durable-stream-liveness';
+
+class DurableStreamStalledError extends Error {
+  constructor() {
+    super('Durable workflow stream produced no first event before the liveness timeout');
+    this.name = 'DurableStreamStalledError';
+  }
+}
 import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
@@ -610,10 +618,15 @@ async function dispatchChatCompletions(
             toolApprovalPolicy,
             connectorPermissions,
           });
+          const live = await claimLiveDurableStream(workflow.readable);
+          if (!live) {
+            await workflow.cancel().catch(() => undefined);
+            throw new DurableStreamStalledError();
+          }
           const durableHeaders = baseAgentHeaders();
           durableHeaders['X-AGI-Tool-Loop'] = 'durable';
           durableHeaders['X-AGI-Workflow-Run-Id'] = workflow.workflowRunId;
-          return new NextResponse(withSseHeartbeat(workflow.readable), {
+          return new NextResponse(withSseHeartbeat(live), {
             headers: durableHeaders,
           });
         } catch (error) {

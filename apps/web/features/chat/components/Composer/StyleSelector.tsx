@@ -17,6 +17,7 @@ import { cn } from '@shared/lib/utils';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import {
   useStyleStore,
+  DEFAULT_PRESET_STYLE,
   RESPONSE_LENGTH_OPTIONS,
   type PresetStyle,
   type CustomStyle,
@@ -69,7 +70,7 @@ export function StyleSelector() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isActive = style !== 'default' || length !== 'brief';
+  const isActive = style !== DEFAULT_PRESET_STYLE || length !== 'brief';
 
   const activeLabel = React.useMemo<string>(() => {
     if (style === 'custom') {
@@ -138,7 +139,9 @@ export function StyleSelector() {
         aria-expanded={open}
       >
         <Palette className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">{style === 'default' ? 'Style' : activeLabel}</span>
+        <span className="hidden sm:inline">
+          {style === DEFAULT_PRESET_STYLE && length === 'brief' ? 'Style' : activeLabel}
+        </span>
       </button>
 
       {/* Portaled + viewport-clamped: as an `absolute bottom-full` panel this

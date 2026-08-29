@@ -1,4 +1,3 @@
-
 import * as Popover from '@radix-ui/react-popover';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useState } from 'react';
@@ -226,9 +225,12 @@ function EffortChip({ conversationId, projectId, modelId, effortOptions }: Effor
             'data-[side=top]:slide-in-from-bottom-2',
           )}
         >
-          <div className="border-b border-[var(--chat-border)] px-3 py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--chat-border)] px-3 py-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
               Reasoning Effort
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--chat-text-secondary)]">
+              {EFFORT_LABEL[effectiveEffort]}
             </span>
           </div>
           <div className="p-3">

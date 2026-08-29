@@ -20,32 +20,25 @@ export function MessageBubbleSkeleton({
 
   return (
     <div
-      className={cn('px-4 py-5', className)}
+      className={cn('py-3', className)}
       role="status"
       aria-label="Loading message"
       aria-busy="true"
     >
-      <div className={cn('mx-auto flex max-w-3xl gap-4', isUser && 'flex-row-reverse')}>
-        {/* Avatar placeholder */}
-        <Skeleton animation={animation} className="h-8 w-8 shrink-0 rounded-full" />
-
-        {/* Content area */}
+      {/* Geometry mirrors .message-row / .message-inner so the skeleton occupies
+          the same column and vertical rhythm as the message it is standing in
+          for — no avatars and no name row, because rendered messages have
+          neither. */}
+      <div className={cn('mx-auto flex max-w-3xl gap-3 px-4', isUser && 'flex-row-reverse')}>
         <div className={cn('min-w-0 flex-1', isUser && 'flex flex-col items-end')}>
-          {/* Header row: name chip + timestamp chip */}
-          <div className={cn('mb-1.5 flex items-center gap-2', isUser && 'flex-row-reverse')}>
-            <Skeleton animation={animation} className="h-4 w-10 rounded" />
-            <Skeleton animation={animation} className="h-3 w-16 rounded" />
-          </div>
-
-          {/* Message body */}
           {isUser ? (
             <Skeleton
               animation={animation}
-              className="inline-block rounded-2xl rounded-tr-sm px-4 py-3"
-              style={{ width: `${55 + (lines - 1) * 15}%`, height: `${lines * 24 + 16}px` }}
+              className="inline-block rounded-2xl px-4 py-3"
+              style={{ width: `${55 + (lines - 1) * 15}%`, height: `${lines * 24 + 24}px` }}
             />
           ) : (
-            <div className="space-y-2 w-full">
+            <div className="w-full space-y-3">
               {Array.from({ length: lines }).map((_, index) => (
                 <Skeleton
                   key={index}

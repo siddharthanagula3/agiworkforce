@@ -4,18 +4,17 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   CapabilityGrid,
+  DevBand,
   FinalCta,
-  TrustTriptych,
 } from '@/features/marketing/components/FlagshipSections';
 import { LedgerSection } from '@/features/marketing/components/LandingSections';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
-import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
-import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailability';
 import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
+import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailability';
 
 export const metadata = buildMetadata({
-  title: 'AGI Desktop | Runs on Your Machine',
-  description: `The native AGI app, built in Rust. Check verified Linux x64 installer availability; macOS and Windows installers are not yet published. Run local models with ${DESKTOP_LOCAL_RUNTIMES.label}.`,
+  title: 'AGI Desktop | The Build With a Process on Your Machine',
+  description: `AGI Desktop is written in Rust and shipped as a Tauri 2 application, so it can do what a web page cannot: reach a local model server (${DESKTOP_LOCAL_RUNTIMES.label}), read the folders you allow, run tool commands inside an OS sandbox, and start MCP servers over stdio.`,
   path: '/desktop',
 });
 
@@ -31,157 +30,131 @@ export default function DesktopPage() {
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">AGI Desktop</p>
               <h1 id="agi-fl-desktop-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Runs on</span>{' '}
                 <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">your machine.</em>
-                </span>
+                  Some work <em className="agi-fl-h1-em">cannot</em>
+                </span>{' '}
+                <span className="agi-fl-h1-line">happen in a tab.</span>
               </h1>
               <p className="agi-fl-lede">
-                The native app, built in Rust. Point it at {DESKTOP_LOCAL_RUNTIMES.label} and work
-                offline after the runtime and model are installed. Chats live in SQLite on your
-                disk. Keys never leave the machine.
+                A web page cannot start a process on your computer. That rules out a shell, a
+                sandboxed run, an MCP server sitting on your disk, and a model answering from your
+                own hardware. Desktop is the build with a process of its own, written in Rust and
+                shipped as a Tauri 2 application.
               </p>
               <div className="agi-fl-cta-row">
-                <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
-                  Check installer availability
+                <Link href="/download#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
+                  See installer availability
                 </Link>
                 <Link href="/local" className="agi-fl-cta agi-fl-cta--secondary">
-                  Run AGI Locally
+                  How Local mode works
                 </Link>
-                <WaitlistTrigger
-                  label="Enterprise early access"
-                  source="website"
-                  className="agi-fl-cta agi-fl-cta--ghost"
-                />
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
-                <li>Local · on-device</li>
-                <li>BYOK · your keys</li>
-                <li>Cloud · public alpha</li>
-              </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
-              <ProductFrame variant="desktop" title="AGI Workforce" badge="Local" />
+              <ProductFrame variant="desktop" title="AGI Desktop" badge="Local" routeMode="local" />
             </div>
           </div>
         </section>
 
         <CapabilityGrid
-          eyebrow="Capabilities"
-          title="Everything lives here."
+          eyebrow="Why a native app"
+          title="Each of these needs a process running on your computer."
           items={[
             {
-              meta: 'Local',
-              title: 'Local Models',
-              body: `${DESKTOP_LOCAL_RUNTIMES.label} on your own hardware. Offline-capable after setup. No account.`,
+              meta: 'Local models',
+              title: 'Runtimes on your hardware',
+              body: `Desktop talks to ${DESKTOP_LOCAL_RUNTIMES.label} on the ports they already listen on, and it can pull or remove an Ollama model without leaving the app.`,
               href: '/local',
             },
             {
-              meta: 'BYOK',
-              title: 'Your Own Keys',
-              body: 'Keys encrypted on your machine. Traffic goes straight to your provider.',
-              href: '/byok',
+              meta: 'Your files',
+              title: 'Allowed Directories',
+              body: 'A path outside the folders you added stops the run and opens an approval naming the exact directory. Protected system paths are refused outright.',
+              href: '/features/tools',
+            },
+            {
+              meta: 'Execution',
+              title: 'An OS sandbox',
+              body: 'Tool commands run under macOS Seatbelt or Linux bubblewrap. When a run needs the network switched off and neither is present, Desktop refuses to execute at all.',
+              href: '/features/agents',
             },
             {
               meta: 'Connectors',
-              title: 'MCP Connectors',
-              body: 'Pick from the gallery or add your own server. stdio, SSE, or HTTP.',
-              href: '/apps',
-            },
-            {
-              meta: 'Artifacts',
-              title: 'Artifact Workbench',
-              body: 'Documents, code, and previews take shape beside the chat.',
-              href: '/features/artifacts',
-            },
-            {
-              meta: 'AGI Work',
-              title: 'Scheduled Work',
-              body: 'Schedule recurring runs. Dispatch tasks. Built in.',
-              href: '/agi-work',
-            },
-            {
-              meta: 'Chat',
-              title: 'Transparent Answers',
-              body: 'Web sources, thinking, and effort, visible on each reply.',
-              href: '/features/ai-chat',
+              title: 'MCP over stdio',
+              body: 'A connector can be a program on your own disk, launched by the app and spoken to over stdio. SSE and streamable HTTP servers attach the same way.',
+              href: '/features/plugins',
             },
           ]}
         />
 
-        <TrustTriptych
-          eyebrow="Trust modes"
-          title="No silent switches."
-          lede="Desktop is where Local and BYOK live. Nothing moves between routes without a label and your consent."
-          cards={[
+        <DevBand
+          eyebrow="Folder access"
+          title="The first path outside your list stops the run."
+          body="Desktop resolves every local path a tool asks for before that tool runs. Paths already inside your Allowed Directories go straight through. A path outside them raises this, naming the exact directory and the capability being asked for, and a protected system path is refused without a prompt at all."
+          ctas={[{ href: '/features/tools', label: 'How the other tool gates work' }]}
+          visual={
+            <div className="agi-chat">
+              <div className="agi-chat-header">
+                <span className="agi-chat-model">file_read · read</span>
+                <span className="agi-chat-meta">High risk · reversible</span>
+              </div>
+              <div className="agi-chat-body">
+                <div className="agi-msg">
+                  <p className="agi-msg-role">you</p>
+                  <p className="agi-msg-text">
+                    Read the specs in ~/work/handbook and summarize what changed.
+                  </p>
+                </div>
+                <div className="agi-msg agi-msg-quiet">
+                  <p className="agi-msg-role">Allow file read to access new folders</p>
+                  <p className="agi-msg-text">
+                    The agent requested local paths that are outside your current Allowed
+                    Directories.
+                  </p>
+                </div>
+                <div className="agi-msg agi-msg-quiet">
+                  <p className="agi-msg-role">directories</p>
+                  <p className="agi-msg-text">~/work/handbook</p>
+                </div>
+                <div className="agi-msg">
+                  <p className="agi-msg-role">undo</p>
+                  <p className="agi-msg-text">
+                    Persistent folders can be removed in Settings → Allowed Directories.
+                  </p>
+                </div>
+              </div>
+            </div>
+          }
+        />
+
+        <LedgerSection
+          eyebrow="Specifications"
+          title="The whole thing is ordinary local software."
+          rows={[
+            { k: 'Engine', v: 'Tauri 2 · Rust backend · React frontend' },
+            { k: 'Ollama', v: 'http://localhost:11434' },
+            { k: 'LM Studio', v: 'http://localhost:1234/v1' },
+            { k: 'llama.cpp', v: 'http://localhost:8080/v1' },
+            { k: 'vLLM', v: 'http://localhost:8000/v1' },
             {
-              mode: 'Local',
-              glyph: '◆',
-              title: 'Yours alone.',
-              body: 'Models on your hardware. Works offline.',
-              points: [
-                'Local chats never silently leave your device',
-                'Chats stored in SQLite on your disk',
-                'No account required',
-              ],
-              cta: { href: '/local', label: 'Run AGI Locally' },
+              k: 'Shells',
+              v: 'Zsh · Bash · Fish · Sh · PowerShell · Command Prompt · Git Bash · WSL',
             },
-            {
-              mode: 'BYOK',
-              glyph: '◇',
-              title: 'Your keys, your bill.',
-              body: 'Bring provider keys on Desktop, CLI, and VS Code.',
-              points: [
-                'Keys encrypted on your machine',
-                'Traffic goes straight to your provider',
-                'Provider label on every route',
-              ],
-              cta: { href: '/byok', label: 'Set Up BYOK' },
-            },
-            {
-              mode: 'AGI Cloud',
-              glyph: '●',
-              title: 'Public alpha.',
-              body: 'Hosted capacity, open by default.',
-              points: [
-                'Public alpha — sign in and start, no waitlist',
-                'Separate from Local by design',
-                'Usage metered and transparent',
-              ],
-              cta: { href: '/get-started', label: 'Get Started' },
-            },
+            { k: 'Sandbox', v: 'macOS Seatbelt · Linux bubblewrap' },
+            { k: 'MCP transports', v: 'stdio · SSE · streamable HTTP' },
+            { k: 'Provider keys', v: 'Encrypted with a key held by the OS credential store' },
+            { k: 'Storage', v: 'SQLite on your own disk, encrypted at rest' },
           ]}
         />
 
         <DesktopDownloadAvailability />
 
-        <LedgerSection
-          eyebrow="Specifications"
-          title="What's inside."
-          rows={[
-            { k: 'Engine', v: 'Tauri 2 · Rust backend · React frontend' },
-            { k: 'Modes', v: 'Local · BYOK · Cloud (public alpha)' },
-            { k: 'Local runtimes', v: DESKTOP_LOCAL_RUNTIMES.compact },
-            { k: 'BYOK keys', v: 'Encrypted at rest, on your machine' },
-            { k: 'Storage', v: 'SQLite, local to your machine' },
-            { k: 'Computer use', v: 'Browser · files · terminal · screen, with explicit consent' },
-            { k: 'MCP transports', v: 'stdio · SSE · streamable HTTP' },
-            { k: 'Skills', v: 'Markdown + frontmatter' },
-            { k: 'Published package assets', v: 'Linux x64 · installer signature pending' },
-            { k: 'macOS & Windows', v: 'Installers not published · no release date announced' },
-          ]}
-        />
-
         <FinalCta
-          eyebrow="Linux x64"
-          title="Check AGI Desktop for Linux."
-          body="The download control appears only when the stable release API verifies a complete Linux x64 AppImage and signature pair. macOS and Windows installers are not published."
-          ctas={[
-            { href: '#desktop-downloads', label: 'Check installer availability' },
-            { href: '/byok', label: 'Set Up BYOK' },
-            { label: 'Enterprise early access', waitlist: true },
-          ]}
-          stamp="Linux x64 · verification required before download"
+          eyebrow="On your disk"
+          title="The chats stay in a database on your machine."
+          body="Desktop keeps conversations, projects, and settings in a local SQLite database that is encrypted at rest, keyed from a per-install secret the operating system's own credential store holds."
+          ctas={[{ href: '/security', label: 'How the database is keyed' }]}
+          stamp="Installer verification and platform support live on the download page"
         />
 
         <MarketingFooter />

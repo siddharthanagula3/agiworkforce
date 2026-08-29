@@ -88,7 +88,8 @@ export async function persistAssistantTurn(params: {
     const affected = await getNeonDb().execute(
       `insert into web_messages
          (id, conversation_id, role, content, model, provider, input_tokens, output_tokens, metadata)
-       select $1::uuid, c.id, 'assistant', $3, $4, $5, $6, $7, $8::jsonb
+       select $1::uuid, c.id, 'assistant', $3::text, $4::text, $5::text,
+              $6::integer, $7::integer, $8::jsonb
          from public.web_conversations c
         where c.id = $2::uuid
           and c.user_id = $9

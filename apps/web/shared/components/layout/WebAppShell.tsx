@@ -260,15 +260,10 @@ export function WebAppShell({ children }: WebAppShellProps) {
       buildAppNavItems({
         pathname,
         navigate: (href) => router.push(href),
-        // CRIT-008: open the modal in place. `/settings/general` renders a
-        // SettingsModalRedirect whose only job is to reopen this modal and
-        // replace back to /chat, so routing there tore down and remounted
-        // whatever page the shell was wrapping.
-        onOpenCustomize: () => openSettings('general'),
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
       }),
-    [hiddenNavIds, isWorkspaceAdmin, openSettings, pathname, router],
+    [hiddenNavIds, isWorkspaceAdmin, pathname, router],
   );
 
   // ---- Account footer ----

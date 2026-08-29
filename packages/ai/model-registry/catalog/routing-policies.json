@@ -137,7 +137,9 @@
       "deep_research": {
         "appliesToTaskTypes": ["research"],
         "riskLabel": "low",
-        "qualityFloor": { "minimumSlotBand": "balanced" }
+        "qualityFloor": {
+          "minimumSlotBand": "balanced"
+        }
       },
       "agentic_work": {
         "appliesToTaskTypes": ["agentic"],
@@ -166,7 +168,9 @@
       "web_grounded_answer": {
         "appliesToTaskTypes": ["research", "general", "simple_chat"],
         "riskLabel": "low",
-        "qualityFloor": { "minimumSlotBand": "economy" }
+        "qualityFloor": {
+          "minimumSlotBand": "economy"
+        }
       },
       "screen_automation": {
         "appliesToTaskTypes": ["computer-use"],
@@ -355,124 +359,139 @@
     },
     "slots": {
       "general_fast": {
-        "modelKey": "gemini-3.5-flash-lite"
+        "modelKey": "family:google/gemini-flash-lite"
       },
       "workhorse_general": {
-        "modelKey": "gemini-3.5-flash-lite"
+        "modelKey": "family:google/gemini-flash-lite"
       },
       "general_balanced": {
-        "providerTask": { "provider": "openai", "task": "chat" }
+        "providerTask": {
+          "provider": "openai",
+          "task": "chat"
+        }
       },
       "general_premium": {
-        "modelKey": "gemini-3.7-flash"
+        "modelKey": "family:google/gemini-flash"
       },
       "flagship_general": {
-        "providerTask": { "provider": "openai", "task": "complex_reasoning" }
+        "providerTask": {
+          "provider": "openai",
+          "task": "complex_reasoning"
+        }
       },
       "coding_fast": {
-        "modelKey": "gemini-3.5-flash-lite"
+        "modelKey": "family:google/gemini-flash-lite"
       },
       "coding_premium": {
-        "providerTask": { "provider": "openai", "task": "code_generation" }
+        "providerTask": {
+          "provider": "openai",
+          "task": "code_generation"
+        }
       },
       "escalation_coding": {
-        "modelKey": "glm-5.2"
+        "modelKey": "family:zhipu/glm"
       },
       "coding_balanced": {
-        "modelKey": "claude-sonnet-5"
+        "modelKey": "family:anthropic/claude-sonnet"
       },
       "flagship_coding": {
-        "modelKey": "claude-opus-5"
+        "modelKey": "family:anthropic/claude-opus"
       },
       "reasoning_premium": {
-        "modelKey": "deepseek-v4-flash"
+        "modelKey": "family:deepseek/deepseek-flash"
       },
       "reasoning_economy": {
-        "modelKey": "qwen-3.5-flash"
+        "modelKey": "family:qwen/qwen-flash"
       },
       "reasoning_balanced": {
-        "modelKey": "qwen-3.7-plus"
+        "modelKey": "family:qwen/qwen-plus"
       },
       "creative_writing": {
-        "modelKey": "claude-sonnet-5"
+        "modelKey": "family:anthropic/claude-sonnet"
       },
       "creative_writing_premium": {
-        "modelKey": "claude-opus-5"
+        "modelKey": "family:anthropic/claude-opus"
       },
       "creative_balanced": {
-        "modelKey": "claude-sonnet-5"
+        "modelKey": "family:anthropic/claude-sonnet"
       },
       "creative_premium": {
-        "modelKey": "claude-opus-5"
+        "modelKey": "family:anthropic/claude-opus"
       },
       "vision_fast": {
-        "modelKey": "gemini-3.5-flash-lite"
+        "modelKey": "family:google/gemini-flash-lite"
       },
       "vision_premium": {
-        "modelKey": "gemini-3.7-flash"
+        "modelKey": "family:google/gemini-flash"
       },
       "multimodal_balanced": {
-        "modelKey": "gemini-3.7-flash"
+        "modelKey": "family:google/gemini-flash"
       },
       "long_context_balanced": {
-        "modelKey": "gemini-3.1-pro-preview"
+        "modelKey": "family:google/gemini-pro"
       },
       "search_fast": {
-        "modelKey": "gemini-3.5-flash-lite"
+        "modelKey": "family:google/gemini-flash-lite"
       },
       "search_premium": {
-        "modelKey": "gemini-3.7-flash"
+        "modelKey": "family:google/gemini-flash"
       },
       "browser_dom": {
-        "modelKey": "claude-sonnet-5"
+        "modelKey": "family:anthropic/claude-sonnet"
       },
       "computer_use": {
-        "modelKey": "claude-sonnet-5"
+        "modelKey": "family:anthropic/claude-sonnet"
       },
       "computer_use_balanced": {
-        "modelKey": "claude-sonnet-5"
+        "modelKey": "family:anthropic/claude-sonnet"
       },
       "computer_use_premium": {
-        "modelKey": "claude-opus-5"
+        "modelKey": "family:anthropic/claude-opus"
       },
       "image_generation": {
-        "modelKey": "gemini-3.1-flash-image"
+        "modelKey": "family:google/gemini-flash-image"
       },
       "video_generation": {
-        "modelKey": "veo-3.1"
+        "modelKey": "family:google/veo"
       },
       "embedding_default": {
-        "modelKey": "gemini-embedding-2"
+        "modelKey": "family:google/gemini-embedding"
       },
       "voice_transcription": {
-        "modelKey": "gpt-4o-transcribe"
+        "modelKey": "family:openai/transcribe-balanced"
       },
       "voice_rewrite": {
-        "modelKey": "gemini-3.5-flash-lite"
+        "modelKey": "family:google/gemini-flash-lite"
       },
       "general_balanced_pro": {
-        "providerTask": { "provider": "openai", "task": "chat" }
+        "providerTask": {
+          "provider": "openai",
+          "task": "chat"
+        }
       },
       "coding_premium_pro": {
-        "modelKey": "claude-sonnet-5"
+        "modelKey": "family:anthropic/claude-sonnet"
       },
       "reasoning_premium_pro": {
-        "modelKey": "qwen-3.7-plus"
+        "modelKey": "family:qwen/qwen-plus"
       },
       "multimodal_pro": {
-        "modelKey": "gemini-3.7-flash"
+        "modelKey": "family:google/gemini-flash"
       },
       "long_context_pro": {
-        "modelKey": "gemini-3.1-pro-preview"
+        "modelKey": "family:google/gemini-pro"
       },
       "flagship_coding_pro_plus": {
-        "modelKey": "claude-opus-5"
+        "modelKey": "family:anthropic/claude-opus"
       },
       "flagship_general_pro_plus": {
-        "providerTask": { "provider": "openai", "task": "complex_reasoning" }
+        "providerTask": {
+          "provider": "openai",
+          "task": "complex_reasoning"
+        }
       },
       "video_generation_pro_plus": {
-        "modelKey": "veo-3.1"
+        "modelKey": "family:google/veo"
       }
     }
   }

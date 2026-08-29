@@ -4,10 +4,18 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { loadFamilyCatalog, resolveFamilyRefsDeep } from '../scripts/families.mjs';
+
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const curation = JSON.parse(
+const familyCatalog = loadFamilyCatalog(path.join(PACKAGE_ROOT, 'catalog'));
+const authoredCuration = JSON.parse(
   fs.readFileSync(path.join(PACKAGE_ROOT, 'catalog', 'models.curation.json'), 'utf8'),
 );
+const curation = {
+  ...authoredCuration,
+  providers: resolveFamilyRefsDeep(authoredCuration.providers, familyCatalog),
+  tierAllowedModels: resolveFamilyRefsDeep(authoredCuration.tierAllowedModels, familyCatalog),
+};
 const harnesses = JSON.parse(
   fs.readFileSync(path.join(PACKAGE_ROOT, 'catalog', 'harnesses.json'), 'utf8'),
 );

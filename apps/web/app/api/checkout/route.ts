@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -67,6 +68,7 @@ async function findLiveStripeSubscription(
 }
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
+  const returnOrigin = resolveCheckoutReturnOrigin(request);
   const { userId } = await getClerkAuthUser(request);
 
   const csrfError = await requireCsrfToken(request, userId);
@@ -303,8 +305,8 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
           quantity,
         },
       ],
-      success_url: `${process.env['NEXT_PUBLIC_APP_URL']}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
+      success_url: `${returnOrigin}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${returnOrigin}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
       metadata: checkoutMetadata,
       subscription_data: {

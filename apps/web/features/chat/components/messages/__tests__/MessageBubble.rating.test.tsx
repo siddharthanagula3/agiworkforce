@@ -51,6 +51,28 @@ describe('rating an assistant response', () => {
     expect(screen.getByRole('button', { name: 'Bad response' })).toBeInTheDocument();
   });
 
+  // A second, independently built pair of thumbs used to render beside this one
+  // whenever the host wired `onReact`, so an answer showed four thumb icons and
+  // recorded two unrelated verdicts.
+  it('offers exactly one verdict pair when the host also persists a reaction', () => {
+    render(<MessageBubble message={assistantMessage()} onReact={vi.fn()} />);
+
+    expect(screen.getAllByRole('button', { name: 'Good response' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Bad response' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Rate as good response' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rate as poor response' })).toBeNull();
+  });
+
+  it('reports the verdict to the host reaction sink as well as the feedback sink', async () => {
+    const onReact = vi.fn();
+    render(<MessageBubble message={assistantMessage()} onReact={onReact} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Good response' }));
+
+    expect(onReact).toHaveBeenCalledWith('msg-1', 'up');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  });
+
   it('does not offer to rate the user their own message', () => {
     render(<MessageBubble message={{ ...assistantMessage(), role: 'user' }} />);
 

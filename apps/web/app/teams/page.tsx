@@ -1,16 +1,73 @@
+import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { FeatureGrid, LedgerSection } from '@/features/marketing/components/LandingSections';
 import { FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI for Teams: Shared projects, governance, and BYOK policy',
+  title: 'AGI for Teams: seats, roles, and the workspace console',
   description:
-    'Team workspace controls for AGI: shared projects, admin policy, connector governance, separated Local/BYOK/Cloud spend, and public-alpha managed cloud. Org-wide BYOK policy is contract-scoped, not shipped.',
+    'How team membership works in AGI: seats held by members and pending invitations, the owner, admin, member and viewer roles, invitations as expiring private links, shared projects and connectors, and the workspace console that sets approved models and integrations on public-alpha managed cloud.',
   path: '/teams',
 });
+
+function WorkspaceConsolePanel() {
+  return (
+    <aside className="agi-campaign-console" aria-label="What the workspace console reports">
+      <div className="agi-console-topline">
+        <span>Workspace console</span>
+        <span>/workspace</span>
+      </div>
+      <div className="agi-console-stats">
+        <div className="agi-console-stat">
+          <span className="agi-console-stat-value">Enforced</span>
+          <span className="agi-console-stat-label">A server check refuses the request</span>
+          <span className="agi-console-stat-note">
+            It holds whichever client the request came from.
+          </span>
+        </div>
+        <div className="agi-console-stat">
+          <span className="agi-console-stat-value">Stated position</span>
+          <span className="agi-console-stat-label">Recorded for this workspace</span>
+          <span className="agi-console-stat-note">
+            Nothing acts on it at runtime yet, and the console says so.
+          </span>
+        </div>
+        <div className="agi-console-stat">
+          <span className="agi-console-stat-value">Not configured</span>
+          <span className="agi-console-stat-label">No row saved here</span>
+          <span className="agi-console-stat-note">
+            The shipped default applies until an owner saves one.
+          </span>
+        </div>
+      </div>
+      <dl className="agi-console-ledger">
+        <div className="agi-console-row">
+          <dt>Seats</dt>
+          <dd>
+            Billing writes the licensed count onto the workspace, and the write is refused when the
+            number lands below the seats already occupied.
+          </dd>
+        </div>
+        <div className="agi-console-row">
+          <dt>Members</dt>
+          <dd>
+            Owner, admin, member, viewer. Only owner and admin can administer, and the workspace
+            always keeps at least one owner.
+          </dd>
+        </div>
+        <div className="agi-console-row">
+          <dt>Invitations</dt>
+          <dd>
+            Hashed tokens that expire after seven days. Each pending one holds a seat until it is
+            accepted, renewed, or revoked.
+          </dd>
+        </div>
+      </dl>
+    </aside>
+  );
+}
 
 export default function TeamsPage() {
   return (
@@ -20,87 +77,100 @@ export default function TeamsPage() {
 
         <FlagshipHero
           eyebrow="AGI for teams"
-          titleLines={['Shared work.', 'Visible routes.']}
-          em="Visible routes."
-          lede="Bring chats, files, projects, artifacts, and code into one shared workspace. Explicit policy covers what runs locally, what goes through your own provider keys on Desktop, CLI, and VS Code, and what runs in AGI managed cloud."
+          titleLines={[
+            'Give a teammate a seat and a role,',
+            'and the workspace console decides',
+            'what that role can reach.',
+          ]}
+          em="a seat and a role"
+          lede={`Seats are the unit you buy, from ${MIN_PURCHASABLE_SEATS} up, and every active member and every pending invitation holds one. Roles run owner, admin, member and viewer, and only the first two administer anything. The console at /workspace is where they set who belongs, what is shared with them, and which models and integrations the workspace approves.`}
           ctas={[
             { href: '/pricing#pricing-team-title', label: 'Choose Team seats' },
             { href: '/contact-sales', label: 'Enterprise sales' },
-            { href: '/business', label: 'See the Business Overview' },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
+          modeRibbon={[
+            `Seats · from ${MIN_PURCHASABLE_SEATS}`,
+            'Roles · owner, admin, member, viewer',
+            'Cloud · public alpha',
+          ]}
+          modeRibbonLabel="What a Team workspace includes"
+          visual={<WorkspaceConsolePanel />}
         />
 
         <FeatureGrid
-          eyebrow="Team admin"
-          title="Controls that make adoption survivable."
+          eyebrow="Membership"
+          title="What an admin can change about a teammate."
           items={[
             {
-              meta: 'Access',
-              title: 'Workspace membership and roles',
-              body: 'Invite team members, separate personal and work spaces, and prepare for enterprise SSO/SCIM when procurement needs it.',
+              meta: 'Seats',
+              title: 'A seat is occupied before anyone accepts',
+              body: 'An active member holds a seat and so does a pending invitation, so the count an admin sees is the count that is actually spoken for. Revoking an invitation or removing a member frees its seat straight away, and leaving a workspace releases your own.',
+              href: '/pricing#pricing-team-title',
             },
             {
-              meta: 'Provider policy',
-              title: 'Keep provider routes explicit',
-              body: 'Local, BYOK, and Cloud stay separate, labeled routes for every member. There is no org-wide provider policy and no BYOK enforcement today: the signed org-policy schema exists but no surface reads it, so both remain contract-scoped commitments.',
+              meta: 'Roles',
+              title: 'Owner and admin are the two that administer',
+              body: 'Owner and admin invite, revoke, change another member’s role and edit workspace policy. Member and viewer do none of it. An owner who wants out nominates a successor first, and the handover and the departure run as one operation so the workspace is never left without an owner.',
             },
             {
-              meta: 'Connectors',
-              title: 'Govern apps and MCP tools',
-              body: 'Members connect services with individual authentication and per-tool approval boundaries that stay visible. Workspace-level connector policy is scoped on enterprise contracts.',
-              href: '/apps',
+              meta: 'Invitations',
+              title: 'A private link you send yourself',
+              body: 'No transactional email provider is wired up, and the product states that plainly: you create the invitation, copy the private link, and pass it on. The token is hashed, expires after seven days, and opens only for someone signing in with the address it was issued to.',
             },
             {
-              meta: 'Knowledge',
-              title: 'Shared projects instead of scattered prompts',
-              body: 'Share a project’s instructions and knowledge files with the workspace, with per-member access, so the team stops rebuilding the same brief. Chats and memory stay personal to each member.',
+              meta: 'Shared work',
+              title: 'Projects and connectors the workspace can open',
+              body: 'Share a project and members read its instructions and knowledge files while each member’s own conversations stay private; you can withdraw any single member’s access without unsharing it from everyone. Share a remote MCP connector once and every member can call it, while its stored credential stays out of their reach.',
               href: '/features/projects',
-            },
-            {
-              meta: 'Usage',
-              title: 'Keep Local, BYOK, and Cloud spend separate',
-              body: 'Local work costs nothing and BYOK bills go straight to your providers. Managed spend applies when a workspace uses AGI managed cloud.',
-            },
-            {
-              meta: 'Security',
-              title: 'Know which models and tools touched the work',
-              body: 'Provider labels and tool approvals stay visible in the product. Audit export for review is scoped on enterprise contracts.',
-              href: '/trust',
             },
           ]}
         />
 
         <LedgerSection
-          eyebrow="Rollout plan"
-          title="How teams phase AGI in."
+          eyebrow="The console"
+          title="Every control has a page, and the page says whether it binds."
           rows={[
             {
-              k: 'Phase 1',
-              v: 'Start with Local and BYOK for high-signal users. No managed compute commitment needed.',
+              k: 'Overview',
+              v: 'The posture view for the whole workspace. Each control carries a label saying whether a server-side check refuses requests that violate it, whether the setting is merely recorded for now, or whether nothing has been saved at all. A recorded position never wears the same badge as an enforced one, which is the difference a security reviewer is there to find.',
             },
             {
-              k: 'Phase 2',
-              v: 'Enable shared projects, apps and connectors, and provider policy for repeat workflows.',
+              k: 'Members',
+              v: 'Roles, invitations and seats, available from the Team plan up. Removing someone cuts their live sessions, device refresh tokens and API keys along with the membership row, records anything it could not reach, and leaves their personal account intact.',
             },
             {
-              k: 'Phase 3',
-              v: 'Bring users onto AGI managed cloud, open in public alpha, for hosted sync and managed compute.',
+              k: 'Policy',
+              v: 'Which privacy modes the workspace allows, whether AGI managed cloud may be used at all, and which client surfaces may sync. A refusal comes back from the server before the turn runs and is written to the audit trail.',
             },
             {
-              k: 'Phase 4',
-              v: 'Move to enterprise controls when SSO, audit export, retention, and contract terms are required.',
+              k: 'Models',
+              v: 'Allowed and blocked providers and models, picked from the shipped catalog so a typo cannot become a rule that governs nothing. The check runs after auto-routing has resolved, so asking for Auto cannot reach a blocked model, and every failover candidate answers to the same saved policy the first choice answered to.',
+            },
+            {
+              k: 'Connectors',
+              v: 'Which integrations members may use, and whether they may add their own. The list is read while a member’s tool set is assembled, so a blocked connector never appears in it.',
+            },
+            {
+              k: 'Usage and billing',
+              v: 'Spend broken down by member, model and provider, alongside the plan, the seat count and invoices. An owner or admin can also set a monthly cap for the workspace and choose whether crossing it notifies or blocks.',
+            },
+            {
+              k: 'Identity, audit and data',
+              v: 'SSO, SCIM directory sync, the audit trail and its JSONL export, legal holds and retention sweeps. These sit behind the enterprise entitlement, one step above the Team plan, and /enterprise states which of them are built and which are commitments.',
             },
           ]}
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
-          title="Pilot the workspace before you buy compute."
-          body="Start the team on free Local and BYOK modes today, then move selected users onto AGI managed cloud, which is open in public alpha."
+          eyebrow="Team plan"
+          title={`Start at ${MIN_PURCHASABLE_SEATS} seats and add people as the work needs them.`}
+          body="The seat count is the only thing anyone has to settle up front, and it moves from the billing page whenever it needs to. Roles, shared projects, approved models and approved connectors are all set afterwards, from the console, by whoever holds owner or admin. Work a member runs locally, or on their own provider keys, never reaches AGI’s servers at all, so it sits outside what this console can govern."
           ctas={[
-            { href: '/pricing#pricing-team-title', label: 'Start with 2 seats' },
-            { href: '/settings/team', label: 'Manage Team' },
+            {
+              href: '/pricing#pricing-team-title',
+              label: `Start with ${MIN_PURCHASABLE_SEATS} seats`,
+            },
+            { href: '/workspace', label: 'Open the workspace console' },
             { href: '/contact-sales', label: 'Enterprise sales' },
           ]}
         />

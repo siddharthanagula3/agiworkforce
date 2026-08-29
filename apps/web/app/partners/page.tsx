@@ -49,8 +49,8 @@ export default function PartnersPage() {
           em="One open door."
           lede="We are not going to describe a partner program we have not built — there is no application form, no directory, and no reseller agreement behind this page. What is real today is that AGI speaks MCP, so anything you build against that open protocol already works with it. Beyond that, here is what we are actively looking for."
           ctas={[
-            { href: contactMailto('Partnership enquiry'), label: 'Email Partnerships' },
-            { href: '/apps', label: 'See Tools & Connectors' },
+            { href: contactMailto('Partnership enquiry'), label: 'Email partnerships' },
+            { href: '/apps', label: 'See tools & connectors' },
           ]}
           modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         />
@@ -105,8 +105,8 @@ export default function PartnersPage() {
           title="Tell us what you are trying to build."
           body={`Email ${CONTACT_EMAIL} with what you have in mind. Concrete proposals get a real answer; we would rather say no clearly than leave you waiting on a program that does not exist.`}
           ctas={[
-            { href: contactMailto('Partnership enquiry'), label: 'Email Partnerships' },
-            { href: '/contact-sales', label: 'Talk to Sales' },
+            { href: contactMailto('Partnership enquiry'), label: 'Email partnerships' },
+            { href: '/contact-sales', label: 'Contact sales' },
           ]}
         />
 

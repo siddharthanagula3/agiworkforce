@@ -1,6 +1,6 @@
-
 import { logger } from '@shared/lib/logger';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import { requestMe } from './me-request';
 
 export interface AuthUser {
   id: string;
@@ -38,7 +38,7 @@ export interface AuthResponse {
 class AuthService {
   async getCurrentUser(): Promise<AuthResponse> {
     try {
-      const response = await fetch('/api/me');
+      const response = await requestMe();
       if (!response.ok) {
         return { user: null, error: 'Not authenticated' };
       }

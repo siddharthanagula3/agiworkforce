@@ -205,6 +205,18 @@
       "verifiedBy": "voice-model-sweep-2026-07-28-followup",
       "status": "PASS",
       "notes": "Founder flagged that gpt-4o-mini-tts carries a Deprecated badge on the developers.openai.com model catalog listing — correct, and it landed the same day we adopted it. Resolved against four sources: the listing badges it Deprecated; its own model page shows NO deprecation banner and no shutdown date; the deprecations table has no family-level row for it (only snapshot gpt-4o-mini-tts-2025-03-20 -> -2025-12-15, shut down 2026-07-23); and the text-to-speech guide still calls it the newest and most reliable TTS model. Decisive fact: it is the ONLY model OpenAI serves on /v1/audio/speech — gpt-audio-1.5's model page lists \"Speech generation | v1/audio/speech | Not supported\". So there is no newer member of this family to move to. Marked deprecated:true (compile.mjs then sets selectable:false) and KEPT, because removing it would leave the OpenAI TTS path with no model at all. NOT ADDED, deliberately: the realtime family (gpt-realtime-2.1, gpt-realtime-2.1-mini, gpt-realtime-translate, gpt-realtime-whisper). Three reasons — ModelType has no \"realtime\" member, so it is a schema change across the TS union, the registry schema and both Rust registries; we ship no duplex audio path (founder-gated on a realtime provider plus echo cancellation); and registering them live would advertise capability we do not have. Recorded as VOICE-REALTIME-FAMILY-ABSENT so the ids do not need re-researching: gpt-realtime-2.1 ($4/$24 text, $32/$64 audio, $0.40 cached, 128k ctx, 32k max out) and gpt-realtime-2.1-mini ($0.60/$2.40 text, $10/$20 audio) are the current heads; gpt-realtime, gpt-realtime-mini, gpt-audio, gpt-audio-mini and every gpt-4o-audio/gpt-4o-realtime variant shut down 2027-01-20. gpt-4o-transcribe and gpt-4o-mini-transcribe carry NO deprecated badge and stay as-is."
+    },
+    {
+      "date": "2026-08-29",
+      "verifiedBy": "official-openrouter-live-model-list",
+      "status": "PASS",
+      "notes": "Added the two OpenRouter router routes the product had no entry for: openrouter/auto (Auto Router) and openrouter/free (Free Models Router), and set open_router.defaultModel to openrouter/auto, which was previously empty so the provider had no route at all. Every field is read from https://openrouter.ai/api/v1/models retrieved 2026-08-29 with a live key. Auto Router: canonical_slug openrouter/auto, 2,000,000 context, tokenizer \"Router\", modality text+image+file+audio+video->text+image, and supported_parameters including reasoning, reasoning_effort, tools, tool_choice and structured_outputs — hence reasoning.control \"effort\". Free Models Router: canonical_slug openrouter/free, 200,000 context, modality text+image->text, pricing prompt \"0\" and completion \"0\", and supported_parameters including reasoning_effort, tools and structured_outputs. Both routes report pricing that is resolved per request — auto returns \"-1\" for prompt and completion because cost follows the model it selects, so no per-million rate is recorded here and reservation must price the resolved route, not the router. No benchmarks are recorded because OpenRouter publishes none for either router, and carrying a member model's numbers forward would be fabricated. openrouter/auto is recorded with inputCost/outputCost 0 because ModelMetadata requires both and the router publishes no rate of its own; managed metering must price the model the router actually resolved (the completion response reports it) rather than the router record, so this route is safe on BYOK — where OpenRouter bills the key holder directly — and must not be exposed on a metered managed plan until resolved-route pricing is wired. openrouter/free is genuinely zero-rated (\"0\"/\"0\" from the provider)."
+    },
+    {
+      "date": "2026-08-29",
+      "verifiedBy": "live-openrouter-completion-through-both-router-routes",
+      "status": "PASS",
+      "notes": "Both router routes were exercised end to end against the live API after the account key was rotated. openrouter/auto returned HTTP 200 in 752ms and reported routing to deepseek/deepseek-v4-flash-0731, confirming the earlier note that the router itself publishes no rate and that metering must price the resolved model. openrouter/free returned HTTP 200 and routed to free members (nvidia/nemotron-3-super-120b-a12b:free, minimax/minimax-m2.7:free) with usage.cost 0, confirming the zero rating. Both free members are reasoning models whose reasoning tokens count against max_tokens: a 16-token cap returned empty content while a 200-token cap returned the expected text with finish_reason \"stop\" and 31 reasoning tokens. The product default is DEFAULT_MAX_OUTPUT_TOKENS 8192, so this is not reachable in normal use, but any caller that lowers the cap for a free-router turn must leave room for reasoning tokens."
     }
   ],
   "providers": {
@@ -221,26 +233,26 @@
       },
       "modelPrefixes": [],
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
-      "defaultModel": "gemini-3.5-flash-lite",
+      "defaultModel": "family:google/gemini-flash-lite",
       "taskRouting": {},
       "canonicalization": {
-        "qwen-turbo": "qwen-3.7-plus",
-        "qwen-max": "qwen-3.7-plus",
-        "qwen-coder-flash": "qwen-3.7-plus",
-        "qwen-coder-plus": "qwen-3.7-plus",
-        "mistral-large-3": "claude-sonnet-5",
-        "mistral-medium-3.5": "claude-sonnet-5",
-        "mistral-small-4": "claude-sonnet-5",
-        "codestral-2508": "claude-sonnet-5",
-        "groq-llama-3.1-8b": "gemini-3.5-flash-lite",
-        "groq-llama-3.3-70b": "gemini-3.5-flash-lite",
-        "nvidia/llama-3.3-70b-instruct": "gemini-3.5-flash-lite",
-        "nvidia/nemotron-3-nano-30b-a3b": "gemini-3.5-flash-lite",
-        "nvidia/nemotron-3-super-120b-a12b": "gemini-3.5-flash-lite",
-        "nvidia/nemotron-3-ultra-550b-a55b": "gemini-3.5-flash-lite",
-        "nvidia/nemotron-3-super-120b-a12b:free": "gemini-3.5-flash-lite",
-        "google/gemma-4-26b-a4b-it:free": "gemini-3.5-flash-lite",
-        "gemini-3.5-flash": "gemini-3.7-flash"
+        "qwen-turbo": "family:qwen/qwen-plus",
+        "qwen-max": "family:qwen/qwen-plus",
+        "qwen-coder-flash": "family:qwen/qwen-plus",
+        "qwen-coder-plus": "family:qwen/qwen-plus",
+        "mistral-large-3": "family:anthropic/claude-sonnet",
+        "mistral-medium-3.5": "family:anthropic/claude-sonnet",
+        "mistral-small-4": "family:anthropic/claude-sonnet",
+        "codestral-2508": "family:anthropic/claude-sonnet",
+        "groq-llama-3.1-8b": "family:google/gemini-flash-lite",
+        "groq-llama-3.3-70b": "family:google/gemini-flash-lite",
+        "nvidia/llama-3.3-70b-instruct": "family:google/gemini-flash-lite",
+        "nvidia/nemotron-3-nano-30b-a3b": "family:google/gemini-flash-lite",
+        "nvidia/nemotron-3-super-120b-a12b": "family:google/gemini-flash-lite",
+        "nvidia/nemotron-3-ultra-550b-a55b": "family:google/gemini-flash-lite",
+        "nvidia/nemotron-3-super-120b-a12b:free": "family:google/gemini-flash-lite",
+        "google/gemma-4-26b-a4b-it:free": "family:google/gemini-flash-lite",
+        "gemini-3.5-flash": "family:google/gemini-flash"
       }
     },
     "openai": {
@@ -256,18 +268,18 @@
       },
       "modelPrefixes": ["gpt-", "tts-", "whisper", "gpt-image"],
       "aliases": [],
-      "defaultModel": "gpt-5.6-sol",
+      "defaultModel": "family:openai/gpt-frontier",
       "taskRouting": {
-        "fast_completion": "gpt-5.6-luna",
-        "code_generation": "gpt-5.6-sol",
-        "complex_reasoning": "gpt-5.6-sol",
-        "chat": "gpt-5.6-terra",
-        "vision": "gpt-5.6-sol",
-        "long_context": "gpt-5.6-sol",
-        "computer_use": "gpt-5.6-sol"
+        "fast_completion": "family:openai/gpt-fast",
+        "code_generation": "family:openai/gpt-frontier",
+        "complex_reasoning": "family:openai/gpt-frontier",
+        "chat": "family:openai/gpt-balanced",
+        "vision": "family:openai/gpt-frontier",
+        "long_context": "family:openai/gpt-frontier",
+        "computer_use": "family:openai/gpt-frontier"
       },
       "canonicalization": {
-        "gpt-5.6": "gpt-5.6-sol"
+        "gpt-5.6": "family:openai/gpt-frontier"
       }
     },
     "anthropic": {
@@ -283,15 +295,15 @@
       },
       "modelPrefixes": ["claude"],
       "aliases": [],
-      "defaultModel": "claude-sonnet-5",
+      "defaultModel": "family:anthropic/claude-sonnet",
       "taskRouting": {
-        "fast_completion": "claude-sonnet-5",
-        "code_generation": "claude-sonnet-5",
-        "complex_reasoning": "claude-fable-5",
-        "chat": "claude-sonnet-5",
-        "vision": "claude-sonnet-5",
-        "long_context": "claude-sonnet-5",
-        "computer_use": "claude-sonnet-5"
+        "fast_completion": "family:anthropic/claude-sonnet",
+        "code_generation": "family:anthropic/claude-sonnet",
+        "complex_reasoning": "family:anthropic/claude-fable",
+        "chat": "family:anthropic/claude-sonnet",
+        "vision": "family:anthropic/claude-sonnet",
+        "long_context": "family:anthropic/claude-sonnet",
+        "computer_use": "family:anthropic/claude-sonnet"
       },
       "canonicalization": {}
     },
@@ -308,14 +320,14 @@
       },
       "modelPrefixes": ["gemini", "imagen", "veo"],
       "aliases": [],
-      "defaultModel": "gemini-3.7-flash",
+      "defaultModel": "family:google/gemini-flash",
       "taskRouting": {
-        "fast_completion": "gemini-3.5-flash-lite",
-        "code_generation": "gemini-3.7-flash",
-        "complex_reasoning": "gemini-3.1-pro-preview",
-        "chat": "gemini-3.7-flash",
-        "vision": "gemini-3.7-flash",
-        "long_context": "gemini-3.1-pro-preview"
+        "fast_completion": "family:google/gemini-flash-lite",
+        "code_generation": "family:google/gemini-flash",
+        "complex_reasoning": "family:google/gemini-pro",
+        "chat": "family:google/gemini-flash",
+        "vision": "family:google/gemini-flash",
+        "long_context": "family:google/gemini-pro"
       },
       "canonicalization": {}
     },
@@ -332,14 +344,14 @@
       },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
-      "defaultModel": "grok-4.5",
+      "defaultModel": "family:xai/grok",
       "taskRouting": {
-        "fast_completion": "grok-4.5",
-        "code_generation": "grok-4.5",
-        "complex_reasoning": "grok-4.5",
-        "chat": "grok-4.5",
-        "vision": "grok-4.5",
-        "long_context": "grok-4.5"
+        "fast_completion": "family:xai/grok",
+        "code_generation": "family:xai/grok",
+        "complex_reasoning": "family:xai/grok",
+        "chat": "family:xai/grok",
+        "vision": "family:xai/grok",
+        "long_context": "family:xai/grok"
       },
       "canonicalization": {}
     },
@@ -356,14 +368,14 @@
       },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
-      "defaultModel": "deepseek-v4-flash",
+      "defaultModel": "family:deepseek/deepseek-flash",
       "taskRouting": {
-        "fast_completion": "deepseek-v4-flash",
-        "code_generation": "deepseek-v4-flash",
-        "complex_reasoning": "deepseek-v4-pro",
-        "chat": "deepseek-v4-flash",
-        "vision": "deepseek-v4-flash",
-        "long_context": "deepseek-v4-flash"
+        "fast_completion": "family:deepseek/deepseek-flash",
+        "code_generation": "family:deepseek/deepseek-flash",
+        "complex_reasoning": "family:deepseek/deepseek-pro",
+        "chat": "family:deepseek/deepseek-flash",
+        "vision": "family:deepseek/deepseek-flash",
+        "long_context": "family:deepseek/deepseek-flash"
       },
       "canonicalization": {}
     },
@@ -380,14 +392,14 @@
       },
       "modelPrefixes": ["qwen"],
       "aliases": ["qwen", "alibaba"],
-      "defaultModel": "qwen-3.7-plus",
+      "defaultModel": "family:qwen/qwen-plus",
       "taskRouting": {
-        "fast_completion": "qwen-3.5-flash",
-        "code_generation": "qwen-3.7-plus",
-        "complex_reasoning": "qwen-3.7-plus",
-        "chat": "qwen-3.7-plus",
-        "vision": "qwen-3.7-plus",
-        "long_context": "qwen-3.7-plus"
+        "fast_completion": "family:qwen/qwen-flash",
+        "code_generation": "family:qwen/qwen-plus",
+        "complex_reasoning": "family:qwen/qwen-plus",
+        "chat": "family:qwen/qwen-plus",
+        "vision": "family:qwen/qwen-plus",
+        "long_context": "family:qwen/qwen-plus"
       },
       "canonicalization": {}
     },
@@ -406,7 +418,7 @@
       "aliases": ["moonshot", "kimi"],
       "taskRouting": {},
       "canonicalization": {},
-      "defaultModel": "kimi-k3"
+      "defaultModel": "family:moonshot/kimi"
     },
     "perplexity": {
       "label": "Perplexity",
@@ -445,14 +457,14 @@
       },
       "modelPrefixes": ["glm"],
       "aliases": ["zhipu", "zhipuai", "bigmodel", "glm", "z.ai", "zai"],
-      "defaultModel": "glm-5.2",
+      "defaultModel": "family:zhipu/glm",
       "taskRouting": {
-        "fast_completion": "glm-5.2",
-        "code_generation": "glm-5.2",
-        "complex_reasoning": "glm-5.2",
-        "chat": "glm-5.2",
-        "vision": "glm-5.2",
-        "long_context": "glm-5.2"
+        "fast_completion": "family:zhipu/glm",
+        "code_generation": "family:zhipu/glm",
+        "complex_reasoning": "family:zhipu/glm",
+        "chat": "family:zhipu/glm",
+        "vision": "family:zhipu/glm",
+        "long_context": "family:zhipu/glm"
       },
       "canonicalization": {}
     },
@@ -502,7 +514,7 @@
       },
       "modelPrefixes": ["meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/", "openrouter/"],
       "aliases": ["open_router", "openrouter", "open-router"],
-      "defaultModel": "",
+      "defaultModel": "openrouter/auto",
       "taskRouting": {},
       "canonicalization": {}
     },
@@ -606,7 +618,7 @@
       "aliases": ["minimax"],
       "taskRouting": {},
       "canonicalization": {},
-      "defaultModel": "minimax-m3"
+      "defaultModel": "family:minimax/minimax"
     }
   },
   "models": {
@@ -2391,21 +2403,73 @@
       },
       "speedOverride": "fast",
       "releasedOverride": "June 2026"
+    },
+    "openrouter-auto": {
+      "id": "openrouter-auto",
+      "apiModelId": "openrouter/auto",
+      "openRouterSlug": "openrouter/auto",
+      "name": "OpenRouter Auto",
+      "provider": "open_router",
+      "modelType": "chat",
+      "openWeight": false,
+      "license": "proprietary",
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["Automatic Routing", "Mixed Workloads", "Cost Balancing"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
+    },
+    "openrouter-free": {
+      "id": "openrouter-free",
+      "apiModelId": "openrouter/free",
+      "openRouterSlug": "openrouter/free",
+      "name": "OpenRouter Free Auto",
+      "provider": "open_router",
+      "modelType": "chat",
+      "openWeight": false,
+      "license": "proprietary",
+      "quality": "fair",
+      "qualityTier": "fast",
+      "bestFor": ["Zero-Cost Drafting", "Experimentation", "Overflow Capacity"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort"
+      },
+      "tierPolicy": {
+        "minTier": "free"
+      }
     }
   },
   "tierAllowedModels": {
-    "economy": ["gpt-5.6-luna", "gemini-3.5-flash-lite", "gemini-3.7-flash", "qwen-3.5-flash"],
-    "pro_additions": [
-      "gpt-5.6-terra",
-      "claude-sonnet-5",
-      "gemini-3.1-pro-preview",
-      "deepseek-v4-flash",
-      "deepseek-v4-pro",
-      "qwen-3.7-plus",
-      "glm-5.2",
-      "kimi-k3"
+    "economy": [
+      "family:openai/gpt-fast",
+      "family:google/gemini-flash-lite",
+      "family:google/gemini-flash",
+      "family:qwen/qwen-flash"
     ],
-    "flagship_additions": ["gpt-5.6-sol", "claude-fable-5", "claude-opus-5", "grok-4.5"]
+    "pro_additions": [
+      "family:openai/gpt-balanced",
+      "family:anthropic/claude-sonnet",
+      "family:google/gemini-pro",
+      "family:deepseek/deepseek-flash",
+      "family:deepseek/deepseek-pro",
+      "family:qwen/qwen-plus",
+      "family:zhipu/glm",
+      "family:moonshot/kimi"
+    ],
+    "flagship_additions": [
+      "family:openai/gpt-frontier",
+      "family:anthropic/claude-fable",
+      "family:anthropic/claude-opus",
+      "family:xai/grok"
+    ]
   },
   "providersInOrder": [
     "managed_cloud",

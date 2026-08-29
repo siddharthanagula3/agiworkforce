@@ -294,12 +294,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
         </AlertDialogHeader>
         {generatedAPIKey && (
           <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={onDismissGeneratedKey}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              Done
-            </AlertDialogAction>
+            <AlertDialogAction onClick={onDismissGeneratedKey}>Done</AlertDialogAction>
           </AlertDialogFooter>
         )}
       </AlertDialogContent>

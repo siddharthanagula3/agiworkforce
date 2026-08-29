@@ -95,6 +95,22 @@ export const MIGRATION_GUIDE = `
 Full guide: docs/product/definition.md and docs/architecture/overview.md.
 `.trim();
 
+/**
+ * Postgres reports a failing statement by parameter index and character
+ * offset alone, so an error like "could not determine data type of parameter
+ * $4" names no query and no table. Attaching the statement (never the
+ * parameter values, which carry user content) makes the offending SQL
+ * identifiable from a log line.
+ */
+function withStatementContext(error: unknown, sql: string): unknown {
+  if (!(error instanceof Error) || 'statement' in error) return error;
+  Object.defineProperty(error, 'statement', {
+    value: sql.replace(/\s+/g, ' ').trim().slice(0, 500),
+    enumerable: true,
+  });
+  return error;
+}
+
 type NeonModule = typeof import('@neondatabase/serverless');
 
 let _neonModule: NeonModule | null = null;
@@ -313,8 +329,12 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
   async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
     const pool = await this.getPool();
     if (this.boundSub === null) {
-      const result = (await pool.query(sql, params as unknown[])) as QueryResult;
-      return result.rows as T[];
+      try {
+        const result = (await pool.query(sql, params as unknown[])) as QueryResult;
+        return result.rows as T[];
+      } catch (err) {
+        throw withStatementContext(err, sql);
+      }
     }
     const client = await pool.connect();
     try {
@@ -337,8 +357,12 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
   async execute(sql: string, params: unknown[] = []): Promise<number> {
     const pool = await this.getPool();
     if (this.boundSub === null) {
-      const result = (await pool.query(sql, params as unknown[])) as QueryResult;
-      return result.rowCount ?? 0;
+      try {
+        const result = (await pool.query(sql, params as unknown[])) as QueryResult;
+        return result.rowCount ?? 0;
+      } catch (err) {
+        throw withStatementContext(err, sql);
+      }
     }
     const client = await pool.connect();
     try {
@@ -352,7 +376,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
       } catch {
         // best-effort rollback; surface the original error
       }
-      throw err;
+      throw withStatementContext(err, sql);
     } finally {
       client.release();
     }
@@ -457,13 +481,21 @@ class NeonTransactionAdapter implements DatabaseAdapter {
   constructor(private client: PoolClient) {}
 
   async query<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
-    const result = (await this.client.query(sql, params as unknown[])) as QueryResult;
-    return result.rows as T[];
+    try {
+      const result = (await this.client.query(sql, params as unknown[])) as QueryResult;
+      return result.rows as T[];
+    } catch (err) {
+      throw withStatementContext(err, sql);
+    }
   }
 
   async execute(sql: string, params: unknown[] = []): Promise<number> {
-    const result = (await this.client.query(sql, params as unknown[])) as QueryResult;
-    return result.rowCount ?? 0;
+    try {
+      const result = (await this.client.query(sql, params as unknown[])) as QueryResult;
+      return result.rowCount ?? 0;
+    } catch (err) {
+      throw withStatementContext(err, sql);
+    }
   }
 
   async transaction<T>(_fn: (tx: DatabaseAdapter) => Promise<T>): Promise<T> {

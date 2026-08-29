@@ -39,6 +39,9 @@ describe('AuthService', () => {
     it('should return user when authenticated', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
+        clone() {
+          return this;
+        },
         json: () => Promise.resolve(mePayload()),
       });
 
@@ -56,7 +59,12 @@ describe('AuthService', () => {
     });
 
     it('should return error when not authenticated', async () => {
-      mockFetch.mockResolvedValue({ ok: false });
+      mockFetch.mockResolvedValue({
+        ok: false,
+        clone() {
+          return this;
+        },
+      });
 
       const result = await authService.getCurrentUser();
 
@@ -76,6 +84,9 @@ describe('AuthService', () => {
     it('should return an error when the payload violates the /api/me contract', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
+        clone() {
+          return this;
+        },
         json: () => Promise.resolve({ id: '1', email: 'test@example.com' }),
       });
 
@@ -140,6 +151,9 @@ describe('AuthService', () => {
       mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        clone() {
+          return this;
+        },
         json: () =>
           Promise.resolve(
             mePayload({

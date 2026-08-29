@@ -169,7 +169,7 @@ export default function AboutPage() {
           ctas={[
             { href: '/login?redirectTo=%2F', label: 'Try AGI Web' },
             { href: '/download', label: 'Get AGI Desktop' },
-            { href: '/trust', label: 'See the Trust Posture' },
+            { href: '/trust', label: 'See the trust posture' },
           ]}
         />
 

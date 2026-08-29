@@ -10,6 +10,7 @@ import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/manage
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { runToolLoop, type ApprovalMode } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { logger } from '@/lib/logger';
+import { claimLiveDurableStream } from './durable-stream-liveness';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
@@ -54,7 +55,11 @@ export interface StartCloudAgentWorkflowExecutionInput {
  */
 export async function startCloudAgentWorkflowExecution(
   input: StartCloudAgentWorkflowExecutionInput,
-): Promise<{ workflowRunId: string; readable: WorkflowReadableStream<Uint8Array> }> {
+): Promise<{
+  workflowRunId: string;
+  readable: WorkflowReadableStream<Uint8Array>;
+  cancel: () => Promise<void>;
+}> {
   const workflowInput = buildCloudAgentWorkflowInput(input);
   const workflowRun = await start(cloudAgentWorkflow, [workflowInput]);
   try {
@@ -71,6 +76,9 @@ export async function startCloudAgentWorkflowExecution(
   return {
     workflowRunId: workflowRun.runId,
     readable: workflowRun.getReadable<Uint8Array>(),
+    cancel: async () => {
+      await workflowRun.cancel();
+    },
   };
 }
 
@@ -84,7 +92,8 @@ export type CloudAgentTransportKind = 'durable' | 'inline';
 export type CloudAgentTransportDegradeReason =
   | 'kill_switch'
   | 'no_reservation'
-  | 'workflow_start_failed';
+  | 'workflow_start_failed'
+  | 'workflow_stream_stalled';
 
 export interface RunCloudAgentTurnInput extends StartCloudAgentWorkflowExecutionInput {
   /**
@@ -181,10 +190,12 @@ export async function runCloudAgentTurn(
 
   try {
     const workflow = await startCloudAgentWorkflowExecution(input);
+    const live = await claimLiveDurableStream(workflow.readable);
+    if (!live) return degrade('workflow_stream_stalled');
     return {
       transport: 'durable',
       workflowRunId: workflow.workflowRunId,
-      readable: workflow.readable,
+      readable: live,
     };
   } catch (error) {
     return degrade(

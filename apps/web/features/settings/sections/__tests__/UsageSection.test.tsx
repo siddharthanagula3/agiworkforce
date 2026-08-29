@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
 import { render, screen } from '@testing-library/react';
@@ -68,16 +67,19 @@ describe('UsageSection', () => {
     expect(screen.getByText(managedUsageBucketLabel('weekly'))).toBeTruthy();
     expect(screen.getByText(managedUsageBucketLabel('weeklyFlagship'))).toBeTruthy();
     expect(screen.getByText(managedUsageBucketLabel('period'))).toBeTruthy();
-    expect(screen.getAllByText('40% left').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('60% left').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('50% left').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/40% left/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/60% left/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/50% left/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/resets in/i)).toHaveLength(4);
+    // The headline figure reads the same direction the bar fills.
+    expect(screen.getAllByText('60% used').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('40% used').length).toBeGreaterThan(0);
   });
 
   it('renders the flagship weekly window the contract has always carried (PAR-1)', async () => {
     render(React.createElement(UsageSection));
     expect(await screen.findByText(managedUsageBucketLabel('weeklyFlagship'))).toBeTruthy();
-    expect(screen.getAllByText('5% left').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\b5% left/).length).toBeGreaterThan(0);
   });
 
   it('shows a relative countdown alongside the absolute reset instant', async () => {

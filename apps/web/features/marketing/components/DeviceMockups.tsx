@@ -20,6 +20,17 @@ export interface DeviceWindowProps {
   routeMode?: 'local' | 'byok' | 'managed';
 }
 
+export type TerminalLine =
+  | { kind: 'cmd'; text: string }
+  | { kind: 'out'; text: string }
+  | { kind: 'ok'; text: string }
+  | { kind: 'dim'; text: string };
+
+export interface TerminalWindowProps extends DeviceWindowProps {
+  session?: readonly TerminalLine[];
+  hud?: { tokensIn: number; tokensOut: number; cost: string; ctx: string } | false;
+}
+
 function deviceStyle(type: DeviceType): CSSProperties {
   const { width, height } = DEVICE_GEOMETRY[type];
   return { '--dev-w': width, '--dev-h': height } as CSSProperties;
@@ -417,7 +428,9 @@ export function TerminalWindow({
   badge = 'sandboxed',
   className,
   routeMode = 'local',
-}: DeviceWindowProps) {
+  session,
+  hud,
+}: TerminalWindowProps) {
   const isByok = routeMode === 'byok';
   const isManaged = routeMode === 'managed';
   const routeLabel = isByok ? 'BYOK' : isManaged ? 'managed cloud' : 'local model';
@@ -433,27 +446,57 @@ export function TerminalWindow({
     <DeviceRoot type="terminal" label="AGI CLI interface" className={className}>
       <WindowBar title={title} badge={badge} />
       <div className="agi-dev-body agi-term" aria-hidden="true">
-        <p className="agi-term-line agi-term-line--dim agi-term-strip">
-          <span>
-            AGI · <span className="agi-term-ok">{routeLabel}</span> · {providerLabel}
-          </span>
-          <span className="agi-term-hud">
-            in 0 · out 0 ·{' '}
-            <span className="agi-term-ok">{isByok ? 'provider billed' : '$0.0000'}</span> · ctx 0%
-          </span>
-        </p>
-        <p className="agi-term-line">Welcome to AGI</p>
-        <p className="agi-term-line agi-term-ok">{boundaryLabel}</p>
-        <p className="agi-term-line agi-term-line--dim">
-          Choose Local, BYOK, or Cloud with /model.
-        </p>
-        <p className="agi-term-line agi-term-line--dim">
-          Type / for commands · Shift+Tab to switch modes
-        </p>
-        <p className="agi-term-line">
-          <span className="agi-term-prompt">›</span> Message AGI…
-          <span className="agi-term-caret" />
-        </p>
+        {hud === false ? null : (
+          <p className="agi-term-line agi-term-line--dim agi-term-strip">
+            <span>
+              AGI · <span className="agi-term-ok">{routeLabel}</span> · {providerLabel}
+            </span>
+            <span className="agi-term-hud">
+              in {hud?.tokensIn ?? 0} · out {hud?.tokensOut ?? 0} ·{' '}
+              <span className="agi-term-ok">
+                {isByok ? 'provider billed' : (hud?.cost ?? '$0.0000')}
+              </span>{' '}
+              · ctx {hud?.ctx ?? '0%'}
+            </span>
+          </p>
+        )}
+        {session ? (
+          session.map((line, i) =>
+            line.kind === 'cmd' ? (
+              <p className="agi-term-line" key={i}>
+                <span className="agi-term-prompt">›</span> {line.text}
+              </p>
+            ) : (
+              <p
+                className={
+                  line.kind === 'ok'
+                    ? 'agi-term-line agi-term-ok'
+                    : line.kind === 'dim'
+                      ? 'agi-term-line agi-term-line--dim'
+                      : 'agi-term-line'
+                }
+                key={i}
+              >
+                {line.text}
+              </p>
+            ),
+          )
+        ) : (
+          <>
+            <p className="agi-term-line">Welcome to AGI</p>
+            <p className="agi-term-line agi-term-ok">{boundaryLabel}</p>
+            <p className="agi-term-line agi-term-line--dim">
+              Choose Local, BYOK, or Cloud with /model.
+            </p>
+            <p className="agi-term-line agi-term-line--dim">
+              Type / for commands · Shift+Tab to switch modes
+            </p>
+            <p className="agi-term-line">
+              <span className="agi-term-prompt">›</span> Message AGI…
+              <span className="agi-term-caret" />
+            </p>
+          </>
+        )}
         <p className="agi-term-line agi-term-line--dim">
           Default · {footerMode} · effort:Medium · sandbox: seatbelt
         </p>

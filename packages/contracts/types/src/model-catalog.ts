@@ -1177,6 +1177,78 @@ export function getRoutingSlotModel(slot: RoutingSlot): string {
   return getRoutingSlotDefinition(slot).modelId;
 }
 
+export type ModelFamilySlot = keyof typeof modelRegistry.families;
+
+export interface ModelFamilySlotDefinition {
+  slot: ModelFamilySlot;
+  provider: string;
+  canonicalFamily: string;
+  tier: string;
+  lifecyclePolicy: string;
+  activeModelId: string;
+  activeGeneration: string;
+  activeLifecycle: string | null;
+  previousModelId: string | null;
+  fallbackChain: readonly string[];
+  promotedAt: string | null;
+  promotionReason: string | null;
+}
+
+type RegistryModelFamily = (typeof modelRegistry.families)[ModelFamilySlot];
+
+export const MODEL_FAMILY_REGISTRY: Readonly<Record<ModelFamilySlot, ModelFamilySlotDefinition>> =
+  Object.freeze(
+    Object.fromEntries(
+      (Object.entries(modelRegistry.families) as Array<[ModelFamilySlot, RegistryModelFamily]>).map(
+        ([slot, family]): [ModelFamilySlot, ModelFamilySlotDefinition] => [
+          slot,
+          {
+            slot,
+            provider: family.provider,
+            canonicalFamily: family.canonicalFamily,
+            tier: family.tier,
+            lifecyclePolicy: family.lifecyclePolicy,
+            activeModelId: family.activeModelKey,
+            activeGeneration: family.activeGeneration,
+            activeLifecycle: family.activeLifecycle,
+            previousModelId: family.previousModelKey,
+            fallbackChain: Object.freeze([...family.fallbackChain]),
+            promotedAt: family.promotedAt,
+            promotionReason: family.promotionReason,
+          },
+        ],
+      ),
+    ) as Record<ModelFamilySlot, ModelFamilySlotDefinition>,
+  );
+
+export function isModelFamilySlot(slot: string): slot is ModelFamilySlot {
+  return Object.prototype.hasOwnProperty.call(MODEL_FAMILY_REGISTRY, slot);
+}
+
+export function getModelFamilySlot(slot: ModelFamilySlot): ModelFamilySlotDefinition {
+  return MODEL_FAMILY_REGISTRY[slot];
+}
+
+export function resolveModelFamilySlot(slot: ModelFamilySlot): string {
+  return getModelFamilySlot(slot).activeModelId;
+}
+
+export function getModelFamilyFallbackChain(slot: ModelFamilySlot): readonly string[] {
+  const family = getModelFamilySlot(slot);
+  return Object.freeze([family.activeModelId, ...family.fallbackChain]);
+}
+
+const MODEL_TO_FAMILY_SLOT: ReadonlyMap<string, ModelFamilySlot> = new Map(
+  Object.values(MODEL_FAMILY_REGISTRY).map((family) => [
+    family.activeModelId,
+    family.slot as ModelFamilySlot,
+  ]),
+);
+
+export function getModelFamilySlotForModel(modelId: string): ModelFamilySlot | null {
+  return MODEL_TO_FAMILY_SLOT.get(modelId) ?? null;
+}
+
 const MODEL_TO_FIRST_SLOT: ReadonlyMap<string, RoutingSlot> = (() => {
   const m = new Map<string, RoutingSlot>();
   for (const [slotKey, def] of Object.entries(SLOT_REGISTRY)) {

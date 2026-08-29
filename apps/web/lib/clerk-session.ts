@@ -6,10 +6,28 @@ export function hasClerkSessionCookie(): boolean {
   return Number.isFinite(value) && value > 0;
 }
 
+export function hasUsableClerkSessionToken(): boolean {
+  if (typeof document === 'undefined') return false;
+  const match = document.cookie.match(/(?:^|;\s*)__session=([^;]*)/);
+  const token = match?.[1];
+  if (!token) return false;
+  const payload = token.split('.')[1];
+  if (!payload) return false;
+  try {
+    const claims: unknown = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    const exp = (claims as { exp?: unknown })?.exp;
+    if (typeof exp !== 'number') return true;
+    return exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 export function clerkSessionCookieValue(): string | null {
   if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(/(?:^|;\s*)__client_uat=([^;]*)/);
-  return match?.[1] ?? null;
+  const uat = document.cookie.match(/(?:^|;\s*)__client_uat=([^;]*)/)?.[1] ?? '';
+  const ready = hasUsableClerkSessionToken() ? '1' : '0';
+  return uat || ready === '1' ? `${uat}.${ready}` : null;
 }
 
 type ClerkSessionListener = () => void;

@@ -11,6 +11,14 @@ import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
 import prettier from 'prettier';
 
+import {
+  buildFamilyView,
+  collectFamilyRefs,
+  loadFamilyCatalog,
+  resolveFamilyRefsDeep,
+  validateFamilyCatalog,
+} from './families.mjs';
+
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REGISTRY_DIR = path.resolve(SCRIPT_DIR, '..');
 const ROOT = path.resolve(REGISTRY_DIR, '..', '..', '..');
@@ -297,7 +305,9 @@ function resolveSyncedFields(cur, up) {
   });
 }
 
-function buildCatalog(curation, synced) {
+const FAMILY_RESOLVED_TOP_LEVEL_KEYS = ['providers', 'tierAllowedModels'];
+
+function buildCatalog(curation, synced, familyCatalog) {
   const models = {};
   for (const [id, cur] of Object.entries(curation.models)) {
     const up = synced.models[id] ?? {};
@@ -311,8 +321,19 @@ function buildCatalog(curation, synced) {
   }
   const catalog = {};
   for (const key of TOP_LEVEL_ORDER) {
-    catalog[key] = key === 'models' ? models : curation[key];
+    if (key === 'models') {
+      catalog[key] = models;
+      continue;
+    }
+    catalog[key] = FAMILY_RESOLVED_TOP_LEVEL_KEYS.includes(key)
+      ? resolveFamilyRefsDeep(curation[key], familyCatalog)
+      : curation[key];
   }
+  assert.equal(
+    collectFamilyRefs(catalog.models, familyCatalog.policy).size,
+    0,
+    'Model records must not reference family slots; a family slot resolves to a model record',
+  );
   return catalog;
 }
 
@@ -868,7 +889,7 @@ function buildRuntimeProfiles(harnessCatalog) {
   return normalizedProfiles;
 }
 
-function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
+function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies, familyCatalog) {
   const models = {};
   const providerModelKeys = {};
   const routes = {};
@@ -988,10 +1009,22 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
     id: `verification/${entry.date ?? 'unknown'}/${index + 1}`,
     ...entry,
   }));
-  const resolvedAutoPolicy = resolveAutoPolicy(routingPolicies.auto, catalog);
+  const resolvedAutoPolicy = resolveAutoPolicy(
+    resolveFamilyRefsDeep(routingPolicies.auto, familyCatalog),
+    catalog,
+  );
   validateAutoPolicy(resolvedAutoPolicy, models, capabilities);
   const autoPolicy = normalizeAutoPolicy(resolvedAutoPolicy);
   const runtimeProfiles = buildRuntimeProfiles(harnessCatalog);
+  const familySnapshot = {
+    models: catalog.models,
+    providers: catalog.providers,
+    capabilities,
+    pricing,
+    limits,
+    benchmarks,
+  };
+  validateFamilyCatalog(familyCatalog, familySnapshot);
 
   return {
     $schema: '../schema/registry.schema.json',
@@ -1006,6 +1039,7 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
     limits,
     benchmarks,
     evidence,
+    families: buildFamilyView(familyCatalog, familySnapshot, familyCatalog.policy),
     policies: {
       auto: autoPolicy,
       legacyTiers: catalog.tierAllowedModels,
@@ -1054,11 +1088,12 @@ function buildSkillSpectorProviderRegistry(catalog, providerId) {
   return `${lines.join('\n')}\n`;
 }
 
-async function buildNormalizedArtifacts(catalog) {
+async function buildNormalizedArtifacts(catalog, familyCatalog) {
   const harnessCatalog = readJson(HARNESSES_JSON);
   const routingPolicies = readJson(ROUTING_POLICIES_JSON);
   assert.equal(routingPolicies.schemaVersion, 1, 'Unsupported routing policy schema version');
-  const registry = buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies);
+  assert.equal(familyCatalog.schemaVersion, 1, 'Unsupported model family schema version');
+  const registry = buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies, familyCatalog);
   const schema = readJson(REGISTRY_SCHEMA_JSON);
   const validate = new Ajv({ allErrors: true, strict: true }).compile(schema);
   if (!validate(registry)) {
@@ -1107,9 +1142,10 @@ function checkGeneratedArtifact(file, expected) {
 async function generate() {
   const curation = readJson(CURATION_JSON);
   const synced = readJson(SYNCED_JSON);
-  const catalog = buildCatalog(curation, synced);
+  const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
+  const catalog = buildCatalog(curation, synced, familyCatalog);
   await writeJson(MODELS_JSON, catalog);
-  const artifacts = await buildNormalizedArtifacts(catalog);
+  const artifacts = await buildNormalizedArtifacts(catalog, familyCatalog);
   ensureGeneratedDirectories();
   writeText(REGISTRY_JSON, artifacts.json);
   writeText(REGISTRY_TS, artifacts.typescript);
@@ -1130,7 +1166,8 @@ async function generate() {
 async function check() {
   const curation = readJson(CURATION_JSON);
   const synced = readJson(SYNCED_JSON);
-  const built = buildCatalog(curation, synced);
+  const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
+  const built = buildCatalog(curation, synced, familyCatalog);
   const regenerated = await formatJson(built, MODELS_JSON);
   const committed = fs.readFileSync(MODELS_JSON, 'utf8');
 
@@ -1148,7 +1185,7 @@ async function check() {
     process.exitCode = 1;
     return;
   }
-  const artifacts = await buildNormalizedArtifacts(built);
+  const artifacts = await buildNormalizedArtifacts(built, familyCatalog);
   const generatedOk = [
     checkGeneratedArtifact(REGISTRY_JSON, artifacts.json),
     checkGeneratedArtifact(REGISTRY_TS, artifacts.typescript),
@@ -1247,6 +1284,32 @@ async function main() {
   if (args.includes('--check')) return check();
   if (args.includes('--refresh')) return refresh(threshold);
   return generate();
+}
+
+export const FAMILY_CATALOG_DIR = CATALOG_DIR;
+
+export function loadFamilySnapshot() {
+  const curation = readJson(CURATION_JSON);
+  const synced = readJson(SYNCED_JSON);
+  const familyCatalog = loadFamilyCatalog(CATALOG_DIR);
+  const catalog = buildCatalog(curation, synced, familyCatalog);
+  const registry = buildNormalizedRegistry(
+    catalog,
+    readJson(HARNESSES_JSON),
+    readJson(ROUTING_POLICIES_JSON),
+    familyCatalog,
+  );
+  return {
+    familyCatalog,
+    snapshot: {
+      models: catalog.models,
+      providers: catalog.providers,
+      capabilities: registry.capabilities,
+      pricing: registry.pricing,
+      limits: registry.limits,
+      benchmarks: registry.benchmarks,
+    },
+  };
 }
 
 const isEntrypoint =

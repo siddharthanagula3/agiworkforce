@@ -60,11 +60,49 @@ export function selectCliReleaseDownloads(release: StableDesktopRelease): CliRel
   return downloads;
 }
 
+const REACHABILITY_TTL_MS = 5 * 60 * 1000;
+const REACHABILITY_TIMEOUT_MS = 6000;
+
+const reachability = new Map<string, { publiclyRetrievable: boolean; checkedAt: number }>();
+
+async function isPubliclyRetrievable(url: string): Promise<boolean> {
+  const cached = reachability.get(url);
+  if (cached && Date.now() - cached.checkedAt < REACHABILITY_TTL_MS) {
+    return cached.publiclyRetrievable;
+  }
+
+  let publiclyRetrievable = false;
+  try {
+    const response = await fetch(url, {
+      method: 'HEAD',
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(REACHABILITY_TIMEOUT_MS),
+    });
+    publiclyRetrievable = response.ok;
+  } catch {
+    publiclyRetrievable = false;
+  }
+
+  reachability.set(url, { publiclyRetrievable, checkedAt: Date.now() });
+  return publiclyRetrievable;
+}
+
 export async function fetchCliReleaseAvailability(): Promise<CliReleaseAvailability | null> {
   const release = await fetchLatestDesktopRelease('stable', { tagPrefix: CLI_RELEASE_TAG_PREFIX });
   if (!release) return null;
 
-  const downloads = selectCliReleaseDownloads(release);
+  const candidates = selectCliReleaseDownloads(release);
+  if (candidates.length === 0) return null;
+
+  const reachable = await Promise.all(
+    candidates.map(async (download) =>
+      (await isPubliclyRetrievable(download.downloadUrl)) ? download : null,
+    ),
+  );
+  const downloads = reachable.filter(
+    (download): download is CliReleaseDownload => download !== null,
+  );
   if (downloads.length === 0) return null;
 
   return { version: release.version, publishedAt: release.publishedAt, downloads };
