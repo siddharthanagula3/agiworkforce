@@ -16,7 +16,6 @@ function build(isAdmin: boolean | undefined) {
   return buildAppNavItems({
     pathname: '/chat',
     navigate: vi.fn(),
-    onOpenCustomize: vi.fn(),
     ...(isAdmin === undefined ? {} : { isAdmin }),
   });
 }
@@ -82,7 +81,18 @@ describe('app rail · every destination resolves to a real route', () => {
     expect(pageFor(href), `${href} has no page.tsx`).toBe(true);
   });
 
-  it('offers Skills, which was reachable only by URL', () => {
-    expect(APP_NAV_DESTINATIONS.map((d) => d.id)).toContain('skills');
+  // Founder decision 2026-08-29: the rail carries neither Skills nor Customize.
+  // Skills keeps its own Settings pane and /skills route; Settings is reached
+  // from the account menu.
+  it('carries neither Skills nor Customize', () => {
+    const ids = APP_NAV_DESTINATIONS.map((d) => d.id);
+    expect(ids).not.toContain('skills');
+    expect(ids).not.toContain('customize');
+  });
+
+  it('routes every destination, with no modal-only entry left behind', () => {
+    expect(APP_NAV_DESTINATIONS.every((d) => typeof d.href === 'string' && d.href.length > 0)).toBe(
+      true,
+    );
   });
 });

@@ -41,13 +41,11 @@ export {
 function UsageBar({
   label,
   percent,
-  value,
   detail,
   unknown = false,
 }: {
   label: string;
   percent: number;
-  value: string;
   detail: string;
   /**
    * No figure could be read from the server. Rendering the computed number
@@ -64,7 +62,17 @@ function UsageBar({
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
       >
         <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
-        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{unknown ? 'Unavailable' : value}</span>
+        {/*
+          The headline number reads the SAME direction the bar fills. It used to
+          print the remaining share beside a bar that fills with the consumed
+          share, so a full allowance ("100% left") rendered as an empty bar and
+          an exhausted one ("None left") as a full bar. The remaining figure
+          still leads the detail line below, where the reset time gives it
+          meaning.
+        */}
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+          {unknown ? 'Unavailable' : `${Math.max(0, Math.min(100, Math.round(percent)))}% used`}
+        </span>
       </div>
       {/*
         Colour tracks the SAME severity ladder every other surface uses
@@ -75,6 +83,7 @@ function UsageBar({
       <Progress
         value={unknown ? 0 : percent}
         aria-label={unknown ? `${label} usage unavailable` : `${label} usage`}
+        aria-valuetext={unknown ? 'Unavailable' : detail}
         className="h-2"
         indicatorClassName={
           getUsageUrgency(percent) === 'critical'
@@ -83,7 +92,7 @@ function UsageBar({
               ? 'bg-[var(--chat-warning,#d97706)]'
               : 'bg-[var(--chat-accent-primary)]'
         }
-        style={{ background: 'var(--bg-hover, rgba(255,255,255,0.08))' }}
+        style={{ background: 'var(--chat-border-strong)' }}
       />
       <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
         {unknown ? 'Could not read your usage. Retry to load it.' : detail}
@@ -215,21 +224,18 @@ export function UsageSection() {
             unknown={usageUnknown}
             label={managedUsageBucketLabel('session')}
             percent={sessionUsedPercent}
-            value={formatUsageRemaining(100 - sessionUsedPercent)}
             detail={usageDetail(100 - sessionUsedPercent, usage?.session_reset_at ?? null, nowMs)}
           />
           <UsageBar
             unknown={usageUnknown}
             label={managedUsageBucketLabel('weekly')}
             percent={weeklyUsedPercent}
-            value={formatUsageRemaining(100 - weeklyUsedPercent)}
             detail={usageDetail(100 - weeklyUsedPercent, usage?.weekly_reset_at ?? null, nowMs)}
           />
           <UsageBar
             unknown={usageUnknown}
             label={managedUsageBucketLabel('weeklyFlagship')}
             percent={flagshipWeeklyUsedPercent}
-            value={formatUsageRemaining(100 - flagshipWeeklyUsedPercent)}
             detail={usageDetail(
               100 - flagshipWeeklyUsedPercent,
               usage?.flagship_weekly_reset_at ?? null,
@@ -240,7 +246,6 @@ export function UsageSection() {
             unknown={usageUnknown}
             label={managedUsageBucketLabel('period')}
             percent={usedPercent}
-            value={formatUsageRemaining(100 - usedPercent)}
             detail={usageDetail(100 - usedPercent, usage?.usage_reset_at ?? null, nowMs)}
           />
         </div>

@@ -1379,7 +1379,8 @@ const ChatComposerNewComponent = ({
   // on web the cowork folder store is never populated through this control.
   const pickerFolderName = canUseAgiWork && canUseWorkingDirectory ? folderName : null;
   const pickerHasSelection = Boolean(activePickerProject || pickerFolderName);
-  const pickerLabel = activePickerProject?.name ?? pickerFolderName ?? 'Project or folder';
+  const pickerPlaceholder = canUseAgiWork ? 'Project or folder' : 'Project';
+  const pickerLabel = activePickerProject?.name ?? pickerFolderName ?? pickerPlaceholder;
   const filteredPickerProjects = projectPicker
     ? projectPicker.projects.filter((p) =>
         p.name.toLowerCase().includes(projectQuery.trim().toLowerCase()),
@@ -2678,6 +2679,10 @@ const ChatComposerNewComponent = ({
             <textarea
               ref={textareaRef}
               data-composer-textarea
+              /* Paragraph direction follows the first strong character, so an
+                 Arabic or Hebrew draft aligns and edits right-to-left instead
+                 of being laid out as an LTR paragraph. */
+              dir="auto"
               value={message}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -3859,7 +3864,7 @@ const ChatComposerNewComponent = ({
                 pickerHasSelection ? 'pr-1' : 'pr-2.5',
                 (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
               )}
-              aria-label={canUseAgiWork ? 'Project or folder' : 'Project'}
+              aria-label={pickerHasSelection ? `${pickerPlaceholder}: ${pickerLabel}` : pickerLabel}
               aria-expanded={showProjectPicker}
               title={pickerHasSelection ? pickerLabel : undefined}
             >
@@ -4047,9 +4052,14 @@ const ChatComposerNewComponent = ({
             through the transient queued-follow-up chip and the collapsed send
             preview. It is derived, not a control, so it is text and not a
             button. */}
-        {billingPolicyReady ? (
-          <>
+        {/* Each entry carries its own leading separator inside one flex item, so
+            a wrapped row can never end on a dangling "·" — which is exactly
+            what happened at 390px, where the row broke after the route
+            disclosure. */}
+        {[
+          billingPolicyReady ? (
             <span
+              key="web-search"
               data-testid="web-search-indicator"
               data-active={webSearchEnabled ? 'true' : 'false'}
               title={
@@ -4060,33 +4070,44 @@ const ChatComposerNewComponent = ({
             >
               {webSearchEnabled ? 'Web search on' : 'Web search off'}
             </span>
-            <span aria-hidden="true">·</span>
-          </>
-        ) : null}
-        {sendPreviewPresentation ? (
-          <>
-            <SendPreview presentation={sendPreviewPresentation} variant="compact" />
-            <span aria-hidden="true">·</span>
-          </>
-        ) : null}
-        {/* Accuracy caveat, in the position ChatGPT and Claude both use. The
-            explicit Article 50(1) "you are interacting with an AI system"
-            sentence was removed on 2026-08-14 in reliance on the regulation's
-            obviousness carve-out, which counsel has NOT reviewed — see
-            ARTICLE_50_1_WEB_CARVE_OUT in lib/compliance/ai-act.ts. This
-            disclaimer is what deliberately stayed; do not trim it too. */}
-        <span data-testid="ai-accuracy-disclaimer">{AI_ACCURACY_DISCLAIMER}</span>
-        <span aria-hidden="true">·</span>
-        <Link
-          href="/privacy"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Privacy
-        </Link>
-        <span aria-hidden="true">·</span>
-        <ComposerFeedbackDialog conversationId={conversationId} />
+          ) : null,
+          sendPreviewPresentation ? (
+            <SendPreview
+              key="send-preview"
+              presentation={sendPreviewPresentation}
+              variant="compact"
+            />
+          ) : null,
+          /* Accuracy caveat, in the position ChatGPT and Claude both use. The
+             explicit Article 50(1) "you are interacting with an AI system"
+             sentence was removed on 2026-08-14 in reliance on the regulation's
+             obviousness carve-out, which counsel has NOT reviewed — see
+             ARTICLE_50_1_WEB_CARVE_OUT in lib/compliance/ai-act.ts. This
+             disclaimer is what deliberately stayed; do not trim it too. */
+          <span key="accuracy" data-testid="ai-accuracy-disclaimer">
+            {AI_ACCURACY_DISCLAIMER}
+          </span>,
+          <Link
+            key="privacy"
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Privacy
+          </Link>,
+          <ComposerFeedbackDialog key="feedback" conversationId={conversationId} />,
+        ]
+          .filter(Boolean)
+          .map((entry, index) => (
+            <span
+              key={(entry as { key: string }).key}
+              className="inline-flex items-center gap-x-1 whitespace-nowrap"
+            >
+              {index > 0 && <span aria-hidden="true">·</span>}
+              {entry}
+            </span>
+          ))}
 
         {/* Webcam capture. Owns its own permission prompt, live preview, and
             stream teardown; the captured frame joins the same attachment

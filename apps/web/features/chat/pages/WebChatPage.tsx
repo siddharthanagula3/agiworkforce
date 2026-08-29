@@ -1394,6 +1394,21 @@ export default function WebChatPage() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
 
+  /*
+   * A refused turn already states itself in the transcript as an
+   * InlinePaywallCard with its own recovery buttons. The generic error banner
+   * printed the identical sentence a second time at the top of the surface, in
+   * destructive red beside the card's warning amber — one condition, two
+   * severities, two copies.
+   */
+  const showsInlinePaywall = useMemo(
+    () =>
+      displayedMessages.some(
+        (message) => (message.metadata as { paywall?: unknown } | undefined)?.paywall != null,
+      ),
+    [displayedMessages],
+  );
+
   // "Reply ready" browser notification: fires once per completed stream while
   // the tab is backgrounded. Previously the permission banner above only
   // ever called Notification.requestPermission() — nothing consumed the
@@ -4220,11 +4235,10 @@ export default function WebChatPage() {
       buildAppNavItems({
         pathname: pathname ?? '/chat',
         navigate: (href) => router.push(href),
-        onOpenCustomize: () => openSettings('general'),
         isAdmin: isWorkspaceAdmin,
         hiddenIds: hiddenNavIds,
       }),
-    [hiddenNavIds, isWorkspaceAdmin, openSettings, pathname, router],
+    [hiddenNavIds, isWorkspaceAdmin, pathname, router],
   );
 
   const handleLogout = useCallback(async () => {
@@ -4535,7 +4549,7 @@ export default function WebChatPage() {
             </div>
           </div>
 
-          {chatError && (
+          {chatError && !showsInlinePaywall && (
             <div
               role="alert"
               aria-live="polite"
@@ -4598,14 +4612,14 @@ export default function WebChatPage() {
           {/* Message list */}
           {isConversationTranscriptPending ? (
             <div className="min-h-0 flex-1 overflow-hidden">
-              <ChatLoadingState className="mx-auto w-full max-w-[960px]" />
+              <ChatLoadingState className="w-full" />
             </div>
           ) : isEmptyChat ? (
             <div className="min-h-0 flex-1 overflow-hidden">
               {/* Empty state: greeting banner + centered composer. */}
-              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center gap-6 px-6">
+              <div className="flex h-full w-full flex-col items-center justify-center gap-6">
                 <GreetingBanner />
-                <div className="w-full max-w-[940px]">
+                <div className="mx-auto w-full max-w-3xl px-4">
                   {usageBanner}
                   {unavailableModelNotice}
                   <ChatComposerNew
@@ -4690,12 +4704,7 @@ export default function WebChatPage() {
                   instances receive it now, and the mode itself lives in the chat
                   store keyed by conversation so it survives the swap. */}
               <div className="shrink-0 pb-4">
-                <div
-                  className={cn(
-                    'mx-auto w-full max-w-3xl px-4',
-                    effectiveSidebarCollapsed ? 'max-w-4xl' : '',
-                  )}
-                >
+                <div className="mx-auto w-full max-w-3xl px-4">
                   {usageBanner}
                   {unavailableModelNotice}
                   <ChatComposerNew

@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 
-const AMBER = '#C8892A';
+const AMBER = '#f0a84a';
 
 const MARK_LINES: ReadonlyArray<[number, number, number, number]> = [
   [12, 7.4, 12, 3],
@@ -26,7 +26,7 @@ export function GET(): ImageResponse {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
-        backgroundColor: '#0A0A0F',
+        backgroundColor: '#0b0a08',
         backgroundImage:
           'radial-gradient(circle at 18% 12%, rgba(200,137,42,0.20), transparent 42%)',
         padding: '84px',
@@ -41,7 +41,7 @@ export function GET(): ImageResponse {
             ))}
           </g>
         </svg>
-        <div style={{ fontSize: 116, fontWeight: 800, color: '#FFFFFF', letterSpacing: -4 }}>
+        <div style={{ fontSize: 116, fontWeight: 800, color: '#f5f0e6', letterSpacing: -4 }}>
           AGI
         </div>
       </div>
@@ -51,7 +51,7 @@ export function GET(): ImageResponse {
           marginTop: 40,
           fontSize: 54,
           fontWeight: 600,
-          color: '#F4F4F5',
+          color: '#f5f0e6',
           lineHeight: 1.15,
           maxWidth: 940,
         }}
@@ -59,7 +59,7 @@ export function GET(): ImageResponse {
         One AI workspace across models and tools.
       </div>
 
-      <div style={{ marginTop: 26, fontSize: 30, color: '#9BA1A6', maxWidth: 980 }}>
+      <div style={{ marginTop: 26, fontSize: 30, color: '#c4bcac', maxWidth: 980 }}>
         Chat, code, research, files, artifacts, connectors, and automation.
       </div>
 

@@ -4,13 +4,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
+import {
+  loadFamilyCatalog,
+  resolveFamilyRefsDeep,
+} from '../packages/ai/model-registry/scripts/families.mjs';
+
 const root = process.cwd();
 const CATALOG = path.join(root, 'packages/contracts/types/src/models.json');
+const FAMILY_CATALOG_DIR = path.join(root, 'packages/ai/model-registry/catalog');
 const ROUTING_POLICIES = path.join(
   root,
   'packages/ai/model-registry/catalog/routing-policies.json',
 );
 
+const familyCatalog = loadFamilyCatalog(FAMILY_CATALOG_DIR);
 const catalog = JSON.parse(fs.readFileSync(CATALOG, 'utf8'));
 const models = catalog.models ?? {};
 
@@ -49,7 +56,10 @@ for (const [provider, entries] of Object.entries(catalog.modelPresets ?? {})) {
   }
 }
 
-const routingPolicies = JSON.parse(fs.readFileSync(ROUTING_POLICIES, 'utf8'));
+const routingPolicies = resolveFamilyRefsDeep(
+  JSON.parse(fs.readFileSync(ROUTING_POLICIES, 'utf8')),
+  familyCatalog,
+);
 for (const [slot, definition] of Object.entries(routingPolicies.auto?.slots ?? {})) {
   if (definition?.modelKey) {
     refs.push({ id: definition.modelKey, where: `routingPolicies.auto.slots.${slot}` });

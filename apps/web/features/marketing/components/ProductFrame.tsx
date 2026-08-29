@@ -1,4 +1,5 @@
 import {
+  ChromeWindow,
   DesktopWindow,
   EditorWindow,
   ImageWindow,
@@ -7,11 +8,21 @@ import {
   TerminalWindow,
   WebWindow,
   type DeviceImage,
+  type TerminalLine,
+  type TerminalWindowProps,
 } from './DeviceMockups';
 
-export type ProductFrameVariant = 'desktop' | 'terminal' | 'phone' | 'browser' | 'editor' | 'web';
+export type ProductFrameVariant =
+  | 'desktop'
+  | 'terminal'
+  | 'phone'
+  | 'browser'
+  | 'chrome'
+  | 'editor'
+  | 'web';
 
 export type ProductFrameImage = DeviceImage;
+export type { TerminalLine } from './DeviceMockups';
 
 export interface ProductFrameProps {
   variant: ProductFrameVariant;
@@ -20,6 +31,8 @@ export interface ProductFrameProps {
   image?: ProductFrameImage;
   className?: string;
   routeMode?: 'local' | 'byok' | 'managed';
+  session?: readonly TerminalLine[];
+  hud?: TerminalWindowProps['hud'];
 }
 
 export function ProductFrame({
@@ -29,6 +42,8 @@ export function ProductFrame({
   image,
   className,
   routeMode,
+  session,
+  hud,
 }: ProductFrameProps) {
   if (image) {
     return <ImageWindow title={title} badge={badge} image={image} className={className} />;
@@ -42,8 +57,17 @@ export function ProductFrame({
       return <WebWindow title={title} badge={badge} className={className} />;
     case 'terminal':
       return (
-        <TerminalWindow title={title} badge={badge} className={className} routeMode={routeMode} />
+        <TerminalWindow
+          title={title}
+          badge={badge}
+          className={className}
+          routeMode={routeMode}
+          session={session}
+          hud={hud}
+        />
       );
+    case 'chrome':
+      return <ChromeWindow badge={badge} className={className} />;
     case 'browser':
       return <SidePanelCard title={title} badge={badge} className={className} />;
     case 'editor':

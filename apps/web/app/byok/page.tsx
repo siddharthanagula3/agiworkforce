@@ -3,15 +3,10 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import type { TerminalLine } from '@/features/marketing/components/DeviceMockups';
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
-import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
-import {
-  BYOK_SURFACES,
-  DESKTOP_LOCAL_RUNTIMES,
-  LAUNCH,
-  MARKETING,
-} from '../../lib/marketing-constants';
-import { byokProviderLabels } from './byok-providers';
+import { BYOK_PROVIDERS } from '@/lib/byok-providers';
+import { BYOK_SURFACES, LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'BYOK: Bring Your Own Keys to Desktop, CLI & VS Code',
@@ -19,7 +14,39 @@ export const metadata = buildMetadata({
   path: '/byok',
 });
 
-const BYOK_PROVIDERS = byokProviderLabels();
+const KEY_SESSION: readonly TerminalLine[] = [
+  { kind: 'cmd', text: 'agi login google' },
+  { kind: 'out', text: 'Enter Google API key (GOOGLE_API_KEY):' },
+  { kind: 'ok', text: 'Done! Google API key saved to the OS credential store.' },
+  { kind: 'cmd', text: 'agi auth-status' },
+  { kind: 'out', text: 'Provider     Type      Status    Expires' },
+  { kind: 'out', text: 'google       api_key   active    -' },
+  { kind: 'cmd', text: 'agi exec --provider google "explain the auth store"' },
+  { kind: 'out', text: 'One keyring entry per provider; the index holds names only.' },
+];
+
+const KEY_CUSTODY: { surface: string; custody: string }[] = [
+  {
+    surface: 'Desktop',
+    custody:
+      'The key is encrypted before it reaches local application storage, and saving it activates a direct-provider route in the running app without a restart.',
+  },
+  {
+    surface: 'CLI',
+    custody:
+      'One OS-keyring entry per provider, under the service com.agiworkforce.cli.auth. The on-disk index keeps provider names because keyrings cannot be enumerated, and it holds no key material.',
+  },
+  {
+    surface: 'VS Code',
+    custody:
+      'The extension hands the key to the editor’s own SecretStorage and reads it back from there.',
+  },
+  {
+    surface: 'Self-hosted',
+    custody:
+      'An operator sets one environment variable per provider on their own deployment. The settings screen reports whether a variable is present and never the value behind it.',
+  },
+];
 
 export default function ByokPage() {
   return (
@@ -29,166 +56,118 @@ export default function ByokPage() {
 
         <section className="agi-fl-hero" aria-labelledby="agi-byok-hero-title">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <p className="agi-fl-eyebrow">BYOK · bring your own keys</p>
-          <h1 id="agi-byok-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Your keys.</span>{' '}
-            <span className="agi-fl-h1-line">Your providers.</span>{' '}
-            <span className="agi-fl-h1-line">
-              <em className="agi-fl-h1-em">Your billing.</em>
-            </span>
-          </h1>
-          <p className="agi-fl-lede">
-            Bring your own API keys to AGI {BYOK_SURFACES.label}. The local desktop or developer
-            runtime owns the key, requests go directly to your provider, and the provider label
-            stays visible on every route.
-          </p>
-          <div className="agi-fl-cta-row">
-            <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Check surface availability
-            </Link>
-            <Link href="/cli" className="agi-fl-cta agi-fl-cta--secondary">
-              Set Up the CLI
-            </Link>
-            <Link href="/providers" className="agi-fl-cta agi-fl-cta--ghost">
-              Browse All Providers
-            </Link>
-          </div>
-          <ul className="agi-fl-mode-ribbon" aria-label="BYOK guarantees">
-            <li>{BYOK_SURFACES.compact}</li>
-            <li>Keys encrypted at rest</li>
-            <li>Billed by your provider</li>
-          </ul>
-
-          <div className="agi-fl-hero-console" aria-hidden="true">
-            <ProductFrame
-              variant="desktop"
-              title="AGI Desktop"
-              badge="BYOK"
-              routeMode="byok"
-              className="agi-fl-hero-frame agi-fl-hero-frame--main"
-            />
-            <ProductFrame
-              variant="terminal"
-              title="agi · zsh"
-              badge="BYOK"
-              routeMode="byok"
-              className="agi-fl-hero-frame agi-fl-hero-frame--terminal"
-            />
+          <div className="agi-fl-hero-split">
+            <div className="agi-fl-hero-copy">
+              <p className="agi-fl-eyebrow">Bring your own keys</p>
+              <h1 id="agi-byok-hero-title" className="agi-fl-h1">
+                <span className="agi-fl-h1-line">AGI Cloud</span>{' '}
+                <span className="agi-fl-h1-line">
+                  <em className="agi-fl-h1-em">never sees</em> your
+                </span>{' '}
+                <span className="agi-fl-h1-line">API key.</span>
+              </h1>
+              <p className="agi-fl-lede">
+                Bring your own API keys to AGI {BYOK_SURFACES.label}. Each runtime holds the key in
+                its own platform credential store, then calls the provider’s endpoint directly, so
+                the usage lands on your provider account.
+              </p>
+              <div className="agi-fl-cta-row">
+                <Link href="/docs/byok-env" className="agi-fl-cta agi-fl-cta--primary">
+                  Set up a provider key
+                </Link>
+                <Link href="/download" className="agi-fl-cta agi-fl-cta--secondary">
+                  Check surface availability
+                </Link>
+              </div>
+              <ul className="agi-fl-mode-ribbon" aria-label="What BYOK covers">
+                <li>{BYOK_SURFACES.compact}</li>
+                <li>{BYOK_PROVIDERS.length} provider env vars</li>
+                <li>Direct provider endpoints</li>
+              </ul>
+            </div>
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
+              <ProductFrame
+                variant="terminal"
+                title="agi · zsh"
+                badge="BYOK"
+                routeMode="byok"
+                session={KEY_SESSION}
+                hud={{ tokensIn: 1240, tokensOut: 386, cost: 'provider billed', ctx: '4%' }}
+              />
+            </div>
           </div>
         </section>
 
-        <section className="agi-fl-section" aria-labelledby="agi-byok-steps-title">
-          <p className="agi-fl-eyebrow">How it works</p>
-          <h2 id="agi-byok-steps-title" className="agi-fl-h2">
-            Three steps, no middleman.
-          </h2>
-          <ol className="agi-steps">
-            <li className="agi-step">
-              <span className="agi-step-n">01 / Add a key</span>
-              <h3 className="agi-step-h">Add a provider key once</h3>
-              <p className="agi-step-body">
-                Add a key in the Desktop, CLI, or VS Code developer runtime. It stays with that
-                local runtime. {BYOK_SURFACES.exclusion}
-              </p>
-            </li>
-            <li className="agi-step">
-              <span className="agi-step-n">02 / Pick provider &amp; model</span>
-              <h3 className="agi-step-h">Switch models without switching apps</h3>
-              <p className="agi-step-body">
-                Choose any provider from the catalog and change models mid-thread. The active
-                provider label is visible before a request leaves your machine.
-              </p>
-            </li>
-            <li className="agi-step">
-              <span className="agi-step-n">03 / Pay your provider</span>
-              <h3 className="agi-step-h">Pay your provider directly</h3>
-              <p className="agi-step-body">
-                BYOK traffic goes straight to your provider, on your account and your rates. AGI is
-                the workspace, not the meter.
-              </p>
-            </li>
-          </ol>
-          <div className="agi-fl-cta-row">
-            <Link href="/docs/byok-env" className="agi-fl-cta agi-fl-cta--ghost">
-              Read the Env-Based BYOK Guide
-            </Link>
-          </div>
-        </section>
-
-        <section className="agi-fl-section" aria-labelledby="agi-byok-providers-title">
-          <p className="agi-fl-eyebrow">Provider catalog</p>
-          <h2 id="agi-byok-providers-title" className="agi-fl-h2">
-            BYOK providers, straight from the catalog.
+        <section className="agi-fl-section" aria-labelledby="agi-byok-custody-title">
+          <p className="agi-fl-eyebrow">Key custody</p>
+          <h2 id="agi-byok-custody-title" className="agi-fl-h2">
+            The key stays on the machine you typed it into.
           </h2>
           <p className="agi-fl-section-lede">
-            BYOK on {BYOK_SURFACES.label} covers the providers below, the same catalog that powers
-            AGI&rsquo;s {MARKETING.models.display} models. Desktop Local mode runs alongside them
-            through {DESKTOP_LOCAL_RUNTIMES.label}.
+            There is no shared vault behind these surfaces. A key added on Desktop is unknown to the
+            CLI, and a key added to the CLI is unknown to VS Code, because each one writes to the
+            credential store its own platform provides.
           </p>
-          <div className="agi-chip-row" aria-label="Supported BYOK providers">
+          <table className="agi-ledger">
+            <thead>
+              <tr>
+                <th>Surface</th>
+                <th>Where the key is held</th>
+              </tr>
+            </thead>
+            <tbody>
+              {KEY_CUSTODY.map((row) => (
+                <tr key={row.surface}>
+                  <td>{row.surface}</td>
+                  <td>{row.custody}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="agi-fl-section" aria-labelledby="agi-byok-env-title">
+          <p className="agi-fl-eyebrow">The env-var contract</p>
+          <h2 id="agi-byok-env-title" className="agi-fl-h2">
+            A provider key arrives as an environment variable.
+          </h2>
+          <p className="agi-fl-section-lede">
+            These are the names a self-hosted deployment reads, and the CLI prompts for the key by
+            the same name while it collects one. Presence is all that is ever reported back to a
+            settings screen; the value stays server-side.
+          </p>
+          <div className="agi-chip-row" aria-label="BYOK provider environment variables">
             {BYOK_PROVIDERS.map((provider) => (
-              <span key={provider} className="agi-chip">
-                {provider}
+              <span key={provider.id} className="agi-chip">
+                {provider.envVar}
               </span>
             ))}
-          </div>
-          <div className="agi-chip-row" aria-label="Supported Desktop Local runtimes">
-            {DESKTOP_LOCAL_RUNTIMES.names.map((runtime) => (
-              <span key={runtime} className="agi-chip">
-                {runtime} (local)
-              </span>
-            ))}
-          </div>
-          <div className="agi-fl-cta-row">
-            <Link href="/providers" className="agi-fl-cta agi-fl-cta--ghost">
-              See Provider Details
-            </Link>
           </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="agi-byok-boundary-title">
-          <p className="agi-fl-eyebrow">The boundary</p>
+          <p className="agi-fl-eyebrow">Surface boundary</p>
           <div className="agi-callout">
             <h2 id="agi-byok-boundary-title" className="agi-callout-h">
-              Local stays Local until you say otherwise.
+              Key entry exists where the key can stay local.
             </h2>
             <p className="agi-callout-p">
-              A Local chat never silently becomes a BYOK chat. Continuing Local work on your keys is
-              an explicit, reviewed continuation. You choose the context that travels and see the
-              provider label before anything is sent.
+              {BYOK_SURFACES.exclusion} Those surfaces have nowhere private to put a key, so they do
+              not ask for one. Carrying an existing thread across Local, BYOK, and managed Cloud is
+              a separate question, and the{' '}
+              <Link href="/faq" className="agi-fl-surface-link">
+                FAQ
+              </Link>{' '}
+              answers it.
             </p>
-          </div>
-        </section>
-
-        <section className="agi-fl-section" aria-labelledby="agi-byok-cloud-title">
-          <p className="agi-fl-eyebrow">AGI Cloud</p>
-          <div className="agi-callout">
-            <h2 id="agi-byok-cloud-title" className="agi-callout-h">
-              Prefer managed compute?
-            </h2>
-            <p className="agi-callout-p">
-              AGI managed cloud is in public alpha and open by default — sign in to start, no
-              waitlist. Pricing shows Team’s per-seat offer and current checkout availability.
-              Enterprise governance, SSO, and custom controls remain contract-scoped.
-            </p>
-          </div>
-          <div className="agi-fl-cta-row">
-            <WaitlistTrigger
-              label="Discuss Enterprise Requirements"
-              source="byok"
-              className="agi-fl-cta agi-fl-cta--ghost"
-            />
           </div>
         </section>
 
         <FinalCta
           eyebrow="BYOK"
-          title="Your keys are ready when you are."
-          body={`Follow the product pages for current ${BYOK_SURFACES.label} availability, add a provider key, and route work on your own account. Local Mode stays available the whole time.`}
-          ctas={[
-            { href: '/download', label: 'Check surface availability' },
-            { href: '/cli', label: 'Explore the CLI' },
-          ]}
+          title="Route your work through the provider you already pay."
+          body="The catalog lists each provider AGI can address, how many models it exposes, how it authenticates, and the per-million-token price it publishes."
+          ctas={[{ href: '/providers', label: 'Browse the provider catalog' }]}
           stamp="Availability varies by surface"
         />
 

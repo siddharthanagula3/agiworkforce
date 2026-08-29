@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ProjectGallery, ProjectCard } from '@agiworkforce/unified-chat';
 import type { Project, ProjectGalleryCreateInput } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
@@ -11,6 +11,13 @@ import { webManagedCloudProjects } from '@/features/projects/services/managed-cl
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
+import { ChevronDown, Check } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@agiworkforce/ui';
 
 type SortMode = 'updated' | 'created' | 'name' | 'starred';
 
@@ -52,8 +59,6 @@ export default function ProjectsPage() {
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>('updated');
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const sortedProjects = useMemo(() => sortProjects(projects, sortMode), [projects, sortMode]);
   const [showArchived, setShowArchived] = useState(false);
@@ -146,7 +151,7 @@ export default function ProjectsPage() {
       >
         <div
           style={{
-            maxWidth: 1040,
+            maxWidth: 1024,
             margin: '0 auto',
             display: 'flex',
             flexDirection: 'column',
@@ -242,101 +247,47 @@ export default function ProjectsPage() {
               </button>
             )}
 
-            {/* Sort menu */}
-            <div ref={sortMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
-              <button
-                type="button"
-                data-testid="projects-sort-btn"
-                onClick={() => setSortMenuOpen((v) => !v)}
-                aria-expanded={sortMenuOpen}
-                aria-haspopup="menu"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 14px',
-                  border: '1px solid var(--agi-rule-strong)',
-                  borderRadius: 9999,
-                  background: 'transparent',
-                  color: 'var(--agi-ink-2)',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span>Sort: {SORT_LABELS[sortMode]}</span>
-                <span style={{ fontSize: 10, opacity: 0.6 }}>&#9660;</span>
-              </button>
-
-              {sortMenuOpen && (
-                <div
-                  role="menu"
-                  aria-label="Sort projects by"
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 4px)',
-                    right: 0,
-                    zIndex: 50,
-                    minWidth: 180,
-                    background: 'var(--agi-bg-3)',
-                    border: '1px solid var(--agi-rule-strong)',
-                    borderRadius: 10,
-                    boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
-                    overflow: 'hidden',
-                  }}
+            {/* Sort menu · the shared DropdownMenu owns Escape, arrow-key
+                roving, focus return and viewport collision. The hand-rolled
+                version it replaces had none of those, and styled its hover
+                state by mutating inline styles, so a keyboard user saw no
+                highlight at all. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  data-testid="projects-sort-btn"
+                  className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--agi-rule-strong)] bg-transparent px-3.5 py-[7px] text-xs font-medium text-[var(--agi-ink-2)] transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  {(Object.entries(SORT_LABELS) as [SortMode, string][]).map(([mode, label]) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      role="menuitem"
-                      data-testid={`projects-sort-${mode}`}
-                      onClick={() => {
-                        setSortMode(mode);
-                        setSortMenuOpen(false);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        width: '100%',
-                        padding: '9px 14px',
-                        background: 'transparent',
-                        border: 'none',
-                        textAlign: 'left',
-                        fontSize: 13,
-                        color: sortMode === mode ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
-                        fontWeight: sortMode === mode ? 600 : 400,
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background =
-                          'var(--color-muted)';
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                      }}
+                  <span>Sort: {SORT_LABELS[sortMode]}</span>
+                  <ChevronDown className="h-3 w-3 opacity-60" aria-hidden="true" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="min-w-[180px]"
+                aria-label="Sort projects by"
+              >
+                {(Object.entries(SORT_LABELS) as [SortMode, string][]).map(([mode, label]) => (
+                  <DropdownMenuItem
+                    key={mode}
+                    data-testid={`projects-sort-${mode}`}
+                    onSelect={() => setSortMode(mode)}
+                    className="flex items-center justify-between gap-3 text-[13px]"
+                  >
+                    <span
+                      className={sortMode === mode ? 'font-semibold text-foreground' : undefined}
                     >
-                      <span>{label}</span>
-                      {sortMode === mode && (
-                        <span style={{ fontSize: 12, color: 'var(--agi-amber)' }}>&#10003;</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                      {label}
+                    </span>
+                    {sortMode === mode && (
+                      <Check className="h-3.5 w-3.5 text-[var(--agi-amber)]" aria-hidden="true" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-
-          {/* Backdrop to close menu on outside click */}
-          {sortMenuOpen && (
-            <div
-              style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-              onClick={() => setSortMenuOpen(false)}
-              aria-hidden
-            />
-          )}
 
           {/*
             Transparent, not a tinted slab.

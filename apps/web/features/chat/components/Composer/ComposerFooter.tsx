@@ -795,6 +795,9 @@ export function ComposerFooter({
   );
   const effortSliderIndex =
     selectedEffortIndex >= 0 ? selectedEffortIndex : Math.max(defaultEffortIndex, 0);
+  const selectedEffortChip = effortChips[effortSliderIndex] ?? '';
+  const selectedEffortLabel = EFFORT_CHIP_LABEL[selectedEffortChip] ?? selectedEffortChip;
+  const effortSliderVisible = effortChipsVisible && effortChips.length > 1;
 
   return (
     <div
@@ -889,11 +892,12 @@ export function ComposerFooter({
               <PopoverContent
                 align="end"
                 sideOffset={6}
-                className="w-72 p-0"
+                collisionPadding={12}
+                className="flex max-h-[min(34rem,var(--radix-popover-content-available-height))] w-72 flex-col p-0"
                 aria-labelledby={modelSelectorTitleId}
               >
                 {/* Header · model count badge removed per Claude reference */}
-                <div className="flex items-center border-b border-border/40 px-3 py-2">
+                <div className="flex shrink-0 items-center border-b border-border/40 px-3 py-2">
                   <span id={modelSelectorTitleId} className="text-xs font-medium text-foreground">
                     Models
                   </span>
@@ -903,7 +907,7 @@ export function ComposerFooter({
                     enough to scan at a glance, so it never adds a control that
                     filters nothing. */}
                 {modelSearchVisible && (
-                  <div className="border-b border-border/40 px-3 py-1.5">
+                  <div className="shrink-0 border-b border-border/40 px-3 py-1.5">
                     <input
                       className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
                       name="model-search"
@@ -920,7 +924,7 @@ export function ComposerFooter({
                     popover, where it remains discoverable without scrolling through
                     the model roster. Values come only from catalog-supportedEfforts. */}
                 {!isSearching && hasEffortControl && (
-                  <div className="border-b border-border/40 px-3 py-2.5">
+                  <div className="shrink-0 border-b border-border/40 px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm text-foreground/85">
@@ -945,33 +949,32 @@ export function ComposerFooter({
                           aria-label="Toggle extended thinking"
                           className="h-5 w-9"
                         />
+                      ) : effortSliderVisible ? (
+                        <span className="shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {selectedEffortLabel}
+                        </span>
                       ) : null}
                     </div>
 
-                    {effortChipsVisible && (
+                    {effortSliderVisible && (
                       <div
                         className="mt-3 rounded-full border border-border/50 bg-muted/35 px-3 py-3"
                         role="group"
                         aria-label="Reasoning effort level"
                       >
-                        {effortChips.length > 1 && (
-                          <Slider
-                            min={0}
-                            max={effortChips.length - 1}
-                            step={1}
-                            value={[effortSliderIndex]}
-                            onValueChange={(value) => {
-                              const chip = effortChips[value[0] ?? -1];
-                              if (chip) handleEffortChip(chip);
-                            }}
-                            thumbAriaLabel="Reasoning effort"
-                            valueLabel={
-                              EFFORT_CHIP_LABEL[effortChips[effortSliderIndex] ?? ''] ??
-                              effortChips[effortSliderIndex]
-                            }
-                            className="px-0.5"
-                          />
-                        )}
+                        <Slider
+                          min={0}
+                          max={effortChips.length - 1}
+                          step={1}
+                          value={[effortSliderIndex]}
+                          onValueChange={(value) => {
+                            const chip = effortChips[value[0] ?? -1];
+                            if (chip) handleEffortChip(chip);
+                          }}
+                          thumbAriaLabel="Reasoning effort"
+                          valueLabel={selectedEffortLabel}
+                          className="px-0.5"
+                        />
                       </div>
                     )}
 
@@ -998,7 +1001,7 @@ export function ComposerFooter({
                   </div>
                 )}
 
-                <div className="max-h-[320px] overflow-y-auto py-1">
+                <div className="min-h-0 flex-1 overflow-y-auto py-1">
                   {/* Recommended section label */}
                   {!isSearching && (
                     <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">

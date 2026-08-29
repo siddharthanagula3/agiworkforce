@@ -3,7 +3,13 @@ import { render, screen } from '@testing-library/react';
 
 const authState = { isSignedIn: false, isLoaded: true };
 
-vi.mock('@clerk/nextjs', () => ({ useAuth: () => authState }));
+vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }) }));
+
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => authState,
+  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
+  useClerk: () => ({ signOut: vi.fn(), openUserProfile: vi.fn() }),
+}));
 
 vi.mock('@/features/settings/components/SettingsModalRedirect', () => ({
   SettingsModalRedirect: ({ section }: { section: string }) => (

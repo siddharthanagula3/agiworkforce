@@ -297,11 +297,11 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
   return (
     <div
       data-testid="tasks-view"
-      className="mx-auto flex h-full w-full max-w-6xl flex-col px-4 py-6"
+      className="mx-auto flex h-full w-full max-w-5xl flex-col px-4 py-6"
     >
       <header className="mb-4 flex flex-wrap items-center gap-2">
         <ListChecks className="h-5 w-5 text-primary" />
-        <h1 className="text-lg font-semibold">Tasks</h1>
+        <h1 className="font-[var(--chat-font-serif)] text-[28px] font-medium">Tasks</h1>
         <span
           data-testid="agi-work-maturity-badge"
           title={AGI_WORK_MATURITY_TITLE}

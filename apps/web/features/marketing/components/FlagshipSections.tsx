@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { ProductFrame, type ProductFrameImage, type ProductFrameVariant } from './ProductFrame';
+import type { TerminalLine, TerminalWindowProps } from './DeviceMockups';
 import { Reveal } from './Reveal';
 import { WaitlistTrigger } from './WaitlistModal';
 
@@ -34,6 +35,7 @@ export function FlagshipHero({
   ctas,
   ctas2,
   modeRibbon,
+  modeRibbonLabel,
   frame,
   visual,
 }: {
@@ -45,13 +47,17 @@ export function FlagshipHero({
   ctas: FlagshipCta[];
   ctas2?: FlagshipCta[];
   modeRibbon: ModeRibbonItem[];
+  modeRibbonLabel?: string;
   frame?: ProductFrameImage;
   visual?: ReactNode;
 }) {
   const hasVisual = !!(visual || frame);
 
   return (
-    <section className="agi-fl-hero" aria-labelledby="agi-fl-hero-title">
+    <section
+      className={hasVisual ? 'agi-fl-hero' : 'agi-fl-hero agi-fl-hero--copy'}
+      aria-labelledby="agi-fl-hero-title"
+    >
       <div className="agi-fl-hero-backdrop" aria-hidden="true" />
       <div className={hasVisual ? 'agi-fl-hero-split' : undefined}>
         <div className={hasVisual ? 'agi-fl-hero-copy' : undefined}>
@@ -95,25 +101,25 @@ export function FlagshipHero({
           )}
           {lede && <p className="agi-fl-lede">{lede}</p>}
           {modeRibbon.length > 0 && (
-          <ul
-            className={
-              modeRibbon.some((mode) => typeof mode !== 'string')
-                ? 'agi-fl-mode-ribbon agi-fl-mode-ribbon--explained'
-                : 'agi-fl-mode-ribbon'
-            }
-            aria-label="Trust modes"
-          >
-            {modeRibbon.map((mode) =>
-              typeof mode === 'string' ? (
-                <li key={mode}>{mode}</li>
-              ) : (
-                <li key={mode.label}>
-                  <span className="agi-fl-mode-label">{mode.label}</span>
-                  <span className="agi-fl-mode-note">{mode.note}</span>
-                </li>
-              ),
-            )}
-          </ul>
+            <ul
+              className={
+                modeRibbon.some((mode) => typeof mode !== 'string')
+                  ? 'agi-fl-mode-ribbon agi-fl-mode-ribbon--explained'
+                  : 'agi-fl-mode-ribbon'
+              }
+              aria-label={modeRibbonLabel ?? 'Trust modes'}
+            >
+              {modeRibbon.map((mode) =>
+                typeof mode === 'string' ? (
+                  <li key={mode}>{mode}</li>
+                ) : (
+                  <li key={mode.label}>
+                    <span className="agi-fl-mode-label">{mode.label}</span>
+                    <span className="agi-fl-mode-note">{mode.note}</span>
+                  </li>
+                ),
+              )}
+            </ul>
           )}
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
@@ -144,9 +150,7 @@ export function FlagshipHero({
               className="agi-fl-hero-frame agi-fl-hero-frame--main"
             />
           </div>
-        ) : (
-          <div className="agi-fl-hero-spacer" aria-hidden="true" />
-        )}
+        ) : null}
       </div>
     </section>
   );
@@ -265,6 +269,8 @@ export interface SurfaceIndexItem {
     title: string;
     badge?: string;
     image?: ProductFrameImage;
+    session?: readonly TerminalLine[];
+    hud?: TerminalWindowProps['hud'];
   };
   visual?: ReactNode;
 }
@@ -329,6 +335,8 @@ export function SurfaceIndex({
                   title={item.frame.title}
                   badge={item.frame.badge}
                   image={item.frame.image}
+                  session={item.frame.session}
+                  hud={item.frame.hud}
                 />
               </div>
             ) : null}
@@ -403,10 +411,18 @@ export function CapabilityGrid({
   title: string;
   items: CapabilityItem[];
 }) {
+  // /features renders two capability grids, and a fixed id made both sections
+  // point `aria-labelledby` at the first heading, so the second landmark was
+  // announced under the wrong name.
+  const titleId = `agi-fl-cap-title-${title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')}`;
+
   return (
-    <section className="agi-fl-section" aria-labelledby="agi-fl-cap-title">
+    <section className="agi-fl-section" aria-labelledby={titleId}>
       <p className="agi-fl-eyebrow">{eyebrow}</p>
-      <h2 id="agi-fl-cap-title" className="agi-fl-h2">
+      <h2 id={titleId} className="agi-fl-h2">
         {title}
       </h2>
       <div className="agi-fl-cap-grid">
@@ -458,7 +474,7 @@ export function DevBand({
           ))}
         </div>
       </div>
-      <Reveal className="agi-fl-devband-term">
+      <Reveal className="agi-fl-devband-visual">
         {visual ?? <ProductFrame variant="terminal" title="agi · zsh" badge="sandboxed" />}
       </Reveal>
     </section>

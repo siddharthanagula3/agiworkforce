@@ -36,10 +36,10 @@ export default function ConsultingPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--primary">
-              Contact Sales
+              Contact sales
             </Link>
             <Link href="/byok" className="agi-fl-cta agi-fl-cta--ghost">
-              Set Up BYOK
+              Set up BYOK
             </Link>
           </div>
           <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
@@ -107,9 +107,9 @@ export default function ConsultingPage() {
           title="Bring the engagement, keep the boundary."
           body="Start on Local and BYOK today, and talk to sales when the practice needs enterprise controls."
           ctas={[
-            { href: '/contact-sales', label: 'Contact Sales' },
-            { href: '/byok', label: 'Set Up BYOK' },
-            { href: '/enterprise', label: 'See Enterprise Controls' },
+            { href: '/contact-sales', label: 'Contact sales' },
+            { href: '/byok', label: 'Set up BYOK' },
+            { href: '/enterprise', label: 'See enterprise controls' },
           ]}
         />
 

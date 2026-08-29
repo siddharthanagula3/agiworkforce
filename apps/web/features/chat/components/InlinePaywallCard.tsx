@@ -37,8 +37,10 @@ import {
   getPlanPriceUsd,
   isBillingPlanTier,
   normalizePaywallFeature,
+  normalizeUIPlanTier,
   paywallLimitHeadline,
   paywallUpgradeLabel,
+  tierAtLeast,
   type BillingPlanTier,
   type PaywallFeature,
 } from '@agiworkforce/types';
@@ -239,7 +241,7 @@ CtaButtons.displayName = 'CtaButtons';
 
 const InlinePaywallCardComponent = function InlinePaywallCard({
   feature,
-  currentTier: _currentTier,
+  currentTier,
   requiredTier,
   reason = EMPTY_REASON,
   showUpgradeCta = true,
@@ -249,14 +251,23 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   onUpgrade,
   onDismiss,
 }: InlinePaywallCardProps) {
+  const alreadyEntitled = tierAtLeast(
+    normalizeUIPlanTier(currentTier, 'free'),
+    normalizeUIPlanTier(requiredTier, 'basic'),
+  );
+  const effectiveAction: PaywallRecoveryAction =
+    alreadyEntitled && (recoveryAction === 'upgrade' || recoveryAction === 'subscribe')
+      ? 'view_usage'
+      : recoveryAction;
+
   // GOV-20: a refusal upgrading cannot fix must not be headlined "Upgrade to…".
   const headline = !showUpgradeCta
     ? paywallLimitHeadline(feature)
-    : recoveryAction === 'manage_billing'
+    : effectiveAction === 'manage_billing'
       ? `Update billing to continue ${paywallUpgradeLabel(feature)}`
-      : recoveryAction === 'view_usage'
+      : effectiveAction === 'view_usage'
         ? paywallLimitHeadline(feature)
-        : recoveryAction === 'subscribe'
+        : effectiveAction === 'subscribe'
           ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`
           : `Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`;
 
@@ -305,7 +316,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
         <CtaButtons
           requiredTier={requiredTier}
           showUpgradeCta={showUpgradeCta}
-          recoveryAction={recoveryAction}
+          recoveryAction={effectiveAction}
           onUpgrade={onUpgrade}
           onDismiss={onDismiss}
         />

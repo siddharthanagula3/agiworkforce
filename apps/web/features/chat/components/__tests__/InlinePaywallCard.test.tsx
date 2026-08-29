@@ -187,6 +187,56 @@ describe('InlinePaywallCard', () => {
       expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
     });
 
+    // QA-037: a Max 15x subscriber whose credit account had no allocation read
+    // as "budget exhausted", and the card answered with "Upgrade to Basic —
+    // $7/mo". The card is handed the current tier; it must use it.
+    it('never offers a tier the subscriber already holds', () => {
+      render(
+        <InlinePaywallCard
+          {...makeProps({
+            feature: 'token_cap',
+            currentTier: 'max_15x',
+            requiredTier: 'basic',
+            recoveryAction: 'upgrade',
+          })}
+        />,
+      );
+
+      expect(screen.queryByText('Upgrade to Basic', { exact: false })).toBeNull();
+      expect(screen.getByRole('button', { name: 'View usage' })).toBeInTheDocument();
+    });
+
+    it('never offers a subscribe CTA to a subscriber above the required tier', () => {
+      render(
+        <InlinePaywallCard
+          {...makeProps({
+            feature: 'web_search',
+            currentTier: 'max',
+            requiredTier: 'pro',
+            recoveryAction: 'subscribe',
+          })}
+        />,
+      );
+
+      expect(screen.queryByText('Subscribe to', { exact: false })).toBeNull();
+      expect(screen.getByRole('button', { name: 'View usage' })).toBeInTheDocument();
+    });
+
+    it('still offers a genuine upgrade when the required tier is above the current one', () => {
+      render(
+        <InlinePaywallCard
+          {...makeProps({
+            feature: 'web_search',
+            currentTier: 'free',
+            requiredTier: 'pro',
+            recoveryAction: 'upgrade',
+          })}
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: /Upgrade to Pro/ })).toBeInTheDocument();
+    });
+
     it('does not render a pricing navigation link for the upgrade action', () => {
       render(
         <InlinePaywallCard {...makeProps({ feature: 'web_search', requiredTier: 'basic' })} />,

@@ -3,7 +3,6 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { FeatureGrid, LedgerSection } from '@/features/marketing/components/LandingSections';
 import { FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Work: goal in, autonomous tool loop, reviewable deliverables',
@@ -12,6 +11,50 @@ export const metadata = buildMetadata({
   path: '/agi-work',
 });
 
+function AgiWorkRunPanel() {
+  return (
+    <figure className="agi-chat" aria-label="An AGI Work run in the task list, paused for approval">
+      <figcaption className="agi-chat-header">
+        <span className="agi-chat-model">AGI Work task</span>
+        <span className="agi-chat-meta">Awaiting input</span>
+      </figcaption>
+      <div className="agi-chat-body" aria-hidden="true">
+        <div className="agi-msg">
+          <p className="agi-msg-role">Goal</p>
+          <p className="agi-msg-text">
+            Compare our onboarding email sequence with the three competitors we track, and write up
+            where ours loses people.
+          </p>
+        </div>
+        <div className="agi-msg agi-msg-quiet">
+          <p className="agi-msg-role">Deliverable</p>
+          <p className="agi-msg-text">A one-page memo with the drop-off points ranked.</p>
+        </div>
+        <div className="agi-switch">
+          <span className="agi-switch-label">Plan &middot; 4</span>
+        </div>
+        <div className="agi-msg agi-msg-quiet">
+          <p className="agi-msg-role">Steps</p>
+          <p className="agi-msg-text">
+            Collect the three published sequences &middot; Extract each step and its timing &middot;
+            Compare them with ours &middot; Draft the memo
+          </p>
+        </div>
+        <div className="agi-switch">
+          <span className="agi-switch-label">Waiting for your approval</span>
+        </div>
+        <div className="agi-msg">
+          <p className="agi-msg-role">url_fetch</p>
+          <p className="agi-msg-text">
+            <code>{'{"url":"https://competitor.example/emails/day-3"}'}</code>
+          </p>
+          <p className="agi-msg-text">Approve, deny, or add guidance to steer this run.</p>
+        </div>
+      </div>
+    </figure>
+  );
+}
+
 export default function AgiWorkPage() {
   return (
     <div data-design="agi">
@@ -19,89 +62,87 @@ export default function AgiWorkPage() {
         <Header />
 
         <FlagshipHero
-          eyebrow="AGI Work · in the web app"
-          titleLines={['Give it a goal.', 'Get a deliverable.']}
-          em="Get a deliverable."
-          lede="AGI Work is a mode built into the AGI chat composer today. Flip the composer from Chat to AGI Work, describe the outcome you want, and it works through a multi-step loop with tools and files — pausing for your approval on anything sensitive — then hands back the finished work. Every run is saved to your task history."
+          eyebrow="AGI Work · in the web composer"
+          titleLines={['AGI Work writes a plan first, then asks before it acts.']}
+          em="writes a plan first"
+          lede="Switch the composer from Chat to AGI Work, describe the outcome, and pin the constraints and the deliverable if they matter. Before it touches a tool, AGI Work sends back a three-to-six step plan for the objective you gave it. Then it works that plan with web search, page fetches, sandboxed code, and files, stopping the run whenever a call needs your say-so."
           ctas={[
             { href: '/chat', label: 'Open AGI Work' },
-            { href: '/tasks', label: 'See task history' },
-            { href: '/pricing', label: 'Plans with AGI Work' },
+            { href: '/tasks', label: 'See your runs' },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
+          modeRibbon={[]}
+          visual={<AgiWorkRunPanel />}
         />
 
         <FeatureGrid
-          eyebrow="How it works"
-          title="What AGI Work does in the composer."
+          eyebrow="Inside a run"
+          title="The run tells you what it will do before it does it."
           items={[
             {
-              meta: 'Toggle',
-              title: 'Chat or AGI Work, one composer',
-              body: 'A single segmented toggle switches the same composer between quick chat and AGI Work — multi-step tasks with tools, files, and reviewable deliverables. No second app, no separate workspace.',
+              meta: 'Composer',
+              title: 'A mode of the box you already type in',
+              body: 'Chat and AGI Work are two positions of one segmented control — right of the attachment button on a wide screen, inside the plus menu on a narrow one. Switching it reveals a project scope chip and two optional fields, Constraints and Deliverable, under the composer. Whatever you type is the objective; the fields only narrow it.',
               href: '/chat',
             },
             {
-              meta: 'Goal',
-              title: 'Goal in, plan out',
-              body: 'Describe the outcome instead of the keystrokes. AGI Work breaks the goal into steps and works through them, using the tools and files the task needs.',
+              meta: 'Plan',
+              title: 'The plan lands before the first tool call',
+              body: 'AGI Work asks the model for three to six concrete steps and shows them under a Plan heading. Each step moves from pending to in progress to completed as the run works, so a stalled run is visible at the step that stalled.',
             },
             {
-              meta: 'Approvals',
-              title: 'Approval-first on sensitive steps',
-              body: 'The loop runs on its own for safe steps and pauses for your explicit approval before anything sensitive — each action is shown before it runs.',
-            },
-            {
-              meta: 'Deliverables',
-              title: 'Reviewable deliverables',
-              body: 'Runs end in something you can check: files, drafts, and artifacts you can open, edit, and keep — not just a chat reply.',
-            },
-            {
-              meta: 'History',
-              title: 'Full run history at /tasks',
-              body: 'Every AGI Work run and agent step is recorded in your task history, so you can revisit what ran, what it produced, and why.',
-              href: '/tasks',
-            },
-            {
-              meta: 'Boundary',
-              title: 'Visible model and routing',
-              body: 'AGI Work shows which model is reasoning and what context would leave your machine before any BYOK or managed-cloud handoff. Local, BYOK, and Cloud stay separate trust boundaries.',
+              meta: 'Approval',
+              title: 'A call you have not cleared stops the run',
+              body: 'The run switches to Awaiting input and shows the tool name with the arguments it wants to send. Approve it, deny it, or attach guidance that redirects what happens next. Another device signed into the same account can answer too, and the first answer wins.',
             },
           ]}
         />
 
         <LedgerSection
-          eyebrow="Where it runs"
-          title="One chat, not a second universe."
+          eyebrow="Run states"
+          title="Every run wears one of these labels in the task list."
           rows={[
             {
-              k: 'In the app today',
-              v: 'AGI Work ships in the web chat composer at /chat on plans that include it. Give it a goal and review the deliverable in the same thread.',
+              k: 'Queued',
+              v: 'The run exists before the model has done anything with it. It is already listed, and Stop already works.',
             },
             {
-              k: 'Task history',
-              v: 'Completed and in-progress runs live at /tasks — your managed-cloud task and agent-run history.',
+              k: 'Running',
+              v: 'The run is working through the plan, and an open run re-reads its own journal every few seconds, so the activity list keeps moving without a refresh.',
             },
             {
-              k: 'Approvals',
-              v: 'Sensitive actions ask before they run. Broader automation is an explicit, scoped choice — never a silent default.',
+              k: 'Awaiting input',
+              v: 'The run is blocked on you: either a tool call is waiting for approval, or a connector asked for a field before it can continue.',
             },
             {
-              k: 'Desktop dispatch',
-              v: 'Scheduled routines run on your own machine, and you can hand a task from your phone to a paired desktop. Both require the Desktop app, and dispatch only runs when that desktop has explicitly enabled it.',
+              k: 'Paused',
+              v: 'The run is held but still live, and Stop still works on it.',
+            },
+            {
+              k: 'Ready for review',
+              v: 'This is the last state the agent loop emits: the journal is complete, and any files the run generated are attached to it for download.',
+            },
+            {
+              k: 'Completed',
+              v: 'The run is settled, and nothing further will ever be appended to it.',
+            },
+            {
+              k: 'Failed',
+              v: 'The run stopped on an error, and the activity list shows the step it stopped on.',
+            },
+            { k: 'Cancelled', v: 'You pressed Stop.' },
+            {
+              k: 'Archived',
+              v: 'The run drops out of the Active filter and stays readable under All.',
             },
           ]}
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
-          title="Put a goal into AGI Work."
-          body="AGI Work is live in the web app: switch the composer to AGI Work, hand it an outcome, approve the steps that matter, and collect the deliverable. Scheduled routines and mobile-to-desktop dispatch ship with the Desktop app."
-          ctas={[
-            { href: '/chat', label: 'Open AGI Work' },
-            { href: '/tasks', label: 'See task history' },
-            { href: '/pricing', label: 'Compare plans' },
-          ]}
+          eyebrow="Plans"
+          title="Give AGI Work its first goal."
+          body="The composer toggle appears on Pro plans and above; on a plan without the capability the control never renders, so nothing breaks at send time. Once it is there, every run you start is readable end to end at /tasks: goal, plan, tool calls, approvals, and outputs."
+          ctas={[{ href: '/pricing', label: 'See which plans include AGI Work' }]}
+          stamp="AGI Work runs on AGI Managed Cloud, which is in public alpha: runs can fail or stall, and behaviour may change."
         />
 
         <MarketingFooter />

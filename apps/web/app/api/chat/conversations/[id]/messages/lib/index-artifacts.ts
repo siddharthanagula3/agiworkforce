@@ -73,7 +73,7 @@ export async function indexMessageArtifacts(options: {
     `insert into web_artifact_index
        (id, user_id, conversation_id, message_id, ordinal, title, artifact_type, language)
      select
-       unnest($1::uuid[]), $2, $3, $4,
+       unnest($1::uuid[]), $2::text, $3::uuid, $4::uuid,
        unnest($5::int[]), unnest($6::text[]), unnest($7::text[]), unnest($8::text[])
      on conflict (id) do update
        set title = excluded.title,

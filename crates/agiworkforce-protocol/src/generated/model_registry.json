@@ -651,6 +651,44 @@
         "deprecated": false
       },
       "evidenceRefs": []
+    },
+    "openrouter-auto": {
+      "identity": {
+        "key": "openrouter-auto",
+        "displayName": "OpenRouter Auto",
+        "provider": "open_router",
+        "providerModelId": "openrouter/auto",
+        "openRouterSlug": "openrouter/auto",
+        "kind": "chat",
+        "openWeight": false,
+        "license": "proprietary"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "openrouter-free": {
+      "identity": {
+        "key": "openrouter-free",
+        "displayName": "OpenRouter Free Auto",
+        "provider": "open_router",
+        "providerModelId": "openrouter/free",
+        "openRouterSlug": "openrouter/free",
+        "kind": "chat",
+        "openWeight": false,
+        "license": "proprietary"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
     }
   },
   "providerModelKeys": {
@@ -680,7 +718,7 @@
     "qwen": ["qwen-3.5-flash", "qwen-3.7-plus"],
     "perplexity": ["sonar", "sonar-reasoning-pro", "sonar-pro", "sonar-deep-research"],
     "runway": ["runway-gen-4"],
-    "open_router": ["seedance-2.5"],
+    "open_router": ["seedance-2.5", "openrouter-auto", "openrouter-free"],
     "zhipu": ["glm-5.2"],
     "moonshot": ["kimi-k3"],
     "xai": ["grok-4.5"],
@@ -992,6 +1030,24 @@
       "trustModes": ["managed_cloud", "byok"],
       "availability": "preview",
       "selectable": false
+    },
+    "open_router/openrouter-auto": {
+      "modelKey": "openrouter-auto",
+      "provider": "open_router",
+      "providerModelId": "openrouter/auto",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "open_router/openrouter-free": {
+      "modelKey": "openrouter-free",
+      "provider": "open_router",
+      "providerModelId": "openrouter/free",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
     }
   },
   "harnesses": {
@@ -1947,6 +2003,34 @@
       "structuredOutput": false,
       "functionCalling": false,
       "reasoning": false
+    },
+    "openrouter-auto": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "openrouter-free": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
     }
   },
   "pricing": {
@@ -2249,6 +2333,18 @@
       "unit": "per_million_tokens",
       "inputPerMillion": 3.5,
       "outputPerMillion": 21
+    },
+    "openrouter-auto": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "openrouter-free": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
     }
   },
   "limits": {
@@ -2438,7 +2534,9 @@
       }
     },
     "gemini-omni-flash-preview": { "contextTokens": 4000 },
-    "gemini-3.5-live-translate-preview": { "contextTokens": 32000 }
+    "gemini-3.5-live-translate-preview": { "contextTokens": 32000 },
+    "openrouter-auto": { "contextTokens": 2000000 },
+    "openrouter-free": { "contextTokens": 200000 }
   },
   "benchmarks": {
     "gpt-5.6-sol": {},
@@ -2480,7 +2578,9 @@
     "minimax-m3": {},
     "veo-3.1-lite": {},
     "gemini-omni-flash-preview": {},
-    "gemini-3.5-live-translate-preview": {}
+    "gemini-3.5-live-translate-preview": {},
+    "openrouter-auto": {},
+    "openrouter-free": {}
   },
   "evidence": [
     {
@@ -2720,8 +2820,362 @@
       "verifiedBy": "voice-model-sweep-2026-07-28-followup",
       "status": "PASS",
       "notes": "Founder flagged that gpt-4o-mini-tts carries a Deprecated badge on the developers.openai.com model catalog listing — correct, and it landed the same day we adopted it. Resolved against four sources: the listing badges it Deprecated; its own model page shows NO deprecation banner and no shutdown date; the deprecations table has no family-level row for it (only snapshot gpt-4o-mini-tts-2025-03-20 -> -2025-12-15, shut down 2026-07-23); and the text-to-speech guide still calls it the newest and most reliable TTS model. Decisive fact: it is the ONLY model OpenAI serves on /v1/audio/speech — gpt-audio-1.5's model page lists \"Speech generation | v1/audio/speech | Not supported\". So there is no newer member of this family to move to. Marked deprecated:true (compile.mjs then sets selectable:false) and KEPT, because removing it would leave the OpenAI TTS path with no model at all. NOT ADDED, deliberately: the realtime family (gpt-realtime-2.1, gpt-realtime-2.1-mini, gpt-realtime-translate, gpt-realtime-whisper). Three reasons — ModelType has no \"realtime\" member, so it is a schema change across the TS union, the registry schema and both Rust registries; we ship no duplex audio path (founder-gated on a realtime provider plus echo cancellation); and registering them live would advertise capability we do not have. Recorded as VOICE-REALTIME-FAMILY-ABSENT so the ids do not need re-researching: gpt-realtime-2.1 ($4/$24 text, $32/$64 audio, $0.40 cached, 128k ctx, 32k max out) and gpt-realtime-2.1-mini ($0.60/$2.40 text, $10/$20 audio) are the current heads; gpt-realtime, gpt-realtime-mini, gpt-audio, gpt-audio-mini and every gpt-4o-audio/gpt-4o-realtime variant shut down 2027-01-20. gpt-4o-transcribe and gpt-4o-mini-transcribe carry NO deprecated badge and stay as-is."
+    },
+    {
+      "id": "verification/2026-08-29/35",
+      "date": "2026-08-29",
+      "verifiedBy": "official-openrouter-live-model-list",
+      "status": "PASS",
+      "notes": "Added the two OpenRouter router routes the product had no entry for: openrouter/auto (Auto Router) and openrouter/free (Free Models Router), and set open_router.defaultModel to openrouter/auto, which was previously empty so the provider had no route at all. Every field is read from https://openrouter.ai/api/v1/models retrieved 2026-08-29 with a live key. Auto Router: canonical_slug openrouter/auto, 2,000,000 context, tokenizer \"Router\", modality text+image+file+audio+video->text+image, and supported_parameters including reasoning, reasoning_effort, tools, tool_choice and structured_outputs — hence reasoning.control \"effort\". Free Models Router: canonical_slug openrouter/free, 200,000 context, modality text+image->text, pricing prompt \"0\" and completion \"0\", and supported_parameters including reasoning_effort, tools and structured_outputs. Both routes report pricing that is resolved per request — auto returns \"-1\" for prompt and completion because cost follows the model it selects, so no per-million rate is recorded here and reservation must price the resolved route, not the router. No benchmarks are recorded because OpenRouter publishes none for either router, and carrying a member model's numbers forward would be fabricated. openrouter/auto is recorded with inputCost/outputCost 0 because ModelMetadata requires both and the router publishes no rate of its own; managed metering must price the model the router actually resolved (the completion response reports it) rather than the router record, so this route is safe on BYOK — where OpenRouter bills the key holder directly — and must not be exposed on a metered managed plan until resolved-route pricing is wired. openrouter/free is genuinely zero-rated (\"0\"/\"0\" from the provider)."
+    },
+    {
+      "id": "verification/2026-08-29/36",
+      "date": "2026-08-29",
+      "verifiedBy": "live-openrouter-completion-through-both-router-routes",
+      "status": "PASS",
+      "notes": "Both router routes were exercised end to end against the live API after the account key was rotated. openrouter/auto returned HTTP 200 in 752ms and reported routing to deepseek/deepseek-v4-flash-0731, confirming the earlier note that the router itself publishes no rate and that metering must price the resolved model. openrouter/free returned HTTP 200 and routed to free members (nvidia/nemotron-3-super-120b-a12b:free, minimax/minimax-m2.7:free) with usage.cost 0, confirming the zero rating. Both free members are reasoning models whose reasoning tokens count against max_tokens: a 16-token cap returned empty content while a 200-token cap returned the expected text with finish_reason \"stop\" and 31 reasoning tokens. The product default is DEFAULT_MAX_OUTPUT_TOKENS 8192, so this is not reachable in normal use, but any caller that lowers the cap for a free-router turn must leave room for reasoning tokens."
     }
   ],
+  "families": {
+    "openai/gpt-frontier": {
+      "provider": "openai",
+      "canonicalFamily": "gpt-frontier",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gpt-5.6-sol",
+      "activeGeneration": "5.6",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "openai/gpt-balanced": {
+      "provider": "openai",
+      "canonicalFamily": "gpt-balanced",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gpt-5.6-terra",
+      "activeGeneration": "5.6",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "openai/gpt-fast": {
+      "provider": "openai",
+      "canonicalFamily": "gpt-fast",
+      "tier": "fast",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gpt-5.6-luna",
+      "activeGeneration": "5.6",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "openai/gpt-image": {
+      "provider": "openai",
+      "canonicalFamily": "gpt-image",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gpt-image-2",
+      "activeGeneration": "2",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "openai/transcribe-balanced": {
+      "provider": "openai",
+      "canonicalFamily": "transcribe-balanced",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gpt-4o-transcribe",
+      "activeGeneration": "4",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "openai/transcribe-fast": {
+      "provider": "openai",
+      "canonicalFamily": "transcribe-fast",
+      "tier": "fast",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gpt-4o-mini-transcribe",
+      "activeGeneration": "4",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "openai/tts-fast": {
+      "provider": "openai",
+      "canonicalFamily": "tts-fast",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gpt-4o-mini-tts",
+      "activeGeneration": "4",
+      "activeLifecycle": "deprecated",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "anthropic/claude-fable": {
+      "provider": "anthropic",
+      "canonicalFamily": "claude-fable",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "claude-fable-5",
+      "activeGeneration": "5",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "anthropic/claude-opus": {
+      "provider": "anthropic",
+      "canonicalFamily": "claude-opus",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "claude-opus-5",
+      "activeGeneration": "5",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "anthropic/claude-sonnet": {
+      "provider": "anthropic",
+      "canonicalFamily": "claude-sonnet",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "claude-sonnet-5",
+      "activeGeneration": "5",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "google/gemini-flash": {
+      "provider": "google",
+      "canonicalFamily": "gemini-flash",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gemini-3.7-flash",
+      "activeGeneration": "3.7",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "google/gemini-flash-lite": {
+      "provider": "google",
+      "canonicalFamily": "gemini-flash-lite",
+      "tier": "fast",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gemini-3.5-flash-lite",
+      "activeGeneration": "3.5",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "google/gemini-pro": {
+      "provider": "google",
+      "canonicalFamily": "gemini-pro",
+      "tier": "frontier",
+      "lifecyclePolicy": "preview",
+      "activeModelKey": "gemini-3.1-pro-preview",
+      "activeGeneration": "3.1",
+      "activeLifecycle": "preview",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "google/gemini-flash-image": {
+      "provider": "google",
+      "canonicalFamily": "gemini-flash-image",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gemini-3.1-flash-image",
+      "activeGeneration": "3.1",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "google/gemini-embedding": {
+      "provider": "google",
+      "canonicalFamily": "gemini-embedding",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "gemini-embedding-2",
+      "activeGeneration": "2",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "google/veo": {
+      "provider": "google",
+      "canonicalFamily": "veo",
+      "tier": "frontier",
+      "lifecyclePolicy": "preview",
+      "activeModelKey": "veo-3.1",
+      "activeGeneration": "3.1",
+      "activeLifecycle": "preview",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "google/veo-fast": {
+      "provider": "google",
+      "canonicalFamily": "veo-fast",
+      "tier": "balanced",
+      "lifecyclePolicy": "preview",
+      "activeModelKey": "veo-3.1-fast",
+      "activeGeneration": "3.1",
+      "activeLifecycle": "preview",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "google/veo-lite": {
+      "provider": "google",
+      "canonicalFamily": "veo-lite",
+      "tier": "balanced",
+      "lifecyclePolicy": "preview",
+      "activeModelKey": "veo-3.1-lite",
+      "activeGeneration": "3.1",
+      "activeLifecycle": "preview",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "deepseek/deepseek-flash": {
+      "provider": "deepseek",
+      "canonicalFamily": "deepseek-flash",
+      "tier": "fast",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "deepseek-v4-flash",
+      "activeGeneration": "4",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "deepseek/deepseek-pro": {
+      "provider": "deepseek",
+      "canonicalFamily": "deepseek-pro",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "deepseek-v4-pro",
+      "activeGeneration": "4",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "qwen/qwen-flash": {
+      "provider": "qwen",
+      "canonicalFamily": "qwen-flash",
+      "tier": "fast",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "qwen-3.5-flash",
+      "activeGeneration": "3.5",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "qwen/qwen-plus": {
+      "provider": "qwen",
+      "canonicalFamily": "qwen-plus",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "qwen-3.7-plus",
+      "activeGeneration": "3.7",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "moonshot/kimi": {
+      "provider": "moonshot",
+      "canonicalFamily": "kimi",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "kimi-k3",
+      "activeGeneration": "3",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "xai/grok": {
+      "provider": "xai",
+      "canonicalFamily": "grok",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "grok-4.5",
+      "activeGeneration": "4.5",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "zhipu/glm": {
+      "provider": "zhipu",
+      "canonicalFamily": "glm",
+      "tier": "frontier",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "glm-5.2",
+      "activeGeneration": "5.2",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    },
+    "minimax/minimax": {
+      "provider": "minimax",
+      "canonicalFamily": "minimax",
+      "tier": "balanced",
+      "lifecyclePolicy": "stable",
+      "activeModelKey": "minimax-m3",
+      "activeGeneration": "3",
+      "activeLifecycle": "stable",
+      "previousModelKey": null,
+      "fallbackChain": [],
+      "promotedAt": "2026-08-18",
+      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+    }
+  },
   "policies": {
     "auto": {
       "kind": "routing_policy",

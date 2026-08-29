@@ -3,8 +3,12 @@ import { render, screen } from '@testing-library/react';
 
 const authState = { isSignedIn: false, isLoaded: true };
 
+vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }) }));
+
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => authState,
+  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
+  useClerk: () => ({ signOut: vi.fn(), openUserProfile: vi.fn() }),
 }));
 
 vi.mock('@/features/settings/components/SettingsModalRedirect', () => ({
@@ -18,7 +22,7 @@ import SkillsPage from '../page';
 /**
  * /skills is sitemap-indexed at 0.8 and is the CTA target of two marketing
  * pages, but it rendered null and bounced anonymous visitors to /login. A
- * person who clicked "Browse Skills" got a blank frame and a redirect that
+ * person who clicked "Browse skills" got a blank frame and a redirect that
  * never said what the page was.
  */
 describe('/skills for a signed-out visitor', () => {

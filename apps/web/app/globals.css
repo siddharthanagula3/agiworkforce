@@ -950,6 +950,20 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
+
+  /* Native form controls default to the browser's own accent (blue in every
+     Chromium/WebKit build), which read as unstyled next to the product's
+     amber Radix controls. */
+  input[type='range'],
+  input[type='checkbox'],
+  input[type='radio'],
+  progress {
+    accent-color: hsl(var(--primary));
+  }
+
+  input[type='range']:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background rounded-full;
+  }
 }
 
 @layer components {
@@ -988,7 +1002,7 @@
   /* Message row container · vertical rhythm only. ChatGPT/Claude-style flat feed:
      no per-row striping or separators — the asymmetry lives in the user bubble. */
   .message-row {
-    @apply relative py-3 px-4;
+    @apply relative py-3;
   }
 
   /* Both roles share a transparent row background (flat conversation feed) */
@@ -997,9 +1011,12 @@
     @apply bg-transparent;
   }
 
-  /* Inner content column constrained to readable width - desktop max-w-3xl centred */
+  /* Inner content column constrained to readable width - desktop max-w-3xl centred.
+     The gutter lives here rather than on .message-row so message text shares its
+     exact left/right edge with the composer and the follow-up rail, which are
+     siblings of the row and carry the same `max-w-3xl px-4`. */
   .message-inner {
-    @apply max-w-3xl mx-auto flex gap-3;
+    @apply max-w-3xl mx-auto flex gap-3 px-4;
   }
 
   /* Avatar - 32 × 32 circle matching desktop .message-avatar */
@@ -4050,11 +4067,14 @@ html[data-contrast='more'] *:focus-visible {
   pointer-events: none;
   flex-shrink: 0;
 }
+[data-design='agi'] .agi-footer--condensed .agi-footer-wordmark {
+  font-size: clamp(2.5rem, 7vw, 5rem);
+}
 [data-design='agi'] .agi-footer-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(6, minmax(108px, 1fr));
   align-items: flex-start;
-  column-gap: clamp(36px, 5vw, 92px);
+  column-gap: clamp(20px, 2.4vw, 36px);
   row-gap: 36px;
 }
 [data-design='agi'] .agi-footer-mark {
@@ -4085,7 +4105,9 @@ html[data-contrast='more'] *:focus-visible {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  /* The 8px the links now carry as padding used to live here as gap, so the
+     visual rhythm is unchanged while each link presents a 26px tall target. */
+  gap: 1px;
 }
 [data-design='agi'] .agi-footer-col-title {
   font-size: 11px;
@@ -4096,6 +4118,8 @@ html[data-contrast='more'] *:focus-visible {
   margin-bottom: 5px;
 }
 [data-design='agi'] .agi-footer-link {
+  display: inline-block;
+  padding-block: 4px;
   font-size: 14px;
   color: var(--agi-ink-2);
   text-decoration: none;
@@ -4116,9 +4140,11 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-ink-quiet);
 }
 
-@media (max-width: 940px) {
+@media (max-width: 1120px) {
   [data-design='agi'] .agi-footer-row {
     grid-template-columns: repeat(3, minmax(120px, 1fr));
+    column-gap: clamp(24px, 4vw, 64px);
+    row-gap: 32px;
   }
 }
 
@@ -4600,7 +4626,7 @@ html[data-contrast='more'] *:focus-visible {
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
-  margin-right: clamp(-80px, -8vw, -140px);
+  margin-right: clamp(-140px, -8vw, -80px);
   animation: hero-fade-up 0.8s var(--agi-ease-out) 0.5s both;
 }
 
@@ -4610,7 +4636,9 @@ html[data-contrast='more'] *:focus-visible {
   }
 
   [data-design='agi'] .agi-fl-hero-visual {
-    display: none;
+    justify-content: flex-start;
+    margin-right: 0;
+    margin-top: 8px;
   }
 }
 
@@ -4802,13 +4830,13 @@ html[data-contrast='more'] *:focus-visible {
 
 /* ─── Availability strip ─── */
 [data-design='agi'] .agi-fl-avail {
-  padding: clamp(48px, 6vw, 80px) var(--agi-page-gutter);
-  max-width: var(--agi-page-max, 1200px);
+  padding: clamp(48px, 6vw, 80px) 28px;
+  max-width: 1180px;
   margin: 0 auto;
 }
 
 [data-design='agi'] .agi-fl-avail-title {
-  font-family: var(--agi-font-sans, sans-serif);
+  font-family: var(--agi-font);
   font-size: clamp(1.1rem, 2vw, 1.35rem);
   font-weight: 400;
   color: var(--agi-ink-2);
@@ -4849,7 +4877,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-avail-name {
   display: block;
-  font-family: var(--agi-font-sans, sans-serif);
+  font-family: var(--agi-font);
   font-size: 14px;
   font-weight: 600;
   color: var(--agi-ink);
@@ -6547,7 +6575,8 @@ html[data-contrast='more'] *:focus-visible {
   font-size: calc(var(--u) * 13);
   line-height: 1.55;
   color: var(--agi-ink-2);
-  white-space: nowrap;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 [data-design='agi'] .agi-term-line--dim {
@@ -7925,8 +7954,8 @@ html[data-contrast='more'] *:focus-visible {
   max-width: 64ch;
 }
 
-[data-design='agi'] .agi-fl-hero-spacer {
-  height: clamp(40px, 6vw, 72px);
+[data-design='agi'] .agi-fl-hero--copy {
+  padding-bottom: clamp(40px, 6vw, 72px);
 }
 
 /* monochrome provider marks inherit theme ink */
@@ -8309,6 +8338,10 @@ html[data-contrast='more'] *:focus-visible {
   [data-design='agi'] .agi-ap-btn--allow {
     animation: none;
   }
+}
+
+[data-design='agi'] .agi-fl-devband-copy {
+  min-width: 0;
 }
 
 /* devband collage: terminal + scene stack */
@@ -8709,12 +8742,12 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-theme='light'] [data-design='agi'] .agi-docs-tab--active,
 [data-theme='light'][data-design='agi'] .agi-docs-tab--active {
-  border-bottom-color: #4b56c0;
+  border-bottom-color: var(--agi-amber);
 }
 
 [data-theme='light'] [data-design='agi'] .agi-docs-breadcrumb,
 [data-theme='light'][data-design='agi'] .agi-docs-breadcrumb {
-  color: #4b56c0;
+  color: var(--agi-amber);
 }
 
 [data-theme='light'] [data-design='agi'] .agi-docs-card-icon,

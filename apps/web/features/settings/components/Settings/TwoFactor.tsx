@@ -97,11 +97,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
           />
 
           <div className="flex justify-end">
-            <Button
-              type="submit"
-              disabled={isSaving || !securityForm.formState.isDirty}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
+            <Button type="submit" disabled={isSaving || !securityForm.formState.isDirty}>
               {isUpdateSettingsPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -135,6 +131,8 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                       <button
                         type="button"
                         onClick={onToggleShowNewPassword}
+                        aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                        aria-pressed={showNewPassword}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         {showNewPassword ? (
@@ -170,6 +168,12 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                       <button
                         type="button"
                         onClick={onToggleShowConfirmPassword}
+                        aria-label={
+                          showConfirmPassword
+                            ? 'Hide confirmed password'
+                            : 'Show confirmed password'
+                        }
+                        aria-pressed={showConfirmPassword}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       >
                         {showConfirmPassword ? (

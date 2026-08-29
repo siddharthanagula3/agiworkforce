@@ -247,7 +247,6 @@ export const ProfilePanel: React.FC<ProfilePanelProps> = ({
                 disabled={
                   isSaving || !profileForm.formState.isDirty || !profileForm.formState.isValid
                 }
-                className="bg-blue-600 hover:bg-blue-700"
               >
                 {isUpdatePending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

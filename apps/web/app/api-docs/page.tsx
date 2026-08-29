@@ -67,7 +67,7 @@ export default function ApiDocsPage() {
             </Link>
           </div>
         </section>
-        <MarketingFooter />
+        <MarketingFooter condensed />
       </main>
     </div>
   );

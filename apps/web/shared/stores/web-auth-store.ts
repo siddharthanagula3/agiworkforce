@@ -3,7 +3,12 @@
 import { create } from 'zustand';
 import { parseMeResponse, type MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
 import { normalizeBillingPlanTier, type BillingPlanTier } from '@agiworkforce/types';
-import { hasClerkSessionCookie, subscribeToClerkSessionChange } from '@/lib/clerk-session';
+import {
+  hasClerkSessionCookie,
+  hasUsableClerkSessionToken,
+  subscribeToClerkSessionChange,
+} from '@/lib/clerk-session';
+import { requestMe } from '@shared/services/me-request';
 
 export interface UserProfileSummary {
   display_name: string | null;
@@ -71,9 +76,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
     try {
       set({ isLoading: true, error: null });
       try {
-        const response = await fetch('/api/me', {
-          credentials: 'include',
-        });
+        const response = await requestMe();
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -162,7 +165,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
 }));
 
 if (typeof window !== 'undefined') {
-  if (hasClerkSessionCookie()) {
+  if (hasClerkSessionCookie() && hasUsableClerkSessionToken()) {
     useBillingStore
       .getState()
       .refreshUser()
@@ -182,7 +185,8 @@ if (typeof window !== 'undefined') {
     const wasSignedIn = lastBootstrapCookie;
     lastBootstrapCookie = signedIn;
     if (signedIn) {
-      if (!wasSignedIn || useBillingStore.getState().user === null) {
+      const needsUser = !wasSignedIn || useBillingStore.getState().user === null;
+      if (needsUser && hasUsableClerkSessionToken()) {
         void useBillingStore.getState().refreshUser();
       }
       return;

@@ -90,7 +90,7 @@
       "name": "@agiworkforce/model-registry",
       "path": "packages/ai/model-registry",
       "kind": "package",
-      "purpose": "Canonical model and harness metadata. Compiles catalog/ into models.json and the Rust mirror; the only place a model ID may be a literal."
+      "purpose": "Canonical model and harness metadata. Compiles catalog/ into models.json and the Rust mirror; the only place a model ID may be a literal. Family slots in model-families.json own which generation of each model family is active."
     },
     {
       "name": "@agiworkforce/provider-protocol",

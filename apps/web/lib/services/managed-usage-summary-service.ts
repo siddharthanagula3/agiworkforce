@@ -55,6 +55,8 @@ export async function getManagedUsageSummary(userId: string): Promise<ManagedUsa
           { usedCents: 0, oldestAt: null },
         ];
 
+  const isUnallocated = !isFreePlan && creditsAllocated <= 0;
+
   const hasPaidUsageRemaining =
     creditsAllocated > 0 &&
     (balance?.credits_remaining_cents ?? 0) > 0 &&
@@ -85,5 +87,6 @@ export async function getManagedUsageSummary(userId: string): Promise<ManagedUsa
     flagship_weekly_reset_at: rollingResetAt(flagshipWeekly.oldestAt, ROLLING_WEEKLY_WINDOW_HOURS),
     credit_balance_cents: spendableCredits.availableCents,
     overage_enabled: spendableCredits.overageEnabled,
+    ...(isFreePlan ? {} : { usage_allocation: isUnallocated ? 'pending' : 'provisioned' }),
   };
 }

@@ -239,6 +239,14 @@ export function Sidebar(props: SidebarProps) {
     return out;
   }, [pinned, grouped, expandedGroups]);
 
+  /*
+   * `visible` counts RENDERED rows, so collapsing every temporal group emptied
+   * it and the rail claimed "No conversations yet" directly under a group
+   * header reading "(50)". Emptiness is a property of the filtered set, not of
+   * which groups happen to be open.
+   */
+  const hasMatchingConversations = filtered.length > 0 || pinned.length > 0;
+
   const toggleGroup = useCallback((group: SidebarTemporalGroup) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -394,6 +402,7 @@ export function Sidebar(props: SidebarProps) {
         key={item.id}
         type="button"
         onClick={item.onClick}
+        aria-current={item.isActive ? 'page' : undefined}
         className={cn(
           'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]',
@@ -441,7 +450,11 @@ export function Sidebar(props: SidebarProps) {
               onClick={item.onClick}
             />
           ))}
-          <div
+          <span
+            role="img"
+            aria-label={
+              mode === 'local' ? t('sidebar.local', 'Local') : t('sidebar.cloud', 'Cloud')
+            }
             title={mode === 'local' ? t('sidebar.local', 'Local') : t('sidebar.cloud', 'Cloud')}
             className={cn(
               'h-2 w-2 rounded-full',
@@ -520,409 +533,410 @@ export function Sidebar(props: SidebarProps) {
           </button>
         </div>
 
-        {/* Nav rows (Projects / Skills / surface-provided) */}
-        {!isSimpleMode && resolvedNavItems.length > 0 && (
-          <div className="space-y-0.5 border-b border-[hsl(var(--border))] px-2 py-1.5">
-            {resolvedNavItems.map((item) => (renderNavLink ?? defaultRenderNavLink)(item))}
-          </div>
-        )}
+        {/* Nav rows, filters and the conversation list share one scroll region.
+            They used to be siblings of the pinned footer, so on a short viewport
+            (1280x600) the fixed header, nav and footer left the `flex-1` list a
+            20px window that could not fit even its own "Chats" heading. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
+          {/* Nav rows (Projects / Skills / surface-provided) */}
+          {!isSimpleMode && resolvedNavItems.length > 0 && (
+            <div className="shrink-0 space-y-0.5 border-b border-[hsl(var(--border))] px-2 py-1.5">
+              {resolvedNavItems.map((item) => (renderNavLink ?? defaultRenderNavLink)(item))}
+            </div>
+          )}
 
-        {/* Filter bar: project folder filter + archive toggle */}
-        {!isSimpleMode && (projects.length > 0 || archivedCount > 0) && (
-          <div className="flex items-center gap-1 px-3 py-2">
-            {projects.length > 0 && (
-              <Menu
-                align="start"
-                trigger={({ toggle }) => (
-                  <button
-                    type="button"
-                    onClick={toggle}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                      selectedProjectFilter
-                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                        : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))]',
-                    )}
-                  >
-                    <span
-                      className="flex h-4 w-4 items-center justify-center rounded"
-                      style={
-                        selectedProject?.color
-                          ? {
-                              backgroundColor: `${selectedProject.color}20`,
-                              color: selectedProject.color,
-                            }
-                          : undefined
-                      }
+          {/* Filter bar: project folder filter + archive toggle */}
+          {!isSimpleMode && (projects.length > 0 || archivedCount > 0) && (
+            <div className="flex shrink-0 items-center gap-1 px-3 py-2">
+              {projects.length > 0 && (
+                <Menu
+                  align="start"
+                  trigger={({ toggle }) => (
+                    <button
+                      type="button"
+                      onClick={toggle}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+                        selectedProjectFilter
+                          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                          : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))]',
+                      )}
                     >
-                      <FolderOpen className="h-3 w-3" />
-                    </span>
-                    <span className="max-w-[100px] truncate">
-                      {selectedProject?.name || tCommon('all', 'All')}
-                    </span>
-                    <ChevronDown className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
-                  </button>
-                )}
-                menuClassName="w-56"
-              >
-                {({ close }) => (
-                  <>
-                    <MenuItem
-                      close={close}
-                      onSelect={() => onSelectProjectFilter?.(null)}
-                      icon={<MessageSquare className="h-4 w-4" />}
-                      active={!selectedProjectFilter}
-                    >
-                      {t('sidebar.allConversations', 'All Conversations')}
-                    </MenuItem>
-                    <MenuSeparator />
-                    {projects.map((project) => (
-                      <MenuItem
-                        key={project.id}
-                        close={close}
-                        onSelect={() => onSelectProjectFilter?.(project.id)}
-                        active={selectedProjectFilter === project.id}
-                        trailing={project.conversationCount}
-                        icon={
-                          <span
-                            className="flex h-4 w-4 items-center justify-center rounded"
-                            style={{ backgroundColor: project.color || 'hsl(var(--primary))' }}
-                          >
-                            <Layers className="h-2.5 w-2.5 text-white" />
-                          </span>
+                      <span
+                        className="flex h-4 w-4 items-center justify-center rounded"
+                        style={
+                          selectedProject?.color
+                            ? {
+                                backgroundColor: `${selectedProject.color}20`,
+                                color: selectedProject.color,
+                              }
+                            : undefined
                         }
                       >
-                        {project.name}
+                        <FolderOpen className="h-3 w-3" />
+                      </span>
+                      <span className="max-w-[100px] truncate">
+                        {selectedProject?.name || tCommon('all', 'All')}
+                      </span>
+                      <ChevronDown className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
+                    </button>
+                  )}
+                  menuClassName="w-56"
+                >
+                  {({ close }) => (
+                    <>
+                      <MenuItem
+                        close={close}
+                        onSelect={() => onSelectProjectFilter?.(null)}
+                        icon={<MessageSquare className="h-4 w-4" />}
+                        active={!selectedProjectFilter}
+                      >
+                        {t('sidebar.allConversations', 'All Conversations')}
                       </MenuItem>
-                    ))}
-                  </>
-                )}
-              </Menu>
-            )}
+                      <MenuSeparator />
+                      {projects.map((project) => (
+                        <MenuItem
+                          key={project.id}
+                          close={close}
+                          onSelect={() => onSelectProjectFilter?.(project.id)}
+                          active={selectedProjectFilter === project.id}
+                          trailing={project.conversationCount}
+                          icon={
+                            <span
+                              className="flex h-4 w-4 items-center justify-center rounded"
+                              style={{ backgroundColor: project.color || 'hsl(var(--primary))' }}
+                            >
+                              <Layers className="h-2.5 w-2.5 text-white" />
+                            </span>
+                          }
+                        >
+                          {project.name}
+                        </MenuItem>
+                      ))}
+                    </>
+                  )}
+                </Menu>
+              )}
 
-            {selectedProjectFilter && onSelectProjectFilter && (
-              <button
-                type="button"
-                onClick={() => onSelectProjectFilter(null)}
-                aria-label={t('sidebar.clearFilter', 'Clear filter')}
-                title={t('sidebar.clearFilter', 'Clear filter')}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
+              {selectedProjectFilter && onSelectProjectFilter && (
+                <button
+                  type="button"
+                  onClick={() => onSelectProjectFilter(null)}
+                  aria-label={t('sidebar.clearFilter', 'Clear filter')}
+                  title={t('sidebar.clearFilter', 'Clear filter')}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
 
-            <div className="flex-1" />
+              <div className="flex-1" />
 
-            {archivedCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowArchived((v) => !v)}
-                title={
-                  showArchived
-                    ? t('sidebar.showActive', 'Show active')
-                    : t('sidebar.archivedCount', 'Archived ({{count}})', { count: archivedCount })
-                }
-                className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-                  showArchived
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
-                )}
-              >
-                <Archive className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+              {archivedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowArchived((v) => !v)}
+                  title={
+                    showArchived
+                      ? t('sidebar.showActive', 'Show active')
+                      : t('sidebar.archivedCount', 'Archived ({{count}})', { count: archivedCount })
+                  }
+                  className={cn(
+                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                    showArchived
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
+                  )}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
 
-        {/* Conversation list.
+          {/* Conversation list.
             AUDIT-FIX GOV-31: the roving-tabindex container — it owns the row
             refs, syncs the highlight with real focus, and releases it on blur. */}
-        <div
-          ref={listRef}
-          className="flex-1 overflow-y-auto"
-          onFocus={handleListFocus}
-          onBlur={handleListBlur}
-        >
-          <div className="p-2">
-            {/* Projects section — header + pinned sub-section + unpinned list */}
-            {projectListEnabled && (pinnedProjects.length > 0 || unpinnedProjects.length > 0) && (
-              <div className="mb-4">
-                {/* Section header row: "Projects" + collapse chevron + "+" + "..." */}
-                <div className="group/projhdr mb-1 flex items-center gap-1 px-2 py-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setProjectsSectionCollapsed((v) => !v)}
-                    aria-label={
-                      projectsSectionCollapsed
-                        ? t('sidebar.expandProjects', 'Expand projects')
-                        : t('sidebar.collapseProjects', 'Collapse projects')
-                    }
-                    className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-                  >
-                    <span>{t('sidebar.projects', 'Projects')}</span>
-                    <ChevronRight
-                      className={cn(
-                        'h-3 w-3 shrink-0 transition-transform',
-                        !projectsSectionCollapsed && 'rotate-90',
-                      )}
-                    />
-                  </button>
-                  {/* Right-side actions (ChatGPT pattern): hidden at rest, revealed
+          <div ref={listRef} className="flex-1" onFocus={handleListFocus} onBlur={handleListBlur}>
+            <div className="p-2">
+              {/* Projects section — header + pinned sub-section + unpinned list */}
+              {projectListEnabled && (pinnedProjects.length > 0 || unpinnedProjects.length > 0) && (
+                <div className="mb-4">
+                  {/* Section header row: "Projects" + collapse chevron + "+" + "..." */}
+                  <div className="group/projhdr mb-1 flex items-center gap-1 px-2 py-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setProjectsSectionCollapsed((v) => !v)}
+                      aria-label={
+                        projectsSectionCollapsed
+                          ? t('sidebar.expandProjects', 'Expand projects')
+                          : t('sidebar.collapseProjects', 'Collapse projects')
+                      }
+                      className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                    >
+                      <span>{t('sidebar.projects', 'Projects')}</span>
+                      <ChevronRight
+                        className={cn(
+                          'h-3 w-3 shrink-0 transition-transform',
+                          !projectsSectionCollapsed && 'rotate-90',
+                        )}
+                      />
+                    </button>
+                    {/* Right-side actions (ChatGPT pattern): hidden at rest, revealed
                       on header hover or keyboard focus-within (a11y: hover-only
                       affordances must also appear on focus), and pinned visible
                       while the "…" menu is open. Rendered only when the relevant
                       handlers are present. */}
-                  <div
-                    className={cn(
-                      'flex shrink-0 items-center gap-0.5 transition-opacity',
-                      'opacity-0 group-hover/projhdr:opacity-100 group-focus-within/projhdr:opacity-100',
-                      projectsHeaderMenuOpen && 'opacity-100',
-                    )}
-                  >
-                    {onProjectCreate && (
-                      <button
-                        type="button"
-                        aria-label={t('sidebar.newProject', 'New project')}
-                        title={t('sidebar.newProject', 'New project')}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onProjectCreate();
-                        }}
-                        className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
-                      >
-                        <Plus className="h-3 w-3" aria-hidden="true" />
-                      </button>
-                    )}
-                    {/* "..." opens the ChatGPT-style "Organize chats" menu */}
-                    <Menu
-                      align="end"
-                      onOpenChange={setProjectsHeaderMenuOpen}
-                      trigger={({ toggle }) => (
+                    <div
+                      className={cn(
+                        'flex shrink-0 items-center gap-0.5 transition-opacity',
+                        'opacity-0 group-hover/projhdr:opacity-100 group-focus-within/projhdr:opacity-100',
+                        projectsHeaderMenuOpen && 'opacity-100',
+                      )}
+                    >
+                      {onProjectCreate && (
                         <button
                           type="button"
-                          aria-label={t('sidebar.organizeChats', 'Organize chats')}
-                          title={t('sidebar.organizeChats', 'Organize chats')}
+                          aria-label={t('sidebar.newProject', 'New project')}
+                          title={t('sidebar.newProject', 'New project')}
                           onClick={(e) => {
                             e.stopPropagation();
-                            toggle();
+                            onProjectCreate();
                           }}
                           className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
                         >
-                          <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
+                          <Plus className="h-3 w-3" aria-hidden="true" />
                         </button>
                       )}
-                      menuClassName="w-52"
-                    >
-                      {({ close }) => (
-                        <>
-                          {/* Non-interactive section label */}
-                          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                            {t('sidebar.organizeChats', 'Organize chats')}
-                          </div>
-                          <MenuSeparator />
-                          <MenuItem
-                            close={close}
-                            onSelect={() => setOrganizeMode('one-list')}
-                            icon={<List className="h-4 w-4" />}
-                            trailing={
-                              organizeMode === 'one-list' ? (
-                                <Check className="h-3.5 w-3.5 text-[hsl(var(--foreground))]" />
-                              ) : undefined
-                            }
+                      {/* "..." opens the ChatGPT-style "Organize chats" menu */}
+                      <Menu
+                        align="end"
+                        onOpenChange={setProjectsHeaderMenuOpen}
+                        trigger={({ toggle }) => (
+                          <button
+                            type="button"
+                            aria-label={t('sidebar.organizeChats', 'Organize chats')}
+                            title={t('sidebar.organizeChats', 'Organize chats')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle();
+                            }}
+                            className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
                           >
-                            {t('sidebar.organizeOneList', 'In one list')}
-                          </MenuItem>
-                          <MenuItem
-                            close={close}
-                            onSelect={() => setOrganizeMode('by-project')}
-                            icon={<Folder className="h-4 w-4" />}
-                            trailing={
-                              organizeMode === 'by-project' ? (
-                                <Check className="h-3.5 w-3.5 text-[hsl(var(--foreground))]" />
-                              ) : undefined
-                            }
-                          >
-                            {t('sidebar.organizeByProject', 'By project')}
-                          </MenuItem>
-                        </>
-                      )}
-                    </Menu>
+                            <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
+                          </button>
+                        )}
+                        menuClassName="w-52"
+                      >
+                        {({ close }) => (
+                          <>
+                            {/* Non-interactive section label */}
+                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                              {t('sidebar.organizeChats', 'Organize chats')}
+                            </div>
+                            <MenuSeparator />
+                            <MenuItem
+                              close={close}
+                              onSelect={() => setOrganizeMode('one-list')}
+                              icon={<List className="h-4 w-4" />}
+                              trailing={
+                                organizeMode === 'one-list' ? (
+                                  <Check className="h-3.5 w-3.5 text-[hsl(var(--foreground))]" />
+                                ) : undefined
+                              }
+                            >
+                              {t('sidebar.organizeOneList', 'In one list')}
+                            </MenuItem>
+                            <MenuItem
+                              close={close}
+                              onSelect={() => setOrganizeMode('by-project')}
+                              icon={<Folder className="h-4 w-4" />}
+                              trailing={
+                                organizeMode === 'by-project' ? (
+                                  <Check className="h-3.5 w-3.5 text-[hsl(var(--foreground))]" />
+                                ) : undefined
+                              }
+                            >
+                              {t('sidebar.organizeByProject', 'By project')}
+                            </MenuItem>
+                          </>
+                        )}
+                      </Menu>
+                    </div>
                   </div>
-                </div>
 
-                {!projectsSectionCollapsed && (
-                  <>
-                    {/* Pinned sub-section */}
-                    {pinnedProjects.length > 0 && (
-                      <div className="mb-2">
-                        <div className="mb-0.5 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]/60">
-                          {t('sidebar.pinned', 'Pinned')}
+                  {!projectsSectionCollapsed && (
+                    <>
+                      {/* Pinned sub-section */}
+                      {pinnedProjects.length > 0 && (
+                        <div className="mb-2">
+                          <div className="mb-0.5 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]/60">
+                            {t('sidebar.pinned', 'Pinned')}
+                          </div>
+                          {pinnedProjects.map((project) => (
+                            <ProjectRow
+                              key={project.id}
+                              project={project}
+                              sessions={sessions}
+                              activeSessionId={activeSessionId}
+                              expandedProjectIds={expandedProjectIds}
+                              setExpandedProjectIds={setExpandedProjectIds}
+                              projectShowAllChats={projectShowAllChats}
+                              setProjectShowAllChats={setProjectShowAllChats}
+                              onOpen={onProjectOpen}
+                              onNewChat={onProjectNewChat}
+                              onRename={onProjectRename}
+                              onShare={onProjectShare}
+                              onSettings={onProjectSettings}
+                              onPin={onProjectPin}
+                              onDelete={onProjectDelete}
+                              onSelectSession={onSelect}
+                            />
+                          ))}
                         </div>
-                        {pinnedProjects.map((project) => (
-                          <ProjectRow
-                            key={project.id}
-                            project={project}
-                            sessions={sessions}
-                            activeSessionId={activeSessionId}
-                            expandedProjectIds={expandedProjectIds}
-                            setExpandedProjectIds={setExpandedProjectIds}
-                            projectShowAllChats={projectShowAllChats}
-                            setProjectShowAllChats={setProjectShowAllChats}
-                            onOpen={onProjectOpen}
-                            onNewChat={onProjectNewChat}
-                            onRename={onProjectRename}
-                            onShare={onProjectShare}
-                            onSettings={onProjectSettings}
-                            onPin={onProjectPin}
-                            onDelete={onProjectDelete}
-                            onSelectSession={onSelect}
-                          />
-                        ))}
-                      </div>
-                    )}
+                      )}
 
-                    {/* Unpinned list */}
-                    {visibleUnpinnedProjects.map((project) => (
-                      <ProjectRow
-                        key={project.id}
-                        project={project}
-                        sessions={sessions}
-                        activeSessionId={activeSessionId}
-                        expandedProjectIds={expandedProjectIds}
-                        setExpandedProjectIds={setExpandedProjectIds}
-                        projectShowAllChats={projectShowAllChats}
-                        setProjectShowAllChats={setProjectShowAllChats}
-                        onOpen={onProjectOpen}
-                        onNewChat={onProjectNewChat}
-                        onRename={onProjectRename}
-                        onShare={onProjectShare}
-                        onSettings={onProjectSettings}
-                        onPin={onProjectPin}
-                        onDelete={onProjectDelete}
-                        onSelectSession={onSelect}
-                      />
-                    ))}
-                    {!showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAllProjects(true)}
-                        className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
-                      >
-                        {t('showMore', 'Show more')}
-                      </button>
-                    )}
-                    {showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAllProjects(false)}
-                        className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
-                      >
-                        {t('showLess', 'Show less')}
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Chats section header + pinned sessions */}
-            {(pinned.length > 0 || grouped.size > 0) && (
-              <div className="mb-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                {t('sidebar.chats', 'Chats')}
-              </div>
-            )}
-
-            {pinned.length > 0 && (
-              <div className="mb-4">
-                <div className="mb-2 flex items-center gap-1 px-3 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                  <Pin className="h-3 w-3" /> {t('sidebar.pinned', 'Pinned')}
-                </div>
-                {pinned.map(renderSessionRow)}
-              </div>
-            )}
-
-            {Array.from(grouped.entries()).map(([group, convs]) => {
-              const isExpanded = expandedGroups.has(group);
-              return (
-                <div key={group} className="mb-4">
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group)}
-                    aria-expanded={isExpanded}
-                    className="flex w-full items-center gap-2 px-2 py-1 text-xs font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
-                  >
-                    <ChevronRight
-                      className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-90')}
-                    />
-                    <span className="flex items-center gap-1">
-                      {group === 'today' && <Calendar className="h-3 w-3" />}
-                      {group === 'yesterday' && <Clock className="h-3 w-3" />}
-                      {t(`sidebar.temporal.${group}`, TEMPORAL_LABELS[group])}
-                    </span>
-                    <span className="ml-auto text-[hsl(var(--muted-foreground))]">
-                      ({convs.length})
-                    </span>
-                  </button>
-                  {isExpanded && (
-                    <div className="mt-1 space-y-1">{convs.map(renderSessionRow)}</div>
+                      {/* Unpinned list */}
+                      {visibleUnpinnedProjects.map((project) => (
+                        <ProjectRow
+                          key={project.id}
+                          project={project}
+                          sessions={sessions}
+                          activeSessionId={activeSessionId}
+                          expandedProjectIds={expandedProjectIds}
+                          setExpandedProjectIds={setExpandedProjectIds}
+                          projectShowAllChats={projectShowAllChats}
+                          setProjectShowAllChats={setProjectShowAllChats}
+                          onOpen={onProjectOpen}
+                          onNewChat={onProjectNewChat}
+                          onRename={onProjectRename}
+                          onShare={onProjectShare}
+                          onSettings={onProjectSettings}
+                          onPin={onProjectPin}
+                          onDelete={onProjectDelete}
+                          onSelectSession={onSelect}
+                        />
+                      ))}
+                      {!showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllProjects(true)}
+                          className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                        >
+                          {t('showMore', 'Show more')}
+                        </button>
+                      )}
+                      {showAllProjects && unpinnedProjects.length > PROJECTS_SHOW_LIMIT && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllProjects(false)}
+                          className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                        >
+                          {t('showLess', 'Show less')}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
-              );
-            })}
+              )}
 
-            {/* Loading skeleton — only while the list is genuinely empty so far,
+              {/* Chats section header + pinned sessions */}
+              {(pinned.length > 0 || grouped.size > 0) && (
+                <div className="mb-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                  {t('sidebar.chats', 'Chats')}
+                </div>
+              )}
+
+              {pinned.length > 0 && (
+                <div className="mb-4">
+                  <div className="mb-2 flex items-center gap-1 px-3 text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                    <Pin className="h-3 w-3" /> {t('sidebar.pinned', 'Pinned')}
+                  </div>
+                  {pinned.map(renderSessionRow)}
+                </div>
+              )}
+
+              {Array.from(grouped.entries()).map(([group, convs]) => {
+                const isExpanded = expandedGroups.has(group);
+                return (
+                  <div key={group} className="mb-4">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group)}
+                      aria-expanded={isExpanded}
+                      className="flex w-full items-center gap-2 px-2 py-1 text-xs font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                    >
+                      <ChevronRight
+                        className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-90')}
+                      />
+                      <span className="flex items-center gap-1">
+                        {group === 'today' && <Calendar className="h-3 w-3" />}
+                        {group === 'yesterday' && <Clock className="h-3 w-3" />}
+                        {t(`sidebar.temporal.${group}`, TEMPORAL_LABELS[group])}
+                      </span>
+                      <span className="ml-auto text-[hsl(var(--muted-foreground))]">
+                        ({convs.length})
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-1 space-y-1">{convs.map(renderSessionRow)}</div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Loading skeleton — only while the list is genuinely empty so far,
                 so a background refetch on an already-populated list never
                 replaces real rows with placeholders. */}
-            {visible.length === 0 && isLoading && (
-              <div
-                className="space-y-1 px-2 py-1"
-                role="status"
-                aria-label={t('sidebar.loadingConversations', 'Loading conversations')}
-              >
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="h-8 animate-pulse rounded-md bg-[hsl(var(--accent))]/50"
-                    style={{ animationDelay: `${i * 75}ms` }}
-                  />
-                ))}
-              </div>
-            )}
+              {visible.length === 0 && isLoading && (
+                <div
+                  className="space-y-1 px-2 py-1"
+                  role="status"
+                  aria-label={t('sidebar.loadingConversations', 'Loading conversations')}
+                >
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="h-8 animate-pulse rounded-md bg-[hsl(var(--accent))]/50"
+                      style={{ animationDelay: `${i * 75}ms` }}
+                    />
+                  ))}
+                </div>
+              )}
 
-            {/* Error state — distinguishes a failed fetch from a genuinely
+              {/* Error state — distinguishes a failed fetch from a genuinely
                 empty account so users don't mistake a transient error for
                 "you have no chats". */}
-            {visible.length === 0 && !isLoading && error && (
-              <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
-                <MessageSquare className="mb-2 h-7 w-7 text-red-400/60" />
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  {t('sidebar.loadFailed', "Couldn't load conversations")}
-                </p>
-                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]/60">{error}</p>
-              </div>
-            )}
+              {!hasMatchingConversations && !isLoading && error && (
+                <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
+                  <MessageSquare className="mb-2 h-7 w-7 text-red-400/60" />
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                    {t('sidebar.loadFailed', "Couldn't load conversations")}
+                  </p>
+                  <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]/60">{error}</p>
+                </div>
+              )}
 
-            {visible.length === 0 && !isLoading && !error && (
-              <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
-                <MessageSquare className="mb-2 h-7 w-7 text-[hsl(var(--muted-foreground))]/30" />
-                <p className="text-sm text-[hsl(var(--muted-foreground))]/60">
-                  {showArchived
-                    ? t('sidebar.noArchivedConversations', 'No archived conversations')
-                    : t('sidebar.noConversations', 'No conversations yet')}
-                </p>
-                {!showArchived && (
-                  <button
-                    type="button"
-                    onClick={onNewChat}
-                    className="mt-2 text-xs text-[hsl(var(--primary))] hover:underline"
-                  >
-                    {t('sidebar.startNewChat', 'Start a new chat')}
-                  </button>
-                )}
-              </div>
-            )}
+              {!hasMatchingConversations && !isLoading && !error && (
+                <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
+                  <MessageSquare className="mb-2 h-7 w-7 text-[hsl(var(--muted-foreground))]/30" />
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]/60">
+                    {showArchived
+                      ? t('sidebar.noArchivedConversations', 'No archived conversations')
+                      : t('sidebar.noConversations', 'No conversations yet')}
+                  </p>
+                  {!showArchived && (
+                    <button
+                      type="button"
+                      onClick={onNewChat}
+                      className="mt-2 text-xs text-[hsl(var(--primary))] hover:underline"
+                    >
+                      {t('sidebar.startNewChat', 'Start a new chat')}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -938,9 +952,18 @@ export function Sidebar(props: SidebarProps) {
               title={t('sidebar.budgetUsed', '{{percent}}% of token budget used', {
                 percent: Math.round(budgetPercent),
               })}
+              aria-label={t('sidebar.budgetUsed', '{{percent}}% of token budget used', {
+                percent: Math.round(budgetPercent),
+              })}
               className="group flex w-full items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-[hsl(var(--accent))]"
             >
-              <div className="h-1 flex-1 overflow-hidden rounded-full bg-[hsl(var(--muted))]">
+              {/* `--muted` is 1.03:1 against the light sidebar, so at 0% the meter
+                  rendered as nothing at all. The border token is the lightest
+                  value in the palette that still reads as a track. */}
+              <div
+                aria-hidden="true"
+                className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--chat-border-strong)]"
+              >
                 <div
                   className={cn(
                     'h-full rounded-full transition-all duration-300',
@@ -953,7 +976,10 @@ export function Sidebar(props: SidebarProps) {
                   style={{ width: `${Math.min(Math.max(budgetPercent, 0), 100)}%` }}
                 />
               </div>
-              <span className="shrink-0 text-[10px] tabular-nums text-[hsl(var(--muted-foreground))]">
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-[10px] tabular-nums text-[hsl(var(--muted-foreground))]"
+              >
                 {Math.round(budgetPercent)}%
               </span>
             </button>

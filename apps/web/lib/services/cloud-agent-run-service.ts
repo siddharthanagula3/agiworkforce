@@ -14,7 +14,11 @@ import {
   type CloudAgentRunUsage,
   type CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
-import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkforce/types';
+import {
+  INTERACTIVE_CARDS_METADATA_KEY,
+  type CloudWorkMode,
+  type InteractiveCard,
+} from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -674,15 +678,15 @@ async function appendCloudAgentEventsWithinTransaction(
            for update
         )
         update public.cloud_agent_runs as runs
-          set last_event_sequence = greatest(runs.last_event_sequence, $3),
+          set last_event_sequence = greatest(runs.last_event_sequence, $3::bigint),
               state = case
-                when $4 is not null and $5 >= runs.last_event_sequence then $4
+                when $4::text is not null and $5::bigint >= runs.last_event_sequence then $4::text
                 else runs.state
               end,
               completed_at = case
-                when $4 is null then runs.completed_at
-                when $5 < runs.last_event_sequence then runs.completed_at
-                when $4 in ('ready_for_review', 'completed', 'failed', 'cancelled', 'archived')
+                when $4::text is null then runs.completed_at
+                when $5::bigint < runs.last_event_sequence then runs.completed_at
+                when $4::text in ('ready_for_review', 'completed', 'failed', 'cancelled', 'archived')
                   then coalesce(runs.completed_at, now())
                 else null
               end,
@@ -855,6 +859,8 @@ export async function listCloudAgentRuns(
     requestId?: string;
     before?: CloudAgentRunCursor;
     limit?: number;
+    /** Restrict to runs started in these work modes. Omit for every mode. */
+    workModes?: readonly CloudWorkMode[];
   },
 ): Promise<CloudAgentRunList> {
   const states = z.array(AgentTaskStateSchema).min(1).max(9).parse(input.states);
@@ -863,6 +869,7 @@ export async function listCloudAgentRuns(
     ? z.object({ updatedAt: z.string().datetime(), id: z.string().uuid() }).parse(input.before)
     : null;
   const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 25)));
+  const workModes = input.workModes?.length ? [...input.workModes] : null;
   const rows = await db.query<CloudAgentRunRow>(
     `select runs.*, ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}
        from public.cloud_agent_runs runs
@@ -872,6 +879,7 @@ export async function listCloudAgentRuns(
         and runs.state = any($2::text[])
         and ($3::text is null or runs.request_id = $3)
         and ($4::timestamptz is null or (runs.updated_at, runs.id) < ($4::timestamptz, $5::uuid))
+        and ($7::text[] is null or runs.work_mode = any($7::text[]))
       order by runs.updated_at desc, runs.id desc
       limit $6`,
     [
@@ -881,6 +889,7 @@ export async function listCloudAgentRuns(
       before?.updatedAt ?? null,
       before?.id ?? null,
       limit + 1,
+      workModes,
     ],
   );
   const pageRows = rows.slice(0, limit);

@@ -15,8 +15,8 @@
  * pathname instead of being asserted.
  *
  * NO router, store, or React import lives here — the caller supplies `navigate`
- * (its own `router.push`) and `onOpenCustomize` (the settings modal opener),
- * which keeps this module a pure data definition that can be unit-tested.
+ * (its own `router.push`), which keeps this module a pure data definition
+ * that can be unit-tested.
  */
 
 import {
@@ -25,9 +25,7 @@ import {
   LibraryBig,
   ListChecks,
   MessageSquare,
-  Settings,
   ShieldCheck,
-  Sparkles,
   TerminalSquare,
 } from 'lucide-react';
 import type { SidebarIconComponent, SidebarNavItem } from '@agiworkforce/ui';
@@ -61,12 +59,8 @@ export interface AppNavDestination {
   id: string;
   label: string;
   icon: SidebarIconComponent;
-  /**
-   * Route pushed on click. `null` means the entry opens the Settings modal in
-   * place instead of navigating (CRIT-008: `/settings/general` only renders a
-   * redirect back to `/chat`, which tore down whatever page the shell wrapped).
-   */
-  href: string | null;
+  /** Route pushed on click. */
+  href: string;
   /** Derived from the live pathname — never hardcoded by a caller. */
   isActive: (pathname: string) => boolean;
   /**
@@ -132,18 +126,6 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
       isUnder(pathname, '/chat/library') || isUnder(pathname, '/chat/artifacts'),
     hideable: true,
   },
-  // Skills — a shipped, indexed surface that marketing links to and that
-  // /settings/skills and /ai-skills both redirect onto, yet the app shell had
-  // no entry for it: a signed-in user could only reach it by typing the URL.
-  // Same defect the Admin entry below was added to fix.
-  {
-    id: 'skills',
-    label: 'Skills',
-    icon: Sparkles,
-    href: '/skills',
-    isActive: (pathname) => isUnder(pathname, '/skills'),
-    hideable: true,
-  },
   {
     id: 'tasks',
     label: 'Tasks',
@@ -173,21 +155,10 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     hideable: true,
     adminOnly: true,
   },
-  {
-    id: 'customize',
-    label: 'Customize',
-    icon: Settings,
-    // Opens General: that is where the user's name, work profile, and cross-chat
-    // instructions are edited. Skills / Plugins / Connectors keep their own
-    // plainly labelled sections inside the same modal.
-    href: null,
-    isActive: () => false,
-    hideable: true,
-  },
 ];
 
 /**
- * Bind the rail to a surface's router + settings modal.
+ * Bind the rail to a surface's router.
  *
  * `pathname` comes from `usePathname()`; pass it through unchanged so the
  * active entry tracks the real route.
@@ -195,7 +166,6 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
 export function buildAppNavItems(options: {
   pathname: string;
   navigate: (href: string) => void;
-  onOpenCustomize: () => void;
   /** Whether the signed-in user holds the admin or owner role. */
   isAdmin?: boolean;
   /**
@@ -204,7 +174,7 @@ export function buildAppNavItems(options: {
    */
   hiddenIds?: readonly string[];
 }): SidebarNavItem[] {
-  const { pathname, navigate, onOpenCustomize, isAdmin = false, hiddenIds = [] } = options;
+  const { pathname, navigate, isAdmin = false, hiddenIds = [] } = options;
   return APP_NAV_DESTINATIONS.filter((destination) => !destination.adminOnly || isAdmin)
     .filter((destination) => !(destination.hideable && hiddenIds.includes(destination.id)))
     .map((destination) => {
@@ -213,7 +183,7 @@ export function buildAppNavItems(options: {
         id: destination.id,
         label: destination.label,
         icon: destination.icon,
-        onClick: href === null ? onOpenCustomize : () => navigate(href),
+        onClick: () => navigate(href),
         isActive: destination.isActive(pathname),
       };
     });

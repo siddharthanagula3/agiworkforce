@@ -18,16 +18,23 @@ describe('MessageBubbleSkeleton', () => {
     expect(screen.getByText('Loading message...')).toBeInTheDocument();
   });
 
-  it('renders avatar skeleton', () => {
+  // Rendered messages carry no avatar and no name/timestamp header, so a
+  // skeleton that draws them shifts the layout the moment real content lands.
+  it('draws no avatar, because a rendered message has none', () => {
     const { container } = render(<MessageBubbleSkeleton />);
-    const avatar = container.querySelector('.rounded-full');
-    expect(avatar).toBeInTheDocument();
+    expect(container.querySelector('.rounded-full')).not.toBeInTheDocument();
   });
 
-  it('renders name and timestamp chips in the header row', () => {
+  it('draws only the body lines it is standing in for', () => {
+    const { container } = render(<MessageBubbleSkeleton lines={2} />);
+    expect(container.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2);
+  });
+
+  it('occupies the same column as .message-inner', () => {
     const { container } = render(<MessageBubbleSkeleton />);
-    const skeletons = container.querySelectorAll('[aria-hidden="true"]');
-    expect(skeletons.length).toBeGreaterThanOrEqual(4);
+    const column = container.querySelector('.mx-auto.flex.max-w-3xl');
+    expect(column).toBeInTheDocument();
+    expect(column).toHaveClass('px-4');
   });
 
   it('applies flex-row-reverse for user messages', () => {
@@ -43,13 +50,13 @@ describe('MessageBubbleSkeleton', () => {
 
   it('renders a rounded bubble shape for user messages', () => {
     const { container } = render(<MessageBubbleSkeleton isUser lines={1} />);
-    const bubble = container.querySelector('.rounded-2xl.rounded-tr-sm');
+    const bubble = container.querySelector('.rounded-2xl');
     expect(bubble).toBeInTheDocument();
   });
 
   it('renders the correct number of text lines for assistant messages', () => {
     const { container } = render(<MessageBubbleSkeleton isUser={false} lines={3} />);
-    const proseLine = container.querySelector('.space-y-2');
+    const proseLine = container.querySelector('.space-y-3');
     expect(proseLine).toBeInTheDocument();
     const lines = proseLine!.querySelectorAll('[aria-hidden="true"]');
     expect(lines).toHaveLength(3);
@@ -57,7 +64,7 @@ describe('MessageBubbleSkeleton', () => {
 
   it('defaults to 2 lines for assistant messages', () => {
     const { container } = render(<MessageBubbleSkeleton isUser={false} />);
-    const proseLine = container.querySelector('.space-y-2');
+    const proseLine = container.querySelector('.space-y-3');
     expect(proseLine).toBeInTheDocument();
     const lines = proseLine!.querySelectorAll('[aria-hidden="true"]');
     expect(lines).toHaveLength(2);

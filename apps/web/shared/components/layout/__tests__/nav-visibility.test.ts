@@ -9,7 +9,6 @@ function build(hiddenIds: string[], isAdmin = false) {
   return buildAppNavItems({
     pathname: '/chat',
     navigate: vi.fn(),
-    onOpenCustomize: vi.fn(),
     isAdmin,
     hiddenIds,
   });

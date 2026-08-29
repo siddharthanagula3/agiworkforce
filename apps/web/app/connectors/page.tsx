@@ -1,29 +1,30 @@
 'use client';
 
-import { Suspense } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
-import { ConnectorsPage } from '@/features/connectors/pages/ConnectorsPage';
+import { SignedOutSurface } from '@shared/components/marketing/SignedOutSurface';
 
 function ConnectorsRoute() {
   const { isSignedIn, isLoaded } = useAuth();
 
-  if (!isLoaded) {
-    return (
-      <Suspense>
-        <ConnectorsPage />
-      </Suspense>
-    );
-  }
+  if (!isLoaded) return null;
 
   if (isSignedIn) {
     return <SettingsModalRedirect section="connectors" />;
   }
 
   return (
-    <Suspense>
-      <ConnectorsPage />
-    </Suspense>
+    <SignedOutSurface
+      eyebrow="Connectors"
+      heading="Connectors bring your own tools into a thread"
+      signInHref="/login?redirectTo=%2Fconnectors"
+      signInLabel="Sign in to add a connector"
+      secondary={{ href: '/connectors/mcp-directory', label: 'Browse the MCP directory' }}
+    >
+      A connector gives the assistant a scoped way to read from and act in a service you already
+      run, over MCP. Which connectors you can add depends on your workspace and what an admin has
+      approved, so the list needs you signed in.
+    </SignedOutSurface>
   );
 }
 

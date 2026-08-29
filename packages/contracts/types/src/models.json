@@ -205,6 +205,18 @@
       "verifiedBy": "voice-model-sweep-2026-07-28-followup",
       "status": "PASS",
       "notes": "Founder flagged that gpt-4o-mini-tts carries a Deprecated badge on the developers.openai.com model catalog listing — correct, and it landed the same day we adopted it. Resolved against four sources: the listing badges it Deprecated; its own model page shows NO deprecation banner and no shutdown date; the deprecations table has no family-level row for it (only snapshot gpt-4o-mini-tts-2025-03-20 -> -2025-12-15, shut down 2026-07-23); and the text-to-speech guide still calls it the newest and most reliable TTS model. Decisive fact: it is the ONLY model OpenAI serves on /v1/audio/speech — gpt-audio-1.5's model page lists \"Speech generation | v1/audio/speech | Not supported\". So there is no newer member of this family to move to. Marked deprecated:true (compile.mjs then sets selectable:false) and KEPT, because removing it would leave the OpenAI TTS path with no model at all. NOT ADDED, deliberately: the realtime family (gpt-realtime-2.1, gpt-realtime-2.1-mini, gpt-realtime-translate, gpt-realtime-whisper). Three reasons — ModelType has no \"realtime\" member, so it is a schema change across the TS union, the registry schema and both Rust registries; we ship no duplex audio path (founder-gated on a realtime provider plus echo cancellation); and registering them live would advertise capability we do not have. Recorded as VOICE-REALTIME-FAMILY-ABSENT so the ids do not need re-researching: gpt-realtime-2.1 ($4/$24 text, $32/$64 audio, $0.40 cached, 128k ctx, 32k max out) and gpt-realtime-2.1-mini ($0.60/$2.40 text, $10/$20 audio) are the current heads; gpt-realtime, gpt-realtime-mini, gpt-audio, gpt-audio-mini and every gpt-4o-audio/gpt-4o-realtime variant shut down 2027-01-20. gpt-4o-transcribe and gpt-4o-mini-transcribe carry NO deprecated badge and stay as-is."
+    },
+    {
+      "date": "2026-08-29",
+      "verifiedBy": "official-openrouter-live-model-list",
+      "status": "PASS",
+      "notes": "Added the two OpenRouter router routes the product had no entry for: openrouter/auto (Auto Router) and openrouter/free (Free Models Router), and set open_router.defaultModel to openrouter/auto, which was previously empty so the provider had no route at all. Every field is read from https://openrouter.ai/api/v1/models retrieved 2026-08-29 with a live key. Auto Router: canonical_slug openrouter/auto, 2,000,000 context, tokenizer \"Router\", modality text+image+file+audio+video->text+image, and supported_parameters including reasoning, reasoning_effort, tools, tool_choice and structured_outputs — hence reasoning.control \"effort\". Free Models Router: canonical_slug openrouter/free, 200,000 context, modality text+image->text, pricing prompt \"0\" and completion \"0\", and supported_parameters including reasoning_effort, tools and structured_outputs. Both routes report pricing that is resolved per request — auto returns \"-1\" for prompt and completion because cost follows the model it selects, so no per-million rate is recorded here and reservation must price the resolved route, not the router. No benchmarks are recorded because OpenRouter publishes none for either router, and carrying a member model's numbers forward would be fabricated. openrouter/auto is recorded with inputCost/outputCost 0 because ModelMetadata requires both and the router publishes no rate of its own; managed metering must price the model the router actually resolved (the completion response reports it) rather than the router record, so this route is safe on BYOK — where OpenRouter bills the key holder directly — and must not be exposed on a metered managed plan until resolved-route pricing is wired. openrouter/free is genuinely zero-rated (\"0\"/\"0\" from the provider)."
+    },
+    {
+      "date": "2026-08-29",
+      "verifiedBy": "live-openrouter-completion-through-both-router-routes",
+      "status": "PASS",
+      "notes": "Both router routes were exercised end to end against the live API after the account key was rotated. openrouter/auto returned HTTP 200 in 752ms and reported routing to deepseek/deepseek-v4-flash-0731, confirming the earlier note that the router itself publishes no rate and that metering must price the resolved model. openrouter/free returned HTTP 200 and routed to free members (nvidia/nemotron-3-super-120b-a12b:free, minimax/minimax-m2.7:free) with usage.cost 0, confirming the zero rating. Both free members are reasoning models whose reasoning tokens count against max_tokens: a 16-token cap returned empty content while a 200-token cap returned the expected text with finish_reason \"stop\" and 31 reasoning tokens. The product default is DEFAULT_MAX_OUTPUT_TOKENS 8192, so this is not reachable in normal use, but any caller that lowers the cap for a free-router turn must leave room for reasoning tokens."
     }
   ],
   "providers": {
@@ -422,7 +434,7 @@
       "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
       "modelPrefixes": ["meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/", "openrouter/"],
       "aliases": ["open_router", "openrouter", "open-router"],
-      "defaultModel": "",
+      "defaultModel": "openrouter/auto",
       "taskRouting": {},
       "canonicalization": {}
     },
@@ -2294,6 +2306,76 @@
       "pricingNote": "Low-latency real-time speech-to-speech translation, 70+ languages. Free tier is free of charge; paid tier $3.50/1M input and $21.00/1M output audio tokens, equivalently $0.0053/min in and $0.0315/min out. Audio bills at 25 tokens per second, an effective ~$0.0368 per minute. Sourced from the published Gemini API pricing table, 2026-08-06. INTERIM: adopted while OpenAI's live/realtime API is unreleased; revisit when that ships.",
       "availability": "preview",
       "reasoning": { "capable": false, "control": "none" }
+    },
+    "openrouter-auto": {
+      "id": "openrouter-auto",
+      "apiModelId": "openrouter/auto",
+      "openRouterSlug": "openrouter/auto",
+      "name": "OpenRouter Auto",
+      "provider": "open_router",
+      "modelType": "chat",
+      "contextWindow": 2000000,
+      "inputCost": 0,
+      "outputCost": 0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": true,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speed": "medium",
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["Automatic Routing", "Mixed Workloads", "Cost Balancing"],
+      "deprecation_date": null,
+      "openWeight": false,
+      "license": "proprietary",
+      "reasoning": { "capable": true, "control": "effort" },
+      "tierPolicy": { "minTier": "free" }
+    },
+    "openrouter-free": {
+      "id": "openrouter-free",
+      "apiModelId": "openrouter/free",
+      "openRouterSlug": "openrouter/free",
+      "name": "OpenRouter Free Auto",
+      "provider": "open_router",
+      "modelType": "chat",
+      "contextWindow": 200000,
+      "inputCost": 0,
+      "outputCost": 0,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speed": "medium",
+      "quality": "fair",
+      "qualityTier": "fast",
+      "bestFor": ["Zero-Cost Drafting", "Experimentation", "Overflow Capacity"],
+      "deprecation_date": null,
+      "openWeight": false,
+      "license": "proprietary",
+      "reasoning": { "capable": true, "control": "effort" },
+      "tierPolicy": { "minTier": "free" }
     }
   },
   "tierAllowedModels": {

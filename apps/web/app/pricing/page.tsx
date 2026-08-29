@@ -42,6 +42,7 @@ import {
   type UpgradeConfirmRequest,
 } from '@features/billing/components/UpgradeConfirmDialog';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
+import { managedUsageMultiplier } from '@/lib/billing/managed-usage-caps';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import {
@@ -222,11 +223,19 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
  * rather than implying four identical columns are different.
  */
 const MODEL_ACCESS_COLUMNS: ReadonlyArray<{ label: string; plan: BillingPlanTier }> = [
-  { label: 'Free', plan: 'free' },
-  { label: 'Basic', plan: 'basic' },
-  { label: 'Pro & Team', plan: 'pro' },
-  { label: 'Max, Max 15x & Enterprise', plan: 'max' },
+  { label: BILLING_PLAN_PRICING.free.label, plan: 'free' },
+  { label: BILLING_PLAN_PRICING.basic.label, plan: 'basic' },
+  { label: `${BILLING_PLAN_PRICING.pro.label} & ${BILLING_PLAN_PRICING.team.label}`, plan: 'pro' },
+  {
+    label: [
+      `${BILLING_PLAN_PRICING.max.label}, ${BILLING_PLAN_PRICING.max_15x.label}`,
+      BILLING_PLAN_PRICING.enterprise.label,
+    ].join(' & '),
+    plan: 'max',
+  },
 ];
+
+const FLAGSHIP_MODEL_COUNT = getAllowedModelsForTier('flagship_additions').length;
 
 interface ModelAccessRow {
   provider: string;
@@ -642,6 +651,28 @@ export default function PricingPage() {
 
   const freeHref = user ? '/' : '/login?redirectTo=%2F';
 
+  const max15xUsageMultiplier = managedUsageMultiplier('max_15x', 'pro');
+  const max15xUsage =
+    max15xUsageMultiplier === null ? '—' : `${max15xUsageMultiplier}x ${pro.label} usage`;
+
+  const maxTierFeatures =
+    maxVariant === 'max'
+      ? [
+          t('maxFeature1'),
+          `All ${FLAGSHIP_MODEL_COUNT} flagship models unlocked for manual selection`,
+          t('maxFeature4'),
+          t('maxFeature5'),
+          t('maxFeature6'),
+        ]
+      : [
+          t('max15xFeature1'),
+          t('max15xFeature2'),
+          t('max15xFeature3'),
+          t('max15xFeature4'),
+          t('max15xFeature5'),
+          t('max15xFeature6'),
+        ];
+
   const compareRows: CompareRow[] = [
     {
       planId: 'local-only',
@@ -722,7 +753,7 @@ export default function PricingPage() {
       label: max15x.label,
       price: `${max15xPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: '15x Pro usage',
+      usageCapacity: max15xUsage,
       ...managedPlanCapabilities('max_15x'),
       bestFor: 'Highest-capacity work and video generation',
     },
@@ -863,6 +894,7 @@ export default function PricingPage() {
           hidden={audience !== 'business'}
           style={{ paddingTop: 0 }}
         >
+          <h2 className="sr-only">{t('audienceBusiness')}</h2>
           <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
@@ -1042,6 +1074,7 @@ export default function PricingPage() {
           hidden={audience !== 'individual'}
           style={{ paddingTop: 0 }}
         >
+          <h2 className="sr-only">{t('audienceIndividual')}</h2>
           {/* The audience tab above already says which plans these are; a second
               headline and two lines of prose only delayed the prices. The name
               moves to aria-label so the section keeps an accessible name. */}
@@ -1231,30 +1264,12 @@ export default function PricingPage() {
                 {maxVariant === 'max' ? t('maxTierBody') : t('max15xTierBody')}
               </p>
               <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {maxVariant === 'max' ? t('maxFeature1') : t('max15xFeature1')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {maxVariant === 'max' ? t('maxFeature2') : t('max15xFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {maxVariant === 'max' ? t('maxFeature3') : t('max15xFeature3')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {maxVariant === 'max' ? t('maxFeature4') : t('max15xFeature4')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {maxVariant === 'max' ? t('maxFeature5') : t('max15xFeature5')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {maxVariant === 'max' ? t('maxFeature6') : t('max15xFeature6')}
-                </li>
+                {maxTierFeatures.map((feature) => (
+                  <li key={feature}>
+                    <CheckIcon />
+                    {feature}
+                  </li>
+                ))}
               </ul>
               {maxVariant === 'max'
                 ? renderPlanAction('max', t('maxCta'))
@@ -1428,9 +1443,10 @@ export default function PricingPage() {
             Models included by plan
           </h2>
           <p className="agi-fl-section-lede">
-            Auto routing picks the strongest available model for every request. Manual model
-            selection widens as you go up plans — this is how many of each provider&apos;s models
-            are reachable at each level, read live from our model catalog.
+            Auto routes each message to the best model for the task, your plan, and cost; the
+            ceiling it can reach rises with the plan. Manual model selection widens the same way —
+            this is how many of each provider&apos;s models are reachable at each level, read live
+            from our model catalog.
           </p>
           <div
             aria-label="Scrollable model access by plan"

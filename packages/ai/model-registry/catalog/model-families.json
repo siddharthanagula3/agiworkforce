@@ -1,0 +1,1555 @@
+{
+  "schemaVersion": 1,
+  "policy": {
+    "referencePrefix": "family:",
+    "stableLifecycle": "stable",
+    "previewLifecycle": "preview",
+    "previewMarkers": [
+      "-preview$",
+      "-exp$",
+      "-beta$",
+      "-canary$",
+      "-latest$",
+      "-[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    ],
+    "lifecycleOrder": ["stable", "preview"],
+    "promotableLifecycles": {
+      "stable": ["stable"],
+      "preview": ["stable", "preview"]
+    },
+    "blockedLifecycles": ["deprecated", "experimental", "retired"],
+    "requiredAvailability": "live",
+    "thresholds": {
+      "maxInputCostIncreaseRatio": 0.25,
+      "maxOutputCostIncreaseRatio": 0.25,
+      "minContextRatio": 1,
+      "minMaxOutputRatio": 1,
+      "minBenchmarkRatio": 0.95
+    },
+    "gates": [
+      "providerAvailability",
+      "familyIdentity",
+      "lifecycleEligibility",
+      "capabilityCoverage",
+      "regressionThresholds",
+      "registryValidation"
+    ],
+    "fallbackChainLimit": 3
+  },
+  "families": {
+    "openai/gpt-frontier": {
+      "provider": "openai",
+      "canonicalFamily": "gpt-frontier",
+      "tier": "frontier",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)-sol$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1050000,
+      "minMaxOutputTokens": 128000,
+      "active": {
+        "modelKey": "gpt-5.6-sol",
+        "generation": "5.6",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 5,
+          "outputPerMillion": 30,
+          "cacheReadPerMillion": 0.5,
+          "cacheWritePerMillion": 6.25
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1050000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-02-16"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "openai/gpt-balanced": {
+      "provider": "openai",
+      "canonicalFamily": "gpt-balanced",
+      "tier": "balanced",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)-terra$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1050000,
+      "minMaxOutputTokens": 128000,
+      "active": {
+        "modelKey": "gpt-5.6-terra",
+        "generation": "5.6",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2,
+          "outputPerMillion": 12,
+          "cacheReadPerMillion": 0.2,
+          "cacheWritePerMillion": 2.5
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1050000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-02-16"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "openai/gpt-fast": {
+      "provider": "openai",
+      "canonicalFamily": "gpt-fast",
+      "tier": "fast",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)-luna$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1050000,
+      "minMaxOutputTokens": 128000,
+      "active": {
+        "modelKey": "gpt-5.6-luna",
+        "generation": "5.6",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.2,
+          "outputPerMillion": 1.2,
+          "cacheReadPerMillion": 0.02,
+          "cacheWritePerMillion": 0.25
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1050000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-02-16"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "openai/gpt-image": {
+      "provider": "openai",
+      "canonicalFamily": "gpt-image",
+      "tier": "frontier",
+      "modelType": "image",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gpt-image-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": ["imageInput", "imageOutput", "textInput"],
+      "minContextTokens": 4000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "gpt-image-2",
+        "generation": "2",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 8,
+          "outputPerMillion": 30,
+          "cacheReadPerMillion": 2
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": false,
+          "imageOutput": true,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 4000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "openai/transcribe-balanced": {
+      "provider": "openai",
+      "canonicalFamily": "transcribe-balanced",
+      "tier": "balanced",
+      "modelType": "stt",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)o-transcribe$",
+      "requiredCapabilities": ["audioInput", "textOutput"],
+      "minContextTokens": 16000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "gpt-4o-transcribe",
+        "generation": "4",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2.5,
+          "outputPerMillion": 10
+        },
+        "capabilitySnapshot": {
+          "textInput": false,
+          "imageInput": false,
+          "audioInput": true,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 16000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "openai/transcribe-fast": {
+      "provider": "openai",
+      "canonicalFamily": "transcribe-fast",
+      "tier": "fast",
+      "modelType": "stt",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)o-mini-transcribe$",
+      "requiredCapabilities": ["audioInput", "textOutput"],
+      "minContextTokens": 16000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "gpt-4o-mini-transcribe",
+        "generation": "4",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 1.25,
+          "outputPerMillion": 5
+        },
+        "capabilitySnapshot": {
+          "textInput": false,
+          "imageInput": false,
+          "audioInput": true,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 16000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "openai/tts-fast": {
+      "provider": "openai",
+      "canonicalFamily": "tts-fast",
+      "tier": "balanced",
+      "modelType": "tts",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gpt-(?<generation>\\d+(?:\\.\\d+)*)o-mini-tts$",
+      "requiredCapabilities": ["audioOutput", "streaming", "textInput"],
+      "minContextTokens": 2000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "gpt-4o-mini-tts",
+        "generation": "4",
+        "lifecycle": "deprecated",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.6,
+          "outputPerMillion": 12
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": false,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": false,
+          "imageOutput": false,
+          "audioOutput": true,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 2000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "anthropic/claude-fable": {
+      "provider": "anthropic",
+      "canonicalFamily": "claude-fable",
+      "tier": "frontier",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^claude-fable-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": 128000,
+      "active": {
+        "modelKey": "claude-fable-5",
+        "generation": "5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 10,
+          "outputPerMillion": 50,
+          "cacheReadPerMillion": 1,
+          "cacheWritePerMillion": 12.5
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-01"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "anthropic/claude-opus": {
+      "provider": "anthropic",
+      "canonicalFamily": "claude-opus",
+      "tier": "frontier",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^claude-opus-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": 128000,
+      "active": {
+        "modelKey": "claude-opus-5",
+        "generation": "5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 5,
+          "outputPerMillion": 25,
+          "cacheReadPerMillion": 0.5,
+          "cacheWritePerMillion": 6.25
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-05"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "anthropic/claude-sonnet": {
+      "provider": "anthropic",
+      "canonicalFamily": "claude-sonnet",
+      "tier": "balanced",
+      "modelType": "code",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^claude-sonnet-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": 128000,
+      "active": {
+        "modelKey": "claude-sonnet-5",
+        "generation": "5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 3,
+          "outputPerMillion": 15,
+          "cacheReadPerMillion": 0.3,
+          "cacheWritePerMillion": 3.75
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxOutputTokens": 128000,
+          "knowledgeCutoff": "2026-01"
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "google/gemini-flash": {
+      "provider": "google",
+      "canonicalFamily": "gemini-flash",
+      "tier": "balanced",
+      "modelType": "multimodal",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gemini-(?<generation>\\d+(?:\\.\\d+)*)-flash$",
+      "requiredCapabilities": [
+        "audioInput",
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput",
+        "videoInput"
+      ],
+      "minContextTokens": 1048576,
+      "minMaxOutputTokens": 65536,
+      "active": {
+        "modelKey": "gemini-3.7-flash",
+        "generation": "3.7",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.75,
+          "outputPerMillion": 3.75,
+          "cacheReadPerMillion": 0.075
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": true,
+          "videoInput": true,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1048576,
+          "maxOutputTokens": 65536
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "google/gemini-flash-lite": {
+      "provider": "google",
+      "canonicalFamily": "gemini-flash-lite",
+      "tier": "fast",
+      "modelType": "multimodal",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gemini-(?<generation>\\d+(?:\\.\\d+)*)-flash-lite$",
+      "requiredCapabilities": [
+        "audioInput",
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput",
+        "videoInput"
+      ],
+      "minContextTokens": 1048576,
+      "minMaxOutputTokens": 65536,
+      "active": {
+        "modelKey": "gemini-3.5-flash-lite",
+        "generation": "3.5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.3,
+          "outputPerMillion": 2.5,
+          "cacheReadPerMillion": 0.03
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": true,
+          "videoInput": true,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1048576,
+          "maxOutputTokens": 65536
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "google/gemini-pro": {
+      "provider": "google",
+      "canonicalFamily": "gemini-pro",
+      "tier": "frontier",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "preview",
+      "apiModelIdPattern": "^gemini-(?<generation>\\d+(?:\\.\\d+)*)-pro$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 2000000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "gemini-3.1-pro-preview",
+        "generation": "3.1",
+        "lifecycle": "preview",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2,
+          "outputPerMillion": 12,
+          "cacheReadPerMillion": 0.2
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 2000000
+        },
+        "benchmarkSnapshot": {
+          "swebench": 74.2,
+          "humaneval": 93.5,
+          "mmlu": 89.5,
+          "gpqa": 91.9,
+          "aime": 95
+        }
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "google/gemini-flash-image": {
+      "provider": "google",
+      "canonicalFamily": "gemini-flash-image",
+      "tier": "balanced",
+      "modelType": "image",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gemini-(?<generation>\\d+(?:\\.\\d+)*)-flash-image$",
+      "requiredCapabilities": ["imageInput", "imageOutput", "textInput"],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "gemini-3.1-flash-image",
+        "generation": "3.1",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_image",
+          "inputPerMillion": 0.5,
+          "outputPerMillion": 60,
+          "imagePerImage": 0.067
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": false,
+          "imageOutput": true,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "google/gemini-embedding": {
+      "provider": "google",
+      "canonicalFamily": "gemini-embedding",
+      "tier": "frontier",
+      "modelType": "embedding",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^gemini-embedding-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": ["audioInput", "imageInput", "textInput", "videoInput"],
+      "minContextTokens": 8192,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "gemini-embedding-2",
+        "generation": "2",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.2,
+          "outputPerMillion": 0
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": true,
+          "videoInput": true,
+          "textOutput": false,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 8192
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "google/veo": {
+      "provider": "google",
+      "canonicalFamily": "veo",
+      "tier": "frontier",
+      "modelType": "video",
+      "lifecyclePolicy": "preview",
+      "apiModelIdPattern": "^veo-(?<generation>\\d+(?:\\.\\d+)*)-generate$",
+      "requiredCapabilities": ["textInput", "videoOutput"],
+      "minContextTokens": 4000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "veo-3.1",
+        "generation": "3.1",
+        "lifecycle": "preview",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_second",
+          "inputPerMillion": 0,
+          "outputPerMillion": 750,
+          "videoPerSecond": 0.4
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": false,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": false,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": true,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 4000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "google/veo-fast": {
+      "provider": "google",
+      "canonicalFamily": "veo-fast",
+      "tier": "balanced",
+      "modelType": "video",
+      "lifecyclePolicy": "preview",
+      "apiModelIdPattern": "^veo-(?<generation>\\d+(?:\\.\\d+)*)-fast-generate$",
+      "requiredCapabilities": ["textInput", "videoOutput"],
+      "minContextTokens": 4000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "veo-3.1-fast",
+        "generation": "3.1",
+        "lifecycle": "preview",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_second",
+          "inputPerMillion": 0,
+          "outputPerMillion": 0,
+          "videoPerSecond": 0.1
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": false,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": false,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": true,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 4000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "google/veo-lite": {
+      "provider": "google",
+      "canonicalFamily": "veo-lite",
+      "tier": "balanced",
+      "modelType": "video",
+      "lifecyclePolicy": "preview",
+      "apiModelIdPattern": "^veo-(?<generation>\\d+(?:\\.\\d+)*)-lite-generate$",
+      "requiredCapabilities": ["textInput", "videoOutput"],
+      "minContextTokens": 4000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "veo-3.1-lite",
+        "generation": "3.1",
+        "lifecycle": "preview",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_second",
+          "inputPerMillion": 0,
+          "outputPerMillion": 0,
+          "videoPerSecond": 0.05
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": false,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": false,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": true,
+          "streaming": false,
+          "structuredOutput": false,
+          "functionCalling": false,
+          "reasoning": false
+        },
+        "limitSnapshot": {
+          "contextTokens": 4000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "deepseek/deepseek-flash": {
+      "provider": "deepseek",
+      "canonicalFamily": "deepseek-flash",
+      "tier": "fast",
+      "modelType": "code",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^deepseek-v(?<generation>\\d+(?:\\.\\d+)*)-flash$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "deepseek-v4-flash",
+        "generation": "4",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.14,
+          "outputPerMillion": 0.28,
+          "cacheReadPerMillion": 0.0028
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000
+        },
+        "benchmarkSnapshot": {
+          "swebench": 75,
+          "humaneval": 95,
+          "mmlu": 87,
+          "gpqa": 75,
+          "aime": 85
+        }
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "deepseek/deepseek-pro": {
+      "provider": "deepseek",
+      "canonicalFamily": "deepseek-pro",
+      "tier": "frontier",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^deepseek-v(?<generation>\\d+(?:\\.\\d+)*)-pro$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "deepseek-v4-pro",
+        "generation": "4",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.435,
+          "outputPerMillion": 0.87,
+          "cacheReadPerMillion": 0.003625
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000
+        },
+        "benchmarkSnapshot": {
+          "swebench": 81,
+          "humaneval": 96,
+          "mmlu": 92,
+          "gpqa": 87,
+          "aime": 95
+        }
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "qwen/qwen-flash": {
+      "provider": "qwen",
+      "canonicalFamily": "qwen-flash",
+      "tier": "fast",
+      "modelType": "multimodal",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^qwen(?<generation>\\d+(?:\\.\\d+)*)-flash$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput",
+        "videoInput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": 64000,
+      "active": {
+        "modelKey": "qwen-3.5-flash",
+        "generation": "3.5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.029,
+          "outputPerMillion": 0.287,
+          "cacheReadPerMillion": 0.0058,
+          "cacheWritePerMillion": 0.03625
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": true,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxOutputTokens": 64000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "qwen/qwen-plus": {
+      "provider": "qwen",
+      "canonicalFamily": "qwen-plus",
+      "tier": "balanced",
+      "modelType": "multimodal",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^qwen(?<generation>\\d+(?:\\.\\d+)*)-plus$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput",
+        "videoInput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": 64000,
+      "active": {
+        "modelKey": "qwen-3.7-plus",
+        "generation": "3.7",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.276,
+          "outputPerMillion": 1.101,
+          "cacheReadPerMillion": 0.0552,
+          "cacheWritePerMillion": 0.345
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": true,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000,
+          "maxOutputTokens": 64000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "moonshot/kimi": {
+      "provider": "moonshot",
+      "canonicalFamily": "kimi",
+      "tier": "frontier",
+      "modelType": "multimodal",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^kimi-k(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1048576,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "kimi-k3",
+        "generation": "3",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 3,
+          "outputPerMillion": 15,
+          "cacheReadPerMillion": 0.3
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1048576
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "xai/grok": {
+      "provider": "xai",
+      "canonicalFamily": "grok",
+      "tier": "frontier",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^grok-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "imageInput",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 500000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "grok-4.5",
+        "generation": "4.5",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 2,
+          "outputPerMillion": 6
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": true,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 500000
+        },
+        "benchmarkSnapshot": {
+          "swebench": 68,
+          "humaneval": 96.5,
+          "mmlu": 91.5,
+          "gpqa": 80,
+          "aime": 82
+        }
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "zhipu/glm": {
+      "provider": "zhipu",
+      "canonicalFamily": "glm",
+      "tier": "frontier",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^glm-(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "glm-5.2",
+        "generation": "5.2",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 1.4,
+          "outputPerMillion": 4.4,
+          "cacheReadPerMillion": 0.26
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": false,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000
+        },
+        "benchmarkSnapshot": {
+          "swebench": 79,
+          "humaneval": 92,
+          "mmlu": 90,
+          "gpqa": 84,
+          "aime": 92
+        }
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    },
+    "minimax/minimax": {
+      "provider": "minimax",
+      "canonicalFamily": "minimax",
+      "tier": "balanced",
+      "modelType": "reasoning",
+      "lifecyclePolicy": "stable",
+      "apiModelIdPattern": "^MiniMax-M(?<generation>\\d+(?:\\.\\d+)*)$",
+      "requiredCapabilities": [
+        "functionCalling",
+        "reasoning",
+        "streaming",
+        "structuredOutput",
+        "textInput",
+        "textOutput"
+      ],
+      "minContextTokens": 1000000,
+      "minMaxOutputTokens": null,
+      "active": {
+        "modelKey": "minimax-m3",
+        "generation": "3",
+        "lifecycle": "stable",
+        "promotedAt": "2026-08-18",
+        "promotionReason": "seeded from the authored catalog roster when family slots were introduced",
+        "evaluation": {
+          "gates": {},
+          "seeded": true
+        },
+        "availability": "live",
+        "pricingSnapshot": {
+          "currency": "USD",
+          "unit": "per_million_tokens",
+          "inputPerMillion": 0.3,
+          "outputPerMillion": 1.2
+        },
+        "capabilitySnapshot": {
+          "textInput": true,
+          "imageInput": false,
+          "audioInput": false,
+          "videoInput": false,
+          "textOutput": true,
+          "imageOutput": false,
+          "audioOutput": false,
+          "videoOutput": false,
+          "streaming": true,
+          "structuredOutput": true,
+          "functionCalling": true,
+          "reasoning": true
+        },
+        "limitSnapshot": {
+          "contextTokens": 1000000
+        },
+        "benchmarkSnapshot": {}
+      },
+      "previous": null,
+      "fallbackChain": [],
+      "history": []
+    }
+  }
+}

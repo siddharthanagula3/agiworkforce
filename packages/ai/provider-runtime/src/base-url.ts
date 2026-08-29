@@ -1,4 +1,3 @@
-
 const DEFAULT_INSECURE_HOSTS: readonly string[] = ['localhost', '127.0.0.1'];
 
 export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
@@ -16,6 +15,7 @@ export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
   'api.minimax.io',
   'openrouter.ai',
   'gateway.ai.cloudflare.com',
+  'ai-gateway.vercel.sh',
   'localhost',
   '127.0.0.1',
 ]);

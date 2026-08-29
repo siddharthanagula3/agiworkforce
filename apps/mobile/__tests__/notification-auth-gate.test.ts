@@ -1,4 +1,3 @@
-
 const mockRouterPush = jest.fn();
 jest.mock('expo-router', () => ({
   router: {
@@ -55,6 +54,20 @@ jest.mock('../services/api', () => ({
 
 jest.mock('@/lib/deviceId', () => ({
   getDeviceId: jest.fn().mockResolvedValue('device-fake'),
+}));
+
+// services/notifications reaches @/lib/mmkv through pushPreferenceSync, and
+// that module loads expo-secure-store's native binding, which Jest has no host
+// for. Every other suite that touches the store mocks it the same way.
+jest.mock('@/lib/mmkv', () => ({
+  rehydrateWhenMmkvReady: jest.fn(),
+  whenMmkvReady: jest.fn((cb: () => void) => cb()),
+  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
+  mmkvStorage: {
+    getItem: jest.fn().mockReturnValue(null),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
 }));
 
 import {

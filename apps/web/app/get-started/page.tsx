@@ -57,8 +57,9 @@ export default function GetStartedPage() {
               <h3 className="agi-reason-h">{localLabel}: free forever</h3>
               <p className="agi-reason-p">
                 Run <code>agi models scan</code>, then{' '}
-                <code>agi --provider ollama --model &lt;model&gt;</code> after installing Ollama. No
-                keys, no quotas, fully offline.
+                <code>agi --provider ollama --model &lt;model&gt;</code> after installing Ollama, or
+                <code>agi --provider lmstudio --model &lt;model&gt;</code> for LM Studio. No keys,
+                no quotas, fully offline.
               </p>
             </li>
             <li className="agi-reason">

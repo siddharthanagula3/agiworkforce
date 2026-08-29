@@ -1,7 +1,7 @@
 {
   "name": "@agiworkforce/model-registry",
   "version": "0.0.1",
-  "description": "Canonical model and harness metadata. Compiles catalog/ into models.json and the Rust mirror; the only place a model ID may be a literal.",
+  "description": "Canonical model and harness metadata. Compiles catalog/ into models.json and the Rust mirror; the only place a model ID may be a literal. Family slots in model-families.json own which generation of each model family is active.",
   "private": true,
   "type": "module",
   "main": "./generated/registry.ts",
@@ -14,6 +14,10 @@
     "generate": "node scripts/compile.mjs",
     "check": "node scripts/compile.mjs --check",
     "refresh": "node scripts/compile.mjs --refresh",
+    "families": "node scripts/family-slots.mjs evaluate",
+    "families:status": "node scripts/family-slots.mjs status",
+    "families:promote": "node scripts/family-slots.mjs promote",
+    "families:rollback": "node scripts/family-slots.mjs rollback",
     "test": "node --test tests/*.test.mjs && node scripts/compile.mjs --check",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

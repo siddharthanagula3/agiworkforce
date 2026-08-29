@@ -4,6 +4,7 @@ export interface ManagedUsageBalance {
   seconds_until_reset: number;
   has_usage_remaining: boolean;
   usage_visible: boolean;
+  usage_allocation?: 'provisioned' | 'pending';
 }
 
 export interface ManagedUsageSubscription {
@@ -34,6 +35,13 @@ export interface ManagedUsageSummaryResponse {
   flagship_weekly_reset_at: string | null;
   credit_balance_cents?: number | null;
   overage_enabled?: boolean;
+  /**
+   * Distinguishes an allocation that was spent from one that was never granted.
+   * `toPublicUsagePercentage` returns 0 for both, so without this a subscriber
+   * whose credit account has not been provisioned reads as 0% used and out of
+   * budget at the same time.
+   */
+  usage_allocation?: 'provisioned' | 'pending';
 }
 
 export function normalizeUsagePercentage(value: unknown): number {

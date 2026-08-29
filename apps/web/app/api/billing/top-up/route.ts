@@ -10,6 +10,7 @@ import {
   topUpUnitsForUsd,
 } from '@agiworkforce/types';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
+import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -144,7 +145,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     top_up_units: String(topUpUnits),
     conversion: 'usd_1_to_units_50_v1',
   };
-  const appUrl = requireEnv('NEXT_PUBLIC_APP_URL').replace(/\/$/, '');
+  const appUrl = resolveCheckoutReturnOrigin(request);
   const session = await getStripe().checkout.sessions.create(
     {
       mode: 'payment',
