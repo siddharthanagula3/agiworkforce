@@ -337,7 +337,6 @@
           "apps/web/shared/components/dashboard/RecentActivity.tsx",
           "apps/web/shared/components/dashboard/StatCard.tsx",
           "apps/web/shared/components/dashboard/WelcomeBanner.tsx",
-          "apps/web/shared/components/seo/SEOHead.tsx",
           "apps/web/shared/components/ui/collapsible.tsx",
           "apps/web/shared/components/ui/input.tsx",
           "apps/web/shared/components/ui/progress.tsx",
