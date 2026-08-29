@@ -2,24 +2,67 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { ProductFrame } from '@/features/marketing/components/ProductFrame';
-import { DevBand, FinalCta, SurfaceIndex } from '@/features/marketing/components/FlagshipSections';
-import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
+import { ProductFrame, type TerminalLine } from '@/features/marketing/components/ProductFrame';
+import { FinalCta } from '@/features/marketing/components/FlagshipSections';
+import { LedgerSection } from '@/features/marketing/components/LandingSections';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
-import {
-  COMING_SOON_LABEL,
-  DESKTOP_LOCAL_RUNTIMES,
-  SURFACE_STATUS,
-} from '../../lib/marketing-constants';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 import { CliDownloadAvailability } from './CliDownloadAvailability';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
+const RELEASE_REPOSITORY = 'siddharthanagula3/agiworkforce';
+const CHECKSUM_FILE = 'SHA256SUMS';
+const CHECKSUM_BUNDLE = `${CHECKSUM_FILE}.sigstore.json`;
+const SAMPLE_ARCHIVE = 'agiworkforce-darwin-arm64.tar.gz';
+const CLOUD_INSTALLER = 'agiworkforce-cloud.dmg';
+const CLOUD_APP_PATH = '/Applications/AGI Cloud.app';
+const CERTIFICATE_ISSUER = 'https://token.actions.githubusercontent.com';
+const CERTIFICATE_IDENTITY = `https://github.com/${RELEASE_REPOSITORY}/.github/workflows/release-cli.yml@refs/tags/v-cli-<version>`;
+const UPDATER_ENDPOINT = '/api/releases/{target}-{arch}/{current_version}';
+const PROSE_LINK_STYLE = { color: 'var(--agi-ink)', textDecoration: 'underline' } as const;
+
+const COSIGN_COMMAND = `cosign verify-blob --bundle ${CHECKSUM_BUNDLE} \\
+    --certificate-oidc-issuer ${CERTIFICATE_ISSUER} \\
+    --certificate-identity ${CERTIFICATE_IDENTITY} \\
+    ${CHECKSUM_FILE}`;
+
+const VERIFY_SESSION: readonly TerminalLine[] = [
+  { kind: 'cmd', text: `shasum -a 256 -c ${CHECKSUM_FILE}` },
+  { kind: 'ok', text: `${SAMPLE_ARCHIVE}: OK` },
+  { kind: 'cmd', text: `tar -xzf ${SAMPLE_ARCHIVE}` },
+  { kind: 'cmd', text: './agi doctor' },
+  { kind: 'out', text: 'AGI doctor' },
+  { kind: 'ok', text: '[Pass] runtime dependency: git - `git` is available' },
+  { kind: 'ok', text: '[Pass] OS sandbox - macOS Seatbelt is available' },
+  {
+    kind: 'dim',
+    text: '[Warn] auth providers - no provider auth entries found; Local models still work',
+  },
+];
+
+const RELEASE_CHECKS: { title: string; body: string }[] = [
+  {
+    title: 'Signed and re-checked inside the same run',
+    body: 'The desktop workflow builds each artifact with the release signing key, then verifies that artifact against its own .sig using the updater public key committed in this repository. A mismatch stops the release before anyone sees it.',
+  },
+  {
+    title: 'A draft until a clean machine can install it',
+    body: 'A bare Ubuntu container installs the Debian package with no build toolchain present, proves the installed binary resolves every shared library, and a second job installs the previous release, upgrades to this one, and rolls back. The release is published once all of that passes.',
+  },
+  {
+    title: 'macOS builds are signed, notarized, and stapled',
+    body: 'Both macOS jobs run codesign --verify --deep --strict against the app, confirm the Developer ID authority and hardened runtime, put the bundle through the same Gatekeeper assessment your Mac will, and validate the notarization ticket stapled onto every DMG they ship.',
+  },
+  {
+    title: 'CLI checksums carry a Sigstore signature',
+    body: `The CLI workflow writes ${CHECKSUM_FILE} over every archive, signs it keyless with cosign, and verifies that bundle against the workflow identity that produced it before the release exists.`,
+  },
+];
 
 export const metadata = buildMetadata({
-  title: 'Download AGI | Desktop and Product Availability',
+  title: 'Download AGI | Verified Installers and Signatures',
   description:
-    'Check verified AGI Desktop installer availability for Linux, macOS, and Windows, plus current availability across Web, Mobile, CLI, Chrome, and VS Code.',
+    'Every AGI installer is signed inside its release workflow and checked against that signature before publication. See live Desktop and CLI availability, what each release publishes, and how to verify a download yourself.',
   path: '/download',
 });
 
@@ -31,206 +74,190 @@ export default function DownloadPage() {
 
         <section className="agi-fl-hero" aria-labelledby="agi-download-hero-title">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <p className="agi-fl-eyebrow">Product availability</p>
+          <p className="agi-fl-eyebrow">Installers and signatures</p>
           <h1 id="agi-download-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">AGI on</span>{' '}
             <span className="agi-fl-h1-line">
-              <em className="agi-fl-h1-em">every surface.</em>
+              We <em className="agi-fl-h1-em">check the signature</em> before you download.
             </span>
           </h1>
           <p className="agi-fl-lede">
-            AGI Web is available in the browser. Desktop package assets exist for Linux x64, while
-            the verified installer control appears only when the release includes its required
-            updater signature. macOS and Windows installers are not published. Other surfaces are
-            individually labeled.
+            Desktop artifacts are signed with the release key and re-verified against that signature
+            in the same workflow run. CLI archives ship a checksum file signed with Sigstore and
+            verified before the release exists. This page then asks the release API again on load,
+            so a platform gets a download control only once the API confirms a published asset for
+            it.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
-              View Desktop downloads
+              Check the installers
             </Link>
-            <WaitlistTrigger
-              label="Enterprise early access"
-              source="website"
-              className="agi-fl-cta agi-fl-cta--ghost"
-            />
+            <Link href="#release-verification" className="agi-fl-cta agi-fl-cta--secondary">
+              How a release is signed
+            </Link>
           </div>
-          <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
-            <li>Local · on-device</li>
-            <li>BYOK · your keys</li>
-            <li>Cloud · public alpha</li>
-          </ul>
 
           <div className="agi-fl-hero-console" aria-hidden="true">
             <ProductFrame
               variant="desktop"
-              title="AGI Desktop"
+              title="AGI"
               badge="Local"
-              className="agi-fl-hero-frame agi-fl-hero-frame--main"
+              className="agi-fl-hero-frame--main"
             />
             <ProductFrame
               variant="terminal"
               title="agi · zsh"
-              className="agi-fl-hero-frame agi-fl-hero-frame--terminal"
-            />
-            <ProductFrame
-              variant="phone"
-              title="AGI Mobile"
-              className="agi-fl-hero-frame agi-fl-hero-frame--phone"
+              badge="your machine"
+              className="agi-fl-hero-frame--terminal"
+              session={VERIFY_SESSION}
+              hud={false}
             />
           </div>
         </section>
-
-        <SurfaceIndex
-          eyebrow="Pick your surface"
-          title="Six surfaces, individually labeled."
-          lede="Availability is tracked per surface and platform. A working Web entry and verified Desktop installer are linked directly; unavailable products do not receive download controls."
-          items={[
-            {
-              index: '01',
-              name: 'AGI Web',
-              tagline: 'No install. Start in the browser.',
-              body: 'Hosted chat with projects, an artifact sidecar, web search, and shared conversations. Managed cloud is open in public alpha; your account and settings live here.',
-              capabilities: [
-                'Chat with projects & memory',
-                'Artifact sidecar',
-                'Web search',
-                'Account & cloud sync',
-              ],
-              platforms: 'Any modern browser',
-              status: SURFACE_STATUS.web,
-              href: WEB_CHAT_ENTRY_HREF,
-              frame: {
-                variant: 'web',
-                title: 'agiworkforce.com/chat',
-                badge: 'Web',
-              },
-            },
-            {
-              index: '02',
-              name: 'AGI Desktop',
-              tagline: 'The local-private compute host.',
-              body: 'A native app built in Rust. Runs local models, holds BYOK keys encrypted, powers files and connectors. Platform installers open from the Desktop page as release assets become available.',
-              capabilities: [
-                `Local models via ${DESKTOP_LOCAL_RUNTIMES.label}`,
-                'BYOK keys, encrypted at rest',
-                'MCP connectors & tool approvals',
-                'Scheduled work with AGI Work',
-              ],
-              platforms: 'Linux x64 package assets · verified installer status below',
-              status: SURFACE_STATUS.desktop,
-              href: '/desktop',
-              frame: { variant: 'desktop', title: 'AGI Desktop', badge: 'Local' },
-            },
-            {
-              index: '03',
-              name: 'AGI Mobile',
-              tagline: 'Private AI in your pocket.',
-              body: 'On-device chat in Local Mode by default. Your conversations, memory, and files stay on the phone unless you explicitly choose otherwise. AGI managed cloud is in public alpha.',
-              capabilities: [
-                'On-device Local chat',
-                'Local data stays local',
-                'Projects & recents drawer',
-                'Cloud · public alpha',
-              ],
-              platforms: 'iPhone · Android',
-              status: SURFACE_STATUS.mobile,
-              href: '/mobile',
-              frame: { variant: 'phone', title: 'AGI Mobile' },
-            },
-            {
-              index: '04',
-              name: 'AGI CLI',
-              tagline: 'An agent in your terminal.',
-              body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution.',
-              capabilities: [
-                'Sessions, resume & fork',
-                'Sandboxed execution',
-                'Hooks, skills & MCP',
-                'Offline with local models',
-              ],
-              platforms: 'macOS · Linux · Windows',
-              status: SURFACE_STATUS.cli,
-              href: '/cli',
-              frame: { variant: 'terminal', title: 'agi · zsh', badge: 'sandboxed' },
-            },
-            {
-              index: '05',
-              name: 'AGI in Chrome',
-              tagline: 'Your browser, with context.',
-              body: 'A Manifest V3 side panel that captures page context on request. Hands real work to Desktop over a paired native-messaging bridge. Availability tracks the Desktop release.',
-              capabilities: [
-                'Side panel on any page',
-                'Page context on request',
-                'Paired Desktop bridge',
-                'Scoped permissions',
-              ],
-              platforms: 'Chrome (MV3)',
-              status: SURFACE_STATUS.chrome,
-              href: '/chrome-extension',
-              frame: { variant: 'browser', title: 'AGI · side panel', badge: 'scoped' },
-            },
-            {
-              index: '06',
-              name: 'AGI in VS Code',
-              tagline: 'IDE-native assistance.',
-              body: 'Chat with @agi inside your editor with workspace-scoped context. Review diffs before they land and run slash commands like /explain and /tests.',
-              capabilities: [
-                '@agi chat participant',
-                'Workspace-scoped context',
-                'Diff review',
-                'Explicit handoffs',
-              ],
-              platforms: 'VS Code',
-              status: SURFACE_STATUS.vscode,
-              href: '/vscode-extension',
-              frame: { variant: 'editor', title: 'AGI · VS Code', badge: '@agi' },
-            },
-          ]}
-        />
 
         <DesktopDownloadAvailability />
 
         <CliDownloadAvailability />
 
-        <section className="agi-fl-section" aria-labelledby="agi-download-notify-title">
-          <p className="agi-fl-eyebrow">{COMING_SOON_LABEL}</p>
-          <h2 id="agi-download-notify-title" className="agi-fl-h2">
-            Get updates for unavailable surfaces.
+        <section
+          id="release-verification"
+          className="agi-fl-section"
+          aria-labelledby="agi-download-verify-title"
+        >
+          <p className="agi-fl-eyebrow">Release verification</p>
+          <h2 id="agi-download-verify-title" className="agi-fl-h2">
+            A build has to prove itself before it reaches this page.
           </h2>
           <p className="agi-fl-section-lede">
-            macOS and Windows Desktop installers do not have published release dates. Mobile,
-            Chrome, and VS Code availability is also tracked separately. Leave your email for
-            product updates without treating an unavailable platform as downloadable.
+            The release API answers with a manifest only when the asset URL sits on its trusted-host
+            allowlist. A release whose URL falls outside it is answered with a 404, and this page
+            then shows a labelled state with nothing to click. These are the checks standing behind
+            a control on the rest of the page.
+          </p>
+
+          <ul
+            className="mt-8 grid list-none gap-4 p-0 md:grid-cols-2"
+            aria-label="Release verification checks"
+          >
+            {RELEASE_CHECKS.map((item) => (
+              <li
+                key={item.title}
+                className="rounded-2xl border border-border bg-card p-5 text-card-foreground"
+              >
+                <p className="text-sm font-semibold">{item.title}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
+              </li>
+            ))}
+          </ul>
+
+          <p className="agi-fl-section-lede">
+            None of that has to be taken on trust. The release publishes the material you need to
+            repeat the checks yourself, on the file you actually downloaded.
+          </p>
+
+          <div className="agi-terminal mt-8">
+            <div className="agi-terminal-bar">Verify a download on your own machine</div>
+            <pre className="agi-terminal-pre">
+              <span className="agi-terminal-comment">
+                # CLI archives, against the checksum file signed in the release run
+              </span>
+              {'\n'}
+              <span className="agi-terminal-prompt">$ </span>
+              {`shasum -a 256 -c ${CHECKSUM_FILE}`}
+              {'\n'}
+              <span className="agi-terminal-prompt">$ </span>
+              {COSIGN_COMMAND}
+              {'\n\n'}
+              <span className="agi-terminal-comment">
+                # the AGI Cloud desktop app, once you have moved it to Applications
+              </span>
+              {'\n'}
+              <span className="agi-terminal-prompt">$ </span>
+              {`codesign -d --verbose=4 "${CLOUD_APP_PATH}"`}
+              {'\n'}
+              <span className="agi-terminal-prompt">$ </span>
+              {`xcrun stapler validate ~/Downloads/${CLOUD_INSTALLER}`}
+            </pre>
+          </div>
+        </section>
+
+        <LedgerSection
+          eyebrow="Release contents"
+          title="Each release publishes the same set of files."
+          rows={[
+            {
+              k: 'AGI Desktop · Linux x86_64',
+              v: 'An .AppImage with its matching .sig, plus a .deb for Debian and Ubuntu',
+            },
+            {
+              k: 'AGI Desktop · macOS universal',
+              v: 'A notarized .dmg, plus an .app.tar.gz updater with its matching .sig',
+            },
+            {
+              k: 'AGI Cloud · macOS',
+              v: 'One notarized .dmg per architecture, Apple silicon and Intel',
+            },
+            {
+              k: 'agi CLI',
+              v: '.tar.gz archives for macOS and Linux, .zip archives for Windows, arm64 and x64',
+            },
+            {
+              k: 'Checksums',
+              v: `${CHECKSUM_FILE} and ${CHECKSUM_BUNDLE} beside the CLI archives`,
+            },
+            {
+              k: 'Channels',
+              v: 'Stable, beta, and nightly are separate release tags. This page reads stable',
+            },
+            {
+              k: 'Updates',
+              v: `The desktop app asks ${UPDATER_ENDPOINT} and installs only a signed artifact`,
+            },
+            {
+              k: 'Asset hosts',
+              v: 'Release assets are served from our download hosts and GitHub releases, and the API refuses anything else',
+            },
+          ]}
+        />
+
+        <section className="agi-fl-section" aria-labelledby="agi-download-notify-title">
+          <p className="agi-fl-eyebrow">Platforms without an installer</p>
+          <h2 id="agi-download-notify-title" className="agi-fl-h2">
+            Leave an address and we will write when a platform opens.
+          </h2>
+          <p className="agi-fl-section-lede">
+            Some surfaces have no installer to verify yet, and each one tracks its own listing:{' '}
+            <Link href="/mobile" style={PROSE_LINK_STYLE}>
+              AGI Mobile
+            </Link>
+            ,{' '}
+            <Link href="/chrome-extension" style={PROSE_LINK_STYLE}>
+              AGI in Chrome
+            </Link>
+            , and{' '}
+            <Link href="/vscode-extension" style={PROSE_LINK_STYLE}>
+              AGI in VS Code
+            </Link>
+            . The sections above report what the release API can confirm for desktop and CLI right
+            now.
           </p>
           <div className="agi-fl-launch-form">
             <PublicWaitlistForm
               source="other"
               ctaLabel="Get notified"
-              successMessage="You're on the list. We'll email you as each AGI surface opens for public launch."
+              successMessage="You're on the list. We'll email you when a platform has a verified installer to download."
             />
           </div>
         </section>
 
-        <DevBand
-          eyebrow="For developers"
-          title="Two developer surfaces."
-          body="The AGI CLI ships as the agi binary. AGI in VS Code adds @agi chat, diff review, and slash commands to your editor, and has no published listing yet."
-          ctas={[
-            { href: '/cli', label: 'See the CLI' },
-            { href: '/vscode-extension', label: 'See the VS Code Extension' },
-          ]}
-        />
-
         <FinalCta
-          eyebrow="Current availability"
-          title="Use AGI now, or follow the next release."
-          body="AGI Web is available now. Desktop downloads appear only when the release API verifies a complete installer and signature pair; unavailable platforms remain clearly labeled."
+          eyebrow="No installer required"
+          title="AGI Web opens in a browser while you wait on a platform."
+          body="Web needs no release tag and no signature check. Sign in there now, and the same account signs you into Desktop on the day an installer for your platform is published."
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Use AGI Web' },
-            { href: '#desktop-downloads', label: 'Desktop availability' },
-            { label: 'Enterprise early access', waitlist: true },
+            { href: '/desktop', label: 'What AGI Desktop does' },
           ]}
-          stamp="Linux x64 · verification required before download"
+          stamp="Stable channel · nothing is linked here until the release API confirms a verified asset"
         />
 
         <MarketingFooter />

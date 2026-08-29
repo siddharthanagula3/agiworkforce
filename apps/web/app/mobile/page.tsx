@@ -2,14 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import {
-  CapabilityGrid,
-  FinalCta,
-  TrustTriptych,
-} from '@/features/marketing/components/FlagshipSections';
-import { ProductFrame } from '@/features/marketing/components/ProductFrame';
-import { Reveal } from '@/features/marketing/components/Reveal';
-import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
+import { FinalCta } from '@/features/marketing/components/FlagshipSections';
+import { LedgerSection, RouteMap } from '@/features/marketing/components/LandingSections';
+import { MobileHeroVisual } from '@/features/marketing/components/MobileHeroVisual';
 import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -33,48 +28,18 @@ export const metadata: Metadata = {
   },
 };
 
-const LOCAL_STORIES = [
+const ON_DEVICE_RUNTIMES = [
   {
-    name: 'Chat that runs on the phone',
-    tagline: 'Local Mode is the default, not a setting.',
-    body: 'Open the app and start talking. Inference runs on-device through AGI Standard. No account required. No network call during a Local chat.',
-    capabilities: [
-      'On-device Local chat',
-      'Works offline',
-      'AGI Standard runtime',
-      'Clear model availability states',
-    ],
-    platforms: 'iPhone · Android',
-    status: 'Local by default',
-    frame: { title: 'AGI Mobile', badge: 'Local' },
+    heading: 'The model the operating system already holds',
+    body: "On an iPhone where Apple Intelligence is available, AGI generates through Apple's Foundation Models runtime. On an Android device with AICore, it generates through Google's on-device model. Neither one is downloaded, and the app checks whether the runtime is available, downloadable, downloading, or unavailable before it offers you the model.",
   },
   {
-    name: 'Your data stays on the phone',
-    tagline: 'No silent routes. No surprise sync.',
-    body: 'Chats, memory, projects, and files live on-device. Nothing moves to a server unless you choose it. When you do, the route is labeled before anything leaves.',
-    capabilities: [
-      'Chats & memory on-device',
-      'Projects & files on-device',
-      'Personalization on-device',
-      'Explicit, labeled continuation',
-    ],
-    platforms: 'iPhone · Android',
-    status: 'On-device by default',
-    frame: { title: 'AGI Mobile', badge: 'On-device' },
+    heading: 'A model you download once',
+    body: 'Choose AGI Standard instead and the phone loads a 4B Qwen3 build, roughly 2 GB quantized, with a 262,144-token context. It runs through ExecuTorch where the device reports at least 3.5 GB of RAM, and through llama.rn from the downloaded file where it does not.',
   },
   {
-    name: 'A complete workspace, not a companion app',
-    tagline: 'The full AGI workspace. One hand.',
-    body: 'Switch models from the picker. Organize work with the projects drawer. Tune memory, appearance, and safety from full settings. All without leaving Local Mode.',
-    capabilities: [
-      'Model picker',
-      'Projects & recents drawer',
-      'Full settings',
-      'Memory & personalization controls',
-    ],
-    platforms: 'iPhone · Android',
-    status: 'Local + Cloud (public alpha)',
-    frame: { title: 'AGI Mobile', badge: 'Local' },
+    heading: 'A picker that says which one is loaded',
+    body: 'Every row in the model picker carries one of three states — ready, download required, or locked — so the cost of a tap is visible before you make it. Generation also pauses on its own while the device reports thermal throttling.',
   },
 ] as const;
 
@@ -88,193 +53,147 @@ export default function MobilePage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              {/*
-                Every other unreleased surface page states its availability in
-                the hero eyebrow (`/cli`, `/chrome-extension`,
-                `/vscode-extension` all read "· coming soon"). This one did not:
-                it opened with "AGI Mobile · iPhone & Android" and a "Get
-                notified" CTA, so the only place the page admitted the app is
-                unpublished was the header nav dropdown — while the hero named
-                two platforms you cannot install on. Mobile has ZERO `v-mobile-*`
-                release tags.
-
-                The status is read from `SURFACE_STATUS.mobile` rather than
-                typed, so the day mobile ships this line changes with the
-                registry instead of becoming the stale claim CRIT-007 was
-                opened for.
-              */}
               <p className="agi-fl-eyebrow">
                 AGI Mobile · iPhone &amp; Android · {SURFACE_STATUS.mobile}
               </p>
               <h1 id="agi-mobile-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Private AI,</span>{' '}
                 <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">in your pocket.</em>
-                </span>
+                  Your phone <em className="agi-fl-h1-em">runs the model</em>
+                </span>{' '}
+                <span className="agi-fl-h1-line">and keeps the chat.</span>
               </h1>
               <p className="agi-fl-lede">
-                Every chat starts in Local Mode. The model runs on your phone. Chats, memory, and
-                files stay on-device unless you say otherwise. AGI Cloud is public alpha — opt-in,
-                never by default.
+                On an iPhone with Apple Intelligence the app generates through Apple&apos;s
+                Foundation Models runtime, and on Android it generates through AICore. Otherwise you
+                download AGI Standard once and it runs through ExecuTorch or llama.rn. Either way
+                the thread is written to SQLite on the phone.
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
                   Get notified
                 </Link>
-                <WaitlistTrigger
-                  label="Enterprise early access"
-                  source="website"
-                  className="agi-fl-cta agi-fl-cta--secondary"
-                />
               </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="Mobile trust modes">
-                <li>Local · on-device</li>
-                <li>Cloud · public alpha</li>
+              <ul className="agi-fl-mode-ribbon" aria-label="On-device runtimes">
+                <li>iOS · Apple Foundation Models</li>
+                <li>Android · AICore</li>
               </ul>
             </div>
-            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
-              <ProductFrame variant="phone" title="AGI Mobile" badge="Local" />
+            <div className="agi-fl-hero-visual agi-fl-hero-frame--main">
+              <MobileHeroVisual />
             </div>
           </div>
         </section>
 
-        <section className="agi-fl-section" aria-labelledby="agi-mobile-local-title">
-          <p className="agi-fl-eyebrow">Local-first</p>
-          <h2 id="agi-mobile-local-title" className="agi-fl-h2">
-            The phone is the computer.
+        <section className="agi-fl-section" aria-labelledby="agi-mobile-runtime-title">
+          <p className="agi-fl-eyebrow">On-device inference</p>
+          <h2 id="agi-mobile-runtime-title" className="agi-fl-h2">
+            A Local answer is generated by the phone you are holding.
           </h2>
           <p className="agi-fl-section-lede">
-            Inference, memory, and your workspace live on the device. The cloud is an explicit,
-            public-alpha option. Not the default route.
+            The app picks a runtime from what the hardware actually reports — the system model, a
+            downloaded one, or nothing yet — and it tells you which before you send anything.
           </p>
-
-          <ul className="agi-fl-surface-list">
-            {LOCAL_STORIES.map((story) => (
-              <Reveal as="li" key={story.name} className="agi-fl-surface-row">
-                <div className="agi-fl-surface-copy">
-                  <h3 className="agi-fl-surface-name">{story.name}</h3>
-                  <p className="agi-fl-surface-tagline">{story.tagline}</p>
-                  <p className="agi-fl-surface-body">{story.body}</p>
-                  <ul className="agi-fl-surface-caps">
-                    {story.capabilities.map((cap) => (
-                      <li key={cap}>{cap}</li>
-                    ))}
-                  </ul>
-                  <p className="agi-fl-surface-meta">
-                    <span>{story.platforms}</span>
-                    <span className="agi-fl-surface-status">{story.status}</span>
-                  </p>
-                </div>
-                <div className="agi-fl-surface-visual">
-                  <ProductFrame
-                    variant="phone"
-                    title={story.frame.title}
-                    badge={story.frame.badge}
-                  />
-                </div>
-              </Reveal>
+          <ul className="agi-reasons">
+            {ON_DEVICE_RUNTIMES.map((runtime) => (
+              <li className="agi-reason" key={runtime.heading}>
+                <h3 className="agi-reason-h">{runtime.heading}</h3>
+                <p className="agi-reason-p">{runtime.body}</p>
+              </li>
             ))}
           </ul>
         </section>
 
-        <TrustTriptych
-          eyebrow="Trust boundary"
-          title="Two modes. One hard line between them."
-          lede="AGI Mobile keeps Local and AGI Cloud separate by design. A Local thread stays Local. Continuing one in the cloud is an explicit, labeled choice."
-          cards={[
-            {
-              mode: 'Local',
-              glyph: '◆',
-              title: 'Yours alone, free forever.',
-              body: 'On-device chat is the default on every install.',
-              points: [
-                'Conversations run on the phone',
-                'Works offline',
-                'No account required',
-                'Free forever',
-              ],
-              cta: { href: '/local', label: 'See How Local Works' },
-            },
-            {
-              mode: 'The boundary',
-              glyph: '◇',
-              title: 'Nothing moves without you.',
-              body: 'Routes are visible, and changing one is always your call.',
-              points: [
-                'Local chats never silently route to the cloud',
-                'Continuation requires explicit consent',
-                'Telemetry separated from conversation content',
-                'DPDP & GDPR disclosures, in progress',
-              ],
-              cta: { href: '/mobile/legal', label: 'Read the Mobile Privacy Policy' },
-            },
-            {
-              mode: 'AGI Cloud',
-              glyph: '●',
-              title: 'Managed compute, public alpha.',
-              body: 'Hosted capacity, open by default, with controls keeping pace.',
-              points: [
-                'Public alpha — sign in and start, no waitlist',
-                'Synced chats and hosted models',
-                'Separate from Local by design',
-                'Usage metered and transparent',
-              ],
-              cta: { href: '/get-started', label: 'Get Started' },
-            },
-          ]}
-        />
+        <section className="agi-fl-section" aria-labelledby="agi-mobile-cloud-title">
+          <p className="agi-fl-eyebrow">What tapping Cloud does</p>
+          <div className="agi-callout">
+            <h2 id="agi-mobile-cloud-title" className="agi-callout-h">
+              Switch to AGI Cloud?
+            </h2>
+            <p className="agi-callout-p">
+              Sign in to use AGI Cloud chat. Your local chat stays on this device unless you choose
+              to start a Cloud session.
+            </p>
+          </div>
+          <p className="agi-fl-section-lede">
+            That is the dialog, word for word. Local and Cloud sit side by side in the chat screen,
+            onboarding lands you on Local with no account, and Cloud stays behind that prompt until
+            you sign in. Sending chats you already have is a separate action under Settings → Data
+            Controls: it copies conversation titles and message text, leaves file attachments and
+            memory facts on the phone, and runs once when you press it.
+          </p>
+          <div className="agi-fl-cta-row">
+            <Link href="/local" className="agi-fl-cta agi-fl-cta--ghost">
+              How Local Mode is defined
+            </Link>
+          </div>
+        </section>
 
-        <CapabilityGrid
+        <RouteMap
           eyebrow="In the app"
-          title="The full feature set. Your phone."
-          items={[
+          title="The drawer carries the whole workspace."
+          routes={[
             {
               meta: 'Chat',
-              title: 'Local Chat',
-              body: 'Fast on-device conversations with the AGI Standard runtime. Online or off.',
+              title: 'Local chat',
+              body: 'Threads run and stay on the device, and the model picker sits in the composer beside the attach and voice controls.',
               href: '/features/ai-chat',
             },
             {
-              meta: 'Models',
-              title: 'Model Picker',
-              body: 'Choose your model and see clear installed, downloadable, and locked states.',
-              href: '/local',
-            },
-            {
               meta: 'Projects',
-              title: 'Projects & Recents',
-              body: 'A drawer that keeps work organized by topic and one tap away.',
+              title: 'Projects and recents',
+              body: 'One drawer holds chats, projects, artifacts, the library, connectors, skills, schedules, and tasks.',
               href: '/features/projects',
             },
             {
               meta: 'Memory',
-              title: 'Memory',
-              body: 'On-device memory and personalization you can inspect and control.',
+              title: 'Memory and personalization',
+              body: 'Memory facts are held on the phone and are excluded even when you choose to sync chats to AGI Cloud.',
               href: '/features/memory',
             },
             {
-              meta: 'Artifacts',
-              title: 'Artifacts',
-              body: 'A gallery and preview for the documents and outputs you generate.',
-              href: '/features/artifacts',
-            },
-            {
-              meta: 'Settings',
-              title: 'Full Settings',
-              body: 'Appearance, data controls, app lock, and safety. All on the device.',
+              meta: 'Data',
+              title: 'Data controls',
+              body: 'Export chats, memory, settings, and installed model details from the device, and wipe local-only chats from Storage.',
               href: '/security',
             },
           ]}
         />
 
+        <LedgerSection
+          eyebrow="Build sheet"
+          title="Here is what the build contains."
+          rows={[
+            {
+              k: 'Default model',
+              v: 'AGI Standard · Qwen3 4B Instruct · ~2 GB quantized · 262,144-token context',
+            },
+            { k: 'Lighter option', v: 'AGI Lite · 1B on-device build · ~1.1 GB' },
+            { k: 'Chats and memory', v: 'SQLite on the device' },
+            {
+              k: 'Export',
+              v: 'Runs on the device — chats, memory, settings, installed model details',
+            },
+            {
+              k: 'Cloud sync',
+              v: 'Manual and one-time · attachments and memory facts stay on the phone',
+            },
+            {
+              k: 'App lock',
+              v: 'The Face ID, Touch ID, or passcode already enrolled on the phone',
+            },
+            {
+              k: 'Model training',
+              v: 'Off — prompts, responses, and files are not used to train AGI-owned models',
+            },
+            { k: 'Platforms', v: `iPhone and Android · ${SURFACE_STATUS.mobile}` },
+          ]}
+        />
+
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
-          title="Take AGI with you."
-          body="AGI Mobile launches on iPhone and Android. Local Mode is the default. AGI managed cloud is in public alpha — sign in to use it."
-          ctas={[
-            { href: '/download', label: 'Get notified' },
-            { label: 'Enterprise early access', waitlist: true },
-          ]}
+          title="AGI Mobile is not in the app stores yet."
+          body="The runtimes, the drawer, and the settings above are built and running on device. Neither store listing is published, and no release date has been announced."
+          ctas={[{ href: '/mobile/legal', label: 'Read the mobile privacy policy' }]}
           stamp={`iPhone & Android · ${LAUNCH.shortLabel}`}
         />
 

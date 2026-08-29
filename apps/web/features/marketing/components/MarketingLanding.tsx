@@ -37,8 +37,8 @@ export function MarketingLanding() {
             { href: '/download', label: 'Get AGI Desktop' },
           ]}
           ctas2={[
-            { href: '/vscode-extension', label: 'VS Code Extension' },
-            { href: '/chrome-extension', label: 'Chrome Extension' },
+            { href: '/vscode-extension', label: 'VS Code extension' },
+            { href: '/chrome-extension', label: 'Chrome extension' },
           ]}
           lede="One assistant across six surfaces — and you choose where each request actually runs."
           modeRibbon={[]}
@@ -178,7 +178,7 @@ export function MarketingLanding() {
                 'On-device Local Mode on Mobile',
                 'No account required',
               ],
-              cta: { href: '/local', label: 'Run AGI Locally' },
+              cta: { href: '/local', label: 'Run AGI locally' },
             },
             {
               mode: 'BYOK',
@@ -191,7 +191,7 @@ export function MarketingLanding() {
                 'Visible provider label on every route',
                 'Explicit, reviewed continuation from Local',
               ],
-              cta: { href: '/byok', label: 'Set Up BYOK' },
+              cta: { href: '/byok', label: 'Set up BYOK' },
             },
             {
               mode: 'AGI Cloud',
@@ -204,7 +204,7 @@ export function MarketingLanding() {
                 'AGI-owned routing with clear labels',
                 'Usage metered and transparent',
               ],
-              cta: { href: '/get-started', label: 'Get Started' },
+              cta: { href: '/get-started', label: 'Get started' },
             },
           ]}
         />
@@ -271,10 +271,10 @@ export function MarketingLanding() {
         <DevBand
           eyebrow="Approvals"
           title="Nothing runs without you."
-          body="Every file edit and shell command asks first. Pick your autonomy: Suggest, Auto-edit, or Full-auto. Change it any time with Shift+Tab."
+          body="Every file edit and shell command asks first. Pick how much rope the agent gets — Safe, Plan, Build, or Autopilot — and change it any time with Shift+Tab."
           ctas={[
-            { href: '/features/tools', label: 'See Tool Permissions' },
-            { href: '/security', label: 'Read the Security Model' },
+            { href: '/features/tools', label: 'See tool permissions' },
+            { href: '/security', label: 'Read the security model' },
           ]}
           visual={<ApprovalWindow />}
         />

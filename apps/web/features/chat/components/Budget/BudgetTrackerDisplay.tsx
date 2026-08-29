@@ -120,11 +120,21 @@ export function BudgetTrackerDisplay({
                 ) : (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
-                      {creditBalance.has_usage_remaining ? 'Included usage' : 'Limit reached'}
+                      {creditBalance.usage_allocation === 'pending'
+                        ? 'Allocation pending'
+                        : creditBalance.has_usage_remaining
+                          ? 'Included usage'
+                          : 'Limit reached'}
                     </span>
-                    <a href="/pricing" className="font-medium underline underline-offset-2">
-                      Upgrade
-                    </a>
+                    {creditBalance.usage_allocation === 'pending' ? (
+                      <a href="/settings" className="font-medium underline underline-offset-2">
+                        Check billing
+                      </a>
+                    ) : (
+                      <a href="/pricing" className="font-medium underline underline-offset-2">
+                        Upgrade
+                      </a>
+                    )}
                   </div>
                 )}
               </>

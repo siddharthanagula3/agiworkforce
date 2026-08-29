@@ -1,11 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import type { TerminalLine } from '@/features/marketing/components/DeviceMockups';
 import { FeatureGrid } from '@/features/marketing/components/LandingSections';
-import { DevBand, FinalCta, TrustTriptych } from '@/features/marketing/components/FlagshipSections';
-import { MARKETING, SURFACE_STATUS } from '../../lib/marketing-constants';
+import { DevBand, FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
+import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI CLI: the agi agent in your terminal',
@@ -13,64 +13,101 @@ export const metadata = buildMetadata({
   path: '/cli',
 });
 
+const CI_SESSION: readonly TerminalLine[] = [
+  { kind: 'cmd', text: 'agi --json-events exec "fix the flaky test" | jq -r .event | uniq' },
+  { kind: 'out', text: 'spawning' },
+  { kind: 'out', text: 'ready_for_prompt' },
+  { kind: 'out', text: 'running_tool' },
+  { kind: 'out', text: 'tool_result' },
+  { kind: 'out', text: 'message_delta' },
+  { kind: 'out', text: 'turn_usage' },
+  { kind: 'ok', text: 'finished' },
+];
+
+const CI_HUD = { tokensIn: 9840, tokensOut: 612, cost: '$0.0000', ctx: '18%' };
+
+const BOUNDARY_SESSION: readonly TerminalLine[] = [
+  { kind: 'cmd', text: '/privacy-settings' },
+  { kind: 'out', text: 'Privacy settings' },
+  { kind: 'out', text: '  Local file access: explicit workspace roots only' },
+  { kind: 'out', text: '  Additional roots: opt-in with --add-dir or /add-dir' },
+  { kind: 'out', text: '  Local -> BYOK: explicit only with /continue-with-byok' },
+  { kind: 'cmd', text: '/privacy-mode byok' },
+  { kind: 'out', text: 'Privacy mode was not changed.' },
+  { kind: 'ok', text: 'Local -> BYOK requires an explicit reviewable handoff.' },
+];
+
+const BOUNDARY_HUD = { tokensIn: 3180, tokensOut: 241, cost: '$0.0000', ctx: '6%' };
+
 const SUBCOMMANDS: { cmd: string; desc: string }[] = [
-  { cmd: 'exec', desc: 'Run a task non-interactively' },
-  { cmd: 'review', desc: 'Non-interactive code review' },
-  { cmd: 'apply', desc: 'Apply latest diff as a git patch' },
-  { cmd: 'sandbox', desc: 'Run a command inside a sandbox' },
-  { cmd: 'mcp-server', desc: 'Run as an MCP server (stdio)' },
-  { cmd: 'app-server', desc: 'Run the app server for IDE integration' },
+  { cmd: 'exec', desc: 'Run a task non-interactively (alias: e)' },
+  { cmd: 'review', desc: 'Review the working diff, or a range with --base' },
+  { cmd: 'apply', desc: 'Apply the latest diff as a git patch (alias: a)' },
+  { cmd: 'sandbox', desc: 'Run a command inside the OS sandbox' },
+  { cmd: 'mcp-server', desc: 'Speak MCP over stdio; advertises no tools yet' },
+  { cmd: 'app-server', desc: 'Serve an editor over stdio or a WebSocket' },
   { cmd: 'resume', desc: 'Continue a previous session' },
   { cmd: 'fork', desc: 'Fork a previous session' },
-  { cmd: 'session', desc: 'Inspect or branch sessions' },
-  { cmd: 'plugin', desc: 'Manage plugins' },
+  { cmd: 'session', desc: 'List, show, fork, archive, or delete sessions' },
   { cmd: 'history', desc: 'Browse session history' },
-  { cmd: 'login', desc: 'Sign in to a provider or configure BYOK' },
-  { cmd: 'auth-status', desc: 'Show auth status for every provider' },
-  { cmd: 'init', desc: 'Initialize ~/.agiworkforce/' },
-  { cmd: 'onboarding', desc: 'Re-run the first-run onboarding' },
+  { cmd: 'models', desc: 'List, scan, and set model configuration' },
+  { cmd: 'approvals', desc: 'Manage command and file-operation approvals' },
+  { cmd: 'execpolicy', desc: 'Show execution policy rules' },
+  { cmd: 'features', desc: 'Inspect feature flags' },
+  { cmd: 'plugin', desc: 'List and install plugins' },
+  { cmd: 'marketplace', desc: 'Search, install, and update marketplace plugins' },
+  { cmd: 'ecosystem', desc: 'Scan for installed AI tools and import their MCP configs' },
+  { cmd: 'migrate', desc: 'Import settings from another coding CLI' },
+  { cmd: 'sync', desc: 'Export and import your settings across machines' },
+  { cmd: 'login', desc: 'Sign in to AGI cloud, or a provider over OAuth' },
+  { cmd: 'logout', desc: 'Sign out of AGI cloud' },
+  { cmd: 'auth-status', desc: 'Show auth status for every configured provider' },
+  { cmd: 'doctor', desc: 'Run local preflight diagnostics' },
+  { cmd: 'completion', desc: 'Generate a shell completion script' },
+  { cmd: 'init', desc: 'Initialize ~/.agiworkforce/ and register the project' },
+  { cmd: 'onboarding', desc: 'Re-run the first-run onboarding wizard' },
 ];
 
 const FEATURES = [
   {
     meta: 'Headless',
-    title: 'agi exec for CI',
-    body: 'Run any task non-interactively and stream typed JSON events. Every tool call, fallback, and turn usage arrives as machine-readable JSONL your pipeline can parse.',
+    title: 'The run comes back as JSONL',
+    body: 'Put --json-events ahead of the subcommand and every lifecycle event lands on stdout as one JSON object: spawning, ready_for_prompt, running_tool, tool_result, message_delta, turn_usage, fallback_triggered, finished. Failures carry a stable kind — api_rate_limit, auth_expired, network, stream_disconnect — so a job can branch on the kind instead of matching an error string.',
   },
   {
     meta: 'Sessions',
-    title: 'Resume, fork, replay',
-    body: 'Every session persists with a turn-by-turn journal. Continue with agi resume. Branch with agi fork. Fork any past turn into a new named session.',
+    title: 'Fork at the turn it went wrong',
+    body: 'Runs persist under ~/.agiworkforce/managed_sessions. agi session show prints the turn-by-turn transcript, and agi session fork --at-turn cuts a copy at one user turn under a name you pick with --as. The original stays as it was, and agi --resume picks either of them back up.',
   },
   {
-    meta: 'Safety',
-    title: 'Sandboxed by default',
-    body: 'Tool execution runs inside macOS Seatbelt or Linux bubblewrap. Opting out is loud: the TUI shows a red “no sandbox” indicator whenever sandboxing is off.',
+    meta: 'Sandbox',
+    title: 'Tool execution runs boxed',
+    body: 'macOS uses Seatbelt, Linux uses bubblewrap, and agi sandbox puts a bare command through the same box. When bwrap or sandbox-exec is missing from PATH the run stops and prints the install line for your distribution rather than quietly running unsandboxed.',
+  },
+  {
+    meta: 'Approvals',
+    title: 'Turning the box off is loud',
+    body: '--no-sandbox suppresses Seatbelt or bwrap and paints a red no sandbox indicator in the TUI footer for as long as it is off. Riskier tool calls still ask before they run, and agi approvals list, allow, deny, session and remove show and edit the answers you saved.',
   },
   {
     meta: 'Extensibility',
-    title: 'Hooks, skills & plugins',
-    body: 'Lifecycle hooks fire across the session. /skills lists every discovered skill. Custom slash commands are plain markdown files in your project or home directory.',
+    title: 'Hooks, skills, and markdown commands',
+    body: 'Hooks fire on session start and end, before and after every tool call, on prompt submit, around compaction, and at model resolution, where a hook can swap the model before the request leaves the agent. Slash commands are markdown files under .agiworkforce/commands, and a nested file becomes a namespaced command such as /review:security.',
   },
   {
     meta: 'MCP',
-    title: 'MCP in both directions',
-    body: 'Connect MCP servers over stdio, SSE, or Streamable HTTP with optional OAuth. Or expose agi itself to any MCP client with agi mcp-server.',
+    title: 'What agi mcp-server actually does',
+    body: 'As a client agi connects MCP servers over stdio, SSE, or Streamable HTTP, with OAuth tokens held in the OS credential store. As a server, agi mcp-server speaks the protocol and answers initialize and tools/list, but advertises an empty tool list on purpose — and its own help text says so instead of implying wiring that is not there.',
   },
   {
     meta: 'Routing',
-    title: 'Multi-model fallback',
-    body: 'Pass a comma-separated model list and the CLI fails over on rate limits, network errors, and stream disconnects. A visible banner and a JSON event fire on each switch.',
+    title: 'A comma in -m buys a fallback chain',
+    body: 'Pass -m with a comma-separated list and a rate limit, a network error, a 5xx, or a dropped stream moves the turn to the next model. The TUI flashes a falling-back banner naming both models and the reason, and a fallback_triggered event goes out on the JSONL stream. Add --demo to watch the rotation fire without waiting for a real 429.',
   },
   {
     meta: 'Cost',
-    title: 'Live cost HUD',
-    body: 'Running tokens in and out, dollar spend, and context usage sit in the corner of the TUI. Pricing comes from the model catalog. Never hardcoded.',
-  },
-  {
-    meta: 'Migration',
-    title: 'Bring your setup',
-    body: 'agi migrate imports your settings from Claude Code, and imported commands and prompts are recognized where they already live.',
+    title: 'The HUD reads the catalog',
+    body: 'Tokens in and out, cache reads, dollars spent, and context percentage sit in the top-right of the TUI, and the context figure changes color as the window fills. Prices resolve from the shared models catalog rather than a table typed into the CLI.',
   },
 ];
 
@@ -80,52 +117,43 @@ export default function CliPage() {
       <main className="agi-shell">
         <Header />
 
-        <section className="agi-fl-hero" aria-labelledby="agi-fl-cli-hero-title">
-          <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <div className="agi-fl-hero-split">
-            <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI CLI · {SURFACE_STATUS.cli}</p>
-              <h1 id="agi-fl-cli-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">An agent in</span>{' '}
-                <span className="agi-fl-h1-line">
-                  <em className="agi-fl-h1-em">your terminal.</em>
-                </span>
-              </h1>
-              <p className="agi-fl-lede">
-                The agi binary is a Rust developer agent. Resume and fork sessions. Run
-                non-interactive code review. Execute in a sandbox with explicit approvals. Works
-                offline with local models.
-              </p>
-              <div className="agi-fl-cta-row">
-                <Link href="/download#cli-downloads" className="agi-fl-cta agi-fl-cta--primary">
-                  Check availability
-                </Link>
-                <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
-                  Explore AGI Code
-                </Link>
-              </div>
-              <ul className="agi-fl-mode-ribbon" aria-label="CLI highlights">
-                <li>Local · offline-capable</li>
-                <li>BYOK · your keys</li>
-                <li>Sandboxed · by default</li>
-              </ul>
-            </div>
-            <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
-              <ProductFrame variant="terminal" title="agi · zsh" badge="sandboxed" />
-            </div>
-          </div>
-        </section>
+        <FlagshipHero
+          eyebrow={`AGI CLI · ${SURFACE_STATUS.cli}`}
+          titleLines={['For every step the', 'agent takes, a JSON', 'line comes out.']}
+          em="every step"
+          lede="The agent is a single Rust program, and it does not need a person at the prompt. Put --json-events before the subcommand and stdout becomes JSONL: one object per lifecycle event, covering every tool call, every model rotation, and the token count for each turn. A pipeline reads the run instead of scraping it."
+          ctas={[
+            { href: '/download#cli-downloads', label: 'Check availability' },
+            { href: '/agi-code', label: 'See it with the editor' },
+          ]}
+          modeRibbon={[]}
+          visual={
+            <ProductFrame
+              variant="terminal"
+              title="agi · ci"
+              badge="json-events"
+              routeMode="byok"
+              session={CI_SESSION}
+              hud={CI_HUD}
+            />
+          }
+        />
 
-        <FeatureGrid eyebrow="Capabilities" title="A full agent runtime." items={FEATURES} />
+        <FeatureGrid
+          eyebrow="Capabilities"
+          title="Every capability here has a command behind it."
+          items={FEATURES}
+        />
 
         <section className="agi-fl-section" aria-labelledby="agi-fl-cli-subcommands-title">
           <p className="agi-fl-eyebrow">Subcommands</p>
           <h2 id="agi-fl-cli-subcommands-title" className="agi-fl-h2">
-            One binary. 15 core subcommands.
+            This is the list agi help prints.
           </h2>
           <p className="agi-fl-section-lede">
-            Every subcommand below ships in the agi binary. Short aliases where it counts: e for
-            exec, a for apply.
+            Aliases exist where they earn their keep: e for exec, a for apply, completions for
+            completion. Run agi with no subcommand and you land in the interactive TUI instead,
+            where --no-tui drops you to the line-based REPL.
           </p>
           <table className="agi-ledger">
             <tbody>
@@ -142,85 +170,34 @@ export default function CliPage() {
         </section>
 
         <DevBand
-          eyebrow="Sandbox"
-          title="Risky actions run inside a box."
-          body="On Linux the sandbox is bubblewrap. On macOS it's Seatbelt. Tool execution runs under OS-level sandboxing by default. Riskier actions ask for explicit approval. Turning the sandbox off is a visible, deliberate choice."
-          ctas={[{ href: '/agi-code', label: 'Explore AGI Code' }]}
-        />
-
-        <TrustTriptych
-          eyebrow="Trust modes"
-          title="Your terminal, your boundary."
-          lede="Local, BYOK, and AGI Cloud stay separate in the CLI too. /privacy-mode shows the active trust boundary. A Local session only continues elsewhere when you explicitly ask."
-          cards={[
-            {
-              mode: 'Local',
-              glyph: '◆',
-              title: 'Offline with local models.',
-              body: 'Point agi at Ollama or LM Studio and work entirely on your machine.',
-              points: [
-                'Local sessions never silently leave your device',
-                '/privacy-mode shows the active trust boundary',
-                'Session journals live under ~/.agiworkforce/',
-                'No account required',
-              ],
-              cta: { href: '/local', label: 'Run AGI Locally' },
-            },
-            {
-              mode: 'BYOK',
-              glyph: '◇',
-              title: 'Your keys, your billing.',
-              body: 'Sign in with agi login. Device-code OAuth or an API key.',
-              points: [
-                `${MARKETING.providers.display} providers plus custom OpenAI-compatible endpoints`,
-                'Traffic goes directly to your provider',
-                '/continue-with-byok is an explicit, visible step',
-                'agi auth-status shows every configured provider',
-              ],
-              cta: { href: '/byok', label: 'Set Up BYOK' },
-            },
-            {
-              mode: 'AGI Cloud',
-              glyph: '●',
-              title: 'Managed compute, public alpha.',
-              body: 'Cloud execution is public alpha, open by default, and still fails closed without an explicit route.',
-              points: [
-                'Public alpha — sign in and start, no waitlist',
-                'agi cloud reports beta status and the model catalog only',
-                'Clear labels before anything routes to cloud',
-                'Usage metered and transparent',
-              ],
-              cta: { href: '/get-started', label: 'Get Started' },
-            },
+          eyebrow="At the prompt"
+          title="The prompt refuses to convert a session already running."
+          body="Type /privacy-mode byok inside a local session and nothing moves. The CLI answers that a local session needs an explicit reviewable handoff and points at /continue-with-byok, which drafts a fork carrying the context you selected, runs a secret scan over it, and shows you the payload before you send it. /privacy-settings prints the rest of the boundary in one screen: which roots the agent may read, what --add-dir has added, where sync stays opt-in. What Local, BYOK and managed cloud each mean is written out on the pages that own them."
+          ctas={[
+            { href: '/local', label: 'Run it against a local model' },
+            { href: '/byok', label: 'Set up BYOK' },
           ]}
+          visual={
+            <ProductFrame
+              variant="terminal"
+              title="agi · zsh"
+              badge="privacy"
+              routeMode="local"
+              session={BOUNDARY_SESSION}
+              hud={BOUNDARY_HUD}
+            />
+          }
         />
-
-        <section className="agi-fl-section" aria-labelledby="agi-fl-cli-install-title">
-          <p className="agi-fl-eyebrow">{SURFACE_STATUS.cli}</p>
-          <h2 id="agi-fl-cli-install-title" className="agi-fl-h2">
-            The CLI is released.
-          </h2>
-          <p className="agi-fl-section-lede">
-            The agi binary ships as macOS, Linux, and Windows archives on the current release
-            channel. The download page tracks availability for every surface and platform in one
-            place.
-          </p>
-          <div className="agi-fl-cta-row">
-            <Link href="/download#cli-downloads" className="agi-fl-cta agi-fl-cta--secondary">
-              Check availability
-            </Link>
-          </div>
-        </section>
 
         <FinalCta
           eyebrow={SURFACE_STATUS.cli}
-          title="An agent for your terminal."
-          body="The agi binary is released: resumable sessions, sandboxed execution, and AGI managed cloud in public alpha, open by default."
+          title="There is no build to hand you yet."
+          body="When archives are published the download page will show them: it asks the release channel as it loads and lists only the platforms it can confirm, for macOS, Linux and Windows alike. Until then the launch list is the honest way to hear about it, and the permission reference already sets out what the agent may do before it asks."
           ctas={[
-            { href: '/download#cli-downloads', label: 'Check availability' },
-            { href: '/agi-code', label: 'Explore AGI Code' },
-            { label: 'Enterprise early access', waitlist: true },
+            { label: LAUNCH.ctaLabel, waitlist: true },
+            { href: '/agent-permissions', label: 'See what runs without asking' },
           ]}
+          stamp={`AGI CLI · ${SURFACE_STATUS.cli}`}
         />
 
         <MarketingFooter />

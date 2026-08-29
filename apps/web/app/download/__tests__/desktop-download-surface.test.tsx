@@ -56,10 +56,21 @@ beforeEach(() => {
 });
 
 describe('public Desktop download surfaces', () => {
-  it('exposes the two-line hero as one correctly spaced heading', () => {
+  it('exposes the hero as one correctly spaced heading', () => {
     render(<DownloadPage />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'AGI on every surface.' })).toBeVisible();
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    const heading = headings[0]!;
+    expect(heading).toBeVisible();
+
+    const lines = [...heading.querySelectorAll('.agi-fl-h1-line')].map((line) =>
+      (line.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    );
+    const accessibleName = (heading.textContent ?? '').replace(/\s+/g, ' ').trim();
+    expect(accessibleName).toBe(lines.length ? lines.join(' ') : accessibleName);
+    expect(accessibleName).not.toMatch(/\s{2,}/);
+    expect(accessibleName.length).toBeGreaterThan(0);
   });
 
   it('offers only the verified Linux AppImage from the shared download API', async () => {

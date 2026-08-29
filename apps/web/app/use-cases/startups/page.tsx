@@ -109,7 +109,7 @@ export default function StartupsPage() {
           ctas={[
             { href: '/download', label: 'Get AGI Desktop' },
             { href: '/cli', label: 'Install the CLI' },
-            { href: '/pricing', label: 'See Plans' },
+            { href: '/pricing', label: 'See plans' },
           ]}
         />
 

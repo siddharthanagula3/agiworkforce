@@ -43,9 +43,9 @@ export default function AccessibilityPage() {
               <tr>
                 <td>Screen reader</td>
                 <td>
-                  Semantic HTML · landmarks, headings in order, lists, labelled controls. ARIA
-                  labels where semantics aren&rsquo;t enough. Verified by automated scan on the
-                  routes listed below, not by testing with an actual screen reader on every page.
+                  Semantic HTML · landmarks, headings in order, lists, labeled controls. ARIA labels
+                  where semantics aren&rsquo;t enough. Verified by automated scan on the routes
+                  listed below, not by testing with an actual screen reader on every page.
                 </td>
               </tr>
               <tr>

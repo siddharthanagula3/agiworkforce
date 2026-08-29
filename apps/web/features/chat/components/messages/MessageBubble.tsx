@@ -766,6 +766,31 @@ const MessageBubbleComponent = function MessageBubble({
     [activeConversationId, message.content, message.id, message.sessionId, ratingState],
   );
 
+  /*
+   * One verdict per answer. The persisted reaction on message metadata is the
+   * source of truth when the host wires `onReact`; `ratingState` only stands in
+   * for hosts that do not. Both sinks are fed from this single control — a
+   * second pair of thumbs used to render beside it, so an answer showed four
+   * thumb icons and two independent verdicts.
+   */
+  const responseRating: 'up' | 'down' | null =
+    message.metadata?.reaction === 'thumbsUp'
+      ? 'up'
+      : message.metadata?.reaction === 'thumbsDown'
+        ? 'down'
+        : ratingState === 'idle'
+          ? null
+          : ratingState;
+
+  const rateResponse = useCallback(
+    (rating: 'up' | 'down') => {
+      const isRepeat = responseRating === rating;
+      onReact?.(message.id, isRepeat ? null : rating);
+      if (!isRepeat) void rateMessage(rating);
+    },
+    [message.id, onReact, rateMessage, responseRating],
+  );
+
   const artifactConversationId = message.sessionId ?? activeConversationId ?? undefined;
   const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
   const storedChoice = useComparisonStore((state) =>
@@ -1481,10 +1506,11 @@ const MessageBubbleComponent = function MessageBubble({
 
           {/* Message Content · 15 px body matching desktop .message-text */}
           <div
+            dir="auto"
             className={cn(
               'prose dark:prose-invert max-w-none',
               'message-text', // 15 px / 1.6 lh (defined in globals.css .message-text)
-              'break-words overflow-wrap-anywhere text-left',
+              'break-words overflow-wrap-anywhere text-start',
               isUser && 'user-bubble', // right-aligned rounded bubble (assistant stays flat)
               !isUser && message.metadata?.comparisonOptions && 'hidden',
               isEditing && 'hidden',
@@ -1509,7 +1535,8 @@ const MessageBubbleComponent = function MessageBubble({
             ) : producedNoVisibleOutput ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
                 <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                The model finished without returning a response. Use Retry below to run it again.
+                The model finished without returning a response. Use Regenerate below to run it
+                again.
               </p>
             ) : (
               (() => {
@@ -2126,7 +2153,7 @@ const MessageBubbleComponent = function MessageBubble({
                   </Tooltip>
                 )}
 
-                {!isUser && onReact && (
+                {!isUser && (
                   <>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -2135,35 +2162,20 @@ const MessageBubbleComponent = function MessageBubble({
                           size="icon"
                           className={cn(
                             ACTION_BUTTON_SIZE,
-                            message.metadata?.reaction === 'thumbsUp' &&
-                              'text-[var(--chat-accent-primary-text)]',
+                            responseRating === 'up' && 'text-[var(--chat-accent-primary-text)]',
                           )}
-                          onClick={() =>
-                            onReact(
-                              message.id,
-                              message.metadata?.reaction === 'thumbsUp' ? null : 'up',
-                            )
-                          }
-                          aria-label={
-                            message.metadata?.reaction === 'thumbsUp'
-                              ? 'Remove good response rating'
-                              : 'Rate as good response'
-                          }
-                          aria-pressed={message.metadata?.reaction === 'thumbsUp'}
+                          onClick={() => rateResponse('up')}
+                          aria-label="Good response"
+                          aria-pressed={responseRating === 'up'}
                         >
                           <ThumbsUp
-                            className={cn(
-                              'h-3.5 w-3.5',
-                              message.metadata?.reaction === 'thumbsUp' && 'fill-current',
-                            )}
+                            className={cn('h-3.5 w-3.5', responseRating === 'up' && 'fill-current')}
                             aria-hidden="true"
                           />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {message.metadata?.reaction === 'thumbsUp'
-                          ? 'Remove rating'
-                          : 'Good response'}
+                        {responseRating === 'up' ? 'Remove rating' : 'Good response'}
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -2173,35 +2185,23 @@ const MessageBubbleComponent = function MessageBubble({
                           size="icon"
                           className={cn(
                             ACTION_BUTTON_SIZE,
-                            message.metadata?.reaction === 'thumbsDown' &&
-                              'text-[var(--chat-accent-primary-text)]',
+                            responseRating === 'down' && 'text-[var(--chat-accent-primary-text)]',
                           )}
-                          onClick={() =>
-                            onReact(
-                              message.id,
-                              message.metadata?.reaction === 'thumbsDown' ? null : 'down',
-                            )
-                          }
-                          aria-label={
-                            message.metadata?.reaction === 'thumbsDown'
-                              ? 'Remove poor response rating'
-                              : 'Rate as poor response'
-                          }
-                          aria-pressed={message.metadata?.reaction === 'thumbsDown'}
+                          onClick={() => rateResponse('down')}
+                          aria-label="Bad response"
+                          aria-pressed={responseRating === 'down'}
                         >
                           <ThumbsDown
                             className={cn(
                               'h-3.5 w-3.5',
-                              message.metadata?.reaction === 'thumbsDown' && 'fill-current',
+                              responseRating === 'down' && 'fill-current',
                             )}
                             aria-hidden="true"
                           />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {message.metadata?.reaction === 'thumbsDown'
-                          ? 'Remove rating'
-                          : 'Poor response'}
+                        {responseRating === 'down' ? 'Remove rating' : 'Bad response'}
                       </TooltipContent>
                     </Tooltip>
                   </>
@@ -2227,48 +2227,6 @@ const MessageBubbleComponent = function MessageBubble({
                       <TooltipContent>Regenerate</TooltipContent>
                     </Tooltip>
                   )}
-
-                {/* Rate the answer — assistant messages only. */}
-                {!isUser && (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={ACTION_BUTTON_SIZE}
-                          onClick={() => void rateMessage('up')}
-                          aria-label="Good response"
-                          aria-pressed={ratingState === 'up'}
-                        >
-                          <ThumbsUp
-                            className={`h-3.5 w-3.5 ${ratingState === 'up' ? 'text-primary' : ''}`}
-                            aria-hidden="true"
-                          />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Good response</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={ACTION_BUTTON_SIZE}
-                          onClick={() => void rateMessage('down')}
-                          aria-label="Bad response"
-                          aria-pressed={ratingState === 'down'}
-                        >
-                          <ThumbsDown
-                            className={`h-3.5 w-3.5 ${ratingState === 'down' ? 'text-primary' : ''}`}
-                            aria-hidden="true"
-                          />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Bad response</TooltipContent>
-                    </Tooltip>
-                  </>
-                )}
 
                 {/*
                   Branch / fork — a persistent icon in the action row, not a

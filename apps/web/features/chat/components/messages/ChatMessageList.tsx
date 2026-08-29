@@ -489,19 +489,28 @@ const MessageRow = ({
   );
 
   if (paywall) {
+    // The card takes the turn's place in the transcript, so it takes the
+    // transcript's column too. Rendered bare it spanned the full surface —
+    // 206px past the message and composer edges on either side.
     return (
-      <InlinePaywallCard
-        feature={normalizePaywallFeature(paywall.feature)}
-        currentTier={currentTier}
-        requiredTier={requiredTier}
-        reason={paywall.reason}
-        showUpgradeCta={paywall.showUpgradeCta ?? true}
-        suggestStandardModel={paywall.suggestStandardModel ?? false}
-        resetLabel={paywallResetLabel(paywall)}
-        recoveryAction={paywall.recoveryAction ?? 'upgrade'}
-        onUpgrade={handlePaywallUpgrade}
-        onDismiss={handlePaywallDismiss}
-      />
+      <div className="message-row">
+        <div className="message-inner">
+          <div className="min-w-0 flex-1">
+            <InlinePaywallCard
+              feature={normalizePaywallFeature(paywall.feature)}
+              currentTier={currentTier}
+              requiredTier={requiredTier}
+              reason={paywall.reason}
+              showUpgradeCta={paywall.showUpgradeCta ?? true}
+              suggestStandardModel={paywall.suggestStandardModel ?? false}
+              resetLabel={paywallResetLabel(paywall)}
+              recoveryAction={paywall.recoveryAction ?? 'upgrade'}
+              onUpgrade={handlePaywallUpgrade}
+              onDismiss={handlePaywallDismiss}
+            />
+          </div>
+        </div>
+      </div>
     );
   }
 

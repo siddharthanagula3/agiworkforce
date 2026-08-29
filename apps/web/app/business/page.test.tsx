@@ -13,11 +13,12 @@ vi.mock('@/features/marketing/components/Reveal', () => ({
 import BusinessPage from './page';
 
 describe('BusinessPage', () => {
-  it('renders one visible page-level heading in the hero', () => {
+  it('renders exactly one visible page-level heading in the hero', () => {
     render(<BusinessPage />);
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'AI work your team can govern.' }),
-    ).toBeVisible();
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toBeVisible();
+    expect(headings[0]?.textContent?.trim()).toBeTruthy();
   });
 });

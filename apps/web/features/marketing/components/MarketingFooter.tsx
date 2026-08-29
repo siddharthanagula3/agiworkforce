@@ -17,18 +17,20 @@ import {
 
 const PRODUCT = [
   { href: '/', label: 'Home' },
+  { href: '/get-started', label: 'Get started' },
+  { href: '/pricing', label: 'Pricing' },
   { href: '/business', label: 'Business' },
   { href: '/teams', label: 'Teams' },
-  { href: '/apps', label: 'Apps' },
+  { href: '/enterprise', label: 'Enterprise' },
   { href: '/agi-code', label: 'AGI Code' },
   { href: '/agi-work', label: 'AGI Work' },
   { href: '/byok', label: 'BYOK' },
   { href: '/local', label: 'Local' },
-  { href: '/pricing', label: 'Pricing' },
   { href: '/waitlist', label: 'Enterprise early access' },
 ];
 
 const SURFACES = [
+  { href: '/apps', label: 'Web' },
   { href: '/desktop', label: 'Desktop' },
   { href: '/mobile', label: 'Mobile' },
   { href: '/cli', label: 'CLI' },
@@ -38,38 +40,85 @@ const SURFACES = [
 ];
 
 const CAPABILITIES = [
-  { href: '/features/artifacts', label: 'Artifacts' },
+  { href: '/features', label: 'All capabilities' },
+  { href: '/features/ai-chat', label: 'AI chat' },
+  { href: '/features/agents', label: 'Agents' },
   { href: '/features/deep-research', label: 'Deep Research' },
+  { href: '/features/artifacts', label: 'Artifacts' },
   { href: '/features/projects', label: 'Projects' },
   { href: '/features/memory', label: 'Memory' },
+  { href: '/features/tools', label: 'Tools' },
+  { href: '/skills', label: 'Skills' },
+  { href: '/plugins', label: 'Plugins' },
+  { href: '/connectors', label: 'Connectors' },
+  { href: '/connectors/mcp-directory', label: 'MCP directory' },
   { href: '/providers', label: 'Providers' },
+  { href: '/gallery', label: 'Gallery' },
+];
+
+const SOLUTIONS = [
+  { href: '/solutions', label: 'Solutions overview' },
+  { href: '/use-cases', label: 'Use cases' },
+  { href: '/use-cases/startups', label: 'Startups' },
+  { href: '/use-cases/sales-teams', label: 'Sales teams' },
+  { href: '/use-cases/consulting', label: 'Consulting' },
+  { href: '/use-cases/it-providers', label: 'IT providers' },
+  { href: '/customers', label: 'Worked examples' },
+  { href: '/integrations', label: 'Integrations' },
+  { href: '/partners', label: 'Partners' },
+  { href: '/contact-sales', label: 'Contact sales' },
 ];
 
 const COMPANY = [
   { href: '/about', label: 'About' },
-  { href: '/enterprise', label: 'Enterprise' },
-  { href: '/contact', label: 'Contact' },
+  { href: '/careers', label: 'Careers' },
+  { href: '/press', label: 'Press' },
+  { href: '/blog', label: 'Blog' },
+  { href: '/changelog', label: 'Changelog' },
+  { href: '/community', label: 'Community' },
+  { href: '/resources', label: 'Resources' },
+  { href: '/docs', label: 'Docs' },
   { href: '/help', label: 'Help' },
   { href: '/faq', label: 'FAQ' },
   { href: '/support', label: 'Support' },
+  { href: '/contact', label: 'Contact' },
+];
+
+const TRUST = [
+  { href: '/trust', label: 'Trust centre' },
+  { href: '/security', label: 'Security' },
+  { href: '/status', label: 'Status' },
+  { href: '/sla', label: 'Service levels' },
+  { href: '/subprocessors', label: 'Subprocessors' },
+  { href: '/dpa', label: 'Data processing' },
+  { href: '/agent-permissions', label: 'Agent permissions' },
+  { href: '/accessibility', label: 'Accessibility' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/data-use', label: 'How we use your data' },
+  { href: '/privacy/requests', label: 'Data rights & consent' },
+  { href: '/privacy/india', label: 'India — DPDP notice' },
   { href: '/terms', label: 'Terms' },
   { href: '/acceptable-use', label: 'Acceptable use' },
-  { href: '/disclaimer', label: 'Disclaimer' },
-  { href: '/agent-permissions', label: 'Agent permissions' },
-  { href: '/security', label: 'Security' },
   { href: '/cookies', label: 'Cookies' },
+  { href: '/refund-policy', label: 'Refunds' },
   { href: '/copyright', label: 'Copyright' },
   { href: '/model-licenses', label: 'Model licences' },
-  { href: '/privacy/india', label: 'India — DPDP notice' },
-  { href: '/privacy/requests', label: 'Data rights & consent' },
+  { href: '/disclaimer', label: 'Disclaimer' },
   { href: '/legal', label: 'All legal docs' },
 ];
 
-export function MarketingFooter() {
+const FOOTER_GROUPS = [
+  { title: 'Product', links: PRODUCT },
+  { title: 'Surfaces', links: SURFACES },
+  { title: 'Capabilities', links: CAPABILITIES },
+  { title: 'Solutions', links: SOLUTIONS },
+  { title: 'Company', links: COMPANY },
+  { title: 'Trust & legal', links: TRUST },
+];
+
+export function MarketingFooter({ condensed = false }: { condensed?: boolean } = {}) {
   return (
-    <footer className="agi-footer">
+    <footer className={condensed ? 'agi-footer agi-footer--condensed' : 'agi-footer'}>
       <div className="agi-footer-brandband">
         <div className="agi-footer-brandband-copy">
           <Link href="/" className="agi-footer-mark" aria-label="AGI home">
@@ -86,46 +135,18 @@ export function MarketingFooter() {
         </span>
       </div>
       <div className="agi-footer-row">
-        <ul className="agi-footer-col">
-          <li className="agi-footer-col-title">Product</li>
-          {PRODUCT.map((l) => (
-            <li key={l.href}>
-              <Link href={l.href} className="agi-footer-link">
-                {l.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <ul className="agi-footer-col">
-          <li className="agi-footer-col-title">Surfaces</li>
-          {SURFACES.map((l) => (
-            <li key={l.href}>
-              <Link href={l.href} className="agi-footer-link">
-                {l.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <ul className="agi-footer-col">
-          <li className="agi-footer-col-title">Capabilities</li>
-          {CAPABILITIES.map((l) => (
-            <li key={l.href}>
-              <Link href={l.href} className="agi-footer-link">
-                {l.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <ul className="agi-footer-col">
-          <li className="agi-footer-col-title">Company</li>
-          {COMPANY.map((l) => (
-            <li key={l.href}>
-              <Link href={l.href} className="agi-footer-link">
-                {l.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        {FOOTER_GROUPS.map((group) => (
+          <ul className="agi-footer-col" key={group.title}>
+            <li className="agi-footer-col-title">{group.title}</li>
+            {group.links.map((l) => (
+              <li key={l.href}>
+                <Link href={l.href} className="agi-footer-link">
+                  {l.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ))}
       </div>
       {/*
         Grievance contact in the footer, not only on the policy page. India's
@@ -151,6 +172,11 @@ export function MarketingFooter() {
       </div>
       <div className="agi-footer-strip">
         <span>© 2026 AGI. Proprietary.</span>
+        <span>
+          <Link href="/sitemap-page" className="agi-footer-link">
+            Sitemap
+          </Link>
+        </span>
         <span>
           Local and BYOK stay explicit. Managed Cloud is open in public alpha; self-serve paid plans
           are listed on Pricing, while Enterprise remains contract-scoped.

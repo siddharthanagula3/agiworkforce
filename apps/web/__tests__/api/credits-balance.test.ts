@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -206,9 +205,11 @@ describe('Credits Balance API', () => {
           'has_usage_remaining',
           'reset_at',
           'seconds_until_reset',
+          'usage_allocation',
           'usage_percentage',
           'usage_visible',
         ]);
+        expect(data.credits.usage_allocation).toBe('provisioned');
         expect(JSON.stringify(data)).not.toMatch(
           /_cents|monthly_allocated|monthly_remaining|formatted|\$/i,
         );
@@ -285,6 +286,28 @@ describe('Credits Balance API', () => {
           has_usage_remaining: true,
         });
         expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith(mockUser.id);
+      });
+
+      it('omits the allocation signal entirely on Free', async () => {
+        vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({
+          ...mockSubscription,
+          plan_tier: 'free',
+        });
+        vi.mocked(CreditService.getBalance).mockResolvedValue(null);
+        mockGetFreeTrialPublicUsage.mockResolvedValue({
+          usagePercentage: 40,
+          resetAt: '2026-07-19T12:00:00.000Z',
+          hasUsageRemaining: true,
+        });
+
+        const response = await GET(
+          new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+            headers: { Authorization: 'Bearer valid-token' },
+          }),
+        );
+        const data = await response.json();
+
+        expect(data.credits).not.toHaveProperty('usage_allocation');
       });
 
       it('never leaks a Free allowance number anywhere in the payload', async () => {

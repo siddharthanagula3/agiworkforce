@@ -2633,10 +2633,10 @@ export function SettingsModal({
         {/* Left nav */}
         <nav
           aria-label={t('modal.navigation', 'Settings navigation')}
-          className="flex max-h-[42%] w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:py-5"
+          className="flex max-h-[42%] w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-b border-border/60 py-4 md:max-h-none md:w-[220px] md:border-b-0 md:border-r md:pb-5 md:pt-7"
         >
           {/* Title */}
-          <DialogTitle className="mb-3 px-4 pr-12 text-[15px] font-semibold leading-normal text-foreground md:pr-4">
+          <DialogTitle className="mb-3 px-4 pr-12 text-base font-semibold text-foreground md:pr-4">
             {title ?? t('modal.title', 'Settings')}
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -2710,7 +2710,7 @@ export function SettingsModal({
 
         {/* Right pane */}
         <main
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-10 sm:px-6 sm:pb-6 md:px-8 md:pb-8 md:pt-7"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-10 [scrollbar-gutter:stable] sm:px-6 sm:pb-6 md:px-8 md:pb-8 md:pt-7"
           id="settings-pane"
           tabIndex={-1}
         >

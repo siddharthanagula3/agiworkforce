@@ -2,11 +2,9 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { RouteMap } from '@/features/marketing/components/LandingSections';
-import {
-  CapabilityGrid,
-  FinalCta,
-  FlagshipHero,
-} from '@/features/marketing/components/FlagshipSections';
+import { ProductFrame, type TerminalLine } from '@/features/marketing/components/ProductFrame';
+import { FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
+import { getModels } from '@agiworkforce/types';
 
 export const metadata = buildMetadata({
   title: 'AGI Solutions: AI workflows for teams, developers, and operators',
@@ -14,6 +12,25 @@ export const metadata = buildMetadata({
     'Explore AGI solution pages for business teams, developers, startups, consultants, sales teams, IT service providers, and enterprise buyers.',
   path: '/solutions',
 });
+
+const SESSION_MODELS = getModels({ modelTypes: ['chat'] })
+  .map((model) => model.id)
+  .slice(0, 3);
+
+const SESSION_ROWS: readonly { title: string; ref: string; msgs: number }[] = [
+  { title: 'Onboarding memo', ref: '4c1a7f02', msgs: 34 },
+  { title: 'Streaming fix', ref: '9b30d5e1', msgs: 18 },
+  { title: 'Q3 spend rollup', ref: '2f77ac10', msgs: 12 },
+];
+
+const WORKSPACE_SESSION: readonly TerminalLine[] = [
+  { kind: 'cmd', text: 'agi history --limit 3' },
+  { kind: 'dim', text: '  Today:' },
+  ...SESSION_ROWS.map((row, i) => ({
+    kind: 'out' as const,
+    text: `    ${row.title.padEnd(24)} [${row.ref}]${String(row.msgs).padStart(6)} msgs  ${SESSION_MODELS[i] ?? ''}`,
+  })),
+];
 
 export default function SolutionsPage() {
   return (
@@ -23,105 +40,60 @@ export default function SolutionsPage() {
 
         <FlagshipHero
           eyebrow="Solutions"
-          titleLines={['One suite.', 'Many ways in.']}
-          em="Many ways in."
-          lede="Developers come for the terminal. Teams come for governance. Operators come for scheduled desktop work. Everyone gets the same rule: Local, BYOK, and AGI Cloud are separate, visible routes. Nothing moves between them silently."
-          ctas={[
-            { href: '/download', label: 'Get AGI Desktop' },
-            { href: '/business', label: 'See AGI for Business' },
-            { href: '/pricing', label: 'See Plans' },
-          ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
+          titleLines={['Every page below is a different', 'way into the same workspace.']}
+          em="the same workspace"
+          lede="This page is an index and argues nothing on its own. Each card names the job its page was written for, and behind all of them sits one workspace: the same chat, the same projects, the same connectors, and the same approval prompts."
+          ctas={[{ href: '/download', label: 'Get AGI Desktop' }]}
+          modeRibbon={[]}
+          visual={
+            <ProductFrame
+              variant="terminal"
+              title="agi · zsh"
+              badge="sessions"
+              session={WORKSPACE_SESSION}
+              hud={false}
+            />
+          }
         />
 
         <RouteMap
-          eyebrow="Solution hubs"
-          title="Start with the page that matches your work."
+          eyebrow="Where to start"
+          title="Each of these pages was written for someone doing a different job."
           routes={[
             {
-              meta: 'Business',
-              title: 'AGI for Business',
-              body: 'Workspace, governance, projects, research, apps, and code across providers.',
-              href: '/business',
-            },
-            {
-              meta: 'Teams',
-              title: 'AGI for Teams',
-              body: 'Shared projects, connector policy, separated Local/BYOK/Cloud spend, and admin rollout.',
-              href: '/teams',
-            },
-            {
-              meta: 'Developers',
+              meta: 'You write code',
               title: 'AGI Code',
-              body: 'CLI, VS Code, and desktop coding with diffs, tests, and permissions.',
+              body: 'The agi binary and the VS Code extension that spawns it over stdio: ranked review findings on a working diff, a session diff landed as a git patch, and commands run under the OS sandbox.',
               href: '/agi-code',
             },
             {
-              meta: 'Operators',
+              meta: 'You want a deliverable',
               title: 'AGI Work',
-              body: 'Scheduled desktop work, file workflows, and mobile-to-desktop dispatch.',
+              body: 'A mode of the web composer that returns a plan before its first tool call, holds the run whenever a call needs your approval, and keeps every run in your task list.',
               href: '/agi-work',
             },
             {
-              meta: 'Privacy',
-              title: 'Local mode',
-              body: 'Run local models on your own hardware. Free and offline-capable.',
-              href: '/local',
+              meta: 'You sign the invoice',
+              title: 'AGI for Business',
+              body: 'The cost side of a rollout: which route we bill for, what hosted capacity buys, and how a single run is capped in dollars before it starts.',
+              href: '/business',
             },
             {
-              meta: 'Provider choice',
-              title: 'BYOK mode',
-              body: 'Bring provider keys on Desktop, CLI, and VS Code and route work explicitly.',
-              href: '/byok',
-            },
-          ]}
-        />
-
-        <CapabilityGrid
-          eyebrow="By intent"
-          title="Find your path by what you need."
-          items={[
-            {
-              meta: 'Privacy',
-              title: 'Private AI chat',
-              body: 'Keep sensitive work on the device with Local Mode across Desktop, Mobile, and CLI.',
-              href: '/local',
-            },
-            {
-              meta: 'Developers',
-              title: 'AI coding agent',
-              body: 'Sessions, code review, sandboxed execution, hooks, and MCP in the terminal and IDE.',
-              href: '/agi-code',
-            },
-            {
-              meta: 'Research',
-              title: 'Reports with sources',
-              body: 'Deep research flows that cite what they read.',
-              href: '/features/deep-research',
-            },
-            {
-              meta: 'Procurement',
-              title: 'Enterprise rollout',
-              body: 'Per-seat BYOK on Desktop, CLI, and VS Code; org-wide policy, identity, audit, and retention remain contract-scoped.',
-              href: '/enterprise',
-            },
-            {
-              meta: 'Roles',
+              meta: 'You know your role',
               title: 'Use cases',
-              body: 'Pages for startups, consultants, sales teams, and IT providers.',
+              body: 'Role pages for startups, consulting firms, IT service providers, and sales teams, each starting from the job rather than the surface.',
               href: '/use-cases',
             },
           ]}
         />
 
         <FinalCta
-          eyebrow="Start now"
-          title="Pick a door. The workspace is the same inside."
-          body="Whichever page brings you in, you land in one product with visible routes, your choice of providers, and a managed cloud in public alpha, open by default."
+          eyebrow="Before you pick"
+          title="Cost and privacy are each argued once, on the page that owns the claim."
+          body="The map sorts pages by the person doing the work, and stops there. What a route costs, and what a Local session is allowed to do, are settled in one place each. Follow the links to read them where they are argued."
           ctas={[
-            { href: '/download', label: 'Get AGI Desktop' },
-            { href: '/use-cases', label: 'Browse Use Cases' },
-            { href: '/pricing', label: 'See Plans' },
+            { href: '/pricing', label: 'See what each route costs' },
+            { href: '/local', label: 'Read how Local mode works' },
           ]}
         />
 

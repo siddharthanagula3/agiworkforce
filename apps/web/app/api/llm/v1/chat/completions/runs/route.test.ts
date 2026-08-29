@@ -54,8 +54,21 @@ describe('GET /api/llm/v1/chat/completions/runs', () => {
       requestId: 'request-1',
       before: undefined,
       limit: 1,
+      workModes: ['agiwork'],
     });
     await expect(response.json()).resolves.toEqual({ runs: [], nextCursor: null });
+  });
+
+  // Tasks is the AGI Work surface. An ordinary `chat` turn also writes a
+  // cloud_agent_runs row, so without the work-mode filter every conversation
+  // was listed here as a task.
+  it('lists AGI Work runs only', async () => {
+    await GET(request());
+
+    expect(mocks.listCloudAgentRuns).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ workModes: ['agiwork'] }),
+    );
   });
 
   it.each([

@@ -1,5 +1,3 @@
-
-
 type DiffRow = {
   n: number;
   kind?: 'del' | 'add';
@@ -81,9 +79,10 @@ export function ApprovalWindow() {
         </div>
       </div>
       <div className="agi-ap-foot" aria-hidden="true">
-        <span className="agi-ap-mode agi-ap-mode--active">Suggest</span>
-        <span className="agi-ap-mode">Auto-edit</span>
-        <span className="agi-ap-mode">Full-auto</span>
+        <span className="agi-ap-mode">Safe</span>
+        <span className="agi-ap-mode">Plan</span>
+        <span className="agi-ap-mode agi-ap-mode--active">Build</span>
+        <span className="agi-ap-mode">Autopilot</span>
         <span className="agi-ap-hint">Shift+Tab cycles autonomy</span>
       </div>
     </figure>

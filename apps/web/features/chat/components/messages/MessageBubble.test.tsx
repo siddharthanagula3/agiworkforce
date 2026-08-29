@@ -946,7 +946,7 @@ describe('MessageBubble', () => {
       const msg = makeMessage({ id: 'msg-react', role: 'assistant', content: 'test' });
       render(<MessageBubble message={msg} onReact={onReact} />);
 
-      fireEvent.click(screen.getByLabelText('Rate as good response'));
+      fireEvent.click(screen.getByLabelText('Good response'));
       expect(onReact).toHaveBeenCalledWith('msg-react', 'up');
     });
 
@@ -955,7 +955,7 @@ describe('MessageBubble', () => {
       const msg = makeMessage({ id: 'msg-react', role: 'assistant', content: 'test' });
       render(<MessageBubble message={msg} onReact={onReact} />);
 
-      fireEvent.click(screen.getByLabelText('Rate as poor response'));
+      fireEvent.click(screen.getByLabelText('Bad response'));
       expect(onReact).toHaveBeenCalledWith('msg-react', 'down');
     });
 

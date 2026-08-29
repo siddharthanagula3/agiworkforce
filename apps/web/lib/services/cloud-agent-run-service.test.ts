@@ -305,7 +305,9 @@ describe('cloud agent run service', () => {
 
     expect(db.query).toHaveBeenNthCalledWith(
       2,
-      expect.stringMatching(/when \$4 is not null and \$5 >= runs\.last_event_sequence/i),
+      expect.stringMatching(
+        /when \$4::text is not null and \$5::bigint >= runs\.last_event_sequence/i,
+      ),
       [RUN_ROW.id, 'user-1', 2, 'ready_for_review', 2],
     );
     expect(run.state).toBe('ready_for_review');
@@ -583,7 +585,7 @@ describe('cloud agent run service', () => {
     expect(result.next).toEqual({ updatedAt: olderRow.updated_at, id: olderRow.id });
     expect(db.query).toHaveBeenCalledWith(
       expect.stringMatching(
-        /runs\.user_id = \$1[\s\S]*runs\.state = any\(\$2::text\[\]\)[\s\S]*runs\.request_id = \$3[\s\S]*\(runs\.updated_at, runs\.id\) < \(\$4::timestamptz, \$5::uuid\)/i,
+        /runs\.user_id = \$1[\s\S]*runs\.state = any\(\$2::text\[\]\)[\s\S]*runs\.request_id = \$3[\s\S]*\(runs\.updated_at, runs\.id\) < \(\$4::timestamptz, \$5::uuid\)[\s\S]*runs\.work_mode = any\(\$7::text\[\]\)/i,
       ),
       [
         'user-1',
@@ -592,6 +594,7 @@ describe('cloud agent run service', () => {
         '2026-07-17T20:00:00.000Z',
         '0190a000-0000-7000-8000-000000000099',
         2,
+        null,
       ],
     );
   });
@@ -618,6 +621,7 @@ describe('cloud agent run service', () => {
       null,
       null,
       2,
+      null,
     ]);
   });
 

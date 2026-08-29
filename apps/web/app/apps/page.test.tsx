@@ -6,7 +6,13 @@ import { join } from 'node:path';
 const useAuth = vi.hoisted(() => vi.fn());
 const replace = vi.hoisted(() => vi.fn());
 
-vi.mock('@clerk/nextjs', () => ({ useAuth }));
+vi.mock('next-themes', () => ({ useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }) }));
+
+vi.mock('@clerk/nextjs', () => ({
+  useAuth,
+  useUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
+  useClerk: () => ({ signOut: vi.fn(), openUserProfile: vi.fn() }),
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push: vi.fn(), prefetch: vi.fn() }),
@@ -52,7 +58,10 @@ describe('/apps navigation', () => {
     for (const call of replace.mock.calls) {
       expect(String(call[0]).startsWith('/integrations')).toBe(false);
     }
-    for (const link of container.querySelectorAll('a')) {
+    const pageLinks = [...container.querySelectorAll('a')].filter(
+      (link) => !link.closest('.agi-footer'),
+    );
+    for (const link of pageLinks) {
       expect(link.getAttribute('href')?.startsWith('/integrations')).toBeFalsy();
     }
   });

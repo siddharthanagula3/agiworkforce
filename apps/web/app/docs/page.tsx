@@ -1,6 +1,7 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
@@ -324,6 +325,7 @@ export default function DocsPage() {
             </div>
           </main>
         </div>
+        <MarketingFooter condensed />
       </div>
     </div>
   );

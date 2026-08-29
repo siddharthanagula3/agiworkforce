@@ -17,6 +17,7 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import type { CloudWorkMode } from '@agiworkforce/types';
 import {
   listCloudAgentRuns,
   type CloudAgentRunCursor,
@@ -56,6 +57,8 @@ function encodeCursor(cursor: CloudAgentRunCursor | null): string | null {
   return cursor ? Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url') : null;
 }
 
+const AGI_WORK_MODES = ['agiwork'] as const satisfies readonly CloudWorkMode[];
+
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'agent-run-follow');
   if (rateLimitResponse) return rateLimitResponse;
@@ -78,12 +81,16 @@ async function handleGet(request: NextRequest) {
   }
 
   const { db, userId } = await getUserScopedDb(request);
+  // Tasks is the AGI Work surface: it lists the runs that mode produced and
+  // nothing else. An ordinary `chat` turn also writes a cloud_agent_runs row,
+  // so without this filter every conversation showed up here as a "task".
   const page = await listCloudAgentRuns(db, {
     userId,
     states: parsedStates.data,
     requestId: parsedRequestIds.data[0],
     before: decodeCursor(url.searchParams.get('cursor')),
     limit: parsedLimit.data,
+    workModes: AGI_WORK_MODES,
   });
   return NextResponse.json(
     { runs: page.runs, nextCursor: encodeCursor(page.next) },

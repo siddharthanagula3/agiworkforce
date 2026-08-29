@@ -78,7 +78,7 @@ export default function ContactPage() {
                 Email contact@agiworkforce.com
               </a>
               <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--ghost">
-                Contact Sales
+                Contact sales
               </Link>
             </div>
           </div>

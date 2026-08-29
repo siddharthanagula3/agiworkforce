@@ -5,19 +5,28 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import process from 'node:process';
 
+import {
+  loadFamilyCatalog,
+  resolveFamilyRef,
+} from '../packages/ai/model-registry/scripts/families.mjs';
+
 const root = process.cwd();
 const GUARD = path.join(root, 'scripts/check-model-catalog-integrity.mjs');
 const FIXTURE = path.join(root, 'apps/cli/test-fixture-stale-model-id.md');
 const LABEL_FIXTURE = path.join(root, 'apps/cli/test-fixture-stale-model-label.ts');
 const DOC_LABEL_FIXTURE = path.join(root, 'docs/test-fixture-retired-opus-label.md');
 const TEST_LABEL_FIXTURE = path.join(root, 'apps/cli/tests/test-fixture-retired-opus-label.ts');
+const familyCatalog = loadFamilyCatalog(path.join(root, 'packages/ai/model-registry/catalog'));
 const curation = JSON.parse(
   fs.readFileSync(
     path.join(root, 'packages/ai/model-registry/catalog/models.curation.json'),
     'utf8',
   ),
 );
-const currentOpenAIModel = curation.providers?.openai?.defaultModel;
+const currentOpenAIModel = resolveFamilyRef(
+  curation.providers?.openai?.defaultModel,
+  familyCatalog,
+);
 if (typeof currentOpenAIModel !== 'string') {
   throw new Error('Canonical OpenAI default model is missing');
 }

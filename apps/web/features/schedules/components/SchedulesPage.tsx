@@ -503,7 +503,7 @@ export function SchedulesPage({
 
   return (
     <main className="min-h-full bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      <div className="mx-auto flex w-full max-w-[68rem] flex-col gap-8 px-8 py-12">
         <header className="flex flex-col gap-5 border-b border-border/70 pb-7 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-3xl space-y-3">
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -517,7 +517,7 @@ export function SchedulesPage({
                 {SCHEDULE_MATURITY_LABEL}
               </span>
             </div>
-            <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h1 className="text-balance font-[var(--chat-font-serif)] text-[28px] font-medium">
               Schedules
             </h1>
             <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">

@@ -39,7 +39,7 @@ export default function IntegrationsPage() {
               Browse Apps &amp; Connectors
             </Link>
             <Link href="/providers" className="agi-fl-cta agi-fl-cta--ghost">
-              See Providers
+              See providers
             </Link>
           </div>
           <div className="agi-fl-hero-console" aria-hidden="true">
@@ -109,8 +109,8 @@ export default function IntegrationsPage() {
           title="Connect one tool, then the next."
           body="Start with a provider key or a local runtime, add MCP plugins as the work demands, and keep every permission visible."
           ctas={[
-            { href: '/providers', label: 'See Providers' },
-            { href: '/api-docs', label: 'Read API Docs' },
+            { href: '/providers', label: 'See providers' },
+            { href: '/api-docs', label: 'Read API docs' },
           ]}
         />
 

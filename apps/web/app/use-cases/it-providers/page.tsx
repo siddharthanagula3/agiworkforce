@@ -36,7 +36,7 @@ export default function ItProvidersPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/contact-sales" className="agi-fl-cta agi-fl-cta--primary">
-              Contact Sales
+              Contact sales
             </Link>
             <Link href="/cli" className="agi-fl-cta agi-fl-cta--ghost">
               See the CLI
@@ -107,9 +107,9 @@ export default function ItProvidersPage() {
           title="Put the agent on the bench."
           body="Start with the CLI on Local and BYOK, and talk to sales when client contracts need enterprise controls."
           ctas={[
-            { href: '/contact-sales', label: 'Contact Sales' },
+            { href: '/contact-sales', label: 'Contact sales' },
             { href: '/cli', label: 'See the CLI' },
-            { href: '/enterprise', label: 'See Enterprise Controls' },
+            { href: '/enterprise', label: 'See enterprise controls' },
           ]}
         />
 

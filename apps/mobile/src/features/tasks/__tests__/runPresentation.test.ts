@@ -152,6 +152,17 @@ describe('cloud run blocking', () => {
 });
 
 describe('cloud run grouping', () => {
+  // groupCloudRunsByRecency reads the wall clock, so pinning it is what keeps
+  // "Today" meaning today — the fixtures are stamped relative to NOW and this
+  // suite began failing the day after NOW passed.
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('groups by last activity and keeps the newest first', () => {
     const dayMs = 24 * 60 * 60 * 1000;
     const older = cloudRun({ id: 'older', updatedAt: new Date(NOW - 10 * dayMs).toISOString() });

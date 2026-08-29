@@ -74,7 +74,7 @@ export default function SlaPage() {
           <h1 id="agi-sla-hero-title" className="agi-fl-h1">
             <span className="agi-fl-h1-line">Targets we are building toward,</span>{' '}
             <span className="agi-fl-h1-line">
-              <em className="agi-fl-h1-em">labelled as targets.</em>
+              <em className="agi-fl-h1-em">labeled as targets.</em>
             </span>
           </h1>
           <p className="agi-fl-lede">

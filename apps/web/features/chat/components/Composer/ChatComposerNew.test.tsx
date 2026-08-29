@@ -454,7 +454,9 @@ describe('ChatComposerNew', () => {
     );
 
     expect(screen.queryByRole('button', { name: 'AGI Work' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Project' })).toHaveTextContent('Free Project');
+    expect(screen.getByRole('button', { name: 'Project: Free Project' })).toHaveTextContent(
+      'Free Project',
+    );
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'Project chat');
@@ -1002,9 +1004,12 @@ describe('ChatComposerNew', () => {
         'aria-pressed',
         'true',
       );
-      expect(screen.getByRole('button', { name: 'Project or folder' })).toHaveTextContent(
-        'Website Redesign',
-      );
+      // WCAG 2.5.3: the accessible name carries the visible chip text, so a
+      // voice-control user can say what they can read and a screen reader
+      // announces WHICH project is scoped, not just that a picker exists.
+      expect(
+        screen.getByRole('button', { name: 'Project or folder: Website Redesign' }),
+      ).toHaveTextContent('Website Redesign');
       fireEvent.click(screen.getByRole('button', { name: /clear project or folder selection/i }));
       expect(picker.onSelectProject).toHaveBeenCalledWith(null);
     });

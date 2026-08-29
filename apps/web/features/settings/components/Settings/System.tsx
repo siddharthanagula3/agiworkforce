@@ -283,11 +283,7 @@ export const SystemPanel: React.FC<SystemPanelProps> = ({
               <span className="text-yellow-500">You have unsaved changes</span>
             )}
           </div>
-          <Button
-            type="submit"
-            disabled={isSaving || !systemForm.formState.isDirty}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
+          <Button type="submit" disabled={isSaving || !systemForm.formState.isDirty}>
             {isUpdatePending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

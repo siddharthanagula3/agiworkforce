@@ -133,7 +133,7 @@ GOOGLE_API_KEY=AIza...
           </Link>
         </section>
 
-        <MarketingFooter />
+        <MarketingFooter condensed />
       </main>
     </div>
   );

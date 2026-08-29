@@ -6,6 +6,8 @@ import {
 } from '@/app/settings/_lib/preferences-client';
 
 export type PresetStyle = 'default' | 'concise' | 'detailed' | 'technical' | 'creative';
+
+export const DEFAULT_PRESET_STYLE: PresetStyle = 'concise';
 export type ResponseStyle = PresetStyle | 'custom';
 
 export type ResponseLength = 'brief' | 'standard' | 'thorough';
@@ -47,7 +49,7 @@ interface StylePreferencesPayload {
 export const useStyleStore = create<StyleState>()(
   persist(
     (set) => ({
-      style: 'default',
+      style: DEFAULT_PRESET_STYLE,
       length: 'brief' as ResponseLength,
       activeCustomStyleId: null,
       customStyles: [],
@@ -92,7 +94,7 @@ export const useStyleStore = create<StyleState>()(
         set((state) => ({
           customStyles: state.customStyles.filter((s) => s.id !== id),
           activeCustomStyleId: state.activeCustomStyleId === id ? null : state.activeCustomStyleId,
-          style: state.activeCustomStyleId === id ? 'default' : state.style,
+          style: state.activeCustomStyleId === id ? DEFAULT_PRESET_STYLE : state.style,
         }));
         void syncToServer();
       },
