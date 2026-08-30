@@ -194,7 +194,7 @@ The `core/skills/` module supports loadable skills from local files, marketplace
 
 ## Security and Privacy
 
-> Trust-boundary model: **[`docs/architecture/trust-boundaries.md`](docs/architecture/trust-boundaries.md)**. Key custody and rotation: **[`docs/security/`](docs/security/)**. The repository has no published vulnerability-reporting policy yet.
+> Trust-boundary model: **[`docs/architecture/trust-boundaries.md`](docs/architecture/trust-boundaries.md)**. Key custody and rotation: **[`docs/security/`](docs/security/)**. Vulnerability reporting: **[`SECURITY.md`](SECURITY.md)** — report privately through GitHub's advisory flow, which is enabled on this repository.
 
 - **Trust boundary enforcement** — Local, BYOK, and Managed Cloud are separate trust boundaries. Local chats never silently route to cloud providers. BYOK transitions require explicit user consent with payload preview and secret scanning.
 - **Encrypted local storage** — Desktop uses SQLCipher-encrypted SQLite for local data. Credentials stored in OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service).
