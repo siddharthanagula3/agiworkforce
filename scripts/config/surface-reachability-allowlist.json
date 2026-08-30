@@ -236,7 +236,12 @@
       }
     },
     "web": {
-      "intentional": [],
+      "intentional": [
+        {
+          "pathPrefix": "apps/web/shared/components/agi/AgiChatDemo.tsx",
+          "reason": "Retained as an anchor for the marketing model-catalog scan; the current landing surface renders the canonical HeroAppWindow preview instead."
+        }
+      ],
       "unreachableDebt": {
         "reason": "Pre-existing unreachable web modules measured by the first real import-graph walk. The list may only shrink; adding to it requires an explicit, reviewed edit.",
         "trackedBy": "SIX-32",
