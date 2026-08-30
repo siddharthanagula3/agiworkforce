@@ -158,7 +158,7 @@
   overflow: hidden;
   border: 1px solid var(--chat-border);
   border-radius: 14px;
-  background: var(--chat-surface);
+  background: var(--chat-surface-elevated);
 }
 
 .panelHeader {
@@ -449,7 +449,7 @@
   gap: 9px;
   padding: 12px;
   border-top: 1px solid var(--chat-border);
-  background: var(--chat-surface);
+  background: var(--chat-surface-elevated);
 }
 
 .commandInput {
@@ -496,7 +496,7 @@
   padding: 12px;
   border: 1px solid var(--chat-border);
   border-radius: 11px;
-  background: var(--chat-surface);
+  background: var(--chat-surface-elevated);
   color: var(--chat-text-primary);
   text-decoration: none;
 }
