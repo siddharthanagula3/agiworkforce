@@ -483,7 +483,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                         variant="ghost"
                         size="sm"
                         onClick={handleClearHistory}
-                        className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-danger"
                       >
                         <Trash2 className="mr-1 h-3 w-3" />
                         Clear
@@ -544,7 +544,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                     <div className="flex flex-col items-center justify-center py-8 text-center">
                       <Search className="mb-3 h-12 w-12 text-muted-foreground opacity-30" />
                       <p className="text-sm text-muted-foreground">Start typing to search</p>
-                      <p className="mt-1 text-xs text-muted-foreground/70">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Your search history will appear here
                       </p>
                     </div>
@@ -561,7 +561,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Search className="mb-3 h-12 w-12 text-muted-foreground opacity-30" />
                 <p className="text-sm text-muted-foreground">No results found</p>
-                <p className="mt-1 text-xs text-muted-foreground/70">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Try different keywords or clear filters
                 </p>
               </div>

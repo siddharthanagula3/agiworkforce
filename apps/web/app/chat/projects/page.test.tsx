@@ -4,8 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const push = vi.fn();
 
+const searchParams = new URLSearchParams();
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
+  // The page opens its create dialog for ?new=1, which is how "New project"
+  // keeps its meaning when the sidebar is rendered by WebAppShell.
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@shared/components/layout/WebAppShell', () => ({

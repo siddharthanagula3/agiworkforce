@@ -98,11 +98,11 @@ function FormField({
       <div className="flex items-center justify-between">
         <Label
           htmlFor={id}
-          className={cn('text-sm font-medium', displayError && 'text-destructive', labelClassName)}
+          className={cn('text-sm font-medium', displayError && 'text-danger', labelClassName)}
         >
           {label}
           {required && (
-            <span className="ml-1 text-destructive" aria-hidden="true">
+            <span className="ml-1 text-danger" aria-hidden="true">
               *
             </span>
           )}
@@ -135,7 +135,7 @@ function FormField({
 
         {showValidationIcon && displayError && (
           <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-            <AlertCircle className="h-4 w-4 text-destructive" aria-hidden="true" />
+            <AlertCircle className="h-4 w-4 text-danger" aria-hidden="true" />
           </div>
         )}
 
@@ -156,7 +156,7 @@ function FormField({
       {displayError && (
         <p
           id={errorId}
-          className="flex items-start gap-1 text-xs text-destructive"
+          className="flex items-start gap-1 text-xs text-danger"
           role="alert"
           aria-live="polite"
         >

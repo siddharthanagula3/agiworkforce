@@ -1,4 +1,3 @@
-
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -7,7 +6,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { NextRequest } from 'next/server';
-import { LOCAL_PROVIDER_KEYS } from '@/lib/byok-access';
+import {
+  isLocalChatModel,
+  isModelAdmittedForExecutionMode,
+  type ModelInfo,
+} from '@agiworkforce/unified-chat';
 import {
   buildManagedComputeGateResponse,
   isManagedComputePrivateBetaEnabled,
@@ -18,17 +21,45 @@ function makeRequest(): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', { method: 'POST' });
 }
 
+function modelFrom(provider: string, overrides: Partial<ModelInfo> = {}): ModelInfo {
+  return {
+    id: `${provider}/fixture`,
+    name: 'fixture',
+    provider,
+    isLocal: false,
+    isByok: false,
+    ...overrides,
+  } as ModelInfo;
+}
+
 describe('L1 Security - Privacy Boundaries (Local)', () => {
   test('SECURITY: on-device providers are classified as Local', () => {
-    for (const localKey of ['local', 'ollama', 'lmstudio', 'executorch', 'llamacpp']) {
-      expect(LOCAL_PROVIDER_KEYS.has(localKey)).toBe(true);
+    for (const localKey of ['local', 'ollama', 'lmstudio', 'llamacpp', 'vllm']) {
+      expect(isLocalChatModel(modelFrom(localKey))).toBe(true);
+      expect(isLocalChatModel(modelFrom(localKey.toUpperCase()))).toBe(true);
     }
   });
 
   test('SECURITY: remote/managed providers are NOT classified as Local', () => {
     for (const remoteKey of ['openai', 'anthropic', 'google', 'managed_cloud', 'byok']) {
-      expect(LOCAL_PROVIDER_KEYS.has(remoteKey)).toBe(false);
+      expect(isLocalChatModel(modelFrom(remoteKey))).toBe(false);
     }
+  });
+
+  test('SECURITY: a remote provider cannot be admitted to a local-only session', () => {
+    for (const remoteKey of ['openai', 'anthropic', 'google', 'managed_cloud']) {
+      expect(isModelAdmittedForExecutionMode(modelFrom(remoteKey), 'local_only')).toBe(false);
+      expect(
+        isModelAdmittedForExecutionMode(modelFrom(remoteKey, { isByok: true }), 'local_only'),
+      ).toBe(false);
+    }
+    expect(isModelAdmittedForExecutionMode(modelFrom('ollama'), 'local_only')).toBe(true);
+  });
+
+  test('SECURITY: a local model is never admitted to a BYOK or managed session', () => {
+    const local = modelFrom('ollama', { isByok: true });
+    expect(isModelAdmittedForExecutionMode(local, 'byok')).toBe(false);
+    expect(isModelAdmittedForExecutionMode(local, 'cloud_managed')).toBe(false);
   });
 });
 

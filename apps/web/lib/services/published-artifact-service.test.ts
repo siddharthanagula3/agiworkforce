@@ -12,6 +12,7 @@ const {
   publishArtifactRecord,
   requiresSandboxedRender,
   unpublishArtifactRecord,
+  unpublishArtifactsForConversations,
   MAX_PUBLISHED_PER_USER,
   PublishedArtifactOwnershipError,
   PublishedArtifactQuotaError,
@@ -392,5 +393,45 @@ describe('buildPublishedArtifactUrl', () => {
     expect(buildPublishedArtifactUrl('aaaaaaaaaaaaaaaaaaaaaaaa')).toContain(
       '/shared-artifact/aaaaaaaaaaaaaaaaaaaaaaaa',
     );
+  });
+});
+
+describe('unpublishArtifactsForConversations', () => {
+  it('revokes every page published out of the given conversations, scoped to the owner', async () => {
+    const db = makeDb([{ token: 'a'.repeat(24) }, { token: 'b'.repeat(24) }]);
+
+    const revoked = await unpublishArtifactsForConversations(db as never, {
+      userId: 'user-1',
+      conversationIds: ['conversation-1', 'conversation-2'],
+    });
+
+    expect(revoked).toEqual(['a'.repeat(24), 'b'.repeat(24)]);
+    const [sql, params] = db.query.mock.calls[0]!;
+    expect(sql).toContain('delete from public.published_artifacts');
+    expect(sql).toContain('user_id = $1');
+    expect(sql).toContain('conversation_id = any($2::uuid[])');
+    expect(params).toEqual(['user-1', ['conversation-1', 'conversation-2']]);
+  });
+
+  it('deduplicates ids and never issues a query for an empty or unowned request', async () => {
+    const db = makeDb([]);
+
+    await unpublishArtifactsForConversations(db as never, {
+      userId: 'user-1',
+      conversationIds: ['conversation-1', 'conversation-1'],
+    });
+    expect(db.query.mock.calls[0]?.[1]).toEqual(['user-1', ['conversation-1']]);
+
+    db.query.mockClear();
+    expect(
+      await unpublishArtifactsForConversations(db as never, { userId: '', conversationIds: ['c'] }),
+    ).toEqual([]);
+    expect(
+      await unpublishArtifactsForConversations(db as never, {
+        userId: 'user-1',
+        conversationIds: [],
+      }),
+    ).toEqual([]);
+    expect(db.query).not.toHaveBeenCalled();
   });
 });

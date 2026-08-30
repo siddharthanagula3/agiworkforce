@@ -48,7 +48,7 @@ export function EmptyState({
                 onClick={handleBadgeAction}
                 aria-label={planBadgeActionAriaLabel}
                 className="font-medium underline-offset-2 hover:underline transition-colors"
-                style={{ color: 'var(--chat-accent-primary)' }}
+                style={{ color: 'var(--chat-accent-primary-text)' }}
               >
                 {planBadgeActionLabel}
               </button>

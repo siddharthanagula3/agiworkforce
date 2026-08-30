@@ -1,7 +1,7 @@
-
 import { describe, expect, it, vi } from 'vitest';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 
+import { QWEN_DEFAULT_BASE_URL } from '../base-url';
 import { createQwenAdapter } from '../index';
 
 const QWEN_DEFAULT_MODEL_ID = requireProviderDefaultModel('qwen');
@@ -86,19 +86,25 @@ describe('createQwenAdapter fallbackEndpoints (pre-first-byte fail-over)', () =>
   }
 
   it('rotates to the fallback endpoint when the primary fails pre-first-byte, then surfaces a terminal error', async () => {
+    // Derived from the default rather than hardcoded, so flipping the default
+    // region cannot turn this into a same-host fallback that is filtered out
+    // and silently stops testing rotation.
+    const primaryHost = new URL(QWEN_DEFAULT_BASE_URL).hostname;
+    const otherRegion =
+      primaryHost === 'dashscope-intl.aliyuncs.com'
+        ? 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+        : 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
     const hosts: string[] = [];
     const adapter = createQwenAdapter({
       apiKey: 'primary-key',
       fetch: hostRecordingFetch(hosts) as never,
-      fallbackEndpoints: [
-        { baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', apiKey: 'alt-key' },
-      ],
+      fallbackEndpoints: [{ baseUrl: otherRegion, apiKey: 'alt-key' }],
     });
 
     const chunks = await drain(adapter);
 
-    expect(hosts.some((h) => h === 'dashscope.aliyuncs.com')).toBe(true);
-    expect(hosts.some((h) => h === 'dashscope-intl.aliyuncs.com')).toBe(true);
+    expect(hosts.some((h) => h === primaryHost)).toBe(true);
+    expect(hosts.some((h) => h === new URL(otherRegion).hostname)).toBe(true);
     expect(chunks.some((c) => c.type === 'error')).toBe(true);
     expect(chunks.at(-1)).toMatchObject({ type: 'stop', reason: 'error' });
   }, 20_000);
@@ -108,7 +114,7 @@ describe('createQwenAdapter fallbackEndpoints (pre-first-byte fail-over)', () =>
     const adapter = createQwenAdapter({
       apiKey: 'primary-key',
       fetch: hostRecordingFetch(hosts) as never,
-      fallbackEndpoints: [{ baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' }],
+      fallbackEndpoints: [{ baseUrl: QWEN_DEFAULT_BASE_URL }],
     });
 
     await drain(adapter);

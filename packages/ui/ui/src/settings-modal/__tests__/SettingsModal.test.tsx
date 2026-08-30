@@ -303,6 +303,20 @@ describe('Connectors pane (table)', () => {
     expect(screen.getByText('GitHub')).toBeTruthy();
   });
 
+  it('keeps the tab count legible when the selected tab inverts its colours', () => {
+    renderModal();
+
+    for (const name of [/^All/, /^Connected/, /^Not connected/]) {
+      fireEvent.click(screen.getByRole('tab', { name }));
+      const selected = screen.getByRole('tab', { name });
+      const count = within(selected).getByText(/^\d+$/);
+      // The selected tab paints bg-foreground/text-background, so any colour
+      // the count sets for itself survives the inversion and lands dark-on-dark.
+      expect(selected.className).toContain('bg-foreground');
+      expect(count.className).not.toMatch(/(^|\s)text-/);
+    }
+  });
+
   it('filters rows via search', () => {
     renderModal();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search connectors' }), {

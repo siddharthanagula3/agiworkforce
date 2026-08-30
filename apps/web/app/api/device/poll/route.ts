@@ -5,8 +5,12 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { decryptToken } from '@/lib/device-token-crypto';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
+  createDeviceRefreshCredential,
+} from '@/lib/server/device-refresh-token';
+import { issueDeveloperToken } from '@/lib/server/developer-token';
 
 interface DeviceAuthRow {
   device_id: string;
@@ -195,37 +199,55 @@ async function handleDevicePoll(request: NextRequest) {
         );
       }
 
-      if (!consumed.access_token || !consumed.user_id) {
+      if (!consumed.user_id) {
         logger.warn(
           { deviceId: device_id, status: consumed.status },
-          'Device code approved but tokens missing after consumption',
+          'Device code approved but carries no account after consumption',
         );
         return NextResponse.json({ status: 'pending' });
       }
 
+      // The device credential is minted on consumption, matching
+      // /api/auth/device/token: a renewable access/refresh pair bound to a
+      // session family, rather than the caller's own browser session token.
+      const familyId = crypto.randomUUID();
+      const refreshCredential = createDeviceRefreshCredential();
       let accessToken: string;
-      let refreshToken: string | null = null;
+      let expiresIn: number;
       try {
-        accessToken = decryptToken(consumed.access_token);
-        if (consumed.refresh_token) {
-          refreshToken = decryptToken(consumed.refresh_token);
-        }
-      } catch (decryptError) {
-        logger.error(
-          {
-            error: decryptError instanceof Error ? decryptError.message : String(decryptError),
-            deviceId: device_id,
-          },
-          'Failed to decrypt device tokens - they may have been stored before encryption was enabled',
-        );
-        throw createError.internal('Failed to decrypt device authorization tokens');
+        ({ accessToken, expiresIn } = issueDeveloperToken({
+          userId: consumed.user_id,
+          ...(consumed.user_email ? { email: consumed.user_email } : {}),
+          sessionFamilyId: familyId,
+        }));
+      } catch (error) {
+        logger.error({ error, deviceId: device_id }, 'Device poll: signing is not configured');
+        throw createError.internal('Token signing is not configured');
       }
+
+      await db.execute(
+        `INSERT INTO device_refresh_tokens
+           (family_id, user_id, user_email, token_hash, expires_at, device_id, device_name)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          familyId,
+          consumed.user_id,
+          consumed.user_email,
+          refreshCredential.tokenHash,
+          refreshCredential.expiresAt,
+          device_id,
+          consumed.user_name,
+        ],
+      );
 
       return NextResponse.json(
         {
           status: 'approved',
           access_token: accessToken,
-          refresh_token: refreshToken,
+          refresh_token: refreshCredential.token,
+          token_type: 'Bearer',
+          expires_in: expiresIn,
+          refresh_token_expires_in: DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
           user: {
             id: consumed.user_id,
             email: consumed.user_email,

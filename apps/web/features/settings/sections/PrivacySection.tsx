@@ -13,6 +13,7 @@ import {
 } from '@/app/settings/_lib/preferences-client';
 import {
   applyBulkConversationAction,
+  fetchConversationHistoryStats,
   type BulkConversationAction,
 } from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
@@ -171,9 +172,7 @@ export function PrivacySection() {
       })
       .catch((error) => {
         if (!cancelled) {
-          setPreferenceError(
-            toUserMessage(error, 'Failed to load privacy settings'),
-          );
+          setPreferenceError(toUserMessage(error, 'Failed to load privacy settings'));
         }
       })
       .finally(() => {
@@ -197,9 +196,7 @@ export function PrivacySection() {
       setTelemetryConsentCache(next.shareTelemetry);
       savePreferenceNamespace(NAMESPACE, next)
         .catch((error) => {
-          setPreferenceError(
-            toUserMessage(error, 'Failed to save privacy settings'),
-          );
+          setPreferenceError(toUserMessage(error, 'Failed to save privacy settings'));
         })
         .finally(() => setSavingPreferences(false));
       return next;
@@ -252,9 +249,7 @@ export function PrivacySection() {
         affectedCount === 1 ? 'Archived 1 chat.' : `Archived ${affectedCount} chats.`,
       );
     } catch (caught) {
-      setConversationActionError(
-        toUserMessage(caught, 'Failed to archive chats'),
-      );
+      setConversationActionError(toUserMessage(caught, 'Failed to archive chats'));
     } finally {
       setBulkAction(null);
     }
@@ -265,14 +260,22 @@ export function PrivacySection() {
       setConversationActionError('Finish or stop active replies before deleting all chats.');
       return;
     }
-    // Highest-stakes destructive action in the app: every active AND
-    // archived conversation, gone, with no restore path (unlike "Delete all
-    // archived", which at least leaves active chats untouched). The count
-    // makes the scope concrete instead of a vague "every chat".
-    const chatCount = conversations.length;
+    // The sidebar store holds only the pages fetched so far, so its length
+    // understates the scope of a delete-everything action. Ask the server for
+    // the real total before naming a number in an irreversible-looking prompt.
+    let chatCount: number | null = null;
+    try {
+      chatCount = (await fetchConversationHistoryStats()).conversationCount;
+    } catch {
+      chatCount = null;
+    }
+    const scope =
+      chatCount === null
+        ? 'Every chat in your account, active and archived, will be removed from your history'
+        : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in your account, active and archived, will be removed from your history`;
     const confirmed = await confirmDestructive({
       title: 'Delete all chats?',
-      description: `Permanently delete all ${chatCount} chat${chatCount === 1 ? '' : 's'} in your account, including every archived chat and its messages. This cannot be undone.`,
+      description: `${scope}. You can restore them from Settings > Deleted chats until they are purged.`,
       confirmText: 'Delete all chats',
       variant: 'destructive',
     });
@@ -291,9 +294,7 @@ export function PrivacySection() {
         affectedCount === 1 ? 'Deleted 1 chat.' : `Deleted ${affectedCount} chats.`,
       );
     } catch (caught) {
-      setConversationActionError(
-        toUserMessage(caught, 'Failed to delete chats'),
-      );
+      setConversationActionError(toUserMessage(caught, 'Failed to delete chats'));
     } finally {
       setBulkAction(null);
     }
@@ -652,7 +653,7 @@ export function PrivacySection() {
               padding: '6px 14px',
               fontSize: 12,
               fontWeight: 600,
-              color: 'var(--chat-accent-primary)',
+              color: 'var(--chat-accent-primary-text)',
               background: 'transparent',
               border: '1px solid rgba(218,119,86,0.5)',
               borderRadius: 'var(--radius-md)',
@@ -672,9 +673,7 @@ export function PrivacySection() {
             style={{
               padding: '10px 20px',
               borderBottom: '1px solid var(--settings-border)',
-              color: conversationActionError
-                ? 'var(--chat-accent-primary)'
-                : 'var(--text-2)',
+              color: conversationActionError ? 'var(--chat-accent-primary)' : 'var(--text-2)',
               fontSize: 12,
             }}
           >
@@ -873,7 +872,7 @@ export function PrivacySection() {
               {exporting ? 'Preparing...' : 'Export data'}
             </button>
             {exportError && (
-              <span style={{ fontSize: 12, color: 'var(--chat-accent-primary)' }}>
+              <span style={{ fontSize: 12, color: 'var(--chat-accent-primary-text)' }}>
                 {exportError}
               </span>
             )}
@@ -931,7 +930,7 @@ export function PrivacySection() {
             borderBottom: '1px solid rgba(218,119,86,0.25)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--chat-accent-primary)',
+            color: 'var(--chat-accent-primary-text)',
           }}
         >
           Danger zone

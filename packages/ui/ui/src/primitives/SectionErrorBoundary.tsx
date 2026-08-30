@@ -107,8 +107,8 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
             role="alert"
             aria-live="assertive"
           >
-            <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
-            <span className="flex-1 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+            <span className="flex-1 text-sm text-danger">
               {sectionName ? `${sectionName} failed to load` : 'Something went wrong'}
             </span>
             <Button
@@ -135,7 +135,7 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
           aria-live="assertive"
         >
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-            <AlertCircle className="h-6 w-6 text-destructive" aria-hidden="true" />
+            <AlertCircle className="h-6 w-6 text-danger" aria-hidden="true" />
           </div>
 
           <h3 className="mb-2 text-lg font-semibold text-foreground">

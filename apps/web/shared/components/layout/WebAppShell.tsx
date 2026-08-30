@@ -248,7 +248,11 @@ export function WebAppShell({ children }: WebAppShellProps) {
     },
     [confirmDestructive, removeProjectFromStore, storeProjects],
   );
-  const handleProjectCreate = useCallback(() => router.push('/chat/projects'), [router]);
+  // The projects page owns the create dialog, so carry the intent across the
+  // navigation: without ?new=1 this button lands the user on a list and the
+  // "New project" they asked for never opens - the same control opens the
+  // dialog directly when WebChatPage renders the sidebar.
+  const handleProjectCreate = useCallback(() => router.push('/chat/projects?new=1'), [router]);
 
   // ONE rail definition, shared with WebChatPage — see `app-nav-items.ts` for
   // why (the two hand-maintained copies had drifted and this shell was the only
@@ -328,10 +332,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
                 <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
               )}
             </div>
-            <ChevronUp
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
-              aria-hidden="true"
-            />
+            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
@@ -391,7 +392,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => void handleLogout()}
-            className="text-destructive focus:text-destructive"
+            className="text-danger focus:text-danger"
           >
             <LogOut className="mr-2 h-4 w-4" />
             Log out

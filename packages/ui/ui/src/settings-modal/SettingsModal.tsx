@@ -332,7 +332,7 @@ function ConnectorDetail({
         </p>
       )}
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       )}
@@ -460,7 +460,10 @@ function SkillDownloadAction({
   skill: SettingsSkill;
 }) {
   if (!skill.downloadHref) return null;
-  const className = cn('font-medium text-foreground underline underline-offset-2', FOCUS_RING);
+  const className = cn(
+    'inline-flex min-h-6 items-center font-medium text-foreground underline underline-offset-2',
+    FOCUS_RING,
+  );
   const label = `Download ${skill.name} SKILL.md`;
   if (adapter?.openHref) {
     return (
@@ -679,7 +682,7 @@ function DirectoryBrowse({
           {connector.description}
         </p>
         {error && (
-          <p role="alert" className="text-[11px] text-destructive">
+          <p role="alert" className="text-[11px] text-danger">
             {error}
           </p>
         )}
@@ -827,7 +830,7 @@ function DirectoryBrowse({
             id="settings-directory-connectors"
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           >
-            <p className="text-sm text-destructive">{connectorsError}</p>
+            <p className="text-sm text-danger">{connectorsError}</p>
             {adapter?.retryConnectors ? (
               <button
                 type="button"
@@ -894,7 +897,7 @@ function DirectoryBrowse({
             id="settings-directory-skills"
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           >
-            <p className="text-sm text-destructive">{skillsError}</p>
+            <p className="text-sm text-danger">{skillsError}</p>
             {adapter?.retrySkills ? (
               <button
                 type="button"
@@ -954,7 +957,7 @@ function DirectoryBrowse({
             id="settings-directory-plugins"
             className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
           >
-            <p className="text-sm text-destructive">{pluginsError}</p>
+            <p className="text-sm text-danger">{pluginsError}</p>
             {adapter?.retryPlugins ? (
               <button
                 type="button"
@@ -1075,7 +1078,7 @@ function DirectoryBrowse({
                           })
                         }
                         className={cn(
-                          'font-medium text-destructive underline-offset-4 hover:underline disabled:opacity-50',
+                          'font-medium text-danger underline-offset-4 hover:underline disabled:opacity-50',
                           FOCUS_RING,
                         )}
                       >
@@ -1085,7 +1088,7 @@ function DirectoryBrowse({
                   </div>
                 )}
                 {plugin.error ? (
-                  <p role="alert" className="text-[11px] text-destructive">
+                  <p role="alert" className="text-[11px] text-danger">
                     {plugin.error}
                   </p>
                 ) : null}
@@ -1366,7 +1369,7 @@ function AddCustomConnectorForm({
           )}
         />
         {jsonImportError && (
-          <p role="alert" className="text-[11px] text-destructive">
+          <p role="alert" className="text-[11px] text-danger">
             {jsonImportError}
           </p>
         )}
@@ -1458,7 +1461,7 @@ function AddCustomConnectorForm({
           className={inputClass}
         />
         {trimmedUrl.length > 0 && !urlValid && (
-          <span id="custom-connector-url-error" className="text-[11px] text-destructive">
+          <span id="custom-connector-url-error" className="text-[11px] text-danger">
             Enter a valid https:// URL.
           </span>
         )}
@@ -1474,7 +1477,7 @@ function AddCustomConnectorForm({
       </p>
 
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       )}
@@ -1706,7 +1709,7 @@ function ConnectorsPanel({
         </p>
       ) : loadError ? (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-          <p className="text-sm text-destructive">{loadError}</p>
+          <p className="text-sm text-danger">{loadError}</p>
           {adapter?.retryConnectors ? (
             <button
               type="button"
@@ -1803,7 +1806,7 @@ function ConnectorsPanel({
                     )}
                   >
                     {t(`connectors.tab.${tab.key}`, tab.label)}
-                    <span className="ml-1 opacity-60">{tabCounts[tab.key]}</span>
+                    <span className="ml-1 font-normal">{tabCounts[tab.key]}</span>
                   </button>
                 ))}
               </div>
@@ -1929,14 +1932,14 @@ function ConnectorsPanel({
                                   setDetailId(connector.id);
                                 }}
                                 className={cn(
-                                  'block max-w-full truncate text-sm font-medium text-foreground hover:underline',
+                                  'block min-h-6 max-w-full truncate py-0.5 text-sm font-medium text-foreground hover:underline',
                                   FOCUS_RING,
                                 )}
                               >
                                 {connector.name}
                               </button>
                               {rowError && (
-                                <p role="alert" className="mt-0.5 text-[11px] text-destructive">
+                                <p role="alert" className="mt-0.5 text-[11px] text-danger">
                                   {rowError}
                                 </p>
                               )}
@@ -2053,7 +2056,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </div>
       ) : loadError ? (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-          <p className="text-sm text-destructive">{loadError}</p>
+          <p className="text-sm text-danger">{loadError}</p>
           {adapter?.retrySkills ? (
             <button
               type="button"
@@ -2267,7 +2270,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         </div>
       ) : loadError ? (
         <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-          <p className="text-sm text-destructive">{loadError}</p>
+          <p className="text-sm text-danger">{loadError}</p>
           {adapter?.retryPlugins ? (
             <button
               type="button"
@@ -2394,7 +2397,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                               })
                             }
                             className={cn(
-                              'font-medium text-destructive underline-offset-4 hover:underline disabled:opacity-50',
+                              'font-medium text-danger underline-offset-4 hover:underline disabled:opacity-50',
                               FOCUS_RING,
                             )}
                           >
@@ -2403,7 +2406,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         ) : null}
                       </div>
                       {plugin.error ? (
-                        <p role="alert" className="mt-1 text-right text-[11px] text-destructive">
+                        <p role="alert" className="mt-1 text-right text-[11px] text-danger">
                           {plugin.error}
                         </p>
                       ) : null}
@@ -2668,7 +2671,7 @@ export function SettingsModal({
               {visibleGroups.map((group, gi) => (
                 <div key={group.label ?? `group-${gi}`} className="flex flex-col gap-0.5">
                   {group.label && (
-                    <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {group.label}
                     </div>
                   )}

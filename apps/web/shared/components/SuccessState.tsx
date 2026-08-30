@@ -47,7 +47,7 @@ export function SuccessState({
       </div>
       <div className="max-w-xs space-y-1">
         <p className="text-sm font-medium text-foreground">{title}</p>
-        {description && <p className="text-xs text-muted-foreground/70">{description}</p>}
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
       {action && (
         <button

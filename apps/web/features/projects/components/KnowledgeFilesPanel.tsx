@@ -1,5 +1,7 @@
 'use client';
 
+import { useConfirmAction } from '@agiworkforce/ui';
+
 import { useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,6 +41,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function KnowledgeFilesPanel({ projectId }: Props) {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [files, setFiles] = useState<ProjectKnowledgeFile[]>([]);
   // Account-wide, not this project's total: the upload cap is account-wide, so
   // a per-project number would promise headroom the server will refuse.
@@ -130,6 +133,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
 
   return (
     <div data-testid="knowledge-files-panel">
+      {confirmDialog}
       {/* Header row */}
       <div
         style={{
@@ -364,6 +368,10 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                   fontSize: 13,
                   color: 'var(--agi-ink)',
                   flex: 1,
+                  // Without minWidth a flex child refuses to shrink below its
+                  // content, so a long file name pushes the size and delete
+                  // controls out of the row instead of ellipsing.
+                  minWidth: 0,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -381,7 +389,13 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                 title="Remove file"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void handleDelete(file);
+                  confirm({
+                    title: `Remove ${file.fileName}?`,
+                    description:
+                      'The file is deleted from this project\u2019s knowledge and the assistant stops using it. This cannot be undone \u2014 the file would have to be uploaded again.',
+                    confirmLabel: 'Remove file',
+                    onConfirm: () => handleDelete(file),
+                  });
                 }}
                 style={{
                   flexShrink: 0,

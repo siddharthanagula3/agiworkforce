@@ -6,6 +6,11 @@ const clerkState = vi.hoisted(() => ({
   user: null as null | { primaryEmailAddress?: { emailAddress?: string } },
   isLoaded: true,
   signOut: vi.fn(),
+  storeLogout: vi.fn(),
+}));
+
+vi.mock('@shared/stores/authentication-store', () => ({
+  useAuthStore: { getState: () => ({ logout: clerkState.storeLogout }) },
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -90,5 +95,27 @@ describe('Header', () => {
       expect(screen.queryByRole('dialog', { name: 'navProducts' })).not.toBeInTheDocument();
       expect(openMenuButton).toHaveFocus();
     });
+  });
+});
+
+describe('Header sign-out', () => {
+  beforeEach(() => {
+    clerkState.user = { primaryEmailAddress: { emailAddress: 'someone@example.com' } };
+    clerkState.isLoaded = true;
+    clerkState.signOut.mockClear();
+    clerkState.storeLogout.mockClear();
+    clerkState.storeLogout.mockResolvedValue(undefined);
+  });
+
+  it('purges this browser of the account it is signing out before Clerk redirects', async () => {
+    render(<Header />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sign Out' })[0]!);
+
+    await waitFor(() => expect(clerkState.signOut).toHaveBeenCalled());
+    expect(clerkState.storeLogout).toHaveBeenCalled();
+    expect(clerkState.storeLogout.mock.invocationCallOrder[0]!).toBeLessThan(
+      clerkState.signOut.mock.invocationCallOrder[0]!,
+    );
   });
 });

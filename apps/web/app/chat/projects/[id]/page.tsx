@@ -1,5 +1,7 @@
 'use client';
 
+import { useMenuKeyboard } from '@agiworkforce/ui';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { FolderOpen, MoreHorizontal, Settings2, Pin, PinOff } from 'lucide-react';
@@ -91,6 +93,18 @@ export default function ProjectDetailPage() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  // The identical menu on the projects LIST page closes on Escape and moves
+  // focus with the arrows through this hook; this one had outside-mousedown
+  // only, so the same control behaved differently on the two surfaces.
+  useMenuKeyboard({
+    open: menuOpen,
+    onClose: closeMenu,
+    panelRef: menuPanelRef,
+    triggerRef: menuTriggerRef,
+  });
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -349,6 +363,7 @@ export default function ProjectDetailPage() {
               {/* "..." overflow menu */}
               <div ref={menuRef} style={{ position: 'relative' }}>
                 <button
+                  ref={menuTriggerRef}
                   type="button"
                   aria-label="Project options"
                   data-testid="project-detail-menu-btn"
@@ -380,6 +395,7 @@ export default function ProjectDetailPage() {
 
                 {menuOpen && (
                   <div
+                    ref={menuPanelRef}
                     role="menu"
                     data-testid="project-detail-menu"
                     style={{
@@ -392,7 +408,7 @@ export default function ProjectDetailPage() {
                       borderRadius: 10,
                       boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
                       overflow: 'hidden',
-                      zIndex: 50,
+                      zIndex: 'var(--z-popover)',
                     }}
                   >
                     <button

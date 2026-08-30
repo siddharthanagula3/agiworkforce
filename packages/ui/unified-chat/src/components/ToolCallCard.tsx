@@ -378,7 +378,7 @@ const ToolCallCardComponent = ({
                 <button
                   type="button"
                   onClick={() => onApprove(id)}
-                  className="flex items-center gap-1 h-6 px-2 text-xs font-medium rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
+                  className="flex items-center gap-1 h-6 px-2 text-xs font-medium rounded bg-green-700 hover:bg-green-800 text-white transition-colors"
                 >
                   <Play className="h-2.5 w-2.5" />
                   Approve
@@ -399,7 +399,7 @@ const ToolCallCardComponent = ({
 
         {showParameters && (hasArgs || commandText) && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1 ml-0.5">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Request
             </p>
             {codeBlock ? (
@@ -420,7 +420,7 @@ const ToolCallCardComponent = ({
 
         {result && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1 ml-0.5">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Response
             </p>
             {resultDiff ? (
@@ -435,7 +435,7 @@ const ToolCallCardComponent = ({
 
         {error && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1 ml-0.5">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Error
             </p>
             <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-red-400 scrollbar-thin">
@@ -445,7 +445,7 @@ const ToolCallCardComponent = ({
         )}
 
         {showParameters && !hasArgs && !commandText && !result && !error && (
-          <p className="text-xs text-muted-foreground/50 italic px-1">No parameters</p>
+          <p className="text-xs text-muted-foreground italic px-1">No parameters</p>
         )}
       </div>
     ) : undefined;

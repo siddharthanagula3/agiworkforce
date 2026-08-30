@@ -137,7 +137,7 @@ export function AddSourcesModal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 200,
+        zIndex: 'var(--z-modal)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

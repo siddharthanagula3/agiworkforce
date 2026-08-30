@@ -368,7 +368,7 @@ function renderInline(text: string): React.ReactNode {
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[var(--chat-accent-primary)] underline underline-offset-2 hover:opacity-80"
+            className="text-[var(--chat-accent-primary-text)] underline underline-offset-2 hover:opacity-80"
           >
             {match[2]}
           </a>,
@@ -452,7 +452,7 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
             toolCall.status === 'failed'
               ? 'bg-red-500/10 text-red-300'
               : toolCall.status === 'completed'
-                ? 'bg-emerald-500/10 text-emerald-300'
+                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                 : 'bg-blue-500/10 text-blue-300',
           )}
         >

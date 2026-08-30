@@ -109,7 +109,7 @@ function MenuItem({
       <span className="flex-1">{label}</span>
       {checked !== undefined && (
         <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-          {checked && <Check size={13} className="text-[var(--chat-accent-primary)]" />}
+          {checked && <Check size={13} className="text-[var(--chat-accent-primary-text)]" />}
         </span>
       )}
       {hasSubmenu &&
@@ -260,7 +260,7 @@ function CameraCaptureOverlay({
             disabled={state !== 'ready'}
             className={cn(
               'flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium',
-              'bg-[var(--chat-accent-primary)] text-white',
+              'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)]',
               state !== 'ready' && 'cursor-not-allowed opacity-50',
             )}
           >
@@ -584,7 +584,7 @@ export function AttachmentMenu({
                       'hover:bg-[var(--chat-surface-hover)]',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                       activeStyle === opt.value
-                        ? 'text-[var(--chat-accent-primary)]'
+                        ? 'text-[var(--chat-accent-primary-text)]'
                         : 'text-[var(--chat-text-primary)]',
                     )}
                   >

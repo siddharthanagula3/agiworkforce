@@ -264,7 +264,7 @@ export function OperatorDashboardPage() {
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       ) : null}
@@ -281,7 +281,7 @@ export function OperatorDashboardPage() {
         <button
           onClick={() => void resetEveryone()}
           disabled={bulkBusy}
-          className="rounded-full border border-destructive/50 px-4 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+          className="rounded-full border border-destructive/50 px-4 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
           {bulkBusy ? 'Working…' : 'Reset all usage'}
         </button>

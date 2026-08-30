@@ -1323,6 +1323,34 @@ export async function replaceScimGroup(
 
 const GROUP_PATCH_PATHS = new Set(['members', 'displayname', 'externalid']);
 
+const MEMBER_FILTER_VALUE = /value\s+eq\s+(?:"([^"]+)"|'([^']+)')/giu;
+
+/**
+ * RFC 7644 §3.5.2.2: `{"op":"remove","path":"members[value eq \"id\"]"}` with no
+ * `value` body removes THAT member. Okta, Entra ID and OneLogin all deprovision
+ * a single user this way, so treating the filter as absent — which
+ * normalizePatchPath does, since it strips `[...]` — turns one removal into
+ * "delete every member of this group".
+ */
+export function parseMemberFilterIds(path: string | undefined): string[] {
+  if (!path) return [];
+  const bracket = path.match(/\[([^\]]*)\]/u);
+  if (!bracket?.[1]) return [];
+  const ids: string[] = [];
+  for (const match of bracket[1].matchAll(MEMBER_FILTER_VALUE)) {
+    const id = match[1] ?? match[2];
+    if (!id) continue;
+    if (!UUID_PATTERN.test(id)) {
+      throw new ScimError(400, `Unknown member id ${id}`, 'invalidValue');
+    }
+    if (!ids.includes(id)) ids.push(id);
+  }
+  if (ids.length === 0) {
+    throw new ScimError(400, `Unsupported PATCH path "${path}"`, 'invalidPath');
+  }
+  return ids;
+}
+
 export async function patchScimGroup(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
@@ -1357,7 +1385,14 @@ export async function patchScimGroup(
         continue;
       }
 
+      const filteredIds = normalized === 'members' ? parseMemberFilterIds(operation.path) : [];
+
       if (operation.op === 'remove' && operation.value === undefined) {
+        if (filteredIds.length > 0) {
+          filteredIds.forEach((memberId) => affected.add(memberId));
+          await removeGroupMembers(tx, ctx, groupId, filteredIds);
+          continue;
+        }
         const current = await getScimGroupMembers(tx, ctx, groupId);
         current.forEach((member) => affected.add(member.id));
         await tx.execute(
@@ -1367,7 +1402,10 @@ export async function patchScimGroup(
         continue;
       }
 
-      const memberIds = parseMemberValues(operation.value);
+      const memberIds =
+        filteredIds.length > 0 && operation.value === undefined
+          ? filteredIds
+          : parseMemberValues(operation.value);
       memberIds.forEach((memberId) => affected.add(memberId));
 
       if (operation.op === 'remove') {

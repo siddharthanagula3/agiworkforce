@@ -257,7 +257,7 @@ export function UpgradeConfirmDialog({
           </section>
         ) : null}
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? <p className="text-sm text-danger">{error}</p> : null}
 
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={confirming}>

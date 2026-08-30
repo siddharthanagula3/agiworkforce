@@ -6,6 +6,7 @@ const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   killE2BSession: vi.fn(),
+  unpublishForConversations: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -18,6 +19,10 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/services/published-artifact-service', () => ({
+  unpublishArtifactsForConversations: (...args: unknown[]) =>
+    mocks.unpublishForConversations(...args),
+}));
 vi.mock('@/lib/e2b/runtime', () => ({
   killE2BSession: (...args: unknown[]) => mocks.killE2BSession(...args),
 }));
@@ -49,6 +54,7 @@ describe('DELETE /api/chat/conversations/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.killE2BSession.mockResolvedValue(undefined);
+    mocks.unpublishForConversations.mockResolvedValue([]);
   });
 
   it('returns 404 and keeps cleanup untouched when no live owned row was deleted', async () => {
@@ -58,6 +64,7 @@ describe('DELETE /api/chat/conversations/[id]', () => {
 
     expect(response.status).toBe(404);
     expect(mocks.killE2BSession).not.toHaveBeenCalled();
+    expect(mocks.unpublishForConversations).not.toHaveBeenCalled();
     expect(mocks.query).toHaveBeenCalledWith(
       expect.stringMatching(/deleted_at is null[\s\S]*returning id/u),
       [CONVERSATION_ID, 'user-1', null],
@@ -72,5 +79,28 @@ describe('DELETE /api/chat/conversations/[id]', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
     expect(mocks.killE2BSession).toHaveBeenCalledOnce();
+  });
+
+  it('revokes every artifact published out of the conversation being deleted', async () => {
+    mocks.query.mockResolvedValue([{ id: CONVERSATION_ID }]);
+    mocks.unpublishForConversations.mockResolvedValue(['tokenaaaaaaaaaaaaaaaaaaa']);
+
+    const response = await DELETE(request(), context);
+
+    expect(response.status).toBe(200);
+    expect(mocks.unpublishForConversations).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user-1',
+      conversationIds: [CONVERSATION_ID],
+    });
+  });
+
+  it('fails the delete rather than leaving a public artifact serving a deleted chat', async () => {
+    mocks.query.mockResolvedValue([{ id: CONVERSATION_ID }]);
+    mocks.unpublishForConversations.mockRejectedValue(new Error('db down'));
+
+    const response = await DELETE(request(), context);
+
+    expect(response.status).toBe(500);
+    expect(mocks.killE2BSession).not.toHaveBeenCalled();
   });
 });

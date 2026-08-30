@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { isAppError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    await requireAdmin(request);
+    await requirePlatformAdmin(request);
   } catch (err) {
     if (isAppError(err)) {
       logger.warn(

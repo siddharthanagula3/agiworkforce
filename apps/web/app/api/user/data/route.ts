@@ -61,10 +61,15 @@ async function handleDeleteUserData(request: NextRequest) {
 
     if (!durableVideoSchemaProvisioned) {
       try {
-        const rows = await db.query<Record<string, unknown>>('select * from delete_user_data($1)', [
-          userId,
-        ]);
-        rpcData = rows[0] ?? null;
+        // delete_user_data is `returns jsonb`, so `select *` yields one column
+        // named after the function. Reading the row itself made `success`
+        // permanently undefined: the branch always reported a decline and logged
+        // one, even on a run that had just erased the account's rows.
+        const rows = await db.query<{ result: Record<string, unknown> | null }>(
+          'select delete_user_data($1) as result',
+          [userId],
+        );
+        rpcData = rows[0]?.result ?? null;
         rpcSucceeded =
           (rpcData as Record<string, unknown> | null | undefined)?.['success'] === true;
         if (!rpcSucceeded) {

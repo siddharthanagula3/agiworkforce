@@ -1,4 +1,3 @@
-
 import Link from 'next/link';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 import { EnvKeyStatusList } from './EnvKeyStatusList';
@@ -22,7 +21,12 @@ export default function ByokSettingsPage() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           These are deployment-managed environment keys, not per-account Web BYOK. Hosted AGI Web
           does not store user provider keys; use Desktop, CLI, or VS Code for user-managed BYOK.{' '}
-          <Link href="/docs/byok-env" style={{ color: 'var(--amber, #c8892a)' }}>
+          {/* Colour alone does not distinguish a link inside a paragraph
+              (WCAG 1.4.1); the underline is what makes it findable. */}
+          <Link
+            href="/docs/byok-env"
+            style={{ color: 'var(--amber)', textDecoration: 'underline' }}
+          >
             How to set env keys &rarr;
           </Link>
         </p>

@@ -29,7 +29,10 @@ export function MaxUpgradePrompt({
         className,
       )}
     >
-      <Sparkles className="h-5 w-5 shrink-0 text-[var(--chat-accent-primary)]" aria-hidden="true" />
+      <Sparkles
+        className="h-5 w-5 shrink-0 text-[var(--chat-accent-primary-text)]"
+        aria-hidden="true"
+      />
       <div className="min-w-0 flex-1">
         <p className="text-foreground">
           <span className="font-semibold">{REQUIRED_PLAN_LABEL} unlocks multi-provider chat.</span>{' '}
@@ -42,7 +45,7 @@ export function MaxUpgradePrompt({
           onClick={onUpgrade}
           className={cn(
             'mt-2 inline-flex items-center gap-1 rounded-lg px-3 py-1.5',
-            'bg-[var(--chat-accent-primary)] text-xs font-semibold text-white',
+            'bg-[var(--chat-accent-primary)] text-xs font-semibold text-[var(--chat-accent-on-primary)]',
             'transition-colors hover:opacity-90',
           )}
         >

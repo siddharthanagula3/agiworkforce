@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { WebSettingsModal } from './WebSettingsModal';
+import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -152,6 +153,9 @@ function stubFetch({
 describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+    // The skills catalogue is deduped in module state, so without this a later
+    // test reads the previous test's cached result instead of its own mock.
+    invalidateSkillsCatalog();
   });
 
   it('marks connectors Connected only from real user_connectors rows', async () => {
@@ -242,13 +246,31 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(screen.getByRole('tab', { name: /^Connected\s*0$/ })).toBeTruthy();
   });
 
+  it('names the real cause instead of blaming the connection for a server fault', async () => {
+    // A 5xx is the server failing, not the user's network. Telling them to
+    // "check your connection" sends them to fix something that is not broken.
+    stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 500 });
+    const { unmount } = render(
+      <WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />,
+    );
+    expect(await screen.findByText(/the server returned an error/)).toBeTruthy();
+    expect(screen.queryByText(/Check your connection/)).toBeNull();
+    unmount();
+
+    // A 4xx that is not an auth failure is a rejected request, not a server fault.
+    stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 400 });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+    expect(await screen.findByText(/the server rejected the request/)).toBeTruthy();
+    expect(screen.queryByText(/the server returned an error/)).toBeNull();
+  });
+
   it('shows a connector loading failure and retries instead of pretending the directory is empty', async () => {
     stubFetch({ connectorFailuresBeforeSuccess: 1 });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
     expect(
       await screen.findByText(
-        'Connectors could not be loaded. Check your connection and try again.',
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
       ),
     ).toBeTruthy();
 
@@ -257,7 +279,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     expect(await screen.findByText('Connect your first tool')).toBeTruthy();
     expect(
-      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+      screen.queryByText(
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+      ),
     ).toBeNull();
   });
 
@@ -292,7 +316,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ),
     ).toBeTruthy();
     expect(
-      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+      screen.queryByText(
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+      ),
     ).toBeNull();
   });
 
@@ -316,7 +342,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ),
     ).toBeTruthy();
     expect(
-      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+      screen.queryByText(
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+      ),
     ).toBeNull();
   });
 
@@ -347,7 +375,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     expect(
       await screen.findByText(
-        'Connectors could not be loaded. Check your connection and try again.',
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
       ),
     ).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
@@ -493,7 +521,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ),
     ).toBeTruthy();
     expect(
-      screen.queryByText('Connectors could not be loaded. Check your connection and try again.'),
+      screen.queryByText(
+        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+      ),
     ).toBeNull();
   });
 
@@ -528,7 +558,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
 
     expect(
-      await screen.findByText('Skills could not be loaded. Check your connection and try again.'),
+      await screen.findByText(
+        'Skills could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+      ),
     ).toBeTruthy();
 
     const { fireEvent } = await import('@testing-library/react');
@@ -536,7 +568,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
 
     expect(await screen.findByText('fixture-reviewed-skill')).toBeTruthy();
     expect(
-      screen.queryByText('Skills could not be loaded. Check your connection and try again.'),
+      screen.queryByText(
+        'Skills could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+      ),
     ).toBeNull();
   });
 
@@ -545,7 +579,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="plugins" />);
 
     expect(
-      await screen.findByText('Plugins could not be loaded. Check your connection and try again.'),
+      await screen.findByText(
+        'Plugins could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+      ),
     ).toBeTruthy();
 
     const { fireEvent } = await import('@testing-library/react');
@@ -555,7 +591,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Browse' }));
     expect(await screen.findByText('GitHub Automation')).toBeTruthy();
     expect(
-      screen.queryByText('Plugins could not be loaded. Check your connection and try again.'),
+      screen.queryByText(
+        'Plugins could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.',
+      ),
     ).toBeNull();
     expect(screen.queryByRole('button', { name: /install/i })).toBeNull();
   });

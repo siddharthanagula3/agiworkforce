@@ -93,6 +93,7 @@ export function ReflectSection() {
     return () => controller.abort();
   }, [load, refreshVersion]);
 
+  const visibleActivity = recap?.dailyActivity.slice(-60) ?? [];
   const maxDailyCount = Math.max(
     1,
     ...(recap?.dailyActivity.map((day) => day.conversationCount) ?? []),
@@ -237,14 +238,19 @@ export function ReflectSection() {
                 <p className="mt-1 text-xs text-muted-foreground">Peak start time</p>
               </div>
             </div>
+            {/* A bare div is role=generic, which PROHIBITS aria-label — every one
+                of these bars was silently dropped by assistive tech. The chart
+                is one image with a summary; the per-day figures stay reachable
+                as text rather than as sixty separate announcements. */}
             <div
+              role="img"
+              aria-label={`Conversation activity across ${visibleActivity.length} active days, peaking at ${maxDailyCount} conversations in a day`}
               className="flex h-28 items-end gap-1 rounded-lg border border-border/50 p-3"
-              aria-label="Conversation activity by active day"
             >
-              {recap.dailyActivity.slice(-60).map((day) => (
+              {visibleActivity.map((day) => (
                 <div
                   key={day.date}
-                  aria-label={`${day.date}: ${day.conversationCount} conversations`}
+                  aria-hidden="true"
                   title={`${formatDate(day.date)}: ${day.conversationCount}`}
                   className="min-w-1 flex-1 rounded-t bg-primary/70"
                   style={{
@@ -253,6 +259,13 @@ export function ReflectSection() {
                 />
               ))}
             </div>
+            <ul className="sr-only">
+              {visibleActivity.map((day) => (
+                <li key={day.date}>
+                  {formatDate(day.date)}: {day.conversationCount} conversations
+                </li>
+              ))}
+            </ul>
           </section>
 
           <section aria-labelledby="reflect-topics-heading" className="space-y-4">

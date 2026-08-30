@@ -345,15 +345,21 @@ async function generateTOTPCode(secret: string, timestamp: number = Date.now()):
   return otp.toString().padStart(TOTP_CONFIG.DIGITS, '0');
 }
 
-async function verifyTOTPCode(
+/**
+ * The time step a code belongs to. Callers persist the accepted step and refuse
+ * anything at or below it, so a code captured inside its validity window cannot
+ * be replayed — verifying the digits alone accepts the same code repeatedly for
+ * as long as it remains current.
+ */
+async function verifyTOTPStep(
   secret: string,
   code: string,
   timestamp: number = Date.now(),
-): Promise<boolean> {
+): Promise<number | null> {
   const normalizedCode = code.replace(/\s/g, '').trim();
 
   if (normalizedCode.length !== TOTP_CONFIG.DIGITS) {
-    return false;
+    return null;
   }
 
   const timeOffsets = [0, -1, 1];
@@ -363,11 +369,19 @@ async function verifyTOTPCode(
     const expectedCode = await generateTOTPCode(secret, adjustedTime);
 
     if (constantTimeCompare(normalizedCode, expectedCode)) {
-      return true;
+      return Math.floor(adjustedTime / 1000 / TOTP_CONFIG.PERIOD);
     }
   }
 
-  return false;
+  return null;
+}
+
+async function verifyTOTPCode(
+  secret: string,
+  code: string,
+  timestamp: number = Date.now(),
+): Promise<boolean> {
+  return (await verifyTOTPStep(secret, code, timestamp)) !== null;
 }
 
 function constantTimeCompare(a: string, b: string): boolean {
@@ -1048,6 +1062,7 @@ export {
   generateOTPAuthURL,
   generateTOTPCode,
   verifyTOTPCode,
+  verifyTOTPStep,
   generateBackupCodes,
   hashBackupCode,
   verifyBackupCode,

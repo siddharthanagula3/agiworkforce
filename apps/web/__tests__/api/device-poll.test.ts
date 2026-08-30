@@ -44,6 +44,10 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
+vi.mock('@/lib/server/developer-token', () => ({
+  issueDeveloperToken: vi.fn(() => ({ accessToken: 'device-access-token', expiresIn: 3600 })),
+}));
+
 import { POST, OPTIONS } from '@/app/api/device/poll/route';
 
 describe('Device Poll API', () => {
@@ -117,22 +121,23 @@ describe('Device Poll API', () => {
       });
     });
 
-    describe('Token decryption and edge cases', () => {
-      it('should return 500 when the stored token is corrupted and cannot be decrypted', async () => {
-        mockNeonQuery
-          // First call: fetch device row
-          .mockResolvedValueOnce([baseApprovedRow])
-          // Second call: atomic consume CTE returns a row with corrupted token
-          .mockResolvedValueOnce([
-            {
-              status: 'approved',
-              user_id: 'user-456',
-              user_email: 'test@example.com',
-              user_name: 'Test User',
-              access_token: 'bm90LXZhbGlk',
-              refresh_token: 'bm90LXZhbGlk',
-            },
-          ]);
+    describe('Token issuance and edge cases', () => {
+      it('refuses rather than pairing a device when token signing is unavailable', async () => {
+        const { issueDeveloperToken } = await import('@/lib/server/developer-token');
+        vi.mocked(issueDeveloperToken).mockImplementationOnce(() => {
+          throw new Error('signing secret missing');
+        });
+
+        mockNeonQuery.mockResolvedValueOnce([baseApprovedRow]).mockResolvedValueOnce([
+          {
+            status: 'approved',
+            user_id: 'user-456',
+            user_email: 'test@example.com',
+            user_name: 'Test User',
+            access_token: null,
+            refresh_token: null,
+          },
+        ]);
 
         const request = new NextRequest('http://localhost/api/device/poll', {
           method: 'POST',
@@ -284,21 +289,17 @@ describe('Device Poll API', () => {
   });
 
   describe('approved-but-missing-tokens (M28)', () => {
-    it('returns {status:"pending"} when consumed row is approved but access_token is null', async () => {
-      mockNeonQuery
-        // First call: fetch device row - approved
-        .mockResolvedValueOnce([baseApprovedRow])
-        // Second call: atomic consume CTE returns row with null access_token
-        .mockResolvedValueOnce([
-          {
-            status: 'approved',
-            user_id: 'user-456',
-            user_email: 'test@example.com',
-            user_name: 'Test User',
-            access_token: null,
-            refresh_token: 'some-refresh',
-          },
-        ]);
+    it('mints a renewable device credential on consumption rather than replaying a session token', async () => {
+      mockNeonQuery.mockResolvedValueOnce([baseApprovedRow]).mockResolvedValueOnce([
+        {
+          status: 'approved',
+          user_id: 'user-456',
+          user_email: 'test@example.com',
+          user_name: 'Test User',
+          access_token: null,
+          refresh_token: null,
+        },
+      ]);
 
       const request = new NextRequest('http://localhost/api/device/poll', {
         method: 'POST',
@@ -309,7 +310,40 @@ describe('Device Poll API', () => {
       const response = await POST(request);
       expect(response.status).toBe(200);
       const data = await response.json();
-      expect(data.status).toBe('pending');
+      expect(data.status).toBe('approved');
+      expect(data.access_token).toBe('device-access-token');
+      expect(typeof data.refresh_token).toBe('string');
+      expect(data.refresh_token.length).toBeGreaterThan(0);
+      expect(data.expires_in).toBe(3600);
+      expect(data.refresh_token_expires_in).toBeGreaterThan(0);
+
+      const insert = mockNeonExecute.mock.calls.find(([sql]) =>
+        String(sql).includes('device_refresh_tokens'),
+      );
+      expect(insert, 'the refresh family must be persisted or renewal cannot work').toBeDefined();
+    });
+
+    it('stays pending when the approved row carries no account', async () => {
+      mockNeonQuery.mockResolvedValueOnce([baseApprovedRow]).mockResolvedValueOnce([
+        {
+          status: 'approved',
+          user_id: null,
+          user_email: null,
+          user_name: null,
+          access_token: null,
+          refresh_token: null,
+        },
+      ]);
+
+      const request = new NextRequest('http://localhost/api/device/poll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validRequest),
+      });
+
+      const response = await POST(request);
+      expect(response.status).toBe(200);
+      expect((await response.json()).status).toBe('pending');
     });
   });
 });

@@ -741,7 +741,7 @@ export function LibraryView({
                   <button
                     type="button"
                     onClick={() => setConfirmingDeleteId(item.id)}
-                    className="flex self-start items-center gap-1 text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
+                    className="flex min-h-6 self-start items-center gap-1 py-1 text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
                     aria-label={`Delete ${item.file_name}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -924,7 +924,7 @@ function EmptyState({
       className="flex flex-col items-center gap-3 py-20 text-center"
     >
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--chat-accent-primary)]/15">
-        <EmptyIcon className="h-7 w-7 text-[var(--chat-accent-primary)]" aria-hidden />
+        <EmptyIcon className="h-7 w-7 text-[var(--chat-accent-primary-text)]" aria-hidden />
       </div>
       <p className="text-base font-semibold text-[var(--chat-text-primary)]">{title}</p>
       <p className="max-w-md text-sm text-[var(--chat-text-muted)]">{copy}</p>

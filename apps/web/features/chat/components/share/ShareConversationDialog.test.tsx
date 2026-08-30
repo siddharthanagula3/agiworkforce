@@ -90,6 +90,11 @@ describe('ShareConversationDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: /Create public link/ }));
     });
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
+    // Revoking kills the link for everyone holding it, so it confirms first.
+    // Assert the dialog by its own title, or this test could pass by clicking
+    // the trigger twice.
+    expect(await screen.findByText('Revoke this share link?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('alertdialog').querySelector('button:last-of-type')!);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenLastCalledWith(

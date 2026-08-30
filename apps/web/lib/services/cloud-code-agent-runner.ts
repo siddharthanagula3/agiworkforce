@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { E2BExecutor } from '@/lib/e2b/types';
-import { CREATE_FOLDER_TOOL, WRITE_FILE_TOOL, routeExecutionTool } from '@/lib/e2b/execution-tools';
+import { confineWorkspacePath, routeExecutionTool } from '@/lib/e2b/execution-tools';
 import type { CloudCodeToolOutcome, CloudCodeToolRunner } from './cloud-code-agent-loop';
 
 const MAX_READ_BYTES = 200_000;
@@ -9,14 +9,6 @@ const LIST_FILES_LIMIT = 500;
 
 function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
-}
-
-function normalizeWorkspacePath(raw: string): string | null {
-  const path = raw.trim();
-  if (!path || path.includes('\0')) return null;
-  if (path.startsWith('/') || path.startsWith('~')) return null;
-  if (path.split('/').some((segment) => segment === '..')) return null;
-  return path;
 }
 
 export function createCloudCodeToolRunner(
@@ -28,7 +20,7 @@ export function createCloudCodeToolRunner(
 
   return {
     async readFile(path: string): Promise<CloudCodeToolOutcome> {
-      const safe = normalizeWorkspacePath(path);
+      const safe = confineWorkspacePath(path);
       if (!safe) {
         return {
           output: `Refused to read "${path}": paths must be workspace-relative and may not traverse upward.`,
@@ -57,7 +49,7 @@ export function createCloudCodeToolRunner(
     },
 
     async listFiles(path: string | undefined): Promise<CloudCodeToolOutcome> {
-      const relative = path === undefined || path === '' ? '.' : normalizeWorkspacePath(path);
+      const relative = path === undefined || path === '' ? '.' : confineWorkspacePath(path);
       if (!relative) {
         return {
           output: `Refused to list "${path}": paths must be workspace-relative and may not traverse upward.`,
@@ -117,19 +109,7 @@ export function createCloudCodeToolRunner(
       name: string,
       args: Record<string, unknown>,
     ): Promise<CloudCodeToolOutcome> {
-      let routedArgs = args;
-      if (name === WRITE_FILE_TOOL || name === CREATE_FOLDER_TOOL) {
-        const raw = typeof args['path'] === 'string' ? args['path'] : '';
-        const safe = normalizeWorkspacePath(raw);
-        if (!safe) {
-          return {
-            output: `Refused to write "${raw}": paths must be workspace-relative and may not traverse upward.`,
-            isError: true,
-          };
-        }
-        routedArgs = { ...args, path: inWorkspace(safe) };
-      }
-      const result = await routeExecutionTool(executor, name, routedArgs);
+      const result = await routeExecutionTool(executor, name, args, workspacePath);
       return {
         output: result.ok ? result.output : (result.error ?? 'Tool failed.'),
         isError: !result.ok,

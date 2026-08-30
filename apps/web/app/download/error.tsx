@@ -22,7 +22,7 @@ export default function DownloadError({
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center bg-background px-4 text-center text-foreground">
       <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10">
-        <AlertTriangle aria-hidden="true" className="h-10 w-10 text-destructive" />
+        <AlertTriangle aria-hidden="true" className="h-10 w-10 text-danger" />
       </div>
 
       <h1 className="mb-3 text-2xl font-bold">Unable to load downloads</h1>

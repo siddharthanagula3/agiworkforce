@@ -55,7 +55,7 @@ function EffectiveChip({ state }: { state: Effective }) {
     <span
       className="shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em]"
       style={{
-        color: alarming ? 'var(--settings-destructive-foreground)' : 'var(--text-3)',
+        color: alarming ? 'var(--settings-destructive-text)' : 'var(--text-3)',
         borderColor: alarming ? 'currentColor' : 'var(--settings-border)',
       }}
     >
@@ -240,7 +240,7 @@ export function WorkspaceModelPolicy() {
                     className="rounded-md border px-2.5 py-1 text-[11px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                     style={{
                       borderColor: blocked ? 'currentColor' : 'var(--settings-border)',
-                      color: blocked ? 'var(--settings-destructive-foreground)' : 'var(--text-3)',
+                      color: blocked ? 'var(--settings-destructive-text)' : 'var(--text-3)',
                     }}
                   >
                     <Ban aria-hidden className="mr-1 inline h-3 w-3" />
@@ -359,7 +359,7 @@ export function WorkspaceModelPolicy() {
                       style={{
                         borderColor: explicitlyBlocked ? 'currentColor' : 'var(--settings-border)',
                         color: explicitlyBlocked
-                          ? 'var(--settings-destructive-foreground)'
+                          ? 'var(--settings-destructive-text)'
                           : 'var(--text-3)',
                       }}
                     >
@@ -383,7 +383,7 @@ export function WorkspaceModelPolicy() {
           </p>
           <div className="flex items-center gap-3">
             {update.isError ? (
-              <span className="text-xs" style={{ color: 'var(--settings-destructive-foreground)' }}>
+              <span className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
                 {update.error.message}
               </span>
             ) : null}

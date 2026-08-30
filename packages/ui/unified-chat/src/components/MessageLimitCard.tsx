@@ -1,4 +1,3 @@
-
 import { Gauge, Timer, Database, Sparkles } from 'lucide-react';
 import {
   getBillingPlanPricing,
@@ -112,7 +111,7 @@ export function MessageLimitCard({ block, onRetry, onUpgrade, className }: Messa
               <button
                 type="button"
                 onClick={onUpgrade}
-                className="rounded-lg bg-[var(--chat-accent-primary)] px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                className="rounded-lg bg-[var(--chat-accent-primary)] px-3 py-1.5 text-xs font-semibold text-[var(--chat-accent-on-primary)] transition-opacity hover:opacity-90"
               >
                 Upgrade to {tierLabel(block.requiredTier)}
               </button>

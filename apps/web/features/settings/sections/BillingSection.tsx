@@ -538,7 +538,10 @@ export function BillingSection() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
-        <p role="alert" style={{ margin: 0, color: 'var(--settings-destructive)', fontSize: 14 }}>
+        <p
+          role="alert"
+          style={{ margin: 0, color: 'var(--settings-destructive-text)', fontSize: 14 }}
+        >
           Your session expired before we could read your plan. Your subscription has not changed
           &mdash; sign in again to see it.
         </p>
@@ -557,7 +560,10 @@ export function BillingSection() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
-        <p role="alert" style={{ margin: 0, color: 'var(--settings-destructive)', fontSize: 14 }}>
+        <p
+          role="alert"
+          style={{ margin: 0, color: 'var(--settings-destructive-text)', fontSize: 14 }}
+        >
           We couldn&rsquo;t load your billing account. Your plan has not been changed.
         </p>
         <button
@@ -582,7 +588,10 @@ export function BillingSection() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
-        <p role="alert" style={{ margin: 0, color: 'var(--settings-destructive)', fontSize: 14 }}>
+        <p
+          role="alert"
+          style={{ margin: 0, color: 'var(--settings-destructive-text)', fontSize: 14 }}
+        >
           We couldn&rsquo;t read your plan just now. Your subscription has not changed.
         </p>
         <button
@@ -647,7 +656,7 @@ export function BillingSection() {
                   padding: '4px 10px',
                   fontSize: 12,
                   fontWeight: 600,
-                  color: 'var(--chat-accent-primary, #c8892a)',
+                  color: 'var(--chat-accent-primary-text, #8b5f1d)',
                   background: 'rgba(200,137,42,0.12)',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid rgba(200,137,42,0.25)',
@@ -702,6 +711,29 @@ export function BillingSection() {
                   </span>
                 </Row>
               )}
+              {subscription?.status === 'past_due' || subscription?.status === 'unpaid' ? (
+                <div
+                  role="alert"
+                  style={{
+                    margin: '0 0 12px',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--settings-destructive-text)',
+                    color: 'var(--settings-destructive-text)',
+                    fontSize: 13,
+                  }}
+                >
+                  Your last payment did not go through, so this subscription is{' '}
+                  {subscription.status === 'unpaid' ? 'unpaid' : 'past due'}. Access can be
+                  suspended until it is settled.{' '}
+                  <a
+                    href="/payment-failure"
+                    style={{ color: 'inherit', textDecoration: 'underline' }}
+                  >
+                    What to check and how to fix it
+                  </a>
+                </div>
+              ) : null}
               {subscription?.current_period_end && (
                 <Row
                   label={
@@ -742,7 +774,9 @@ export function BillingSection() {
                 background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary, #c8892a)',
                 border: 'none',
                 borderRadius: 'var(--radius)',
-                color: isFreeTier ? 'var(--bg-base, #09090b)' : '#fff',
+                color: isFreeTier
+                  ? 'var(--bg-base, #09090b)'
+                  : 'var(--chat-accent-on-primary, #1c150b)',
                 fontSize: 13,
                 fontWeight: 600,
                 textDecoration: 'none',
@@ -812,7 +846,7 @@ export function BillingSection() {
                 background: 'transparent',
                 border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius)',
-                color: 'var(--settings-destructive)',
+                color: 'var(--settings-destructive-text)',
                 fontSize: 13,
                 cursor: portalPending ? 'progress' : 'pointer',
               }}
@@ -827,7 +861,7 @@ export function BillingSection() {
             style={{
               padding: '0 20px 16px',
               fontSize: 13,
-              color: 'var(--settings-destructive)',
+              color: 'var(--settings-destructive-text)',
             }}
           >
             {portalError}
@@ -915,7 +949,11 @@ export function BillingSection() {
           {paymentMethods.status === 'error' && (
             <div
               role="alert"
-              style={{ padding: '0 20px 16px', color: 'var(--settings-destructive)', fontSize: 13 }}
+              style={{
+                padding: '0 20px 16px',
+                color: 'var(--settings-destructive-text)',
+                fontSize: 13,
+              }}
             >
               {paymentMethods.message}{' '}
               <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
@@ -1013,7 +1051,7 @@ export function BillingSection() {
                   border: 0,
                   borderRadius: 'var(--radius-md)',
                   background: 'var(--chat-accent-primary, #c8892a)',
-                  color: '#fff',
+                  color: 'var(--chat-accent-on-primary, #1c150b)',
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: topUpPending || selectedTopUpUnits === null ? 'not-allowed' : 'pointer',
@@ -1030,7 +1068,7 @@ export function BillingSection() {
             {topUpError && (
               <p
                 role="alert"
-                style={{ margin: 0, fontSize: 13, color: 'var(--settings-destructive)' }}
+                style={{ margin: 0, fontSize: 13, color: 'var(--settings-destructive-text)' }}
               >
                 {topUpError}
               </p>
@@ -1073,7 +1111,7 @@ export function BillingSection() {
                     style={{
                       margin: '6px 0 0',
                       fontSize: 12,
-                      color: 'var(--settings-destructive)',
+                      color: 'var(--settings-destructive-text)',
                     }}
                   >
                     {overageError}
@@ -1189,7 +1227,11 @@ export function BillingSection() {
         ) : creditHistory.status === 'error' ? (
           <div
             role="alert"
-            style={{ padding: '16px 20px', color: 'var(--settings-destructive)', fontSize: 13 }}
+            style={{
+              padding: '16px 20px',
+              color: 'var(--settings-destructive-text)',
+              fontSize: 13,
+            }}
           >
             {creditHistory.message}{' '}
             <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
@@ -1307,7 +1349,11 @@ export function BillingSection() {
         ) : invoices.status === 'error' ? (
           <div
             role="alert"
-            style={{ padding: '16px 20px', color: 'var(--settings-destructive)', fontSize: 13 }}
+            style={{
+              padding: '16px 20px',
+              color: 'var(--settings-destructive-text)',
+              fontSize: 13,
+            }}
           >
             {invoices.message}{' '}
             <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>

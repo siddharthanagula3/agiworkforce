@@ -51,7 +51,7 @@ function StatusBadge({ isSet }: { isSet: boolean }) {
         background: isSet
           ? 'color-mix(in srgb, var(--teal, #2eb88a) 12%, transparent)'
           : 'var(--bg-elev)',
-        color: isSet ? 'var(--teal, #2eb88a)' : 'var(--text-3)',
+        color: isSet ? 'var(--teal-text, #1c6d78)' : 'var(--text-3)',
         border: isSet
           ? '1px solid color-mix(in srgb, var(--teal, #2eb88a) 30%, transparent)'
           : '1px solid var(--settings-border)',

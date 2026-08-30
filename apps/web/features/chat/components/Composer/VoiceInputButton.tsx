@@ -35,6 +35,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   const error = useVoiceInputStore((s) => s.error);
   const startListening = useVoiceInputStore((s) => s.startListening);
   const stopListening = useVoiceInputStore((s) => s.stopListening);
+  const cancelListening = useVoiceInputStore((s) => s.cancelListening);
   const clearTranscript = useVoiceInputStore((s) => s.clearTranscript);
   const clearError = useVoiceInputStore((s) => s.clearError);
 
@@ -89,6 +90,15 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
     return undefined;
   }, [mode, transcript]);
 
+  // Leaving the composer while the mic is live must release the device and drop
+  // the audio; stopListening() would instead upload it to the paid endpoint.
+  useEffect(
+    () => () => {
+      useVoiceInputStore.getState().cancelListening();
+    },
+    [],
+  );
+
   const handleStart = useCallback(async () => {
     if (!isSupported) {
       setShowTooltip(true);
@@ -105,15 +115,9 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   }, [stopListening]);
 
   const handleCancel = useCallback(() => {
-    if (isListening) {
-      stopListening().then(() => {
-        clearTranscript();
-        setShowOverlay(false);
-      });
-    } else {
-      setShowOverlay(false);
-    }
-  }, [isListening, stopListening, clearTranscript]);
+    cancelListening();
+    setShowOverlay(false);
+  }, [cancelListening]);
 
   const handleClick = useCallback(() => {
     if (isListening) {
@@ -205,8 +209,10 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
           isListening={isListening}
           isTranscribing={isTranscribing}
           elapsedSeconds={elapsedSeconds}
+          error={mode === 'error' ? error : null}
           onDone={handleStop}
           onCancel={handleCancel}
+          onRetry={handleStart}
         />
       )}
     </div>

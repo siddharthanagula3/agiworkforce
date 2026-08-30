@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -225,7 +224,7 @@ describe('Form Components', () => {
 
       await waitFor(() => {
         const emailLabel = screen.getByText('Email');
-        expect(emailLabel).toHaveClass('text-destructive');
+        expect(emailLabel).toHaveClass('text-danger');
       });
     });
 
@@ -243,7 +242,7 @@ describe('Form Components', () => {
       await user.tab();
 
       const emailLabel = screen.getByText('Email');
-      expect(emailLabel).not.toHaveClass('text-destructive');
+      expect(emailLabel).not.toHaveClass('text-danger');
     });
 
     it('should apply custom className', () => {
@@ -380,7 +379,7 @@ describe('Form Components', () => {
     it('should not render when no error', () => {
       render(<TestForm />);
 
-      const messages = document.querySelectorAll('.text-destructive');
+      const messages = document.querySelectorAll('.text-danger');
       expect(messages.length).toBe(0);
     });
 
@@ -405,7 +404,7 @@ describe('Form Components', () => {
 
       await waitFor(() => {
         const message = screen.getByText('Please enter a valid email');
-        expect(message).toHaveClass('text-destructive');
+        expect(message).toHaveClass('text-danger');
         expect(message).toHaveClass('text-sm');
         expect(message).toHaveClass('font-medium');
       });

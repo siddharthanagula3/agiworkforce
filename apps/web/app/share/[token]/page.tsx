@@ -24,7 +24,9 @@ interface SharedSessionRow {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
-  if (!TOKEN_REGEX.test(token)) return { title: 'Shared Session - AGI' };
+  if (!TOKEN_REGEX.test(token)) {
+    return { title: 'Shared Session - AGI', robots: { index: false, follow: false } };
+  }
 
   const db = getNeonDb();
   const result = await db
@@ -38,6 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: data ? `${data.title} - AGI` : 'Shared Session - AGI',
     description: data ? `${data.total_messages} message conversation shared from AGI` : undefined,
+    robots: { index: false, follow: false },
   };
 }
 

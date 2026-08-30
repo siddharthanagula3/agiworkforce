@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,8 +8,9 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { claimTotpStep } from '@/lib/server/two-factor-replay';
 import {
-  verifyTOTPCode,
+  verifyTOTPStep,
   verifyBackupCode,
   decryptTOTPSecret,
 } from '@/features/settings/services/user-preferences';
@@ -77,18 +77,21 @@ async function handleDisable2FA(request: NextRequest) {
   }
 
   const secret = await decryptTOTPSecret(row.totp_secret_enc);
-  const totpValid = await verifyTOTPCode(secret, code);
+  const step = await verifyTOTPStep(secret, code);
   let backupCodeIndex = -1;
 
-  if (!totpValid) {
+  const db = getNeonDb();
+
+  if (step === null) {
     backupCodeIndex = await verifyBackupCode(code, row.backup_codes_hashed ?? []);
     if (backupCodeIndex === -1) {
       logger.warn({ userId }, '2FA disable: invalid code provided');
       throw createError.unauthorized('Invalid TOTP or backup code');
     }
+  } else if (!(await claimTotpStep(db, userId, step))) {
+    logger.warn({ userId }, '2FA disable: refused a replayed TOTP code');
+    throw createError.unauthorized('Invalid TOTP or backup code');
   }
-
-  const db = getNeonDb();
 
   if (backupCodeIndex !== -1) {
     const updatedCodes = (row.backup_codes_hashed ?? []).filter((_, i) => i !== backupCodeIndex);

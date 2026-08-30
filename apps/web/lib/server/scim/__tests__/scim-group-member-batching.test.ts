@@ -3,6 +3,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import {
   createScimGroup,
+  parseMemberFilterIds,
   patchScimGroup,
   type ScimConnectionContext,
 } from '../scim-provisioning-service';
@@ -225,5 +226,55 @@ describe('SCIM group membership writes are batched', () => {
 
     expect(db.matching('insert into scim_group_members')).toHaveLength(0);
     expect(db.matching('from scim_provisioned_users')).toHaveLength(0);
+  });
+});
+
+describe('SCIM filtered member removal (RFC 7644 3.5.2.2)', () => {
+  it('removes only the filtered member, never the whole group', async () => {
+    const members = [memberId(1), memberId(2), memberId(3)];
+    const db = fakeDb(members);
+
+    await patchScimGroup(db.adapter, ctx, GROUP, [
+      { op: 'remove', path: `members[value eq "${memberId(2)}"]` },
+    ] as never);
+
+    const deletes = db.matching('delete from scim_group_members');
+    expect(deletes).toHaveLength(1);
+    const sql = deletes[0]?.sql ?? '';
+    expect(sql, 'a filtered remove must not be an unscoped delete').toContain('scim_user_id');
+    expect(deletes[0]?.params[2]).toEqual([memberId(2)]);
+  });
+
+  it('removes each member named by an or-joined filter', async () => {
+    const members = [memberId(1), memberId(2), memberId(3)];
+    const db = fakeDb(members);
+
+    await patchScimGroup(db.adapter, ctx, GROUP, [
+      {
+        op: 'remove',
+        path: `members[value eq "${memberId(1)}" or value eq "${memberId(3)}"]`,
+      },
+    ] as never);
+
+    const deletes = db.matching('delete from scim_group_members');
+    expect(deletes[0]?.params[2]).toEqual([memberId(1), memberId(3)]);
+  });
+
+  it('still clears the group when the path carries no filter at all', async () => {
+    const members = [memberId(1), memberId(2)];
+    const db = fakeDb(members);
+
+    await patchScimGroup(db.adapter, ctx, GROUP, [{ op: 'remove', path: 'members' }] as never);
+
+    const deletes = db.matching('delete from scim_group_members');
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]?.sql).not.toContain('scim_user_id');
+  });
+
+  it('rejects a filter it cannot read rather than falling back to clearing', () => {
+    expect(() => parseMemberFilterIds('members[display eq "Engineering"]')).toThrow();
+    expect(() => parseMemberFilterIds('members[value eq "not-a-uuid"]')).toThrow();
+    expect(parseMemberFilterIds('members')).toEqual([]);
+    expect(parseMemberFilterIds(undefined)).toEqual([]);
   });
 });

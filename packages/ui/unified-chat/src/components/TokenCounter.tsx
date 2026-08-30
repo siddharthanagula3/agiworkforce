@@ -38,11 +38,11 @@ function getUsageStatus(
 
   if (budget && current >= budget) {
     status = 'over-budget';
-    statusColor = 'text-destructive';
+    statusColor = 'text-danger';
     barColor = 'bg-destructive';
   } else if (percentage >= 90) {
     status = 'danger';
-    statusColor = 'text-destructive';
+    statusColor = 'text-danger';
     barColor = 'bg-destructive';
   } else if (percentage >= 70 || (budget && budgetPercentage >= 80)) {
     status = 'warning';
@@ -102,7 +102,7 @@ export const TokenCounter = ({
                 className={cn(
                   'ml-0.5 rounded px-1 py-0.5 text-[9px] font-semibold',
                   showWarning && 'bg-warning/20 text-warning',
-                  showDanger && 'bg-destructive/20 text-destructive',
+                  showDanger && 'bg-destructive/20 text-danger',
                 )}
               >
                 {percentage.toFixed(0)}%
@@ -114,7 +114,7 @@ export const TokenCounter = ({
           <button
             type="button"
             onClick={onCompact}
-            className="flex items-center gap-1 rounded-md bg-destructive/15 px-1.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/25"
+            className="flex items-center gap-1 rounded-md bg-destructive/15 px-1.5 py-1 text-xs font-medium text-danger transition-colors hover:bg-destructive/25"
             title="Compact context to free up space"
           >
             <Scissors className="h-3 w-3" />
@@ -231,7 +231,7 @@ export const TokenCounter = ({
               <div
                 className={cn(
                   'text-sm font-medium',
-                  budgetRemaining <= 0 ? 'text-destructive' : 'text-foreground',
+                  budgetRemaining <= 0 ? 'text-danger' : 'text-foreground',
                 )}
               >
                 {formatTokens(Math.max(0, budgetRemaining))}
@@ -260,7 +260,7 @@ export const TokenCounter = ({
 
           {status === 'danger' && (
             <div className="col-span-2 rounded-md bg-destructive/10 px-2 py-1.5">
-              <div className="flex items-center gap-2 text-xs text-destructive">
+              <div className="flex items-center gap-2 text-xs text-danger">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 <span>Approaching context limit</span>
                 {onCompact && (
@@ -279,7 +279,7 @@ export const TokenCounter = ({
 
           {status === 'over-budget' && (
             <div className="col-span-2 rounded-md bg-destructive/10 px-2 py-1.5">
-              <div className="flex items-center gap-2 text-xs text-destructive">
+              <div className="flex items-center gap-2 text-xs text-danger">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 <span>Budget limit exceeded</span>
               </div>

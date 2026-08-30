@@ -62,7 +62,7 @@ const ToastIcon: React.FC<{
         />
       );
     case 'destructive':
-      return <XCircle {...iconProps} className={cn(iconProps.className, 'text-destructive')} />;
+      return <XCircle {...iconProps} className={cn(iconProps.className, 'text-danger')} />;
     case 'warning':
       return (
         <AlertCircle

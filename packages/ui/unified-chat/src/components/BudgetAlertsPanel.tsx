@@ -24,13 +24,13 @@ export function BudgetAlertsPanel() {
             icon: AlertCircle,
             bg: 'bg-destructive/10',
             border: 'border-destructive/30',
-            text: 'text-destructive',
+            text: 'text-danger',
           },
           exceeded: {
             icon: XCircle,
             bg: 'bg-destructive/20',
             border: 'border-destructive/50',
-            text: 'text-destructive',
+            text: 'text-danger',
           },
         }[alert.type];
         if (!config) return null;

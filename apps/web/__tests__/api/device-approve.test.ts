@@ -43,11 +43,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-vi.mock('@/lib/device-token-crypto', () => ({
-  encryptToken: vi.fn(() => 'encrypted-token-value'),
-  decryptToken: vi.fn((t: string) => t),
-}));
-
 const mockIsDeviceCodeSignInEnabled = vi.fn();
 const mockHasAcceptedCurrentTerms = vi.fn();
 

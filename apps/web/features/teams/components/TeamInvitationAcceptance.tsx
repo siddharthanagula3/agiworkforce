@@ -110,7 +110,7 @@ export function TeamInvitationAcceptance() {
               background:
                 'color-mix(in srgb, var(--chat-accent-primary, #c8892a) 14%, transparent)',
               borderRadius: 16,
-              color: 'var(--chat-accent-primary, #c8892a)',
+              color: 'var(--chat-accent-primary-text, #8b5f1d)',
               display: 'flex',
               height: 48,
               justifyContent: 'center',
@@ -229,10 +229,7 @@ export function TeamInvitationAcceptance() {
                 to a different signed-in account.
               </div>
               {error ? (
-                <p
-                  role="alert"
-                  style={{ color: 'var(--settings-destructive-foreground, #ef4444)' }}
-                >
+                <p role="alert" style={{ color: 'var(--settings-destructive-text, #d31212)' }}>
                   {error}
                 </p>
               ) : null}

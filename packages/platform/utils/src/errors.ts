@@ -12,7 +12,7 @@ import type {
   ApiError as ApiErrorType,
   FriendlyError as FriendlyErrorType,
 } from '@agiworkforce/types';
-import { ErrorCode, type ErrorCodeValue } from '@agiworkforce/types';
+import { ERROR_CODE_TO_HTTP_STATUS, ErrorCode, type ErrorCodeValue } from '@agiworkforce/types';
 
 export type ApiError = ApiErrorType;
 export type FriendlyError = FriendlyErrorType;
@@ -75,49 +75,48 @@ export class AppError extends Error {
  * throw createError.validation('Invalid email', { field: 'email' });
  * ```
  */
+const appError = (code: ErrorCodeValue, message: string, details?: unknown): AppError =>
+  new AppError(code, message, ERROR_CODE_TO_HTTP_STATUS[code], details);
+
 export const createError = {
-  unauthorized: (message = 'Unauthorized'): AppError =>
-    new AppError(ErrorCode.UNAUTHORIZED, message, 401),
+  unauthorized: (message = 'Unauthorized'): AppError => appError(ErrorCode.UNAUTHORIZED, message),
 
-  forbidden: (message = 'Forbidden'): AppError => new AppError(ErrorCode.FORBIDDEN, message, 403),
+  forbidden: (message = 'Forbidden'): AppError => appError(ErrorCode.FORBIDDEN, message),
 
-  notFound: (message = 'Resource not found'): AppError =>
-    new AppError(ErrorCode.NOT_FOUND, message, 404),
+  notFound: (message = 'Resource not found'): AppError => appError(ErrorCode.NOT_FOUND, message),
 
   validation: (message: string, details?: unknown): AppError =>
-    new AppError(ErrorCode.VALIDATION_ERROR, message, 400, details),
+    appError(ErrorCode.VALIDATION_ERROR, message, details),
 
-  conflict: (message: string): AppError => new AppError(ErrorCode.CONFLICT, message, 409),
+  conflict: (message: string): AppError => appError(ErrorCode.CONFLICT, message),
 
   rateLimit: (message = 'Rate limit exceeded'): AppError =>
-    new AppError(ErrorCode.RATE_LIMIT_EXCEEDED, message, 429),
+    appError(ErrorCode.RATE_LIMIT_EXCEEDED, message),
 
   stripe: (message: string, details?: unknown): AppError =>
-    new AppError(ErrorCode.STRIPE_ERROR, message, 502, details),
+    appError(ErrorCode.STRIPE_ERROR, message, details),
 
   cloudDatabase: (message: string, details?: unknown): AppError =>
-    new AppError(ErrorCode.CLOUD_DB_ERROR, message, 502, details),
+    appError(ErrorCode.CLOUD_DB_ERROR, message, details),
 
   internal: (message = 'Internal server error', details?: unknown): AppError =>
-    new AppError(ErrorCode.INTERNAL_ERROR, message, 500, details),
+    appError(ErrorCode.INTERNAL_ERROR, message, details),
 
   serviceUnavailable: (message = 'Service unavailable'): AppError =>
-    new AppError(ErrorCode.SERVICE_UNAVAILABLE, message, 503),
+    appError(ErrorCode.SERVICE_UNAVAILABLE, message),
 
-  timeout: (message = 'Operation timed out'): AppError =>
-    new AppError(ErrorCode.TIMEOUT, message, 504),
+  timeout: (message = 'Operation timed out'): AppError => appError(ErrorCode.TIMEOUT, message),
 
-  network: (message = 'Network error'): AppError =>
-    new AppError(ErrorCode.NETWORK_ERROR, message, 503),
+  network: (message = 'Network error'): AppError => appError(ErrorCode.NETWORK_ERROR, message),
 
   payloadTooLarge: (message = 'Payload too large'): AppError =>
-    new AppError(ErrorCode.PAYLOAD_TOO_LARGE, message, 413),
+    appError(ErrorCode.PAYLOAD_TOO_LARGE, message),
 
   badRequest: (message: string, details?: unknown): AppError =>
-    new AppError(ErrorCode.VALIDATION_ERROR, message, 400, details),
+    appError(ErrorCode.VALIDATION_ERROR, message, details),
 
   paymentRequired: (message = 'Payment required'): AppError =>
-    new AppError(ErrorCode.PAYMENT_REQUIRED, message, 402),
+    appError(ErrorCode.PAYMENT_REQUIRED, message),
 };
 
 /**
@@ -270,7 +269,7 @@ export function getFriendlyErrorByCode(code: ErrorCodeValue): FriendlyError {
     ERROR_CODE_MESSAGES[code] ?? {
       title: 'Something Went Wrong',
       message: "We weren't able to complete your request.",
-      suggestion: 'Please try again. If this keeps happening, try restarting the app.',
+      suggestion: 'Please try again. If this keeps happening, contact support.',
       icon: 'error',
     }
   );
@@ -476,14 +475,48 @@ export function getFriendlyError(error: Error | string): FriendlyError {
   }
 
   if (
+    errorLower.includes('oauth') ||
+    errorLower.includes('reauthorize') ||
+    errorLower.includes('reauthenticate') ||
+    errorLower.includes('refresh token') ||
+    errorLower.includes('token expired') ||
+    errorLower.includes('token revoked')
+  ) {
+    return {
+      title: 'Connection Needs Reauthorizing',
+      message:
+        'This connected account no longer has valid access. Your chat and data are unchanged.',
+      suggestion: 'Reconnect the account in Settings, then retry.',
+      icon: 'auth',
+    };
+  }
+
+  if (
+    errorLower.includes('403') ||
+    errorLower.includes('forbidden') ||
+    errorLower.includes('permission denied') ||
+    errorLower.includes('insufficient permission')
+  ) {
+    return {
+      title: 'Access Denied',
+      message: 'Your account does not have permission for this. Nothing was changed.',
+      suggestion: 'Ask a workspace admin for access. Retrying will not help.',
+      icon: 'auth',
+    };
+  }
+
+  if (
     errorLower.includes('401') ||
     errorLower.includes('unauthorized') ||
-    errorLower.includes('auth')
+    errorLower.includes('not authenticated') ||
+    errorLower.includes('session expired') ||
+    errorLower.includes('invalid session') ||
+    errorLower.includes('authentication')
   ) {
     return {
       title: 'Sign In Required',
-      message: 'You need to sign in to continue.',
-      suggestion: 'Please sign out and sign back in to refresh your session.',
+      message: 'Your session has expired. Your saved work is unaffected.',
+      suggestion: 'Sign in again to continue.',
       icon: 'auth',
     };
   }
@@ -530,7 +563,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
   return {
     title: 'Something Went Wrong',
     message: "We weren't able to complete your request.",
-    suggestion: 'Please try again. If this keeps happening, try restarting the app.',
+    suggestion: 'Please try again. If this keeps happening, contact support.',
     icon: 'error',
   };
 }

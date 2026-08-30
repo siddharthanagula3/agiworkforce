@@ -7,6 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
+import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -72,6 +73,27 @@ async function handleBulkConversationAction(request: NextRequest) {
   }
 
   if (isDelete) {
+    // Soft delete leaves the 0095 FK cascade dormant, so a published artifact
+    // would keep serving its public token after its chat is gone.
+    try {
+      const revoked = await unpublishArtifactsForConversations(getNeonChatDb(), {
+        userId,
+        conversationIds: affected.map(({ id }) => id),
+      });
+      if (revoked.length > 0) {
+        logger.info(
+          { userId, action, revoked: revoked.length },
+          'Revoked published artifacts for bulk-deleted conversations',
+        );
+      }
+    } catch (error) {
+      logger.error(
+        { error, userId, action },
+        'Failed to revoke published artifacts during bulk conversation delete',
+      );
+      throw createError.internal('Failed to update conversations');
+    }
+
     await Promise.all(
       affected.map(async ({ id }) => {
         try {

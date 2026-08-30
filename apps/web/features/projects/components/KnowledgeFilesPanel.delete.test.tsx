@@ -44,6 +44,7 @@ describe('KnowledgeFilesPanel delete', () => {
     expect(screen.getByText('notes.txt')).toBeTruthy();
 
     fireEvent.click(del);
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(

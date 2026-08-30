@@ -1,10 +1,9 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { createError } from '@/lib/errors';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { redactSecrets } from '@/lib/support/handoff/transcript';
@@ -22,7 +21,7 @@ async function handleAgentList(request: NextRequest, context: RouteContext) {
   const limited = await withRateLimit(request, 'support-handoff-agent');
   if (limited) return limited;
 
-  const { userId } = await requireAdmin(request);
+  const { userId } = await requirePlatformAdmin(request);
   const { sessionId } = await context.params;
 
   const session = await getSessionById(sessionId);
@@ -59,7 +58,7 @@ async function handleAgentPost(request: NextRequest, context: RouteContext) {
   const limited = await withRateLimit(request, 'support-handoff-agent');
   if (limited) return limited;
 
-  const { userId } = await requireAdmin(request);
+  const { userId } = await requirePlatformAdmin(request);
   const { sessionId } = await context.params;
 
   const session = await getSessionById(sessionId);

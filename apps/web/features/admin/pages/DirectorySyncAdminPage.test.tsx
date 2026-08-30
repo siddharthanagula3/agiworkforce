@@ -186,7 +186,8 @@ describe('DirectorySyncAdminPage', () => {
     });
 
     render(<DirectorySyncAdminPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Revoke/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Revoke$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke token' }));
 
     await waitFor(() => {
       const revokeCall = fetchMock.mock.calls.find(

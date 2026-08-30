@@ -161,7 +161,7 @@ function AgiWorkMaturityBadge() {
       aria-hidden="true"
       data-testid="agi-work-maturity-badge"
       title={AGI_WORK_MATURITY_TITLE}
-      className="ml-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1 text-[9px] font-medium uppercase leading-4 tracking-wide text-amber-700 dark:text-amber-300"
+      className="ml-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1 text-[9px] font-medium uppercase leading-4 tracking-wide text-amber-800 dark:text-amber-300"
     >
       {AGI_WORK_MATURITY_LABEL}
     </span>
@@ -2581,6 +2581,8 @@ const ChatComposerNewComponent = ({
         <AnchoredComposerMenu
           anchorRef={textareaRef}
           open={showMentions}
+          label="Mention suggestions"
+          onRequestClose={() => setShowMentions(false)}
           contentRef={mentionsRef}
           className="w-72"
         >
@@ -2708,7 +2710,7 @@ const ChatComposerNewComponent = ({
               // Image mode has no streaming turn to type ahead of, so it stays gated.
               disabled={composerDisabled || ((imageMode || videoMode) && isTurnActive)}
               className={cn(
-                'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
+                'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
                 emptyState
                   ? 'min-h-[40px] py-1.5 text-[18px] md:text-[18px]'
                   : 'min-h-[52px] py-3 text-sm md:text-[15px]',
@@ -2726,7 +2728,7 @@ const ChatComposerNewComponent = ({
                 role="status"
                 className={cn(
                   'absolute bottom-0 right-2 z-20 text-[10px] tabular-nums',
-                  charCounterExceeded ? 'text-destructive' : 'text-muted-foreground',
+                  charCounterExceeded ? 'text-danger' : 'text-muted-foreground',
                 )}
               >
                 {messageLength.toLocaleString()} / {COMPOSER_MAX_CHARS.toLocaleString()} characters
@@ -2771,7 +2773,7 @@ const ChatComposerNewComponent = ({
                 className={cn(
                   'relative flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                   hasOverflowActive
-                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
+                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                   composerDisabled && 'cursor-not-allowed opacity-50',
                 )}
@@ -2807,6 +2809,8 @@ const ChatComposerNewComponent = ({
               <AnchoredComposerMenu
                 anchorRef={overflowTriggerRef}
                 open={showOverflowMenu}
+                label="More composer options"
+                onRequestClose={() => setShowOverflowMenu(false)}
                 align="start"
                 contentRef={overflowMenuRef}
                 className="w-64 p-1.5"
@@ -3372,7 +3376,7 @@ const ChatComposerNewComponent = ({
                   .map((option) => option.label)
                   .join(', ')}`}
                 title={overflowActiveOptions.map((option) => option.label).join(', ')}
-                className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-[11px] font-medium text-[var(--chat-accent-primary)]"
+                className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-[11px] font-medium text-[var(--chat-accent-primary-text)]"
               >
                 <PrimaryOverflowIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
                 <span className="hidden max-w-24 truncate sm:inline">
@@ -3465,6 +3469,8 @@ const ChatComposerNewComponent = ({
                   <AnchoredComposerMenu
                     anchorRef={imageAspectTriggerRef}
                     open={showImageAspectMenu}
+                    label="Image aspect ratio"
+                    onRequestClose={() => setShowImageAspectMenu(false)}
                     className="w-44 p-1"
                   >
                     {imageAspectOptions.map((opt) => (
@@ -3539,6 +3545,8 @@ const ChatComposerNewComponent = ({
                     <AnchoredComposerMenu
                       anchorRef={videoAspectTriggerRef}
                       open={showVideoAspectMenu}
+                      label="Video aspect ratio"
+                      onRequestClose={() => setShowVideoAspectMenu(false)}
                       className="w-44 p-1"
                     >
                       {videoAspectOptions.map((opt) => (
@@ -3590,6 +3598,8 @@ const ChatComposerNewComponent = ({
                     <AnchoredComposerMenu
                       anchorRef={videoQualityTriggerRef}
                       open={showVideoQualityMenu}
+                      label="Video quality"
+                      onRequestClose={() => setShowVideoQualityMenu(false)}
                       className="w-52 p-1"
                     >
                       {videoQualityOptions.map((opt) => (
@@ -3679,6 +3689,8 @@ const ChatComposerNewComponent = ({
                 <AnchoredComposerMenu
                   anchorRef={imageModelTriggerRef}
                   open={showImageModelMenu}
+                  label="Image model"
+                  onRequestClose={() => setShowImageModelMenu(false)}
                   align="end"
                   className="w-52 p-1"
                 >
@@ -3749,6 +3761,8 @@ const ChatComposerNewComponent = ({
                 <AnchoredComposerMenu
                   anchorRef={videoModelTriggerRef}
                   open={showVideoModelMenu}
+                  label="Video model"
+                  onRequestClose={() => setShowVideoModelMenu(false)}
                   align="end"
                   className="w-52 p-1"
                 >
@@ -3847,7 +3861,7 @@ const ChatComposerNewComponent = ({
             className={cn(
               'flex h-8 min-w-0 items-center rounded-full border transition-all',
               pickerHasSelection
-                ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
+                ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                 : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
             )}
           >
@@ -3891,6 +3905,8 @@ const ChatComposerNewComponent = ({
           <AnchoredComposerMenu
             anchorRef={projectPickerTriggerRef}
             open={showProjectPicker}
+            label="Project or folder"
+            onRequestClose={() => setShowProjectPicker(false)}
             contentRef={projectPickerMenuRef}
             className="w-72 p-1.5"
           >
@@ -3901,7 +3917,7 @@ const ChatComposerNewComponent = ({
               placeholder="Search projects..."
               aria-label="Search projects"
               autoFocus
-              className="mb-1.5 w-full rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
+              className="mb-1.5 w-full rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
             />
             <div className="max-h-56 overflow-y-auto">
               {filteredPickerProjects.length === 0 && (
@@ -4005,7 +4021,7 @@ const ChatComposerNewComponent = ({
                   onChange={(e) => setAgiWorkConstraints(e.target.value.slice(0, 1000))}
                   placeholder={tAgiWork('agiWork.compose.constraintsPlaceholder')}
                   disabled={isTurnActive || composerDisabled}
-                  className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
+                  className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
                 />
               </label>
               <label className="flex flex-col gap-1">
@@ -4018,7 +4034,7 @@ const ChatComposerNewComponent = ({
                   onChange={(e) => setAgiWorkDeliverable(e.target.value.slice(0, 1000))}
                   placeholder={tAgiWork('agiWork.compose.deliverablePlaceholder')}
                   disabled={isTurnActive || composerDisabled}
-                  className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
+                  className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
                 />
               </label>
             </div>
@@ -4092,6 +4108,7 @@ const ChatComposerNewComponent = ({
             href="/privacy"
             target="_blank"
             rel="noopener noreferrer"
+            data-inline-link="true"
             className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Privacy

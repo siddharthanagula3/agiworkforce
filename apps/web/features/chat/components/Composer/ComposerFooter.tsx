@@ -334,7 +334,7 @@ function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string; size?:
   // Auto modes (managed cloud) carry the AGI brand mark in the brand accent colour.
   if (providerKey === 'managed_cloud') {
     return (
-      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-accent-primary)]">
+      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-accent-primary-text)]">
         <AgiMark size={size} mono />
       </span>
     );
@@ -866,7 +866,7 @@ export function ComposerFooter({
                 <button
                   id="model-selector"
                   disabled={modelChangePending}
-                  className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  className="flex min-h-6 min-w-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                   aria-label={modelChangePending ? 'Saving model selection' : 'Change model'}
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={12} />
@@ -882,7 +882,7 @@ export function ComposerFooter({
                     {modelChangePending ? 'Saving…' : selectedModel.name}
                   </span>
                   {hasEffortControl && (
-                    <span className="text-xs text-muted-foreground/70">
+                    <span className="text-xs text-muted-foreground">
                       {EFFORT_LABEL[effectiveEffort]}
                     </span>
                   )}
@@ -1004,7 +1004,7 @@ export function ComposerFooter({
                 <div className="min-h-0 flex-1 overflow-y-auto py-1">
                   {/* Recommended section label */}
                   {!isSearching && (
-                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Available
                     </div>
                   )}

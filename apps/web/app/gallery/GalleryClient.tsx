@@ -575,7 +575,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
         style={{
           position: 'fixed',
           inset: 0,
-          zIndex: 50,
+          zIndex: 'var(--z-modal)',
           background: 'rgba(0,0,0,0.55)',
         }}
         aria-hidden="true"
@@ -589,7 +589,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          zIndex: 60,
+          zIndex: 'var(--z-modal)',
           width: 'min(560px, 92vw)',
           background: 'var(--agi-bg-2)',
           border: '1px solid var(--agi-rule-strong)',
@@ -732,7 +732,12 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
     <>
       <div
         onClick={onClose}
-        style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.55)' }}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 'var(--z-modal)',
+          background: 'rgba(0,0,0,0.55)',
+        }}
         aria-hidden="true"
       />
       <div
@@ -744,7 +749,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          zIndex: 60,
+          zIndex: 'var(--z-modal)',
           width: 'min(520px, 92vw)',
           background: 'var(--agi-bg-2)',
           border: '1px solid var(--agi-rule-strong)',
@@ -917,7 +922,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
         style={{
           position: 'fixed',
           inset: 0,
-          zIndex: 40,
+          zIndex: 'var(--z-modal)',
           background: 'rgba(0,0,0,0.6)',
         }}
         aria-hidden="true"
@@ -929,7 +934,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
           top: 0,
           right: 0,
           bottom: 0,
-          zIndex: 50,
+          zIndex: 'var(--z-modal)',
           width: 'min(680px, 92vw)',
           background: 'var(--agi-bg-2)',
           borderLeft: '1px solid var(--agi-rule-strong)',

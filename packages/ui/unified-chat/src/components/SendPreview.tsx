@@ -1,4 +1,3 @@
-
 import { useId, useState } from 'react';
 import { ChevronDown, ChevronUp, Cloud, HardDrive, KeyRound, Lock } from 'lucide-react';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
@@ -75,7 +74,7 @@ export function SendPreview({
           aria-controls={detailsId}
           aria-label={`${presentation.destinationLabel}. ${expanded ? 'Hide' : 'Show'} send details`}
           title={presentation.destinationLabel}
-          className="inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-overlay)] hover:text-[var(--chat-text-secondary)]"
+          className="inline-flex h-6 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-overlay)] hover:text-[var(--chat-text-secondary)]"
         >
           <DestinationIcon presentation={presentation} compact />
           <span>{compactDestinationLabel(presentation)}</span>

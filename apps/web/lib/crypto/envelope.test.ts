@@ -192,18 +192,16 @@ describe('legacy layouts', () => {
     });
   });
 
-  it('interoperates with lib/device-token-crypto (b64-iv-ct-tag)', async () => {
-    vi.stubEnv('DEVICE_TOKEN_ENCRYPTION_KEY', KEY_ONE);
-    vi.resetModules();
-    const { encryptToken, decryptToken } = await import('../device-token-crypto');
+  it('round-trips the b64-iv-ct-tag layout it inherited from device-token-crypto', () => {
     const loaded = ring({ TEST_KEY: KEY_ONE });
+    const sealed = sealEnvelope(loaded, 'device-session', 'b64-iv-ct-tag');
 
-    expect(openEnvelope(loaded, encryptToken('device-session'), 'b64-iv-ct-tag').plaintext).toBe(
-      'device-session',
-    );
-    expect(decryptToken(sealEnvelope(loaded, 'device-session', 'b64-iv-ct-tag'))).toBe(
-      'device-session',
-    );
+    // Layout, not just round-trip: base64 of iv(12) || ciphertext || tag(16).
+    const raw = Buffer.from(sealed, 'base64');
+    expect(raw.byteLength).toBe(12 + 'device-session'.length + 16);
+    expect(openEnvelope(loaded, sealed, 'b64-iv-ct-tag')).toMatchObject({
+      plaintext: 'device-session',
+    });
   });
 
   it('interoperates with the WebCrypto TOTP layout (utf8 key, tag appended)', async () => {

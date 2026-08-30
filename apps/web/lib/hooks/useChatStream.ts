@@ -1668,6 +1668,11 @@ export function useChatStream(): UseChatStreamReturn {
     Map<string, ManagedCloudAgentRunHandle & { assistantMessageId: string }>
   >(new Map());
 
+  // streamingConversationIds only flips after the auth-token await below, so it
+  // cannot stop a second click that arrives inside that gap. Claim the
+  // conversation synchronously instead, or a double-click bills two runs.
+  const continuationClaimsRef = useRef<Set<string>>(new Set());
+
   const abortConversation = useCallback((conversationId: string): void => {
     const controller = abortControllersRef.current.get(conversationId);
     if (!controller) return;
@@ -2038,6 +2043,7 @@ export function useChatStream(): UseChatStreamReturn {
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
       if (conversationId && store.streamingConversationIds.includes(conversationId)) return;
+      if (conversationId && continuationClaimsRef.current.has(conversationId)) return;
       const conversationMessages = conversationId
         ? readConversationMessages(conversationId)
         : store.messages;
@@ -2049,165 +2055,173 @@ export function useChatStream(): UseChatStreamReturn {
         setError('No active conversation. Please create a new conversation first.');
         return;
       }
-      const isTemporaryConversation = Boolean(
-        store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
-      );
-      const model = message.model || selectedModel;
-
-      const getAuthToken: AuthTokenProvider = async () => {
-        const token = await getToken();
-        if (!token) throw new Error('Not authenticated');
-        return token;
-      };
-      let authToken: string;
+      continuationClaimsRef.current.add(conversationId);
       try {
-        authToken = await getAuthToken();
-      } catch {
-        setError('Not authenticated', conversationId);
-        return;
-      }
+        const isTemporaryConversation = Boolean(
+          store.conversations.find((conversation) => conversation.id === conversationId)
+            ?.isTemporary,
+        );
+        const model = message.model || selectedModel;
 
-      const abortController = beginConversationRequest(conversationId);
-
-      const apiMessages: ApiMessage[] = conversationMessages
-        .slice(0, messageIndex + 1)
-        .flatMap((m) => {
-          const turn: ApiMessage = { role: m.role, content: m.content as MessageContent };
-          const settled = settledInteractiveCardTurn(m);
-          return settled ? [turn, settled] : [turn];
-        });
-      apiMessages.push({ role: 'user', content: CONTINUE_GENERATION_INSTRUCTION });
-
-      const seedContent = message.content;
-      const seedTools = message.metadata?.tools?.map((t) => ({ ...t }));
-      const priorMetadata = message.metadata;
-
-      updateMessage(
-        assistantMessageId,
-        { isStreaming: true, metadata: { ...priorMetadata, finishReason: undefined } },
-        conversationId,
-      );
-      startStreaming(assistantMessageId, conversationId);
-      setLoading(true, conversationId);
-      setError(null, conversationId);
-
-      try {
-        const continuationOperationId = crypto.randomUUID();
-        const headers = await addCsrfHeaders({
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-          'X-AGI-Surface': 'web',
-          'Idempotency-Key': createManagedChatIdempotencyKey({
-            surface: 'web',
-            purpose: 'continue',
-            operationId: continuationOperationId,
-          }),
-        });
-        const response = await fetch('/api/llm/v1/chat/completions', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model,
-            messages: apiMessages,
-            conversation_id: conversationId,
-            assistant_message_id: assistantMessageId,
-            stream: true,
-            use_prompt_cache: true,
-          }),
-          signal: abortController.signal,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const {
-            message: errMessage,
-            code,
-            recovery,
-          } = readChatApiErrorPayload(errorData, `Request failed: ${response.status}`);
-          throw new ChatApiError(errMessage, {
-            code,
-            status: response.status,
-            resetAt: readErrorResetAt(errorData, response),
-            ...(recovery ? { recovery } : {}),
-          });
-        }
-
-        await consumeAssistantStream({
-          response,
-          assistantMessageId,
-          model: response.headers.get('X-AGI-Resolved-Model')?.trim() || model,
-          conversationId,
-          isTemporaryConversation,
-          getAuthToken,
-          seedContent,
-          seedTools,
-          onRunHandle: (handle) => {
-            if (handle) {
-              activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
-            } else {
-              activeRunsRef.current.delete(conversationId);
-            }
-          },
-        });
-      } catch (error) {
-        const isAbort =
-          typeof error === 'object' &&
-          error !== null &&
-          (error as { name?: unknown }).name === 'AbortError';
-        if (isAbort) {
-          updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
-          stopStreaming(conversationId);
-          setLoading(false, conversationId);
+        const getAuthToken: AuthTokenProvider = async () => {
+          const token = await getToken();
+          if (!token) throw new Error('Not authenticated');
+          return token;
+        };
+        let authToken: string;
+        try {
+          authToken = await getAuthToken();
+        } catch {
+          setError('Not authenticated', conversationId);
           return;
         }
 
-        const errorMessage = getVisibleErrorMessage(error);
-        const errorCode = error instanceof ChatApiError ? error.code : undefined;
+        const abortController = beginConversationRequest(conversationId);
 
-        if (isFreeTrialErrorCode(errorCode)) {
-          if (errorCode === 'free_trial_token_budget_reached') {
-            useFreeTrialStore.getState().markLimitReached();
+        const apiMessages: ApiMessage[] = conversationMessages
+          .slice(0, messageIndex + 1)
+          .flatMap((m) => {
+            const turn: ApiMessage = { role: m.role, content: m.content as MessageContent };
+            const settled = settledInteractiveCardTurn(m);
+            return settled ? [turn, settled] : [turn];
+          });
+        apiMessages.push({ role: 'user', content: CONTINUE_GENERATION_INSTRUCTION });
+
+        const seedContent = message.content;
+        const seedTools = message.metadata?.tools?.map((t) => ({ ...t }));
+        const priorMetadata = message.metadata;
+
+        updateMessage(
+          assistantMessageId,
+          { isStreaming: true, metadata: { ...priorMetadata, finishReason: undefined } },
+          conversationId,
+        );
+        startStreaming(assistantMessageId, conversationId);
+        setLoading(true, conversationId);
+        setError(null, conversationId);
+
+        try {
+          const continuationOperationId = crypto.randomUUID();
+          const headers = await addCsrfHeaders({
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            'X-AGI-Surface': 'web',
+            'Idempotency-Key': createManagedChatIdempotencyKey({
+              surface: 'web',
+              purpose: 'continue',
+              operationId: continuationOperationId,
+            }),
+          });
+          const response = await fetch('/api/llm/v1/chat/completions', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              model,
+              messages: apiMessages,
+              conversation_id: conversationId,
+              assistant_message_id: assistantMessageId,
+              stream: true,
+              use_prompt_cache: true,
+            }),
+            signal: abortController.signal,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const {
+              message: errMessage,
+              code,
+              recovery,
+            } = readChatApiErrorPayload(errorData, `Request failed: ${response.status}`);
+            throw new ChatApiError(errMessage, {
+              code,
+              status: response.status,
+              resetAt: readErrorResetAt(errorData, response),
+              ...(recovery ? { recovery } : {}),
+            });
           }
+
+          await consumeAssistantStream({
+            response,
+            assistantMessageId,
+            model: response.headers.get('X-AGI-Resolved-Model')?.trim() || model,
+            conversationId,
+            isTemporaryConversation,
+            getAuthToken,
+            seedContent,
+            seedTools,
+            onRunHandle: (handle) => {
+              if (handle) {
+                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId });
+              } else {
+                activeRunsRef.current.delete(conversationId);
+              }
+            },
+          });
+        } catch (error) {
+          const isAbort =
+            typeof error === 'object' &&
+            error !== null &&
+            (error as { name?: unknown }).name === 'AbortError';
+          if (isAbort) {
+            updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
+            stopStreaming(conversationId);
+            setLoading(false, conversationId);
+            return;
+          }
+
+          const errorMessage = getVisibleErrorMessage(error);
+          const errorCode = error instanceof ChatApiError ? error.code : undefined;
+
+          if (isFreeTrialErrorCode(errorCode)) {
+            if (errorCode === 'free_trial_token_budget_reached') {
+              useFreeTrialStore.getState().markLimitReached();
+            }
+            updateMessage(
+              assistantMessageId,
+              { isStreaming: false, metadata: priorMetadata },
+              conversationId,
+            );
+            setError(errorMessage, conversationId);
+            stopStreaming(conversationId);
+            setLoading(false, conversationId);
+            return;
+          }
+
+          const streamedSoFar =
+            findConversationMessage(conversationId, assistantMessageId)?.content ?? seedContent;
+          const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage)}`;
           updateMessage(
             assistantMessageId,
-            { isStreaming: false, metadata: priorMetadata },
+            { isStreaming: false, content: mergedContent, error: true },
             conversationId,
           );
           setError(errorMessage, conversationId);
+          if (!isTemporaryConversation) {
+            saveMessageToDb(
+              conversationId,
+              {
+                id: assistantMessageId,
+                role: 'assistant',
+                content: mergedContent,
+                model,
+                metadata: { ...priorMetadata, finishReason: undefined },
+              },
+              getAuthToken,
+            ).catch((err) => notifyPersistenceFailure('assistant', err));
+          }
           stopStreaming(conversationId);
           setLoading(false, conversationId);
-          return;
+        } finally {
+          if (
+            activeRunsRef.current.get(conversationId)?.assistantMessageId === assistantMessageId
+          ) {
+            activeRunsRef.current.delete(conversationId);
+          }
+          endConversationRequest(conversationId, abortController);
         }
-
-        const streamedSoFar =
-          findConversationMessage(conversationId, assistantMessageId)?.content ?? seedContent;
-        const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage)}`;
-        updateMessage(
-          assistantMessageId,
-          { isStreaming: false, content: mergedContent, error: true },
-          conversationId,
-        );
-        setError(errorMessage, conversationId);
-        if (!isTemporaryConversation) {
-          saveMessageToDb(
-            conversationId,
-            {
-              id: assistantMessageId,
-              role: 'assistant',
-              content: mergedContent,
-              model,
-              metadata: { ...priorMetadata, finishReason: undefined },
-            },
-            getAuthToken,
-          ).catch((err) => notifyPersistenceFailure('assistant', err));
-        }
-        stopStreaming(conversationId);
-        setLoading(false, conversationId);
       } finally {
-        if (activeRunsRef.current.get(conversationId)?.assistantMessageId === assistantMessageId) {
-          activeRunsRef.current.delete(conversationId);
-        }
-        endConversationRequest(conversationId, abortController);
+        continuationClaimsRef.current.delete(conversationId);
       }
     },
     [

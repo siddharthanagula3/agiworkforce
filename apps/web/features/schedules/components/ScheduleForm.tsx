@@ -41,7 +41,7 @@ function FieldError({ field, errors }: { field: keyof ScheduleDraft; errors: Sch
   const message = errors[field];
   if (!message) return null;
   return (
-    <p id={`${fieldId(field)}-error`} role="alert" className="text-xs text-destructive">
+    <p id={`${fieldId(field)}-error`} role="alert" className="text-xs text-danger">
       {message}
     </p>
   );
@@ -113,7 +113,7 @@ export function ScheduleForm({
         {submitError && (
           <div
             role="alert"
-            className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-danger"
           >
             {submitError} Review the fields below or retry.
           </div>

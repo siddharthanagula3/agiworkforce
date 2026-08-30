@@ -33,7 +33,7 @@ export function ConversationItem({ conversation, collapsed = false }: Conversati
         'flex w-full items-center rounded-[var(--chat-radius-md)] transition-colors',
         collapsed ? 'h-8 justify-center px-0' : 'h-8 gap-2 px-2',
         isActive
-          ? 'bg-[var(--chat-accent-primary)]/12 text-[var(--chat-accent-primary)]'
+          ? 'bg-[var(--chat-accent-primary)]/12 text-[var(--chat-accent-primary-text)]'
           : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
       )}
       aria-current={isActive ? 'page' : undefined}

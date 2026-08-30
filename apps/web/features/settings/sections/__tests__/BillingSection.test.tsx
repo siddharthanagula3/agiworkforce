@@ -303,3 +303,26 @@ describe('BillingSection', () => {
     expect(screen.queryByText('Renews on')).toBeNull();
   });
 });
+
+describe('past-due payment notice', () => {
+  // invoice.payment_failed sets the subscription to past_due server-side, but
+  // this panel rendered nothing about it, so a user whose card was declined
+  // had no way to learn that from the product - and /payment-failure, the page
+  // written to explain it, had no inbound link from anywhere.
+  it('says the payment failed and links to the explainer', async () => {
+    mockSubscription = { ...mockSubscription, status: 'past_due' };
+    render(<BillingSection />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('did not go through');
+    expect(alert.textContent).toContain('past due');
+    expect(alert.querySelector('a')?.getAttribute('href')).toBe('/payment-failure');
+  });
+
+  it('stays silent on a healthy subscription', async () => {
+    mockSubscription = { ...mockSubscription, status: 'active' };
+    render(<BillingSection />);
+    await waitFor(() => expect(screen.getByText(/Pro/)).toBeTruthy());
+    expect(screen.queryByText(/did not go through/)).toBeNull();
+  });
+});
