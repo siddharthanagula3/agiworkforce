@@ -16,7 +16,9 @@
     "@agiworkforce/types": "workspace:*"
   },
   "peerDependencies": {
-    "react-native": ">=0.83.0 <0.87.0"
+    "llama.rn": "^0.10.0",
+    "react-native": ">=0.83.0 <0.87.0",
+    "react-native-executorch": "^0.8.4"
   },
   "devDependencies": {
     "@babel/core": "^7.29.6",
@@ -25,5 +27,13 @@
     "react-native": "0.86.2",
     "typescript": "~5.9.3",
     "vitest": "^4.1.8"
+  },
+  "peerDependenciesMeta": {
+    "llama.rn": {
+      "optional": true
+    },
+    "react-native-executorch": {
+      "optional": true
+    }
   }
 }
