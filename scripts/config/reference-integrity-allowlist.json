@@ -5,40 +5,29 @@
     {
       "pathPrefix": "docs/00-foundation/owner-decision-register.md",
       "reason": "Decision-register entries name candidate package and command names inside proposed migration phases (\"Create a new package (e.g., @agiworkforce/chat-core)\"). These are proposals under evaluation, not claims that the package exists today.",
-      "kinds": [
-        "package",
-        "script"
-      ]
+      "kinds": ["package", "script"]
     },
     {
       "pathPrefix": "THIRD_PARTY_LICENSES.md",
       "reason": "Every path to the right of an arrow in this file is a path in the UPSTREAM project a file was ported from, not a path in this repo. Most read as `src/...` and never collide; `packages/plugin-sdk/src/provider-entry.ts` happens to look repo-rooted. Resolving these against this tree is the wrong check.",
-      "kinds": [
-        "md-path"
-      ]
+      "kinds": ["md-path"]
     },
     {
       "pathPrefix": "docs/agent-context/known-flaws.md",
       "reference": "scripts/check-native-module-tracing.mjs",
       "reason": "NATIVE-TRACING-GUARD-01 documents a guard that lives on the hotfix/argon2-native-module-tracing branch and was deliberately not adopted on main; the entry names the branch file on purpose so the un-adopted guard stays findable.",
-      "kinds": [
-        "md-path"
-      ]
+      "kinds": ["md-path"]
     },
     {
       "pathPrefix": "docs/architecture/render-layer.md",
       "reason": "The render-layer spec carries Status: Draft for build. Every repo path it cites names a file the design would create, not a file it claims exists. Filed as debt these read as rot to whoever ratchets next; they are proposals, and they resolve when the design ships.",
-      "kinds": [
-        "md-path"
-      ]
+      "kinds": ["md-path"]
     },
     {
       "pathPrefix": "docs/work/audit-remediation-ledger.md",
       "reference": "test:l1:l2",
       "reason": "A dated verification log records `pnpm test:l1:l2` among the commands that were green on the day of that audit. The script was removed on 2026-08-30 because priority-level-2 matched no tests and the lane gated nothing. Rewriting the line to name a script that did not run would falsify the record, so the reference is kept and declared here; it fails as stale if the line is ever removed.",
-      "kinds": [
-        "script"
-      ]
+      "kinds": ["script"]
     }
   ],
   "knownContradictions": [],
@@ -111,8 +100,6 @@
     "path::packages/contracts/types/src/sessions/execution-profile.ts::docs/plans/target-structure-finalization-2026-07-15.md",
     "path::packages/contracts/types/src/sessions/taxonomy.ts::docs/research/competitor-capability-session-architecture-2026-07-15.md",
     "path::packages/platform/artifacts/src/artifact-sync.ts::docs/plans/artifact-cloud-sync-design-2026-06-21.md",
-    "path::packages/ui/ui/src/primitives/Resizable.tsx::apps/web/shared/ui/resizable-panels.tsx",
-    "path::packages/ui/ui/src/primitives/Resizable.tsx::apps/web/shared/ui/resizable.tsx",
     "path::scripts/check-non-md-artifacts.mjs::docs/design/pitch-deck-verified-numbers-2026-05-17.md"
   ]
 }

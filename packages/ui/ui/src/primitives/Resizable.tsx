@@ -5,12 +5,9 @@ import * as ResizablePrimitive from 'react-resizable-panels';
 import { cn } from '../cn';
 
 /**
- * Faithful port of apps/web/shared/ui/resizable.tsx — the file actually
- * exported from web's barrel (apps/web/shared/ui/index.ts re-exports
- * ResizablePanelGroup/ResizablePanel/ResizableHandle from './resizable').
- * A second, unexported apps/web/shared/ui/resizable-panels.tsx also exists
- * with a pure data-attribute-driven API and richer vertical-handle styling,
- * but nothing imports it, so it is not the port source. `direction` is a
+ * Originally a port of web's own resizable primitive. Both that file and the
+ * barrel that re-exported it were removed once nothing imported them, so this
+ * is now the single implementation rather than a copy of one. `direction` is a
  * back-compat alias resolved ahead of the primitive's own `orientation`
  * prop; react-resizable-panels' `Group` is a plain function component with
  * no forwardRef (it exposes `elementRef`/`groupRef` instead), so there is
