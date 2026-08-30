@@ -129,6 +129,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "@vitest/ui": "^4.1.8",
     "@wdio/cli": "^9.29.1",
+    "@wdio/globals": "^9.29.1",
     "@wdio/mocha-framework": "^9.29.1",
     "@wdio/spec-reporter": "^9.29.1",
     "@wdio/tauri-plugin": "^1.2.0",
