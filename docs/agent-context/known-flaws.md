@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-08-24
+Last updated: 2026-08-30
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
@@ -2241,10 +2241,23 @@ stream-transform.ts` handles `reasoningOutputTokens` and never emits a
   Active Model row + Browse-all button), so selection routes through the picker's
   existing lock/tier gating rather than a duplicated ungated path. Regression test
   in models-page.test.tsx asserts the rows render as buttons.
-  • [LOW] OPEN MOBILE-CONNECTORS-501: cloud-connectors/index.tsx:684 — ~19/21
-  catalog providers' "Connect" shows an honest "coming soon" alert (server POST
-  /api/connectors returns 501; only GitHub + custom-MCP work). Backend-truthful,
-  not fake UI; the real gap is per-provider server-side OAuth registration (backend).
+  • [LOW] LARGELY FIXED MOBILE-CONNECTORS-501 (re-measured 2026-08-30): the claim
+  "only GitHub + custom-MCP work; POST /api/connectors returns 501" is no longer
+  accurate. isConnectorOAuthSupported() (lib/connectors/oauth-registry.ts:150) is
+  now `getConnectorOAuthProvider(id) !== null || isSelfServiceConnector(id)`, and
+  getAvailableConnectorIds() (app/api/connectors/route.ts:84-91) adds every
+  self-service endpoint, so 15 of the 27 records in lib/connectors/mcp-endpoints.ts
+  (8 `cimd` + 7 `dynamic`) are available with NO operator credentials. POST for
+  those answers 409 with an `oauthStartPath` (route.ts:279-295), not 501; mobile
+  follows it — connectConnector() returns an authorizeUrl and
+  cloud-connectors/index.tsx:697-705 opens the browser. 501 now only remains for a
+  connector that is neither operator-mapped nor OAuth-supported.
+  Still open: the 12 `preregistered` endpoints need CONNECTOR_OAUTH_PROVIDERS_JSON,
+  and 6 of them (asana, dropbox, figma, intercom, square, vercel) refused dynamic
+  registration on 2026-08-14 and need AGI's callback allowlisted — see
+  docs/work/founder-assistance.md item 25. No live consent round trip has been
+  completed yet, so "authorizes end to end" is still unproven by anything but
+  mocked tests.
   • NOTE dead code (not a visible control): src/features/sidebar/\*\* (Sidebar/
   ConversationList/etc.) is not mounted anywhere (live nav uses DrawerContent) —
   a delete/cleanup concern, not a dead interface.

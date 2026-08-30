@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-08
+Last updated: 2026-08-30
 
 ## The three audit sources
 
@@ -462,6 +462,21 @@ The screenshot reports are preserved in the source tags, but execution is reorde
 - [ ] Add a repository guard that rejects present-tense connector copy for entries whose implementation state is not production-ready.
 
 **Done when:** every visible connector is either end-to-end functional or consistently labeled planned/unavailable; no default connector produces a surprise `501` after a successful-looking setup flow.
+
+**Status 2026-08-30 (partial — reported evidence above is preserved as the
+original finding, not restated as current):** the `501`-by-default half is fixed.
+`isConnectorOAuthSupported()` is now
+`getConnectorOAuthProvider(id) !== null || isSelfServiceConnector(id)`
+(`apps/web/lib/connectors/oauth-registry.ts:150`), so the 15 self-service
+endpoints of the 27 in `apps/web/lib/connectors/mcp-endpoints.ts` are available
+with no operator registration, and POST answers `409` with an `oauthStartPath`
+rather than a surprise `501`. `/.well-known/oauth-client-metadata` now serves
+`200` in production, which was the blocker for the 8 CIMD vendors.
+
+The checkboxes above are deliberately still unticked: there is no generated
+connector capability registry, no guard on present-tense copy, and no contract
+test proving authorize → callback → storage → discovery → action → disconnect
+against a live vendor. Those remain open.
 
 ### CRIT-002 — Enterprise custom limits collapse to zero
 
