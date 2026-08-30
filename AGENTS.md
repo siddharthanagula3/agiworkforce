@@ -23,6 +23,12 @@ enforces it.
   frameworks, OS and store policy, use current primary sources.
 - Mark what you could not verify as unknown. An honest gap beats a confident
   invention.
+- **Verify the instrument, not just the result.** A harness, guard or probe is
+  a source like any other. Ask what would make its answer false — state leaking
+  between cases, a measurement taken before the page settled, your own traffic
+  counted as the product's, a check that passed over an input it never read.
+- **A second opinion sharing the first one's question is not independent.**
+  Verification catches fabrication, not a premise both parties assumed.
 
 ## 2. Source-of-truth precedence
 
@@ -161,6 +167,12 @@ tooling reads.
 Never weaken validation, tests, security, trust boundaries, permissions, type
 safety, lint rules, or guards to make a change pass.
 
+An action a user cannot undo asks first, and the question names the
+consequence — what stops working, who loses access, whether it can be
+recovered — not "are you sure". `useConfirmAction` in `@agiworkforce/ui` is
+that surface; a mutation fired straight from `onClick` is a defect regardless
+of how obvious the button's label seems.
+
 ## 10. Research
 
 Claude, ChatGPT, Gemini and other products are legitimate references. Verify
@@ -233,6 +245,9 @@ Four things that bite:
   are the tokens that resolve.
 - **`apps/web`'s `tsc --noEmit` exhausts Node's default heap.** Use
   `NODE_OPTIONS=--max-old-space-size=8192` or it dies with SIGABRT.
+- **A loaded machine fails tests that pass alone.** Long suites time out under
+  concurrent browser or build work and report as assertion failures. Check
+  `uptime`, and re-run in isolation before chasing an intermittent red.
 
 Commit subjects are conventional and lowercase; `commitlint` rejects any
 capitalized token in the subject, filenames included. Put those in the body.

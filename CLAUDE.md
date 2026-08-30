@@ -10,9 +10,14 @@ adds what is specific to Claude Code.
 
 ## Claude Code specifics
 
-- Use sub-agents for bounded, parallel, read-only work: inventory, reference
-  analysis, dependency tracing, review. Give each a narrow scope and an explicit
-  expected output. Never let two agents write the same file concurrently.
+- Use sub-agents for bounded, parallel work: inventory, reference analysis,
+  dependency tracing, review, and driving a slice of the running product
+  through its own Playwright spec. Give each a narrow scope and an explicit
+  expected output. Never let two agents write the same file concurrently — one
+  spec file per agent, deleted when it finishes. An agent driving the product
+  runs against real data: name the controls it must not click, and require it
+  to reproduce a finding before reporting it. See AGENTS.md §1 on verifying the
+  instrument, which applies to the agent as much as to its harness.
 - Use skills in `.agents/skills/` for repeatable procedures rather than
   re-deriving them. `skills-lock.json` pins their content hashes, so a reformat
   of any `SKILL.md` fails `scripts/verify-skills-lock.mjs` in CI.
