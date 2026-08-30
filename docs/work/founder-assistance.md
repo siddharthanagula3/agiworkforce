@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-17
+Last updated: 2026-08-30
 
 Things the remediation cannot finish in code, because they need a dashboard, a
 credential, a paid account, or a product decision that is not mine to make.
@@ -1229,18 +1229,36 @@ document at:
 https://agiworkforce.com/.well-known/oauth-client-metadata
 ```
 
-It is served correctly on localhost and returns 404 in production, because the
-change has not shipped yet. An authorization server that fetches a 404 answers
+It was served correctly on localhost and returned 404 in production, because the
+change had not shipped. An authorization server that fetches a 404 answers
 `invalid_client`, which is exactly what linear, sentry, canva, and todoist did
 when probed on 2026-08-14 — a symptom of the missing deploy, not of the flow.
 
+**Steps 1 and 2 are done as of 2026-08-30.** Production was promoted to
+`871f75caa` and the document now answers `200 application/json`:
+
+```json
+{
+  "client_id": "https://agiworkforce.com/.well-known/oauth-client-metadata",
+  "client_name": "AGI Workforce",
+  "redirect_uris": ["https://agiworkforce.com/api/connectors/oauth/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "token_endpoint_auth_method": "none"
+}
+```
+
+`client_id` equals its own URL, which is the CIMD contract, and the resolved
+origin confirms `CONNECTOR_OAUTH_REDIRECT_BASE_URL`/`NEXT_PUBLIC_APP_URL` is set
+correctly in Vercel production. The `invalid_client` cause is therefore removed.
+
 **Do:**
 
-1. Ship this branch to production.
-2. Confirm the document is public and unauthenticated:
-   `curl -i https://agiworkforce.com/.well-known/oauth-client-metadata`
-   — expect `200` and JSON whose `client_id` equals that same URL.
-3. Click Connect on Linear in the directory and complete consent once.
+1. ~~Ship this branch to production.~~ Done 2026-08-30 (`871f75caa`).
+2. ~~Confirm the document is public and unauthenticated.~~ Done 2026-08-30 — `200`,
+   `client_id` matches the URL.
+3. Click Connect on Linear in the directory and complete consent once. **This is
+   the only remaining step**, and it needs a human at a consent screen; no agent
+   can complete it.
 
 **Then tell Claude**, so the endpoint registry's CIMD verification note is
 updated from "advertised" to "confirmed end to end".
