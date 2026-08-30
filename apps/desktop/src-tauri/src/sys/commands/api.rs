@@ -120,6 +120,16 @@ fn ensure_oauth_endpoints_public_with(
         ("authUrl", config.auth_url.as_str()),
         ("tokenUrl", config.token_url.as_str()),
     ] {
+        let scheme = url::Url::parse(value)
+            .map_err(|_| format!("{field}: not a valid URL"))?
+            .scheme()
+            .to_ascii_lowercase();
+        if scheme != "https" {
+            return Err(format!(
+                "{field}: must use https, got {scheme}. The token call POSTs client_secret in a \
+                 form body and the authorization code rides the same exchange."
+            ));
+        }
         judge_destination(value, resolver).map_err(|denial| format!("{field}: {denial}"))?;
     }
     Ok(())
@@ -498,11 +508,27 @@ mod tests {
 
         let metadata_auth = OAuth2Config {
             auth_url: "http://169.254.169.254/latest/meta-data/".to_string(),
-            ..public
+            ..public.clone()
         };
         let error = ensure_oauth_endpoints_public_with(&metadata_auth, &StubResolver)
             .expect_err("a link-local auth endpoint must be refused");
         assert!(error.starts_with("authUrl:"), "got: {error}");
+
+        let plaintext_token = OAuth2Config {
+            token_url: "http://idp.example.com/oauth/token".to_string(),
+            ..public.clone()
+        };
+        let error = ensure_oauth_endpoints_public_with(&plaintext_token, &StubResolver)
+            .expect_err("a plaintext token endpoint must be refused");
+        assert!(error.contains("must use https"), "got: {error}");
+
+        let plaintext_auth = OAuth2Config {
+            auth_url: "http://idp.example.com/oauth/authorize".to_string(),
+            ..public
+        };
+        let error = ensure_oauth_endpoints_public_with(&plaintext_auth, &StubResolver)
+            .expect_err("a plaintext auth endpoint must be refused");
+        assert!(error.contains("must use https"), "got: {error}");
     }
 
     #[tokio::test]
