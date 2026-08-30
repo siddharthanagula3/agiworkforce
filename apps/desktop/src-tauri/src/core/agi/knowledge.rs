@@ -51,9 +51,7 @@ impl KnowledgeBase {
     }
 
     fn get_db_path() -> Result<PathBuf> {
-        let app_data = dirs::data_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?
-            .join("agiworkforce");
+        let app_data = crate::sys::utils::app_data_dir()?;
         std::fs::create_dir_all(&app_data)?;
         Ok(app_data.join("knowledge.db"))
     }

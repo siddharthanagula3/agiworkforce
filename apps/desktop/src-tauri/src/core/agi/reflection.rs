@@ -1201,8 +1201,26 @@ mod tests {
         create_test_engine_with_config(ReflectionConfig::default())
     }
 
+    /// KnowledgeBase and LearningSystem open keyed databases under
+    /// `app_data_dir()`. Without an override they open the developer's real
+    /// application database, so the suite depended on that machine's state.
+    static APP_DATA_DIR_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn isolated_app_data() -> std::sync::MutexGuard<'static, ()> {
+        let guard = APP_DATA_DIR_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let dir =
+            std::env::temp_dir().join(format!("agiworkforce-reflection-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp app data dir");
+        std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", &dir);
+        guard
+    }
+
     fn create_test_engine_with_config(config: ReflectionConfig) -> ReflectionEngine {
         use crate::core::llm::LLMRouter;
+
+        let _isolated = isolated_app_data();
 
         // Create minimal dependencies for testing
         let router = Arc::new(RwLock::new(LLMRouter::new()));

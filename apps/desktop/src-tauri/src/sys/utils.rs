@@ -16,6 +16,15 @@ pub fn set_app_data_dir(path: PathBuf) {
 }
 
 pub fn app_data_dir() -> anyhow::Result<PathBuf> {
+    #[cfg(test)]
+    if let Some(dir) = std::env::var_os("AGIWORKFORCE_APP_DATA_DIR") {
+        let dir = PathBuf::from(dir);
+        if !dir.exists() {
+            std::fs::create_dir_all(&dir)?;
+        }
+        return Ok(dir);
+    }
+
     // Primary: OnceLock set during setup().
     if let Some(dir) = APP_DATA_DIR.get() {
         if !dir.exists() {
