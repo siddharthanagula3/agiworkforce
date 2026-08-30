@@ -15,23 +15,9 @@ pub(super) fn request_uses_managed_cloud(
 /// Check billing subscription access and monthly budget limits.
 /// Returns `Ok(())` if the request is allowed, `Err(String)` if blocked.
 pub(super) fn check_billing_and_budget(
-    #[cfg(feature = "billing")] billing_state: &tokio::sync::MutexGuard<
-        '_,
-        crate::sys::billing::BillingState,
-    >,
     db: &AppDatabase,
     user_id: &str,
 ) -> Result<(), String> {
-    #[cfg(feature = "billing")]
-    {
-        if !billing_state.check_cloud_access() {
-            return Err(
-                "Subscription required. Please upgrade to the Basic plan to use the AGI agent."
-                    .to_string(),
-            );
-        }
-    }
-
     let conn = db
         .connection()
         .map_err(|e| format!("Budget check failed: {e}"))?;

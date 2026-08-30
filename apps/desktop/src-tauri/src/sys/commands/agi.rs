@@ -1168,33 +1168,8 @@ pub async fn get_knowledge_by_category(
     Ok(filtered)
 }
 
-/// Helper function to get user tier from billing state
-async fn get_user_tier_from_billing(billing: &BillingStateWrapper) -> String {
-    let billing_guard = billing.0.lock().await;
-
-    #[cfg(feature = "billing")]
-    {
-        if let Ok(service) = billing_guard.stripe_service() {
-            if let Ok(Some(sub)) = service.get_primary_subscription() {
-                let plan = sub.plan_name.to_lowercase();
-                // Map subscription plan names to tier names
-                return match plan.as_str() {
-                    p if p.contains("max") || p.contains("enterprise") => "max".to_string(),
-                    p if p.contains("pro") || p.contains("professional") => "pro".to_string(),
-                    p if p.contains("hobby") || p.contains("basic") => "basic".to_string(),
-                    _ => "free".to_string(),
-                };
-            }
-        }
-        "free".to_string()
-    }
-
-    #[cfg(not(feature = "billing"))]
-    {
-        drop(billing_guard);
-        // Without billing feature, default to "pro" for development
-        "pro".to_string()
-    }
+async fn get_user_tier_from_billing(_billing: &BillingStateWrapper) -> String {
+    "free".to_string()
 }
 
 /// Select best model and provider based on user tier
