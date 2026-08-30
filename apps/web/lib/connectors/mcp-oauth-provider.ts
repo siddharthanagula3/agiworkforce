@@ -1,6 +1,6 @@
-
 import 'server-only';
 
+import { AuthorizationServerMismatchError } from '@modelcontextprotocol/client';
 import type {
   OAuthClientMetadata,
   OAuthClientProvider,
@@ -195,6 +195,15 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
   }
 
   saveAuthorizationServerUrl(authorizationServerUrl: string): void {
+    const recordedIssuer = this.options.seed?.issuer;
+    if (
+      recordedIssuer &&
+      recordedIssuer !== authorizationServerUrl &&
+      `${recordedIssuer}/` !== authorizationServerUrl &&
+      recordedIssuer !== `${authorizationServerUrl}/`
+    ) {
+      throw new AuthorizationServerMismatchError(recordedIssuer, authorizationServerUrl);
+    }
     this._authorizationServerUrl = authorizationServerUrl;
   }
 

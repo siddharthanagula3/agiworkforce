@@ -1194,7 +1194,8 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "providerCompatibility": { "forcedToolChoice": false }
     },
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
@@ -1252,7 +1253,8 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "pro" },
+      "providerCompatibility": { "forcedToolChoice": false }
     },
     "qwen-3.5-flash": {
       "id": "qwen-3.5-flash",

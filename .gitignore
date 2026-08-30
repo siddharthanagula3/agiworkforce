@@ -285,3 +285,19 @@ __pycache__/
 # them also keeps them out of the closed root allowlist in
 # scripts/check-repo-organization.mjs, which skips gitignored entries.
 /CLAUDE-SECURITY-*/
+
+# Point-in-time architecture audit produced by a multi-agent code sweep. Same
+# artifact class as the CLAUDE-SECURITY reports above: a snapshot of the tree at
+# one revision, not living documentation, and stale the moment the code moves.
+#
+# It necessarily quotes hundreds of real catalog model IDs to describe routing,
+# which is precisely what scripts/check-no-hardcoded-model-ids.mjs exists to
+# forbid in tracked files. Ignoring it keeps that guard meaningful rather than
+# widening its owner-path allowlist to admit a document that owns nothing.
+# Current-state facts that must survive belong in the docs the guards already
+# cover (README, docs/architecture/**), not in a frozen report.
+/AGIWORKFORCE_CURRENT_STATE.md
+
+# Transient capability-QA evidence (raw provider streams, probes)
+.qa-evidence/
+tmp/qa/

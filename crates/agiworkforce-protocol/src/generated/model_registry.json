@@ -3469,8 +3469,8 @@
           "requiredCapabilities": ["textInput", "textOutput"],
           "requiredHarnessFeatures": ["webSearch"],
           "preferredSlots": {
-            "economy": ["search_fast"],
-            "balanced": ["search_fast"],
+            "economy": ["search_premium", "search_fast"],
+            "balanced": ["search_premium", "search_fast"],
             "premium": ["search_premium", "search_fast"]
           },
           "benchmarkWeights": {}

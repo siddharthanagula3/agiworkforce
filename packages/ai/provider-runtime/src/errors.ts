@@ -38,6 +38,25 @@ export type ErrorCategory =
   | 'invalid_input'
   | 'media_too_large'
   | 'auth'
+  /**
+   * The upstream account has no spend headroom left: a hard 402, or a provider
+   * message that plainly says the balance/credit is exhausted.
+   *
+   * Deliberately NOT `auth`. A credential that is merely unfunded is still a
+   * VALID credential, and conflating the two makes an economic failure look like
+   * a security failure — which then rotates the request onto a different PAID
+   * provider instead of surfacing that we have run out of money.
+   */
+  | 'billing_exhausted'
+  /**
+   * A 429 whose provider-native signal says the quota WINDOW is spent (e.g.
+   * OpenAI `insufficient_quota`), not that the caller is momentarily too fast.
+   *
+   * Distinct from `rate_limit` because the correct response differs: a short
+   * rate limit is worth waiting out on the same route; an exhausted quota pool
+   * must be taken out of service until it resets.
+   */
+  | 'quota_exhausted'
   | 'safety' // refusal / content filter / Google safety reasons
   | 'connection'
   | 'pause_turn'
@@ -99,6 +118,14 @@ export class FallbackTriggeredError extends Error {
 interface SDKErrorLike {
   status?: number;
   statusCode?: number;
+  /**
+   * A already-extracted Retry-After, in seconds.
+   *
+   * Set by layers that reconstruct an `Error` from a provider stream chunk
+   * (the raw HTTP headers are long gone by then). Read in preference to nothing
+   * at all — see `extractRetryAfterSeconds`.
+   */
+  retryAfterSeconds?: number;
   message?: string;
   name?: string;
   code?: string;
@@ -133,7 +160,15 @@ function extractMessage(e: SDKErrorLike): string {
 }
 
 function extractRetryAfterSeconds(e: SDKErrorLike): number | undefined {
-  return parseRetryAfter(e.headers ?? e.response?.headers ?? null);
+  // Prefer real headers when we still have them.
+  const fromHeaders = parseRetryAfter(e.headers ?? e.response?.headers ?? null);
+  if (fromHeaders !== undefined) return fromHeaders;
+  // Otherwise accept a value an upstream layer already extracted. Without this,
+  // any error that crossed a stream-chunk boundary lost its Retry-After even
+  // though the provider sent one, and every downstream backoff decision was made
+  // blind.
+  const direct = e.retryAfterSeconds;
+  return typeof direct === 'number' && Number.isFinite(direct) && direct >= 0 ? direct : undefined;
 }
 
 function extractAnthropicOverageHint(e: SDKErrorLike): string | undefined {
@@ -163,6 +198,59 @@ function matchesContextOverflow(message: string): boolean {
     lower.includes('model_context_window_exceeded') ||
     lower.includes('prompt is too long') ||
     lower.includes('maximum context length')
+  );
+}
+
+/**
+ * Provider-native codes that mean "this quota window is spent", as opposed to
+ * "you are going too fast right now".
+ *
+ * The distinction is not cosmetic. A short 429 should be waited out on the same
+ * route; an exhausted window must take the whole quota pool out of service until
+ * it resets, or every subsequent request burns a round-trip rediscovering the
+ * same wall. The signal is already present on the error object — OpenAI puts
+ * `insufficient_quota` in `error.type`/`error.code`, Google reports
+ * `RESOURCE_EXHAUSTED` in `error.status` — and was simply never read.
+ */
+const QUOTA_EXHAUSTED_CODES: ReadonlySet<string> = new Set([
+  'insufficient_quota',
+  'quota_exceeded',
+  'resource_exhausted',
+  'billing_hard_limit_reached',
+]);
+
+function matchesQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
+  const codes = [e.code, e.type, e.error?.type, e.error?.code, e.error?.status];
+  for (const raw of codes) {
+    if (typeof raw === 'string' && QUOTA_EXHAUSTED_CODES.has(raw.trim().toLowerCase())) {
+      return true;
+    }
+  }
+  return (
+    lowerMessage.includes('insufficient_quota') ||
+    lowerMessage.includes('exceeded your current quota') ||
+    lowerMessage.includes('quota exceeded') ||
+    lowerMessage.includes('resource_exhausted')
+  );
+}
+
+/**
+ * The upstream account is out of money.
+ *
+ * A 402 is unambiguous. The wording checks cover providers that return a 400/429
+ * with a balance message instead. This must never be classified `auth`: an
+ * unfunded key is still a valid key, and treating it as a credential failure is
+ * what previously caused an exhausted paid account to rotate the request onto a
+ * DIFFERENT paid provider rather than surfacing the billing problem.
+ */
+function matchesBillingExhausted(status: number | undefined, lowerMessage: string): boolean {
+  if (status === 402) return true;
+  return (
+    lowerMessage.includes('credit balance is too low') ||
+    lowerMessage.includes('insufficient credit') ||
+    lowerMessage.includes('insufficient funds') ||
+    lowerMessage.includes('payment required') ||
+    lowerMessage.includes('billing hard limit')
   );
 }
 
@@ -285,6 +373,27 @@ export function classifyError(err: unknown): ClassifiedError {
   }
 
   if (status === 429) {
+    // A 429 means two very different things depending on the provider-native
+    // code riding alongside it. OpenAI's `insufficient_quota` (and the
+    // equivalent wording other vendors use) says the billing/quota WINDOW is
+    // spent — retrying in a second cannot help, and the pool should be taken out
+    // of service until it resets. A plain 429 is back-pressure and IS worth
+    // waiting out. Both were previously collapsed into `rate_limit`.
+    if (matchesQuotaExhausted(e, lower)) {
+      return {
+        category: 'quota_exhausted',
+        code: 'insufficient_quota_429',
+        // Retrying the SAME route is pointless until the window resets; a
+        // different route with its own quota is fine, which is why this stays
+        // fallbackable while `retryable` is false.
+        retryable: false,
+        fallbackable: true,
+        ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+        status: 429,
+        message,
+        ...(overageHint ? { providerHint: overageHint } : {}),
+      };
+    }
     return {
       category: 'rate_limit',
       code: 'rate_limit_429',
@@ -362,10 +471,12 @@ export function classifyError(err: unknown): ClassifiedError {
     };
   }
 
-  if (lower.includes('credit balance is too low')) {
+  if (matchesBillingExhausted(status, lower)) {
     return {
-      category: 'auth',
-      code: 'credit_balance_low',
+      category: 'billing_exhausted',
+      code: status === 402 ? 'payment_required_402' : 'credit_balance_low',
+      // Waiting does not add funds, and neither does another provider: this is
+      // an operator problem, not a routing problem.
       retryable: false,
       fallbackable: false,
       ...(typeof status === 'number' ? { status } : {}),

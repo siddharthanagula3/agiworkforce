@@ -55,7 +55,11 @@ import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
  *  explicit selections remain rotation-free by construction.
  *
  *  Credential rejections are deliberately excluded here — they rotate under the
- *  separate provider-scoped rule below (`CredentialFailoverState`). */
+ *  separate provider-scoped rule below (`CredentialFailoverState`).
+ *
+ *  `quota_exhausted` IS eligible: that route's window is spent, but a different
+ *  route with its own quota is a legitimate answer. What must never appear here
+ *  is `billing_exhausted` — see `NEVER_ROTATE_CATEGORIES`. */
 const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'connection',
   'server_error',
@@ -63,11 +67,38 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'capacity_off_switch',
   'api_timeout',
   'rate_limit',
+  'quota_exhausted',
 ]);
+
+/**
+ * Classes that must NEVER produce a rotation, whatever else says otherwise.
+ *
+ * `billing_exhausted` is the load-bearing member. Anthropic's "credit balance is
+ * too low" used to classify as `auth`, and `CredentialFailoverState` treats any
+ * `auth` as a bad credential worth rotating away from — so an AGIWorkforce
+ * account that had simply run out of money would silently push the request onto
+ * a DIFFERENT PAID provider and spend more there. An unfunded credential is a
+ * valid credential; running out of money is an operator problem, not a routing
+ * problem, and hiding it by spending elsewhere is the worst possible response.
+ *
+ * `safety` is here for a different reason: a policy refusal must never be
+ * shopped around providers until one accepts the content.
+ */
+const NEVER_ROTATE_CATEGORIES: ReadonlySet<string> = new Set(['billing_exhausted', 'safety']);
+
+export function isNeverRotateCategory(category: string): boolean {
+  return NEVER_ROTATE_CATEGORIES.has(category);
+}
 
 export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): boolean {
   if (signal?.aborted) return false;
-  return FAILOVER_ELIGIBLE_CATEGORIES.has(classifyError(error).category);
+  const classified = classifyError(error);
+  if (NEVER_ROTATE_CATEGORIES.has(classified.category)) return false;
+  // `fallbackable` is computed by the classifier for exactly this decision and
+  // was previously ignored here, so a classification that explicitly said "do
+  // not fall back" still rotated.
+  if (classified.fallbackable === false && classified.category !== 'rate_limit') return false;
+  return FAILOVER_ELIGIBLE_CATEGORIES.has(classified.category);
 }
 
 export interface FailoverAttempt {
@@ -255,7 +286,25 @@ export function createFailoverPlan(
   return {
     next: (error: unknown): FailoverAttempt | null => {
       if (options.signal.aborted) return null;
-      const category = classifyError(error).category;
+      const classified = classifyError(error);
+      const category = classified.category;
+      // Checked FIRST and unconditionally: the credential-rotation path below
+      // must not be able to re-open a class we have decided may never rotate.
+      // This is the guard that stops an exhausted paid account from quietly
+      // spending through a different paid provider.
+      if (isNeverRotateCategory(category)) {
+        logger.warn(
+          {
+            requestId: processed.requestId,
+            provider: latestView.provider,
+            model: latestView.chatRequest.model,
+            category,
+            code: classified.code,
+          },
+          'Managed failover refused: failure class must never rotate',
+        );
+        return null;
+      }
       const credentialRotation = credentialFailover.recordFailure(latestView.provider, category);
       if (!credentialRotation && !isFailoverEligibleError(error, options.signal)) return null;
 

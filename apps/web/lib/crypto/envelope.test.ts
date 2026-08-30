@@ -29,6 +29,30 @@ afterEach(() => {
 });
 
 describe('key ring', () => {
+  it.each(['', 'not-a-key'])(
+    'reports unavailable connector storage for an invalid production key %j',
+    async (key) => {
+      vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', key);
+      vi.resetModules();
+      const { isConnectorTokenStorageAvailable, encryptConnectorToken } =
+        await import('../custom-connector-crypto');
+      expect(isConnectorTokenStorageAvailable()).toBe(false);
+      expect(() => encryptConnectorToken('token', 'oauth-access-token')).toThrow(/ENCRYPTION_KEY/);
+    },
+  );
+
+  it('reports connector storage ready only when the entire configured key ring is usable', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', KEY_ONE);
+    vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_RETIRED', '');
+    vi.resetModules();
+    const { isConnectorTokenStorageAvailable } = await import('../custom-connector-crypto');
+    expect(isConnectorTokenStorageAvailable()).toBe(true);
+    vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_RETIRED', 'invalid-retired-key');
+    expect(isConnectorTokenStorageAvailable()).toBe(false);
+  });
+
   it('labels an untouched deployment as key 1 so 0104 needs no backfill', () => {
     const loaded = ring({ TEST_KEY: KEY_ONE });
     expect(loaded.active.id).toBe('1');

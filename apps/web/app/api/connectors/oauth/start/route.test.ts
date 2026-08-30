@@ -68,11 +68,31 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const key of ENV_KEYS) delete process.env[key];
   __resetConnectorOAuthRegistryCacheForTests();
 });
 
 describe('GET /api/connectors/oauth/start', () => {
+  it.each(['linear', 'notion'])(
+    'rejects %s OAuth before discovery or persistence without a storage key',
+    async (connectorId) => {
+      configureLinear();
+      vi.stubEnv('NODE_ENV', 'production');
+      vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', '');
+      const fetchMock = vi.spyOn(globalThis, 'fetch');
+      const response = await GET(request(`?connectorId=${connectorId}&mode=json`));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        status: 'unavailable',
+        error: expect.stringContaining('secure token storage'),
+      });
+      expect(mocks.createPending).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+      fetchMock.mockRestore();
+    },
+  );
+
   it('refuses to start a flow for a provider with no OAuth app configured', async () => {
     const response = await GET(request('?connectorId=trello'));
 

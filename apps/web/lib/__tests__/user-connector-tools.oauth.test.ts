@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 
 vi.mock('server-only', () => ({}));
 
@@ -57,6 +58,8 @@ vi.mock('@/lib/connectors/oauth-registry', () => ({
   getConnectorOAuthProvider: (id: string) =>
     mockConfiguredIds().has(id) ? { ...PROVIDER, connectorId: id } : null,
   getOAuthConfiguredConnectorIds: () => mockConfiguredIds(),
+  isConnectorOAuthSupported: (id: string) =>
+    mockConfiguredIds().has(id) || isSelfServiceConnector(id),
   buildConnectorOAuthStartPath: (id: string) => `/api/connectors/oauth/start?connectorId=${id}`,
 }));
 
@@ -72,6 +75,7 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
 
 import {
   __resetConnectorMcpMapCacheForTests,
+  loadUserConnectorCapabilityCatalog,
   loadUserConnectorToolDefs,
   makeUserConnectorExecutor,
   evictConnectorOAuthCaches,
@@ -107,6 +111,7 @@ function catalogWith(serverName: string, toolName: string) {
 
 beforeEach(async () => {
   await evictConnectorOAuthCaches('user-1', 'linear');
+  await evictConnectorOAuthCaches('user-1', 'airtable');
   vi.clearAllMocks();
   __resetConnectorMcpMapCacheForTests();
   delete process.env['CONNECTOR_MCP_SERVERS_JSON'];
@@ -164,6 +169,46 @@ describe('OAuth connector catalog gating', () => {
     );
   });
 
+  it('offers tools for a self-service connector without an operator OAuth registration', async () => {
+    mockConfiguredIds.mockReturnValue(new Set());
+    mockGrantSummaries.mockResolvedValue([{ connectorId: 'airtable' }]);
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'tok',
+      tokenType: 'Bearer',
+      grantedScopes: ['data.records:read'],
+    });
+    mockBuildMcpToolCatalog.mockResolvedValue(catalogWith('airtable', 'list_records'));
+
+    const defs = await loadUserConnectorToolDefs('user-1');
+
+    expect(defs.map((definition) => definition.qualifiedName)).toEqual([
+      'mcp__airtable__list_records',
+    ]);
+  });
+
+  it('loads capability details for a connected self-service connector', async () => {
+    mockConfiguredIds.mockReturnValue(new Set());
+    mockGrantSummaries.mockResolvedValue([{ connectorId: 'airtable' }]);
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'tok',
+      tokenType: 'Bearer',
+      grantedScopes: ['data.records:read'],
+    });
+    mockBuildMcpToolCatalog.mockResolvedValue(catalogWith('airtable', 'list_records'));
+
+    const capability = await loadUserConnectorCapabilityCatalog('user-1', 'airtable');
+
+    expect(capability).toMatchObject({
+      connectorId: 'airtable',
+      source: 'oauth',
+      catalog: {
+        tools: [expect.objectContaining({ serverName: 'airtable', toolName: 'list_records' })],
+      },
+    });
+  });
+
   it('still applies the user per-tool BLOCK verdict to an OAuth connector', async () => {
     mockResolveAccessToken.mockResolvedValue({
       status: 'ready',
@@ -206,6 +251,38 @@ describe('OAuth connector catalog gating', () => {
 });
 
 describe('OAuth connector execution — lazy authentication', () => {
+  it('dispatches a self-service connector tool without an operator OAuth registration', async () => {
+    mockConfiguredIds.mockReturnValue(new Set());
+    mockResolveAccessToken.mockResolvedValue({
+      status: 'ready',
+      accessToken: 'tok',
+      tokenType: 'Bearer',
+      grantedScopes: ['data.records:read'],
+    });
+    const callTool = vi.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'records loaded' }],
+    });
+    mockConnectMcpServer.mockResolvedValue({ callTool, close: async () => undefined });
+
+    const result = await makeUserConnectorExecutor('user-1')('airtable', 'list_records', {});
+
+    expect(result).toEqual({ handled: true, content: 'records loaded', isError: false });
+    expect(callTool).toHaveBeenCalledWith('list_records', {});
+  });
+
+  it('returns a connect path when a self-service connector grant is missing', async () => {
+    mockConfiguredIds.mockReturnValue(new Set());
+    mockResolveAccessToken.mockResolvedValue({ status: 'not-connected' });
+
+    const result = await makeUserConnectorExecutor('user-1')('airtable', 'list_records', {});
+
+    expect(parseConnectorAuthorizationRequired(result.content)).toMatchObject({
+      connectorId: 'airtable',
+      connectUrl: '/api/connectors/oauth/start?connectorId=airtable',
+      reason: 'not_connected',
+    });
+  });
+
   it('surfaces a structured connect card instead of failing when there is no grant', async () => {
     mockResolveAccessToken.mockResolvedValue({ status: 'not-connected' });
 
@@ -224,7 +301,7 @@ describe('OAuth connector execution — lazy authentication', () => {
     expect(mockConnectMcpServer).not.toHaveBeenCalled();
   });
 
-  it('refreshes and RETRIES the same tool call after a 401, returning the real result', async () => {
+  it('preserves cancellation and continuation options when retrying a tool after a 401', async () => {
     mockResolveAccessToken
       .mockResolvedValueOnce({
         status: 'ready',
@@ -245,15 +322,26 @@ describe('OAuth connector execution — lazy authentication', () => {
       .mockResolvedValueOnce({ content: [{ type: 'text', text: 'issue created' }] });
     mockConnectMcpServer.mockResolvedValue({ callTool, close: async () => undefined });
 
-    const result = await makeUserConnectorExecutor('user-1')('linear', 'create_issue', {
-      title: 'x',
-    });
+    const controller = new AbortController();
+    const options = {
+      signal: controller.signal,
+      allowInputRequired: true,
+      inputResponses: { confirmation: true },
+      requestState: 'continuation-state',
+    };
+    const result = await makeUserConnectorExecutor('user-1')(
+      'linear',
+      'create_issue',
+      { title: 'x' },
+      options,
+    );
 
     expect(result).toEqual({ handled: true, content: 'issue created', isError: false });
     expect(mockResolveAccessToken).toHaveBeenLastCalledWith('user-1', 'linear', {
       forceRefresh: true,
     });
-    expect(callTool).toHaveBeenNthCalledWith(2, 'create_issue', { title: 'x' });
+    expect(callTool).toHaveBeenNthCalledWith(1, 'create_issue', { title: 'x' }, options);
+    expect(callTool).toHaveBeenNthCalledWith(2, 'create_issue', { title: 'x' }, options);
     expect(mockConnectMcpServer).toHaveBeenCalledTimes(2);
   });
 
@@ -339,7 +427,7 @@ describe('OAuth connector execution — lazy authentication', () => {
   it('does not claim an unconfigured connector id', async () => {
     mockConfiguredIds.mockReturnValue(new Set());
 
-    const result = await makeUserConnectorExecutor('user-1')('linear', 'create_issue', {});
+    const result = await makeUserConnectorExecutor('user-1')('dropbox', 'search', {});
 
     expect(result.handled).toBe(false);
   });

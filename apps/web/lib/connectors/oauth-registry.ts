@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 
 import { logger } from '@/lib/logger';
+import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 
 /**
  * Both broker addresses are cross-surface contract values (mobile and the
@@ -144,6 +145,10 @@ export function getOAuthConfiguredConnectorIds(): Set<string> {
 
 export function isConnectorOAuthConfigured(connectorId: string): boolean {
   return getOAuthConfiguredConnectorIds().has(connectorId);
+}
+
+export function isConnectorOAuthSupported(connectorId: string): boolean {
+  return getConnectorOAuthProvider(connectorId) !== null || isSelfServiceConnector(connectorId);
 }
 
 export function getConnectorOAuthRedirectUri(): string | null {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveValidatedBaseUrl, validateBaseUrl } from '../base-url';
+import {
+  ALLOWED_MANAGED_PROVIDER_HOSTS,
+  resolveValidatedBaseUrl,
+  validateBaseUrl,
+} from '../base-url';
 
 describe('validateBaseUrl', () => {
   const options = { allowedHosts: ['api.example.com', 'api.other.com'] };
@@ -67,6 +71,30 @@ describe('validateBaseUrl', () => {
       allowedHosts: new Set(['api.example.com']),
     });
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('managed provider host allowlist', () => {
+  it('admits both Qwen Model Studio deployment scopes', () => {
+    // A QwenCloud key is issued against exactly one scope. Allowlisting only
+    // the mainland host silently refuses an international operator's
+    // QWEN_BASE_URL override as SSRF and leaves Qwen unusable for them.
+    expect(ALLOWED_MANAGED_PROVIDER_HOSTS.has('dashscope.aliyuncs.com')).toBe(true);
+    expect(ALLOWED_MANAGED_PROVIDER_HOSTS.has('dashscope-intl.aliyuncs.com')).toBe(true);
+  });
+
+  it('accepts an international Qwen base URL override', () => {
+    const result = validateBaseUrl('https://dashscope-intl.aliyuncs.com/compatible-mode/v1', {
+      allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('still refuses a look-alike host outside the allowlist', () => {
+    const result = validateBaseUrl('https://dashscope-intl.aliyuncs.com.evil.test/v1', {
+      allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
+    });
+    expect(result.ok).toBe(false);
   });
 });
 

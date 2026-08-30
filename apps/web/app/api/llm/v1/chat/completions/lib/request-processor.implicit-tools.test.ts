@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getModels,
   getRoutingSlotModel,
   type BillingPlanTier,
   type RoutingTaskType,
@@ -186,6 +187,62 @@ describe('tool-aware Auto routing', () => {
       expect(resolveToolAwareTaskType()('simple_chat', chatRequest)).toBe(expectedTaskType);
     },
   );
+});
+
+describe('forced tool choice compatibility', () => {
+  const forcedChoiceIncompatibleModel = getModels()
+    .filter((model) => model.providerCompatibility?.forcedToolChoice === false)
+    .map((model) => model.id)[0];
+
+  it('the catalog records at least one model that rejects a forced tool choice', () => {
+    expect(forcedChoiceIncompatibleModel).toBeTruthy();
+  });
+
+  it('never forces a code tool call on a model whose provider rejects it', () => {
+    expect(
+      requestProcessor.resolveInitialManagedCodeToolChoice({
+        requestedToolChoice: undefined,
+        codeExecution: true,
+        stream: true,
+        provider: 'deepseek',
+        model: forcedChoiceIncompatibleModel,
+        e2bEnabled: true,
+        toolsCapable: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('never forces a web-search tool call on a model whose provider rejects it', () => {
+    expect(
+      requestProcessor.resolveInitialWebSearchToolChoice({
+        requestedToolChoice: undefined,
+        webSearch: true,
+        researchTask: true,
+        stream: true,
+        provider: 'deepseek',
+        model: forcedChoiceIncompatibleModel,
+        webSearchToolAttached: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('still forces the call for a model that accepts a forced tool choice', () => {
+    const compatible = getModels().find(
+      (model) =>
+        model.providerCompatibility?.forcedToolChoice !== false && model.capabilities?.tools,
+    );
+    expect(
+      requestProcessor.resolveInitialWebSearchToolChoice({
+        requestedToolChoice: undefined,
+        webSearch: true,
+        researchTask: true,
+        stream: true,
+        provider: 'openai',
+        model: compatible?.id,
+        webSearchToolAttached: true,
+      }),
+    ).toBe('required');
+  });
 });
 
 describe('managed code tool choice', () => {
