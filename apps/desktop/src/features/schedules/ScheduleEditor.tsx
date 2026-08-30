@@ -429,8 +429,8 @@ export function ScheduleEditor({ isOpen, editingSchedule, onClose }: ScheduleEdi
             className={cn(
               'flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition',
               isSaving
-                ? 'cursor-not-allowed bg-[var(--chat-accent-primary)]/50 text-[var(--chat-accent-on-primary)]/70'
-                : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] hover:opacity-90',
+                ? 'cursor-not-allowed bg-[var(--chat-accent-primary)]/50 text-[var(--chat-accent-primary-contrast)]/70'
+                : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-primary-contrast)] hover:opacity-90',
             )}
           >
             {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
