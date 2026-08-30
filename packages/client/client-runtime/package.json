@@ -30,5 +30,8 @@
     "@tauri-apps/api": {
       "optional": true
     }
+  },
+  "devDependencies": {
+    "vitest": "^4.1.8"
   }
 }
