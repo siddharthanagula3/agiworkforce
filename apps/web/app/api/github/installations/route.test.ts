@@ -54,6 +54,29 @@ describe('GitHub installation listing ownership proof', () => {
     expect(mocks.query).not.toHaveBeenCalled();
   });
 
+  it('emits installation_id as a number even though the driver returns bigint as a string', async () => {
+    // The fixture above uses a JS number, which is what hid this. installation_id
+    // is `bigint` and no int8 type parser is registered, so the real driver hands
+    // back a string. The settings panel validates the body with z.number(), so an
+    // un-coerced row failed safeParse and rendered a connected GitHub as not
+    // connected behind a retry notice that could never succeed.
+    mocks.linkingAvailable.mockReturnValue(true);
+    mocks.query.mockResolvedValue([
+      {
+        id: 'row-1',
+        installation_id: '987654',
+        account_login: 'victim-org',
+        account_type: 'Organization',
+      },
+    ]);
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/github/installations'));
+
+    const body = (await response.json()) as { installations: Array<{ installation_id: unknown }> };
+    expect(body.installations[0]?.installation_id).toBe(987654);
+    expect(typeof body.installations[0]?.installation_id).toBe('number');
+  });
+
   it('lists only rows carrying an explicit ownership proof', async () => {
     mocks.linkingAvailable.mockReturnValue(true);
 
