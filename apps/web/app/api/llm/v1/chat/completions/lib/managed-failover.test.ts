@@ -111,11 +111,21 @@ describe('rotation eligibility (gateway parity)', () => {
     ['forbidden (403)', httpError(403, 'permission denied')],
     ['revoked oauth token', new Error('This oauth token has been revoked')],
     ['disabled organization', httpError(403, 'Your organization has been disabled')],
-    ['exhausted credit balance', new Error('Your credit balance is too low')],
   ])('rotates on %s', (_label, error) => {
     const attempt = makePlan(makeProcessed()).next(error);
     expect(attempt).not.toBeNull();
     expect(attempt!.model).toBe('candidate-a');
+  });
+
+  it('never rotates on an exhausted credit balance', () => {
+    // Inverted deliberately. This case used to sit in the list above, because
+    // "credit balance is too low" classified as `auth` and every `auth` is a
+    // rotation trigger. That meant an account which had merely run out of money
+    // was pushed onto a DIFFERENT PAID provider and spent more there. An
+    // unfunded credential is a valid credential: the failure is an operator
+    // problem and must surface, not be paid around.
+    const attempt = makePlan(makeProcessed()).next(new Error('Your credit balance is too low'));
+    expect(attempt).toBeNull();
   });
 
   it('skips the rejected provider’s own remaining routes rather than replaying the same key', () => {

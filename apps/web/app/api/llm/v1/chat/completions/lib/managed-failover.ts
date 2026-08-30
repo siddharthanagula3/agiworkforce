@@ -94,10 +94,11 @@ export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): b
   if (signal?.aborted) return false;
   const classified = classifyError(error);
   if (NEVER_ROTATE_CATEGORIES.has(classified.category)) return false;
-  // `fallbackable` is computed by the classifier for exactly this decision and
-  // was previously ignored here, so a classification that explicitly said "do
-  // not fall back" still rotated.
-  if (classified.fallbackable === false && classified.category !== 'rate_limit') return false;
+  // Deliberately does NOT consult `classified.fallbackable`. That flag answers
+  // "should the caller swap models?" and is computed as `status >= 502 && <= 504`
+  // for server errors, so honouring it here stopped rotation on a plain 500, on
+  // ECONNRESET, and on a timeout - the exact failures cross-provider failover
+  // exists to absorb. Rotation is decided by category alone.
   return FAILOVER_ELIGIBLE_CATEGORIES.has(classified.category);
 }
 

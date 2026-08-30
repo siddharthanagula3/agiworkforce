@@ -31,12 +31,37 @@ describe('buildUpstreamErrorResponse', () => {
     );
 
     expect(response.status).toBe(429);
-    const body = (await response.json()) as { error: { message: string; type: string } };
+    const body = (await response.json()) as {
+      error: { message: string; type: string; code: string };
+    };
     expect(body.error.type).toBe('rate_limit_error');
+    // RESOURCE_EXHAUSTED plus "exceeded your current quota" is a spent quota
+    // window, not a momentary rate limit, so it must not promise that retrying
+    // shortly will work.
+    expect(body.error.code).toBe('provider_quota_exhausted');
+    expect(body.error.message).toBe(
+      'Google capacity for this model is exhausted for now. Choose Auto to use another available model, or try again later.',
+    );
+    expect(body.error.message).not.toContain('RESOURCE_EXHAUSTED');
+  });
+
+  it('keeps a momentary rate limit distinct from an exhausted quota', async () => {
+    const response = buildUpstreamErrorResponse(
+      upstreamError('Google API rate limit exceeded (429)', 429),
+      'google',
+      FIXTURE_MODEL_ID,
+      FIXTURE_MODEL_ID,
+      'user-1',
+      'request-1',
+      'streaming',
+    );
+
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as { error: { message: string; code: string } };
+    expect(body.error.code).toBe('provider_rate_limited');
     expect(body.error.message).toBe(
       'Google is temporarily at capacity. Try again shortly, or choose Auto to use another available model.',
     );
-    expect(body.error.message).not.toContain('RESOURCE_EXHAUSTED');
   });
 
   it('never returns the raw upstream message for an unclassified failure (SYS-18)', async () => {
