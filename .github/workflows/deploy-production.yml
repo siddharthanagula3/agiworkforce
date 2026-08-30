@@ -218,7 +218,7 @@ jobs:
         run: npm install --global vercel@58.4.0
 
       - name: Pull production project settings
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
       # Captured BEFORE the promotion. The source is the project's production
       # TARGET (`/v9/projects/{id}` -> `targets.production.id`), which is the
@@ -275,7 +275,7 @@ jobs:
           NODE
 
       - name: Build the production artifact
-        run: vercel build --prod --token="$VERCEL_TOKEN"
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
       - name: Deploy the prebuilt artifact
         id: deploy
@@ -283,7 +283,7 @@ jobs:
         run: |
           set -euo pipefail
           deployment_url="$(
-            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
+            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
           )"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
@@ -319,7 +319,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "::error::Production verification failed; reverting to $PREVIOUS_DEPLOYMENT_ID"
-          vercel rollback "$PREVIOUS_DEPLOYMENT_ID" --yes --timeout 10m --token="$VERCEL_TOKEN"
+          vercel rollback "$PREVIOUS_DEPLOYMENT_ID" --yes --timeout 10m --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
       # Runs on the failure path too — the rollback target is exactly what a
       # human needs when the gate rejected a build. Skipped only when nothing
@@ -461,11 +461,11 @@ jobs:
 
       - name: Pull production project settings
         working-directory: ${{ runner.temp }}/sandbox-origin
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
       - name: Build the production artifact
         working-directory: ${{ runner.temp }}/sandbox-origin
-        run: vercel build --prod --token="$VERCEL_TOKEN"
+        run: vercel build --prod --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
 
       - name: Deploy the prebuilt artifact
         id: deploy
@@ -474,7 +474,7 @@ jobs:
         run: |
           set -euo pipefail
           deployment_url="$(
-            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
+            vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"
           )"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
