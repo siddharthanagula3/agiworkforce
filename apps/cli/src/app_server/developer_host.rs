@@ -4284,13 +4284,9 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let agent = AgentSession::new_checked(
-            "fixture-local-model:latest",
-            &context,
-            None,
-            Some("ollama"),
-        )
-        .expect("Local session");
+        let agent =
+            AgentSession::new_checked("fixture-local-model:latest", &context, None, Some("ollama"))
+                .expect("Local session");
         assert_eq!(agent.privacy_mode, crate::agent::PrivacyMode::Local);
 
         let mut base = CliConfig::default();

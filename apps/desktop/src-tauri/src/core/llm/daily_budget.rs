@@ -256,7 +256,9 @@ mod tests {
     fn check_rejects_only_the_user_who_is_over_cap() {
         let guard = fresh_guard();
         guard.record_actual("alice", 25.0).expect("record");
-        guard.check_or_reject("bob").expect("bob is under his own cap");
+        guard
+            .check_or_reject("bob")
+            .expect("bob is under his own cap");
     }
 
     #[test]
