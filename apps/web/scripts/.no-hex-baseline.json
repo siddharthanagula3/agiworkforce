@@ -5,13 +5,13 @@
       "file": "app/api/og/route.tsx",
       "line": 3,
       "rule": "hex",
-      "literal": "#C8892A"
+      "literal": "#f0a84a"
     },
     {
       "file": "app/api/og/route.tsx",
       "line": 29,
       "rule": "hex",
-      "literal": "#0A0A0F"
+      "literal": "#0b0a08"
     },
     {
       "file": "app/api/og/route.tsx",
@@ -23,19 +23,19 @@
       "file": "app/api/og/route.tsx",
       "line": 44,
       "rule": "hex",
-      "literal": "#FFFFFF"
+      "literal": "#f5f0e6"
     },
     {
       "file": "app/api/og/route.tsx",
       "line": 54,
       "rule": "hex",
-      "literal": "#F4F4F5"
+      "literal": "#f5f0e6"
     },
     {
       "file": "app/api/og/route.tsx",
       "line": 62,
       "rule": "hex",
-      "literal": "#9BA1A6"
+      "literal": "#c4bcac"
     },
     {
       "file": "app/api/projects/[id]/duplicate/route.ts",

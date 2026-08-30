@@ -38,7 +38,6 @@ test.describe('QA phase 1 — runtime capability discovery', () => {
       body: safeParse(pluginsBody),
     });
 
-    // eslint-disable-next-line no-console
     console.log(
       `[qa] skills=${skills.status()} connectors=${connectors.status()} plugins=${plugins.status()}`,
     );

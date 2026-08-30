@@ -14,6 +14,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 const VAPID_PUBLIC_KEY_ENV = 'WEB_PUSH_VAPID_PUBLIC_KEY';
 const VAPID_PRIVATE_KEY_ENV = 'WEB_PUSH_VAPID_PRIVATE_KEY';
 const VAPID_SUBJECT_ENV = 'WEB_PUSH_VAPID_SUBJECT';
+const AUTH_TAG_BYTES = 16;
 
 const {
   getWebPushPublicKey,
@@ -94,10 +95,11 @@ function receiveWebPush(body: Buffer, ecdh: ECDH, authSecret: Buffer): string {
     'aes-128-gcm',
     expand(pseudoRandomKey, encodingInfo('aes128gcm'), 16),
     expand(pseudoRandomKey, encodingInfo('nonce'), 12),
+    { authTagLength: AUTH_TAG_BYTES },
   );
-  decipher.setAuthTag(record.subarray(record.length - 16));
+  decipher.setAuthTag(record.subarray(record.length - AUTH_TAG_BYTES));
   const padded = Buffer.concat([
-    decipher.update(record.subarray(0, record.length - 16)),
+    decipher.update(record.subarray(0, record.length - AUTH_TAG_BYTES)),
     decipher.final(),
   ]);
 
