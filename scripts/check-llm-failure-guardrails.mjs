@@ -17,6 +17,7 @@ const SKIP_DIRS = new Set([
   'coverage',
   'dist',
   'node_modules',
+  'out',
   'target',
   'Pods',
   'dist-web',
