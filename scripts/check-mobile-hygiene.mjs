@@ -75,6 +75,7 @@ const serviceStoreImportBaseline = new Set([
   'apps/mobile/services/companionNotifications.ts',
   'apps/mobile/services/realtime.ts',
   'apps/mobile/services/notificationGate.ts',
+  'apps/mobile/services/pushPreferenceSync.ts',
 ]);
 
 function absolute(relativePath) {
