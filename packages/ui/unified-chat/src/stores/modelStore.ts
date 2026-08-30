@@ -6,10 +6,10 @@ import {
   getAutoRoutingProfiles,
   getProviderDefaultModel,
   getTaskModelForProvider,
-  resolveAutoModeModel,
   type Provider,
 } from '@agiworkforce/types';
 import type { RoutingDecision } from '@agiworkforce/types';
+import { getAutoCapabilityEnvelope } from '@agiworkforce/routing';
 
 interface ModelState {
   models: ModelInfo[];
@@ -78,11 +78,31 @@ const AUTO_PROFILE_TIER = {
   premium: { subscription: 'max', presentation: 'flagship' },
 } as const;
 
+/**
+ * What an Auto row may claim.
+ *
+ * This used to name ONE representative model via `resolveAutoModeModel` — a
+ * second, simplified copy of the routing walk that skipped every admission check
+ * the canonical resolver performs, and reported that single model's
+ * capabilities as Auto's. The row could therefore advertise a capability the
+ * dispatched model did not have, and overstate the context window.
+ *
+ * `getAutoCapabilityEnvelope` instead asks the canonical resolver what it would
+ * really select, for every task type, at this tier and runtime — and returns the
+ * INTERSECTION. A picker describes a request that has not been classified yet,
+ * so it may only promise what holds on every branch that request might take.
+ */
 const AUTO_MODE_FALLBACKS: ModelInfo[] = AUTO_ROUTING_PROFILES.flatMap((profile) => {
   const tier = AUTO_PROFILE_TIER[profile.profile];
-  const representativeId = resolveAutoModeModel(profile.id, tier.subscription, 'general');
-  const metadata = getModelMetadataById(representativeId);
-  if (!metadata || metadata.contextWindow === undefined) return [];
+  const envelope = getAutoCapabilityEnvelope({
+    selection: profile.id,
+    subscriptionTier: tier.subscription,
+    trustMode: 'managed_cloud',
+    runtimeProfileId: 'web/cloud-chat',
+  });
+  // No dispatchable route means there is nothing honest to advertise; the row is
+  // dropped rather than rendered as a model that supports nothing.
+  if (!envelope) return [];
 
   return [
     {
@@ -90,10 +110,10 @@ const AUTO_MODE_FALLBACKS: ModelInfo[] = AUTO_ROUTING_PROFILES.flatMap((profile)
       name: profile.label,
       provider: 'managed_cloud',
       tier: tier.presentation,
-      supportsThinking: metadata.capabilities.thinking,
-      supportsVision: metadata.capabilities.vision,
-      supportsTools: metadata.capabilities.tools,
-      contextWindow: metadata.contextWindow,
+      supportsThinking: envelope.supportsThinking,
+      supportsVision: envelope.supportsVision,
+      supportsTools: envelope.supportsTools,
+      contextWindow: envelope.contextWindow,
       isLocal: false,
       isByok: false,
     },

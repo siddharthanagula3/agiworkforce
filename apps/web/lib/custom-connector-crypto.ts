@@ -19,6 +19,18 @@ export const CONNECTOR_SECRET_PURPOSES = [
 
 export type ConnectorSecretPurpose = (typeof CONNECTOR_SECRET_PURPOSES)[number];
 
+export const CONNECTOR_TOKEN_STORAGE_UNAVAILABLE =
+  'Connector authorization is unavailable because secure token storage is not configured. Contact your administrator.';
+
+export function isConnectorTokenStorageAvailable(): boolean {
+  try {
+    getKeyRing();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function getKeyRing(): KeyRing {
   const keyHex = CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY;
   if (keyHex && HEX_64_RE.test(keyHex)) {

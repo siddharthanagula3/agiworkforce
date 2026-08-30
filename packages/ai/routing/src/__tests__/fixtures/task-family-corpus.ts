@@ -80,6 +80,12 @@ const BASELINE_ROUTES = {
   reasoningEconomy: `${getRoutingSlotModel('reasoning_economy')}@economy`,
   reasoningBalanced: `${getRoutingSlotModel('reasoning_balanced')}@balanced`,
   reasoningPremium: `${getRoutingSlotModel('reasoning_premium_pro')}@premium`,
+  // The `research` task now prefers `search_premium` at every profile band.
+  // It previously preferred `search_fast`, whose model carries
+  // `capabilities.research: false` — so Deep Research resolved to a model that
+  // could not perform it, `researchModeAllowed()` refused, and the research loop
+  // silently never ran. These rows pinned that broken baseline.
+  searchPremiumBalanced: `${getRoutingSlotModel('search_premium')}@balanced`,
 } as const satisfies Record<string, BaselineRoutePin>;
 
 export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
@@ -93,7 +99,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'research',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.searchPremiumBalanced,
     note: 'Deep Research toggle alone is decisive.',
   },
   {
@@ -102,7 +108,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { researchMode: true, webSearch: true, messageCharCount: 120 },
     taskType: 'research',
     subscriptionTier: 'max',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.searchPremiumBalanced,
     note: 'Research outranks the plain web-search toggle.',
   },
   {
@@ -111,7 +117,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { researchMode: true, workMode: 'agiwork' },
     taskType: 'research',
     subscriptionTier: 'max',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.searchPremiumBalanced,
     note: 'Research outranks agiwork, matching resolveToolAwareTaskType order.',
   },
   {
@@ -120,7 +126,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { researchMode: true, declaredToolCount: 3, toolChoiceForced: true },
     taskType: 'research',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.searchPremiumBalanced,
     note: 'Caller tools do not displace an explicit research request.',
   },
   {
@@ -142,7 +148,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'research',
     subscriptionTier: 'max',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.searchPremiumBalanced,
     note: 'Research outranks attachments.',
   },
 
@@ -321,7 +327,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webSearch: true, messageCharCount: 55 },
     taskType: 'research',
     subscriptionTier: 'pro',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseBalanced,
+    expectedBaselineRoute: BASELINE_ROUTES.searchPremiumBalanced,
     note: 'Plain web-search toggle without the Deep Research mode.',
   },
   {

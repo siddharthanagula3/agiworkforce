@@ -22,7 +22,6 @@ import modelsCatalogJson from './models.json';
 import { modelRegistry } from '@agiworkforce/model-registry';
 import type { Provider } from './provider';
 import type { ModelInfo } from './provider-adapter';
-import type { RoutingTaskType } from './runtime';
 import type { SubscriptionTier } from './user';
 import type { Effort } from './design-system/effort';
 export type { Provider };
@@ -408,6 +407,14 @@ export interface ModelMetadata {
   promptCacheMinimumTokens?: number;
   providerCompatibility?: {
     nativeWebFetch?: boolean;
+    /**
+     * Whether the provider accepts a FORCED `tool_choice` (`'required'` or a
+     * named function) for this model. Some reasoning models reason on every turn
+     * and answer a forced choice with HTTP 400 "Thinking mode does not support
+     * this tool_choice", which surfaces to the user as an empty turn. `'auto'`
+     * and an omitted choice are unaffected.
+     */
+    forcedToolChoice?: boolean;
   };
   availability?: ModelAvailability;
   unavailableReason?: string;
@@ -1127,13 +1134,6 @@ function normalizeProductTier(tier: string | null | undefined): ProductTier {
     default:
       return 'free';
   }
-}
-
-function normalizeAutoRoutingTier(tier: string | null | undefined): ProductTier | 'byok' {
-  if ((tier ?? '').toLowerCase() === 'byok') return 'byok';
-  return normalizeSubscriptionAccessTier(tier ?? 'free') === 'basic'
-    ? 'free'
-    : normalizeProductTier(tier);
 }
 
 export function getProviderSurface(provider: Provider | string): ProviderSurface {
@@ -1960,56 +1960,6 @@ export const NON_US_PROVIDERS: ReadonlySet<string> = Object.freeze(
   new Set<string>(modelRegistry.policies.auto.providerPolicies.usOnly.excludedProviders),
 );
 
-export interface ResolveAutoModeOptions {
-  usOnly?: boolean;
-}
-
-export function resolveAutoModeModel(
-  autoMode: AutoModeModelId | string | null | undefined,
-  subscriptionTier?: string | null,
-  taskType?: RoutingTaskType,
-  options?: ResolveAutoModeOptions,
-): string | null {
-  const autoPolicy = modelRegistry.policies.auto;
-  const normalizedMode = (autoMode ?? autoPolicy.defaultAlias).toLowerCase();
-  const normalizedTier = normalizeAutoRoutingTier(subscriptionTier);
-  const alias = autoPolicy.aliases[normalizedMode as keyof typeof autoPolicy.aliases];
-  if (!alias) {
-    return normalizeModelId(normalizedMode);
-  }
-
-  const requestedProfileIndex = autoPolicy.profileOrder.indexOf(alias.profile);
-  const maximumProfile = autoPolicy.tierMaximumProfiles[normalizedTier];
-  const maximumProfileIndex = autoPolicy.profileOrder.indexOf(maximumProfile);
-  const effectiveProfile =
-    autoPolicy.profileOrder[Math.min(requestedProfileIndex, maximumProfileIndex)] ?? maximumProfile;
-  const effectiveTaskType = taskType ?? 'general';
-  const taskPolicy = autoPolicy.tasks[effectiveTaskType];
-  if (!taskPolicy) return null;
-
-  const allowedSlots = new Set(autoPolicy.tierAllowedSlots[normalizedTier]);
-  const usOnlyPolicy = autoPolicy.providerPolicies.usOnly;
-  const applyUsOnly =
-    options?.usOnly === true && usOnlyPolicy.allowedTiers.includes(normalizedTier);
-
-  const preferredSlots =
-    taskPolicy.preferredSlots[effectiveProfile as keyof typeof taskPolicy.preferredSlots];
-  for (const slotId of preferredSlots) {
-    if (!allowedSlots.has(slotId)) continue;
-    const modelKey = autoPolicy.slots[slotId as keyof typeof autoPolicy.slots]?.modelKey;
-    if (!modelKey) continue;
-    const provider =
-      modelRegistry.models[modelKey as keyof typeof modelRegistry.models]?.identity.provider;
-    if (applyUsOnly && provider && usOnlyPolicy.excludedProviders.includes(provider)) continue;
-    return modelKey;
-  }
-
-  const fallbackSlot = autoPolicy.fallbackSlot;
-  return allowedSlots.has(fallbackSlot)
-    ? (autoPolicy.slots[fallbackSlot as keyof typeof autoPolicy.slots]?.modelKey ?? null)
-    : null;
-}
-
 /**
  * Kinds of "default model" requests `getDefaultModelFor` understands.
  *
@@ -2017,7 +1967,6 @@ export function resolveAutoModeModel(
  * `TIER_POLICIES` registry the auto-router consults. Use this helper instead
  * of hardcoding concrete model IDs at call sites.
  *
- * @see resolveAutoModeModel for the legacy auto-mode picker.
  */
 export type DefaultModelKind = 'chat' | 'fast-status' | 'voice' | 'computer-use' | 'reasoning';
 

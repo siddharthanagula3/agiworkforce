@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -24,6 +23,7 @@ import {
   buildConnectorOAuthStartPath,
   getOAuthConfiguredConnectorIds,
   isConnectorOAuthConfigured,
+  isConnectorOAuthSupported,
 } from '@/lib/connectors/oauth-registry';
 import {
   connectorIdsWithMcpEndpoint,
@@ -37,6 +37,10 @@ import {
 } from '@/lib/connectors/catalog';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
+import {
+  CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
+  isConnectorTokenStorageAvailable,
+} from '@/lib/custom-connector-crypto';
 
 const GITHUB_CONNECTOR_ID = 'github';
 
@@ -159,7 +163,7 @@ async function handleGetConnectors(request: NextRequest) {
 
   const oauthGrants = await getUserConnectorOAuthGrantSummaries(userId);
   for (const grant of oauthGrants) {
-    if (!isConnectorOAuthConfigured(grant.connectorId)) continue;
+    if (!isConnectorOAuthSupported(grant.connectorId)) continue;
     if (connectors.some((c) => c.connectorId === grant.connectorId)) continue;
     connectors.push({
       id: `oauth-${grant.connectorId}`,
@@ -272,10 +276,13 @@ async function handleCreateConnector(request: NextRequest) {
     );
   }
 
-  if (
-    !operatorMappedIds.has(body.connectorId) &&
-    (isConnectorOAuthConfigured(body.connectorId) || isSelfServiceConnector(body.connectorId))
-  ) {
+  if (!operatorMappedIds.has(body.connectorId) && isConnectorOAuthSupported(body.connectorId)) {
+    if (!isConnectorTokenStorageAvailable()) {
+      return NextResponse.json(
+        { error: CONNECTOR_TOKEN_STORAGE_UNAVAILABLE, connectorId: body.connectorId },
+        { status: 503 },
+      );
+    }
     const startPath = buildConnectorOAuthStartPath(body.connectorId);
     return NextResponse.json(
       {

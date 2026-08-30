@@ -13,6 +13,7 @@ import {
   getConnectorOAuthRedirectUri,
   getOAuthConfiguredConnectorIds,
   isAllowedConnectorOAuthRedirectUri,
+  isConnectorOAuthSupported,
   sanitizeConnectorReturnPath,
 } from '../oauth-registry';
 
@@ -65,6 +66,13 @@ describe('connector OAuth registry — availability is earned, not assumed', () 
     expect(getConnectorOAuthProvider('linear')).toBeNull();
   });
 
+  it('supports self-service OAuth without treating preregistered providers as configured', () => {
+    expect(isConnectorOAuthSupported('airtable')).toBe(true);
+    expect(isConnectorOAuthSupported('linear')).toBe(true);
+    expect(isConnectorOAuthSupported('dropbox')).toBe(false);
+    expect(isConnectorOAuthSupported('unknown-connector')).toBe(false);
+  });
+
   it('does not advertise a described provider until its client credentials exist', () => {
     setProviders(describeProvider());
     expect([...getOAuthConfiguredConnectorIds()]).toEqual([]);
@@ -95,6 +103,7 @@ describe('connector OAuth registry — availability is earned, not assumed', () 
     __resetConnectorOAuthRegistryCacheForTests();
 
     expect(getConnectorOAuthProvider('google-calendar')?.clientId).toBe('id');
+    expect(isConnectorOAuthSupported('google-calendar')).toBe(true);
   });
 
   it('yields ZERO providers from a malformed env value rather than a partial set', () => {

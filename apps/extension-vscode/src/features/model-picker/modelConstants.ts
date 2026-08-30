@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import {
   canAccessModelForSubscriptionTier,
@@ -9,7 +8,6 @@ import {
   getModelMetadataById,
   getPickerModelTier,
   normalizeModelId,
-  resolveAutoModeModel,
   evaluateModelEnvironment,
   PROVIDER_DISPLAY,
   type ModelAvailability,
@@ -17,6 +15,7 @@ import {
   type EnvironmentAvailability,
   type ModelEnvironment,
 } from '@agiworkforce/types';
+import { getAutoCapabilityEnvelope } from '@agiworkforce/routing';
 
 export interface ModelPickerOption {
   id: string;
@@ -55,6 +54,26 @@ function codiconForProvider(providerId: ProviderId): string {
 
 export const MODEL_LOCKED_HINT = 'Sign in or add a provider key';
 
+/**
+ * Auto is reachable when the canonical resolver can actually resolve it for
+ * this tier — not when some representative model happens to be tier-allowed.
+ * The plan gates below mirror `isModelReachableForTier` exactly; only the
+ * routing half changed.
+ */
+export function isAutoReachableForTier(autoId: string, tier: string | undefined): boolean {
+  if (tier === undefined) return true;
+  if (tier === 'byok') return true;
+  if (tier === 'local' || !canUseBillingPlanCapability(tier, 'developer_surfaces')) return false;
+  return (
+    getAutoCapabilityEnvelope({
+      selection: autoId,
+      subscriptionTier: tier,
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'vscode/managed-chat',
+    }) !== null
+  );
+}
+
 export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
   if (tier === undefined) return true;
   if (tier === 'byok') return true;
@@ -74,8 +93,7 @@ export interface GroupedQuickPickItem extends vscode.QuickPickItem {
 }
 
 export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[] {
-  const autoReachable = (autoId: string): boolean =>
-    isModelReachableForTier(resolveAutoModeModel(autoId, tier) ?? autoId, tier);
+  const autoReachable = (autoId: string): boolean => isAutoReachableForTier(autoId, tier);
 
   const withLockHint = (description: string, reachable: boolean): string =>
     reachable ? description : `${description} · ${MODEL_LOCKED_HINT}`;
@@ -191,9 +209,24 @@ export function getModelProviderInfo(modelId: string): ModelProviderInfo {
 
 const DEFAULT_CONTEXT_LIMIT = 128_000;
 
-const AUTO_MODEL_DEFAULTS: Record<'auto', string | null> = {
-  auto: resolveAutoModeModel('auto', 'pro'),
-} as const;
+/**
+ * The capability envelope Auto can guarantee on this surface.
+ *
+ * Previously a single representative model id from `resolveAutoModeModel` — a
+ * parallel routing walk that skipped the canonical resolver's admission checks.
+ * The envelope asks `resolveAutoRoute` what it would really select across every
+ * task type and reports the intersection, so the context limit below is a floor
+ * Auto can honour rather than one route's best case.
+ *
+ * Computed at the `pro` tier to preserve the previous module-level constant's
+ * shape; these tables are not tier-parameterised.
+ */
+const AUTO_ENVELOPE = getAutoCapabilityEnvelope({
+  selection: 'auto',
+  subscriptionTier: 'pro',
+  trustMode: 'managed_cloud',
+  runtimeProfileId: 'vscode/managed-chat',
+});
 
 const MANUAL_MODEL_OPTIONS = getCoreManualModelOptions();
 const MANUAL_MODEL_IDS = MANUAL_MODEL_OPTIONS.map((option) => option.id);
@@ -201,14 +234,23 @@ const MANUAL_MODEL_IDS = MANUAL_MODEL_OPTIONS.map((option) => option.id);
 const manualContextLimits = getModelContextLimits(MANUAL_MODEL_IDS);
 const manualCostRates = getModelCostRates(MANUAL_MODEL_IDS);
 
-function getAutoContextLimit(modelId: string | null): number {
-  return getModelMetadataById(modelId)?.contextWindow ?? DEFAULT_CONTEXT_LIMIT;
-}
-
-function getAutoCostRate(modelId: string | null): { input: number; output: number } {
-  if (modelId === null) return { input: 0, output: 0 };
-  const rate = getModelCostRates([modelId])[modelId];
-  return rate ? { input: rate.input, output: rate.output } : { input: 0, output: 0 };
+/**
+ * Auto's cost rate is the WORST case across every route it can pick, not one
+ * representative's. A budget estimate that under-states the price of a route
+ * Auto might actually take is worse than one that over-states it.
+ */
+function getAutoCostRate(modelIds: readonly string[]): { input: number; output: number } {
+  if (modelIds.length === 0) return { input: 0, output: 0 };
+  const rates = getModelCostRates([...modelIds]);
+  let input = 0;
+  let output = 0;
+  for (const modelId of modelIds) {
+    const rate = rates[modelId];
+    if (!rate) continue;
+    input = Math.max(input, rate.input);
+    output = Math.max(output, rate.output);
+  }
+  return { input, output };
 }
 
 export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
@@ -243,7 +285,9 @@ export function getModelPickerOptionsForTier(
 ): Array<ModelPickerOption & { reachable: boolean }> {
   return MODEL_PICKER_OPTIONS.map((option) => ({
     ...option,
-    reachable: isModelReachableForTier(resolveAutoModeModel(option.id, tier) ?? option.id, tier),
+    reachable: option.id.startsWith('auto')
+      ? isAutoReachableForTier(option.id, tier)
+      : isModelReachableForTier(option.id, tier),
   }));
 }
 
@@ -267,7 +311,7 @@ export function normalizeConfiguredModelId(modelId: string | null | undefined): 
 
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   ...manualContextLimits,
-  auto: getAutoContextLimit(AUTO_MODEL_DEFAULTS['auto']),
+  auto: AUTO_ENVELOPE?.contextWindow ?? DEFAULT_CONTEXT_LIMIT,
 };
 
 export const MODEL_COST_RATES: Record<string, { input: number; output: number }> = {
@@ -277,7 +321,7 @@ export const MODEL_COST_RATES: Record<string, { input: number; output: number }>
       { input: rates.input, output: rates.output },
     ]),
   ),
-  auto: getAutoCostRate(AUTO_MODEL_DEFAULTS['auto']),
+  auto: getAutoCostRate(AUTO_ENVELOPE?.reachableModelKeys ?? []),
 };
 
 export const CHARS_PER_TOKEN = 4;

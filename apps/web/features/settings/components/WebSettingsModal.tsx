@@ -176,6 +176,108 @@ const CustomConnectorsResponseSchema = z.object({
   ),
 });
 
+type ParsedConnectorRow = {
+  connectorId: string;
+  connectedAt?: string;
+  needsReauthorization?: boolean;
+};
+
+type ParsedCustomConnectorRow = {
+  id: string;
+  name: string;
+  url: string;
+  createdAt: string;
+};
+
+function readConnectorResponse(value: unknown): {
+  rows: ParsedConnectorRow[];
+  available: string[];
+  degraded: boolean;
+} | null {
+  if (!value || typeof value !== 'object') return null;
+  const envelope = value as { connectors?: unknown; available?: unknown };
+  if (!Array.isArray(envelope.connectors)) return null;
+
+  let degraded = false;
+  const rows: ParsedConnectorRow[] = [];
+  for (const raw of envelope.connectors) {
+    if (!raw || typeof raw !== 'object') {
+      degraded = true;
+      continue;
+    }
+    const row = raw as Record<string, unknown>;
+    if (typeof row['connectorId'] !== 'string' || row['connectorId'].length === 0) {
+      degraded = true;
+      continue;
+    }
+    const parsed: ParsedConnectorRow = { connectorId: row['connectorId'] };
+    if (row['connectedAt'] !== undefined) {
+      if (typeof row['connectedAt'] === 'string') parsed.connectedAt = row['connectedAt'];
+      else degraded = true;
+    }
+    if (row['needsReauthorization'] !== undefined) {
+      if (typeof row['needsReauthorization'] === 'boolean') {
+        parsed.needsReauthorization = row['needsReauthorization'];
+      } else degraded = true;
+    }
+    rows.push(parsed);
+  }
+
+  let available: string[] = [];
+  if (envelope.available !== undefined) {
+    if (!Array.isArray(envelope.available)) {
+      degraded = true;
+    } else {
+      available = envelope.available.filter((id): id is string => {
+        const valid = typeof id === 'string' && id.length > 0;
+        if (!valid) degraded = true;
+        return valid;
+      });
+    }
+  }
+
+  return { rows, available, degraded };
+}
+
+function readCustomConnectorResponse(value: unknown): {
+  rows: ParsedCustomConnectorRow[];
+  degraded: boolean;
+} | null {
+  if (!value || typeof value !== 'object') return null;
+  const envelope = value as { connectors?: unknown };
+  if (!Array.isArray(envelope.connectors)) return null;
+
+  let degraded = false;
+  const rows: ParsedCustomConnectorRow[] = [];
+  for (const raw of envelope.connectors) {
+    if (!raw || typeof raw !== 'object') {
+      degraded = true;
+      continue;
+    }
+    const row = raw as Record<string, unknown>;
+    if (
+      typeof row['id'] !== 'string' ||
+      row['id'].length === 0 ||
+      typeof row['name'] !== 'string' ||
+      row['name'].length === 0 ||
+      typeof row['url'] !== 'string' ||
+      row['url'].length === 0 ||
+      typeof row['createdAt'] !== 'string'
+    ) {
+      degraded = true;
+      continue;
+    }
+    rows.push({
+      id: row['id'],
+      name: row['name'],
+      url: row['url'],
+      createdAt: row['createdAt'],
+    });
+  }
+
+  return { rows, degraded };
+}
+
 // ---------------------------------------------------------------------------
 // URL segment -> section key mapping.
 //
@@ -392,6 +494,7 @@ export function WebSettingsModal({
 
   const [connectorsLoading, setConnectorsLoading] = useState(false);
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
+  const [connectorsNotice, setConnectorsNotice] = useState<string | null>(null);
   // Scoped to the GitHub installations source only — never blocks the rest of
   // the panel (see GITHUB_INSTALLATIONS_NOTICE).
   const [githubInstallationsNotice, setGithubInstallationsNotice] = useState<string | null>(null);
@@ -402,15 +505,27 @@ export function WebSettingsModal({
       headers: await authedHeaders(),
     });
     if (!response.ok) throw new Error('Custom connector directory request failed.');
-    const parsed = CustomConnectorsResponseSchema.safeParse(await response.json());
-    if (!parsed.success) throw new Error('Custom connector directory returned invalid data.');
-    setCustomConnectors(parsed.data.connectors);
+    const body = await response.json();
+    const parsed = CustomConnectorsResponseSchema.safeParse(body);
+    if (parsed.success) {
+      setCustomConnectors(parsed.data.connectors);
+      return;
+    }
+    const fallback = readCustomConnectorResponse(body);
+    if (!fallback) throw new Error('Custom connector directory returned invalid data.');
+    setCustomConnectors(fallback.rows);
+    if (fallback.degraded) {
+      setConnectorsNotice(
+        'Some connector data could not be read. Valid connectors remain available; retry to refresh.',
+      );
+    }
   }, [authedHeaders]);
 
   const loadConnectors = useCallback(
     async (signal?: AbortSignal) => {
       setConnectorsLoading(true);
       setConnectorsError(null);
+      setConnectorsNotice(null);
       setGithubInstallationsNotice(null);
       try {
         const requestOptions = {
@@ -440,18 +555,33 @@ export function WebSettingsModal({
         ]);
         const connectorsResult = ConnectorsResponseSchema.safeParse(connectorsJson);
         const customResult = CustomConnectorsResponseSchema.safeParse(customJson);
-        if (!connectorsResult.success || !customResult.success) {
+        const connectorsFallback = connectorsResult.success
+          ? {
+              rows: connectorsResult.data.connectors,
+              available: connectorsResult.data.available ?? [],
+              degraded: false,
+            }
+          : readConnectorResponse(connectorsJson);
+        const customFallback = customResult.success
+          ? { rows: customResult.data.connectors, degraded: false }
+          : readCustomConnectorResponse(customJson);
+        if (!connectorsFallback || !customFallback) {
           throw new ConnectorLoadError('invalid-data');
         }
         if (signal?.aborted) return;
-        setConnectedConnectors(connectorsResult.data.connectors);
-        setAvailableIds(connectorsResult.data.available ?? []);
+        setConnectedConnectors(connectorsFallback.rows);
+        setAvailableIds(connectorsFallback.available);
         setExpiredConnectorIds(
-          connectorsResult.data.connectors
+          connectorsFallback.rows
             .filter((connector) => connector.needsReauthorization)
             .map((connector) => connector.connectorId),
         );
-        setCustomConnectors(customResult.data.connectors);
+        setCustomConnectors(customFallback.rows);
+        if (connectorsFallback.degraded || customFallback.degraded) {
+          setConnectorsNotice(
+            'Some connector data could not be read. Valid connectors remain available; retry to refresh.',
+          );
+        }
 
         // Deliberately isolated from the try/catch above: a malformed body or
         // JSON parse failure here must still degrade to the scoped notice,
@@ -950,7 +1080,8 @@ export function WebSettingsModal({
     connectedConnectors: mergedConnectedConnectors,
     connectorsLoading,
     connectorsError,
-    connectorsNotice: githubInstallationsNotice,
+    connectorsNotice:
+      [connectorsNotice, githubInstallationsNotice].filter(Boolean).join(' ') || null,
     retryConnectors: loadConnectors,
     connectConnector,
     disconnectConnector,

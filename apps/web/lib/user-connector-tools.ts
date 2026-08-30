@@ -32,6 +32,7 @@ import { decryptConnectorToken } from '@/lib/custom-connector-crypto';
 import {
   getConnectorOAuthProvider,
   getOAuthConfiguredConnectorIds,
+  isConnectorOAuthSupported,
 } from '@/lib/connectors/oauth-registry';
 import {
   connectorIdsWithMcpEndpoint,
@@ -1230,6 +1231,7 @@ async function executeOAuthConnectorTool(
         refreshed.tokenType,
         toolName,
         args,
+        options,
       );
     } catch (retryErr) {
       if (detectConnectorAuthChallenge(retryErr)) {
@@ -1676,7 +1678,7 @@ export async function loadUserConnectorCapabilityCatalog(
           catalog,
         };
       }
-    } else if (getConnectorOAuthProvider(connectorRef)) {
+    } else if (isConnectorOAuthSupported(connectorRef)) {
       const grants = await getUserConnectorOAuthGrantSummaries(userId);
       if (grants.some((grant) => grant.connectorId === connectorRef)) {
         const target = resolveConnectorMcpTarget(connectorRef);
@@ -1781,7 +1783,7 @@ export async function withUserConnectorMcpHandle<T>(
         config: entryToMcpConfig(entry),
         isCustom: false,
       };
-    } else if (getConnectorOAuthProvider(connectorRef)) {
+    } else if (isConnectorOAuthSupported(connectorRef)) {
       const grants = await getUserConnectorOAuthGrantSummaries(userId);
       const target = resolveConnectorMcpTarget(connectorRef);
       const access = grants.some((grant) => grant.connectorId === connectorRef)
@@ -1990,7 +1992,7 @@ export function makeUserConnectorExecutor(
     const map = loadConnectorMcpMap();
     const entry = map.get(serverId);
     if (!entry) {
-      if (getConnectorOAuthProvider(serverId)) {
+      if (isConnectorOAuthSupported(serverId)) {
         return executeOAuthConnectorTool(userId, serverId, toolName, args, options);
       }
       return NOT_HANDLED;

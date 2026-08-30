@@ -37,7 +37,6 @@ import {
   normalizeModelId,
   normalizeSubscriptionAccessTier,
   requireProviderDefaultModel,
-  resolveAutoModeModel,
   resolveEffectiveModelPricing,
   resolveEffectiveModelPricingForInputTokens,
   SLOT_REGISTRY,
@@ -560,20 +559,11 @@ describe('model catalog helpers', () => {
   it('detects providers and resolves auto modes from shared routing defaults', () => {
     const anthropicDefault = requireProviderDefaultModel('anthropic');
     const explicitModel = getRoutingSlotModel('general_balanced_pro');
-    const workhorse = getRoutingSlotModel('workhorse_general');
     expect(isAutoModeModelId('auto')).toBe(true);
     expect(isAutoModeModelId('AUTO-BALANCED')).toBe(false);
     expect(isAutoModeModelId(explicitModel)).toBe(false);
     expect(isAutoModeModelId(null)).toBe(false);
     expect(detectProviderFromModelId(anthropicDefault)).toBe('anthropic');
-    expect(resolveAutoModeModel('auto-economy', 'free')).toBe(workhorse);
-    expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe(workhorse);
-    expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe(explicitModel);
-    expect(resolveAutoModeModel('auto-premium', 'max')).toBe(
-      modelRegistry.policies.auto.slots.flagship_general.modelKey,
-    );
-    expect(resolveAutoModeModel('auto-premium', 'free')).toBe(workhorse);
-    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe(workhorse);
   });
 
   it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
@@ -673,208 +663,6 @@ describe('model catalog helpers', () => {
       surfacedUx: 'auto_plus_manual',
       manualModelSelection: true,
       allowMediaGeneration: true,
-    });
-  });
-});
-
-describe('resolveAutoModeModel — task-aware routing', () => {
-  it('keeps economy, balanced, and premium profiles distinct at Max tier', () => {
-    const slots = modelRegistry.policies.auto.slots;
-    expect(resolveAutoModeModel('auto-economy', 'max', 'coding')).toBe(
-      slots.workhorse_general.modelKey,
-    );
-    expect(resolveAutoModeModel('auto-balanced', 'max', 'coding')).toBe(
-      slots.coding_balanced.modelKey,
-    );
-    expect(resolveAutoModeModel('auto-premium', 'max', 'coding')).toBe(
-      slots.flagship_coding.modelKey,
-    );
-  });
-
-  describe('backward compat (no taskType)', () => {
-    it('legacy 2-arg call still resolves to general slot for hobby auto-balanced', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'hobby');
-      expect(result).not.toBeNull();
-    });
-    it('legacy 2-arg call still resolves to general slot for pro auto-balanced', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'pro');
-      expect(result).not.toBeNull();
-    });
-    it('undefined taskType uses legacy auto-mode path', () => {
-      expect(resolveAutoModeModel('auto-economy', 'hobby', undefined)).toBe(
-        resolveAutoModeModel('auto-economy', 'hobby'),
-      );
-    });
-  });
-
-  describe('explicit model selection is respected (not re-routed by task)', () => {
-    it('concrete model + coding taskType returns the SAME model, not the coding slot', () => {
-      const explicitModel = getRoutingSlotModel('general_balanced_pro');
-      expect(resolveAutoModeModel(explicitModel, 'pro', 'coding')).toBe(explicitModel);
-    });
-    it('concrete model + reasoning taskType returns the SAME model', () => {
-      const explicitModel = getRoutingSlotModel('general_balanced_pro');
-      expect(resolveAutoModeModel(explicitModel, 'pro', 'reasoning')).toBe(explicitModel);
-    });
-    it('auto alias still task-routes (control — task routing only applies to auto-*)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe(
-        getRoutingSlotModel('coding_premium_pro'),
-      );
-    });
-  });
-
-  describe('Pro tier task-aware routing', () => {
-    it('coding task → coding_premium_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe(
-        getRoutingSlotModel('coding_premium_pro'),
-      );
-    });
-    it('reasoning task → reasoning_premium_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning')).toBe(
-        getRoutingSlotModel('reasoning_premium_pro'),
-      );
-    });
-    it('multimodal task → multimodal_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe(
-        getRoutingSlotModel('multimodal_pro'),
-      );
-    });
-    it('long_context task → long_context_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'long_context')).toBe(
-        getRoutingSlotModel('long_context_pro'),
-      );
-    });
-    it('general task → general_balanced_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'general')).toBe(
-        getRoutingSlotModel('general_balanced_pro'),
-      );
-    });
-    it('simple_chat task → general_balanced_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'simple_chat')).toBe(
-        getRoutingSlotModel('general_balanced_pro'),
-      );
-    });
-    it('creative_writing → canonical balanced creative slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'creative_writing')).toBe(
-        modelRegistry.policies.auto.slots.creative_balanced.modelKey,
-      );
-    });
-    it('research → canonical fast search slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'research')).toBe(
-        modelRegistry.policies.auto.slots.search_fast.modelKey,
-      );
-    });
-    it('agentic → general_balanced_pro slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'agentic')).toBe(
-        getRoutingSlotModel('general_balanced_pro'),
-      );
-    });
-    it('image_generation → shared image_generation slot', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'pro', 'image_generation');
-      expect(result).not.toBeNull();
-    });
-    it('computer-use → computer_use slot', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'pro', 'computer-use');
-      expect(result).not.toBeNull();
-    });
-  });
-
-  describe('Free tier task-aware routing', () => {
-    it('coding → the allowed economy coding slot', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
-      expect(result).toBe(modelRegistry.policies.auto.slots.coding_fast.modelKey);
-    });
-    it('reasoning → economy reasoning slot', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
-      expect(result).toBe(getRoutingSlotModel('reasoning_economy'));
-    });
-    it('multimodal → workhorse_general', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'free', 'multimodal');
-      expect(result).toBe(getRoutingSlotModel('workhorse_general'));
-    });
-  });
-
-  describe('Free tier task-aware fallback behavior', () => {
-    it('coding → uses the allowed economy coding slot', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
-      expect(result).toBe(modelRegistry.policies.auto.slots.coding_fast.modelKey);
-    });
-    it('reasoning → uses the allowed economy reasoning slot', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
-      expect(result).toBe(getRoutingSlotModel('reasoning_economy'));
-    });
-    it('image_generation → falls back to workhorse_general (no media on free)', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'free', 'image_generation');
-      expect(result).toBe(getRoutingSlotModel('workhorse_general'));
-    });
-  });
-
-  describe('Max + Enterprise task-aware routing respects the selected Auto profile', () => {
-    it('Max balanced coding → balanced coding slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'max', 'coding')).toBe(
-        modelRegistry.policies.auto.slots.coding_balanced.modelKey,
-      );
-    });
-    it('Enterprise balanced coding → balanced coding slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'enterprise', 'coding')).toBe(
-        modelRegistry.policies.auto.slots.coding_balanced.modelKey,
-      );
-    });
-    it('Max premium coding → flagship coding slot', () => {
-      expect(resolveAutoModeModel('auto-premium', 'max', 'coding')).toBe(
-        modelRegistry.policies.auto.slots.flagship_coding.modelKey,
-      );
-    });
-    it('BYOK premium coding → flagship coding slot without a managed tier clamp', () => {
-      expect(resolveAutoModeModel('auto-premium', 'byok', 'coding')).toBe(
-        modelRegistry.policies.auto.slots.flagship_coding.modelKey,
-      );
-    });
-    it('Max balanced general → balanced general slot', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'max', 'general')).toBe(
-        modelRegistry.policies.auto.slots.general_balanced.modelKey,
-      );
-    });
-  });
-
-  describe('US-only routing toggle (Pro+/Max only)', () => {
-    it('Max reasoning + usOnly=true skips every excluded provider', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'max', 'reasoning')).toBe(
-        getRoutingSlotModel('reasoning_premium_pro'),
-      );
-      const result = resolveAutoModeModel('auto-balanced', 'max', 'reasoning', {
-        usOnly: true,
-      });
-      const resultProvider = getModelMetadataById(result)?.provider;
-      expect(resultProvider).toBeDefined();
-      expect(modelRegistry.policies.auto.providerPolicies.usOnly.excludedProviders).not.toContain(
-        resultProvider,
-      );
-    });
-
-    it('Max reasoning + usOnly=true does not return the excluded default route', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'max', 'reasoning', { usOnly: true });
-      expect(result).not.toBe(getRoutingSlotModel('reasoning_premium_pro'));
-    });
-
-    it('Pro tier ignores usOnly flag (toggle gated by usOnlyRoutingAvailable)', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'pro', 'reasoning', { usOnly: true });
-      expect(result).toBe(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning'));
-    });
-
-    it('Free tier reasoning with usOnly=true is ignored (toggle not available)', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning', { usOnly: true });
-      expect(result).toBe(resolveAutoModeModel('auto-balanced', 'free', 'reasoning'));
-    });
-
-    it('Max balanced coding with usOnly=true stays on the balanced Anthropic slot', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'max', 'coding', { usOnly: true });
-      expect(result).toBe(modelRegistry.policies.auto.slots.coding_balanced.modelKey);
-    });
-
-    it('Max balanced general with usOnly=true keeps the balanced OpenAI slot', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'max', 'general', { usOnly: true });
-      expect(result).toBe(modelRegistry.policies.auto.slots.general_balanced.modelKey);
     });
   });
 });

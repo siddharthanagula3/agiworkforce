@@ -15,6 +15,10 @@ import { generateOAuthState, generatePkcePair } from '@/lib/connectors/pkce';
 import { beginMcpAuthorization } from '@/lib/connectors/mcp-discovery';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import {
+  CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
+  isConnectorTokenStorageAvailable,
+} from '@/lib/custom-connector-crypto';
+import {
   ConnectorOAuthStoreUnavailableError,
   createPendingAuthorization,
 } from '@/lib/connectors/oauth-store';
@@ -52,9 +56,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const provider = getConnectorOAuthProvider(connectorId);
   const redirectUri = getConnectorOAuthRedirectUri();
+  const endpoint = !provider ? getMcpEndpoint(connectorId) : null;
+
+  if ((provider || endpoint) && !isConnectorTokenStorageAvailable()) {
+    return fail('unavailable', 503, CONNECTOR_TOKEN_STORAGE_UNAVAILABLE);
+  }
 
   if (!provider) {
-    const endpoint = getMcpEndpoint(connectorId);
     if (endpoint) {
       const started = await beginMcpAuthorization({
         userId,

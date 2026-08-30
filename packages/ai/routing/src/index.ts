@@ -36,6 +36,34 @@
 
 export { applyConversationContext, classifyTaskLocally, estimateTokens } from './classify';
 export { resolveAutoRoute } from './auto';
+export { getAutoCapabilityEnvelope } from './auto-capability-envelope';
+export { resolveFreeAutoRoute } from './free-auto';
+export type {
+  FreeAutoCandidate,
+  FreeAutoDecision,
+  FreeAutoRejection,
+  FreeAutoRejectionReason,
+  FreeAutoRequest,
+  FreeAutoSelection,
+  FreeAutoUnavailable,
+} from './free-auto';
+export {
+  effectiveRouteHealth,
+  emptyRuntimeState,
+  isFreeEligibilityValid,
+  isSelfHealingReason,
+} from './runtime-state';
+export type {
+  FreeEligibility,
+  QuotaPool,
+  RouteHealth,
+  RouteUnavailabilityReason,
+  RoutingRuntimeState,
+} from './runtime-state';
+export type {
+  AutoCapabilityEnvelope,
+  AutoCapabilityEnvelopeRequest,
+} from './auto-capability-envelope';
 export type {
   AutoRouteDecision,
   AutoFallbackRoute,
