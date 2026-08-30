@@ -603,7 +603,7 @@ jobs:
         env:
           CARGO_HOME: ~/.cargo
 
-      - name: Test (apps/desktop + apps/cli, default features)
+      - name: Test (apps/desktop + apps/cli + shared crates, default features)
         # Scope the test step to the binaries we actually ship — matches
         # the Clippy step's scope (323ab2e5). The 100+ ported codex-rs
         # crates under crates/* have their own pre-existing test
@@ -636,6 +636,7 @@ jobs:
         run: |
           xvfb-run --auto-servernum cargo test -p agiworkforce-desktop --lib
           xvfb-run --auto-servernum cargo test -p agiworkforce-cli
+          cargo test --workspace --lib --exclude agiworkforce-desktop --exclude agiworkforce-cli
 
       - name: Cross-language sync parity (TEST-05)
         # packages/client/sync (TS) and data::cloud_sync (Rust) reimplement the
@@ -1266,9 +1267,10 @@ jobs:
         # similar). cargo check + clippy on the same Windows toolchain pass,
         # so the build itself is sound; only the test loader trips on a
         # mismatched DLL import at process startup. Marking continue-on-error
-        # to unblock CI while keeping the Linux full test suite + Windows
-        # check + Windows clippy strict. Track investigation separately —
-        # requires a real Windows machine for procmon/depends.exe analysis.
+        # to unblock CI while keeping the Windows check + Windows clippy
+        # strict, and the shared crates blocking on Linux in the Test step
+        # above. Track investigation separately — requires a real Windows
+        # machine for procmon/depends.exe analysis.
         continue-on-error: true
         run: cargo test --workspace --lib -- --skip landlock --skip seccomp --skip linux_sandbox
 
