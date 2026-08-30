@@ -2429,7 +2429,8 @@
       },
       "tierPolicy": {
         "minTier": "free"
-      }
+      },
+      "releasedOverride": "November 8, 2023"
     },
     "openrouter-free": {
       "id": "openrouter-free",
@@ -2450,7 +2451,8 @@
       },
       "tierPolicy": {
         "minTier": "free"
-      }
+      },
+      "releasedOverride": "February 1, 2026"
     }
   },
   "tierAllowedModels": {

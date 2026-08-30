@@ -666,6 +666,7 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
+        "released": "November 8, 2023",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -685,6 +686,7 @@
       "lifecycle": {
         "status": "active",
         "availability": "live",
+        "released": "February 1, 2026",
         "deprecationDate": null,
         "deprecated": false
       },
