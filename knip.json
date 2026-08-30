@@ -1,6 +1,53 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
+    "apps/desktop": {
+      "entry": [
+        "src/main.tsx",
+        "electron/*.{ts,mjs}",
+        "scripts/*.mjs",
+        "**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}",
+        "electron/**/*.ts"
+      ]
+    },
+    "apps/extension": {
+      "entry": [
+        "src/background.ts",
+        "src/side_panel.ts",
+        "src/options.ts",
+        "src/content.ts",
+        "vite.config.ts",
+        "**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "**/*.{ts,tsx}"
+      ]
+    },
+    "apps/extension-vscode": {
+      "entry": [
+        "src/extension.ts",
+        "esbuild.js",
+        "**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "**/*.{ts,tsx}"
+      ]
+    },
+    "apps/mobile": {
+      "entry": [
+        "index.js",
+        "app/**/*.{ts,tsx}",
+        "metro.config.js",
+        "babel.config.js",
+        "**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "**/*.{ts,tsx}"
+      ]
+    },
     "apps/web": {
       "entry": [
         "app/**/{page,layout,template,loading,error,not-found,route,default,global-error}.{ts,tsx}",
@@ -11,19 +58,36 @@
         "next.config.ts",
         "**/*.test.{ts,tsx}"
       ],
-      "project": ["**/*.{ts,tsx}"]
-    },
-    "apps/desktop": {
-      "entry": ["src/main.tsx", "electron/*.{ts,mjs}", "scripts/*.mjs", "**/*.test.{ts,tsx}"],
-      "project": ["src/**/*.{ts,tsx}", "electron/**/*.ts"]
+      "project": [
+        "**/*.{ts,tsx}"
+      ]
     },
     "packages/*": {
-      "entry": ["src/index.{ts,tsx}", "**/*.test.{ts,tsx}"],
-      "project": ["src/**/*.{ts,tsx}"]
+      "entry": [
+        "src/index.{ts,tsx}",
+        "**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}"
+      ]
     },
     "packages/ui/*": {
-      "entry": ["src/index.{ts,tsx}", "**/*.test.{ts,tsx}"],
-      "project": ["src/**/*.{ts,tsx}"]
+      "entry": [
+        "src/index.{ts,tsx}",
+        "**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}"
+      ]
+    },
+    "services/signaling-server": {
+      "entry": [
+        "src/index.ts",
+        "**/*.test.ts"
+      ],
+      "project": [
+        "**/*.ts"
+      ]
     }
   },
   "ignore": [
@@ -32,8 +96,13 @@
     "**/.next/**",
     "**/build/**",
     "**/coverage/**",
-    "**/archive/**"
+    "**/archive/**",
+    "**/.vscode-test/**",
+    "**/out/**"
   ],
-  "ignoreDependencies": ["@types/*"],
+  "ignoreDependencies": [
+    "@types/*",
+    "pino-pretty"
+  ],
   "ignoreExportsUsedInFile": true
 }
