@@ -269,9 +269,8 @@ impl ImageGenerationClient {
     ) -> Result<ImageGenerationResponse> {
         let model = resolve_image_model("google", request.model.as_deref())?;
 
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{model}:predict"
-        );
+        let url =
+            format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:predict");
 
         let aspect_ratio = match request.size.unwrap_or(ImageSize::Large) {
             ImageSize::Small => "1:1",
