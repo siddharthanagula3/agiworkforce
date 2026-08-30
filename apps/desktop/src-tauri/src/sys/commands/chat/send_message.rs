@@ -76,15 +76,7 @@ pub async fn chat_send_message(
         request_uses_managed_cloud(provider_enum, request.prefer_cloud_credits);
 
     if uses_managed_cloud {
-        #[cfg(feature = "billing")]
-        {
-            let billing = _billing_state.0.lock().await;
-            check_billing_and_budget(&billing, &_db, &request.user_id)?;
-        }
-        #[cfg(not(feature = "billing"))]
-        {
-            check_billing_and_budget(&_db, &request.user_id)?;
-        }
+        check_billing_and_budget(&_db, &request.user_id)?;
     } else {
         info!(
             target: "chat",
@@ -94,25 +86,6 @@ pub async fn chat_send_message(
         );
     }
 
-    #[cfg(feature = "billing")]
-    let plan_tier = {
-        if uses_managed_cloud {
-            let billing_guard = _billing_state.0.lock().await;
-            if let Ok(service) = billing_guard.stripe_service() {
-                if let Ok(Some(subscription)) = service.get_primary_subscription() {
-                    subscription.plan_name.to_lowercase()
-                } else {
-                    "free".to_string()
-                }
-            } else {
-                "free".to_string()
-            }
-        } else {
-            "byok".to_string()
-        }
-    };
-
-    #[cfg(not(feature = "billing"))]
     let plan_tier = if uses_managed_cloud { "free" } else { "byok" }.to_string();
 
     let preferences = build_router_preferences(&request, provider_enum, &model, plan_tier);

@@ -270,8 +270,7 @@ impl ImageGenerationClient {
         let model = resolve_image_model("google", request.model.as_deref())?;
 
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:predict?key={}",
-            model, self.api_key
+            "https://generativelanguage.googleapis.com/v1beta/models/{model}:predict"
         );
 
         let aspect_ratio = match request.size.unwrap_or(ImageSize::Large) {
@@ -302,6 +301,7 @@ impl ImageGenerationClient {
             .client
             .post(url)
             .header("Content-Type", "application/json")
+            .header("x-goog-api-key", &self.api_key)
             .json(&payload)
             .send()
             .await
