@@ -6,7 +6,10 @@
         "src/main.tsx",
         "electron/*.{ts,mjs}",
         "scripts/*.mjs",
-        "**/*.test.{ts,tsx}"
+        "**/*.test.{ts,tsx}",
+        "src/lib/tauri-web/*.ts",
+        "src/lib/tauri-electron/*.ts",
+        "vite.config.ts"
       ],
       "project": [
         "src/**/*.{ts,tsx}",
