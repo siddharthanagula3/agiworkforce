@@ -2648,11 +2648,18 @@ mod tests {
     /// Runs `body` with a fresh temp-dir-backed settings_v2 table and restores
     /// the previous `AGIWORKFORCE_APP_DATA_DIR` afterwards, regardless of
     /// whether `body` succeeds or panics-via-assert.
+    /// `AGIWORKFORCE_APP_DATA_DIR` is process-global, so two of these running
+    /// concurrently would each point the other at the wrong temp directory.
+    static APP_DATA_DIR_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     async fn with_temp_settings_db<F, Fut, T>(body: F) -> T
     where
         F: FnOnce(rusqlite::Connection) -> Fut,
         Fut: std::future::Future<Output = T>,
     {
+        let _serialized = APP_DATA_DIR_GUARD
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let previous = std::env::var("AGIWORKFORCE_APP_DATA_DIR").ok();
         std::env::set_var("AGIWORKFORCE_APP_DATA_DIR", temp_dir.path());
