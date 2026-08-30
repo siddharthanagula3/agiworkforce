@@ -47,7 +47,7 @@ const FIELD_CLASS =
 const SECONDARY_BUTTON =
   'inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--chat-border)] px-3 py-2 text-sm font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] disabled:cursor-not-allowed disabled:opacity-50';
 const PRIMARY_BUTTON =
-  'inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-[var(--chat-accent-primary-contrast)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-[var(--chat-accent-on-primary)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
 
 type IntervalUnit = 'days';
 

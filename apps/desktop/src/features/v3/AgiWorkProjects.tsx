@@ -166,7 +166,7 @@ export function AgiWorkProjects({
               <button
                 type="button"
                 onClick={() => onNewChat?.(activeProject.id)}
-                className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-xs font-medium text-[var(--chat-accent-primary-contrast)] hover:opacity-85"
+                className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-85"
               >
                 <SquarePen size={14} />
                 New chat
@@ -273,7 +273,7 @@ export function AgiWorkProjects({
               type="button"
               disabled={isLoading}
               onClick={onCreateProject}
-              className="flex items-center gap-1.5 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-1.5 text-xs font-medium text-[var(--chat-accent-primary-contrast)] hover:opacity-85 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-1.5 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-85 disabled:opacity-50"
             >
               <Plus size={13} strokeWidth={2.4} />
               {t('agiWork.projects.newProject')}
