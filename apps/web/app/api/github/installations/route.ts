@@ -72,7 +72,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Failed to fetch installations' }, { status: 500 });
   }
 
-  return NextResponse.json({ installations });
+  // installation_id is `bigint` (db/neon/0017_github.sql:4) and no int8 type
+  // parser is registered, so the driver hands it back as a string even though
+  // GitHubInstallationRow types it as a number. The settings panel validates this
+  // body with z.number(), so an un-coerced row failed safeParse and the panel
+  // showed "installations could not be loaded" and rendered GitHub as not
+  // connected - for a user who was connected, and retrying never helped.
+  // Every other bigint column in this codebase is already coerced the same way,
+  // including this very column in lib/user-connector-tools.ts.
+  return NextResponse.json({
+    installations: installations.map((row) => ({
+      ...row,
+      installation_id: Number(row.installation_id),
+    })),
+  });
 }
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
