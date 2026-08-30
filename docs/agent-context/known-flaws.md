@@ -3373,8 +3373,12 @@ no agent should deploy this slice or run production-mutating QA until the
 founder confirms 0061, 0062, and 0063 were applied in order.
 
 2026-07-17 Mobile ExecuTorch packaging warning
-(`MOBILE-EXECUTORCH-IOS26-ARCHIVE-01`, Medium, Open): a fresh Expo 55 / React
-Native 0.83.10 simulator build succeeds and installs, but
+(`MOBILE-EXECUTORCH-IOS26-ARCHIVE-01`, Medium, Open): measured on Expo 55 /
+React Native 0.83.10; `apps/mobile/package.json` now pins Expo ~57.0.12 /
+React Native 0.86.2, so the version pairing below is the state at the time of
+the finding, not the current stack, and the interaction needs re-measuring on
+57 before anyone acts on it. On the measured stack a fresh simulator build
+succeeded and installed, but
 `react-native-executorch` 0.8.4's phonemis static objects were built for the
 iOS 26 simulator while the app deployment target is iOS 17. The upstream
 compatibility matrix says both 0.8.x and 0.9.x support Expo 55 / React Native
@@ -3851,3 +3855,958 @@ current capability claim.
   A focused Rust compile/test was deliberately not started while Electron owned
   the single live-app/RAM lane; do not mark runtime-verified until that check
   runs.
+
+## 2026-08-30 Full web-product capability audit — 121 verified findings, 22 fixed, 99 open
+
+A capability-by-capability audit of `apps/web` (56 units covering every page,
+API route, feature module and the shared `unified-chat`/`ui` packages). Each
+finding was produced by reading the implementation, then re-checked by an
+independent adversarial pass that refuted anything it could not confirm in
+code; only survivors are listed. Severity is the verifier's, not the finder's.
+
+Fixed in this pass, with regression tests, so do NOT re-report: error-boundary
+classification and raw-error leakage; the duplicate friendly-error table across
+`@agiworkforce/types` and `@agiworkforce/utils`; 166 unreachable modules
+deleted (web unreachable debt 167 -> 4); `/api/support/ask` created, making the
+whole `lib/support/agent/**` answer engine reachable; bulk-delete confirmation
+count and reversibility copy; published artifacts revoked on conversation
+delete; continue-generation double billing; voice cancel billing the user and
+the mic stream leaking on unmount; stream billing refunding a kept partial
+answer on a client abort; `/share/[token]` and `/shared-artifact/[token]`
+indexable; marketing sign-out leaving the previous account's storage; sandbox
+path confinement for `edit_file`/`read_file`/`list_files`; support-agent
+handoff routes and two diagnostic endpoints reachable by any self-service org
+admin; SCIM filtered member removal wiping whole groups; Stripe entitlement
+granted before payment confirmed; device pairing issuing a ~60s token with no
+refresh; TOTP replay and the backup-code read-modify-write race; hardcoded
+z-index bypassing the token scale; stale cookie-policy disclosures.
+
+Also fixed after that first sweep, both instances of one class: a Postgres
+function declared `returns json`/`returns jsonb` read through `select * from
+fn(...)`. Postgres names that single column after the function, so the row is
+`{ fn: {...} }` and every field read off the row is `undefined` — silently,
+because nothing throws. `/api/claim-offer` therefore failed EVERY valid invite
+redemption, and did so after `claim_beta_invite` had already consumed the
+invite and written the subscription, so the user lost the code and saw an
+error. `/api/user/data` read `delete_user_data` the same way and logged that
+the function had "declined erasure" on runs where it had just performed one.
+`apps/web/db/neon/scalar-rpc-read-shape.test.ts` now cross-references every
+`select * from fn(...)` in `apps/web` against the return type the migrations
+declare, and fails any caller that does not read the function-named column.
+`process_stripe_event_idempotent` uses `select *` too and is correct, because it
+does read that column — the guard checks the misread, not the query shape.
+
+Two findings were checked and are NOT defects — do not "fix" them: image
+generation minting a fresh idempotency key per call is correct, because every
+call is a user-initiated generation and there is no automatic retry reusing the
+operation; and the enterprise NULL-usage-cap 503 is already remediated by
+`apps/web/db/neon/0152_restore_null_tolerant_usage_caps.sql`, which is written
+but marked NOT YET APPLIED and needs a production apply, not more code.
+
+The rest are open. Each row is file:line plus the failure, so the next pass can
+go straight to the code rather than rediscovering it.
+
+### High (33)
+
+- **Org-shared projects render as fully-editable owned projects, but every route beyond list/detail enforces strict ownership and silently 404s** — `apps/web/app/api/projects/[id]/knowledge-files/route.ts`
+  - Fails: An org admin shares Project A with the org (default read access). A member opens /chat/projects, sees Project A listed identically to their own projects (no shared indicator, because isOrgShared never reaches the client), clicks in, and lands on the Sources tab: SourcesPanel.tsx's GET call 404s and the panel…
+  - Fix: Add `isOrgShared: z.boolean().optional()` to ManagedCloudProjectSchema in packages/contracts/cloud-contracts/src/projects.ts, thread it through toWebProject in apps/web/features/projects/services/managed-cloud-projects.ts, and gate…
+- **Sidebar recents list is hard-capped at 50 conversations — pagination is computed but never wired to any UI** — `apps/web/features/chat/pages/WebChatPage.tsx`
+  - Fails: An account with more than 50 non-deleted conversations (very plausible for an active daily user) opens /chat. The first GET returns exactly 50 rows ordered `pinned desc, updated_at desc`; every conversation older than the 50th most-recently-touched is now permanently absent from the sidebar (and further squeezed if…
+  - Fix: Add an onLoadMore/hasMore prop pair to packages/ui/ui/src/sidebar/Sidebar.tsx (trigger on scroll-to-bottom of the session list or a trailing 'Load more' row), then in WebChatPage.tsx and WebAppShell.tsx destructure…
+- **Unsent composer draft is discarded on unmount instead of being parked, and even a parked draft does not survive a reload** — `apps/web/features/chat/components/Composer/ChatComposerNew.tsx`
+  - Fails: A user types a long reply in conversation A, then clicks a sidebar link to a conversation they have not opened yet this session (or navigates to any other route and back, or hits refresh). The composer unmounts before `conversationId` ever changes on that instance, so `setDraftContent` is never called and the typed…
+  - Fix: In ChatComposerNew.tsx, initialize `message` lazily from the store (`useState(() => useChatStore.getState().getDraftContent(conversationId))`) and add an unmount-time park (a cleanup return from the effect at line 2045, or a…
+- **Interrupting (stopping) a streaming artifact permanently discards it — no persistence, no trace** — `apps/web/features/chat/hooks/use-streaming-artifact.ts`
+  - Fails: A user asks for an HTML/React artifact, watches it stream into the live preview, and clicks Stop partway through (or the connection drops) before the closing ```arrives. ArtifactsPanel.tsx:479 evaluates`artifacts.length === 0 && !streamingArtifact`and falls back to`ArtifactsEmptyState` ('No artifacts yet') even…
+  - Fix: In use-streaming-artifact.ts, when `!isStreaming` fires with a still-open `streaming` entry for this messageId, upsert its last content into `useArtifactsStore` (e.g. `addArtifactForMessage`) with a `metadata.interrupted: true` flag…
+- **Two near-simultaneous turns on the same conversation can both start a billed cloud-agent run** — `apps/web/app/api/llm/v1/chat/completions/route.ts`
+  - Fails: Two POST /v1/chat/completions requests for the same conversationId but different request_id (a double-tap on Send, a client-side retry after a slow response that the client gives up on while the original request is still processing, or two open tabs on the same conversation) both reach beginCloudAgentRun before…
+  - Fix: Add a partial unique index in a new migration: `create unique index cloud_agent_runs_one_active_per_conversation on public.cloud_agent_runs(conversation_id) where conversation_id is not null and state in ('running','queued') and…
+- **Auto-route continuity policy is fully enabled but structurally unreachable — every turn re-resolves the model from scratch** — `packages/ai/routing/src/auto.ts`
+  - Fails: A user on the default Auto mode has a multi-turn conversation. Turn 1 ("hi") classifies to task type/family A and routes to model X, building a prompt cache. Turn 2 ("write a Python function to...") classifies to a different task type/family, which selects a different `preferredSlots` list and lands on model Y.…
+  - Fix: In request-processor.ts, read the conversation's last-routed model/task type (already available where the conversation record is loaded) and pass them as `currentModelKey`/`previousTaskType` into `resolveWebCloudModelRoute`'s…
+- **US-only routing preference is persisted but has no caller and no effect on actual routing** — `apps/web/app/api/me/routing-preferences/route.ts`
+  - Fails: A user (or a future settings toggle) sets `us_only: true` believing it excludes non-US model providers from their chats. The preference round-trips correctly through GET/PUT and shows as saved, but no chat request is ever routed with `usOnly: true`, so the excluded-provider check in `auto.ts` never engages and…
+  - Fix: In `request-processor.ts`, read the caller's `profiles.routing_preferences.us_only` alongside the other profile/subscription reads and pass it as `usOnly` into `resolveWebCloudModelRoute`'s `resolveAutoRoute` call; wire a Settings…
+- **Custom Style's writing-sample matching is dead: sampleText is captured, stored, and never sent to the model** — `apps/web/features/chat/stores/style-store.ts`
+  - Fails: A user pastes a 300-word writing sample into 'Create Custom Style', leaves the auto-filled instruction 'Match the tone, vocabulary, and sentence structure of my writing sample.', names it and saves. Every subsequent turn, useChatStream.ts unshifts exactly that sentence as the system message -- the model is told to…
+  - Fix: In getStyleInstruction() (style-store.ts), when style === 'custom' and a matching custom style is found, append its sampleText (when non-empty) to styleText, e.g. build styleText as [custom.instruction, custom.sampleText ? `Writing…
+- **Pull-side conversation reconciliation discards concurrent remote edits to every field, not just the locally-dirty one** — `packages/client/sync/src/conversations.ts`
+  - Fails: Device A renames conversation c1 and pushes it (server_version -> 9). Device B independently toggles `pinned` on c1 while offline/before its next push (c1 now marked dirty locally, still holding the OLD title and server_version 1). Device B's next pull returns the delta {title:'New from A', pinned:false,…
+  - Fix: In applyConversationDeltas (and the identical pattern in applyMemoryDeltas), stop overwriting the whole record with `existing` on a dirty id. Track, per record, the last-synced server snapshot (already available as the pre-mutation…
+- **OpenAI billing-exhaustion codes classified as fallbackable quota_exhausted, not billing_exhausted** — `packages/ai/provider-runtime/src/errors.ts`
+  - Fails: An OpenAI-backed managed account exhausts its billing (hits its hard monthly spend limit or has $0 balance). OpenAI's API returns HTTP 429 with `error.type: 'insufficient_quota'` (or 'billing_hard_limit_reached'), which is OpenAI's documented out-of-funds/hard-limit signal, not a short, self-resetting rate window.…
+  - Fix: In errors.ts, remove 'insufficient_quota' and 'billing_hard_limit_reached' from QUOTA_EXHAUSTED_CODES (keep only 'quota_exceeded' and 'resource_exhausted' there), and check those two codes inside the status===429 branch before…
+- **The package's retry engine is never wired into any provider adapter; Google adapter has zero retry of any kind** — `packages/ai/providers/google/src/index.ts`
+  - Fails: A user explicitly selects a Gemini model (not Auto, so processed.fallbackModels is empty per managed-failover.ts's documented contract). The Google API returns a single transient failure -- an ECONNRESET, a 503, or a momentary DNS blip. classifyError marks it retryable:true, but nothing in the pipeline ever…
+  - Fix: In packages/ai/providers/google/src/index.ts, wrap the `await fetchFn(url, ...)` call (and the res.ok check) with `withRetry` from `@agiworkforce/provider-runtime`, using `createRetryContext({ model: req.model, signal })` and…
+- **Fleet-wide usage reset logs $0 cleared due to RETURNING reading post-update values** — `apps/web/features/admin/services/operator-metrics.ts`
+  - Fails: An operator runs the fleet-wide 'Reset all usage' action after previewing '2,431 users, $840.12'. The UPDATE really zeroes out $840.12 of consumed credits across 2,431 accounts, but every row inserted into public.credit_transactions for this action carries amount_cents=0, the POST /api/operator response returns…
+  - Fix: In apps/web/features/admin/services/operator-metrics.ts, capture the pre-update credits_used_cents before zeroing it, e.g. rewrite resetAllUsersUsage's query as a CTE that selects the old rows (with FOR UPDATE) and joins them into the…
+- **A tool 'Blocked' mid-run stays runnable for the rest of a durable AGI Work/cloud-agent turn** — `apps/web/lib/workflows/cloud-agent-workflow.ts`
+  - Fails: A user starts an AGI Work / cloud-agent turn where a connector tool (e.g. a Gmail-send or Slack-post MCP tool) is set to 'Always allow'. The task runs long enough to cross more than one workflow invocation slice — trivial to hit, since each `executeCloudAgentWorkflowInvocation` is capped at `maxDurationMs: 210_000`…
+  - Fix: In apps/web/lib/workflows/cloud-agent-workflow.ts, import `loadConnectorToolPermissions` from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions' and, inside `executeCloudAgentWorkflowInvocation` (which already has `db`…
+- **/api/mcp connect-and-discover route is dead, unwired code that also skips the paid-plan connector gate its sibling route enforces** — `apps/web/app/api/mcp/route.ts`
+  - Fails: A free-tier user who already has 1 saved connector (their limit) opens devtools, fetches a CSRF token the app already exposes, and POSTs `{serverName, config:{url,transport}}` straight to /api/mcp for as many different HTTPS MCP servers as they want. Each call returns the full tool/resource/prompt catalog (names,…
+  - Fix: Delete apps/web/app/api/mcp/route.ts (and apps/web/**tests**/api/mcp.security.test.ts, which only tests this dead route) since nothing in the product calls it and its functionality is already served, correctly gated, by…
+- **Any dropped connection (page reload, tab close, brief network loss) silently cancels an in-progress AGI Work run, contradicting the product's own 'Cancelled = you pressed Stop' claim** — `apps/web/app/api/llm/v1/chat/completions/lib/managed-agent-stream.ts`
+  - Fails: A user starts an AGI Work mission with several tool steps. While it is actively running a tool call (state 'running', no approval pending), the user's laptop sleeps, WiFi blips, or they simply refresh the browser tab. The completions route's ReadableStream.cancel() fires, the async generator is torn down mid-loop,…
+  - Fix: 1) In packages/ui/unified-chat/src/components/tasks/task-display.ts, extend taskStateLabel (or add a sibling helper used by TasksPage.tsx/TaskDetailPanel.tsx) to render 'Cancelled - connection lost' when `run.cancellationRequestedAt` is…
+- **Composer wipes the user's message and attachments before the async send/upload settles, losing them on any failure** — `apps/web/features/chat/components/Composer/ChatComposerNew.tsx`
+  - Fails: User types a message, attaches a file whose real bytes disagree with its extension (rejected by lib/security/upload-scan.ts's type-confusion check) or hits a transient network error during the presigned PUT, and presses Send. handleSubmit fires onSend and immediately clears the composer (text + attachments).…
+  - Fix: In WebChatPage.tsx, change the normal-send branch's `send` callback to return the outcome instead of firing-and-forgetting: `send: () => sendContent(content, { attachments, meta: resolvedMeta }).then(() => undefined).catch(() =>…
+- **Cloud Code agent's composed cancellation signal never reaches the sandbox command call** — `apps/web/lib/services/cloud-code-agent-loop.ts`
+  - Fails: A Cloud Code turn issues a long-running shell command (a build, test suite, or an accidental `sleep`). The client disconnects, or the per-turn budget timer in withTurnDeadline fires (CLOUD_CODE_AGENT_TURN_BUDGET_MS derived from a 300s function ceiling). controller.abort() fires and input.signal.aborted becomes…
+  - Fix: In apps/web/lib/e2b/types.ts, add `signal?: AbortSignal` to E2BExecutor.runCommand's input. In apps/web/lib/e2b/runtime.ts, forward it: `sandbox.commands.run(command, { ...(cwd?{cwd}:{}), timeoutMs, signal })`. In…
+- **Ownership transfer is fully built server-side but has no UI caller anywhere in the product** — `apps/web/app/api/settings/organization/transfer-ownership/route.ts`
+  - Fails: An organization owner who wants to hand ownership to a co-founder or successor while remaining in the workspace (e.g. stepping down to admin) has no button anywhere in the product to do it. The only ownership-changing path exposed in the UI is the 'Leave workspace' flow in TeamSection.tsx (lines ~975-1019), which…
+  - Fix: In apps/web/features/settings/hooks/use-settings-queries.ts add a `useTransferOwnership` mutation that POSTs { organizationId, toUserId, outgoingOwnerRole } to /api/settings/organization/transfer-ownership, and in…
+- **Deleting a directory-sync connection cascades away SCIM records but never revokes the org membership or credentials it granted** — `apps/web/app/api/admin/directory-sync/route.ts`
+  - Fails: An org admin (role 'admin' or 'owner' both pass requireDirectorySyncAdmin) clicks 'Remove' on a directory-sync connection in the admin UI (DirectorySyncAdminPage.tsx line 337, which calls DELETE with no confirmation dialog at all). Every SCIM-provisioned user record for that connection disappears, but every one of…
+  - Fix: In apps/web/app/api/admin/directory-sync/route.ts DELETE, before deleting the connection row, query `scim_provisioned_users` for `connection_id = $1 and organization_id = $2 and linked_user_id is not null`, and for each linked_user_id…
+- **"Never remember" exclusion terms only enforced for auto-captured memories, not manual creates or cross-device sync** — `apps/web/app/api/memory/route.ts`
+  - Fails: A user adds 'salary' to Never Remember. They then type 'My salary is $150k' directly into Settings > Memory > Add a new fact (or it arrives via a desktop/mobile sync push). POST /api/memory (or POST /api/memory/sync) saves it unfiltered; it is immediately eligible for loadManagedMemoryContext and gets injected into…
+  - Fix: In handleCreateMemory (apps/web/app/api/memory/route.ts), after trimming body.content, call loadMemoryExclusions(db, { userId }) and reject with createError.validation when isMemoryExcluded(trimmed, exclusions) is true (both already…
+- **Debounced settings autosave is silently dropped when the user switches settings tabs or closes the modal** — `apps/web/features/settings/sections/GeneralSection.tsx`
+  - Fails: User edits their custom instructions or picks a response-style trait in General settings, then within 400ms clicks another settings section (e.g. Account) or closes the settings modal — both ordinary interactions. The pending setTimeout is cleared before it fires, `savePreferenceNamespace` for the…
+  - Fix: In GeneralSection.tsx, replace the plain `clearTimeout` cleanup with one that flushes: on unmount, if `dirtyRef.current` is true, cancel the timer and synchronously fire `savePreferenceNamespace` with the latest values (read from refs,…
+- **Live-agent chat messaging is fully unwired in the UI on both sides** — `apps/web/features/support/components/SupportHandoffPanel.tsx`
+  - Fails: A live handoff session reaches status='connected' (an agent claimed it via direct API call, e.g. curl). The widget tells the user "They can see the whole conversation, so start wherever you like," but the only composer on screen still posts to /api/support/ask (the bot), so nothing the user types ever reaches the…
+  - Fix: Add a message-thread view to SupportHandoffPanel.tsx's 'connected' branch that polls GET /api/support/handoff/{sessionId}/messages on the existing pollIntervalMs cadence and posts via POST .../messages from a dedicated input (not the…
+- **Consent Centre analytics withdrawal never reaches the analytics gate** — `apps/web/app/privacy/requests/ConsentCentre.tsx`
+  - Fails: A user accepts the cookie banner (writes {analytics:true} to localStorage, GA4 loads on every page via AnalyticsConsentGate). They later sign in, open /privacy/requests, and click 'Withdraw consent' on 'Allow aggregated usage analytics' (purpose id 'product_analytics', the same purpose the consent-purposes.ts…
+  - Fix: In ConsentCentre.tsx's decide(), when purpose === ANALYTICS_CONSENT_PURPOSE ('product_analytics') from shared/lib/cookie-consent.ts, after the POST succeeds also call writeCookiePreferences({ necessary: true, analytics: granted })…
+- **Self-leave never deprovisions the departing member — shared connectors and live credentials stay usable by the org** — `apps/web/app/api/settings/organization/leave/route.ts`
+  - Fails: A member shares a personal connector (e.g. a custom MCP server backed by their own API token) with the org via POST /api/settings/organization/shared/connectors/[connectorId], then later voluntarily leaves via DELETE /api/settings/organization/leave (the 'Leave workspace' button in TeamSection.tsx). Their…
+  - Fix: In apps/web/app/api/settings/organization/leave/route.ts, import deprovisionMember from '@/lib/services/deprovision-service' and clerkClient from '@clerk/nextjs/server'. After `const result = await leaveOrganization(db, {...})`…
+- **Takedown control and privacy erasure/request queue are fully built server-side but have zero UI — one panel even tells the admin to use a control that doesn't exist** — `apps/web/features/admin/components/ContentReportQueuePanel.tsx`
+  - Fails: A trust-and-safety admin reviews a copyright/DMCA content report in the queue, reads the panel's own instruction to "use the takedown control with the share link," and there is no such control anywhere in the product — the only way to actually unpublish the reported content is to hand-craft an authenticated HTTP…
+  - Fix: In apps/web/features/admin/components/, add a TakedownPanel (token/URL lookup via GET /api/admin/takedown, confirm, then POST) and a PrivacyRequestsPanel (list GET /api/admin/privacy/requests, plus a form for POST…
+- **Stale credit-reservation recovery is starved by a daily cron when the design requires per-minute cadence** — `vercel.json`
+  - Fails: A managed usage request (an in-flight AI turn) is killed mid-flight -- serverless timeout, provider disconnect, deploy, crash -- while its credit reservation sits in `reserving`/`reserved`/`provider_started` with a short lease (`lease_expires_at`). The one function that releases such a leaked reservation,…
+  - Fix: In vercel.json, change the `/api/cron/reconcile-credits` cron schedule from `30 0 * * *` to a sub-hourly expression such as `*/5 * * * *`, matching the cadence the migration's comment documents and that…
+- **The only automated outage-paging cron runs once a day, leaving a ~24h blind spot** — `vercel.json`
+  - Fails: The database or Stripe goes unavailable at 07:00, right after the 06:15 probe reported healthy. runHealthChecks() would mark the platform 'unhealthy' and pageOnCall()/sendSupportEmail() would fire -- but nothing invokes runHealthChecks() again until 06:15 the next day, so a total platform outage that starts minutes…
+  - Fix: In vercel.json, change the `/api/cron/health-probe` cron schedule from `15 6 * * *` to a frequent cadence such as `*/5 * * * *`, so a critical outage is paged within minutes instead of up to a day later.
+- **app/api/download/route.ts defaults the standard-desktop GitHub repo to a name that disagrees with every other release route** — `apps/web/app/api/download/route.ts`
+  - Fails: With `DESKTOP_GITHUB_REPO` unset (the variable is only a 'warning'-tier var in lib/validate-env.ts, not required), a user opens /download. DesktopDownloadAvailability.tsx calls GET /api/releases/latest/linux-x86_64, which queries repo `siddharthanagula3/agiworkforce` (the correct/canonical repo) and finds a signed…
+  - Fix: In apps/web/app/api/download/route.ts, delete the local REPO_OWNER/REPO_NAME constants and call `resolveDesktopReleaseRepository()` from '@/lib/releases/github-desktop-releases' to get `{ owner, repo }` for the non-cloud…
+- **pr_review_enabled has no writer anywhere in the app — the entire PR-review webhook pipeline is permanently dead** — `apps/web/app/api/github/webhook/route.ts`
+  - Fails: A user connects GitHub, completes OAuth ownership verification, and mentions "@agi-workforce" on a PR — exactly the flow the connector catalog advertises (`capabilitySummary: 'pull request diffs, issue comments, and PR reviews'` in features/connectors/data/connectors.ts). The webhook fires, finds the installation…
+  - Fix: Add a PATCH handler to apps/web/app/api/github/installations/route.ts that updates `pr_review_enabled` (and optionally `review_model`) on github_installations scoped by `installation_id` and `user_id`, guarded the same way DELETE is…
+- **Disconnecting GitHub only deletes AGI's own DB row — the GitHub App installation itself is never revoked** — `apps/web/app/api/github/installations/route.ts`
+  - Fails: A user clicks "Disconnect" on the GitHub row in Settings. The row disappears and the UI reports GitHub as not connected. On GitHub's side, the App installation is untouched: it still holds whatever repo/org permissions were granted (contents, pull requests, issues, etc.), still appears installed in the user's…
+  - Fix: In the DELETE handler (installations/route.ts), before deleting the row, call `DELETE https://api.github.com/app/installations/{installationId}` using a JWT from `getGitHubAppJwt()` in lib/github-app.ts (treat a 404 as…
+- **DialogContent clips dialog body with no scroll path on short/mobile viewports** — `apps/web/features/chat/components/dialogs/KeyboardShortcutsDialog.tsx`
+  - Fails: On a viewport under roughly 700-750px tall (e.g. 375x667 iPhone SE, or any short browser window/split-screen), opening Keyboard Shortcuts stacks a DialogHeader + 4 category groups (8 shortcut rows, headers, separators) + a tip box — roughly 850-900px of content — inside a DialogContent capped at…
+  - Fix: In KeyboardShortcutsDialog.tsx, wrap the shortcuts list and tip content (current direct DialogContent children after DialogHeader) in a single scrollable div, e.g. change DialogContent to className="flex max-h-[85vh] flex-col…
+- **Image generation route echoes raw upstream provider error text straight into the chat UI, bypassing the app's own error classification** — `apps/web/app/api/media/image/generate/route.ts`
+  - Fails: A user asks for an image edit with an unsupported combination (e.g. an aspect ratio OpenAI's gpt-image API rejects for that operation, or an org that hasn't completed API verification for that model). OpenAI/Google returns a 400 with an internal-sounding message such as "Your organization must be verified to use…
+  - Fix: In apps/web/app/api/media/image/generate/route.ts, change the default assignment at line 1449 from `let friendlyMessage = `Provider ${provider} failed: ${errorMessage}`;` to a generic non-provider-naming fallback, e.g. `let…
+- **SURFACE_STATUS.cli still says "Coming soon" although the CLI has shipped and is live-downloadable** — `apps/web/lib/marketing-constants.ts`
+  - Fails: A visitor loads the homepage; the AGI CLI card reads 'macOS · Linux · Windows' with a 'Coming soon' badge, so they leave thinking no CLI exists yet — while /download#cli-downloads (one click away, and the exact page app/cli/page.tsx's own CTA points to) is already serving five real, signed, cosign-verifiable…
+  - Fix: In lib/marketing-constants.ts, change `cli: COMING_SOON_LABEL` to a real shipped-status string built the same way `desktop: 'Linux assets · v1.2.0'` is (e.g. reflect the live v-cli- release: 'macOS, Linux & Windows archives · v1.0.0').…
+
+### Medium (54)
+
+- **Global search has no request cancellation — a slow, older keystroke's response can overwrite a newer/cleared query's state** — `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx`
+  - Fails: User types "invoice" (fetch A starts), then clears the box to empty before A resolves. The `query.trim()===''` branch of the debounce effect (line 145-149) immediately runs `setResults([]); setStats(null)`, switching the panel to the "Start typing to search" / recent-searches view. Fetch A then resolves and…
+  - Fix: In global-search-service.ts, add an optional `signal?: AbortSignal` parameter to `search()` and pass it into the `fetch(...)` call at line 139. In GlobalSearchDialog.tsx, hold an AbortController in a ref, call `.abort()` on it at the…
+- **Autotag API surface (classify/batch/conversations) has no caller anywhere in the web app** — `apps/web/app/api/autotag/classify/route.ts`
+  - Fails: A user can never see a conversation's auto-classified topic tag or filter their conversation list by tag in the web app: the full stack (auth, CSRF, rate limiting, per-org tenant scoping, `conversation_tags` persistence) is implemented and unit-tested, but zero UI path triggers classification, batch tag lookup, or…
+  - Fix: Either wire a UI consumer (e.g. call `POST /api/autotag/classify` after a conversation's first exchange and render the tag via `getConversationTopicPresentation` in ConversationListItem, and call `/api/autotag/conversations` from a…
+- **In-transcript message search jumps to the wrong row (off-by-one against the virtualized list)** — `apps/web/features/chat/components/messages/ChatMessageList.tsx`
+  - Fails: User opens search (Cmd/Ctrl+F) in a conversation, types a query that matches an early message, and presses Enter or clicks the next/prev arrows. `goToMatch(0)` calls `scrollToRow({ index: 0 })`, which scrolls to the bare top-spacer placeholder row (no message content at all) instead of the first matching message.…
+  - Fix: In apps/web/features/chat/components/messages/ChatMessageList.tsx, change goToMatch's scrollToRow call to target `index: rowIndex + 1` (or store `index + 1` when building `searchMatches`), matching the +1 top-spacer offset…
+- **Duplicate project drops icon, accent color, provider mode, allowed surfaces, and default model even though those are persisted, user-settable fields** — `apps/web/app/api/projects/[id]/duplicate/route.ts`
+  - Fails: A user sets a project's default model to a specific pinned model and picks an accent color/icon via a non-web surface (mobile/desktop, or a future web control), then clicks Duplicate in the web ProjectSettingsDialog. The new project silently reverts to the default model, no icon, no accent color, and ManagedGateway…
+  - Fix: In apps/web/app/api/projects/[id]/duplicate/route.ts, extend the INSERT's column list and values to also copy source['icon_emoji'], source['accent_color'], source['default_provider_mode'], source['allowed_surfaces'], and…
+- **Web projects list is fetched once with limit:100 and never paginates, silently hiding projects beyond the 100 most recently updated for unlimited-tier accounts** — `apps/web/features/projects/hooks/use-managed-cloud-projects.ts`
+  - Fails: An account on an unlimited-projects tier creates 130 projects over time. On /chat/projects, only the 100 most recently updated (order by updated_at desc, route.ts:63) ever load; the other 30 are not shown, there is no 'load more' control, no count of total projects, and no search -- those projects are effectively…
+  - Fix: In apps/web/features/projects/hooks/use-managed-cloud-projects.ts, have hydrateManagedCloudProjectStore (or the hook) loop `listProjects({ limit: 100, offset })` accumulating pages until a page returns fewer than 100 projects, or add a…
+- **Dead ConversationListItem component duplicates the live sidebar's conversation-row behavior and is never rendered** — `apps/web/features/chat/components/Sidebar/ConversationListItem.tsx`
+  - Fails: A future change to conversation-row behavior (e.g. a new bulk action, a fixed authz check, an accessibility fix) applied to ConversationListItem.tsx has no effect on the product, since nothing renders it — the file only exists to be discovered, half-trusted, and edited by mistake in place of the actual live component.
+  - Fix: Delete apps/web/features/chat/components/Sidebar/ConversationListItem.tsx and its re-export in apps/web/features/chat/components/Sidebar/index.ts (and the matching **tests** file), since the shared @agiworkforce/ui <Sidebar> is the sole…
+- **Publish always uploads the current/latest artifact content, silently ignoring the older version the user is viewing** — `apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx`
+  - Fails: A user pages back through an artifact's version history with the `<` chip (viewing 'v1/3' on screen, code and preview both showing the old revision), then clicks Publish intending to share what's on screen. The service actually POSTs the latest v3 content to `/api/artifacts/publish`; the user gets a 'Published'…
+  - Fix: Change the `publishArtifact` prop type to `(content: string) => Promise<PublishResult>`, have `ArtifactPreview.handlePublish` pass `activeContent`, and have `makePublishHandler` in ArtifactsPanel.tsx build the…
+- **Artifact cloud-sync conflicts are resolved silently in the server's favor with no user notification, and the losing local edit is never retried** — `apps/web/features/chat/stores/artifacts-store.ts`
+  - Fails: The same account is open on two devices (or two tabs); both hold an artifact and one restores/edits it first and syncs. The second device's next sync push for its own edit is rejected as a conflict: the small sync indicator keeps reading 'Synced', the artifact tab/list quietly starts showing the other device's…
+  - Fix: In artifacts-store.ts, extend `cloudSyncStatus`/`cloudSyncError` (or add a per-artifact `conflictedIds` set) so `applyArtifactPushResult`'s conflict branch records which artifact ids lost a push, and surface that in ArtifactsPanel.tsx…
+- **Deleting/restoring an item before paging forward silently skips one Library item** — `packages/ui/unified-chat/src/components/library/LibraryView.tsx`
+  - Fails: A user has 30 generated files. They load the first page (offset 0, limit 24, next_offset=24), delete file #5 (soft delete succeeds), then click 'Show more'. The client requests offset=24 again, but the underlying ordered set now has only 29 non-deleted rows, so what used to be row #25 has shifted to position #24…
+  - Fix: In each of the three setPage calls in packages/ui/unified-chat/src/components/library/LibraryView.tsx (handleDelete line 389, handleRestore line 365, handlePermanentDelete line 414), also decrement the tracked offset: `nextOffset:…
+- **Lease-expiry cleanup finalizes a schedule run as timed out without ever notifying the user** — `apps/web/lib/services/schedule-service.ts`
+  - Fails: A scheduled run's Node process is killed mid-execution (function OOM, deploy restart, an uncaught exception outside the try/catch in runClaimedSchedule/executeScheduledAgent, or the run simply outlives its 45s DB lease because a wave was cut short by the 55s sweep budget). The run row is left status='running' with…
+  - Fix: In apps/web/lib/services/schedule-service.ts, inside processDueScheduleRuns()'s expired.map(...) block (around line 1205-1213), after finalizeScheduleRun resolves call `await announceScheduleRun(claim, 'timeout')` for that claim,…
+- **Share-payload path-redaction targets a field shape that is never populated, so tool-call local-path scrubbing is dead and bypassable** — `apps/web/app/api/share/route.ts`
+  - Fails: An authenticated user (or any client scripting the documented POST /api/share body) includes `tool_calls: [{ tool_name: 'bash', display_args: '/Users/alice/Documents/taxes/return.pdf' }]` in a message. sanitizeMessages() only ever inspects the non-existent top-level `msg['display_args']`, so the nested value passes…
+  - Fix: In app/api/share/route.ts, change sanitizeMessages() to also map over `msg['tool_calls']` (when it is an array) and apply the same local-path regex to each entry's `display_args` string, producing a new `tool_calls` array in the…
+- **No way to cancel a running command or in-flight agent turn from the UI** — `apps/web/features/code/CloudCodePage.tsx`
+  - Fails: A user starts an agent turn with a bad or expensive goal (e.g. one that triggers a long build/test loop). The turn can legitimately run for up to 300 seconds (agent/route.ts:42) or a command up to CLOUD_CODE_COMMAND_DEADLINE_MS. The only UI control available while it runs is 'Close session', which force-kills the…
+  - Fix: In CloudCodePage.tsx, create an AbortController before calling api.run/api.startAgentTurn/api.decideApproval, store it in a ref, pass its signal through, and render a Cancel button next to the running/agent-busy spinner that calls…
+- **Session-busy race leaves a cloud_code_agent_turns row stuck at state='running' forever** — `apps/web/lib/services/cloud-code-agent-service.ts`
+  - Fails: Two requests race on the same Code session (e.g. two browser tabs, or an approval decision submitted at the same moment a fresh agent turn starts): one wins claimCloudCodeSessionForRun and runs; the other's turn row was already written as `state='running'` (by the insert in startCloudCodeAgentTurn, or the UPDATE in…
+  - Fix: In executePersistedAgentTurn, when claimCloudCodeSessionForRun returns null, update the turn row to state='failed' (with stop_reason='error' and an explanatory error_message) scoped by turnId+userId before throwing…
+- **Public model catalog endpoint returns deprecated/coming-soon models with no field to distinguish them, unlike the sibling models endpoint** — `apps/web/app/api/models/route.ts`
+  - Fails: Any caller of the public, unauthenticated `GET /api/models` (external integrator, or the repo's own e2e test at `apps/web/e2e/enterprise-enforcement.spec.ts:199` which picks an arbitrary id from this list) can receive a `coming_soon` catalog entry — with full pricing/capability data and no…
+  - Fix: In `apps/web/app/api/models/route.ts`, filter `listCanonicalModels()` to `isModelLive(model)` (from `@agiworkforce/types`, model-catalog.ts:1401-1403) before mapping, matching what `getPickerModelsForRuntimeProfile` already does for the…
+- **Settings > Sync page hardcodes 'Live' status pills disconnected from the app's actual sync health** — `apps/web/app/settings/sync/page.tsx`
+  - Fails: A user's cloud sync starts failing repeatedly (expired auth, network partition, server 5xx) so `cloudSyncStatus` sits at 'error' with exponential backoff. The user, suspicious their chat history isn't syncing across devices, opens Settings > Sync specifically to check — the only page whose stated purpose is showing…
+  - Fix: Convert apps/web/app/settings/sync/page.tsx to a client component that reads `cloudSyncStatus`/`cloudSyncError` from `useArtifactsStore` (already exported and consumed by ArtifactsPanel.tsx) and derive each pill's label/color from that…
+- **Cloud artifact sync resets to cursor 0 and wipes the artifact store on every conversation navigation** — `apps/web/features/chat/hooks/use-artifact-cloud-sync.ts`
+  - Fails: A user with an account-wide artifact history switches from conversation A to conversation B. WebChatPage unmounts and remounts: `clearCloudArtifacts()` empties the entire cross-device Artifacts gallery (which, per index-artifacts.ts's own docstring, is meant to be account-wide, not per-conversation), then the hook…
+  - Fix: Move the sync loop (cursor state, interval, and cloud-artifact cache) out of a per-page-mounted hook and into a module-level/provider-scoped owner that persists across `[sessionId]` navigations (e.g. hosted in ChatStreamRuntimeProvider…
+- **BYOK env-key status list shows every provider as "Not set" when the status fetch fails** — `apps/web/app/settings/byok/EnvKeyStatusList.tsx`
+  - Fails: The env-key-status route can legitimately return non-200 (e.g. the rate limiter's 429, proven reachable by apps/web/**tests**/api/byok-env-key-status.security.test.ts:320-330) or the fetch can hit a transient network error. When that happens, EnvKeyStatusList's catch swallows it, `statuses` stays an empty Map, and…
+  - Fix: In EnvKeyStatusList.tsx, add a `hasError` state set to `true` in the catch block (and cleared at the start of each fetch attempt); in the row render, when `hasError` is true, render a distinct 'Couldn't check' badge (not `StatusBadge`)…
+- **The BYOK settings page and its provider-test endpoint are unreachable from the product** — `apps/web/features/settings/lib/web-settings-sections.ts`
+  - Fails: A self-hosted operator sets ANTHROPIC_API_KEY and opens Settings looking for the BYOK status the /byok marketing page promises ('The settings screen reports whether a variable is present'). Nothing in the Settings modal navigation (WebSettingsModal) links to it, so unless they already know to type /settings/byok…
+  - Fix: Add a web-visible 'byok' key to WEB_SETTINGS_CONTENT_SECTIONS in apps/web/features/settings/lib/web-settings-sections.ts and register it in WebSettingsModal.tsx's sectionContent map pointing at the existing…
+- **Goodwill credit grant skips the styled destructive-action confirmation used for every other billing mutation** — `apps/web/features/admin/pages/OperatorDashboardPage.tsx`
+  - Fails: An operator clicks 'Grant credit', the amount prompt defaults to '10', they meant to type 100 but a stray keystroke or muscle memory submits the default, and the grant lands with zero severity-styled confirmation step to catch the mistake before the POST fires — unlike resetUsage, which would have shown a styled…
+  - Fix: In apps/web/features/admin/pages/OperatorDashboardPage.tsx, after computing `dollars` and `reason` in grantCredits, call `confirmDestructive({ title: 'Grant credit to ' + label + '?', description: 'This adds ' +…
+- **ToolTimeline's memo comparator drops statusPhrase, so live status text freezes during a running tool call** — `apps/web/features/chat/components/messages/ToolTimeline.tsx`
+  - Fails: An MCP tool call stays in status 'running' across two or more x_tool_status SSE events that only change status_phrase (e.g. "Reading page 1…" then "Reading page 2…"), with args/parallelGroup/error/result/requiresApproval/toolCallId unchanged in between. The outer MessageBubble/ChatMessageList re-renders correctly…
+  - Fix: In apps/web/features/chat/components/messages/ToolTimeline.tsx, add `p.statusPhrase !== n.statusPhrase` to the per-tool field comparison inside the `MemoizedToolTimeline` comparator (alongside the existing `p.result !== n.result` etc.…
+- **A failed tool-approval resume leaves cloudApproval metadata stale, silently emptying the Approvals inbox for a still-pending request** — `apps/web/lib/hooks/useChatStream.ts`
+  - Fails: User has one pending tool approval, clicks Approve/Reject, and the resume POST to /api/llm/v1/chat/completions/approve fails (500, quota, transient network error — any non-ok response). The tool card correctly reverts to 'awaiting_approval' inline in the conversation, but the ApprovalInbox popover (badge + list,…
+  - Fix: In apps/web/lib/hooks/useChatStream.ts, inside the ChatApiError branch of useResolveToolApproval's catch block (around line 2465), before returning: clear the decisions for calls reset in the loop…
+- **Org connector policy is never checked before a member connects, authorizes, or creates a connector — only when tools are later read for a chat turn** — `apps/web/app/api/connectors/custom/route.ts`
+  - Fails: An org admin sets allowCustomConnectors=false in Workspace > Connectors ('Switching this off blocks all of them' per the UI copy at WorkspaceConnectorPolicy.tsx:147-150), or blocks a specific catalog connector (e.g. 'notion') via blockedConnectors. A member still POSTs to /api/connectors/custom with an arbitrary…
+  - Fix: In app/api/connectors/custom/route.ts handlePost, after resolving the subscription/db, resolve the caller's organizationId and call the same evaluateConnectorAccess({..., isCustom: true}) check used in lib/user-connector-tools.ts before…
+- **Two full voice-recording implementations are exported but never wired to any route** — `apps/web/features/chat/hooks/use-voice-recording.ts`
+  - Fails: An engineer fixing a voice bug (permission handling, pause/resume, cleanup) naturally opens features/chat/hooks/use-voice-recording.ts or features/chat/components/VoiceInputButton.tsx per this task's own SCOPE listing, ships a fix there, and nothing changes in the product because neither file is on the render path…
+  - Fix: Delete features/chat/hooks/use-voice-recording.ts and features/chat/components/VoiceInputButton.tsx along with their exports in features/chat/hooks/index.ts and features/chat/components/index.ts; keep only the…
+- **'Archived' is a fully modeled task state (schema, filter, badge color, marketing copy) with zero code path anywhere that ever sets it** — `packages/ui/unified-chat/src/components/tasks/task-display.ts`
+  - Fails: A user reads the AGI Work page's promise that they can archive old runs to declutter their Active list, or simply expects the 'All' vs 'Active' filter split to be meaningful. No control anywhere in the product ever produces an archived run, so the filter distinction and the documented row are permanently inert --…
+  - Fix: Add `archiveCloudAgentRun(db, { userId, runId })` to apps/web/lib/services/cloud-agent-run-service.ts (parallel to requestCloudAgentRunCancellation, restricted to TERMINAL_STATES rows), wire it into a new authenticated+CSRF-checked…
+- **TaskDetailPanel's full-screen mobile overlay has no dialog semantics, focus trap, or Escape-to-close, unlike the sibling WorkSessionPanel in the same codebase** — `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx`
+  - Fails: A screen-reader or keyboard-only user on a narrow viewport opens a task's detail panel from /tasks. It is announced as a generic labeled region, not a dialog; there is no way to close it with Escape; tabbing is not confined to the panel even though it visually covers everything else; and the previously focused…
+  - Fix: In TaskDetailPanel.tsx, add `role="dialog"` and `aria-modal="true"` to the `<aside>` at line 308-310, import `useEffect`/`useRef` from 'react', add a `closeButtonRef` on the close Button (line ~349-357) with a `useEffect` that focuses…
+- **Installed-plugin panels show "Enabled" even after the plugin is deprecated and server-gated off** — `apps/web/features/settings/components/WebSettingsModal.tsx`
+  - Fails: A user installs and enables a web-installable pack (e.g. research-pack). An operator later deprecates it with a migration that (per the `plugin_registry_entries_web_pack_is_embedded` CHECK in db/neon/0109_web_plugin_installations.sql, which forbids `web_installable=true` on any non-`published` row) must set both…
+  - Fix: In WebSettingsModal.tsx's `loadPlugins` mapping (around line 880), add `live: plugin.status === 'published' && plugin.webInstallable` to each installed entry (reusing the same rule as `isPluginEntryWebInstallable`). Add `live?: boolean`…
+- **Plugin install/uninstall/enable-toggle write path (the actual installations capability) has zero test coverage** — `apps/web/lib/services/plugin-installation-service.ts`
+  - Fails: Nothing in CI would catch a regression in the untested functions today. For example, `setWebPluginEnabled`'s isolation currently rests entirely on its own `where user_id = $1 and plugin_id = $2` clause (plugin-installation-service.ts:76-77) rather than RLS, because these routes use `getNeonDb()`, the…
+  - Fix: Add cases to plugin-installation-service.test.ts for installWebPlugin (returns null for a non-web-installable or missing plugin id; upserts installed_version and forces enabled=true on a re-install), setWebPluginEnabled and…
+- **Generated-file harvest silently drops files beyond the per-turn cap without counting them as failed** — `apps/web/lib/e2b/generated-files.ts`
+  - Fails: A sandbox execution turn (e.g. a data-processing script) writes 12 new output files. Only files[0..7] are attempted; suppose 2 of those fail persistence (failedCount becomes 2). The 4 files beyond the MAX_FILES_PER_TURN=8 cap are dropped with zero accounting — not attached, not counted. tool-loop.ts's…
+  - Fix: In apps/web/lib/e2b/generated-files.ts, seed the counter with the dropped total when capping: replace `let failedCount = 0;` with `let failedCount = Math.max(0, changed.length - MAX_FILES_PER_TURN);` right after the existing `if…
+- **Deep-research url_fetch calls never receive the client's AbortSignal, so cancel doesn't stop an in-flight fetch** — `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts`
+  - Fails: User starts a Deep Research run; a gathering round issues a url_fetch on a slow page; user clicks Stop. `flushCancellationIfRequested()` is only checked before/after each fetch call (research-loop.ts:1206, 1249, 1372 etc.), so the in-flight `await executeUrlFetch(...)` keeps running — the outbound connection stays…
+  - Fix: In research-loop.ts, change the call at line 1226 to `const outcome = await executeUrlFetch(call.args, { maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS, signal: options.signal });` so the same AbortSignal that already cancels…
+- **SourceAggregator never upgrades a URL-fallback citation title to the real page title from a later url_fetch** — `apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts`
+  - Fails: A gathering round's provider-native search returns a result whose title is blank (common for some search backends/redirect links), so `sources.add({ url, title: '' })` stores the raw URL as the display title. A later round calls url_fetch on that same URL (the tool's own description tells the model to do exactly…
+  - Fix: In research-loop.ts, change line 476 to detect the URL-fallback case explicitly, e.g. `if ((!existing.title || existing.title === existing.url) && typeof entry.title === 'string' && entry.title) existing.title = entry.title;` so a later…
+- **Web Push deep link to a specific run is dead — the client never reads the `run` query param the service worker builds** — `apps/web/public/sw.js`
+  - Fails: A user gets a push notification 'Agent run finished' / 'Approval needed' while the AGI tab is closed, clicks it, and is taken to `/tasks?run=<id>`. The Tasks page renders its default 'Active' filtered list with no run selected/opened/scrolled-to — the user must manually scan the list (which is paginated 25 at a…
+  - Fix: In apps/web/features/tasks/components/TasksPage.tsx, read `useSearchParams().get('run')` and pass it as an `initialRunId` prop to `SharedTasksPage`; in packages/ui/unified-chat/src/components/tasks/TasksPage.tsx, accept that prop and…
+- **In-app notification store (read/unread, persistent, actionable) has zero UI consumers — alerts written to it, including a billing block, are never shown** — `apps/web/shared/stores/notification-store.ts`
+  - Fails: A user on a plan-gated feature hits a 402. They see a one-line toast ('Payment required - please upgrade your plan') that auto-dismisses; the richer 'Upgrade Required' notification with the Upgrade Now button that the code explicitly built for this moment is written to a store no component ever mounts, so it is…
+  - Fix: Either add a notification-bell UI (e.g. in shared/components/layout/Header.tsx or WebAppShell.tsx) that renders `useNotifications()`/`useUnreadCount()`/`useNotificationUIState()` and wires…
+- **Clarify card's Send/Skip buttons give no busy state while the response request is in flight** — `apps/web/features/chat/components/messages/cards/ClarifyCard.tsx`
+  - Fails: A user answers the clarifying question and clicks 'Send answers'. For the whole round trip to POST /api/interactive-cards/respond (network + DB read/write), the button stays fully clickable with no spinner, disabled state, or aria-busy — visually indistinguishable from before the click. A user who does not see…
+  - Fix: Change `onRespond` in InteractiveCardBlock.tsx (SingleCard, around line 93) to return the promise from `respondToInteractiveCard` instead of discarding it with `void`, and in ClarifyCard.tsx add a local `submitting` state that…
+- **Releasing a legal hold skips the confirmation pattern used for every other consequential action in the same console** — `apps/web/features/workspace-console/components/WorkspaceDataControls.tsx`
+  - Fails: An admin scanning the legal-hold list misclicks 'Release hold' on an active hold. The hold is released with no confirmation. WorkspaceDataControls.tsx's own copy states the stakes: 'A hold suspends retention for its subject. Held conversations survive the sweep however old they are.' Once released, the next…
+  - Fix: In WorkspaceDataControls.tsx, replace the direct `onRelease` call with a pending-confirmation state (mirroring TeamSection.tsx's `pendingAction` + AlertDialog) so 'Release hold' opens a confirm dialog naming the hold and its subject…
+- **user_memories.pinned is fully modeled end to end but has no UI control anywhere** — `packages/ui/unified-chat/src/components/MemoryEditor.tsx`
+  - Fails: A user cannot pin an important fact from the web app in any way. Even a fact the sync protocol or another client marked pinned displays identically to every other fact in the list — the ordering priority the backend computes is invisible and unreachable from the UI.
+  - Fix: Add pinned to MemoryFact in packages/ui/unified-chat/src/stores/memoryStore.ts, populate it in hydrateFromServer's merge, add a togglePin(id) action that calls PUT /api/memory/{id} with { pinned: !current }, and render a pin toggle…
+- **/session-expired recovery page is fully unreachable dead code** — `apps/web/app/session-expired/page.tsx`
+  - Fails: The dedicated 'Your session expired' recovery screen (with its own explanation copy and a hardened same-origin redirectTo sanitizer in SessionExpiredActions.tsx) never renders for any real user in any flow -- a user whose session actually expires is either silently redirected to /login by the middleware or shown a…
+  - Fix: Either wire an actual caller to it -- e.g. have proxy.ts's buildSignedOutRedirect distinguish 'no cookie ever' from 'cookie present but rejected by clerkAwareProxy' and send the latter to /session-expired instead of /login, or have…
+- **Account-wide quota/credit-exhaustion errors render as a one-off inline chat turn instead of a composer-attached banner** — `apps/web/features/chat/components/messages/ChatMessageList.tsx`
+  - Fails: A user on a paid plan exhausts their rolling 5-hour or billing-period credit budget. The chat shows a card replacing that one assistant turn, explaining the block — but nothing is attached to the composer. The user scrolls past it (or it scrolls out of view as the conversation continues), sees an empty composer…
+  - Fix: In lib/hooks/useChatStream.ts, when `resolveQuotaPaywallSlot` resolves for scope kinds that are account-wide (billing_period/rolling_window/rate_limit), write the result into a composer-level store (e.g. useBillingStore) instead of…
+- **Stale-reservation recovery cron runs once a day though the mechanism was designed to run every minute, leaving interrupted turns falsely counted against a user's rolling quota for up to 24 hours** — `vercel.json`
+  - Fails: A user's turn is interrupted before `finalizeManagedUsageRequest` runs — client disconnects, function timeout, unhandled exception between reserve and finalize. The reservation's deduction transaction stays counted in `getRollingUsage`'s 5-hour/7-day sums. Every further send in that window re-checks the same…
+  - Fix: In vercel.json, change the `/api/cron/reconcile-credits` cron entry's `schedule` from `30 0 * * *` to a sub-hourly cadence (e.g. `*/5 * * * *`), matching the cadence assumption baked into `recover_stale_managed_usage_requests` and…
+- **Namespace-scoped settings PUT has no concurrency check, so two tabs/devices editing the same namespace silently lose one edit** — `apps/web/app/api/settings/preferences/route.ts`
+  - Fails: A user has Settings > General (or Notifications, Privacy, etc.) open in two browser tabs (or two devices) signed into the same account. Tab A changes one field and its debounced/explicit save fires. Tab B, still holding the pre-change snapshot, later changes a different field in the same namespace and saves its own…
+  - Fix: In route.ts's handlePut, thread a `baseVersion`/`server_version` (as sync/route.ts already does) through the namespace PUT and reject with the current value on mismatch instead of unconditionally overwriting; or change the client…
+- **Enabling 2FA and regenerating backup codes are never written to the audit log** — `apps/web/app/api/settings/2fa/verify/route.ts`
+  - Fails: A user (or an attacker who has taken over the account and enrolls their own authenticator, or strips backup codes by regenerating them) enables 2FA or regenerates backup codes; the account's own audit trail — the thing an owner or admin would review to detect account takeover — shows nothing for either action,…
+  - Fix: Add `'two_factor_enabled'` and `'backup_codes_regenerated'` to `AuditEventType` in lib/security-audit.ts, add matching cases in `inferResourceType`, and call `recordAuditEvent({ userId, eventType: 'two_factor_enabled', request, detail:…
+- **Account activity feed (GET /api/settings/activity) has no UI caller anywhere** — `apps/web/features/settings/hooks/use-settings-queries.ts`
+  - Fails: A fully implemented, rate-limited, tested backend capability (recent login/settings-change/api-call activity, distinct from the audit log) is unreachable — a user can never view it in the product, even though the route, its query schema, and its response mapping are all live and correct.
+  - Fix: Either render a `RecentActivityPanel` backed by `useUserActivity` inside SecuritySection.tsx (or AccountSection.tsx) alongside AuditLogPanel, or remove the orphaned hook and route if the product intentionally consolidated activity into…
+- **Direct team-add endpoint is an authenticated, platform-wide account-existence oracle** — `apps/web/app/api/settings/team/route.ts`
+  - Fails: An attacker signs up for a self-serve Team-plan workspace (any account can become its owner/admin), then repeatedly POSTs to /api/settings/team with { organizationId, email }. For an address with an AGI account, the response is a 409/201 outcome branch; for one without, it is the distinct 400 'No AGI account uses…
+  - Fix: In apps/web/app/api/settings/team/route.ts handleAddMember, stop asserting account existence in the response: when targetProfile is not found, return the same generic 'use the invitation link flow' guidance without stating whether an…
+- **/api/download-beta is fully implemented (auth + active-subscription gate + file/redirect) but has no caller anywhere in the codebase** — `apps/web/app/api/download-beta/route.ts`
+  - Fails: No end user can ever reach this endpoint through the product: there is no button, link, or client fetch anywhere in apps/web (or any other app) that calls GET /api/download-beta. The subscription check, the DB query, the redirect-allowlist logic, and the local-file-serving fallback are all unreachable, so a…
+  - Fix: Either wire a real caller — add a Download button on the page that represents an active-subscriber beta channel (e.g. gated inside /beta or /billing) that links to /api/download-beta?platform=... — or delete…
+- **Device-pairing POST bypasses the app's CSRF gate and its own coverage guard** — `apps/web/app/api/pair/initiate/route.ts`
+  - Fails: A signed-in victim visits an attacker-controlled page containing `<form action="https://agiworkforce.com/api/pair/initiate" method="POST" enctype="text/plain">` with a body crafted to parse as JSON. The browser attaches the Clerk session cookie on the cross-site form submission (a plain HTML form POST is not gated…
+  - Fix: In apps/web/app/api/pair/initiate/route.ts: import `requireCsrfToken` from '@/lib/csrf' and call `const csrfError = await requireCsrfToken(request, userId); if (csrfError) return csrfError as NextResponse;` immediately after the…
+- **Export format picker exposes no selected-state ARIA** — `apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx`
+  - Fails: A screen-reader user tabbing through the five export-format buttons hears only 'Markdown, button' / 'PDF, button' / 'Word Document, button' / etc. with no indication of which one is currently selected, so they cannot confirm what format Export will actually produce without sighted verification of the border color…
+  - Fix: In EnhancedExportDialog.tsx, add `aria-pressed={selectedFormat === format.id}` to the format `<button>` at line 197, matching CreateProjectDialog.tsx:194.
+- **control-plane/status is a fully built, DB-querying route with zero callers and zero tests** — `apps/web/app/api/control-plane/status/route.ts`
+  - Fails: The route builds `SurfaceRow`/`ProviderRow`/`ActivityRow` data (heartbeats, running/pending/completed agent counts, three outbound HEAD probes to anthropic.com/openai.com/generativelanguage.googleapis.com, and a 10-row recent-activity join) behind Clerk auth and a Neon round trip on every invocation, but no UI,…
+  - Fix: Delete apps/web/app/api/control-plane/status/route.ts (and its OPTIONS handler) since nothing in the repo calls it and it has no test coverage to protect; if a control-plane UI is genuinely planned, that PR should re-add the route…
+- **Multi-file generated-content fetch effect refetches all still-pending files every time one resolves** — `apps/web/features/chat/components/messages/MessageBubble.tsx`
+  - Fails: A message with 2+ generated text files (e.g. a tool run that returns multiple code/CSV outputs) renders. Effect run #1 fetches A, B, C concurrently. When A resolves first, setGeneratedTextContent updates state, which (a) reruns the cleanup, setting the run #1 closure's `cancelled=true` — silently discarding B and…
+  - Fix: In MessageBubble.tsx, replace the `generatedTextContent` read used for the pending-check with a ref that tracks already-requested file ids (e.g. `const requestedFileIdsRef = useRef(new Set<string>())`), add each file's id to that ref…
+- **Video-generation status polling loop has no cancellation and keeps running after the chat page unmounts** — `apps/web/lib/hooks/useMediaGeneration.ts`
+  - Fails: A user starts (or reloads onto) a conversation containing a queued/processing video job, which auto-resumes a watch window per WebChatPage.tsx:2739-2758. If they then navigate away from /chat entirely (e.g. to /settings), WebChatRoot's dynamic-imported WebChatPage unmounts, but the `for(;;)` loop in watchVideo…
+  - Fix: Thread an AbortSignal through watchVideo/getVideoStatus (add `signal` param to getVideoStatus in media-api-service.ts and pass it through the fetch), have watchVideo exit the loop when the signal aborts, and in WebChatPage.tsx create…
+- **jsPDF and docx are statically imported into the always-mounted export dialog, bundling both into the core /chat route chunk** — `apps/web/features/chat/services/document-export-service.ts`
+  - Fails: Every user who opens any chat conversation downloads jsPDF's and docx's full JS into the /chat chunk on first load, inflating time-to-interactive for the core product surface, even though PDF/DOCX export is an opt-in action reached only via Export in the conversation menu.
+  - Fix: In document-export-service.ts, remove the top-level `import jsPDF from 'jspdf'` and `import { Document, Packer, ... } from 'docx'`, and instead do `const { default: jsPDF } = await import('jspdf')` inside downloadAsPDF and `const {…
+- **Send-message queue in useChat is structurally a no-op — nothing is ever actually queued** — `packages/ui/unified-chat/src/hooks/useChat.ts`
+  - Fails: The queue is imported from @agiworkforce/client-runtime with real priority lanes ('now'/'next'/'later'), a per-surface localStorage adapter, and a QueueFullError/lane-cap check — machinery that only makes sense for "type ahead while the agent is busy" queuing. In production that path is unreachable from both ends:…
+  - Fix: In packages/ui/unified-chat/src/hooks/useChat.ts, remove the dead round-trip: drop the `enqueuePrompt`/`queue.dequeue()`/`QueueFullError` block at lines 932-943 and use `content` directly, and drop the now-unused `sendQueueRef`,…
+- **Modal dialogs claim aria-modal but never trap or restore keyboard focus** — `packages/ui/unified-chat/src/components/KeyboardShortcutsDialog.tsx`
+  - Fails: A keyboard-only or screen-reader user opens the keyboard-shortcuts dialog, the search overlay, the command palette, settings, or the BYOK handoff dialog and presses Tab repeatedly: focus walks off the last focusable control in the dialog and back into the conversation/sidebar behind it, which is still fully…
+  - Fix: Add one shared hook, e.g. packages/ui/unified-chat/src/hooks/useFocusTrap.ts, that on mount stores `document.activeElement`, moves focus into the dialog (first focusable element or a designated initial-focus ref), attaches a keydown…
+- **BYOK key status silently renders "Not set" when the status fetch fails** — `apps/web/app/settings/byok/EnvKeyStatusList.tsx`
+  - Fails: A user with BYOK provider keys already configured opens Settings > BYOK while offline, on a flaky connection, or during any transient 5xx from /api/byok/env-key-status. Every provider row flips from 'Checking...' straight to 'Not set' (never an error or 'unknown' state), which is indistinguishable from actually…
+  - Fix: In EnvKeyStatusList.tsx, add `const [error, setError] = useState(false)`, set it `true` in the catch block instead of the empty body, and in the badge render branch check `error` before falling back to `Boolean(isSet)` — render a third…
+- **cloud-managed waitlist 'rank' is the table's total row count, identical for every caller, not the caller's actual position** — `apps/web/app/api/waitlist/cloud-managed/route.ts`
+  - Fails: User A joins the waitlist as the very first entry and is told '#1 in line'. Immediately after, 500 more people join. User A calls the endpoint again (or any new joiner calls it) and both User A and the newest joiner are told the identical rank, because the query counts every row in the table at query time…
+  - Fix: In apps/web/app/api/waitlist/cloud-managed/route.ts, replace the query at line 70-73 with one scoped to the row just upserted, e.g. `select count(\*) - 1 as rank from cloud_managed_waitlist where joined_at <= (select joined_at from…
+- **Marketing footer's "Web" surface link points to /apps (the connectors marketplace), not the web app** — `apps/web/features/marketing/components/MarketingFooter.tsx`
+  - Fails: A visitor on any marketing page opens the site-wide footer's Surfaces column expecting Web / Desktop / Mobile / CLI / Chrome / VS Code to each open that surface's product page, the way Desktop, Mobile, CLI, Chrome, and VS Code do. Clicking 'Web' sends them to /apps instead, which — signed out — shows a sign-in gate…
+  - Fix: In features/marketing/components/MarketingFooter.tsx, change the SURFACES entry at line 33 from `{ href: '/apps', label: 'Web' }` to either drop the mislabeled row or repoint it at the actual web-chat entry used elsewhere on the site…
+
+### Low (12)
+
+- **Code-block copy button swallows clipboard failures instead of using the repo's existing safe-clipboard fallback** — `packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx`
+  - Fails: In any context where `navigator.clipboard` is undefined or `writeText` rejects (denied Permissions-Policy in an embedding/microfrontend iframe, browser without Clipboard API support, or a permission prompt the user dismisses), the `await` throws inside CodeBlock's async handler with no catch: the promise rejects…
+  - Fix: In packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx, wrap the `navigator.clipboard.writeText(codeString)` call in a try/catch and only call `setCopied(true)` on success (leaving the button in its default 'Copy' state…
+- **ThinkingBlock derives its aria-labelledby id from a content prefix, producing duplicate DOM ids across messages** — `apps/web/features/chat/components/ThinkingBlock.tsx`
+  - Fails: Any two ThinkingBlock instances rendered at the same time whose visible text shares the same first 8 non-whitespace characters — trivially true while a block is still empty at the very start of streaming (content='' for both → id='thinking-header-'), and routinely true for completed blocks since LLM…
+  - Fix: In apps/web/features/chat/components/ThinkingBlock.tsx, replace the content-derived headerId with React's `useId()` (or accept a `segmentId`/`messageId` prop from the callers in MessageBubble.tsx that already have a stable id for each…
+- **Empty-state copy claims uploads are never cataloged, but the Uploaded filter is fully wired to real upload rows** — `packages/ui/unified-chat/src/components/library/LibraryView.tsx`
+  - Fails: A user attaches an image to a chat message. The completion route inserts a media_assets row with metadata.origin='upload', so the file is now genuinely cataloged in the Library. If that user later opens /chat/library, clicks the 'Uploaded' filter chip, and also has an active kind/surface/search filter that this…
+  - Fix: In packages/ui/unified-chat/src/components/library/LibraryView.tsx's EmptyState, replace the origin==='uploaded' branch (line 918) with copy that matches actual behavior, e.g. 'No uploaded files match your filters yet — files you attach…
+- **ModeSelector (team/engineer/research/race/solo Chat Mode picker) is exported but never rendered anywhere** — `apps/web/features/chat/components/Tools/ModeSelector.tsx`
+  - Fails: No user can ever reach team/engineer/research/race/solo mode selection through this control — it renders nowhere, so any product intent behind those five modes is invisible in the shipped app.
+  - Fix: Delete `ModeSelector.tsx`, its export in `Tools/index.ts`, and the unused `ChatMode` type/`mode?` field in `features/chat/types/index.ts`, or mount it in the composer if the five-mode concept is still intended to ship.
+- **Custom Style has no edit affordance: updateCustomStyle is exported but never called** — `apps/web/features/chat/stores/style-store.ts`
+  - Fails: A user creates a custom style with a typo or wrong wording in the instruction/sample text. There is no way to fix it in place -- the only remedy is Delete followed by Create from scratch, retyping the name, sample text, and instruction, and losing the original id/createdAt.
+  - Fix: Add an edit affordance in StyleSelector.tsx: clicking a custom style's row (outside the delete icon) opens the create-form pre-populated with that style's name/sampleText/instruction, and Save calls updateCustomStyle(id, {...}) instead…
+- **apps/web/lib/ai-sdk/ is a complete, unreferenced duplicate provider-dispatch implementation** — `apps/web/lib/ai-sdk/stream-handler.ts`
+  - Fails: None at runtime -- the module is unreachable, so it cannot misbehave in production. The risk is maintenance: a future change to real provider/failover behavior (e.g. adding a provider, or fixing the billing-classification issue above) has no reason to touch this parallel implementation, so it silently drifts and…
+  - Fix: Delete apps/web/lib/ai-sdk/providers.ts, stream-handler.ts, event-adapter.ts, managed-provider-mode-gate.ts and their **tests** counterparts; if a future route is meant to use the AI-SDK-based path, import and call…
+- **Skill body detail route (/api/skills/[name]) has zero callers anywhere in the product** — `apps/web/app/api/skills/[name]/route.ts`
+  - Fails: A developer maintains this endpoint (adds fields, fixes bugs, keeps its test green) believing it backs a 'view skill body before download' UI, but no such UI exists and none is ever built against it — the endpoint is pure unexercised surface area that can silently drift from the download route's behavior (e.g. it…
+  - Fix: Delete apps/web/app/api/skills/[name]/route.ts (and its dedicated assertions in apps/web/**tests**/api/skills.security.test.ts) since /download already covers the only real client need, or wire an actual caller (e.g. an…
+- **Presign route returns an attachmentId that no caller ever reads** — `apps/web/app/api/uploads/presign/route.ts`
+  - Fails: No functional failure — the generated UUID is computed and serialized on every presign call and then discarded by every caller, so it can never be used to correlate a presign with its later `/complete` call or to pre-allocate the asset id.
+  - Fix: Remove the `attachmentId: randomUUID(),` line from the response object in apps/web/app/api/uploads/presign/route.ts and drop the now-unused `randomUUID` import.
+- **Legacy Runway/Google-Veo video status branch is unreachable dead code that always returns a misleading 403** — `apps/web/app/api/media/video/status/route.ts`
+  - Fails: Any caller that still supplies a `runway_...`/`google_...` task_id (a stale bookmark, cached client state from before the durable-job migration, or a script hitting the API directly) receives a 403 'You do not have permission to check this task' — which reads as an ownership/authz failure rather than 'this legacy…
+  - Fix: Delete the legacy branch in apps/web/app/api/media/video/status/route.ts (parseTaskId, RunwayTaskStatusResponse/GoogleOperationResponse types, getRunwayStatus, getGoogleVeoStatus, and the routing block at 343-406 for non-UUID task_id),…
+- **Workspace billing page tells admins per-member/per-model usage has 'no admin read path' and links Usage to the wrong (personal) page** — `apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx`
+  - Fails: An owner/admin reading the workspace Billing page is told the per-member/per-model cost breakdown they need for a budget review doesn't exist yet, and clicking the page's own 'Usage' link takes them to their personal usage/quota bars instead of the workspace usage page that already has it — so they may never…
+  - Fix: In WorkspaceBillingSummary.tsx, change the 'Usage' Link's href from '/settings/usage' to '/workspace/usage', and delete the now-false closing paragraph (lines 153-156) claiming no admin read path exists.
+- **Raw subscription status enum ('past_due', 'incomplete_expired', etc.) is rendered to users with no humanization, showing literal underscores** — `apps/web/features/settings/sections/BillingSection.tsx`
+  - Fails: A subscriber whose card was declined and who is in the payment-failure grace period opens Settings > Billing to see what is happening with their account. The one status indicator on the page — the Status row this codebase relies on to communicate the grace period — reads 'Past_due', a raw enum leak that looks like…
+  - Fix: In BillingSection.tsx, add a small status-label map (e.g. `{ past_due: 'Past due', incomplete_expired: 'Incomplete', unpaid: 'Unpaid', trialing: 'Trial', canceled: 'Canceled', active: 'Active' }`) and render…
+- **Offline message-sync queue is globally mounted but nothing ever enqueues into it** — `apps/web/lib/offline/offlineQueue.ts`
+  - Fails: A user sends a chat message while offline. The composer's send call fails and is handled by the generic chat-error path (an inline 'Error:' bubble asking them to manually retry); no message is added to the offline queue. When connectivity returns, nothing auto-resends — the queue-driven 'synced' / 'pending'…
+  - Fix: In lib/hooks/useChatStream.ts's network-failure branch of handleStreamError (or the fetch call that throws), call `queueMessage(...)` from lib/offline/offlineQueue.ts with the pending content before falling back to the generic error…
+
+2026-08-30 Colour tokens carried two roles at once (`WEB-CONTRAST-DUAL-ROLE-01`,
+High, Fixed): a live axe sweep across light/dark x 5 accents found the same
+structural fault in three token families - one variable served both text and
+solid-fill roles, so each theme failed whichever role it was not tuned for.
+Measured before: `--destructive` 3.55:1 as text and 3.76:1 under white on a
+fill in light, 2.10:1 as text in dark (124 text call sites); no single value
+satisfies both roles in dark, so the token had to split. The accent fill had no
+paired foreground at all - white read 2.97:1 on amber and 2.54-3.20:1 on every
+dark swatch. `--muted-foreground` is tuned to 4.96:1 but 75 call sites diluted
+it with an opacity modifier, reaching 2.31:1 at /60. Fixed by adding
+`--destructive-text`, `--settings-destructive-text` and
+`--accent-swatch-*-on`, repointing 112 `text-danger`, 20 settings-token and 9
+accent-fill call sites, dropping the opacity modifiers (the two deliberate `/0`
+hover-reveals kept), and darkening green-600/emerald-500 action buttons that
+carried white. Verified live: 24/24 theme x accent x route combinations clean,
+up from 12/24. Guarded by 14 new token assertions in
+`apps/web/shared/components/__tests__/theme-contrast.test.ts`, each confirmed
+to fail on the pre-fix values. `apps/desktop` keeps its own duplicate of these
+tokens and still carries the unsplit `text-destructive` call sites; the new
+tokens are defined there so the shared components render correctly, but its own
+76 files were left alone as out of scope.
+
+2026-08-30 Responsive and dialog slices measured clean, two instruments
+corrected (`WEB-QA-INSTRUMENT-02`, Info, Fixed): the responsive sweep reports
+0/45 horizontal overflows at 375/768/1440, and both settings dialogs pass all
+eight focus properties (modal, named, focus moved in, trapped, background
+inert, Escape closes, focus restored). Neither result was trustworthy as first
+measured. Five routes (`/connectors`, `/skills`, `/settings/general`,
+`/settings/billing`, `/settings/security`) render as a modal over `/chat`, so
+`finalUrl` alone could not distinguish an open modal from a closed one - the
+sweep now records `dialogPresent` and `dialogOverflowBy`, confirming all 15
+modal measurements had the dialog open and neither the dialog nor the page
+overflowed. The dialog probe reported `backgroundInert=false` on both dialogs;
+the only element failing its check was a `<script>` tag, which exposes nothing
+to assistive tech, so the probe now skips non-rendering tags. The
+`#main-content` aria-hidden fix was already correct.
+
+2026-08-30 Exhaustive interaction audit, round one (`WEB-UI-INTERACTION-01`,
+High, Fixed): a six-lens fan-out (38 agents, 29 confirmed / 3 refuted) plus a
+new real-browser interaction crawler produced the following, all fixed.
+
+Token roles, 5th and 6th instances of one variable serving two jobs: 26 call
+sites painted text with `--settings-destructive-foreground`, which resolves
+near-white because it is the colour for text ON a red fill - measured ~1.04:1
+on a light card, including the "Deletion is not recoverable" warning on the
+workspace policy page. `--teal` likewise served text, a dot fill and a 12%
+tint at once (3.97:1 as text), and `--amber` aliased the accent fill rather
+than its text variant. Added `--chat-accent-text`/`--teal-text`, repointed 26
+destructive, 41 `text-[var(--chat-accent-primary)]`, 13 inline accent-as-text
+and 5 white-on-accent-fill call sites. One usage (AccountSection.tsx:457) is
+correctly on a fill and was left alone.
+
+Misleading empty states: ArchivedChatsSection, DeletedChatsSection and
+SharedLinksSection each rendered "No archived chats" / "No deleted chats" /
+"No shared links" when the fetch had failed, contradicting the error banner
+directly above and telling the user their data was empty when it was
+unreadable. Each now renders a distinct could-not-load state.
+
+Unconfirmed destructive action: WorkspaceDataControls released a legal hold -
+which un-preserves records held for litigation or a regulatory request - on a
+single click. `confirmingRelease` was named for a confirmation but only drove
+the spinner. Now a two-step arm/confirm with an explicit warning and a "Keep
+hold" escape.
+
+Wrong tenant scope: DirectorySyncAdminPage issued three GETs with no
+`organizationId`, unlike its sibling `<SSOPanel organizationId=...>` on the
+same page, so any admin of two or more workspaces saw the directory-sync
+section fail permanently and indistinguishably from "nothing configured". Now
+scoped via query param on GETs and body on POST/PATCH, matching the handlers.
+
+WCAG 2.2 SC 2.5.8 target size: 9 controls under 24x24, including
+`/chat/library`'s destructive Delete buttons at 55x16 and the sidebar's
+20x20 icon buttons. All raised; the composer disclaimer and cookie-banner
+links are the genuine "Inline" exception and are now marked
+`data-inline-link` at the source rather than inferred from DOM shape.
+
+Guards added: `apps/web/shared/components/__tests__/destructive-token-roles.test.ts`
+(fails on any reintroduced text/fill role swap, confirmed red on a reverted
+line) and `apps/web/e2e/qa-08-target-size.spec.ts`.
+
+Instrument correction (7th of the audit): the interaction crawler reported
+"Organize chats" as a dead control and five nav buttons as non-navigating.
+Both were false. "Collapse sidebar" persists to localStorage, so every control
+tested after it was judged against a collapsed sidebar. Re-tested with storage
+cleared per control, the menu opens and every nav button routes correctly. The
+crawler now clears persisted UI state between controls and counts a portalled
+menu as feedback.
+
+2026-08-30 Load-failure copy blamed the user's network for server faults
+(`WEB-LOAD-ERROR-COPY-01`, Low, Fixed): the Connectors, Skills and Plugins
+panels in the settings modal each rendered "…could not be loaded. Check your
+connection and try again." for every non-auth failure, including a 5xx. That
+sends a user to diagnose a network that is not broken. All three now share one
+`loadFailureMessage` helper that distinguishes an expired session, a server
+error (5xx), a rejected request (other 4xx) and an actual network failure;
+Connectors previously had its own parallel ternary and now delegates to the
+same helper. The four existing tests asserted the old generic string and were
+updated to the corrected copy, plus a new test that renders a 500 and a 400 and
+asserts the two messages differ and neither mentions the connection.
+
+2026-08-30 "New project" meant two different things (`WEB-NEW-PROJECT-INTENT-01`,
+Medium, Fixed): the sidebar is rendered by two shells. Under WebChatPage the
+"New project" button opens the create dialog; under WebAppShell (every non-chat
+surface: /tasks, /skills, /plugins, /connectors) the same button only ran
+`router.push('/chat/projects')`, so the user asked to create a project and
+landed on a list with no dialog and no form. The shell now carries the intent as
+`/chat/projects?new=1` and the projects page opens its own CreateProjectDialog
+for it; verified live from /tasks, which now lands on the dialog titled "Create
+project". Guarded by `features/chat/pages/__tests__/project-create-intent.test.tsx`.
+
+2026-08-30 Cancelled requests logged as errors (`WEB-ABORT-NOISE-01`, Low,
+Fixed): `use-settings-queries.ts` logged "[SettingsQuery] API keys error: signal
+is aborted without reason" whenever the API-keys query was superseded or its
+component unmounted. A caller abort is normal cancellation, not a failure - the
+same file already suppresses signed-out noise for this reason. A genuine
+timeout still logs and still surfaces to the user.
+
+2026-08-30 More WCAG 2.2 SC 2.5.8 target sizes (`WEB-TARGET-SIZE-02`, Low,
+Fixed): the /plugins CTA link (whole-paragraph, so not the Inline exception),
+every skill "Download" link in the settings modal, and every connector-name
+button in the connector list were 16-20px tall. All raised to a 24px minimum;
+qa-08 now passes across /chat, /chat/projects, /chat/library, /tasks, /skills,
+/plugins and /connectors.
+
+Instrument correction (8th of the audit): the interaction crawler reported 14
+click timeouts on /skills, reading as dead controls. /skills renders the
+settings modal over /chat, so every control it enumerated was behind the
+dialog overlay and correctly click-blocked - the modal doing its job. The
+crawler now scopes enumeration to the open dialog when one is present, and
+skips sr-only skip links (offscreen until focused, so a blind click always
+times out). After the fix the same crawl reports 0 dead and 0 click errors, and
+exercises the modal's own sections instead. A separate "dead" report for "New
+project" on /tasks was a real defect but not the one reported: the control
+worked, it just did the wrong thing.
+
+2026-08-30 Wave-two audit fan-out: 50 agents, 38 confirmed, 5 refuted
+(`WEB-AUDIT-WAVE2-01`, High, In progress). Lens counts: destructive-confirmation
+10, keyboard-focus 7, hidden-unreachable-ui 6, ui-consistency 5,
+long-content-overflow 4, layout-shift 3, duplicate-requests 3.
+
+Destructive actions without confirmation (10 found): every one fired its
+mutation straight from onClick. Rather than ten bespoke dialogs, added one
+shared `useConfirmAction` primitive in
+`packages/ui/ui/src/primitives/ConfirmAction.tsx`, built on the AlertDialog the
+account-deletion flow already uses, so the confirm surface is consistent and a
+call site costs a few lines. Wired so far: SSO connection Remove (a hard
+DELETE that cuts off every member signing in through it), "Log out of all
+devices", per-row session Revoke, and linked-device Unlink. Still to wire:
+DirectorySync Remove and Revoke, KnowledgeFiles delete, ShareConversationDialog
+"Revoke link", WorkspaceSpendLimit "Remove limit", MemoryEditor per-fact delete
+(its adjacent "Clear all" already confirms, so the single-fact delete is
+inconsistent as well as unguarded).
+
+Four existing tests clicked those buttons and asserted the mutation fired
+immediately. They now click through the dialog, which additionally asserts the
+confirmation exists - removing it would fail them on the missing dialog text.
+
+Not yet addressed from this wave: 7 keyboard findings (the shared
+`ui/src/sidebar/Menu.tsx` and `AnchoredComposerMenu` render role="menu" without
+arrow-key handling, so several call sites share one root cause), 6 orphaned
+routes (/beta, /founder, /payment-failure, /settings/byok, /settings/sync,
+/operator - all real pages with zero inbound navigation; /payment-failure is
+notable because neither Stripe checkout flow sets it as cancel_url, so no real
+payment failure ever reaches it), 5 consistency findings, 4 overflow, 3 layout
+shift, 3 duplicate-request findings.
+
+2026-08-30 All ten unconfirmed destructive actions wired, plus the shared menu
+keyboard pattern (`WEB-AUDIT-WAVE2-02`, High, Fixed).
+
+Every one of the ten destructive actions now routes through the shared
+`useConfirmAction` primitive: SSO connection Remove, "Log out of all devices",
+per-row session Revoke, linked-device Unlink, DirectorySync connection Remove,
+SCIM token Revoke, project knowledge-file Remove, share-link Revoke,
+workspace spend-limit Remove, and MemoryEditor per-fact Delete (whose adjacent
+"Clear all" already confirmed, so the single-fact path was inconsistent as well
+as unguarded). Each dialog names the actual consequence rather than asking
+"are you sure" - what stops working, who loses access, and whether it can be
+undone.
+
+Seven existing tests clicked those controls and asserted the mutation fired
+immediately; they now click through the dialog. The share-link test was
+strengthened further: its confirm button carries the same label as its trigger,
+so asserting only the label would have let the test pass by clicking the
+trigger twice - it now asserts the dialog title and clicks inside the
+alertdialog.
+
+`packages/ui/ui/src/sidebar/Menu.tsx` rendered `role="menu"`/`role="menuitem"`
+with Escape and outside-click only: no focus into the menu on open, no
+Arrow/Home/End movement between items, and Escape stranded focus on <body>.
+That is the shared primitive behind several of the wave-two keyboard findings.
+It now implements the WAI-ARIA menu pattern - focus moves to the first item on
+open, ArrowUp/ArrowDown wrap, Home/End jump, Tab closes, and Escape returns
+focus to the trigger. Guarded by `src/sidebar/__tests__/Menu.keyboard.test.tsx`,
+confirmed red when the panel key handler is removed.
+
+Still open from wave two: the remaining keyboard findings that do not route
+through this primitive (AnchoredComposerMenu, ProjectCard, the project-detail
+menu, Header's Products disclosure, UserProfile popover, ProjectGallery emoji
+picker), 6 orphaned routes, 5 consistency, 4 overflow, 3 layout-shift and 3
+duplicate-request findings.
+
+2026-08-30 A passing unit test hid a broken keyboard fix
+(`WEB-MENU-KEYBOARD-02`, Medium, Fixed): the WAI-ARIA menu pattern added to
+`packages/ui/ui/src/sidebar/Menu.tsx` passed its jsdom test and did not work in
+a real browser. Driving it live showed focus landing correctly on the first
+menu item, then ArrowDown moving focus to a conversation title in the sidebar -
+outside the open menu entirely. The surrounding sidebar runs its own arrow-key
+list navigation on a document listener and consumed the event before the
+panel's React handler saw it. jsdom has no competing listener, so the unit test
+could never catch it. Key handling now runs on a document listener in the
+CAPTURE phase with stopPropagation, so the open menu wins; the React panel
+handler was removed as dead code. Verified live: ArrowDown/ArrowUp stay inside
+the panel and wrap, Escape closes and returns focus to the trigger. Guarded by
+`apps/web/e2e/qa-09-menu-keyboard.spec.ts` - a live spec, because the unit test
+provably cannot cover this failure mode.
+
+2026-08-30 A failed payment was invisible, and its explainer unreachable
+(`WEB-PAST-DUE-SILENT-01`, Medium, Fixed): `invoice.payment_failed` and
+`checkout.session.async_payment_failed` set the subscription to `past_due`
+server-side, but `BillingSection` never rendered the subscription status, so a
+user whose card was declined saw a normal-looking billing panel. Separately,
+`/payment-failure` - a complete page explaining declines, expiry and issuer
+flags - had zero inbound links. The wave-two finding proposed wiring it to
+Stripe's `cancel_url`, which would have been wrong: `cancel_url` fires when the
+user backs out of checkout, so that would tell people their payment failed when
+they merely clicked back. The honest connection is the real failure state, so
+BillingSection now renders a past_due/unpaid alert linking to the explainer.
+Guarded in `BillingSection.test.tsx`, confirmed red when the notice is removed.
+
+2026-08-30 The cookie banner made the account menu unclickable
+(`WEB-COOKIE-BANNER-BLOCKS-SIDEBAR-01`, High, Fixed): the banner's wrapper is
+`fixed bottom-0 left-0 right-0 p-4 z-50` while its card is centred at
+`max-w-7xl`, so on a wide viewport the wrapper's empty padding covered the
+sidebar footer. `document.elementFromPoint` at the centre of the "Account menu"
+button returned the banner wrapper, and Playwright's click timed out: until a
+user dismissed the cookie banner they could not open their account menu at all.
+Found only by driving the browser - no static lens would surface it. Fixed by
+making the wrapper and its centring container `pointer-events-none` and the
+card `pointer-events-auto`. Guarded by
+`apps/web/e2e/qa-10-overlay-blocking.spec.ts`, which asserts the named critical
+controls are the top element at their own centre and that the account menu
+actually opens; confirmed red when the fix is reverted, naming the exact
+overlay.
+
+A broader "nothing covers anything" sweep was written first and discarded: it
+reported nested conversation rows and the offscreen skip link as covered, and
+those are not defects. The guard asserts the specific controls instead rather
+than shipping a check whose output cannot be trusted.
+
+2026-08-30 Menu keyboard pattern extended to every popup
+(`WEB-MENU-KEYBOARD-03`, Medium, Fixed): a live sweep of all eight reachable
+popup triggers found ProjectCard's "Project options" opening a role="menu" that
+took no focus and ignored Escape. The keyboard contract was extracted from
+`Menu.tsx` into `packages/ui/ui/src/primitives/useMenuKeyboard.ts` (capture
+phase, for the reason in WEB-MENU-KEYBOARD-02) and ProjectCard now uses it.
+
+`AnchoredComposerMenu` - the positioning primitive behind nine composer popups
+including the response-style and project pickers - rendered a bare div with no
+role, no name, no focus management and no Escape. It is mixed content
+(headings, presets, nested edit buttons), so role="menu" would be wrong: a
+menuitem cannot contain other interactive elements. It is now a non-modal
+`role="dialog"` with a required `label`, focus moved in on open, and Escape
+closing and restoring focus to the anchor. All nine call sites were given real
+names. Live re-verification: 8/8 popups now take focus and close on Escape.
+
+2026-08-30 Long user content and a cross-viewport overlay sweep
+(`WEB-LONG-CONTENT-01`, Low, Fixed): fixed four places where user-supplied
+strings could push layout - the shared-session header (title and "Open in AGI"
+were plain flex siblings, so a long title pushed the link off), shared-session
+message bodies and moderation-queue excerpts (`whitespace-pre-wrap` with no
+`break-words`, so an unbroken 180-character token overflowed), and the
+project knowledge-file row (a `flex: 1` child with no `minWidth: 0`, which
+refuses to shrink below its content, pushing the size and delete controls out
+of the row instead of ellipsing). Guarded by
+`apps/web/e2e/qa-11-long-content.spec.ts`, which injects a 180-char word and a
+long URL into every user-supplied string on the page at 375px and 1440px and
+asserts the document never scrolls horizontally. The spec carries two
+anti-vacuity checks: it asserts the injection actually found strings to stress,
+and the overflow assertion was proved to bite by appending a 5000px canary
+(it reported 4625px of overflow, then passed again once removed).
+
+The overlay-blocking check from WEB-COOKIE-BANNER-BLOCKS-SIDEBAR-01 was run
+across 4 viewports x 4 routes. It surfaced no further defects: the
+`/connectors` hits are a modal backdrop correctly blocking the page behind it,
+the "Skip to main content" hits are a link that is deliberately offscreen until
+focused, and the remainder were an artefact of walking up to a fixed ancestor
+rather than reporting the true top element. Two things were checked rather than
+assumed - the cookie banner is fully dismissible at 375px (all four buttons
+on-screen and clickable), and `RACEPROBE1787997510` is a conversation title in
+the account's own test data, not shipped markup.
+
+2026-08-30 Layout shift measured, not assumed; skills catalogue deduped
+(`WEB-DUPLICATE-FETCH-01`, Low, Fixed).
+
+Layout shift: measured with a real PerformanceObserver across five routes.
+CLS is 0.0072-0.0255 everywhere, well inside the 0.1 "good" threshold, and no
+single shift exceeded 0.01. The three wave-two layout-shift findings are
+theoretically sound but produce no measurable shift on these routes, so they
+are recorded rather than "fixed" - a media element without intrinsic
+dimensions only shifts when such content actually arrives mid-stream.
+
+Duplicate requests: the first measurement grouped by pathname and made
+`/api/settings/preferences` look like 7 identical calls. With the query string
+included they are distinct namespaces, so that was an instrument artefact and
+no fix was warranted. The real duplicate was `/api/skills`, fetched 4x on
+/connectors and 2x on /chat because `useSkillsList` (composer) and
+`WebSettingsModal.loadSkills` each fetched independently, and /connectors
+renders the modal over /chat. Added
+`apps/web/features/skills/services/skills-catalog.ts`: one in-flight promise
+shared by both, with a 30s TTL and invalidation on SKILL_CATALOG_CHANGED_EVENT.
+`/api/skills` no longer appears in the duplicate list on any route.
+
+Two things the refactor got wrong and had to be corrected before landing:
+caching the promise indefinitely would have frozen the catalogue for the whole
+session (hence the TTL), and routing through a shared loader initially dropped
+the HTTP status, silently regressing the honest 5xx-vs-network error copy added
+earlier the same day. The loader now throws a status-carrying
+`SkillsCatalogError` and `loadFailureMessage` reads a status off any error
+shape. Two settings-modal tests failed on the shared module cache leaking
+between them; they now reset it in beforeEach, which is the isolation a
+module-level cache requires.
+
+2026-08-30 Orphaned settings pages, and six iterations of test drift
+(`WEB-ORPHAN-ROUTES-01`, Medium, Fixed).
+
+Drove all six wave-two orphaned routes live. Three were real defects, three
+were not: `/beta` and `/founder` are marketing pages where direct-link-only
+distribution is defensible, and `/operator` correctly gates a non-admin account
+(HTTP 200 with 404 content - a soft-404, worth noting but the gate works).
+`/settings/byok` ("API keys (BYOK)", 7 controls) and `/settings/sync` ("Sync",
+6 controls) are real settings pages with no rail entry and no inbound link:
+only a typed URL reached them. BYOK matters most - it is the product's headline
+differentiator and had no route from inside settings. Both are now linked from
+the section that owns the topic (Capabilities and General), verified live to
+land on the right page.
+
+Guarded by `apps/web/app/settings/__tests__/settings-routes-reachable.test.ts`,
+which enumerates every `app/settings/*/page.tsx` and requires a rail key, a URL
+link, or a `<SettingsSectionLink section="...">`. Writing it surfaced a seventh
+route the static lens missed, `/settings/profile` - but that turned out to be a
+five-line redirect to `/settings/general`, a legacy-URL alias that should NOT
+be linked. The guard now skips redirect-only pages. Confirmed red when the BYOK
+link is removed.
+
+Test drift found while running the full suite: four accent-token tests and two
+projects-page tests had been failing since earlier iterations today. Both were
+caused by my own changes - adding `--chat-accent-on-primary` to the
+`html[data-accent=...]` blocks (the test pinned the exact CSS text) and adding
+`useSearchParams` for the ?new=1 create intent (the test's next/navigation mock
+lacked the export). I had been running `vitest run features` and not `app`, so
+neither surfaced for several iterations. Both are now fixed, and the accent test
+additionally asserts every swatch defines its paired `-on` foreground. Full web
+suite: 4919 passed, 1 skipped.
+
+2026-08-30 Shared formatters pinned en-US; fresh re-crawl 41/41
+(`WEB-FORMATTER-LOCALE-01`, Medium, Fixed).
+
+The wave-two consistency finding said 40 ad-hoc `toLocaleString()` call sites
+should route through the canonical helpers in
+`packages/platform/utils/src/format.ts`. Checking the helpers first showed they
+themselves pin 'en-US' in all four formatters - `formatDate`, `formatDateTime`,
+`formatCurrency` and `formatNumber` - so following that recommendation would
+have spread a locale bug to every screen instead of fixing it. `formatNumber`'s
+own doc comment already claimed "locale-specific thousands separators" while
+hardcoding en-US. All four now default to the viewer's locale and take an
+optional explicit one, which is also what makes them testable:
+`src/__tests__/format.locale.test.ts` asserts de-DE and en-US render
+differently and that the default matches the runtime locale. The 40-site
+consolidation is now safe to do but was not attempted in this pass.
+
+Fresh full re-crawl of 41 routes across four slices: 38 reported clean and all
+three flags resolved to non-defects on re-run. `/settings/memory` reported
+blank(20) once and renders 2744 characters with 127 controls on every retry -
+the sweep had measured before the modal mounted.
+`/settings/notifications` reported 429s, which are this harness's own traffic
+against the shared rate-limit bucket. `/chat/library`'s two 404s are an
+orphaned file blob in the account's data; the UI degrades correctly around it
+(onPreviewError -> fallback, verified earlier), so it is a data-integrity note
+rather than a UI defect.
+
+One unified-chat test failed once and passed on re-run; the failing name was
+not captured, so it is recorded as a flake rather than chased.
+
+2026-08-30 Convergence pass: every guard green, one new defect found
+(`WEB-CONVERGENCE-01`, Info).
+
+Ran all eight guard specs together against the live product. qa-05 responsive:
+45/45 measurements, zero page overflow, zero dialog overflow, and all 15 modal
+routes confirmed to have actually opened their dialog. qa-06 dialogs, qa-08
+target size, qa-09 menu keyboard, qa-10 overlay blocking and qa-11 long content
+all pass. qa-07 interaction crawl over /chat, /chat/projects and /tasks: 48
+controls, 0 dead, 0 real console errors (all 65 were 429s from the crawl's own
+reload-per-control traffic against the shared rate-limit bucket).
+
+The crawl found one defect the live target-size sweep structurally cannot see:
+the sidebar's empty-state call to action ("No conversations yet" -> "Start a
+new chat") was a bare text button under 24px. qa-08 never renders it because it
+only appears when the account has no conversations, and the QA account has 26;
+the crawl reached it by filtering the list empty. This is a general coverage
+limit worth stating plainly - the live sweeps only measure the states this
+account's data produces, so empty, error and loading states are invisible to
+them. Fixed, and guarded at the component level in
+`Sidebar.emptyState.test.tsx`, which renders the empty sidebar deterministically
+rather than hoping a live run reaches that state. Confirmed red when the
+min-height is removed.
+
+2026-08-30 Loading screens were silent, unthemed and ignored reduced motion
+(`WEB-LOADING-STATE-A11Y-01`, Medium, Fixed): 23 route-level `loading.tsx`
+files rendered a bare spinning div. None carried `role="status"`, a live region
+or any label, so a screen-reader user navigating to those pages heard nothing
+while they loaded. Five pinned `border-zinc-700 border-t-blue-500`, ignoring
+both the theme and the user's accent colour, and only three of nineteen
+spinners repo-wide honoured `prefers-reduced-motion` (WCAG 2.3.3). All 23 now
+expose a live region with a label, use theme tokens, and stop animating under
+reduced motion. Guarded by `apps/web/app/__tests__/loading-states.test.ts`,
+confirmed red when a single file's status role is removed - it names the file.
+
+The guard caught two files the sweep's regex missed (`app/loading.tsx`,
+`app/download/loading.tsx`) and also over-reported one: the root screen shows a
+visible "Loading…" label rather than an `sr-only` one, which is not worse, so
+the assertion now accepts either.
+
+Near-miss worth recording: the wave-two finding said there was no shared
+spinner component. There is - `packages/ui/ui/src/primitives/Spinner.tsx`, with
+`role="status"` and an sr-only label already correct. I created a "new" one at
+that exact path without checking, overwriting it; `git checkout` restored it.
+The real finding is not "no shared component" but "19 places ignore the one
+that exists". Its appearance was left alone because its only three consumers
+are in `apps/desktop`, which is out of scope and which I cannot verify
+visually; it gained only the reduced-motion class, which is a pure improvement.
+
+Test-suite health: three packages/ui/ui dialog tests (5-6s each) failed once
+and passed on re-run, as did one unified-chat test earlier. Recorded as flakes
+rather than chased, but that is now four intermittent failures in a day.
+
+Operational note (same day): running `vitest run app` while five Sonnet-5
+agents drove Playwright browsers produced 8 failures across unrelated areas
+(org membership, installers, pricing routing), each taking 5-12 seconds - the
+shape of a timeout, not an assertion. Load average was 24.4 with 23 Playwright
+processes and 4 Chromium instances alive. These are starvation artefacts and
+must be re-run under quiet conditions before being believed; the earlier
+"flakes" recorded in this file may share the same cause, since they were also
+long-running tests during periods of concurrent browser work.
+
+2026-08-30 Cross-surface accent token break, and a database guard tests never had
+(`WEB-SHARED-TOKEN-DESKTOP-01`, High, Fixed).
+
+A peer session's guard sweep caught a real regression of mine. Splitting the
+accent token into fill/text/on-fill roles, I added `--chat-accent-on-primary`
+to the SHARED stylesheet `packages/ui/design-tokens/src/chat.css` but not
+`--chat-accent-primary-text`, while sweeping 36 shared-package call sites onto
+the latter. Desktop loads that stylesheet and would have rendered all 36 with
+no colour. Now defined in all three scopes with per-scope values, because the
+fill does not clear AA as text on every background: #a8502f in the light
+default (#da7756 is 3.11:1 on white, this is 5.45:1), #da7756 unchanged in
+`.dark` (already 6.75:1), #0961bb in the cool light theme (#0b84ff is 3.65:1
+on white, this is 6.11:1). check:css-tokens now passes across all 4 surfaces.
+
+Found while fixing it: `--chat-accent-primary-contrast` already existed for the
+"text on the accent fill" role and is #ffffff in all three scopes, which is
+3.11:1 on the terracotta fill. Its 14 call sites are all in apps/desktop, so it
+was left alone and reported to that session rather than changed unverifiably -
+but it duplicates `--chat-accent-on-primary` and one of the two should win.
+
+The peer's second guard failure, check:structure-conventions ENOENT on
+`e2e/agent-chat-composer-sweep.spec.ts`, was not a registration problem:
+nothing registers it. Those files are written and deleted by the Sonnet-5
+subagents driving browsers, and the guard read one between enumerate and open.
+It passes cleanly; it will flap while those agents run.
+
+Acting on the same session's tip that desktop tests were reading the real
+application database through an isolation variable nobody read: the web
+equivalent existed as a risk. `getNeonDb()` builds its client from
+AGI_DATABASE_URL ?? DATABASE_URL with no test-mode guard, and
+`apps/web/test/setup.ts` neutralised neither, so a developer with the app's env
+loaded had one unmocked query between a unit test and production data. The
+setup now points both at an unroutable host. Running with that in place:
+app/api 2118 passed, lib+db 4715 passed - so nothing was actually reaching the
+database, the exposure was latent rather than live, and any future test that
+forgets to mock now fails loudly instead of touching real data.
+
+A first pass at this looked much worse - 20+ environment variables appeared to
+be set by tests and read by nothing - but that was a regex that could not see
+template-literal access like process.env[`CONNECTOR_OAUTH_${provider}_ID`].
+Every one of them is read. Only the database gap was real.
+
+2026-08-30 Sonnet-5 agents driving real browsers: four slices, zero findings
+(`WEB-SONNET-BROWSER-AUDIT-01`, Info).
+
+The user asked why the audit was not using computer use in Chrome with
+Sonnet-5. Testing rather than restating the docs: `request_access` for Chrome
+answers that "browser applications can only ever be granted in 'read' mode, so
+you cannot use them to interact with websites", and directs to the Claude in
+Chrome extension MCP, which is not connected in this session (no
+mcp**claude-in-chrome**\* tools exist). Computer use can therefore see the
+screen but not click. Playwright remains the only real browser control
+available here.
+
+What had genuinely been missed is that Sonnet-5 was only doing static code
+analysis while I drove the browser myself. Five Sonnet-5 agents were given
+their own Playwright harnesses and slices: composer, the settings modal rail
+section by section, projects and library, empty and error states reached by
+filtering lists, and keyboard-only navigation. Each was told to reproduce a
+finding twice before reporting it, and given the false-positive traps this
+audit has already hit (modal backdrops, offscreen skip links, its own 429s,
+portalled menus).
+
+Four completed with ZERO findings across /chat, /chat/projects, /chat/library,
+/tasks, /settings/general, /settings/connections and /settings/skills at both
+1440x900 and 375x812. That is worth weighing properly: their self-reported
+"controls exercised" numbers are low (7 to 20), but the transcripts show 1018
+tool calls and 878 bash invocations between them, so the slices were driven
+hard and the empty result is a real signal rather than a shallow pass. The
+fifth (projects and library) was still running.
+
+2026-08-30 Opacity on the accent text token put five live labels under AA
+(`WEB-ACCENT-TEXT-OPACITY-01`, Medium, Fixed): a peer session measuring the
+desktop side warned that #1c150b at /70 drops to 3.62:1 on the terracotta fill.
+Checking the same on my own sweep found five live-text uses of
+`--chat-accent-primary-text` carrying an opacity modifier. Composited against
+the light surface (#a8502f on #f9f8f6): /80 is 3.54:1, /70 is 2.98:1, /60 is
+2.49:1; dark (#da7756 on black) survives /80 at 4.52:1 but fails /70 at 3.66:1.
+None are disabled controls, so WCAG 1.4.3 applies in full, and the /60 case is
+an icon that fails even the 3:1 non-text bar. Sites: AgentControl.tsx:154 and
+ModelSelector.tsx:325, 326, 330, 845. Opacity removed from all five - the token
+is already the de-emphasised accent, so diluting it further repeats the
+`text-muted-foreground/60` mistake fixed earlier the same day.
+
+Correction to advice I gave that peer: I suggested consolidating
+`--chat-accent-primary-contrast` and `--chat-accent-on-primary` since they name
+the same role. That would have broken the three call sites that were already
+correct. The contrast token sits on TWO backgrounds and white is right on one
+of them - 4.63:1 on the secondary accent #21808d and 5.04:1 on the cool
+#0a6ed1, against 3.11:1 on the primary #da7756. The peer mapped all 14 sites to
+their actual background rather than swapping by name, and two of those were
+inline-style ternaries invisible to a class-string scan. The lesson is that a
+token's name is not evidence of the background it renders against.
+
+`chat.css` now also defines `--chat-accent-on-secondary` with the real value,
+with `--chat-accent-primary-contrast` aliasing it, so the honest name exists
+without touching desktop files while that session has work in flight.
+
+2026-08-30 Sonnet-5 browser agents: 2 confirmed, 1 of them wrong on review
+(`WEB-SONNET-BROWSER-AUDIT-02`, Medium).
+
+The five-agent browser run finished: 7 agents, 1077 tool calls, two findings
+that a second agent reproduced independently. One was real; the other was
+carefully measured and wrongly framed, which is worth recording because the
+verification step did not catch it.
+
+REAL — project detail menu had no keyboard contract. `app/chat/projects/[id]`
+renders the same role="menu" with the same items as ProjectCard on the list
+page, but was dismissed by a `mousedown` listener alone: no Escape, no focus
+into the menu, no arrows. The list page received `useMenuKeyboard`; the detail
+page was missed. Fixed with the same hook and verified live - focus lands on a
+menuitem, Escape closes and returns focus to "Project options". Guarded by a
+second case in `apps/web/e2e/qa-09-menu-keyboard.spec.ts`.
+
+NOT A DEFECT — the cookie banner "covering" the project card at 375px. Both the
+finder and its verifier measured correctly (card bbox inside the consent band,
+`locator.click()` timing out with the consent subtree intercepting) and
+concluded the earlier pointer-events fix was incomplete. It is not. Measuring
+what actually sits at that point: the intercepting element is
+`P.pr-10 text-sm text-muted-foreground` inside a card painted rgb(255,255,255)
+at opacity 1 - the banner's own visible body text. A cookie banner overlaying
+content until dismissed is normal, and its four buttons were separately
+verified reachable and clickable at 375px. The earlier fix addressed a
+different thing: the wrapper's TRANSPARENT padding swallowing clicks over the
+sidebar, which is invisible blocking. The distinguishing question is whether
+the intercepting element is painted or transparent, and neither agent asked it
+
+- "Playwright reports interception" is equally true of a legitimate banner.
+  Worth adding to the false-positive list given to future browser agents.
+
+2026-08-30 Data-truth lens: does the UI match the server it renders from
+(`WEB-DATA-TRUTH-01`, Info, no defects found).
+
+Every earlier pass asked whether the UI was accessible, errored, broke at a
+breakpoint, was reachable, or confirmed destructive actions. None asked whether
+what it displays is TRUE. Applying the lesson from the cookie-banner false
+positive - a second pass only adds information if it changes the question, not
+just the reasoner - this pass compared rendered state against the API payloads
+captured on the same page load.
+
+Both surfaces checked are accurate. `/api/projects` returned 1 project and the
+gallery rendered exactly 1 card with the matching name.
+`/api/chat/conversations` returned 50 and the sidebar's three group headers
+claim 26 + 10 + 14, which is exactly 50.
+
+Recorded because it nearly became a phantom finding. The first measurement read
+"group headers claim 50 conversations, only 26 rows rendered", which is the
+shape of a real data-correctness defect. It is collapsed groups: the two
+smaller groups carry aria-expanded="false" and render no rows, while their
+headers correctly report the group's size. The counts are right and the
+rendering is right. A follow-up attempt to expand them failed to find the
+headers by accessible name (the label and the count are separate elements), so
+the second measurement did not disprove the first either - only reading
+aria-expanded and the API total together settled it.
