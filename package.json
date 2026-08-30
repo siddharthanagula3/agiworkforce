@@ -220,8 +220,10 @@
     "pg": "^8.22.0",
     "playwright": "^1.58.2",
     "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
     "turbo": "2.10.5",
     "typescript": "5.9.3",
+    "vitest": "^4.1.8",
     "yaml": "^2.9.0"
   },
   "lint-staged": {
