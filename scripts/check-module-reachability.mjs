@@ -422,10 +422,9 @@ const tsTargets = [
       'apps/desktop/src/utils/permissions.ts',
       'apps/desktop/src/utils/subscriptionGate.ts',
       'apps/desktop/src/utils/tokenCount.ts',
-      'apps/desktop/src/lib/friendlyErrors.ts',
       'apps/desktop/src/utils/validation.ts',
     ],
-    maxKnownUnreachable: 235,
+    maxKnownUnreachable: 234,
   },
 ];
 
