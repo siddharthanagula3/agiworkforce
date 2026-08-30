@@ -389,3 +389,35 @@ describe('the two emitters of the --chat-* contract agree', () => {
     });
   }
 });
+
+const MODE_INVARIANT = /(^--(z|neutral)-)|(radius|shadow|font|dur|ease|spacing|blur|width|height)/;
+
+describe('theme completeness', () => {
+  const declarations = (block: string): Map<string, string> =>
+    new Map(
+      [...block.matchAll(/^\s*(--[a-zA-Z0-9-]+)\s*:\s*([^;]+);/gm)].map((m) => [
+        m[1] as string,
+        (m[2] as string).trim(),
+      ]),
+    );
+
+  const resolvesThroughAnotherToken = (value: string): boolean => value.includes('var(--');
+
+  for (const [name, css] of [
+    ['globals.css', globalsCss],
+    ['chat.css', chatCss],
+  ] as const) {
+    const { light, dark } = baseThemeBlocks(css);
+    const lightDecls = declarations(light);
+    const darkDecls = declarations(dark);
+
+    it(`${name} defines no theme-dependent literal in only one mode`, () => {
+      const singleModeLiterals = [...lightDecls]
+        .filter(([token, value]) => !darkDecls.has(token) && !resolvesThroughAnotherToken(value))
+        .filter(([token]) => !MODE_INVARIANT.test(token))
+        .map(([token, value]) => `${token}: ${value}`);
+
+      expect(singleModeLiterals).toEqual([]);
+    });
+  }
+});

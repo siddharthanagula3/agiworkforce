@@ -151,6 +151,14 @@ jobs:
         # whose own _description already promised "New violations will fail CI".
         run: pnpm check:no-hex-mobile
 
+      - name: Web UI invariants — no new colour, type or legibility regressions
+        # Ratchet guard over apps/web and packages/ui TS/TSX during the frontend
+        # redesign: raw palette utilities, arbitrary colour literals, opacity-diluted
+        # foreground tokens, type below the 12px floor, and hover-only affordances.
+        # Pre-existing violations are grandfathered in
+        # scripts/.web-ui-invariants-baseline.json and that list only shrinks.
+        run: pnpm check:web-ui-invariants
+
       - name: Extension AP-10 — no direct cloud-IPC in v1
         # R27-PARITY / v1-local-only: cloud feature paths must gate through InviteCodeModal.
         run: pnpm --filter @agiworkforce/extension check:no-cloud-ipc
