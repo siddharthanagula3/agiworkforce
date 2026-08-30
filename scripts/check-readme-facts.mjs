@@ -13,6 +13,36 @@ const SURFACE_MANIFESTS = [
 
 const CLI_MANIFEST = 'apps/cli/Cargo.toml';
 
+const FRAMEWORK_CLAIMS = [
+  ['Expo', 'apps/mobile/package.json', 'expo', /Expo (\d+)/, 1],
+  ['React Native', 'apps/mobile/package.json', 'react-native', /React Native (\d+\.\d+)/, 2],
+  ['Next.js', 'apps/web/package.json', 'next', /Next\.js (\d+)/, 1],
+  ['Tauri', 'apps/desktop/package.json', '@tauri-apps/api', /Tauri (\d+)/, 1],
+  ['Express', 'services/signaling-server/package.json', 'express', /Express (\d+)/, 1],
+];
+
+function declaredRange(root, manifest, name) {
+  const absolute = path.join(root, manifest);
+  if (!fs.existsSync(absolute)) return null;
+  const pkg = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+  return { ...pkg.dependencies, ...pkg.devDependencies }[name] ?? null;
+}
+
+function versionPrefix(range, segments) {
+  const digits = String(range).match(/(\d+(?:\.\d+)*)/);
+  if (!digits) return null;
+  return digits[1].split('.').slice(0, segments).join('.');
+}
+
+export function collectFrameworkFacts(root) {
+  const facts = {};
+  for (const [label, manifest, name, , segments] of FRAMEWORK_CLAIMS) {
+    const range = declaredRange(root, manifest, name);
+    if (range) facts[label] = versionPrefix(range, segments);
+  }
+  return facts;
+}
+
 const PROVIDER_LABELS = {
   managed_cloud: 'AGI managed cloud',
   openai: 'OpenAI',
@@ -85,6 +115,7 @@ export function collectFacts(root) {
     ? JSON.parse(fs.readFileSync(rootManifestPath, 'utf8'))
     : {};
   return {
+    frameworks: collectFrameworkFacts(root),
     repositoryUrl: rootManifest.repository?.url ?? null,
     modelCount: Object.keys(catalog.models ?? {}).length,
     providerCount: providerKeys.length,
@@ -129,6 +160,21 @@ export function collectReadmeFactErrors(readme, facts) {
     ],
     [claim(readme, /(\d+) Rust crates/, 'Rust crate count'), facts.crateCount],
   ];
+
+  for (const [label, , , pattern] of FRAMEWORK_CLAIMS) {
+    const expected = facts.frameworks?.[label];
+    if (!expected) continue;
+    const match = readme.match(pattern);
+    if (!match) {
+      errors.push(`README.md no longer states its ${label} version; the guard cannot verify it.`);
+      continue;
+    }
+    if (match[1] !== expected) {
+      errors.push(
+        `README.md says ${label} ${match[1]}, but the manifest declares ${expected}.`,
+      );
+    }
+  }
 
   for (const [found, expected] of numeric) {
     if (found.missing) {
