@@ -1,4 +1,4 @@
-name: Test Priority Levels 1-2 (Blocking when populated)
+name: Priority Level 1 tests
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'crates/**'
-      - '.github/workflows/test-l1-l2.yml'
+      - '.github/workflows/test-l1.yml'
   push:
     branches:
       - main
@@ -14,10 +14,10 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'crates/**'
-      - '.github/workflows/test-l1-l2.yml'
+      - '.github/workflows/test-l1.yml'
 
 concurrency:
-  group: tests-l1-l2-${{ github.ref }}
+  group: tests-l1-${{ github.ref }}
   cancel-in-progress: true
 
 # Least privilege. Without an explicit block GITHUB_TOKEN inherits the
@@ -28,7 +28,7 @@ permissions:
   contents: read
 
 jobs:
-  test-l1-l2:
+  test-l1:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -53,8 +53,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Priority Level 1-2 Tests
-        run: pnpm test:l1:l2
+      - name: Run Priority Level 1 tests
+        run: pnpm test:l1
         continue-on-error: false
 
       - name: Generate Coverage Report
@@ -71,7 +71,7 @@ jobs:
 
       - name: Verify Boundaries
         if: always()
-        run: pnpm check:boundaries || echo "Boundary check warning"
+        run: pnpm check:boundaries
 
       - name: Verify LLM Failures
         if: always()
