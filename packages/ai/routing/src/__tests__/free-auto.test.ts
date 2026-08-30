@@ -7,11 +7,19 @@
  * ineligible.
  */
 import { describe, expect, it } from 'vitest';
+import { getModelsForProvider } from '@agiworkforce/types';
 
 import { resolveFreeAutoRoute, type FreeAutoCandidate } from '../free-auto';
 import type { FreeEligibility, QuotaPool, RoutingRuntimeState } from '../runtime-state';
 
 const NOW = 1_800_000_000_000;
+const OPENROUTER_AUTO_MODEL_ID = getModelsForProvider('open_router').find((model) =>
+  model.apiModelId?.endsWith('/auto'),
+)?.id;
+
+if (!OPENROUTER_AUTO_MODEL_ID) {
+  throw new Error('OpenRouter automatic router is missing from the model catalog.');
+}
 
 function candidate(routeId: string, provider = 'google'): FreeAutoCandidate {
   return { routeId, modelKey: `${routeId}-model`, provider, harnessId: `${provider}/chat` };
@@ -71,11 +79,11 @@ describe('strict zero-cost gate', () => {
   });
 
   it('never infers eligibility from a zero price — a paid meta-router priced at 0 stays out', () => {
-    // `openrouter-auto` is priced 0 in the catalog because its price is unknowable
-    // at compile time, not because it is free. With no eligibility record it must
+    // The automatic router is priced 0 in the catalog because its price is
+    // unknowable at compile time, not because it is free. With no eligibility record it must
     // be refused no matter what the catalog says.
     const decision = resolveFreeAutoRoute({
-      candidates: [candidate('open_router/openrouter-auto', 'open_router')],
+      candidates: [candidate(OPENROUTER_AUTO_MODEL_ID, 'open_router')],
       state: state({ quotaPools: { p: pool('p') } }),
       nowMs: NOW,
     });
