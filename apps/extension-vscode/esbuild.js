@@ -39,14 +39,22 @@ const webviewOptions = {
   logLevel: 'info',
 };
 
+const CODICON_ASSETS = ['codicon.css', 'codicon.ttf'];
+
 function copyCodiconAssets() {
   const codiconSrc = path.join(__dirname, 'node_modules', '@vscode', 'codicons', 'dist');
   const codiconDst = path.join(__dirname, 'out', 'codicons');
-  if (!fs.existsSync(codiconSrc)) return;
   fs.mkdirSync(codiconDst, { recursive: true });
-  for (const file of ['codicon.css', 'codicon.ttf']) {
+  for (const file of CODICON_ASSETS) {
     const src = path.join(codiconSrc, file);
-    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(codiconDst, file));
+    if (!fs.existsSync(src)) {
+      throw new Error(
+        `[esbuild] missing ${path.relative(__dirname, src)}. The sidebar webview links ` +
+          `out/codicons/codicon.css, so a build without it ships tofu glyphs. ` +
+          `Run pnpm install to restore @vscode/codicons.`,
+      );
+    }
+    fs.copyFileSync(src, path.join(codiconDst, file));
   }
 }
 
