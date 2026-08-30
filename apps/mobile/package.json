@@ -135,6 +135,7 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^24.13.3",
     "@types/react": "~19.2.14",
+    "babel-preset-expo": "~57.0.6",
     "detox": "20.51.4",
     "detox-cli": "20.51.4",
     "expect": "29.7.0",
