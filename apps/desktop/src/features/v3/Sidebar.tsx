@@ -920,7 +920,7 @@ export function Sidebar({
                   : 'var(--chat-surface-elevated)',
                 border: isSignedIn ? 'none' : '1px solid var(--chat-border)',
                 color: isSignedIn
-                  ? 'var(--chat-accent-primary-contrast)'
+                  ? 'var(--chat-accent-on-primary)'
                   : 'var(--chat-text-secondary)',
                 display: 'flex',
                 alignItems: 'center',
