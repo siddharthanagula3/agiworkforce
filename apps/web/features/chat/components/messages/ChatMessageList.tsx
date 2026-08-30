@@ -1163,7 +1163,7 @@ const ChatMessageListComponent = ({
       {showStreamErrorNotice && lastMessage && (
         <div className="px-4 pt-1 md:px-12 lg:px-20">
           <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-muted-foreground">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-danger" aria-hidden="true" />
             <span>
               {getStreamErrorMessage(lastMessage)
                 ? `Response may be incomplete: ${getStreamErrorMessage(lastMessage)}`
@@ -1219,7 +1219,7 @@ const ChatMessageListComponent = ({
       {showIncompleteTurnNotice && lastMessage && (
         <div className="px-4 pt-1 md:px-12 lg:px-20">
           <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-muted-foreground">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-danger" aria-hidden="true" />
             <span>This turn didn&apos;t complete. No response was received.</span>
             <button
               type="button"

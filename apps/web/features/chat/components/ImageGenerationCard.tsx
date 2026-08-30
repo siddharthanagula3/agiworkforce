@@ -303,7 +303,11 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
               className="h-40 w-full object-cover"
             />
           ) : (
-            <img src={imageUrl} alt="Generated image preview" className="h-40 w-full object-cover" />
+            <img
+              src={imageUrl}
+              alt="Generated image preview"
+              className="h-40 w-full object-cover"
+            />
           )}
         </div>
 
@@ -653,7 +657,7 @@ function EditPanel({
               }}
               placeholder="Describe a change to generate a new version..."
               disabled={generating || retryBlocked}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none disabled:opacity-50"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-50"
             />
             <button
               type="button"
@@ -663,7 +667,7 @@ function EditPanel({
                 'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
                 editText.trim() && !generating && !retryBlocked
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'text-muted-foreground/40 cursor-not-allowed',
+                  : 'text-muted-foreground cursor-not-allowed',
               )}
               aria-label="Generate a new version with this change"
             >

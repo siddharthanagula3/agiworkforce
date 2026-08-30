@@ -131,7 +131,10 @@ export function DeletedChatsSection() {
       </div>
 
       {error ? (
-        <div role="alert" style={{ color: 'var(--chat-accent-primary, #c8892a)', fontSize: 13 }}>
+        <div
+          role="alert"
+          style={{ color: 'var(--chat-accent-primary-text, #8b5f1d)', fontSize: 13 }}
+        >
           {error}{' '}
           <button type="button" onClick={() => void loadFirstPage()} style={actionButtonStyle}>
             Retry
@@ -157,6 +160,15 @@ export function DeletedChatsSection() {
           <p style={{ margin: 0, padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
             Loading deleted chats…
           </p>
+        ) : error ? (
+          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+            <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
+              Deleted chats could not be loaded
+            </div>
+            <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
+              This is not the same as having no deleted chats. Retry above to load them.
+            </p>
+          </div>
         ) : conversations.length === 0 ? (
           <div style={{ padding: '32px 20px', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>

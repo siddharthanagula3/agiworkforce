@@ -68,7 +68,7 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
         <Telescope className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-foreground">{label}</span>
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground/70">
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
             {formatCreatedAt(report.createdAt)}
             {` · ${report.sourcesConsulted} ${report.sourcesConsulted === 1 ? 'source' : 'sources'}`}
             {report.model ? ` · ${report.model}` : ''}
@@ -147,7 +147,7 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
   }
   if (state === 'error') {
     return (
-      <p role="alert" className="px-4 py-6 text-center text-xs text-destructive">
+      <p role="alert" className="px-4 py-6 text-center text-xs text-danger">
         {error}
       </p>
     );
@@ -156,7 +156,7 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/50">
-          <Telescope className="h-6 w-6 text-muted-foreground/60" />
+          <Telescope className="h-6 w-6 text-muted-foreground" />
         </div>
         <div>
           <p className="text-sm font-medium text-foreground">No reports yet</p>

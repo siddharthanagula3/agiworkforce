@@ -71,7 +71,7 @@ export function WorkspaceIdentityPanels() {
   return (
     <div className="flex flex-col gap-6">
       <SSOPanel organizationId={organization.id} isOwner={isOwner} />
-      <DirectorySyncAdminPage />
+      <DirectorySyncAdminPage organizationId={organization.id} />
       <div style={noticeStyle}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           Not yet available

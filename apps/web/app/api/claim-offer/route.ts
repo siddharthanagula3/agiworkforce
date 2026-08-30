@@ -63,7 +63,11 @@ async function handleClaimOffer(request: NextRequest) {
       throw createError.validation('Invalid invite code');
     }
 
-    type ClaimRpcRow = {
+    // claim_beta_invite is `returns json`, so `select *` yields ONE column named
+    // after the function holding the whole object. Reading the row as the result
+    // made every field undefined, so a valid redemption reported failure after
+    // the function had already consumed the invite and written the subscription.
+    type ClaimResult = {
       success: boolean;
       error: string | null;
       subscription_id: string | null;
@@ -71,19 +75,18 @@ async function handleClaimOffer(request: NextRequest) {
       trial_days: number | null;
       discount_percent: number | null;
     };
-    let claimRpcRows: ClaimRpcRow[];
+    let claimRpcRows: { result: ClaimResult | null }[];
     try {
-      claimRpcRows = await db.query<ClaimRpcRow>('select * from claim_beta_invite($1, $2, $3)', [
-        userId,
-        invite.id,
-        invite.plan_tier,
-      ]);
+      claimRpcRows = await db.query<{ result: ClaimResult | null }>(
+        'select claim_beta_invite($1, $2, $3) as result',
+        [userId, invite.id, invite.plan_tier],
+      );
     } catch (claimError) {
       logger.error({ userId: userId, error: claimError }, 'Error calling claim_beta_invite RPC');
       throw createError.internal('Failed to claim invite code');
     }
 
-    const result = claimRpcRows[0] ?? null;
+    const result = claimRpcRows[0]?.result ?? null;
 
     if (!result?.success) {
       const msg = result?.error || 'Failed to claim invite code';

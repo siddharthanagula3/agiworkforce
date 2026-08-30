@@ -27,6 +27,30 @@ const EXECUTION_TOOLS = new Set<string>([
 
 const MAX_READ_FILE_BYTES = 200_000;
 
+const PATH_TOOLS = new Set<string>([
+  WRITE_FILE_TOOL,
+  CREATE_FOLDER_TOOL,
+  READ_FILE_TOOL,
+  LIST_FILES_TOOL,
+  EDIT_FILE_TOOL,
+]);
+
+/**
+ * Confinement runs here rather than in each caller: every path-taking execution
+ * tool reaches the sandbox through routeExecutionTool, and a caller that forgot
+ * to normalize was how edit_file, read_file and list_files ended up able to
+ * address anything outside the workspace.
+ */
+export function confineWorkspacePath(raw: string, workspaceRoot?: string): string | null {
+  const path = raw.trim();
+  if (!path || path.includes('\0')) return null;
+  if (path.startsWith('/') || path.startsWith('~')) return null;
+  const segments = path.split('/');
+  if (segments.some((segment) => segment === '..')) return null;
+  if (!workspaceRoot) return path;
+  return `${workspaceRoot.replace(/\/+$/, '')}/${path}`;
+}
+
 export function isExecutionTool(name: string): boolean {
   return EXECUTION_TOOLS.has(name);
 }
@@ -242,7 +266,8 @@ export function capOutput(output: string): string {
 export async function routeExecutionTool(
   executor: E2BExecutor | null,
   name: string,
-  args: Record<string, unknown>,
+  rawArgs: Record<string, unknown>,
+  workspaceRoot?: string,
 ): Promise<ExecutionResult> {
   if (!executor) {
     return {
@@ -253,6 +278,20 @@ export async function routeExecutionTool(
   }
   if (!isExecutionTool(name)) {
     return { ok: false, output: '', error: `Not an execution tool: ${name}` };
+  }
+  let args = rawArgs;
+  if (PATH_TOOLS.has(name)) {
+    const raw = typeof rawArgs['path'] === 'string' ? rawArgs['path'] : '';
+    const requested = raw || (name === LIST_FILES_TOOL ? '.' : '');
+    const confined = confineWorkspacePath(requested, workspaceRoot);
+    if (!confined) {
+      return {
+        ok: false,
+        output: '',
+        error: `Refused "${raw}": paths must be workspace-relative and may not traverse upward.`,
+      };
+    }
+    args = { ...rawArgs, path: confined };
   }
   try {
     let result: ExecutionResult;
@@ -278,7 +317,7 @@ export async function routeExecutionTool(
         if (!executor.listFiles) {
           return { ok: false, output: '', error: 'Listing files is unavailable in this sandbox.' };
         }
-        const dir = typeof args['path'] === 'string' && args['path'] ? args['path'] : '.';
+        const dir = typeof args['path'] === 'string' ? args['path'] : '.';
         const entries = await executor.listFiles(dir);
         if (!entries) {
           return { ok: false, output: '', error: `No such folder in the workspace: ${dir}` };

@@ -348,6 +348,24 @@ export async function unpublishArtifactRecord(
   return rows.length > 0;
 }
 
+export async function unpublishArtifactsForConversations(
+  db: DatabaseAdapter,
+  input: { userId: string; conversationIds: readonly string[] },
+): Promise<string[]> {
+  const userId = input.userId?.trim();
+  const conversationIds = [...new Set(input.conversationIds.filter(Boolean))];
+  if (!userId || conversationIds.length === 0) return [];
+
+  const rows = await db.query<{ token: string }>(
+    `delete from public.published_artifacts
+      where user_id = $1
+        and conversation_id = any($2::uuid[])
+      returning token`,
+    [userId, conversationIds],
+  );
+  return rows.map((row) => row.token);
+}
+
 export async function listPublishedArtifacts(
   db: DatabaseAdapter,
   input: { userId: string; limit?: number },

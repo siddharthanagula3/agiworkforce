@@ -421,7 +421,7 @@ export function ArtifactsPanel() {
                 hidden. Without this the artifacts simply vanish on reload. */}
             {persistenceDegraded && (
               <span
-                className="shrink-0 whitespace-nowrap text-[10px] text-destructive"
+                className="shrink-0 whitespace-nowrap text-[10px] text-danger"
                 title="Browser storage is full, so artifacts are not being saved. They will disappear when this tab is closed."
               >
                 Not saved
@@ -431,7 +431,7 @@ export function ArtifactsPanel() {
               <span
                 className={cn(
                   'shrink-0 whitespace-nowrap text-[10px]',
-                  cloudSyncStatus === 'error' ? 'text-destructive' : 'text-muted-foreground',
+                  cloudSyncStatus === 'error' ? 'text-danger' : 'text-muted-foreground',
                 )}
                 title={cloudSyncStatus === 'error' ? (cloudSyncError ?? undefined) : undefined}
               >
@@ -452,8 +452,7 @@ export function ArtifactsPanel() {
                   toast.promise(downloadAllArtifacts(artifacts), {
                     loading: 'Preparing artifact download…',
                     success: 'Artifact download ready',
-                    error: (error) =>
-                      toUserMessage(error, 'Could not download artifacts'),
+                    error: (error) => toUserMessage(error, 'Could not download artifacts'),
                   });
                 }}
                 className="h-7 px-2 text-xs"

@@ -64,7 +64,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
             onClick={() => handleFeedback('up')}
             className={cn(
               'h-8 w-8 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
-              feedback === 'up' && 'text-[var(--chat-accent-primary)]',
+              feedback === 'up' && 'text-[var(--chat-accent-primary-text)]',
             )}
           >
             <ThumbsUp size={14} />

@@ -12,6 +12,7 @@ import {
   resolveTurnCodeExecutionTools,
   routeExecutionTool,
   providerRoutesToE2B,
+  confineWorkspacePath,
 } from '../execution-tools';
 import { MAX_EXECUTION_OUTPUT_BYTES, type E2BExecutor } from '../types';
 
@@ -253,7 +254,6 @@ describe('resolveTurnCodeExecutionTools — reports a dropped "Run code" turn', 
   });
 });
 
-
 describe('workspace inspection and editing', () => {
   function fsExecutor(files: Record<string, string>) {
     const writeFile = vi.fn(async ({ path, content }: { path: string; content: string }) => {
@@ -343,5 +343,73 @@ describe('workspace inspection and editing', () => {
     const res = await routeExecutionTool(mockExecutor(), READ_FILE_TOOL, { path: 'a.ts' });
     expect(res.ok).toBe(false);
     expect(res.error).toContain('unavailable');
+  });
+});
+
+describe('workspace confinement', () => {
+  const ESCAPES = [
+    '/etc/passwd',
+    '~/.ssh/id_rsa',
+    '../../etc/shadow',
+    'sub/../../../root/.bashrc',
+    '..',
+    '   ',
+    '',
+    'ok\u0000/../../etc/passwd',
+  ];
+
+  const PATH_TOOLS = [
+    WRITE_FILE_TOOL,
+    CREATE_FOLDER_TOOL,
+    READ_FILE_TOOL,
+    LIST_FILES_TOOL,
+    EDIT_FILE_TOOL,
+  ];
+
+  it.each(PATH_TOOLS)('%s refuses every path that leaves the workspace', async (tool) => {
+    // An absent path on list_files means the workspace root, which is allowed.
+    const cases = tool === LIST_FILES_TOOL ? ESCAPES.filter((path) => path !== '') : ESCAPES;
+    for (const path of cases) {
+      const executor = mockExecutor({
+        readFileBytes: vi.fn(async () => new TextEncoder().encode('x')),
+        listFiles: vi.fn(async () => []),
+      });
+      const result = await routeExecutionTool(executor, tool, {
+        path,
+        content: 'c',
+        old_text: 'x',
+        new_text: 'y',
+      });
+      expect(result.ok, `${tool} accepted ${JSON.stringify(path)}`).toBe(false);
+      expect(result.error).toContain('workspace-relative');
+      expect(executor.writeFile).not.toHaveBeenCalled();
+      expect(executor.createFolder).not.toHaveBeenCalled();
+      expect(executor.readFileBytes).not.toHaveBeenCalled();
+      expect(executor.listFiles).not.toHaveBeenCalled();
+    }
+  });
+
+  it('prefixes an accepted relative path with the workspace root when one is given', async () => {
+    const executor = mockExecutor();
+    await routeExecutionTool(executor, WRITE_FILE_TOOL, { path: 'src/a.ts', content: 'c' }, '/ws/');
+    expect(executor.writeFile).toHaveBeenCalledWith({ path: '/ws/src/a.ts', content: 'c' });
+  });
+
+  it('leaves a relative path alone when no workspace root is given', async () => {
+    const executor = mockExecutor();
+    await routeExecutionTool(executor, WRITE_FILE_TOOL, { path: 'src/a.ts', content: 'c' });
+    expect(executor.writeFile).toHaveBeenCalledWith({ path: 'src/a.ts', content: 'c' });
+  });
+
+  it('defaults a list_files call with no path to the workspace root itself', async () => {
+    const executor = mockExecutor({ listFiles: vi.fn(async () => []) });
+    await routeExecutionTool(executor, LIST_FILES_TOOL, {}, '/ws');
+    expect(executor.listFiles).toHaveBeenCalledWith('/ws/.');
+  });
+
+  it('never lets a workspace root be escaped by the path it is joined to', () => {
+    expect(confineWorkspacePath('../escape', '/ws')).toBeNull();
+    expect(confineWorkspacePath('/abs', '/ws')).toBeNull();
+    expect(confineWorkspacePath('nested/ok.txt', '/ws')).toBe('/ws/nested/ok.txt');
   });
 });

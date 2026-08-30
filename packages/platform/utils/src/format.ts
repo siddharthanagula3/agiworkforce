@@ -21,6 +21,13 @@
  * formatDate('2026-01-15', { dateStyle: 'short' }); // "1/15/26"
  * ```
  */
+/**
+ * These formatters pass `undefined` as the locale so Intl uses the viewer's
+ * own locale. They previously pinned 'en-US', which meant a non-US user saw
+ * US date order and separators — and the consistency work that wanted every
+ * ad-hoc `toLocaleString()` call routed through here would have spread that
+ * to every screen rather than fixing it.
+ */
 export function formatDate(
   date: string | number | Date,
   options: Intl.DateTimeFormatOptions = {
@@ -28,10 +35,11 @@ export function formatDate(
     day: 'numeric',
     year: 'numeric',
   },
+  locale?: string,
 ): string {
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('en-US', options).format(d);
+  return new Intl.DateTimeFormat(locale, options).format(d);
 }
 
 /**
@@ -45,10 +53,10 @@ export function formatDate(
  * formatDateTime(new Date()); // "January 15, 2026, 2:30 PM"
  * ```
  */
-export function formatDateTime(date: string | number | Date): string {
+export function formatDateTime(date: string | number | Date, locale?: string): string {
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat(locale, {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -122,8 +130,8 @@ function formatRelativeUnit(
  * formatCurrency(1234.56, 'EUR'); // "EUR 1,234.56"
  * ```
  */
-export function formatCurrency(amount: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
+export function formatCurrency(amount: number, currency = 'USD', locale?: string): string {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
   }).format(amount);
@@ -142,8 +150,12 @@ export function formatCurrency(amount: number, currency = 'USD'): string {
  * formatNumber(0.123, { style: 'percent' }); // "12%"
  * ```
  */
-export function formatNumber(num: number, options?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat('en-US', options).format(num);
+export function formatNumber(
+  num: number,
+  options?: Intl.NumberFormatOptions,
+  locale?: string,
+): string {
+  return new Intl.NumberFormat(locale, options).format(num);
 }
 
 /**

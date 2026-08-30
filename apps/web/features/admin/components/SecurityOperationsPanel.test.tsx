@@ -8,6 +8,16 @@ const mocks = vi.hoisted(() => ({
   performAction: vi.fn(),
 }));
 
+const confirmStub = vi.hoisted(() => ({
+  confirm: vi.fn(async (_options: { title: string; description: string }) => true),
+  dialog: null as React.ReactNode,
+}));
+
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  useConfirm: () => confirmStub,
+}));
+
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => ({ getToken: mocks.getToken }),
 }));
@@ -59,6 +69,8 @@ const OPERATIONS = {
 
 describe('SecurityOperationsPanel', () => {
   beforeEach(() => {
+    confirmStub.confirm.mockReset();
+    confirmStub.confirm.mockResolvedValue(true);
     vi.clearAllMocks();
     mocks.getToken.mockResolvedValue('session-token');
     mocks.fetchOperations.mockResolvedValue(OPERATIONS);
@@ -100,5 +112,40 @@ describe('SecurityOperationsPanel', () => {
     });
     expect(await screen.findByText('User user-target has been suspended')).toBeInTheDocument();
     expect(mocks.fetchOperations).toHaveBeenCalledTimes(2);
+  });
+
+  it('names the account and the consequence before locking anyone out', async () => {
+    render(<SecurityOperationsPanel />);
+    await screen.findByText('authorization_failed');
+
+    fireEvent.change(screen.getByLabelText('Target user ID'), {
+      target: { value: 'user-target' },
+    });
+    fireEvent.change(screen.getByLabelText('Audit reason'), {
+      target: { value: 'Confirmed abuse' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Suspend account' }));
+
+    await waitFor(() => expect(confirmStub.confirm).toHaveBeenCalled());
+    const options = confirmStub.confirm.mock.lastCall?.[0];
+    expect(options?.title).toContain('user-target');
+    expect(options?.description).toMatch(/signed out everywhere/i);
+  });
+
+  it('does not suspend anyone when the operator backs out of the confirmation', async () => {
+    confirmStub.confirm.mockResolvedValueOnce(false);
+    render(<SecurityOperationsPanel />);
+    await screen.findByText('authorization_failed');
+
+    fireEvent.change(screen.getByLabelText('Target user ID'), {
+      target: { value: 'user-target' },
+    });
+    fireEvent.change(screen.getByLabelText('Audit reason'), {
+      target: { value: 'Confirmed abuse' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Suspend account' }));
+
+    await waitFor(() => expect(confirmStub.confirm).toHaveBeenCalled());
+    expect(mocks.performAction).not.toHaveBeenCalled();
   });
 });

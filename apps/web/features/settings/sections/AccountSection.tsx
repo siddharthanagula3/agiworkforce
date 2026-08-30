@@ -13,6 +13,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -73,6 +74,7 @@ export function AccountSection() {
   // structurally null (its only writer, `_setUser`, had zero call sites); that
   // is fixed and `_setUser` is gone, but this section wants the auth store's
   // `logout()` anyway, so it keeps reading the user from the same store.
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { signOut: clerkSignOut } = useClerk();
@@ -225,6 +227,7 @@ export function AccountSection() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+      {confirmDialog}
       <div>
         <h1
           style={{
@@ -283,7 +286,15 @@ export function AccountSection() {
           <button
             type="button"
             aria-label="Log out of all devices"
-            onClick={() => void handleLogOutAll()}
+            onClick={() =>
+              confirm({
+                title: 'Log out of all devices?',
+                description:
+                  'Every signed-in session on every device ends immediately, including this one. You will need to sign in again.',
+                confirmLabel: 'Log out everywhere',
+                onConfirm: () => handleLogOutAll(),
+              })
+            }
             disabled={loggingOut}
             style={{
               flexShrink: 0,
@@ -307,7 +318,11 @@ export function AccountSection() {
         </div>
         {logoutError && (
           <div
-            style={{ padding: '0 20px 16px', fontSize: 12, color: 'var(--settings-destructive)' }}
+            style={{
+              padding: '0 20px 16px',
+              fontSize: 12,
+              color: 'var(--settings-destructive-text)',
+            }}
           >
             {logoutError}
           </div>
@@ -331,7 +346,7 @@ export function AccountSection() {
             borderBottom: '1px solid var(--settings-destructive)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--settings-destructive)',
+            color: 'var(--settings-destructive-text)',
           }}
         >
           Danger Zone
@@ -417,7 +432,11 @@ export function AccountSection() {
               {deletionStatus.isError && (
                 <p
                   role="alert"
-                  style={{ fontSize: 11, color: 'var(--settings-destructive)', margin: '6px 0 0' }}
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--settings-destructive-text)',
+                    margin: '6px 0 0',
+                  }}
                 >
                   Could not check whether a deletion is already pending.{' '}
                   <button
@@ -548,7 +567,11 @@ export function AccountSection() {
           <div style={{ padding: '20px' }}>
             <p
               role="alert"
-              style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--settings-destructive)' }}
+              style={{
+                margin: '0 0 12px',
+                fontSize: 13,
+                color: 'var(--settings-destructive-text)',
+              }}
             >
               {sessionsError}
             </p>
@@ -637,7 +660,7 @@ export function AccountSection() {
                             fontWeight: 700,
                             letterSpacing: '0.05em',
                             textTransform: 'uppercase',
-                            color: 'var(--teal, #21808d)',
+                            color: 'var(--teal-text, #1c6d78)',
                             background: 'rgba(33,128,141,0.12)',
                             borderRadius: 3,
                             padding: '1px 5px',
@@ -665,7 +688,18 @@ export function AccountSection() {
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       <button
                         type="button"
-                        onClick={() => void handleRevokeSession(row)}
+                        onClick={() =>
+                          confirm({
+                            title: row.isCurrent
+                              ? 'Log out this session?'
+                              : `Revoke the ${row.device} session?`,
+                            description: row.isCurrent
+                              ? 'You will be signed out on this device and returned to the sign-in page.'
+                              : 'That device is signed out immediately and has to sign in again to regain access.',
+                            confirmLabel: row.isCurrent ? 'Log out' : 'Revoke session',
+                            onConfirm: () => handleRevokeSession(row),
+                          })
+                        }
                         disabled={revokingSessionId !== null || loggingOut}
                         aria-label={
                           row.isCurrent ? 'Log out current session' : `Revoke ${row.device} session`
@@ -703,7 +737,7 @@ export function AccountSection() {
             style={{
               padding: '0 20px 12px',
               fontSize: 12,
-              color: 'var(--settings-destructive)',
+              color: 'var(--settings-destructive-text)',
               margin: 0,
             }}
           >
@@ -784,9 +818,7 @@ export function AccountSection() {
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
                 />
                 {deleteAccountMutation.error && (
-                  <p className="mt-2 text-xs text-destructive">
-                    {deleteAccountMutation.error.message}
-                  </p>
+                  <p className="mt-2 text-xs text-danger">{deleteAccountMutation.error.message}</p>
                 )}
               </div>
               <AlertDialogFooter>
@@ -825,7 +857,7 @@ export function AccountSection() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {cancelDeletionMutation.error && (
-            <p className="text-xs text-destructive">{cancelDeletionMutation.error.message}</p>
+            <p className="text-xs text-danger">{cancelDeletionMutation.error.message}</p>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={cancelDeletionMutation.isPending}>

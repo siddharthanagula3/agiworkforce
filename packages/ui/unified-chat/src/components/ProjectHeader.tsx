@@ -1,4 +1,3 @@
-
 import { Folder, KeyRound, Lock, Users } from 'lucide-react';
 import type { ProjectAccentColor, ProjectHeaderPresentation } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
@@ -10,7 +9,7 @@ export interface ProjectHeaderProps {
 }
 
 const ACCENT_BG: Record<ProjectAccentColor, string> = {
-  emerald: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300',
+  emerald: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
   sky: 'bg-sky-500/15 border-sky-500/30 text-sky-300',
   amber: 'bg-amber-500/15 border-amber-500/30 text-amber-300',
   rose: 'bg-rose-500/15 border-rose-500/30 text-rose-300',
@@ -19,7 +18,7 @@ const ACCENT_BG: Record<ProjectAccentColor, string> = {
 };
 
 const PROVIDER_CHIP: Record<string, string> = {
-  Local: 'border-emerald-500/40 text-emerald-300 bg-emerald-500/5',
+  Local: 'border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5',
   DirectByok: 'border-amber-500/40 text-amber-300 bg-amber-500/5',
   ManagedGateway: 'border-sky-500/40 text-sky-300 bg-sky-500/5',
   ManagedNative: 'border-sky-500/40 text-sky-300 bg-sky-500/5',
@@ -49,7 +48,7 @@ function PrivacyChip({ presentation }: { presentation: ProjectHeaderPresentation
       className={cn(
         'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
         presentation.staysLocal
-          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
           : 'border-zinc-500/40 bg-zinc-500/10 text-zinc-200',
       )}
     >

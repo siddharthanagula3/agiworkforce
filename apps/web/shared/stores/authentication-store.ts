@@ -375,6 +375,17 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         set({ isLoading: true });
 
+        // Before the session goes: the push subscription is bound to this
+        // browser, not to the tab, so leaving it registered keeps delivering the
+        // signed-out account's notifications to whoever uses this machine next.
+        // The DELETE needs the session cookie, so it has to run first.
+        try {
+          const { disableWebPush } = await import('@/features/notifications/lib/web-push-client');
+          await disableWebPush();
+        } catch (err) {
+          console.warn('[Auth] Web Push revocation failed, proceeding with cleanup:', err);
+        }
+
         try {
           const result = await authService.logout();
           if (result?.error) {

@@ -1,5 +1,7 @@
 'use client';
 
+import { useConfirmAction } from '@agiworkforce/ui';
+
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@shared/lib/get-auth-token';
@@ -61,6 +63,7 @@ const ENFORCEMENT_COPY: Record<Enforcement, string> = {
 };
 
 export function WorkspaceSpendLimit() {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const queryClient = useQueryClient();
   const { data, isPending, isError } = useQuery<SpendLimitResult | null, Error>({
     queryKey: KEY,
@@ -121,6 +124,7 @@ export function WorkspaceSpendLimit() {
 
   return (
     <section style={cardStyle} aria-labelledby="spend-limit-heading">
+      {confirmDialog}
       <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
         <h2
           id="spend-limit-heading"
@@ -147,9 +151,7 @@ export function WorkspaceSpendLimit() {
               style={{
                 width: `${Math.min(100, state.usedPct ?? 0)}%`,
                 height: '100%',
-                background: state.overCap
-                  ? 'var(--settings-destructive-foreground)'
-                  : 'var(--text-3)',
+                background: state.overCap ? 'var(--settings-destructive)' : 'var(--text-3)',
               }}
             />
           </div>
@@ -220,7 +222,7 @@ export function WorkspaceSpendLimit() {
           <div
             role="status"
             className="rounded-md border px-3 py-2 text-xs leading-relaxed"
-            style={{ borderColor: 'currentColor', color: 'var(--settings-destructive-foreground)' }}
+            style={{ borderColor: 'currentColor', color: 'var(--settings-destructive-text)' }}
           >
             Saving this starts refusing members&rsquo; managed turns once the cap is reached. Work
             already running is unaffected; new turns are declined until the cap is raised or the
@@ -247,7 +249,15 @@ export function WorkspaceSpendLimit() {
             <button
               type="button"
               disabled={!canManageLimit || remove.isPending}
-              onClick={() => remove.mutate()}
+              onClick={() =>
+                confirm({
+                  title: 'Remove the workspace spend limit?',
+                  description:
+                    'Spending is no longer capped. Members can run turns without the limit refusing them, and the workspace can exceed the budget you set.',
+                  confirmLabel: 'Remove limit',
+                  onConfirm: () => remove.mutate(),
+                })
+              }
               className="rounded-md border px-3 py-1.5 text-xs transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
             >
@@ -255,7 +265,7 @@ export function WorkspaceSpendLimit() {
             </button>
           ) : null}
           {save.isError || remove.isError ? (
-            <span className="text-xs" style={{ color: 'var(--settings-destructive-foreground)' }}>
+            <span className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
               {(save.error ?? remove.error)?.message}
             </span>
           ) : null}

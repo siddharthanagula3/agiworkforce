@@ -152,6 +152,31 @@ export async function deleteManagedConversation(id: string): Promise<void> {
   ManagedCloudDeleteConversationResponseSchema.parse(await response.json());
 }
 
+const ConversationHistoryStatsSchema = z.object({
+  historyStats: z.object({
+    conversationCount: z.number().int().nonnegative(),
+    messageCount: z.number().int().nonnegative(),
+  }),
+});
+
+export interface ConversationHistoryStats {
+  conversationCount: number;
+  messageCount: number;
+}
+
+export async function fetchConversationHistoryStats(
+  signal?: AbortSignal,
+): Promise<ConversationHistoryStats> {
+  const response = await fetch('/api/chat/conversations?includeHistoryStats=1&statsOnly=1', {
+    credentials: 'include',
+    signal,
+  });
+  if (!response.ok) {
+    throw await responseError(response, 'Failed to load chat history size');
+  }
+  return ConversationHistoryStatsSchema.parse(await response.json()).historyStats;
+}
+
 export async function applyBulkConversationAction(action: BulkConversationAction): Promise<number> {
   const response = await fetch('/api/chat/conversations/bulk', {
     method: 'POST',

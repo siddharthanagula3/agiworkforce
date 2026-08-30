@@ -220,9 +220,9 @@ function InlineSourceRow({ source, index }: { source: ResearchSource; index: num
       {/* Title: takes remaining space, truncated */}
       <span className="flex-1 truncate text-xs text-foreground">{source.title || displayHost}</span>
       {/* Domain: right-aligned, muted */}
-      <span className="shrink-0 text-[10px] text-muted-foreground/60 ml-2">{displayHost}</span>
+      <span className="shrink-0 text-[10px] text-muted-foreground ml-2">{displayHost}</span>
       <ExternalLink
-        className="h-2.5 w-2.5 shrink-0 text-muted-foreground/0 group-hover:text-muted-foreground/50"
+        className="h-2.5 w-2.5 shrink-0 text-muted-foreground/0 group-hover:text-muted-foreground"
         aria-hidden="true"
       />
     </a>

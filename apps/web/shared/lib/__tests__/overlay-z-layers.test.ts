@@ -3,8 +3,6 @@ import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { designTokens } from '../design-tokens';
-
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../..');
 const WEB_CSS = 'apps/web/app/globals.css';
 const DESKTOP_CSS = 'apps/desktop/src/styles/globals.css';
@@ -63,8 +61,15 @@ const desktop = declaredLayers(DESKTOP_CSS);
 const references = layerReferences();
 
 describe('overlay stacking contract', () => {
-  it('keeps the z-index scale out of the TypeScript tokens', () => {
-    expect(designTokens).not.toHaveProperty('zIndex');
+  it('keeps the z-index scale out of TypeScript, so CSS stays its only owner', () => {
+    const declarations = sourceFiles('apps/web')
+      .concat(sourceFiles('packages/ui/ui/src'))
+      .filter((file) => /\bzIndex\s*:/.test(readFileSync(join(REPO_ROOT, file), 'utf8')))
+      .filter(
+        (file) =>
+          !/zIndex\s*:\s*['"`]?var\(\s*--z-/.test(readFileSync(join(REPO_ROOT, file), 'utf8')),
+      );
+    expect(declarations, 'z-index values must come from a --z-* custom property').toEqual([]);
   });
 
   it('declares every layer web renders and nothing speculative', () => {

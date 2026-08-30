@@ -1,4 +1,3 @@
-
 import type { HandoffTarget, LocalToByokHandoffPreview } from '@agiworkforce/utils';
 import type { HandoffContextItem } from '@agiworkforce/types';
 import { formatPrivacyModeLabel, formatProviderModeLabel } from '@agiworkforce/types';
@@ -85,7 +84,10 @@ export function LocalByokHandoffDialog({
         <div className="grid max-h-[calc(100vh-2rem)] grid-rows-[auto,1fr,auto] overflow-hidden">
           <DialogHeader className="border-b border-border/60 px-6 py-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-300">
+              <Badge
+                variant="outline"
+                className="gap-1 border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+              >
                 <ShieldCheck className="h-3 w-3" />
                 {localLabel}
               </Badge>
@@ -172,7 +174,7 @@ export function LocalByokHandoffDialog({
                       'mt-2 text-lg font-semibold',
                       findings.length > 0 || unscannedContextCount > 0
                         ? 'text-amber-300'
-                        : 'text-emerald-300',
+                        : 'text-emerald-700 dark:text-emerald-300',
                     )}
                   >
                     {findings.length}
@@ -194,7 +196,7 @@ export function LocalByokHandoffDialog({
               </div>
 
               {error && (
-                <div className="mt-3 flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="mt-3 flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-danger">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -255,7 +257,9 @@ export function LocalByokHandoffDialog({
                     <span
                       className={cn(
                         'inline-flex items-center gap-1 text-xs',
-                        unscannedContextCount > 0 ? 'text-amber-200' : 'text-emerald-300',
+                        unscannedContextCount > 0
+                          ? 'text-amber-200'
+                          : 'text-emerald-700 dark:text-emerald-300',
                       )}
                     >
                       {unscannedContextCount > 0 ? (

@@ -119,7 +119,7 @@ export function ArchivedChatsSection() {
     const label = conversation.title ? `“${conversation.title}”` : 'this archived chat';
     const confirmed = await confirmDestructive({
       title: 'Delete archived chat?',
-      description: `Permanently delete ${label} and every message in it. This cannot be undone.`,
+      description: `${label.charAt(0).toUpperCase()}${label.slice(1)} moves to Deleted chats and leaves your history. You can restore it from Settings > Deleted chats until it is purged.`,
       confirmText: 'Delete chat',
       variant: 'destructive',
     });
@@ -141,10 +141,12 @@ export function ArchivedChatsSection() {
   };
 
   const handleDeleteAll = async () => {
-    const chatCount = conversations.length;
+    const scope = hasMore
+      ? 'Every archived chat'
+      : `All ${conversations.length} archived chat${conversations.length === 1 ? '' : 's'}`;
     const confirmed = await confirmDestructive({
       title: 'Delete all archived chats?',
-      description: `Permanently delete all ${chatCount} archived chat${chatCount === 1 ? '' : 's'} and their messages. Chats that are not archived are not affected. This cannot be undone.`,
+      description: `${scope} will be removed from your history. Chats that are not archived are not affected. You can restore them from Settings > Deleted chats until they are purged.`,
       confirmText: 'Delete all archived',
       variant: 'destructive',
     });
@@ -203,7 +205,10 @@ export function ArchivedChatsSection() {
       </div>
 
       {error ? (
-        <div role="alert" style={{ color: 'var(--chat-accent-primary, #c8892a)', fontSize: 13 }}>
+        <div
+          role="alert"
+          style={{ color: 'var(--chat-accent-primary-text, #8b5f1d)', fontSize: 13 }}
+        >
           {error}{' '}
           <button type="button" onClick={() => void loadFirstPage()} style={actionButtonStyle}>
             Retry
@@ -229,6 +234,15 @@ export function ArchivedChatsSection() {
           <p style={{ margin: 0, padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
             Loading archived chats…
           </p>
+        ) : error ? (
+          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+            <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
+              Archived chats could not be loaded
+            </div>
+            <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
+              This is not the same as having no archived chats. Retry above to load them.
+            </p>
+          </div>
         ) : conversations.length === 0 ? (
           <div style={{ padding: '32px 20px', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
@@ -287,7 +301,7 @@ export function ArchivedChatsSection() {
                     disabled={busy || streaming}
                     style={{
                       ...actionButtonStyle,
-                      color: 'var(--chat-accent-primary, #c8892a)',
+                      color: 'var(--chat-accent-primary-text, #8b5f1d)',
                       cursor: busy || streaming ? 'not-allowed' : 'pointer',
                     }}
                   >
@@ -319,7 +333,7 @@ export function ArchivedChatsSection() {
             disabled={actionId !== null || hasStreamingChat}
             style={{
               ...actionButtonStyle,
-              color: 'var(--chat-accent-primary, #c8892a)',
+              color: 'var(--chat-accent-primary-text, #8b5f1d)',
               cursor: actionId !== null || hasStreamingChat ? 'not-allowed' : 'pointer',
             }}
           >

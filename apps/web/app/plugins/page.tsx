@@ -51,7 +51,12 @@ export default async function PluginsPage() {
             live hosted registry. <strong>{pluginAvailabilityClaim(catalog)}</strong>
           </p>
           <p className="agi-page-lede" style={{ marginTop: 12 }}>
-            <Link href="/features/plugins">What a plugin bundles, and how installs work</Link>
+            <Link
+              href="/features/plugins"
+              style={{ display: 'inline-block', minHeight: 24, paddingBlock: 4 }}
+            >
+              What a plugin bundles, and how installs work
+            </Link>
           </p>
         </section>
 

@@ -1,4 +1,3 @@
-
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getRoutingSlotModel } from '@agiworkforce/types';
@@ -18,6 +17,7 @@ export interface VoiceInputState {
 interface VoiceInputActions {
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
+  cancelListening: () => void;
   clearTranscript: () => void;
   setLanguage: (lang: string) => void;
   setPreferServerTranscription: (prefer: boolean) => void;
@@ -86,12 +86,55 @@ const PREFERRED_MIME_TYPES = [
   'audio/ogg;codecs=opus',
 ];
 
+class TranscriptionError extends Error {
+  constructor(readonly status: number) {
+    super(`transcription_failed_${status}`);
+    this.name = 'TranscriptionError';
+  }
+}
+
+function transcriptionErrorMessage(error: unknown): string {
+  if (error instanceof TranscriptionError) {
+    if (error.status === 401 || error.status === 403) {
+      return 'Sign in again to use voice input. Your recording was not saved.';
+    }
+    if (error.status === 402) {
+      return 'Voice input needs an active plan. Nothing was charged for this recording.';
+    }
+    if (error.status === 413) {
+      return 'That recording was too long to transcribe. Try a shorter one.';
+    }
+    if (error.status === 429) {
+      return 'Too many recordings just now. Wait a moment, then try again.';
+    }
+    if (error.status >= 500) {
+      return 'Transcription is unavailable right now. Your recording was not saved — try again shortly.';
+    }
+    return 'That recording could not be transcribed. Try again, or type instead.';
+  }
+  return 'Could not reach transcription. Check your connection and try again.';
+}
+
 function getBestMimeType(): string {
   if (typeof MediaRecorder === 'undefined') return '';
   for (const mime of PREFERRED_MIME_TYPES) {
     if (MediaRecorder.isTypeSupported(mime)) return mime;
   }
   return '';
+}
+
+function releaseCapture(): void {
+  rt.recognition?.abort();
+  rt.recognition = null;
+  if (rt.mediaRecorder && rt.mediaRecorder.state !== 'inactive') {
+    rt.mediaRecorder.stop();
+  }
+  rt.mediaRecorder = null;
+  rt.mediaStream?.getTracks().forEach((track) => track.stop());
+  rt.mediaStream = null;
+  rt.audioChunks = [];
+  rt.stopResolve?.();
+  rt.stopResolve = null;
 }
 
 async function transcribeViaServer(blob: Blob, language: string): Promise<string> {
@@ -107,8 +150,7 @@ async function transcribeViaServer(blob: Blob, language: string): Promise<string
   });
 
   if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Server transcription failed (${response.status}): ${body}`);
+    throw new TranscriptionError(response.status);
   }
 
   const data = (await response.json()) as { text?: string };
@@ -250,8 +292,14 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           const text = await transcribeViaServer(blob, language);
           set({ transcript: text, mode: 'idle' });
         } catch (err) {
-          set({ mode: 'error', error: `Transcription failed: ${String(err)}` });
+          set({ mode: 'error', error: transcriptionErrorMessage(err) });
         }
+      },
+
+      cancelListening: () => {
+        if (get().mode === 'idle') return;
+        releaseCapture();
+        set({ mode: 'idle', transcript: '', error: null });
       },
 
       clearTranscript: () => set({ transcript: '' }),

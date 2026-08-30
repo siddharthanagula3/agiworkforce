@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ProjectGallery, ProjectCard } from '@agiworkforce/unified-chat';
 import type { Project, ProjectGalleryCreateInput } from '@agiworkforce/unified-chat';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { CreateProjectDialog } from '@features/chat/components/dialogs/CreateProjectDialog';
 import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects, useProjectStore } from '@features/projects';
@@ -57,7 +57,8 @@ export default function ProjectsPage() {
   const { projects, status: projectStatus, error: projectError, retry } = useManagedCloudProjects();
 
   const [editProject, setEditProject] = useState<Project | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(searchParams.get('new') === '1');
   const [sortMode, setSortMode] = useState<SortMode>('updated');
 
   const sortedProjects = useMemo(() => sortProjects(projects, sortMode), [projects, sortMode]);

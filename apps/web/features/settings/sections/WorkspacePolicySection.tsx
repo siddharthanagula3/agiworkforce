@@ -432,7 +432,7 @@ export function WorkspacePolicySection() {
             padding: '10px 12px',
             border: '1px solid currentColor',
             borderRadius: 'var(--radius-md)',
-            color: 'var(--settings-destructive-foreground)',
+            color: 'var(--settings-destructive-text)',
             fontSize: 12,
             lineHeight: 1.6,
           }}
@@ -456,7 +456,7 @@ export function WorkspacePolicySection() {
         <div
           style={{
             fontSize: 12,
-            color: coherenceError ? 'var(--settings-destructive-foreground)' : 'var(--text-3)',
+            color: coherenceError ? 'var(--settings-destructive-text)' : 'var(--text-3)',
           }}
         >
           {coherenceError ??

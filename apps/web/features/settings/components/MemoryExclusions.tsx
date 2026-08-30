@@ -191,7 +191,10 @@ export function MemoryExclusions() {
       </div>
 
       {error !== null && (
-        <p role="alert" style={{ fontSize: 12, color: 'var(--settings-destructive)', margin: 0 }}>
+        <p
+          role="alert"
+          style={{ fontSize: 12, color: 'var(--settings-destructive-text)', margin: 0 }}
+        >
           {error}
         </p>
       )}

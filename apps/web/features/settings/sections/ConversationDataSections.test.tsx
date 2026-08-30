@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   listPublished: vi.fn(),
   unpublish: vi.fn(),
   routerReplace: vi.fn(),
+  historyStats: vi.fn(),
 }));
 
 /**
@@ -25,7 +26,7 @@ const mocks = vi.hoisted(() => ({
  * same stub shape as apps/web/shared/components/layout/WebAppShell.test.tsx.
  */
 const confirmStub = vi.hoisted(() => ({
-  confirm: vi.fn(async () => true),
+  confirm: vi.fn(async (_options: { title: string; description: string }) => true),
   dialog: null as React.ReactNode,
 }));
 
@@ -38,6 +39,7 @@ vi.mock('../services/conversation-data-service', () => ({
   restoreArchivedConversation: (...args: unknown[]) => mocks.restoreArchived(...args),
   deleteManagedConversation: (...args: unknown[]) => mocks.deleteConversation(...args),
   applyBulkConversationAction: (...args: unknown[]) => mocks.bulkAction(...args),
+  fetchConversationHistoryStats: (...args: unknown[]) => mocks.historyStats(...args),
   listSharedLinks: (...args: unknown[]) => mocks.listShares(...args),
   revokeSharedLink: (...args: unknown[]) => mocks.revokeShare(...args),
   listPublishedArtifacts: (...args: unknown[]) => mocks.listPublished(...args),
@@ -99,6 +101,7 @@ describe('Web conversation data settings', () => {
     mocks.revokeShare.mockResolvedValue(undefined);
     mocks.listPublished.mockResolvedValue([]);
     mocks.unpublish.mockResolvedValue(undefined);
+    mocks.historyStats.mockResolvedValue({ conversationCount: 1, messageCount: 1 });
     useChatStore.setState({
       conversations: [storeConversation],
       activeConversationId: null,
@@ -184,5 +187,41 @@ describe('Web conversation data settings', () => {
     await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
     expect(mocks.routerReplace).toHaveBeenCalledWith('/chat');
     expect(useChatStore.getState().conversations).toEqual([]);
+  });
+
+  it('scopes delete-all by the account total, not the pages the sidebar happens to hold', async () => {
+    mocks.historyStats.mockResolvedValue({ conversationCount: 812, messageCount: 9001 });
+
+    render(<PrivacySection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
+
+    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
+    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
+    expect(description).toContain('812');
+    expect(description).not.toContain(`${useChatStore.getState().conversations.length} chat`);
+  });
+
+  it('does not claim a soft delete is irreversible', async () => {
+    mocks.historyStats.mockResolvedValue({ conversationCount: 3, messageCount: 9 });
+
+    render(<PrivacySection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
+    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
+
+    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
+    expect(description).not.toMatch(/cannot be undone/i);
+    expect(description).toMatch(/restore/i);
+  });
+
+  it('falls back to an unnumbered scope when the account total cannot be read', async () => {
+    mocks.historyStats.mockRejectedValue(new Error('offline'));
+
+    render(<PrivacySection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
+    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
+
+    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
+    expect(description).toContain('Every chat in your account');
+    expect(description).not.toMatch(/\ball \d+ chat/i);
   });
 });

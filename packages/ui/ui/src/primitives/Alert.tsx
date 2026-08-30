@@ -27,7 +27,7 @@ function Alert({
         'relative w-full rounded-lg border p-4',
         variant === 'default' && 'bg-background text-foreground',
         variant === 'destructive' &&
-          'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
+          'border-destructive/50 text-danger dark:border-destructive [&>svg]:text-danger',
         variant === 'success' &&
           'border-green-500/50 text-green-700 dark:text-green-400 dark:border-green-500 [&>svg]:text-green-600',
         variant === 'warning' &&

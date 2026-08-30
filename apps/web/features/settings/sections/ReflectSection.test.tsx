@@ -113,3 +113,26 @@ describe('ReflectSection', () => {
     expect(screen.queryByText('Writing led your past 30 days')).toBeNull();
   });
 });
+
+describe('ReflectSection activity chart accessibility', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => response(recap)),
+    );
+  });
+
+  it('exposes the chart as one image and the daily figures as text', async () => {
+    render(<ReflectSection />);
+
+    const chart = await screen.findByRole('img', { name: /conversation activity across/i });
+    expect(chart).toBeInTheDocument();
+
+    // A bare div is role=generic, which prohibits aria-label: every bar used to
+    // carry one and was dropped entirely by assistive tech.
+    for (const bar of Array.from(chart.querySelectorAll('div'))) {
+      expect(bar.getAttribute('aria-label')).toBeNull();
+      expect(bar.getAttribute('aria-hidden')).toBe('true');
+    }
+  });
+});

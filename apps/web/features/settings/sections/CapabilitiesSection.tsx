@@ -98,7 +98,7 @@ export function CapabilitiesSection() {
         {/* AUDIT-FIX PAR-32: report a failed load instead of falling through
           to 'Synced to your account' while the toggles show local defaults. */}
         <p
-          className={`mt-2 text-xs ${loadError ? 'text-destructive' : 'text-muted-foreground'}`}
+          className={`mt-2 text-xs ${loadError ? 'text-danger' : 'text-muted-foreground'}`}
           role="status"
         >
           {saving
@@ -174,7 +174,7 @@ export function CapabilitiesSection() {
         <div className="flex flex-col items-start gap-3">
           <SettingsSectionLink
             section="memory"
-            className="text-xs text-[var(--chat-accent-primary)] hover:underline"
+            className="text-xs text-[var(--chat-accent-primary-text)] hover:underline"
           >
             View and manage memory
           </SettingsSectionLink>
@@ -210,10 +210,21 @@ export function CapabilitiesSection() {
         Skills have moved to{' '}
         <SettingsSectionLink
           section="skills"
-          className="text-[var(--chat-accent-primary)] hover:underline"
+          className="text-[var(--chat-accent-primary-text)] hover:underline"
         >
           Customize → Skills
         </SettingsSectionLink>
+        .
+      </p>
+
+      <p className="text-xs text-muted-foreground">
+        Running models on your own provider keys?{' '}
+        <a
+          href="/settings/byok"
+          className="inline-block min-h-6 py-0.5 text-[var(--chat-accent-primary-text)] hover:underline"
+        >
+          API keys (BYOK)
+        </a>
         .
       </p>
     </div>

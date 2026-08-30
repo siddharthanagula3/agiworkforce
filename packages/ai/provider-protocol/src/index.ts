@@ -92,7 +92,11 @@ export type { OpenAIStrictToolSchemaDiagnostic } from './openai-tool-schema';
 export { normalizeToolParameterSchema } from './tool-parameter-schema';
 export type { ToolParameterSchemaOptions } from './tool-parameter-schema';
 
-export { cleanSchemaForGemini, GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS } from './lib/clean-for-gemini';
+export {
+  cleanSchemaForGemini,
+  GEMINI_SUPPORTED_SCHEMA_KEYWORDS,
+  GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS,
+} from './lib/clean-for-gemini';
 
 export {
   createAnthropicToolPayloadCompatibilityWrapper,

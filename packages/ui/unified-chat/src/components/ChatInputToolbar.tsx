@@ -1,4 +1,3 @@
-
 import { Brain, EyeOff, Hand, Zap, BookOpen } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { usePlanModeStore, selectPlanMode } from '../stores/planModeStore';
@@ -165,7 +164,7 @@ export function ChatInputToolbar({
             variant={isAutoMode ? 'default' : 'outline'}
             size="sm"
             onClick={onAutoModeToggle}
-            className={cn(isAutoMode && 'bg-emerald-500 hover:bg-emerald-600 text-white')}
+            className={cn(isAutoMode && 'bg-emerald-700 hover:bg-emerald-800 text-white')}
             title={isAutoMode ? 'Auto: Agent acts autonomously' : 'Manual: Agent asks permission'}
             aria-label="Toggle auto mode"
             aria-pressed={isAutoMode}

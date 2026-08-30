@@ -171,14 +171,14 @@ export function ScheduleCard({
             </dl>
 
             {schedule.lastError && (
-              <p className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <p className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-danger">
                 Last run: {schedule.lastError}
               </p>
             )}
             {error && (
               <p
                 role="alert"
-                className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-sm text-danger"
               >
                 {error} Retry the action when ready.
               </p>
@@ -235,7 +235,7 @@ export function ScheduleCard({
               disabled={operation !== null}
               aria-label={`Delete ${schedule.name}`}
               title="Delete Schedule"
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="text-danger hover:bg-destructive/10 hover:text-danger"
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
             </Button>

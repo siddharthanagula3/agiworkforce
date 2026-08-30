@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
 import { FolderOpen, MoreHorizontal, Star } from 'lucide-react';
+import { useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useProjectStore } from '../stores/projectStore';
 import type { Project } from '../lib/types';
@@ -57,6 +58,21 @@ export function ProjectCard({
     [toggleStar, project.id, project.starred, onStarChange],
   );
 
+  const menuPanelRef = useRef<HTMLDivElement | null>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+    setConfirmDelete(false);
+  }, []);
+  // role="menu" promises the keyboard contract; this panel had outside-click
+  // dismissal only, so a keyboard user could open it and reach nothing.
+  useMenuKeyboard({
+    open: menuOpen,
+    onClose: closeMenu,
+    panelRef: menuPanelRef,
+    triggerRef: menuTriggerRef,
+  });
+
   useEffect(() => {
     if (!menuOpen) return;
     function handleOutside(e: globalThis.MouseEvent) {
@@ -78,28 +94,29 @@ export function ProjectCard({
   const hasMenu = !!(onEdit || archiveAction || onDelete);
 
   return (
+    // The card used to BE the button, with the star and menu buttons nested
+    // inside it. A control cannot contain other controls: assistive tech has no
+    // way to represent it, and axe reports nested-interactive. The open action
+    // is now its own element stretched over the card, so the row still clicks
+    // anywhere while the action buttons stay siblings rather than descendants.
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect?.(project)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onSelect?.(project);
-        }
-      }}
       aria-current={active ? 'true' : undefined}
-      aria-label={`Open project ${project.name}`}
       className={cn(
-        'group relative flex w-full cursor-pointer flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
-        'hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+        'group relative flex w-full flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
+        'hover:bg-[var(--chat-surface-hover)] focus-within:ring-2 focus-within:ring-[var(--chat-accent-secondary)]',
         active
           ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_rgba(218,119,86,0.18)]'
           : 'border-[var(--chat-border)]',
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      <button
+        type="button"
+        onClick={() => onSelect?.(project)}
+        aria-label={`Open project ${project.name}`}
+        className="absolute inset-0 z-0 cursor-pointer rounded-xl focus:outline-none"
+      />
+      <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <FolderOpen
             size={16}
@@ -112,7 +129,7 @@ export function ProjectCard({
           </span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="pointer-events-auto flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={handleStarClick}
@@ -122,7 +139,7 @@ export function ProjectCard({
               'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
               'hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
               project.starred
-                ? 'text-[var(--chat-accent-primary)]'
+                ? 'text-[var(--chat-accent-primary-text)]'
                 : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
             )}
           >
@@ -132,6 +149,7 @@ export function ProjectCard({
           {hasMenu && (
             <div ref={menuRef} className="relative">
               <button
+                ref={menuTriggerRef}
                 type="button"
                 aria-label="Project options"
                 aria-expanded={menuOpen}
@@ -148,6 +166,7 @@ export function ProjectCard({
 
               {menuOpen && (
                 <div
+                  ref={menuPanelRef}
                   role="menu"
                   aria-label={`Options for ${project.name}`}
                   className="absolute right-0 top-full z-20 mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-lg"
@@ -298,12 +317,12 @@ export function ProjectCard({
       </div>
 
       {project.description ? (
-        <p className="line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
+        <p className="pointer-events-none relative z-10 line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
           {project.description}
         </p>
       ) : null}
 
-      <div className="flex items-center justify-between text-[11px] text-[var(--chat-text-muted)]">
+      <div className="pointer-events-none relative z-10 flex items-center justify-between text-[11px] text-[var(--chat-text-muted)]">
         <span>
           {conversationCount === 0
             ? 'No conversations yet'

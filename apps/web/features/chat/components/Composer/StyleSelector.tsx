@@ -154,6 +154,8 @@ export function StyleSelector() {
         open={open}
         align="start"
         contentRef={panelRef}
+        label="Response style"
+        onRequestClose={() => setOpen(false)}
         className="w-72 p-2"
       >
         <div>
@@ -252,7 +254,7 @@ export function StyleSelector() {
                           handleDelete(e as unknown as React.MouseEvent, custom.id);
                       }}
                       className={cn(
-                        'ml-auto rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100',
+                        'ml-auto rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-danger group-hover:opacity-100',
                         isSelected && 'opacity-100',
                       )}
                       aria-label={`Delete ${custom.name}`}

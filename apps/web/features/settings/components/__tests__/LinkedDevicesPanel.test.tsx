@@ -58,6 +58,8 @@ describe('LinkedDevicesPanel', () => {
 
     render(<LinkedDevicesPanel />);
     await userEvent.click(await screen.findByRole('button', { name: 'Unlink Work laptop' }));
+    // Unlinking revokes credentials, so it asks before sending anything.
+    await userEvent.click(await screen.findByRole('button', { name: 'Unlink device' }));
 
     await waitFor(() => {
       const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
@@ -76,6 +78,8 @@ describe('LinkedDevicesPanel', () => {
 
     render(<LinkedDevicesPanel />);
     await userEvent.click(await screen.findByRole('button', { name: 'Unlink Work laptop' }));
+    // Unlinking revokes credentials, so it asks before sending anything.
+    await userEvent.click(await screen.findByRole('button', { name: 'Unlink device' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Device not found');
     expect(screen.getByText(/Work laptop/)).toBeVisible();

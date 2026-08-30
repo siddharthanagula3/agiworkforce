@@ -114,6 +114,9 @@ describe('AccountSection active sessions', () => {
     expect(await screen.findByText('Mobile Safari 19')).toBeInTheDocument();
     expect(screen.getByText('Chicago, US')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Revoke iPhone session' }));
+    // Revoking now asks first: nothing is sent until the dialog is accepted.
+    expect(await screen.findByText('Revoke the iPhone session?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke session' }));
 
     await waitFor(() => expect(screen.queryByText('Mobile Safari 19')).not.toBeInTheDocument());
     expect(mockAddCsrfHeaders).toHaveBeenCalled();
@@ -138,6 +141,8 @@ describe('AccountSection active sessions', () => {
     render(<AccountSection />);
     await screen.findByText('Chrome 140');
     fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
+    expect(await screen.findByText('Log out of all devices?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Log out everywhere' }));
 
     await waitFor(() => expect(mockSignOut).toHaveBeenCalledWith({ redirectUrl: '/login' }));
     expect(requests).toContainEqual({ url: '/api/settings/sessions', method: 'DELETE' });

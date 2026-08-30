@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 import { Brain } from 'lucide-react';
 import { getModelReasoning } from '@agiworkforce/types';
@@ -31,7 +30,7 @@ export function ThinkingControl({ modelId, disabled, className }: ThinkingContro
         className={cn(
           'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1',
           'text-[11px] font-medium select-none',
-          'text-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/15',
+          'text-[var(--chat-accent-primary-text)] bg-[var(--chat-accent-primary)]/15',
           className,
         )}
       >
@@ -61,7 +60,7 @@ export function ThinkingControl({ modelId, disabled, className }: ThinkingContro
         'text-[11px] font-medium transition-colors duration-150 select-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
         thinkingEnabled
-          ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
+          ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
           : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
         disabled && 'cursor-not-allowed opacity-50',
         className,

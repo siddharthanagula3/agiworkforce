@@ -1,10 +1,9 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { createError } from '@/lib/errors';
 import { getHandoffConfig, heartbeatIntervalMs } from '@/lib/support/handoff/config';
 import {
@@ -27,7 +26,7 @@ async function handleSetPresence(request: NextRequest) {
   const limited = await withRateLimit(request, 'support-handoff-agent');
   if (limited) return limited;
 
-  const { userId } = await requireAdmin(request);
+  const { userId } = await requirePlatformAdmin(request);
 
   const parsed = PresenceSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -75,7 +74,7 @@ async function handleReadPresence(request: NextRequest) {
   const limited = await withRateLimit(request, 'support-handoff-agent');
   if (limited) return limited;
 
-  await requireAdmin(request);
+  await requirePlatformAdmin(request);
   const availability = await resolveHumanAvailability({ skipCache: true });
   return NextResponse.json({ availability }, { headers: { 'cache-control': 'no-store' } });
 }

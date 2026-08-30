@@ -201,7 +201,7 @@ function TierBadge({ tier, className }: TierBadgeProps) {
       <span
         className={cn(
           'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium',
-          'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]',
+          'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]',
           className,
         )}
       >
@@ -261,7 +261,7 @@ function ThinkingToggle({ enabled, enabledEffort, onChange }: ThinkingToggleProp
         'text-[10px] font-medium transition-colors',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--chat-accent-secondary)]',
         enabled
-          ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
+          ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
           : 'text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-secondary)]',
       )}
     >
@@ -297,7 +297,7 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
           'border border-transparent',
           disabled && 'cursor-not-allowed opacity-50',
           isSelected
-            ? 'border-[var(--chat-accent-primary)]/30 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
+            ? 'border-[var(--chat-accent-primary)]/30 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
             : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
         )}
       >
@@ -312,7 +312,7 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
               className={cn(
                 'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
                 isSelected
-                  ? 'bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary)]'
+                  ? 'bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary-text)]'
                   : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]',
               )}
             >
@@ -322,12 +322,12 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
           {/* Routing decision badge — shown after first auto-routed message */}
           {isSelected && routedModel ? (
             <div className="mt-0.5 flex items-center gap-1">
-              <Sparkles size={9} className="shrink-0 text-[var(--chat-accent-primary)]/60" />
-              <span className="text-[10px] text-[var(--chat-accent-primary)]/80">
+              <Sparkles size={9} className="shrink-0 text-[var(--chat-accent-primary-text)]" />
+              <span className="text-[10px] text-[var(--chat-accent-primary-text)]">
                 {routedModel.name}
               </span>
               {taskLabel && (
-                <span className="rounded bg-[var(--chat-accent-primary)]/10 px-1 py-px text-[9px] font-medium text-[var(--chat-accent-primary)]/70">
+                <span className="rounded bg-[var(--chat-accent-primary)]/10 px-1 py-px text-[9px] font-medium text-[var(--chat-accent-primary-text)]">
                   {taskLabel}
                 </span>
               )}
@@ -339,7 +339,7 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
           )}
         </div>
         {isSelected && (
-          <Check size={14} className="mt-0.5 shrink-0 text-[var(--chat-accent-primary)]" />
+          <Check size={14} className="mt-0.5 shrink-0 text-[var(--chat-accent-primary-text)]" />
         )}
       </button>
     </Popover.Close>
@@ -597,7 +597,7 @@ export function ModelSelector({
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
               {t('selector.model', 'Model')}
             </span>
-            <span className="rounded-full bg-[var(--chat-accent-primary)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--chat-accent-primary)]">
+            <span className="rounded-full bg-[var(--chat-accent-primary)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--chat-accent-primary-text)]">
               {executionMode === 'local_only'
                 ? t('selector.local', 'Local')
                 : executionMode === 'byok'
@@ -813,7 +813,7 @@ export function ModelSelector({
                                 !isSelectable
                                   ? 'cursor-not-allowed opacity-50'
                                   : isSelected
-                                    ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
+                                    ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                                     : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
                               )}
                             >
@@ -842,7 +842,7 @@ export function ModelSelector({
                                     className={cn(
                                       'text-[10px] font-medium',
                                       isSelected
-                                        ? 'text-[var(--chat-accent-primary)]/80'
+                                        ? 'text-[var(--chat-accent-primary-text)]'
                                         : 'text-[var(--chat-text-muted)]',
                                     )}
                                   >
@@ -868,14 +868,14 @@ export function ModelSelector({
                               {isSelected && !showThinkingToggle && (
                                 <Check
                                   size={14}
-                                  className="mt-0.5 shrink-0 text-[var(--chat-accent-primary)]"
+                                  className="mt-0.5 shrink-0 text-[var(--chat-accent-primary-text)]"
                                 />
                               )}
                             </button>
                           </Popover.Close>
 
                           {isSelected && reasoningIsMandatory && (
-                            <span className="self-center pr-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--chat-accent-primary)]">
+                            <span className="self-center pr-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--chat-accent-primary-text)]">
                               always
                             </span>
                           )}

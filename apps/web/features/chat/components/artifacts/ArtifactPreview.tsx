@@ -1055,7 +1055,7 @@ if (__AgiApp) {
           className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center"
           data-testid="artifact-pdf-fallback"
         >
-          <FileText className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
+          <FileText className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
           <div>
             <p className="text-sm font-medium text-foreground">
               {pdfError ? "This PDF couldn't be displayed." : 'Inline preview unavailable'}
@@ -1106,7 +1106,7 @@ if (__AgiApp) {
           className="flex h-full min-h-48 w-full flex-col items-center justify-center gap-2 px-6 text-center"
           data-testid="artifact-image-fallback"
         >
-          <FileText className="h-8 w-8 text-muted-foreground/60" aria-hidden="true" />
+          <FileText className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm font-medium text-foreground">
             {imageError ? "This image couldn't be displayed." : 'Image preview unavailable'}
           </p>
@@ -1561,7 +1561,7 @@ if (__AgiApp) {
               // Empty state: a renderable artifact with no content yet (e.g. an
               // opened-but-still-empty draft). Not an error, just nothing to show.
               <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-background px-6 text-center">
-                <Code className="h-6 w-6 text-muted-foreground/50" aria-hidden="true" />
+                <Code className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
                 <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
               </div>
             ) : renderError ? (
@@ -1618,7 +1618,7 @@ if (__AgiApp) {
           {showPreview && isDocx && (
             <>
               {docxError ? (
-                <div className="flex items-center justify-center p-8 text-sm text-destructive">
+                <div className="flex items-center justify-center p-8 text-sm text-danger">
                   Could not render document: {docxError}
                 </div>
               ) : docxPreviewHtml ? (
@@ -1927,7 +1927,7 @@ if (__AgiApp) {
         {isDocx && (
           <TabsContent value="preview" className="m-0 p-0">
             {docxError ? (
-              <div className="flex items-center justify-center p-8 text-sm text-destructive">
+              <div className="flex items-center justify-center p-8 text-sm text-danger">
                 Could not render document: {docxError}
               </div>
             ) : docxPreviewHtml ? (

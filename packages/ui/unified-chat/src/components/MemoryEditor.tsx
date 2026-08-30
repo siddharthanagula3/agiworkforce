@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Trash2 } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
 
@@ -33,6 +34,7 @@ export function MemoryEditor({
   className,
   adapter,
 }: MemoryEditorProps) {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const localFacts = useMemoryStore((s) => s.facts);
   const localAdd = useMemoryStore((s) => s.add);
   const localUpdate = useMemoryStore((s) => s.update);
@@ -150,6 +152,7 @@ export function MemoryEditor({
 
   return (
     <div className={cn('flex h-full flex-col gap-4 p-6', className)}>
+      {confirmDialog}
       {title ? (
         <div className="flex flex-col gap-1">
           <h3 className="text-base font-semibold text-[var(--chat-text-primary)]">{title}</h3>
@@ -184,7 +187,7 @@ export function MemoryEditor({
               'shrink-0 rounded-md px-3 py-2 text-sm font-medium transition-colors',
               draft.trim().length === 0
                 ? 'cursor-not-allowed bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]'
-                : 'bg-[var(--chat-accent-primary)] text-white hover:opacity-90',
+                : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] hover:opacity-90',
             )}
           >
             Add
@@ -261,7 +264,7 @@ export function MemoryEditor({
                           type="button"
                           onClick={() => void onSaveEdit(fact.id)}
                           disabled={fact.pending}
-                          className="rounded bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-white hover:opacity-90"
+                          className="rounded bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-90"
                         >
                           Save
                         </button>
@@ -307,7 +310,15 @@ export function MemoryEditor({
                         </span>
                         <button
                           type="button"
-                          onClick={() => void runMutation(() => remove(fact.id))}
+                          onClick={() =>
+                            confirm({
+                              title: 'Delete this memory?',
+                              description:
+                                'The assistant stops using this fact in future conversations. It cannot be restored \u2014 it would have to be saved again.',
+                              confirmLabel: 'Delete memory',
+                              onConfirm: () => runMutation(() => remove(fact.id)),
+                            })
+                          }
                           disabled={fact.pending}
                           className="rounded p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive)]"
                           aria-label={`Delete memory fact`}

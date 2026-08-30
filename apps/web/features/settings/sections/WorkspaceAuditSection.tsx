@@ -43,7 +43,7 @@ function OutcomeChip({ outcome }: { outcome: AuditEventView['outcome'] }) {
     outcome === 'success'
       ? { fg: 'var(--text-2)', bd: 'var(--settings-border)' }
       : outcome === 'denied'
-        ? { fg: 'var(--settings-destructive-foreground)', bd: 'currentColor' }
+        ? { fg: 'var(--settings-destructive-text)', bd: 'currentColor' }
         : { fg: 'var(--text-1)', bd: 'currentColor' };
 
   return (

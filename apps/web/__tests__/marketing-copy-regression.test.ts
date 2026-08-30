@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 const WEB_ROOT = join(__dirname, '..');
+const SKIPPED_SOURCE_DIRS = new Set(['node_modules', '.next', 'dist', 'coverage', '__tests__']);
 
 function readWebFile(path: string) {
   return readFileSync(join(WEB_ROOT, path), 'utf8');
@@ -414,10 +415,20 @@ describe('public marketing copy regressions', () => {
     expect(supportArticles).toContain('the composer states whether search is on');
   });
 
-  it('reframes the web InviteCodeModal away from invite-only cloud access (PA-5)', () => {
-    const modal = readWebFile('shared/components/cloud-bridge/InviteCodeModal.tsx');
-
-    expect(modal).not.toContain('Cloud access is currently invite-only');
-    expect(modal).toContain('Managed cloud is open in public alpha');
+  it('never claims cloud access is invite-only anywhere the web surface ships (PA-5)', () => {
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(join(WEB_ROOT, dir), { withFileTypes: true })) {
+        const rel = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) {
+          if (!SKIPPED_SOURCE_DIRS.has(entry.name) && !entry.name.startsWith('.')) walk(rel);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry.name) || /\.(test|spec)\.tsx?$/.test(entry.name)) continue;
+        if (/Cloud access is currently invite-only/.test(readWebFile(rel))) offenders.push(rel);
+      }
+    };
+    for (const root of ['app', 'features', 'shared', 'lib', 'content']) walk(root);
+    expect(offenders, 'managed cloud is open in public alpha, not invite-only').toEqual([]);
   });
 });

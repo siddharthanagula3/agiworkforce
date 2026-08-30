@@ -1,4 +1,3 @@
-
 import { useMemo, useState, type ElementType } from 'react';
 import {
   Activity,
@@ -42,7 +41,7 @@ const STATUS_ICON_MAP: Record<ActionLogEntry['status'], ElementType> = {
 const STATUS_CLASS_MAP: Record<ActionLogEntry['status'], string> = {
   pending: 'text-muted-foreground border-border/60 bg-card/40',
   running: 'text-amber-300 border-amber-500/30 bg-amber-500/5',
-  success: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/5',
+  success: 'text-emerald-700 dark:text-emerald-300 border-emerald-500/30 bg-emerald-500/5',
   failed: 'text-red-300 border-red-500/30 bg-red-500/5',
   blocked: 'text-yellow-300 border-yellow-500/30 bg-yellow-500/5',
 };

@@ -8,6 +8,7 @@ import { useTheme } from 'next-themes';
 import { Moon, Sun, X } from 'lucide-react';
 import { AgiMark } from '../agi/AgiMark';
 import { SURFACE_STATUS } from '@/lib/marketing-constants';
+import { useAuthStore } from '@shared/stores/authentication-store';
 
 function ThemeToggle({ className = '' }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
@@ -150,7 +151,12 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
     };
   }, [closeMobileMenu, isMenuOpen]);
 
+  // Clerk's signOut alone leaves this browser holding the previous account's
+  // app-owned local/session storage; the store's logout purges it first, exactly
+  // as WebAppShell does. Skipping it leaks one user's styles and instructions
+  // into whoever signs in next on the same machine.
   const handleSignOut = async () => {
+    await useAuthStore.getState().logout();
     await signOut({ redirectUrl: '/' });
   };
 

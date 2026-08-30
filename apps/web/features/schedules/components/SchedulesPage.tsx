@@ -512,7 +512,7 @@ export function SchedulesPage({
               <span
                 data-testid="schedule-maturity-badge"
                 title={SCHEDULE_MATURITY_TITLE}
-                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300"
+                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
               >
                 {SCHEDULE_MATURITY_LABEL}
               </span>
@@ -557,7 +557,7 @@ export function SchedulesPage({
 
         {listStatus === 'error' && (
           <section className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6 text-center">
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-sm text-danger">
               {listError ?? 'Schedules could not be loaded.'} Check your connection, then retry.
             </p>
             <Button
@@ -603,7 +603,7 @@ export function SchedulesPage({
                     >
                       <span className="text-sm font-medium text-foreground">{template.name}</span>
                       <span className="text-xs text-muted-foreground">{template.description}</span>
-                      <span className="mt-1 text-[11px] text-muted-foreground/80">
+                      <span className="mt-1 text-[11px] text-muted-foreground">
                         {template.cadenceLabel}
                       </span>
                     </button>
@@ -646,7 +646,7 @@ export function SchedulesPage({
         {listStatus === 'success' && sortedSchedules.length > 0 && (
           <section aria-label="Your Schedules" className="space-y-4">
             {listError && (
-              <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-danger">
                 {listError} Retry loading more schedules.
               </p>
             )}

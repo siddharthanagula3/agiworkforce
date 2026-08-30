@@ -532,7 +532,7 @@ export function ArtifactPanel({
               className={cn(
                 'h-7 w-7',
                 viewMode === 'preview'
-                  ? 'text-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/10'
+                  ? 'text-[var(--chat-accent-primary-text)] bg-[var(--chat-accent-primary)]/10'
                   : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
               )}
             >
@@ -548,7 +548,7 @@ export function ArtifactPanel({
             className={cn(
               'h-7 w-7',
               viewMode === 'code'
-                ? 'text-[var(--chat-accent-primary)] bg-[var(--chat-accent-primary)]/10'
+                ? 'text-[var(--chat-accent-primary-text)] bg-[var(--chat-accent-primary)]/10'
                 : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
             )}
           >

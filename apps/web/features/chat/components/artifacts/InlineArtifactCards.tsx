@@ -201,7 +201,7 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
           />
         ) : (
           <div className="flex h-full w-full min-h-[64px] items-center justify-center">
-            <TypeIcon type={artifact.type} className="h-6 w-6 text-muted-foreground/40" />
+            <TypeIcon type={artifact.type} className="h-6 w-6 text-muted-foreground" />
           </div>
         )}
         {/* Hover open indicator */}
@@ -237,7 +237,7 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
         )}
 
         {/* Claude-style "{Kind} · {EXT}" subtitle (e.g. "Document · MD", "Code · HTML"). */}
-        <span className="text-[11px] text-muted-foreground/70 truncate">
+        <span className="text-[11px] text-muted-foreground truncate">
           {kindLabel(artifact.type)} · {extLabel(artifact)}
         </span>
       </div>
@@ -307,8 +307,7 @@ export function InlineArtifactCards({ artifacts, onOpen, className }: InlineArti
             toast.promise(downloadAllArtifacts(artifacts), {
               loading: 'Preparing artifact download…',
               success: 'Artifact download ready',
-              error: (error) =>
-                toUserMessage(error, 'Could not download artifacts'),
+              error: (error) => toUserMessage(error, 'Could not download artifacts'),
             });
           }}
           className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border/50 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

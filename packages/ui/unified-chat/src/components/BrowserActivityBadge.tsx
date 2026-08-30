@@ -70,7 +70,7 @@ export function BrowserActivityBadge({
             ? 'border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/15'
             : hasError
               ? 'border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/15'
-              : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15',
+              : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15',
       )}
       title={lastAction ?? currentPageTitle ?? label}
       aria-label="Open browser activity"

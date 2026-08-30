@@ -1,7 +1,7 @@
 'use client';
 
 import { type CSSProperties, useEffect } from 'react';
-import { Bot, RefreshCw, Home } from 'lucide-react';
+import { getFriendlyError } from '@agiworkforce/utils';
 
 export default function GlobalError({
   error,
@@ -13,6 +13,8 @@ export default function GlobalError({
   useEffect(() => {
     console.error('[GlobalError] Root layout error caught:', error.digest ?? error.message);
   }, [error]);
+
+  const friendly = getFriendlyError(error);
 
   const errorTheme = {
     '--global-error-bg': 'black',
@@ -62,13 +64,19 @@ export default function GlobalError({
               margin: '0 auto 1.5rem',
             }}
           >
-            <Bot
-              style={{
-                width: '2.5rem',
-                height: '2.5rem',
-                color: 'var(--global-error-danger)',
-              }}
-            />
+            <svg
+              width={40}
+              height={40}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--global-error-danger)"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+            </svg>
           </div>
 
           <h1
@@ -78,7 +86,7 @@ export default function GlobalError({
               marginBottom: '0.75rem',
             }}
           >
-            Something Went Wrong
+            {friendly.title}
           </h1>
 
           <p
@@ -88,8 +96,20 @@ export default function GlobalError({
               fontSize: '0.875rem',
             }}
           >
-            {error.message || 'A critical error occurred. Please reload the page.'}
+            {friendly.message}
           </p>
+
+          {friendly.suggestion && (
+            <p
+              style={{
+                color: 'var(--global-error-muted)',
+                marginBottom: '0.5rem',
+                fontSize: '0.875rem',
+              }}
+            >
+              {friendly.suggestion}
+            </p>
+          )}
 
           {error.digest && (
             <p
@@ -129,8 +149,7 @@ export default function GlobalError({
                 cursor: 'pointer',
               }}
             >
-              <RefreshCw style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
-              Try Again
+              Try again
             </button>
             <a
               href="/"
@@ -149,8 +168,7 @@ export default function GlobalError({
                 textDecoration: 'none',
               }}
             >
-              <Home style={{ width: '1rem', height: '1rem', marginRight: '0.5rem' }} />
-              Go Home
+              Go home
             </a>
           </div>
 
@@ -162,10 +180,11 @@ export default function GlobalError({
             }}
           >
             <p style={{ color: 'var(--global-error-quiet)', fontSize: '0.875rem' }}>
-              If this problem persists,{' '}
+              If this keeps happening,{' '}
               <a href="/contact" style={{ color: 'var(--global-error-link)' }}>
-                contact our support team
+                contact support
               </a>
+              .
             </p>
           </div>
         </div>

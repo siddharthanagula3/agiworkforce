@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,15 +9,17 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import {
-  verifyTOTPCode,
+  verifyTOTPStep,
   verifyBackupCode,
   decryptTOTPSecret,
 } from '@/features/settings/services/user-preferences';
 import { readJsonBody } from '@/lib/read-json-body';
+import { claimTotpStep } from '@/lib/server/two-factor-replay';
 
 interface TwoFactorRow {
   totp_secret_enc: string;
   backup_codes_hashed: string[];
+  last_totp_step: string | number | null;
   enabled: boolean;
 }
 
@@ -39,7 +40,7 @@ async function handleValidateTOTP(request: NextRequest) {
 
   const db = getNeonDb();
   const [row] = await db.query<TwoFactorRow>(
-    'select totp_secret_enc, backup_codes_hashed, enabled from user_two_factor where user_id = $1 limit 1',
+    'select totp_secret_enc, backup_codes_hashed, enabled, last_totp_step from user_two_factor where user_id = $1 limit 1',
     [userId],
   );
 
@@ -48,28 +49,38 @@ async function handleValidateTOTP(request: NextRequest) {
   }
 
   const secret = await decryptTOTPSecret(row.totp_secret_enc);
-  const totpValid = await verifyTOTPCode(secret, code);
+  const step = await verifyTOTPStep(secret, code);
 
-  if (totpValid) {
-    await db.query(
-      'update user_two_factor set last_verified_at = now(), updated_at = now() where user_id = $1',
-      [userId],
-    );
+  if (step !== null) {
+    if (!(await claimTotpStep(db, userId, step))) {
+      logger.warn({ userId }, '2FA validate: refused a replayed TOTP code');
+      return NextResponse.json({ valid: false }, { status: 401 });
+    }
     return NextResponse.json({ valid: true, used_backup_code: false });
   }
 
   const backupIndex = await verifyBackupCode(code, row.backup_codes_hashed ?? []);
   if (backupIndex !== -1) {
-    const updatedCodes = (row.backup_codes_hashed ?? []).filter((_, i) => i !== backupIndex);
-    await db.query(
+    const usedHash = (row.backup_codes_hashed ?? [])[backupIndex]!;
+    // array_remove inside a guarded update makes consumption atomic: reading the
+    // array, filtering it and writing it back let two concurrent requests both
+    // spend the same code, and the later write could resurrect codes the
+    // earlier one had removed.
+    const consumed = await db.query<{ remaining: number }>(
       `update user_two_factor
-          set backup_codes_hashed = $2,
+          set backup_codes_hashed = array_remove(backup_codes_hashed, $2),
               last_verified_at    = now(),
               updated_at          = now()
-        where user_id = $1`,
-      [userId, updatedCodes],
+        where user_id = $1
+          and $2 = any(backup_codes_hashed)
+        returning coalesce(array_length(backup_codes_hashed, 1), 0) as remaining`,
+      [userId, usedHash],
     );
-    logger.info({ userId, remaining: updatedCodes.length }, '2FA backup code used');
+    if (!consumed.length) {
+      logger.warn({ userId }, '2FA validate: backup code was already spent');
+      return NextResponse.json({ valid: false }, { status: 401 });
+    }
+    logger.info({ userId, remaining: consumed[0]?.remaining ?? 0 }, '2FA backup code used');
     return NextResponse.json({ valid: true, used_backup_code: true });
   }
 

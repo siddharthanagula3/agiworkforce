@@ -45,6 +45,16 @@ export async function dispatchStripeEvent(
         } else {
           await handleCreditTopUp(db, stripe, session);
         }
+      } else if (session.payment_status === 'unpaid') {
+        // An asynchronous method (SEPA, bank debit, a card needing action)
+        // completes the checkout before it completes the payment. Provisioning
+        // here would allocate a period of credits the user could spend before
+        // async_payment_failed ever arrives. checkout.session.async_payment_succeeded
+        // provisions instead, exactly as the top-up path above already does.
+        logger.info(
+          { sessionId: session.id },
+          'Subscription entitlement awaits asynchronous payment confirmation',
+        );
       } else {
         await upsertSubscriptionFromSession(db, stripe, session);
       }

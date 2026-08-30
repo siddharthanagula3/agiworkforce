@@ -87,7 +87,7 @@ export function UpgradeWelcome({
               </h1>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-sm">
                 <span
-                  className="rounded-full px-3 py-1 font-semibold text-white"
+                  className="rounded-full px-3 py-1 font-semibold text-[var(--chat-accent-on-primary)]"
                   style={{ background: 'var(--chat-accent-primary, #c8892a)' }}
                 >
                   {planLabel}
@@ -97,7 +97,7 @@ export function UpgradeWelcome({
                 ) : null}
                 {periodEnd ? (
                   <>
-                    <span aria-hidden="true" className="text-muted-foreground/50">
+                    <span aria-hidden="true" className="text-muted-foreground">
                       &middot;
                     </span>
                     <span className="text-muted-foreground">
@@ -162,7 +162,7 @@ export function UpgradeWelcome({
           */}
           <Link
             href="/chat"
-            className="w-full rounded-lg border border-transparent px-5 py-3 text-center text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90 sm:w-auto sm:py-2.5"
+            className="w-full rounded-lg border border-transparent px-5 py-3 text-center text-sm font-semibold text-[var(--chat-accent-on-primary)] no-underline transition-opacity hover:opacity-90 sm:w-auto sm:py-2.5"
             style={{ background: 'var(--chat-accent-primary, #c8892a)' }}
           >
             Start chatting

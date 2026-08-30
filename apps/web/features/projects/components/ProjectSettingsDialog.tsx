@@ -263,7 +263,7 @@ export function ProjectSettingsDialog({
               type="button"
               variant="ghost"
               size="sm"
-              className="order-3 col-span-2 w-full justify-center text-destructive hover:bg-destructive/10 hover:text-destructive sm:order-none sm:w-auto"
+              className="order-3 col-span-2 w-full justify-center text-danger hover:bg-destructive/10 hover:text-danger sm:order-none sm:w-auto"
               onClick={() => setDeleteConfirmOpen(true)}
             >
               <Trash2 className="mr-1.5 h-4 w-4" />

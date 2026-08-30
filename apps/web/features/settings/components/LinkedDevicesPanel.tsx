@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 
@@ -57,6 +58,7 @@ function readApiError(data: unknown, fallback: string): string {
 const cell = { padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' } as const;
 
 export function LinkedDevicesPanel() {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [devices, setDevices] = useState<LinkedDevice[]>([]);
   const [credentialStateKnown, setCredentialStateKnown] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -106,160 +108,182 @@ export function LinkedDevicesPanel() {
   }
 
   return (
-    <section
-      style={{
-        border: '1px solid var(--settings-border)',
-        borderRadius: 'var(--radius-lg)',
-        background: 'var(--bg-elev)',
-        overflow: 'hidden',
-      }}
-    >
-      <div
+    <>
+      {confirmDialog}
+      <section
         style={{
-          padding: '14px 20px',
-          borderBottom: '1px solid var(--settings-border)',
-          fontSize: 13,
-          fontWeight: 600,
-          color: 'var(--text-2)',
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          overflow: 'hidden',
         }}
       >
-        Linked devices
-      </div>
-
-      {loading ? (
-        <div role="status" style={{ padding: 20, fontSize: 13, color: 'var(--text-3)' }}>
-          Loading linked devices…
-        </div>
-      ) : loadError ? (
-        <div style={{ padding: 20 }}>
-          <p
-            role="alert"
-            style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--settings-destructive)' }}
-          >
-            {loadError}
-          </p>
-          <button
-            type="button"
-            onClick={() => void load()}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 11px',
-              fontSize: 12,
-              fontWeight: 500,
-              color: 'var(--text-1)',
-              background: 'transparent',
-              border: '1px solid var(--settings-border)',
-              borderRadius: 'var(--radius-md)',
-              cursor: 'pointer',
-            }}
-          >
-            <RefreshCw size={13} aria-hidden="true" />
-            Try again
-          </button>
-        </div>
-      ) : devices.length === 0 ? (
-        <p style={{ padding: 20, margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
-          No desktop or mobile app is linked to this account.
-        </p>
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <caption className="sr-only">
-              Desktop and mobile apps linked to your account, and whether each still holds a
-              credential
-            </caption>
-            <thead>
-              <tr style={{ textAlign: 'left', color: 'var(--text-3)', fontSize: 11 }}>
-                <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
-                  Device
-                </th>
-                <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
-                  Signed in
-                </th>
-                <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
-                  Last seen
-                </th>
-                <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
-                  Linked
-                </th>
-                <th scope="col" style={{ padding: '10px 16px', fontWeight: 500, textAlign: 'right' }}>
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {devices.map((device) => (
-                <tr key={device.id} style={{ borderTop: '1px solid var(--settings-border)' }}>
-                  <td style={{ ...cell, color: 'var(--text-1)' }}>
-                    {describe(device)}
-                    {device.version ? (
-                      <span style={{ color: 'var(--text-3)' }}> · {device.version}</span>
-                    ) : null}
-                  </td>
-                  <td style={cell}>
-                    {device.hasLiveCredential === null ? 'Unknown' : device.hasLiveCredential ? 'Yes' : 'No'}
-                  </td>
-                  <td style={cell}>{formatDateTime(device.lastSeenAt)}</td>
-                  <td style={cell}>{formatDateTime(device.registeredAt)}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    <button
-                      type="button"
-                      onClick={() => void handleUnlink(device)}
-                      disabled={unlinkingId !== null}
-                      aria-label={`Unlink ${describe(device)}`}
-                      style={{
-                        padding: '6px 10px',
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: 'var(--settings-destructive)',
-                        background: 'transparent',
-                        border: '1px solid var(--settings-border)',
-                        borderRadius: 'var(--radius-md)',
-                        cursor: unlinkingId !== null ? 'default' : 'pointer',
-                        opacity: unlinkingId !== null && unlinkingId !== device.id ? 0.5 : 1,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {unlinkingId === device.id ? 'Unlinking…' : 'Unlink'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {actionError ? (
-        <p
-          role="alert"
+        <div
           style={{
-            padding: '0 20px 12px',
-            margin: 0,
-            fontSize: 12,
-            color: 'var(--settings-destructive)',
+            padding: '14px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--text-2)',
           }}
         >
-          {actionError}
-        </p>
-      ) : null}
+          Linked devices
+        </div>
 
-      <p style={{ padding: '12px 20px 16px', margin: 0, fontSize: 11, color: 'var(--text-3)' }}>
-        {credentialStateKnown ? (
-          <>
-            Unlinking revokes the device&rsquo;s stored credential and removes it from this list.
-            The app signs out the next time it reaches the server.
-          </>
+        {loading ? (
+          <div role="status" style={{ padding: 20, fontSize: 13, color: 'var(--text-3)' }}>
+            Loading linked devices…
+          </div>
+        ) : loadError ? (
+          <div style={{ padding: 20 }}>
+            <p
+              role="alert"
+              style={{
+                margin: '0 0 12px',
+                fontSize: 13,
+                color: 'var(--settings-destructive-text)',
+              }}
+            >
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 11px',
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--text-1)',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius-md)',
+                cursor: 'pointer',
+              }}
+            >
+              <RefreshCw size={13} aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        ) : devices.length === 0 ? (
+          <p style={{ padding: 20, margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
+            No desktop or mobile app is linked to this account.
+          </p>
         ) : (
-          <>
-            Sign-in state cannot be read on this deployment, so unlinking removes the device from
-            this list without revoking its stored credential. Use &ldquo;Log out of all
-            devices&rdquo; below to end every session.
-          </>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <caption className="sr-only">
+                Desktop and mobile apps linked to your account, and whether each still holds a
+                credential
+              </caption>
+              <thead>
+                <tr style={{ textAlign: 'left', color: 'var(--text-3)', fontSize: 11 }}>
+                  <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
+                    Device
+                  </th>
+                  <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
+                    Signed in
+                  </th>
+                  <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
+                    Last seen
+                  </th>
+                  <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
+                    Linked
+                  </th>
+                  <th
+                    scope="col"
+                    style={{ padding: '10px 16px', fontWeight: 500, textAlign: 'right' }}
+                  >
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {devices.map((device) => (
+                  <tr key={device.id} style={{ borderTop: '1px solid var(--settings-border)' }}>
+                    <td style={{ ...cell, color: 'var(--text-1)' }}>
+                      {describe(device)}
+                      {device.version ? (
+                        <span style={{ color: 'var(--text-3)' }}> · {device.version}</span>
+                      ) : null}
+                    </td>
+                    <td style={cell}>
+                      {device.hasLiveCredential === null
+                        ? 'Unknown'
+                        : device.hasLiveCredential
+                          ? 'Yes'
+                          : 'No'}
+                    </td>
+                    <td style={cell}>{formatDateTime(device.lastSeenAt)}</td>
+                    <td style={cell}>{formatDateTime(device.registeredAt)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          confirm({
+                            title: `Unlink ${describe(device)}?`,
+                            description:
+                              'That device is signed out and its stored credentials are revoked. It has to be linked again from the device itself to regain access.',
+                            confirmLabel: 'Unlink device',
+                            onConfirm: () => handleUnlink(device),
+                          })
+                        }
+                        disabled={unlinkingId !== null}
+                        aria-label={`Unlink ${describe(device)}`}
+                        style={{
+                          padding: '6px 10px',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: 'var(--settings-destructive-text)',
+                          background: 'transparent',
+                          border: '1px solid var(--settings-border)',
+                          borderRadius: 'var(--radius-md)',
+                          cursor: unlinkingId !== null ? 'default' : 'pointer',
+                          opacity: unlinkingId !== null && unlinkingId !== device.id ? 0.5 : 1,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {unlinkingId === device.id ? 'Unlinking…' : 'Unlink'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </p>
-    </section>
+
+        {actionError ? (
+          <p
+            role="alert"
+            style={{
+              padding: '0 20px 12px',
+              margin: 0,
+              fontSize: 12,
+              color: 'var(--settings-destructive-text)',
+            }}
+          >
+            {actionError}
+          </p>
+        ) : null}
+
+        <p style={{ padding: '12px 20px 16px', margin: 0, fontSize: 11, color: 'var(--text-3)' }}>
+          {credentialStateKnown ? (
+            <>
+              Unlinking revokes the device&rsquo;s stored credential and removes it from this list.
+              The app signs out the next time it reaches the server.
+            </>
+          ) : (
+            <>
+              Sign-in state cannot be read on this deployment, so unlinking removes the device from
+              this list without revoking its stored credential. Use &ldquo;Log out of all
+              devices&rdquo; below to end every session.
+            </>
+          )}
+        </p>
+      </section>
+    </>
   );
 }

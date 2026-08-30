@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, GitBranch, Wrench } from 'lucide-react';
@@ -147,7 +146,7 @@ export function ToolTimeline({
               Used {entries.length} tool{entries.length !== 1 ? 's' : ''}
               {errorCount > 0 && <span className="text-red-400 ml-1">({errorCount} failed)</span>}
               {totalDuration > 0 && (
-                <span className="text-muted-foreground/60 ml-1">
+                <span className="text-muted-foreground ml-1">
                   (
                   {totalDuration < 1000
                     ? `${totalDuration}ms`

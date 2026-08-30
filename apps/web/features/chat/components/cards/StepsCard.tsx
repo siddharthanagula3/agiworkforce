@@ -335,7 +335,7 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
                       className={cn(
                         'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all',
                         isCompleted
-                          ? 'border-emerald-500 bg-emerald-500 text-white'
+                          ? 'border-emerald-700 bg-emerald-700 text-white'
                           : 'border-muted-foreground/30 hover:border-[var(--chat-accent-primary)]',
                       )}
                       aria-label={
@@ -347,7 +347,7 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
                       {isCompleted ? (
                         <Check className="h-3.5 w-3.5" aria-hidden="true" />
                       ) : (
-                        <Circle className="h-3 w-3 text-muted-foreground/30" aria-hidden="true" />
+                        <Circle className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
                       )}
                     </button>
 

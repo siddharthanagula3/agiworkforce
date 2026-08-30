@@ -744,6 +744,9 @@ export async function buildAdapterStreamResponse(
           'Provider stream threw before completion; settling as failed and persisting a marker',
         );
         try {
+          // A client that stops generation can surface here as a thrown abort
+          // instead of cancel(); the partial answer is still persisted below, so
+          // settling it as 'failed' would refund tokens the user keeps.
           await settleStreamBilling({
             processed,
             userId,
@@ -758,6 +761,7 @@ export async function buildAdapterStreamResponse(
               cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
             },
             outcome: 'failed',
+            ...(request.signal.aborted ? { cancelled: true } : {}),
           });
         } catch (reconciliationError) {
           logger.error(

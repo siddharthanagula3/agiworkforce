@@ -49,6 +49,10 @@ export interface AnchoredComposerMenuProps {
   align?: 'start' | 'end';
   contentRef?: React.RefObject<HTMLDivElement | null>;
   className?: string;
+  /** Announced name for the popup. Without it the panel is an unlabelled region. */
+  label: string;
+  /** Escape and Tab-out close the popup through this. */
+  onRequestClose?: () => void;
   children: React.ReactNode;
 }
 
@@ -65,6 +69,8 @@ export function AnchoredComposerMenu({
   align = 'start',
   contentRef,
   className,
+  label,
+  onRequestClose,
   children,
 }: AnchoredComposerMenuProps) {
   const internalRef = useRef<HTMLDivElement>(null);
@@ -144,11 +150,41 @@ export function AnchoredComposerMenu({
     };
   }, [open, mounted, reposition]);
 
+  // The panel opened with no focus inside it and no Escape handling, so a
+  // keyboard user could open it and neither reach its contents nor dismiss it.
+  useEffect(() => {
+    if (!open || !mounted) return;
+    const node = contentRef?.current ?? internalRef.current;
+    const id = window.setTimeout(() => {
+      node
+        ?.querySelector<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        )
+        ?.focus();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [open, mounted, contentRef]);
+
+  useEffect(() => {
+    if (!open || !mounted || !onRequestClose) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      onRequestClose();
+      anchorRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [open, mounted, onRequestClose, anchorRef]);
+
   if (!open || !mounted) return null;
 
   return createPortal(
     <div
       ref={setContentNode}
+      role="dialog"
+      aria-modal="false"
+      aria-label={label}
       style={{
         position: 'fixed',
         left: position?.left ?? 0,

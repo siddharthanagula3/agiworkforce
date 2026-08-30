@@ -95,8 +95,8 @@ class ErrorBoundary extends Component<Props, State> {
       if (this.props.compact) {
         return (
           <div className="flex flex-col items-center justify-center rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-            <AlertTriangle className="mb-2 h-6 w-6 text-destructive" />
-            <p className="mb-2 text-sm text-destructive">
+            <AlertTriangle className="mb-2 h-6 w-6 text-danger" />
+            <p className="mb-2 text-sm text-danger">
               {this.props.componentName
                 ? `${this.props.componentName} failed to load`
                 : 'Something went wrong'}
@@ -119,7 +119,7 @@ class ErrorBoundary extends Component<Props, State> {
           <Card className="w-full max-w-2xl">
             <CardHeader className="text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-                <AlertTriangle className="h-8 w-8 text-destructive" />
+                <AlertTriangle className="h-8 w-8 text-danger" />
               </div>
               <CardTitle className="text-2xl">Something went wrong</CardTitle>
               <CardDescription>
@@ -140,10 +140,8 @@ class ErrorBoundary extends Component<Props, State> {
 
               {process.env.NODE_ENV === 'development' && this.state.error && (
                 <div className="rounded-lg bg-destructive/10 p-4">
-                  <h4 className="mb-2 font-semibold text-destructive">
-                    Error Details (Development)
-                  </h4>
-                  <pre className="overflow-auto text-xs text-destructive">
+                  <h4 className="mb-2 font-semibold text-danger">Error Details (Development)</h4>
+                  <pre className="overflow-auto text-xs text-danger">
                     {this.state.error.toString()}
                   </pre>
                   {this.state.errorInfo && (

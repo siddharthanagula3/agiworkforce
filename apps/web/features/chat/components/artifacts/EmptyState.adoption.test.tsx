@@ -13,7 +13,7 @@ const CONVERSATION_ID = 'conv-empty-state';
 /**
  * The shared primitive renders `role="status"` and the accessible icon recipe
  * (`bg-primary/10` + `text-primary`); the local copies it replaced used
- * `bg-muted/50` + `text-muted-foreground/60`, which is the low-contrast pairing
+ * `bg-muted/50` + `text-muted-foreground`, which is the low-contrast pairing
  * the primitive exists to prevent.
  */
 function assertSharedEmptyState(title: string) {

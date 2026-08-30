@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,8 +8,9 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { claimTotpStep } from '@/lib/server/two-factor-replay';
 import {
-  verifyTOTPCode,
+  verifyTOTPStep,
   generateBackupCodes,
   hashBackupCode,
   decryptTOTPSecret,
@@ -48,9 +48,13 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   }
 
   const secret = await decryptTOTPSecret(row.totp_secret_enc);
-  const valid = await verifyTOTPCode(secret, code);
-  if (!valid) {
+  const step = await verifyTOTPStep(secret, code);
+  if (step === null) {
     logger.warn({ userId }, 'backup-codes regenerate: invalid TOTP code');
+    throw createError.unauthorized('Invalid TOTP code');
+  }
+  if (!(await claimTotpStep(db, userId, step))) {
+    logger.warn({ userId }, 'backup-codes regenerate: refused a replayed TOTP code');
     throw createError.unauthorized('Invalid TOTP code');
   }
 

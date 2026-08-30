@@ -53,4 +53,24 @@ describe('Sidebar empty state', () => {
 
     expect(screen.getByText('No conversations yet')).not.toBeNull();
   });
+
+  // WCAG 2.2 SC 2.5.8 wants 24x24. The live target-size sweep cannot see this
+  // control because it only renders when the account has no conversations, and
+  // the QA account has plenty — the interaction crawl reached it by filtering.
+  it('gives the empty-state call to action a 24px target', () => {
+    // renderSidebar([]) falls back to the populated list, so render directly.
+    render(
+      <Sidebar
+        sessions={[]}
+        projects={[]}
+        onNewChat={vi.fn()}
+        onSelect={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onTogglePin={vi.fn()}
+      />,
+    );
+    const cta = screen.getByRole('button', { name: 'Start a new chat' });
+    expect(cta.className).toMatch(/min-h-6/);
+  });
 });

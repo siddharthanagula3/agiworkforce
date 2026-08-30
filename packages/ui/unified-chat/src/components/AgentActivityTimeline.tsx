@@ -250,11 +250,9 @@ function SourceLinks({
     <div className="ml-8 mt-1.5 space-y-1.5 pb-1" aria-label="Sources">
       <div className="flex items-center gap-2">
         {entry.query && (
-          <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground/70">
-            {entry.query}
-          </p>
+          <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{entry.query}</p>
         )}
-        <span className="shrink-0 text-[11px] text-muted-foreground/70">
+        <span className="shrink-0 text-[11px] text-muted-foreground">
           {total} result{total === 1 ? '' : 's'}
         </span>
       </div>
@@ -314,7 +312,7 @@ function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'pr
             aria-hidden="true"
           />
         ) : entry.status === 'failed' || entry.status === 'cancelled' ? (
-          <AlertCircle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />
+          <AlertCircle className="h-3.5 w-3.5 text-danger" aria-hidden="true" />
         ) : (
           <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
         )}
@@ -404,8 +402,8 @@ function StaticRow({
 
   return (
     <div className="relative pl-8 py-1.5">
-      <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-destructive" aria-hidden="true" />
-      <p className="break-words text-sm text-destructive">{entry.message}</p>
+      <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-danger" aria-hidden="true" />
+      <p className="break-words text-sm text-danger">{entry.message}</p>
       {entry.retryable && (
         <p className="mt-0.5 text-[11px] text-muted-foreground">Retry available</p>
       )}
@@ -421,7 +419,7 @@ function RunStatusIcon({ status }: { status: AgentActivityState['status'] }) {
   }
   if (status === 'paused') return <PauseCircle className="h-4 w-4" aria-hidden="true" />;
   if (status === 'failed' || status === 'cancelled') {
-    return <AlertCircle className="h-4 w-4 text-destructive" aria-hidden="true" />;
+    return <AlertCircle className="h-4 w-4 text-danger" aria-hidden="true" />;
   }
   if (status === 'completed') {
     return <CheckCircle2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
