@@ -214,6 +214,7 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-danger: hsl(var(--destructive-text));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -645,8 +646,11 @@
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
 
-    --destructive: 0 84.2% 60.2%;
+    /* 48% lightness -> 4.60:1 as text and 4.88:1 under --destructive-foreground
+       on a solid fill - 60.2% failed WCAG AA in both roles (3.55 and 3.76) */
+    --destructive: 0 84.2% 48%;
     --destructive-foreground: 210 40% 98%;
+    --destructive-text: 0 84.2% 45%;
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
@@ -698,9 +702,11 @@
     --chat-text-primary: #1a1a1a;
     --chat-text-secondary: #636363;
     --chat-accent: #21808d;
+    --chat-accent-text: #1c6d78;
     --chat-accent-secondary: #da7756;
     /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
     --chat-accent-primary: #c8892a;
+    --chat-accent-on-primary: var(--accent-swatch-default-on);
     /* Darkened amber for TEXT set directly on light/near-white surfaces.
        --chat-accent-primary itself only measures ~2.8-3:1 against --chat-bg /
        --chat-bg-elevated in light mode (fails WCAG AA 4.5:1 for normal text) -
@@ -716,6 +722,11 @@
     --accent-swatch-blue: #2563eb;
     --accent-swatch-violet: #7c3aed;
     --accent-swatch-rose: #e11d48;
+    --accent-swatch-default-on: #1c150b;
+    --accent-swatch-green-on: #ffffff;
+    --accent-swatch-blue-on: #ffffff;
+    --accent-swatch-violet-on: #ffffff;
+    --accent-swatch-rose-on: #ffffff;
     /*
      * Legacy product-surface aliases used by /settings and older shared pages.
      * Keep them derived from semantic tokens so light/dark mode stays readable
@@ -730,12 +741,14 @@
     --settings-border: hsl(var(--border));
     --settings-destructive: hsl(var(--destructive));
     --settings-destructive-foreground: hsl(var(--destructive-foreground));
+    --settings-destructive-text: hsl(var(--destructive-text));
     --terracotta: var(--chat-accent-secondary);
     --chat-surface-elevated: hsl(var(--card));
     --serif: var(--font-heading);
     --mono: var(--font-mono);
     --teal: var(--chat-accent);
-    --amber: var(--chat-accent-primary);
+    --teal-text: var(--chat-accent-text);
+    --amber: var(--chat-accent-primary-text);
     /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border,
        --chat-user-bubble-bg, --chat-thinking-*, --chat-badge-*, --chat-destructive,
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
@@ -770,6 +783,7 @@
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
+    --destructive-text: 0 84% 65%;
 
     --border: var(--neutral-4);
     --input: var(--neutral-3);
@@ -832,9 +846,11 @@
     --chat-thinking-line: rgba(255, 255, 255, 0.1);
     --chat-badge-neutral: hsl(var(--neutral-fg-3));
     --chat-accent: #21808d;
+    --chat-accent-text: #3aa8b8;
     --chat-accent-secondary: #da7756;
     /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
     --chat-accent-primary: #c8892a;
+    --chat-accent-on-primary: var(--accent-swatch-default-on);
     /* On dark surfaces #c8892a already clears WCAG AA for text (~6.7:1 against
        --chat-bg #0a0a0a), so the text variant can reuse the same value. */
     --chat-accent-primary-text: #c8892a;
@@ -843,6 +859,11 @@
     --accent-swatch-blue: #60a5fa;
     --accent-swatch-violet: #a78bfa;
     --accent-swatch-rose: #fb7185;
+    --accent-swatch-default-on: #1c150b;
+    --accent-swatch-green-on: #1c150b;
+    --accent-swatch-blue-on: #1c150b;
+    --accent-swatch-violet-on: #1c150b;
+    --accent-swatch-rose-on: #1c150b;
     /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border,
        --chat-user-bubble-bg, --chat-thinking-*, --chat-badge-*, --chat-destructive,
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
@@ -857,6 +878,7 @@
      so AGI's brand colour is consistent across both warm and cool palettes. */
   [data-chat-theme='cool'] {
     --chat-accent-primary: #c8892a;
+    --chat-accent-on-primary: var(--accent-swatch-default-on);
     /* Light-mode cool theme: darkened text variant, see --chat-accent-primary-text
        above for the WCAG AA rationale (~5.3-5.6:1 vs ~2.8-3:1). */
     --chat-accent-primary-text: #8b5f1d;
@@ -865,6 +887,7 @@
   .dark [data-chat-theme='cool'],
   .dark[data-chat-theme='cool'] {
     --chat-accent-primary: #c8892a;
+    --chat-accent-on-primary: var(--accent-swatch-default-on);
     /* Dark-mode cool theme: #c8892a already passes AA for text on dark surfaces. */
     --chat-accent-primary-text: #c8892a;
   }
@@ -877,18 +900,22 @@
   html[data-accent='green'] {
     --chat-accent-primary: var(--accent-swatch-green);
     --chat-accent-primary-text: var(--accent-swatch-green);
+    --chat-accent-on-primary: var(--accent-swatch-green-on);
   }
   html[data-accent='blue'] {
     --chat-accent-primary: var(--accent-swatch-blue);
     --chat-accent-primary-text: var(--accent-swatch-blue);
+    --chat-accent-on-primary: var(--accent-swatch-blue-on);
   }
   html[data-accent='violet'] {
     --chat-accent-primary: var(--accent-swatch-violet);
     --chat-accent-primary-text: var(--accent-swatch-violet);
+    --chat-accent-on-primary: var(--accent-swatch-violet-on);
   }
   html[data-accent='rose'] {
     --chat-accent-primary: var(--accent-swatch-rose);
     --chat-accent-primary-text: var(--accent-swatch-rose);
+    --chat-accent-on-primary: var(--accent-swatch-rose-on);
   }
 
   [data-accent-swatch='default'] {
@@ -1748,8 +1775,9 @@
   --border: 240 6% 15%;
   --input: 240 6% 15%;
   --ring: 200 98% 39%;
-  --destructive: 0 84% 60%;
+  --destructive: 0 84% 48%;
   --destructive-foreground: 0 0% 98%;
+  --destructive-text: 0 84% 65%;
 
   color-scheme: dark;
   background-color: hsl(240, 10%, 3.9%);
@@ -4119,6 +4147,9 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-footer-link {
   display: inline-block;
+  /* WCAG 2.2 SC 2.5.8: a standalone nav link is not the "inline" exception,
+     so short labels like "CLI" still need a 24px target. */
+  min-width: 24px;
   padding-block: 4px;
   font-size: 14px;
   color: var(--agi-ink-2);
@@ -5079,9 +5110,12 @@ html[data-contrast='more'] *:focus-visible {
   line-height: 1.08;
 }
 
+/* Inside a paragraph this sat at 2.01:1 against the surrounding text with no
+   underline, so colour alone had to carry it (WCAG 1.4.1). */
 [data-design='agi'] .agi-fl-surface-link {
   color: var(--agi-ink);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   transition: color var(--agi-dur-fast) var(--agi-ease-out);
 }
 

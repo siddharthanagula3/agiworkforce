@@ -48,7 +48,15 @@
     --chat-border-strong: rgba(26, 25, 21, 0.15);
     --chat-border-subtle: rgba(26, 25, 21, 0.08);
     --chat-accent-primary: #da7756;
-    --chat-accent-primary-contrast: #ffffff;
+    --chat-accent-on-primary: #1c150b;
+    /* the fill reads 3.11:1 as text on this light surface; 5.45:1 here. */
+    --chat-accent-primary-text: #a8502f;
+    /* Named for the accent it actually sits on. White clears AA on the
+       secondary accent (4.63:1 on #21808d, 5.04:1 on #0a6ed1) but not on
+       the primary one (3.11:1 on #da7756), which is what
+       --chat-accent-on-primary is for. */
+    --chat-accent-on-secondary: #ffffff;
+    --chat-accent-primary-contrast: var(--chat-accent-on-secondary);
     --chat-accent-secondary: #21808d;
     --chat-accent-secondary-soft: rgba(33, 128, 141, 0.15);
     --chat-focus-ring: rgba(33, 128, 141, 0.25);
@@ -90,7 +98,15 @@
     --chat-border-strong: rgba(255, 255, 255, 0.16);
     --chat-border-subtle: rgba(255, 255, 255, 0.08);
     --chat-accent-primary: #da7756;
-    --chat-accent-primary-contrast: #ffffff;
+    --chat-accent-on-primary: #1c150b;
+    /* on the dark surface the fill itself clears AA as text: 6.75:1. */
+    --chat-accent-primary-text: #da7756;
+    /* Named for the accent it actually sits on. White clears AA on the
+       secondary accent (4.63:1 on #21808d, 5.04:1 on #0a6ed1) but not on
+       the primary one (3.11:1 on #da7756), which is what
+       --chat-accent-on-primary is for. */
+    --chat-accent-on-secondary: #ffffff;
+    --chat-accent-primary-contrast: var(--chat-accent-on-secondary);
     --chat-accent-secondary: #21808d;
     --chat-accent-secondary-soft: rgba(33, 128, 141, 0.15);
     --chat-focus-ring: rgba(33, 128, 141, 0.25);
@@ -154,7 +170,15 @@
     --chat-border-strong: rgba(0, 0, 0, 0.16);
     --chat-border-subtle: rgba(0, 0, 0, 0.08);
     --chat-accent-primary: #0b84ff;
-    --chat-accent-primary-contrast: #ffffff;
+    --chat-accent-on-primary: #1c150b;
+    /* #0b84ff reads 3.65:1 as text on white; 6.11:1 here. */
+    --chat-accent-primary-text: #0961bb;
+    /* Named for the accent it actually sits on. White clears AA on the
+       secondary accent (4.63:1 on #21808d, 5.04:1 on #0a6ed1) but not on
+       the primary one (3.11:1 on #da7756), which is what
+       --chat-accent-on-primary is for. */
+    --chat-accent-on-secondary: #ffffff;
+    --chat-accent-primary-contrast: var(--chat-accent-on-secondary);
     --chat-accent-secondary: #0a6ed1;
     --chat-accent-secondary-soft: rgba(11, 132, 255, 0.12);
     --chat-focus-ring: rgba(11, 132, 255, 0.3);
@@ -162,5 +186,4 @@
     --chat-thinking-text: #5d5d5d;
     --chat-thinking-line: rgba(0, 0, 0, 0.08);
   }
-
 }
