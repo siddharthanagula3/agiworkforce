@@ -163,6 +163,27 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await waitFor(() => expect(within(notionRow).getByText('Connected')).toBeTruthy());
   });
 
+  it('keeps valid connector rows when one response field is malformed', async () => {
+    stubFetch({
+      connectors: [
+        { connectorId: 'notion', connectedAt: null } as unknown as {
+          connectorId: string;
+          connectedAt?: string;
+        },
+      ],
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('Notion')).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'Some connector data could not be read. Valid connectors remain available; retry to refresh.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText('Connectors returned data this page could not read.')).toBeNull();
+  });
+
   it('marks GitHub Connected from real GitHub App installations (not user_connectors)', async () => {
     stubFetch({ installations: [{ installation_id: 42, created_at: '2026-06-01T00:00:00Z' }] });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
@@ -195,6 +216,30 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await waitFor(() =>
       expect(within(githubRow).getByRole('button', { name: /^Connect/ })).toBeTruthy(),
     );
+  });
+
+  it('shows a secure-storage configuration failure on the connector row', async () => {
+    const fetchMock = stubFetch({ available: ['notion'] });
+    const readResponse = fetchMock.getMockImplementation()!;
+    const message =
+      'Connector authorization is unavailable because secure token storage is not configured. Contact your administrator.';
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (input === '/api/connectors' && init?.method === 'POST') {
+        return Response.json({ error: message, connectorId: 'notion' }, { status: 503 });
+      }
+      return readResponse(input);
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    const { act, fireEvent } = await import('@testing-library/react');
+    const connectButton = await screen.findByRole('button', { name: 'Connect Notion' });
+    await act(async () => {
+      fireEvent.click(connectButton);
+    });
+
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Connect Notion' })).toBeEnabled();
+    expect(screen.getByRole('tab', { name: /^Connected\s*0$/ })).toBeTruthy();
   });
 
   it('shows a connector loading failure and retries instead of pretending the directory is empty', async () => {

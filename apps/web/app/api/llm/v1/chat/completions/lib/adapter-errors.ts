@@ -2,6 +2,25 @@ import 'server-only';
 
 import type { StreamChunk } from '@agiworkforce/types';
 
+/**
+ * An upstream failure reconstructed from a provider `StreamChunk`.
+ *
+ * `classifyError` in `@agiworkforce/provider-runtime` reads `status` AND
+ * `retryAfterSeconds` off the thrown value. Every adapter already computes
+ * `retryAfterSeconds` from the real provider headers and attaches it to the
+ * error chunk — but this layer used to rebuild a bare `Error` carrying only
+ * `status`, so by the time managed failover classified the error a second time
+ * the header value was structurally unrecoverable and rotation happened with
+ * zero backoff regardless of what `Retry-After` said.
+ *
+ * Carrying the field through is what makes honouring `Retry-After` possible at
+ * all downstream.
+ */
+export interface UpstreamError extends Error {
+  status?: number;
+  retryAfterSeconds?: number;
+}
+
 function providerUpstreamError(
   label: string,
   chunk: Extract<StreamChunk, { type: 'error' }>,
@@ -24,8 +43,13 @@ function providerUpstreamError(
     default:
       message = `${label} API error (${status ?? 'unknown'}): ${chunk.message}`;
   }
-  const error = new Error(message) as Error & { status?: number };
+  const error = new Error(message) as UpstreamError;
   if (Number.isFinite(status)) error.status = status;
+  // Preserve the provider's own Retry-After. Dropping it here is what made
+  // `retryAfterSeconds` unrecoverable for every downstream consumer.
+  if (typeof chunk.retryAfterSeconds === 'number' && Number.isFinite(chunk.retryAfterSeconds)) {
+    error.retryAfterSeconds = chunk.retryAfterSeconds;
+  }
   return error;
 }
 

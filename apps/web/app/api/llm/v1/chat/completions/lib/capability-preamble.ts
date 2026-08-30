@@ -80,6 +80,16 @@ export interface CapabilityPreambleInput {
    * where the toggle was never touched, so the drop has to be disclosed.
    */
   codeExecutionUnavailable?: boolean;
+  /**
+   * The user turned Deep Research on, but the model this turn routed to cannot
+   * do it, so the research loop never ran.
+   *
+   * Disclosed for the same reason `codeExecutionUnavailable` is: the toggle
+   * stays lit in the UI, and without this the user receives an ordinary
+   * single-turn answer that looks like a researched one. Silence here is the
+   * difference between a degraded feature and a dishonest one.
+   */
+  researchUnavailable?: boolean;
 }
 
 function formatLocalInstant(now: Date, timeZone: string | undefined): string | null {
@@ -193,6 +203,17 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
         'available for the model this turn was routed to. Write code if it helps, but ' +
         'present it as code you have not run — never report output, results, or timings as ' +
         'though you had executed it.',
+    );
+  }
+
+  if (input.researchUnavailable) {
+    sections.push(
+      'The user turned "Deep Research" on for this turn, but the model handling it cannot ' +
+        'run the research loop, so no multi-step search, source gathering, or citation pass ' +
+        'happened. Tell the user that plainly before you answer, and name the limit: Deep ' +
+        'Research is not available for the model this turn was routed to. Answer from your ' +
+        'own knowledge if you can, and never present the result as researched, sourced, or ' +
+        'cited when it was not.',
     );
   }
 

@@ -14,12 +14,34 @@ describe('credential failover admission', () => {
 
   it.each([
     ['a suspended organization', 'Your organization has been disabled', 403],
-    ['an exhausted credit balance', 'Your credit balance is too low to access the API', 400],
     ['a revoked token', 'OAuth token has been revoked', 401],
   ])('admits rotation for %s', (_label, message, status) => {
     const classified = classifyError({ status, message });
     expect(classified.category).toBe('auth');
     expect(isCredentialFailureCategory(classified.category)).toBe(true);
+  });
+
+  // CORRECTED: this case previously asserted `category === 'auth'`, which
+  // encoded a real defect rather than a requirement. An exhausted credit balance
+  // is an unfunded — but perfectly VALID — credential. Classifying it as a
+  // credential failure made it a rotation trigger, so an AGIWorkforce account
+  // that had run out of money silently pushed the request onto a different PAID
+  // provider and spent more there instead of surfacing the billing problem.
+  //
+  // The assertion is inverted deliberately. See billing-failure-taxonomy.test.ts
+  // for the full invariant.
+  it('refuses credential rotation for an exhausted credit balance', () => {
+    const classified = classifyError({
+      status: 400,
+      message: 'Your credit balance is too low to access the API',
+    });
+
+    expect(classified.category).toBe('billing_exhausted');
+    expect(isCredentialFailureCategory(classified.category)).toBe(false);
+
+    const state = new CredentialFailoverState();
+    expect(state.recordFailure('anthropic', classified.category)).toBe(false);
+    expect(state.blocksRoute('anthropic')).toBe(false);
   });
 
   it('rotates to a different provider but never back to the rejected one', () => {

@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import {
@@ -286,17 +285,25 @@ export async function refreshDiscoveredGrant(input: {
   tokenType: string;
   grantedScopes: string[];
 }): Promise<McpRefreshOutcome> {
+  if (!input.issuer) {
+    return {
+      status: 'failed',
+      message: 'This grant has no recorded issuer. Please connect again.',
+    };
+  }
+
   const provider = new McpOAuthClientProvider({
     mcpUrl: input.mcpUrl,
     state: generateOAuthState(),
     seed: {
       issuer: input.issuer,
       tokens: {
+        issuer: input.issuer,
         access_token: '',
         refresh_token: input.refreshToken,
         token_type: input.tokenType,
         ...(input.grantedScopes.length > 0 ? { scope: input.grantedScopes.join(' ') } : {}),
-      } as unknown as NonNullable<McpOAuthProviderSeed['tokens']>,
+      },
     },
   });
 

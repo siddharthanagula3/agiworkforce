@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -35,6 +36,8 @@ vi.mock('@/lib/user-connector-tools', () => ({
 vi.mock('@/lib/connectors/oauth-registry', () => ({
   getOAuthConfiguredConnectorIds: () => mocks.oauthConfiguredIds(),
   isConnectorOAuthConfigured: (id: string) => mocks.oauthConfiguredIds().has(id),
+  isConnectorOAuthSupported: (id: string) =>
+    mocks.oauthConfiguredIds().has(id) || isSelfServiceConnector(id),
   buildConnectorOAuthStartPath: (id: string) => `/api/connectors/oauth/start?connectorId=${id}`,
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
@@ -65,6 +68,8 @@ import { CONNECTORS } from '@/features/connectors/data/connectors';
 import { CONNECTOR_CAPABILITIES } from '@/lib/connectors/catalog';
 
 import { DELETE, GET, POST } from './route';
+
+afterEach(() => vi.unstubAllEnvs());
 
 function getRequest(): NextRequest {
   return new NextRequest('http://localhost:3000/api/connectors');
@@ -132,6 +137,19 @@ describe('/api/connectors managed-cloud capability boundary', () => {
       error: expect.stringContaining('Desktop Local settings'),
     });
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('shows a storage configuration error before redirecting to OAuth', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', '');
+
+    const response = await POST(postRequest('notion'));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      connectorId: 'notion',
+      error: expect.stringContaining('secure token storage'),
+    });
+    expect(mocks.execute).not.toHaveBeenCalled();
   });
 
   it('accepts dropbox as a known connector id (honest 501, not the allowlist rejection)', async () => {
@@ -295,10 +313,34 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     expect(JSON.stringify(body)).not.toMatch(/token/i);
   });
 
+  it('reports a self-service MCP grant as connected after discovered OAuth completes', async () => {
+    mocks.oauthGrants.mockResolvedValue([
+      {
+        connectorId: 'airtable',
+        grantedScopes: ['data.records:read'],
+        connectedAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        needsReauthorization: false,
+      },
+    ]);
+
+    const response = await GET(getRequest());
+    const body = (await response.json()) as {
+      connectors: Array<{ connectorId: string; source: string; scopes?: string[] }>;
+    };
+
+    expect(body.connectors.find((connector) => connector.connectorId === 'airtable')).toMatchObject(
+      {
+        source: 'oauth',
+        scopes: ['data.records:read'],
+      },
+    );
+  });
+
   it('does not report a grant whose provider is no longer configured', async () => {
     mocks.oauthGrants.mockResolvedValue([
       {
-        connectorId: 'linear',
+        connectorId: 'dropbox',
         grantedScopes: [],
         connectedAt: '',
         updatedAt: '',
@@ -309,7 +351,7 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     const response = await GET(getRequest());
     const body = (await response.json()) as { connectors: Array<{ connectorId: string }> };
 
-    expect(body.connectors.some((c) => c.connectorId === 'linear')).toBe(false);
+    expect(body.connectors.some((c) => c.connectorId === 'dropbox')).toBe(false);
   });
 
   it('revokes the grant, closes the live handle, and clears saved verdicts on disconnect', async () => {

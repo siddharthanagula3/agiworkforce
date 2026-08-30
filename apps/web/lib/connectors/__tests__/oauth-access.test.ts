@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
     updateTokens: vi.fn(),
     revokeGrant: vi.fn(),
     refresh: vi.fn(),
+    refreshDiscovered: vi.fn(),
     revokeAtProvider: vi.fn(),
     getProvider: vi.fn(),
     ConnectorOAuthTokenError,
@@ -55,6 +56,10 @@ vi.mock('@/lib/connectors/oauth-client', () => ({
 
 vi.mock('@/lib/connectors/oauth-registry', () => ({
   getConnectorOAuthProvider: (...a: unknown[]) => mocks.getProvider(...a),
+}));
+
+vi.mock('@/lib/connectors/mcp-discovery', () => ({
+  refreshDiscoveredGrant: mocks.refreshDiscovered,
 }));
 
 import { disconnectConnectorOAuthGrant, resolveConnectorAccessToken } from '../oauth-access';
@@ -194,6 +199,58 @@ describe('resolveConnectorAccessToken', () => {
       status: 'reauthorization-required',
       reason: 'undecryptable',
     });
+  });
+
+  it('refreshes a self-service grant without operator OAuth configuration', async () => {
+    mocks.getProvider.mockReturnValue(null);
+    mocks.getGrant.mockResolvedValue(
+      grant({
+        mcpUrl: 'https://mcp.example.test/mcp',
+        issuer: 'https://auth.example.test',
+      }),
+    );
+    const tokens = {
+      accessToken: 'fresh-access',
+      refreshToken: 'fresh-refresh',
+      tokenType: 'Bearer',
+      grantedScopes: ['read'],
+      accessTokenExpiresAt: new Date(Date.now() + 3_600_000),
+    };
+    mocks.refreshDiscovered.mockResolvedValue({ status: 'refreshed', ...tokens });
+    await expect(
+      resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
+    ).resolves.toMatchObject({
+      status: 'ready',
+      accessToken: 'fresh-access',
+    });
+    expect(mocks.refreshDiscovered).toHaveBeenCalledWith({
+      mcpUrl: 'https://mcp.example.test/mcp',
+      issuer: 'https://auth.example.test',
+      refreshToken: 'live-refresh',
+      tokenType: 'Bearer',
+      grantedScopes: ['read'],
+    });
+    expect(mocks.updateTokens).toHaveBeenCalledWith('u1', 'linear', tokens);
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it('revokes a discovered grant when the authorization server changes', async () => {
+    mocks.getProvider.mockReturnValue(null);
+    mocks.getGrant.mockResolvedValue(
+      grant({
+        mcpUrl: 'https://mcp.example.test/mcp',
+        issuer: 'https://auth.example.test',
+      }),
+    );
+    mocks.refreshDiscovered.mockResolvedValue({ status: 'authorization-server-changed' });
+    await expect(
+      resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
+    ).resolves.toEqual({
+      status: 'reauthorization-required',
+      reason: 'refresh-failed',
+    });
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear');
+    expect(mocks.updateTokens).not.toHaveBeenCalled();
   });
 });
 

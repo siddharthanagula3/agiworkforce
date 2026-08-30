@@ -663,11 +663,24 @@ function modelSupportsEffort(provider: string, model: string): boolean {
   return provider === 'anthropic' || provider === 'openai' || provider === 'google';
 }
 
+/**
+ * Whether this model accepts a FORCED `tool_choice`. Some reasoning models reason on
+ * every turn and reject `'required'` or a named function with HTTP 400
+ * ("Thinking mode does not support this tool_choice"), which reaches the user
+ * as an empty assistant turn. The catalog records the constraint per model, so
+ * a new model inherits the right behavior without editing this route.
+ */
+function modelAcceptsForcedToolChoice(model: string | undefined): boolean {
+  if (!model) return true;
+  return getModelMetadataById(model)?.providerCompatibility?.forcedToolChoice !== false;
+}
+
 export function resolveInitialManagedCodeToolChoice(input: {
   requestedToolChoice: ChatCompletionRequest['tool_choice'];
   codeExecution: boolean | undefined;
   stream: boolean | undefined;
   provider: string;
+  model?: string;
   e2bEnabled: boolean;
   toolsCapable: boolean;
 }): ChatCompletionRequest['tool_choice'] {
@@ -678,6 +691,7 @@ export function resolveInitialManagedCodeToolChoice(input: {
     input.e2bEnabled &&
     input.toolsCapable &&
     input.provider.toLowerCase() !== 'anthropic' &&
+    modelAcceptsForcedToolChoice(input.model) &&
     providerRoutesToE2B(input.provider)
   ) {
     return 'required';
@@ -691,6 +705,7 @@ export function resolveInitialWebSearchToolChoice(input: {
   researchTask: boolean;
   stream: boolean | undefined;
   provider: string;
+  model?: string;
   webSearchToolAttached: boolean;
 }): ChatCompletionRequest['tool_choice'] {
   if (input.requestedToolChoice !== undefined) return input.requestedToolChoice;
@@ -699,7 +714,8 @@ export function resolveInitialWebSearchToolChoice(input: {
     input.researchTask &&
     input.stream === true &&
     input.webSearchToolAttached &&
-    input.provider.toLowerCase() !== 'anthropic'
+    input.provider.toLowerCase() !== 'anthropic' &&
+    modelAcceptsForcedToolChoice(input.model)
   ) {
     return 'required';
   }
@@ -2173,6 +2189,13 @@ export async function processRequest(
   if (researchMode) {
     applyResearchMode(chatRequest);
   }
+  // The user asked for Deep Research and the routed model cannot do it, so the
+  // research loop will not run. Previously this was silent: the toggle stayed
+  // lit, `runResearchLoop` never executed, and the user received an ordinary
+  // answer with no header, no SSE status frame and nothing in the text to say
+  // so. Mirrors `codeExecutionUnavailable`, which already discloses exactly this
+  // shape of degradation.
+  const researchUnavailable = chatRequest.research === true && !researchMode;
 
   if (
     !freeTrialEnabled &&
@@ -2763,6 +2786,7 @@ export async function processRequest(
   if (chatSurface !== 'api') {
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
+      researchUnavailable,
       timeZone: chatRequest.client_timezone,
       codeExecutionUnavailable,
     });
@@ -2788,6 +2812,7 @@ export async function processRequest(
     codeExecution: chatRequest.code_execution,
     stream: chatRequest.stream,
     provider: providerLower,
+    model: chatRequest.model,
     e2bEnabled: e2bCutoverEnabled(),
     toolsCapable: resolvedModelCaps?.tools ?? true,
   });
@@ -2806,6 +2831,7 @@ export async function processRequest(
         researchTask: resolvedTaskType === 'research',
         stream: chatRequest.stream,
         provider: providerLower,
+        model: chatRequest.model,
         webSearchToolAttached: extractToolNames(resolvedTools).includes('web_search'),
       }),
     thinking_mode: chatRequest.thinking_mode,

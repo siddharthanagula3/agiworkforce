@@ -81,7 +81,7 @@ describe('connector authorization-required payload', () => {
 
   it('offers NO connect button when the deployment has no OAuth app for the connector', () => {
     const payload = buildConnectorAuthorizationRequiredPayload({
-      connectorId: 'notion',
+      connectorId: 'dropbox',
       toolName: 'search',
       reason: 'not_connected',
     });

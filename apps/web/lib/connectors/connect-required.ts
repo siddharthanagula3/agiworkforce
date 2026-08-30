@@ -1,9 +1,9 @@
-
 import 'server-only';
 
 import {
   buildConnectorOAuthStartPath,
   getConnectorOAuthProvider,
+  isConnectorOAuthSupported,
 } from '@/lib/connectors/oauth-registry';
 
 export const CONNECTOR_AUTHORIZATION_REQUIRED_KEY = 'agi_connector_authorization_required';
@@ -54,6 +54,7 @@ export function buildConnectorAuthorizationRequiredPayload(params: {
   returnPath?: string;
 }): ConnectorAuthorizationRequiredPayload {
   const provider = getConnectorOAuthProvider(params.connectorId);
+  const connectable = isConnectorOAuthSupported(params.connectorId);
   const connectorName = params.connectorLabel ?? provider?.displayName ?? params.connectorId;
   const scopes = [...new Set([...(provider?.scopes ?? []), ...(params.additionalScopes ?? [])])];
   return {
@@ -62,11 +63,11 @@ export function buildConnectorAuthorizationRequiredPayload(params: {
     connectorName,
     toolName: params.toolName,
     reason: params.reason,
-    connectUrl: provider
+    connectUrl: connectable
       ? buildConnectorOAuthStartPath(params.connectorId, params.returnPath)
       : null,
     scopes,
-    message: messageFor(params.reason, connectorName, provider !== null),
+    message: messageFor(params.reason, connectorName, connectable),
   };
 }
 
