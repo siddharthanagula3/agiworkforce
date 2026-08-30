@@ -14,10 +14,7 @@ pub(super) fn request_uses_managed_cloud(
 
 /// Check billing subscription access and monthly budget limits.
 /// Returns `Ok(())` if the request is allowed, `Err(String)` if blocked.
-pub(super) fn check_billing_and_budget(
-    db: &AppDatabase,
-    user_id: &str,
-) -> Result<(), String> {
+pub(super) fn check_billing_and_budget(db: &AppDatabase, user_id: &str) -> Result<(), String> {
     let conn = db
         .connection()
         .map_err(|e| format!("Budget check failed: {e}"))?;
