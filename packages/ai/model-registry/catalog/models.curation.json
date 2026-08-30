@@ -514,7 +514,7 @@
       },
       "modelPrefixes": ["meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/", "openrouter/"],
       "aliases": ["open_router", "openrouter", "open-router"],
-      "defaultModel": "openrouter/auto",
+      "defaultModel": "openrouter-auto",
       "taskRouting": {},
       "canonicalization": {}
     },
