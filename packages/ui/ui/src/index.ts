@@ -331,3 +331,7 @@ export {
   type CustomMcpJsonImportError,
   type CustomMcpJsonImportResult,
 } from './settings-modal';
+
+export { useConfirmAction } from './primitives/ConfirmAction';
+export type { ConfirmActionRequest } from './primitives/ConfirmAction';
+export { useMenuKeyboard } from './primitives/useMenuKeyboard';
