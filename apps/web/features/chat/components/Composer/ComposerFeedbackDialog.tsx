@@ -105,9 +105,7 @@ export function ComposerFeedbackDialog({
       setMessage('');
     } catch (error) {
       setSubmitState('error');
-      setErrorMessage(
-        toUserMessage(error, 'Could not send feedback. Please try again.'),
-      );
+      setErrorMessage(toUserMessage(error, 'Could not send feedback. Please try again.'));
     }
   };
 
@@ -116,6 +114,7 @@ export function ComposerFeedbackDialog({
       <button
         type="button"
         onClick={() => setOpen(true)}
+        data-inline-link="true"
         className="underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {isSafetyAppeal ? 'Report issue' : 'Feedback'}
@@ -210,7 +209,7 @@ export function ComposerFeedbackDialog({
               </div>
 
               {errorMessage ? (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className="text-sm text-danger">
                   {errorMessage}
                 </p>
               ) : null}

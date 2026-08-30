@@ -172,11 +172,11 @@ export default function ContentReportQueuePanel() {
               </span>
             </div>
 
-            <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-foreground">
               {report.contentExcerpt || 'No excerpt was submitted with this report.'}
             </p>
             {report.userNote ? (
-              <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                 Reporter note: {report.userNote}
               </p>
             ) : null}

@@ -46,9 +46,11 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
 
       {/* Header */}
       <div className="border-b border-border px-6 py-4">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">{session.title}</h1>
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold" title={session.title}>
+              {session.title}
+            </h1>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
               {session.model_id && (
                 <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
@@ -109,7 +111,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
                   ))}
                 </div>
               )}
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <p className="whitespace-pre-wrap break-words">{message.content}</p>
             </div>
           </div>
         ))}

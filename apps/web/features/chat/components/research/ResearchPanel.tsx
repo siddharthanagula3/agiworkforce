@@ -87,15 +87,15 @@ function SourceRow({ source, index }: { source: ResearchSource; index: number })
         <h4 className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
           {source.title || displayHost}
         </h4>
-        <p className="truncate text-[11px] text-muted-foreground/70">{displayHost}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{displayHost}</p>
         {source.snippet && (
-          <p className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground/60">
+          <p className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
             {source.snippet}
           </p>
         )}
       </div>
 
-      <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/60" />
+      <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground" />
     </a>
   );
 }
@@ -198,7 +198,7 @@ function ReportTab({
   }
   if (state === 'error') {
     return (
-      <p role="alert" className="px-4 py-6 text-center text-xs text-destructive">
+      <p role="alert" className="px-4 py-6 text-center text-xs text-danger">
         {error}
       </p>
     );
@@ -479,7 +479,7 @@ function SourcePill({ source, index }: { source: ResearchSource; index: number }
           onError={() => setImgError(true)}
         />
       ) : (
-        <Globe className="h-3 w-3 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+        <Globe className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
       )}
       <span className="max-w-[120px] truncate">{host}</span>
     </a>
@@ -499,7 +499,7 @@ export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
       aria-label={query ? `Sources for "${query}"` : 'Web search sources'}
     >
       {/* Compact "Sources" label (claude.ai parity) with the deduped count. */}
-      <span className="mr-0.5 text-[11px] font-medium text-muted-foreground/70">
+      <span className="mr-0.5 text-[11px] font-medium text-muted-foreground">
         {sources.length} {sources.length === 1 ? 'source' : 'sources'}
       </span>
 
@@ -511,7 +511,7 @@ export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
       <button
         type="button"
         onClick={() => openPanel(activeConversationId, sources, query)}
-        className="inline-flex items-center gap-1 rounded-full border border-border/20 bg-transparent px-2 py-0.5 text-[11px] text-muted-foreground/70 transition-colors hover:border-border/50 hover:text-primary"
+        className="inline-flex items-center gap-1 rounded-full border border-border/20 bg-transparent px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-border/50 hover:text-primary"
         aria-label="Open all sources in panel"
       >
         <PanelRight className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />

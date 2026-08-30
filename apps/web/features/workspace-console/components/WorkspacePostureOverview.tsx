@@ -36,7 +36,7 @@ function StateMark({ state }: { state: PostureState }) {
     return (
       <span
         className={shared}
-        style={{ background: 'var(--bg-hover)', color: 'var(--settings-destructive-foreground)' }}
+        style={{ background: 'var(--bg-hover)', color: 'var(--settings-destructive-text)' }}
         role="img"
         aria-label="Needs attention"
       >

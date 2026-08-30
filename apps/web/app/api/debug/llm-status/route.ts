@@ -5,14 +5,14 @@ import { getOptionalEnv } from '@shared/utils/env';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 
 async function handleGetLlmStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
   const isDev = process.env.NODE_ENV === 'development';
   if (!isDev) {
-    await requireAdmin(request);
+    await requirePlatformAdmin(request);
   }
 
   const providers = [

@@ -54,7 +54,7 @@ exports[`shared-primitive DOM snapshots > locks the GeneratedFileCard rendered s
           Snapshot report
         </span>
         <span
-          class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300"
+          class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
         >
           <svg
             aria-hidden="true"
@@ -157,7 +157,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
   >
     <div
       aria-hidden="true"
-      class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-xl bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+      class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-xl bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
     >
       <svg
         aria-hidden="true"
@@ -206,7 +206,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
     class="flex flex-wrap items-center gap-1.5"
   >
     <span
-      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
       data-stays-local="true"
       data-testid="project-header-privacy-chip"
     >
@@ -240,7 +240,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
       </span>
     </span>
     <span
-      class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium border-emerald-500/40 text-emerald-300 bg-emerald-500/5"
+      class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5"
       data-provider-mode="Local"
       data-testid="project-header-provider-chip"
     >

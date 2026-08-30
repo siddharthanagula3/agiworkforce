@@ -184,6 +184,12 @@ export function useAPIKeys(): UseQueryResult<APIKey[], Error> {
         if (error) throw new Error(error);
         return data;
       } catch (error) {
+        // A caller abort (unmount, navigation, a new query superseding this
+        // one) is normal cancellation, not a failure — the same reasoning as
+        // the signed-out suppression above. Only a genuine timeout is an error.
+        const aborted =
+          error instanceof Error && error.name === 'AbortError' && !timeoutSignal.aborted;
+        if (aborted) throw error;
         const message = timeoutSignal.aborted
           ? 'API keys took too long to load. Please try again.'
           : error instanceof Error

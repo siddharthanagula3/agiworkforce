@@ -933,7 +933,7 @@ export function ChatInput({
 
         {selectedSkill ? (
           <div className="px-3 pt-2">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--chat-accent-primary)]/10 px-2 py-1 text-xs text-[var(--chat-accent-primary)]">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-[var(--chat-accent-primary)]/10 px-2 py-1 text-xs text-[var(--chat-accent-primary-text)]">
               Skill: {selectedSkill.name}
               <button
                 type="button"
@@ -1066,13 +1066,13 @@ export function ChatInput({
                       'transition-colors duration-150',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                       attachedFiles.length > 0 || attachmentMenuOpen
-                        ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
+                        ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
                         : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
                     )}
                   >
                     <Plus size={18} />
                     {attachedFiles.length > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-white">
+                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-[var(--chat-accent-on-primary)]">
                         {attachedFiles.length}
                       </span>
                     )}
@@ -1144,7 +1144,7 @@ export function ChatInput({
                   onClick={exitMediaMode}
                   aria-pressed
                   aria-label={`Leave ${mediaMode} generation mode`}
-                  className="flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-[var(--chat-accent-primary)] px-3 text-xs font-medium text-white"
+                  className="flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-[var(--chat-accent-primary)] px-3 text-xs font-medium text-[var(--chat-accent-on-primary)]"
                 >
                   {mediaMode === 'image' ? <ImageIcon size={13} /> : <Clapperboard size={13} />}
                   {mediaMode === 'image' ? 'Image' : 'Video'}
@@ -1188,7 +1188,7 @@ export function ChatInput({
                       'transition-colors duration-150',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                       voiceState === 'listening'
-                        ? 'text-[var(--chat-accent-primary)] animate-pulse hover:bg-[var(--chat-accent-primary)]/10'
+                        ? 'text-[var(--chat-accent-primary-text)] animate-pulse hover:bg-[var(--chat-accent-primary)]/10'
                         : voiceIsBusy
                           ? 'cursor-wait text-[var(--chat-text-muted)]'
                           : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
@@ -1231,7 +1231,7 @@ export function ChatInput({
             className={cn(
               'flex h-8 min-w-0 items-center rounded-full border transition-all',
               scopeHasSelection
-                ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
+                ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                 : 'border-[var(--chat-border)] bg-[var(--chat-surface-hover)]/40 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]',
             )}
           >

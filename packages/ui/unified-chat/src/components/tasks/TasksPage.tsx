@@ -305,7 +305,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
         <span
           data-testid="agi-work-maturity-badge"
           title={AGI_WORK_MATURITY_TITLE}
-          className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300"
+          className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
         >
           {AGI_WORK_MATURITY_LABEL}
         </span>
@@ -346,7 +346,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       ) : runs.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--chat-accent-primary)]/15">
-            <ListChecks className="h-7 w-7 text-[var(--chat-accent-primary)]" />
+            <ListChecks className="h-7 w-7 text-[var(--chat-accent-primary-text)]" />
           </div>
           <p className="text-base font-semibold text-foreground">
             No {filter === 'active' ? 'active ' : ''}tasks yet

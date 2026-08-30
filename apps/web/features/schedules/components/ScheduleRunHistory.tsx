@@ -46,7 +46,7 @@ function runStatusIcon(run: ScheduleRun) {
   if (run.status === 'cancelled') {
     return <AlertCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   }
-  return <XCircle className="h-4 w-4 text-destructive" aria-hidden="true" />;
+  return <XCircle className="h-4 w-4 text-danger" aria-hidden="true" />;
 }
 
 function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
@@ -99,7 +99,7 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
         )}
       </div>
       {run.error && (
-        <p className="mt-2 break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <p className="mt-2 break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-danger">
           {run.error}
         </p>
       )}
@@ -136,7 +136,7 @@ export function ScheduleRunHistory({
   if (state.status === 'error') {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4">
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-danger">
           {state.error ?? 'Run history could not be loaded.'} Retry to check this schedule again.
         </p>
         <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
@@ -159,7 +159,7 @@ export function ScheduleRunHistory({
       </ol>
       {state.error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3">
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-sm text-danger">
             {state.error}
           </p>
           <Button type="button" variant="outline" size="sm" className="mt-2" onClick={onLoadMore}>

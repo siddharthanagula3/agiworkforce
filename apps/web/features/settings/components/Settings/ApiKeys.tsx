@@ -96,7 +96,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
           </div>
           <Button
             onClick={() => onSetShowAPIKeyDialog(true)}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-green-700 text-white hover:bg-green-800"
             size="sm"
             disabled={Boolean(loadError)}
           >
@@ -114,7 +114,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
             </div>
           ) : loadError ? (
             <div className="space-y-3 py-6 text-center">
-              <p role="alert" className="text-sm text-destructive">
+              <p role="alert" className="text-sm text-danger">
                 {loadError}
               </p>
               {onRetry ? (
@@ -276,7 +276,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                       <Button
                         type="submit"
                         disabled={isCreatePending || !apiKeyForm.formState.isValid}
-                        className="bg-green-600 hover:bg-green-700"
+                        className="bg-green-700 text-white hover:bg-green-800"
                       >
                         {isCreatePending ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />

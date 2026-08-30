@@ -65,7 +65,7 @@ function chipClass(active?: boolean) {
     'text-[11px] font-medium transition-colors duration-150 select-none',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
     active
-      ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
+      ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
       : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
   );
 }
@@ -134,7 +134,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
                         'transition-colors duration-100',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                         isSelected
-                          ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
+                          ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                           : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
                       )}
                     >
@@ -151,7 +151,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
                           className={cn(
                             'mt-0.5 text-[10px]',
                             isSelected
-                              ? 'text-[var(--chat-accent-primary)]/70'
+                              ? 'text-[var(--chat-accent-primary-text)]'
                               : 'text-[var(--chat-text-muted)]',
                           )}
                         >
@@ -162,7 +162,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
                         <Check
                           aria-hidden="true"
                           size={13}
-                          className="mt-0.5 shrink-0 text-[var(--chat-accent-primary)]"
+                          className="mt-0.5 shrink-0 text-[var(--chat-accent-primary-text)]"
                         />
                       )}
                     </button>

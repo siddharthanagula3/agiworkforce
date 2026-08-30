@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { History, RotateCcw, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -241,13 +240,13 @@ export function RewindTimeline({
                         )}
                         {checkpoint.description && (
                           <p
-                            className="text-xs text-muted-foreground/70 mt-0.5 truncate"
+                            className="text-xs text-muted-foreground mt-0.5 truncate"
                             title={checkpoint.description}
                           >
                             {checkpoint.description}
                           </p>
                         )}
-                        <span className="text-xs text-muted-foreground/50 tabular-nums">
+                        <span className="text-xs text-muted-foreground tabular-nums">
                           {getRelativeTime(checkpoint.createdAtMs)}
                         </span>
                       </div>

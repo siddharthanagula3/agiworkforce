@@ -386,10 +386,7 @@ export function OrganizationSharingSection() {
 
   if (overviewQuery.isError) {
     return (
-      <p
-        role="alert"
-        style={{ color: 'var(--settings-destructive-foreground, #ef4444)', fontSize: 12 }}
-      >
+      <p role="alert" style={{ color: 'var(--settings-destructive-text, #d31212)', fontSize: 12 }}>
         {overviewQuery.error.message}
       </p>
     );

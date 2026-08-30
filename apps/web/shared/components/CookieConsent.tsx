@@ -63,12 +63,16 @@ export const CookieConsent = () => {
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6"
+            className="pointer-events-none fixed bottom-0 left-0 right-0 z-50 p-4 md:p-6"
             role="region"
             aria-label="Cookie consent"
           >
-            <div className="mx-auto max-w-7xl">
-              <div className="relative rounded-lg border bg-card p-3 shadow-2xl backdrop-blur-sm sm:p-4 md:p-6">
+            {/* The wrapper spans the full width but the card is centred at
+                max-w-7xl, so its empty padding sat over the sidebar and
+                swallowed clicks on the account menu until the banner was
+                dismissed. Only the card itself should take pointer events. */}
+            <div className="pointer-events-none mx-auto max-w-7xl">
+              <div className="pointer-events-auto relative rounded-lg border bg-card p-3 shadow-2xl backdrop-blur-sm sm:p-4 md:p-6">
                 <button
                   onClick={() => setShowBanner(false)}
                   className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full hover:bg-muted"
@@ -85,7 +89,11 @@ export const CookieConsent = () => {
                       <p className="pr-10 text-sm text-muted-foreground">
                         Cookies that keep you signed in are always on. Analytics is off until you
                         turn it on, and we never set advertising cookies. Read the{' '}
-                        <Link href="/cookies" className="underline underline-offset-2">
+                        <Link
+                          href="/cookies"
+                          data-inline-link="true"
+                          className="underline underline-offset-2"
+                        >
                           cookie policy
                         </Link>
                         .
@@ -127,7 +135,11 @@ export const CookieConsent = () => {
             <DialogTitle>Cookie preferences</DialogTitle>
             <DialogDescription>
               These are the only cookie categories this site uses. See the{' '}
-              <Link href="/cookies" className="underline underline-offset-2">
+              <Link
+                href="/cookies"
+                data-inline-link="true"
+                className="underline underline-offset-2"
+              >
                 cookie policy
               </Link>{' '}
               for what each one covers.

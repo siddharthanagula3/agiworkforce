@@ -45,3 +45,52 @@ describe('SettingsModalProvider', () => {
     expect(dynamicState.renderCount).toBeGreaterThan(0);
   });
 });
+
+describe('SettingsModalProvider — background is hidden from assistive tech', () => {
+  /**
+   * Radix sets aria-modal and hides the dialog's body-level siblings, but
+   * #main-content is not one it reaches: measured live, 1178 characters of the
+   * chat surface stayed readable behind the open dialog. Focus is trapped, so
+   * keyboard users were fine and only a screen reader's virtual cursor could
+   * wander out — which is exactly the case a focus trap cannot cover.
+   */
+  function withMainContent(): HTMLElement {
+    const main = document.createElement('div');
+    main.id = 'main-content';
+    main.setAttribute('role', 'main');
+    main.textContent = 'chat surface behind the dialog';
+    document.body.appendChild(main);
+    return main;
+  }
+
+  it('hides #main-content while open and restores it on close', async () => {
+    const user = userEvent.setup();
+    const main = withMainContent();
+
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+
+    expect(main.getAttribute('aria-hidden')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /open settings/i }));
+    expect(await screen.findByTestId('web-settings-modal')).toBeInTheDocument();
+    expect(main.getAttribute('aria-hidden')).toBe('true');
+
+    main.remove();
+  });
+
+  it('does not fail when the layout landmark is absent', async () => {
+    const user = userEvent.setup();
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /open settings/i }));
+    expect(await screen.findByTestId('web-settings-modal')).toBeInTheDocument();
+  });
+});

@@ -260,7 +260,7 @@ export function CheckpointManager({
               className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && <p className="text-xs text-danger">{error}</p>}
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -317,7 +317,7 @@ export function CheckpointManager({
 
       {/* Error banner (outside dialogs) */}
       {error && !showCreateDialog && (
-        <div className="flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div className="flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-danger">
           <span>{error}</span>
           <button type="button" onClick={() => setError(null)} aria-label="Dismiss error">
             <X className="h-3.5 w-3.5" />
@@ -397,7 +397,7 @@ export function CheckpointManager({
                         type="button"
                         title="Delete checkpoint"
                         onClick={() => setConfirm({ open: true, type: 'delete', checkpoint })}
-                        className="rounded p-1 text-muted-foreground hover:text-destructive"
+                        className="rounded p-1 text-muted-foreground hover:text-danger"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

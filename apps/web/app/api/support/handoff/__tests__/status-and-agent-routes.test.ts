@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -6,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   getOrCreateAnonSession: vi.fn(),
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
-  requireAdmin: vi.fn(),
+  requirePlatformAdmin: vi.fn(),
   getSessionForOwner: vi.fn(),
   getSessionById: vi.fn(),
   claimExpiredWaitingSession: vi.fn(),
@@ -24,7 +23,7 @@ vi.mock('@/lib/csrf', () => ({
   getOrCreateAnonSession: mocks.getOrCreateAnonSession,
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/auth-guards', () => ({ requireAdmin: mocks.requireAdmin }));
+vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: mocks.requirePlatformAdmin }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -114,7 +113,7 @@ beforeEach(() => {
   mocks.withRateLimit.mockResolvedValue(null);
   mocks.auth.mockResolvedValue({ userId: null });
   mocks.getOrCreateAnonSession.mockResolvedValue({ id: 'anon-owner' });
-  mocks.requireAdmin.mockResolvedValue({ userId: 'user_agent_1' });
+  mocks.requirePlatformAdmin.mockResolvedValue({ userId: 'user_agent_1' });
   mocks.recordEmailOutcome.mockResolvedValue(undefined);
   mocks.appendHandoffMessage.mockResolvedValue({
     seq: 1,
@@ -211,11 +210,14 @@ describe('DELETE /api/support/handoff/[sessionId]', () => {
 });
 
 describe('agent surface', () => {
-  it('requires admin for the queue', async () => {
-    mocks.requireAdmin.mockRejectedValue(createError.forbidden('Admin privileges required'));
+  // A support handoff belongs to any customer, so the org admin/owner role —
+  // which anyone gets by creating a workspace — must not reach it. Only a
+  // platform operator may, and a non-operator is told 404, not 403.
+  it('hides the queue from a self-service org admin', async () => {
+    mocks.requirePlatformAdmin.mockRejectedValue(createError.notFound('Not found.'));
 
     const response = await QUEUE(req('http://localhost/api/support/handoff/agent/queue'));
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     expect(mocks.listWaitingQueue).not.toHaveBeenCalled();
   });
 

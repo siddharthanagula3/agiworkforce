@@ -63,23 +63,23 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
         className={cn(
           'mt-[2px] h-3 w-3 shrink-0',
           step.status === 'completed' && 'text-primary',
-          step.status === 'failed' && 'text-destructive',
+          step.status === 'failed' && 'text-danger',
           step.status === 'running' && 'animate-spin text-primary',
-          step.status === 'pending' && 'text-muted-foreground/50',
+          step.status === 'pending' && 'text-muted-foreground',
         )}
         aria-hidden="true"
       />
-      <TypeIcon className="mt-[2px] h-3 w-3 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+      <TypeIcon className="mt-[2px] h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span
         className={cn(
           'min-w-0 flex-1 leading-snug',
-          step.status === 'pending' ? 'text-muted-foreground/70' : 'text-foreground',
+          step.status === 'pending' ? 'text-muted-foreground' : 'text-foreground',
           step.status === 'completed' && 'text-muted-foreground',
         )}
       >
         {step.description}
       </span>
-      <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/60">
+      <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
         {STEP_STATUS_LABELS[step.status]}
       </span>
     </li>
@@ -166,7 +166,7 @@ export function ResearchActivity({
           'flex items-center gap-2 rounded-lg border px-3 py-2 text-xs',
           steps.length > 0 && 'rounded-b-none border-b-0',
           failed
-            ? 'border-destructive/30 bg-destructive/5 text-destructive'
+            ? 'border-destructive/30 bg-destructive/5 text-danger'
             : 'border-border/30 bg-muted/20 text-muted-foreground',
         )}
         role="status"

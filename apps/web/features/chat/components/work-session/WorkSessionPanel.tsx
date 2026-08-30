@@ -352,12 +352,12 @@ function StatusIcon({ status }: { status: ProgressStatus }) {
     return <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />;
   }
   if (status === 'failed' || status === 'cancelled') {
-    return <CircleAlert className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />;
+    return <CircleAlert className="h-3.5 w-3.5 text-danger" aria-hidden="true" />;
   }
   if (status === 'awaiting-approval' || status === 'paused') {
     return <CircleAlert className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />;
   }
-  return <Circle className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />;
+  return <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />;
 }
 
 function byteLabel(byteCount: number | undefined): string | undefined {
@@ -525,7 +525,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                 <span
                   data-testid="agi-work-maturity-badge"
                   title={AGI_WORK_MATURITY_TITLE}
-                  className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300"
+                  className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
                 >
                   {AGI_WORK_MATURITY_LABEL}
                 </span>

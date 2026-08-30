@@ -672,7 +672,7 @@ export function Sidebar(props: SidebarProps) {
                           ? t('sidebar.expandProjects', 'Expand projects')
                           : t('sidebar.collapseProjects', 'Collapse projects')
                       }
-                      className="flex min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                      className="flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
                     >
                       <span>{t('sidebar.projects', 'Projects')}</span>
                       <ChevronRight
@@ -703,7 +703,7 @@ export function Sidebar(props: SidebarProps) {
                             e.stopPropagation();
                             onProjectCreate();
                           }}
-                          className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+                          className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
                         >
                           <Plus className="h-3 w-3" aria-hidden="true" />
                         </button>
@@ -721,7 +721,7 @@ export function Sidebar(props: SidebarProps) {
                               e.stopPropagation();
                               toggle();
                             }}
-                            className="flex h-5 w-5 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+                            className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
                           >
                             <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
                           </button>
@@ -770,7 +770,7 @@ export function Sidebar(props: SidebarProps) {
                       {/* Pinned sub-section */}
                       {pinnedProjects.length > 0 && (
                         <div className="mb-2">
-                          <div className="mb-0.5 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]/60">
+                          <div className="mb-0.5 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                             {t('sidebar.pinned', 'Pinned')}
                           </div>
                           {pinnedProjects.map((project) => (
@@ -913,14 +913,14 @@ export function Sidebar(props: SidebarProps) {
                   <p className="text-sm text-[hsl(var(--muted-foreground))]">
                     {t('sidebar.loadFailed', "Couldn't load conversations")}
                   </p>
-                  <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]/60">{error}</p>
+                  <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{error}</p>
                 </div>
               )}
 
               {!hasMatchingConversations && !isLoading && !error && (
                 <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
-                  <MessageSquare className="mb-2 h-7 w-7 text-[hsl(var(--muted-foreground))]/30" />
-                  <p className="text-sm text-[hsl(var(--muted-foreground))]/60">
+                  <MessageSquare className="mb-2 h-7 w-7 text-[hsl(var(--muted-foreground))]" />
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
                     {showArchived
                       ? t('sidebar.noArchivedConversations', 'No archived conversations')
                       : t('sidebar.noConversations', 'No conversations yet')}
@@ -929,7 +929,7 @@ export function Sidebar(props: SidebarProps) {
                     <button
                       type="button"
                       onClick={onNewChat}
-                      className="mt-2 text-xs text-[hsl(var(--primary))] hover:underline"
+                      className="mt-2 inline-flex min-h-6 items-center px-1 text-xs text-[hsl(var(--primary))] hover:underline"
                     >
                       {t('sidebar.startNewChat', 'Start a new chat')}
                     </button>
@@ -955,7 +955,7 @@ export function Sidebar(props: SidebarProps) {
               aria-label={t('sidebar.budgetUsed', '{{percent}}% of token budget used', {
                 percent: Math.round(budgetPercent),
               })}
-              className="group flex w-full items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-[hsl(var(--accent))]"
+              className="group flex min-h-6 w-full items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-[hsl(var(--accent))]"
             >
               {/* `--muted` is 1.03:1 against the light sidebar, so at 0% the meter
                   rendered as nothing at all. The border token is the lightest
@@ -1101,7 +1101,7 @@ function ProjectRow({
         {/* Folder icon + project name — clicking toggles expand */}
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left"
           onClick={toggleExpand}
           aria-label={
             isExpanded
@@ -1249,7 +1249,7 @@ function ProjectRow({
       {isExpanded && (
         <div className="mt-0.5 pl-4">
           {projectSessions.length === 0 ? (
-            <p className="px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))]/60 italic">
+            <p className="px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))] italic">
               {t('noChats', 'No chats yet')}
             </p>
           ) : (
@@ -1291,7 +1291,7 @@ function ProjectRow({
                       return next;
                     })
                   }
-                  className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))]/70 transition-colors hover:text-[hsl(var(--muted-foreground))]"
+                  className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--muted-foreground))]"
                 >
                   {t('showMore', 'Show more')}
                 </button>
@@ -1306,7 +1306,7 @@ function ProjectRow({
                       return next;
                     })
                   }
-                  className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))]/70 transition-colors hover:text-[hsl(var(--muted-foreground))]"
+                  className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--muted-foreground))]"
                 >
                   {t('showLess', 'Show less')}
                 </button>

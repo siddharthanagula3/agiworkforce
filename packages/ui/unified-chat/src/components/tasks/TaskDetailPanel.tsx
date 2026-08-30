@@ -108,10 +108,10 @@ const TOOL_CATEGORY_ICON: Record<AgentEventToolCategory, ComponentType<LucidePro
 
 function statusToneClass(status: AgentActivityToolEntry['status']): string {
   if (status === 'completed') return 'text-emerald-500';
-  if (status === 'failed') return 'text-destructive';
+  if (status === 'failed') return 'text-danger';
   if (status === 'cancelled') return 'text-muted-foreground';
   if (status === 'running' || status === 'awaiting-approval') return 'text-primary';
-  return 'text-muted-foreground/50';
+  return 'text-muted-foreground';
 }
 
 function ProgressRow({ entry }: { entry: AgentActivityProgressEntry | AgentActivityToolEntry }) {
@@ -433,7 +433,7 @@ export function TaskDetailPanel({
           className="m-4 rounded-md border border-destructive/40 bg-destructive/5 p-3"
         >
           <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+            <AlertTriangle className="h-3.5 w-3.5 text-danger" />
             Why this task failed
           </p>
           {failures.length > 0 ? (

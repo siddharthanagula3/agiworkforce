@@ -9,8 +9,10 @@ export default function NotFound() {
       <main className="flex-1 flex items-center justify-center">
         <div className="container mx-auto px-4 text-center">
           <div className="mb-8">
-            <Bot className="h-24 w-24 text-muted-foreground/40 mx-auto mb-6" />
-            <h1 className="text-8xl font-bold text-muted-foreground/30 mb-4">404</h1>
+            <Bot className="h-24 w-24 text-muted-foreground mx-auto mb-6" />
+            {/* muted-foreground clears 4.5:1 on its own; the /30 blend dropped this
+                to 1.48:1, so the only thing naming the error was invisible. */}
+            <h1 className="mb-4 text-8xl font-bold text-muted-foreground">404</h1>
             <h2 className="text-2xl font-semibold mb-4">Page Not Found</h2>
             <p className="text-muted-foreground max-w-md mx-auto mb-8">
               Oops! The page you&apos;re looking for doesn&apos;t exist or has been moved.

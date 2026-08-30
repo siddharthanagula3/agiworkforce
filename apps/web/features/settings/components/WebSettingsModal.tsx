@@ -32,6 +32,7 @@
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { loadSkillsCatalog } from '@features/skills/services/skills-catalog';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -77,10 +78,7 @@ import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
 import { HelpSection } from '../sections/HelpSection';
 import { SettingsSectionNavigationProvider } from './SettingsSectionLink';
-import {
-  ManagedSkillsResponseSchema,
-  type ManagedSkillSummary as ApiSkill,
-} from '@agiworkforce/cloud-contracts';
+import { type ManagedSkillSummary as ApiSkill } from '@agiworkforce/cloud-contracts';
 import { toUserMessage } from '@/lib/user-error-message';
 
 // ---------------------------------------------------------------------------
@@ -131,8 +129,36 @@ const PluginInstallationsResponseSchema = z.object({
   ),
 });
 
+class LoadFailure extends Error {
+  constructor(readonly status: number | null) {
+    super(`load failed: ${status ?? 'network'}`);
+  }
+}
+
+function loadFailureMessage(subject: string, error: unknown): string {
+  const status =
+    error instanceof LoadFailure
+      ? error.status
+      : typeof (error as { status?: unknown })?.status === 'number'
+        ? (error as { status: number }).status
+        : null;
+  if (status === 401 || status === 403) {
+    return `Your session expired. Reload the page to sign back in, then reopen ${subject}.`;
+  }
+  if (status !== null && status >= 500) {
+    return `${subject} could not be loaded because the server returned an error. This is not a problem with your connection — retry, or contact support if it persists.`;
+  }
+  if (status !== null) {
+    return `${subject} could not be loaded (the server rejected the request). Retry, or contact support if it persists.`;
+  }
+  return `${subject} could not be loaded. Check your connection and try again.`;
+}
+
 class ConnectorLoadError extends Error {
-  constructor(readonly kind: 'signed-out' | 'request' | 'invalid-data') {
+  constructor(
+    readonly kind: 'invalid-data' | 'status',
+    readonly status: number | null = null,
+  ) {
     super(kind);
   }
 }
@@ -547,7 +573,7 @@ export function WebSettingsModal({
           const status = [connectorsResponse, customResponse].find(
             (response) => !response.ok,
           )?.status;
-          throw new ConnectorLoadError(status === 401 || status === 403 ? 'signed-out' : 'request');
+          throw new ConnectorLoadError('status', status ?? null);
         }
         const [connectorsJson, customJson] = await Promise.all([
           connectorsResponse.json(),
@@ -607,13 +633,13 @@ export function WebSettingsModal({
         }
       } catch (error) {
         if (signal?.aborted) return;
-        const kind = error instanceof ConnectorLoadError ? error.kind : 'request';
         setConnectorsError(
-          kind === 'signed-out'
-            ? 'Your session expired. Reload the page to sign back in, then reopen Connectors.'
-            : kind === 'invalid-data'
-              ? 'Connectors returned data this page could not read. Try again, or contact support if it persists.'
-              : 'Connectors could not be loaded. Check your connection and try again.',
+          error instanceof ConnectorLoadError && error.kind === 'invalid-data'
+            ? 'Connectors returned data this page could not read. Try again, or contact support if it persists.'
+            : loadFailureMessage(
+                'Connectors',
+                error instanceof ConnectorLoadError ? new LoadFailure(error.status) : error,
+              ),
         );
       } finally {
         if (!signal?.aborted) setConnectorsLoading(false);
@@ -806,13 +832,10 @@ export function WebSettingsModal({
     setSkillsLoading(true);
     setSkillsError(null);
     try {
-      const response = await fetch('/api/skills', signal ? { signal } : undefined);
-      if (!response.ok) throw new Error('Skills request failed.');
-      const parsed = ManagedSkillsResponseSchema.safeParse(await response.json());
-      if (!parsed.success) throw new Error('Skills request returned invalid data.');
+      const catalog = await loadSkillsCatalog();
       if (signal?.aborted) return;
       setSkills(
-        parsed.data.skills.map((skill: ApiSkill) => ({
+        catalog.map((skill: ApiSkill) => ({
           id: skill.name,
           name: skill.name,
           description: skill.description ?? '',
@@ -827,7 +850,7 @@ export function WebSettingsModal({
       );
     } catch (error) {
       if (signal?.aborted) return;
-      setSkillsError('Skills could not be loaded. Check your connection and try again.');
+      setSkillsError(loadFailureMessage('Skills', error));
     } finally {
       if (!signal?.aborted) setSkillsLoading(false);
     }
@@ -852,7 +875,9 @@ export function WebSettingsModal({
         fetch('/api/plugins/installations', { credentials: 'include', signal }),
       ]);
       if (!catalogResponse.ok || !installationsResponse.ok) {
-        throw new Error('Plugin directory request failed.');
+        throw new LoadFailure(
+          [catalogResponse, installationsResponse].find((response) => !response.ok)?.status ?? null,
+        );
       }
       const [catalogJson, installationsJson] = await Promise.all([
         catalogResponse.json(),
@@ -904,9 +929,9 @@ export function WebSettingsModal({
           } satisfies SettingsPlugin;
         }),
       );
-    } catch {
+    } catch (error) {
       if (signal?.aborted) return;
-      setPluginsError('Plugins could not be loaded. Check your connection and try again.');
+      setPluginsError(loadFailureMessage('Plugins', error));
       setPluginCatalog([]);
     } finally {
       if (!signal?.aborted) {

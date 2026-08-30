@@ -77,16 +77,22 @@ export function DeviceSignInToggle() {
         padding: '16px 20px',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 16,
+        }}
+      >
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
             Approve sign-in from a device code
           </div>
           <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
             Lets the CLI, desktop and mobile apps sign in by showing you a short code to approve
-            here. Turn this off if you never use them. Anyone who can get you to approve a code
-            they generated gains access to your account, so only approve a code you started
-            yourself.
+            here. Turn this off if you never use them. Anyone who can get you to approve a code they
+            generated gains access to your account, so only approve a code you started yourself.
           </p>
         </div>
         <button
@@ -123,7 +129,10 @@ export function DeviceSignInToggle() {
         </button>
       </div>
       {error ? (
-        <p role="alert" style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--settings-destructive)' }}>
+        <p
+          role="alert"
+          style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--settings-destructive-text)' }}
+        >
           {error}
         </p>
       ) : null}

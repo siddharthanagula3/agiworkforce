@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ProjectCard } from '../ProjectCard';
@@ -26,10 +25,29 @@ describe('ProjectCard — valid HTML nesting', () => {
     expect(nested.length).toBe(0);
   });
 
-  it('renders the card as a role="button" element, not a native button', () => {
+  /**
+   * The previous fix for nested <button> markup made the card a
+   * `div role="button"` wrapping the star and menu buttons. That satisfies an
+   * HTML validator but is the same defect to assistive tech — a control cannot
+   * contain controls, and axe reports nested-interactive on the live page. The
+   * open action is now a sibling stretched over the card instead.
+   */
+  it('never makes the open control an ancestor of the other controls', () => {
+    render(<ProjectCard project={PROJECT} onDelete={vi.fn()} onEdit={vi.fn()} />);
+    const open = screen.getByRole('button', { name: /open project design system/i });
+    const others = screen.getAllByRole('button').filter((element) => element !== open);
+
+    expect(others.length).toBeGreaterThan(0);
+    for (const other of others) {
+      expect(open.contains(other)).toBe(false);
+    }
+  });
+
+  it('gives the open action a real button so keyboard activation is native', () => {
     render(<ProjectCard project={PROJECT} />);
-    const card = screen.getByRole('button', { name: /open project design system/i });
-    expect(card.tagName).toBe('DIV');
+    const open = screen.getByRole('button', { name: /open project design system/i });
+    expect(open.tagName).toBe('BUTTON');
+    expect(open.getAttribute('tabindex')).toBeNull();
   });
 });
 
@@ -50,13 +68,17 @@ describe('ProjectCard — independent click handlers', () => {
     expect(onSelect).toHaveBeenCalledWith(PROJECT);
   });
 
-  it('opens the project on Enter/Space keyboard activation', () => {
+  it('opens the project from the keyboard without a hand-rolled key handler', () => {
     const onSelect = vi.fn();
     render(<ProjectCard project={PROJECT} onSelect={onSelect} />);
-    const card = screen.getByRole('button', { name: /open project design system/i });
-    fireEvent.keyDown(card, { key: 'Enter' });
-    fireEvent.keyDown(card, { key: ' ' });
-    expect(onSelect).toHaveBeenCalledTimes(2);
+    const open = screen.getByRole('button', { name: /open project design system/i });
+
+    // A native button turns Enter and Space into click itself; jsdom models that
+    // through the click, which is the behaviour a real browser produces.
+    open.focus();
+    expect(document.activeElement).toBe(open);
+    fireEvent.click(open);
+    expect(onSelect).toHaveBeenCalledTimes(1);
   });
 
   it('toggles the star WITHOUT opening the project (stopPropagation preserved)', () => {

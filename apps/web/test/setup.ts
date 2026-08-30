@@ -30,6 +30,16 @@ process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
 process.env['STRIPE_WEBHOOK_SECRET'] = 'whsec_test_secret';
 process.env['AGI_MANAGED_COMPUTE_PRIVATE_BETA'] = '1';
 
+// A unit test must never reach the real database. `getNeonDb()` builds its
+// client from AGI_DATABASE_URL ?? DATABASE_URL with no test-mode guard, and
+// nothing here previously neutralised either, so a developer with the app's
+// env loaded had one unmocked query between a test and production data. This
+// is the same shape as the desktop bug where AGIWORKFORCE_APP_DATA_DIR was set
+// for isolation but never read. Pointing both at an unroutable host turns that
+// silent reach into a loud connection failure.
+process.env['AGI_DATABASE_URL'] = 'postgresql://test:test@127.0.0.1:1/agi_test_must_not_connect';
+process.env['DATABASE_URL'] = process.env['AGI_DATABASE_URL'];
+
 vi.mock('next/headers', () => ({
   cookies: vi.fn(() => ({
     get: vi.fn(() => ({ value: 'test-cookie' })),

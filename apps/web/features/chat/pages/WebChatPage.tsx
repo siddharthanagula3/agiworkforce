@@ -4300,10 +4300,7 @@ export default function WebChatPage() {
                 <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
               )}
             </div>
-            <ChevronUp
-              className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60"
-              aria-hidden="true"
-            />
+            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
@@ -4347,7 +4344,7 @@ export default function WebChatPage() {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => void handleLogout()}
-            className="text-destructive focus:text-destructive"
+            className="text-danger focus:text-danger"
           >
             <LogOut className="mr-2 h-4 w-4" />
             {t('common:navLogOut')}

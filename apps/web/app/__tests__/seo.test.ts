@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import robots from '@/app/robots';
 import sitemap from '@/app/sitemap';
 import { buildMetadata } from '@/lib/seo/metadata';
@@ -200,5 +202,24 @@ describe('structured data', () => {
     expect(items).toHaveLength(3);
     expect(items[0]).toMatchObject({ position: 1, item: SITE_URL });
     expect(items[2]).toMatchObject({ position: 3, item: `${SITE_URL}/features/agents` });
+  });
+});
+
+describe('public token pages are never indexable', () => {
+  const TOKEN_PAGES = [
+    'app/share/[token]/page.tsx',
+    'app/shared-artifact/[token]/page.tsx',
+    'app/chat/from-share/[token]/page.tsx',
+  ];
+
+  it.each(TOKEN_PAGES)('%s marks every metadata branch noindex', (relativePath) => {
+    const source = readFileSync(join(process.cwd(), relativePath), 'utf8');
+    const returns = source.split('generateMetadata')[1] ?? source;
+    const metadataReturns = returns.match(/return\s*\{/g) ?? [];
+    const noindexMarks = returns.match(/robots:\s*\{\s*index:\s*false/g) ?? [];
+    expect(
+      noindexMarks.length,
+      `${relativePath}: ${metadataReturns.length} metadata branches but ${noindexMarks.length} marked noindex — a shared conversation must never reach a search index`,
+    ).toBeGreaterThanOrEqual(metadataReturns.length);
   });
 });

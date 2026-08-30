@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -57,6 +56,7 @@ async function handleGetConversations(request: NextRequest) {
     ) || MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
   const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
+  const statsOnly = includeHistoryStats && url.searchParams.get('statsOnly') === '1';
 
   const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
@@ -82,16 +82,18 @@ async function handleGetConversations(request: NextRequest) {
     const offsetParameter = params.length;
 
     const [rows, historyStatsRows] = await Promise.all([
-      db.query<ChatConversationRow>(
-        `
+      statsOnly
+        ? Promise.resolve([])
+        : db.query<ChatConversationRow>(
+            `
           select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at
           from web_conversations
           where ${where.join(' and ')}
           order by pinned desc, updated_at desc
           limit $${limitParameter} offset $${offsetParameter}
         `,
-        params,
-      ),
+            params,
+          ),
       includeHistoryStats
         ? db.query<{ conversation_count: string; message_count: string }>(
             `

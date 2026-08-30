@@ -51,7 +51,7 @@ function OutcomeChip({ sweep }: { sweep: RetentionSweepRecord }) {
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
         whiteSpace: 'nowrap',
-        color: alarming ? 'var(--settings-destructive-foreground)' : 'var(--text-2)',
+        color: alarming ? 'var(--settings-destructive-text)' : 'var(--text-2)',
         border: `1px solid ${alarming ? 'currentColor' : 'var(--settings-border)'}`,
         borderRadius: 'var(--radius-sm)',
         padding: '2px 6px',
@@ -66,10 +66,16 @@ function HoldRow({
   hold,
   onRelease,
   releasing,
+  armed,
+  onArm,
+  onDisarm,
 }: {
   hold: LegalHold;
   onRelease: (id: string) => void;
   releasing: boolean;
+  armed: boolean;
+  onArm: (id: string) => void;
+  onDisarm: () => void;
 }) {
   const released = hold.releasedAt !== null;
 
@@ -95,21 +101,46 @@ function HoldRow({
             {hold.reason}
           </p>
         ) : null}
+        {armed ? (
+          <p
+            id={`release-warning-${hold.id}`}
+            role="alert"
+            className="mt-2 text-xs leading-relaxed"
+            style={{ color: 'var(--settings-destructive-text)' }}
+          >
+            Releasing this hold lets the retention sweep delete the records it was preserving. This
+            cannot be undone.
+          </p>
+        ) : null}
       </div>
       {released ? (
         <span className="shrink-0 text-xs" style={{ color: 'var(--text-3)' }}>
           Released
         </span>
       ) : (
-        <button
-          type="button"
-          disabled={releasing}
-          onClick={() => onRelease(hold.id)}
-          className="shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-          style={{ borderColor: 'currentColor', color: 'var(--settings-destructive-foreground)' }}
-        >
-          {releasing ? 'Releasing…' : 'Release hold'}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {armed ? (
+            <button
+              type="button"
+              onClick={onDisarm}
+              disabled={releasing}
+              className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              style={{ borderColor: 'var(--settings-border)', color: 'var(--text-2)' }}
+            >
+              Keep hold
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={releasing}
+            onClick={() => (armed ? onRelease(hold.id) : onArm(hold.id))}
+            aria-describedby={armed ? `release-warning-${hold.id}` : undefined}
+            className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            style={{ borderColor: 'currentColor', color: 'var(--settings-destructive-text)' }}
+          >
+            {releasing ? 'Releasing…' : armed ? 'Confirm release' : 'Release hold'}
+          </button>
+        </div>
       )}
     </li>
   );
@@ -214,8 +245,10 @@ export function WorkspaceDataControls() {
                 key={hold.id}
                 hold={hold}
                 releasing={release.isPending && confirmingRelease === hold.id}
+                armed={confirmingRelease === hold.id}
+                onArm={(id) => setConfirmingRelease(id)}
+                onDisarm={() => setConfirmingRelease(null)}
                 onRelease={(id) => {
-                  setConfirmingRelease(id);
                   release.mutate(id, { onSettled: () => setConfirmingRelease(null) });
                 }}
               />
@@ -295,12 +328,12 @@ export function WorkspaceDataControls() {
               {create.isPending ? 'Placing…' : 'Place hold'}
             </button>
             {create.isError ? (
-              <span className="text-xs" style={{ color: 'var(--settings-destructive-foreground)' }}>
+              <span className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
                 {create.error.message}
               </span>
             ) : null}
             {release.isError ? (
-              <span className="text-xs" style={{ color: 'var(--settings-destructive-foreground)' }}>
+              <span className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
                 {release.error.message}
               </span>
             ) : null}

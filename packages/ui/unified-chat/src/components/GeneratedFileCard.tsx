@@ -128,7 +128,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
   }
   if (presentation.isComplete) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
         <ShieldCheck className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
       </span>

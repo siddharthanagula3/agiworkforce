@@ -282,7 +282,7 @@ export function Sidebar() {
                   }),
                 )
               }
-              className="font-medium text-[var(--chat-accent-primary)] hover:underline underline-offset-2 transition-colors"
+              className="font-medium text-[var(--chat-accent-primary-text)] hover:underline underline-offset-2 transition-colors"
             >
               Upgrade
             </button>

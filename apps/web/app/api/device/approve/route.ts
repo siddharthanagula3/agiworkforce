@@ -11,7 +11,6 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { encryptToken } from '@/lib/device-token-crypto';
 import { isDeviceCodeSignInEnabled } from '@/lib/server/device-signin-policy';
 import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 import { QrLinkCodeSchema } from '@/lib/validations/device';
@@ -37,7 +36,7 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const { userId, getToken } = await auth();
+    const { userId } = await auth();
 
     if (!userId) {
       throw createError.unauthorized('Please sign in to continue');
@@ -148,28 +147,24 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       );
     }
 
-    const clerkToken = await getToken();
-
-    if (!clerkToken) {
-      throw createError.internal('Missing session token - please sign in again');
-    }
-
-    const encryptedAccessToken = encryptToken(clerkToken);
-
+    // Approval IS the grant, exactly as in /api/auth/device/approve. Stashing a
+    // Clerk session token here handed the device a credential that expires in
+    // about a minute and carries no refresh; the poll below mints the same
+    // durable device credential /api/auth/device/token issues instead.
     const updated = await db.query<{ status: string }>(
       `UPDATE device_authorization_codes
           SET status        = 'approved',
               user_id       = $1,
               user_email    = $2,
               user_name     = $3,
-              access_token  = $4,
+              access_token  = NULL,
               refresh_token = NULL,
-              authorized_at = $5,
-              updated_at    = $5
-        WHERE device_id = $6
+              authorized_at = $4,
+              updated_at    = $4
+        WHERE device_id = $5
           AND status    = 'pending'
         RETURNING status`,
-      [userId, null, null, encryptedAccessToken, nowIso, record.device_id],
+      [userId, null, null, nowIso, record.device_id],
     );
 
     if (!updated.length) {

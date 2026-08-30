@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
@@ -167,7 +166,7 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
               }}
               className="overflow-hidden"
             >
-              <p className="mt-1.5 text-[11px] text-muted-foreground/80 font-mono leading-snug whitespace-pre-wrap bg-card/30 rounded px-2 py-1.5 border border-border/30">
+              <p className="mt-1.5 text-[11px] text-muted-foreground font-mono leading-snug whitespace-pre-wrap bg-card/30 rounded px-2 py-1.5 border border-border/30">
                 {step.details}
               </p>
             </motion.div>

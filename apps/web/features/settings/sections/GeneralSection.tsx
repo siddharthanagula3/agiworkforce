@@ -391,7 +391,7 @@ export function GeneralSection() {
                 PNG, JPEG, GIF, WebP, or HEIC. Up to {AVATAR_MAX_MB} MB.
               </span>
               {avatarError && (
-                <span role="alert" className="text-xs text-destructive">
+                <span role="alert" className="text-xs text-danger">
                   {avatarError}
                 </span>
               )}
@@ -560,14 +560,14 @@ export function GeneralSection() {
             {savedAt !== null && saveError === null && (
               <span className="text-xs text-muted-foreground">Synced to your account.</span>
             )}
-            {saveError !== null && <span className="text-xs text-destructive">{saveError}</span>}
+            {saveError !== null && <span className="text-xs text-danger">{saveError}</span>}
             {!preferencesLoaded && (
               <span role="status" className="text-xs text-muted-foreground">
                 Loading profile…
               </span>
             )}
             {loadError !== null && saveError === null && (
-              <span className="flex items-center gap-2 text-xs text-destructive">
+              <span className="flex items-center gap-2 text-xs text-danger">
                 {loadError}
                 <button
                   type="button"
@@ -654,6 +654,17 @@ export function GeneralSection() {
         </p>
         <CustomCommandsSettings />
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Keeping chats in step across devices?{' '}
+        <a
+          href="/settings/sync"
+          className="inline-block min-h-6 py-0.5 text-[var(--chat-accent-primary-text)] hover:underline"
+        >
+          Sync settings
+        </a>
+        .
+      </p>
     </div>
   );
 }

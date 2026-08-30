@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 type ConnectionStatus =
@@ -71,7 +72,7 @@ const buttonStyle = {
   border: 0,
   borderRadius: 'var(--radius-md)',
   background: 'var(--chat-accent-primary, #c8892a)',
-  color: '#fff',
+  color: 'var(--chat-accent-on-primary, #1c150b)',
   fontSize: 13,
   fontWeight: 600,
   padding: '7px 13px',
@@ -117,6 +118,7 @@ export function SSOPanel({
   organizationId: string;
   isOwner: boolean;
 }) {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -242,290 +244,310 @@ export function SSOPanel({
   }
 
   return (
-    <section style={cardStyle} aria-labelledby="sso-panel-heading">
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--settings-border)' }}>
-        <div
-          id="sso-panel-heading"
-          style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}
-        >
-          Single sign-on (SAML / OIDC)
-        </div>
-        <div style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, marginTop: 3 }}>
-          Route sign-in for an email domain you control to Okta, Microsoft Entra ID, Google
-          Workspace, or any SAML 2.0 / OIDC provider. Domain ownership must be proven by DNS before
-          a connection can go live.
-        </div>
-      </div>
-
-      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {error ? (
-          <p
-            role="alert"
-            style={{
-              margin: 0,
-              color: 'var(--settings-destructive-foreground, #ef4444)',
-              fontSize: 12,
-              lineHeight: 1.5,
-            }}
+    <>
+      {confirmDialog}
+      <section style={cardStyle} aria-labelledby="sso-panel-heading">
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--settings-border)' }}>
+          <div
+            id="sso-panel-heading"
+            style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}
           >
-            {error}
-          </p>
-        ) : null}
+            Single sign-on (SAML / OIDC)
+          </div>
+          <div style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, marginTop: 3 }}>
+            Route sign-in for an email domain you control to Okta, Microsoft Entra ID, Google
+            Workspace, or any SAML 2.0 / OIDC provider. Domain ownership must be proven by DNS
+            before a connection can go live.
+          </div>
+        </div>
 
-        {connections.length === 0 ? (
-          <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 13 }}>No SSO connections yet.</p>
-        ) : null}
-
-        {connections.map((connection) => {
-          const copy = STATUS_COPY[connection.status];
-          return (
-            <article
-              key={connection.id}
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {error ? (
+            <p
+              role="alert"
               style={{
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: 14,
+                margin: 0,
+                color: 'var(--settings-destructive-text, #d31212)',
+                fontSize: 12,
+                lineHeight: 1.5,
               }}
             >
-              <div
+              {error}
+            </p>
+          ) : null}
+
+          {connections.length === 0 ? (
+            <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 13 }}>
+              No SSO connections yet.
+            </p>
+          ) : null}
+
+          {connections.map((connection) => {
+            const copy = STATUS_COPY[connection.status];
+            return (
+              <article
+                key={connection.id}
                 style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                  alignItems: 'baseline',
-                  justifyContent: 'space-between',
+                  border: '1px solid var(--settings-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: 14,
                 }}
               >
-                <div>
-                  <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
-                    {connection.displayName ?? connection.domain}
-                  </div>
-                  <div style={{ color: 'var(--text-3)', fontSize: 12 }}>
-                    {connection.providerType.toUpperCase()} · {connection.domain}
-                  </div>
-                </div>
-                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{copy.label}</span>
-              </div>
-
-              <p
-                style={{ margin: '8px 0 0', color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5 }}
-              >
-                {copy.detail}
-              </p>
-
-              {connection.domainVerification ? (
-                <div style={{ marginTop: 10 }}>
-                  <CopyRow label="Record type" value={connection.domainVerification.recordType} />
-                  <CopyRow label="Record name" value={connection.domainVerification.recordName} />
-                  <CopyRow label="Record value" value={connection.domainVerification.recordValue} />
-                  {connection.domainChallengeExpiresAt ? (
-                    <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 11 }}>
-                      This challenge expires{' '}
-                      {new Date(connection.domainChallengeExpiresAt).toLocaleString()}. Reissue it
-                      to get a fresh record.
-                    </p>
-                  ) : null}
-                </div>
-              ) : !connection.domainVerifiedAt ? (
-                <p
-                  role="status"
-                  style={{ margin: '10px 0 0', color: 'var(--text-3)', fontSize: 12 }}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 8,
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                  }}
                 >
-                  The domain verification challenge has expired. Reissue it to get a new DNS TXT
-                  record, publish that record, then verify.
-                </p>
-              ) : null}
-
-              {connection.serviceProvider.acsUrl ? (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-                    Paste these into your identity provider:
+                  <div>
+                    <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
+                      {connection.displayName ?? connection.domain}
+                    </div>
+                    <div style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                      {connection.providerType.toUpperCase()} · {connection.domain}
+                    </div>
                   </div>
-                  <CopyRow label="ACS URL" value={connection.serviceProvider.acsUrl} />
-                  {connection.serviceProvider.entityId ? (
-                    <CopyRow label="SP entity ID" value={connection.serviceProvider.entityId} />
-                  ) : null}
-                  {connection.serviceProvider.metadataUrl ? (
-                    <CopyRow
-                      label="SP metadata URL"
-                      value={connection.serviceProvider.metadataUrl}
-                    />
-                  ) : null}
+                  <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{copy.label}</span>
                 </div>
-              ) : null}
 
-              {isOwner ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-                  {!connection.domainVerifiedAt ? (
-                    <>
-                      <button
-                        type="button"
-                        disabled={busy || !connection.domainVerification}
-                        style={buttonStyle}
-                        onClick={() =>
-                          void mutate(
-                            '/api/admin/sso/verify-domain',
-                            'POST',
-                            { connectionId: connection.id },
-                            'Domain verification failed.',
-                          )
-                        }
-                      >
-                        Verify domain
-                      </button>
-                      {/* Challenges expire, so the reissue endpoint has to be
+                <p
+                  style={{
+                    margin: '8px 0 0',
+                    color: 'var(--text-3)',
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {copy.detail}
+                </p>
+
+                {connection.domainVerification ? (
+                  <div style={{ marginTop: 10 }}>
+                    <CopyRow label="Record type" value={connection.domainVerification.recordType} />
+                    <CopyRow label="Record name" value={connection.domainVerification.recordName} />
+                    <CopyRow
+                      label="Record value"
+                      value={connection.domainVerification.recordValue}
+                    />
+                    {connection.domainChallengeExpiresAt ? (
+                      <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 11 }}>
+                        This challenge expires{' '}
+                        {new Date(connection.domainChallengeExpiresAt).toLocaleString()}. Reissue it
+                        to get a fresh record.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : !connection.domainVerifiedAt ? (
+                  <p
+                    role="status"
+                    style={{ margin: '10px 0 0', color: 'var(--text-3)', fontSize: 12 }}
+                  >
+                    The domain verification challenge has expired. Reissue it to get a new DNS TXT
+                    record, publish that record, then verify.
+                  </p>
+                ) : null}
+
+                {connection.serviceProvider.acsUrl ? (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                      Paste these into your identity provider:
+                    </div>
+                    <CopyRow label="ACS URL" value={connection.serviceProvider.acsUrl} />
+                    {connection.serviceProvider.entityId ? (
+                      <CopyRow label="SP entity ID" value={connection.serviceProvider.entityId} />
+                    ) : null}
+                    {connection.serviceProvider.metadataUrl ? (
+                      <CopyRow
+                        label="SP metadata URL"
+                        value={connection.serviceProvider.metadataUrl}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {isOwner ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                    {!connection.domainVerifiedAt ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={busy || !connection.domainVerification}
+                          style={buttonStyle}
+                          onClick={() =>
+                            void mutate(
+                              '/api/admin/sso/verify-domain',
+                              'POST',
+                              { connectionId: connection.id },
+                              'Domain verification failed.',
+                            )
+                          }
+                        >
+                          Verify domain
+                        </button>
+                        {/* Challenges expire, so the reissue endpoint has to be
                           reachable from here — otherwise a lapsed challenge is
                           a dead end for everyone who does not call the API by
                           hand. */}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          style={secondaryButtonStyle}
+                          onClick={() =>
+                            void mutate(
+                              '/api/admin/sso/verify-domain',
+                              'PUT',
+                              { connectionId: connection.id },
+                              'Could not reissue the domain challenge.',
+                            )
+                          }
+                        >
+                          Reissue challenge
+                        </button>
+                      </>
+                    ) : (
                       <button
                         type="button"
                         disabled={busy}
-                        style={secondaryButtonStyle}
+                        style={buttonStyle}
                         onClick={() =>
                           void mutate(
-                            '/api/admin/sso/verify-domain',
-                            'PUT',
-                            { connectionId: connection.id },
-                            'Could not reissue the domain challenge.',
+                            `/api/admin/sso/${connection.id}`,
+                            'PATCH',
+                            { is_active: !connection.isActive },
+                            connection.isActive
+                              ? 'Could not deactivate the connection.'
+                              : 'Could not activate the connection.',
                           )
                         }
                       >
-                        Reissue challenge
+                        {connection.isActive ? 'Deactivate' : 'Activate'}
                       </button>
-                    </>
-                  ) : (
+                    )}
                     <button
                       type="button"
                       disabled={busy}
-                      style={buttonStyle}
+                      style={secondaryButtonStyle}
                       onClick={() =>
-                        void mutate(
-                          `/api/admin/sso/${connection.id}`,
-                          'PATCH',
-                          { is_active: !connection.isActive },
-                          connection.isActive
-                            ? 'Could not deactivate the connection.'
-                            : 'Could not activate the connection.',
-                        )
+                        confirm({
+                          title: 'Remove this SSO connection?',
+                          description:
+                            'Members who sign in through this connection lose access immediately. The connection and its configuration are deleted permanently — this cannot be undone.',
+                          confirmLabel: 'Remove connection',
+                          onConfirm: () =>
+                            mutate(
+                              `/api/admin/sso?id=${encodeURIComponent(connection.id)}&hard=true`,
+                              'DELETE',
+                              undefined,
+                              'Could not remove the connection.',
+                            ),
+                        })
                       }
                     >
-                      {connection.isActive ? 'Deactivate' : 'Activate'}
+                      Remove
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled={busy}
-                    style={secondaryButtonStyle}
-                    onClick={() =>
-                      void mutate(
-                        `/api/admin/sso?id=${encodeURIComponent(connection.id)}&hard=true`,
-                        'DELETE',
-                        undefined,
-                        'Could not remove the connection.',
-                      )
-                    }
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : null}
-            </article>
-          );
-        })}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
 
-        {isOwner ? (
-          <form
-            onSubmit={handleCreate}
-            style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
-          >
-            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
-              Email domain
-              <input
-                aria-label="Email domain"
-                value={domain}
-                onChange={(event) => setDomain(event.target.value)}
-                placeholder="example.com"
-                required
-                style={controlStyle}
-              />
-            </label>
-
-            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
-              Protocol
-              <select
-                aria-label="Protocol"
-                value={providerType}
-                onChange={(event) => setProviderType(event.target.value as 'saml' | 'oidc')}
-                style={controlStyle}
-              >
-                <option value="saml">SAML 2.0</option>
-                <option value="oidc">OIDC</option>
-              </select>
-            </label>
-
-            <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
-              Display name
-              <input
-                aria-label="Display name"
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Okta"
-                style={controlStyle}
-              />
-            </label>
-
-            {providerType === 'saml' ? (
+          {isOwner ? (
+            <form
+              onSubmit={handleCreate}
+              style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+            >
               <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
-                IdP metadata URL
+                Email domain
                 <input
-                  aria-label="IdP metadata URL"
-                  value={metadataUrl}
-                  onChange={(event) => setMetadataUrl(event.target.value)}
-                  placeholder="https://example.okta.com/app/.../sso/saml/metadata"
+                  aria-label="Email domain"
+                  value={domain}
+                  onChange={(event) => setDomain(event.target.value)}
+                  placeholder="example.com"
                   required
                   style={controlStyle}
                 />
               </label>
-            ) : (
-              <>
-                <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
-                  OIDC discovery URL
-                  <input
-                    aria-label="OIDC discovery URL"
-                    value={discoveryUrl}
-                    onChange={(event) => setDiscoveryUrl(event.target.value)}
-                    placeholder="https://idp.example.com/.well-known/openid-configuration"
-                    required
-                    style={controlStyle}
-                  />
-                </label>
-                <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
-                  OIDC client ID
-                  <input
-                    aria-label="OIDC client ID"
-                    value={clientId}
-                    onChange={(event) => setClientId(event.target.value)}
-                    required
-                    style={controlStyle}
-                  />
-                </label>
-                <p style={{ margin: 0, fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>
-                  The client secret is requested when you activate the connection. It is passed to
-                  the identity provider and never stored here.
-                </p>
-              </>
-            )}
 
-            <button
-              type="submit"
-              disabled={busy}
-              style={{ ...buttonStyle, alignSelf: 'flex-start' }}
-            >
-              Add connection
-            </button>
-          </form>
-        ) : null}
-      </div>
-    </section>
+              <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+                Protocol
+                <select
+                  aria-label="Protocol"
+                  value={providerType}
+                  onChange={(event) => setProviderType(event.target.value as 'saml' | 'oidc')}
+                  style={controlStyle}
+                >
+                  <option value="saml">SAML 2.0</option>
+                  <option value="oidc">OIDC</option>
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+                Display name
+                <input
+                  aria-label="Display name"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  placeholder="Okta"
+                  style={controlStyle}
+                />
+              </label>
+
+              {providerType === 'saml' ? (
+                <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+                  IdP metadata URL
+                  <input
+                    aria-label="IdP metadata URL"
+                    value={metadataUrl}
+                    onChange={(event) => setMetadataUrl(event.target.value)}
+                    placeholder="https://example.okta.com/app/.../sso/saml/metadata"
+                    required
+                    style={controlStyle}
+                  />
+                </label>
+              ) : (
+                <>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+                    OIDC discovery URL
+                    <input
+                      aria-label="OIDC discovery URL"
+                      value={discoveryUrl}
+                      onChange={(event) => setDiscoveryUrl(event.target.value)}
+                      placeholder="https://idp.example.com/.well-known/openid-configuration"
+                      required
+                      style={controlStyle}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+                    OIDC client ID
+                    <input
+                      aria-label="OIDC client ID"
+                      value={clientId}
+                      onChange={(event) => setClientId(event.target.value)}
+                      required
+                      style={controlStyle}
+                    />
+                  </label>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>
+                    The client secret is requested when you activate the connection. It is passed to
+                    the identity provider and never stored here.
+                  </p>
+                </>
+              )}
+
+              <button
+                type="submit"
+                disabled={busy}
+                style={{ ...buttonStyle, alignSelf: 'flex-start' }}
+              >
+                Add connection
+              </button>
+            </form>
+          ) : null}
+        </div>
+      </section>
+    </>
   );
 }

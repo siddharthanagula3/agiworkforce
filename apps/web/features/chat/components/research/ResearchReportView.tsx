@@ -226,17 +226,17 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
               onError={() => setFaviconError(true)}
             />
           ) : (
-            <Globe className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+            <Globe className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
           )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-foreground group-hover:text-primary">
             {citation.title || host}
           </span>
-          <span className="block truncate text-[11px] text-muted-foreground/70">{host}</span>
+          <span className="block truncate text-[11px] text-muted-foreground">{host}</span>
         </span>
         <ExternalLink
-          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground/80"
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-muted-foreground"
           aria-hidden="true"
         />
       </a>
@@ -403,7 +403,7 @@ export function ResearchReportView({
       {exportError && (
         <p
           role="alert"
-          className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-xs text-destructive"
+          className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-xs text-danger"
         >
           {exportError}
         </p>
@@ -520,7 +520,7 @@ export function ResearchReportView({
               rows={2}
               placeholder="Ask a follow-up about this report"
               aria-label="Ask a follow-up about this report"
-              className="min-w-0 flex-1 resize-none bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60"
+              className="min-w-0 flex-1 resize-none bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
             />
             <Button
               type="submit"
@@ -533,7 +533,7 @@ export function ResearchReportView({
               Ask
             </Button>
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground/70">
+          <p className="mt-1 text-[11px] text-muted-foreground">
             The report travels with your question, so the answer stays grounded in it.
           </p>
         </form>

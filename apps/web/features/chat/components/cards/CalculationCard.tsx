@@ -14,6 +14,7 @@ import {
   stripListMarker,
   type ExtraSection,
 } from './card-extras';
+import 'katex/dist/katex.min.css';
 
 interface ParsedCalculation {
   title: string;

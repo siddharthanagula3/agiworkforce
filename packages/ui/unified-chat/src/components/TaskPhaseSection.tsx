@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Loader2, CheckCircle2, XCircle, ChevronRight, ChevronDown, Wrench } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -108,9 +107,9 @@ export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionPro
         )}
       >
         {isExpanded ? (
-          <ChevronDown className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+          <ChevronDown className="w-3 h-3 text-muted-foreground shrink-0" />
         ) : (
-          <ChevronRight className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+          <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
         )}
 
         <StatusIcon status={phase.status} />
@@ -124,7 +123,7 @@ export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionPro
         </span>
 
         {duration != null && duration > 0 && (
-          <span className="text-[10px] text-muted-foreground/60 tabular-nums shrink-0">
+          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
             {formatDuration(duration)}
           </span>
         )}
@@ -141,7 +140,7 @@ export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionPro
           )}
 
           {phase.summary && (
-            <p className="text-[11px] text-muted-foreground/70 leading-relaxed">{phase.summary}</p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">{phase.summary}</p>
           )}
         </div>
       )}

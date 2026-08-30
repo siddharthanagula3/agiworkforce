@@ -8,8 +8,10 @@ interface VoiceRecordingOverlayProps {
   isListening: boolean;
   isTranscribing: boolean;
   elapsedSeconds: number;
+  error?: string | null;
   onDone: () => void;
   onCancel: () => void;
+  onRetry?: () => void;
 }
 
 function formatTimer(seconds: number): string {
@@ -47,9 +49,12 @@ function VoiceRecordingOverlayComponent({
   isListening,
   isTranscribing,
   elapsedSeconds,
+  error,
   onDone,
   onCancel,
+  onRetry,
 }: VoiceRecordingOverlayProps) {
+  const failed = Boolean(error);
   return (
     <>
       {/* Inject keyframes for the waveform animation */}
@@ -71,13 +76,21 @@ function VoiceRecordingOverlayComponent({
           'border border-border/60 bg-popover/95 px-6 py-4 shadow-xl backdrop-blur-xl',
           'min-w-[200px]',
         )}
-        role="status"
-        aria-live="polite"
-        aria-label={isTranscribing ? 'Processing voice input' : 'Recording voice input'}
+        role={failed ? 'alert' : 'status'}
+        aria-live={failed ? 'assertive' : 'polite'}
+        aria-label={
+          failed
+            ? 'Voice input failed'
+            : isTranscribing
+              ? 'Processing voice input'
+              : 'Recording voice input'
+        }
       >
         {/* Status text + timer */}
         <div className="flex flex-col items-center gap-1.5">
-          {isTranscribing ? (
+          {failed ? (
+            <p className="max-w-[240px] text-center text-sm text-foreground">{error}</p>
+          ) : isTranscribing ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
               <span className="text-sm font-medium text-foreground">Processing...</span>
@@ -100,7 +113,28 @@ function VoiceRecordingOverlayComponent({
         </div>
 
         {/* Action buttons */}
-        {!isTranscribing && (
+        {failed ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-full border border-border bg-muted/50 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+            >
+              Dismiss
+            </button>
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Try again
+              </button>
+            )}
+          </div>
+        ) : null}
+
+        {!failed && !isTranscribing && (
           <div className="flex items-center gap-3">
             {/* Cancel */}
             <button

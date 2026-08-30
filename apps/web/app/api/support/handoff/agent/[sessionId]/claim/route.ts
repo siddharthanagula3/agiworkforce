@@ -1,9 +1,8 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { requireAdmin } from '@/lib/auth-guards';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { createError } from '@/lib/errors';
 import { claimHandoffForAgent } from '@/lib/support/handoff/handoff-service';
 import { appendHandoffMessage, getSessionById } from '@/lib/support/handoff/store';
@@ -17,7 +16,7 @@ async function handleClaim(request: NextRequest, context: RouteContext) {
   const limited = await withRateLimit(request, 'support-handoff-agent');
   if (limited) return limited;
 
-  const { userId } = await requireAdmin(request);
+  const { userId } = await requirePlatformAdmin(request);
   const { sessionId } = await context.params;
 
   const claim = await claimHandoffForAgent(sessionId, userId);

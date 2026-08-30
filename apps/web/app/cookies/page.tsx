@@ -50,15 +50,6 @@ const COOKIES: CookieRow[] = [
     source: 'app/i18n/index.ts',
   },
   {
-    name: 'sidebar:state',
-    category: 'Functional',
-    controller: LEGAL_ENTITY,
-    purpose:
-      'Remembers whether you left the sidebar open or collapsed, so the first render matches what you last chose instead of flashing to a default. Holds "true" or "false" and nothing else — no identifier.',
-    duration: '7 days.',
-    source: 'shared/ui/sidebar.tsx',
-  },
-  {
     name: '_ga and _ga_*',
     category: 'Analytics',
     controller: 'Google',
@@ -87,14 +78,6 @@ interface StorageRow {
 }
 
 const STORAGE: StorageRow[] = [
-  {
-    key: 'auth_token, refresh_token',
-    store: 'Local storage',
-    holds:
-      'Your API session credentials, encrypted before they are written. They authenticate you to our API from the browser.',
-    clearedBy: 'Signing out, or clearing site data.',
-    source: 'shared/lib/api.ts',
-  },
   {
     key: 'user_id',
     store: 'Local storage',
@@ -163,13 +146,6 @@ const STORAGE: StorageRow[] = [
     holds: 'Which system voice you picked for read-aloud.',
     clearedBy: 'Clearing site data.',
     source: 'lib/hooks/useTTS.ts',
-  },
-  {
-    key: 'agw_onboarding_progress, help-tour-completed',
-    store: 'Local storage',
-    holds: 'Which onboarding steps and product tours you have finished, so they stop reappearing.',
-    clearedBy: 'Clearing site data.',
-    source: 'shared/components/dashboard/WelcomeBanner.tsx, features/chat/hooks/useHelpTour.ts',
   },
   {
     key: 'agi.terms-accepted-version',

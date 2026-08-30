@@ -1,3 +1,41 @@
+/**
+ * Gemini's `FunctionDeclaration.parameters` is a SUBSET of OpenAPI 3.0 Schema,
+ * not JSON Schema, and it rejects the whole request with a 400 on any field it
+ * does not know — naming the exact path, e.g. `Unknown name "propertyNames" at
+ * tools[0].function_declarations[4].parameters.properties[2].value`.
+ *
+ * This is therefore an ALLOWLIST. A denylist shipped first and broke live chats
+ * as soon as a connector or MCP tool arrived carrying a keyword nobody had
+ * enumerated — `propertyNames` and `exclusiveMinimum` both reached Google and
+ * took every tool-enabled Gemini turn down with them. Anything not named here
+ * is dropped, so an unfamiliar keyword costs a little schema fidelity instead of
+ * the entire request.
+ *
+ * Deliberately narrower than what Gemini documents: the validation keywords
+ * (minimum, maxLength, pattern, format, …) are omitted because they constrain
+ * arguments the model is only being asked to draft, and dropping them has never
+ * cost a correct tool call.
+ */
+export const GEMINI_SUPPORTED_SCHEMA_KEYWORDS = new Set([
+  'type',
+  'description',
+  'title',
+  'default',
+  'enum',
+  'properties',
+  'required',
+  'items',
+  'anyOf',
+  'oneOf',
+  'allOf',
+  'nullable',
+  'propertyOrdering',
+]);
+
+/**
+ * Retained for callers that assert on the historical stripping behaviour. The
+ * allowlist above is what the cleaner actually enforces.
+ */
 export const GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
   'patternProperties',
   'additionalProperties',
@@ -371,12 +409,14 @@ function cleanSchemaForGeminiWithDefs(
   const cleaned: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(obj)) {
-    if (GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS.has(key)) {
+    // `const` is not a Gemini keyword; it becomes a single-value enum, so it is
+    // resolved before the allowlist rejects the name.
+    if (key === 'const') {
+      cleaned['enum'] = [value];
       continue;
     }
 
-    if (key === 'const') {
-      cleaned['enum'] = [value];
+    if (!GEMINI_SUPPORTED_SCHEMA_KEYWORDS.has(key)) {
       continue;
     }
 

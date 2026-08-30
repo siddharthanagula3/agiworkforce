@@ -3,6 +3,7 @@
 import { useAuth } from '@clerk/nextjs';
 import { AlertTriangle, RefreshCw, ShieldAlert, UserRoundCog } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useConfirm } from '@agiworkforce/ui';
 import {
   fetchAdminSecurityOperations,
   performAdminAccountAction,
@@ -16,6 +17,13 @@ const ACTION_LABELS: Record<AdminAccountAction, string> = {
   'suspend-user': 'Suspend account',
   'ban-user': 'Ban account',
   'reactivate-user': 'Reactivate account',
+};
+
+const ACTION_CONSEQUENCE: Partial<Record<AdminAccountAction, string>> = {
+  'suspend-user':
+    'They are signed out everywhere and locked out until an operator reactivates the account. Their data is kept.',
+  'ban-user':
+    'They are signed out everywhere and permanently locked out. Their data is kept, but this is not part of the normal support flow.',
 };
 
 function formatTimestamp(value: string): string {
@@ -42,6 +50,7 @@ export default function SecurityOperationsPanel() {
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [actionResult, setActionResult] = useState<string | null>(null);
+  const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirm();
 
   const loadOperations = useCallback(async () => {
     setLoading(true);
@@ -68,6 +77,17 @@ export default function SecurityOperationsPanel() {
     const normalizedUserId = targetUserId.trim();
     const normalizedReason = reason.trim();
     if (!normalizedUserId || !normalizedReason || submitting) return;
+
+    const consequence = ACTION_CONSEQUENCE[action];
+    if (consequence) {
+      const confirmed = await confirmDestructive({
+        title: `${ACTION_LABELS[action]} for ${normalizedUserId}?`,
+        description: consequence,
+        confirmText: ACTION_LABELS[action],
+        variant: 'destructive',
+      });
+      if (!confirmed) return;
+    }
 
     setSubmitting(true);
     setActionResult(null);
@@ -304,6 +324,7 @@ export default function SecurityOperationsPanel() {
           {actionResult}
         </p>
       </form>
+      {destructiveConfirmDialog}
     </section>
   );
 }

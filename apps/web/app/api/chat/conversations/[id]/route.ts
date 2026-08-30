@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -9,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
+import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import {
   getNeonChatDb,
@@ -226,6 +226,28 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
 
   if (!deletedConversation) {
     throw createError.notFound('Conversation not found');
+  }
+
+  // A published artifact outlives the chat it came from unless it is revoked
+  // here: the FK cascade in 0095 never fires because this delete is a soft
+  // delete, so the public token would keep serving the content indefinitely.
+  try {
+    const revoked = await unpublishArtifactsForConversations(db, {
+      userId,
+      conversationIds: [id],
+    });
+    if (revoked.length > 0) {
+      logger.info(
+        { conversationId: id, revoked: revoked.length },
+        'Revoked published artifacts for deleted conversation',
+      );
+    }
+  } catch (error) {
+    logger.error(
+      { error, conversationId: id },
+      'Failed to revoke published artifacts for deleted conversation',
+    );
+    throw createError.internal('Failed to delete conversation');
   }
 
   // TTL (session-store.ts) is the safety net if this ever throws.

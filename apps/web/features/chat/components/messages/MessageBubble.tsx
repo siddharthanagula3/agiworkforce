@@ -2342,7 +2342,7 @@ const MessageBubbleComponent = function MessageBubble({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={handleDeleteWithConfirm}
-                          className="text-destructive focus:text-destructive"
+                          className="text-danger focus:text-danger"
                         >
                           <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                           Delete

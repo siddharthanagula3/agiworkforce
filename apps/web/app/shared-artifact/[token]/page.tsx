@@ -17,7 +17,9 @@ export const runtime = 'nodejs';
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { token } = await params;
-  if (!PUBLISHED_TOKEN_REGEX.test(token)) return { title: 'Published artifact - AGI' };
+  if (!PUBLISHED_TOKEN_REGEX.test(token)) {
+    return { title: 'Published artifact - AGI', robots: { index: false, follow: false } };
+  }
 
   const artifact = await getPublishedArtifactByToken(getNeonDb(), token).catch(() => null);
 

@@ -127,12 +127,10 @@ export function DragDropOverlay({
               <h3 className="mb-1 text-xl font-semibold text-foreground">Drop files here</h3>
               <p className="text-sm text-muted-foreground">Release to attach to your message</p>
               {accept && accept.length > 0 && (
-                <p className="mt-2 text-xs text-muted-foreground/60">
-                  Accepted: {accept.join(', ')}
-                </p>
+                <p className="mt-2 text-xs text-muted-foreground">Accepted: {accept.join(', ')}</p>
               )}
               {maxFiles > 1 && (
-                <p className="text-xs text-muted-foreground/60">Up to {maxFiles} files</p>
+                <p className="text-xs text-muted-foreground">Up to {maxFiles} files</p>
               )}
             </div>
           </motion.div>

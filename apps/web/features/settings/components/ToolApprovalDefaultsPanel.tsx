@@ -93,7 +93,7 @@ export function ToolApprovalDefaultsPanel() {
           Allow, Ask, and Deny choices in Connectors always win over this default.
         </p>
         <p
-          className={`mt-2 text-xs ${loadError || saveError ? 'text-destructive' : 'text-muted-foreground'}`}
+          className={`mt-2 text-xs ${loadError || saveError ? 'text-danger' : 'text-muted-foreground'}`}
           role="status"
         >
           {saving

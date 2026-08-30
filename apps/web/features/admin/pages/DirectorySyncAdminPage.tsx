@@ -1,5 +1,7 @@
 'use client';
 
+import { useConfirmAction } from '@agiworkforce/ui';
+
 import { useCallback, useEffect, useState } from 'react';
 import { getCsrfToken } from '@/lib/client/csrf';
 
@@ -70,7 +72,13 @@ async function readError(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
-export default function DirectorySyncAdminPage() {
+export default function DirectorySyncAdminPage({
+  organizationId,
+}: {
+  organizationId?: string;
+} = {}) {
+  const orgQuery = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : '';
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [connections, setConnections] = useState<Connection[]>([]);
   const [events, setEvents] = useState<SyncEvent[]>([]);
   const [tokens, setTokens] = useState<TokenSummary[]>([]);
@@ -95,9 +103,9 @@ export default function DirectorySyncAdminPage() {
     setError(null);
     try {
       const [connectionsResponse, tokensResponse, groupsResponse] = await Promise.all([
-        fetch('/api/admin/directory-sync', { credentials: 'include' }),
-        fetch('/api/admin/directory-sync/tokens', { credentials: 'include' }),
-        fetch('/api/admin/directory-sync/groups', { credentials: 'include' }),
+        fetch(`/api/admin/directory-sync${orgQuery}`, { credentials: 'include' }),
+        fetch(`/api/admin/directory-sync/tokens${orgQuery}`, { credentials: 'include' }),
+        fetch(`/api/admin/directory-sync/groups${orgQuery}`, { credentials: 'include' }),
       ]);
 
       if (!connectionsResponse.ok) {
@@ -146,7 +154,7 @@ export default function DirectorySyncAdminPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [orgQuery]);
 
   useEffect(() => {
     void load();
@@ -166,6 +174,7 @@ export default function DirectorySyncAdminPage() {
           provider,
           directory_id: directoryId.trim(),
           display_name: displayName.trim() || undefined,
+          organizationId,
         }),
       });
       if (!response.ok) {
@@ -214,7 +223,11 @@ export default function DirectorySyncAdminPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-        body: JSON.stringify({ connectionId: tokenConnectionId, name: tokenName.trim() }),
+        body: JSON.stringify({
+          connectionId: tokenConnectionId,
+          name: tokenName.trim(),
+          organizationId,
+        }),
       });
       if (!response.ok) {
         setError(await readError(response));
@@ -238,7 +251,7 @@ export default function DirectorySyncAdminPage() {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
-        body: JSON.stringify({ groupId, mappedRole }),
+        body: JSON.stringify({ groupId, mappedRole, organizationId }),
       });
       if (!response.ok) {
         setError(await readError(response));
@@ -281,6 +294,7 @@ export default function DirectorySyncAdminPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {confirmDialog}
       <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
         <header>
           <h1 className="text-2xl font-medium text-foreground">Directory sync (SCIM 2.0)</h1>
@@ -334,7 +348,15 @@ export default function DirectorySyncAdminPage() {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void deleteConnection(connection.id)}
+                    onClick={() =>
+                      confirm({
+                        title: 'Remove this directory sync connection?',
+                        description:
+                          'SCIM provisioning stops immediately and the connection, its tokens and its group mappings are deleted. Members already provisioned keep their accounts, but no further changes sync.',
+                        confirmLabel: 'Remove connection',
+                        onConfirm: () => deleteConnection(connection.id),
+                      })
+                    }
                     className="rounded border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
                   >
                     Remove
@@ -429,7 +451,15 @@ export default function DirectorySyncAdminPage() {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => void revokeToken(token.id)}
+                      onClick={() =>
+                        confirm({
+                          title: 'Revoke this SCIM token?',
+                          description:
+                            'Any identity provider still using this token stops syncing immediately and will start failing its requests. This cannot be undone — issue a new token instead.',
+                          confirmLabel: 'Revoke token',
+                          onConfirm: () => revokeToken(token.id),
+                        })
+                      }
                       className="rounded border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
                     >
                       Revoke

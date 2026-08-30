@@ -137,6 +137,54 @@ const CHAT_SURFACE_OVERLAY_DARK = colorToken(web.dark, '--chat-surface-overlay')
 const DARK_CARD = colorToken(web.dark, '--card');
 const DARK_POPOVER = colorToken(web.dark, '--popover');
 
+const SWATCHES = ['default', 'green', 'blue', 'violet', 'rose'] as const;
+
+describe('destructive tokens carry both roles', () => {
+  // One --destructive served text and solid fills at once, so each theme failed
+  // the role it was not tuned for: light text 3.55:1 and light fills 3.76:1,
+  // dark text 2.10:1. No single value satisfies both, hence --destructive-text.
+  for (const [theme, block, bg] of [
+    ['light', web.light, LIGHT_BG],
+    ['dark', web.dark, DARK_BG],
+  ] as const) {
+    it(`${theme}: --destructive-text on --background >= 4.5:1`, () => {
+      expect(contrastRatio(colorToken(block, '--destructive-text'), bg)).toBeGreaterThanOrEqual(
+        WCAG_AA_NORMAL,
+      );
+    });
+
+    it(`${theme}: --destructive-foreground on --destructive >= 4.5:1`, () => {
+      expect(
+        contrastRatio(
+          colorToken(block, '--destructive-foreground'),
+          colorToken(block, '--destructive'),
+        ),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+  }
+});
+
+describe('every accent swatch pairs with a legible foreground', () => {
+  // The accent is a user-selectable fill. White cleared the light swatches but
+  // failed amber (2.97:1) and every dark swatch (2.54-3.20:1), so the paired
+  // --accent-swatch-*-on foreground is what call sites must render on the fill.
+  for (const [theme, block] of [
+    ['light', web.light],
+    ['dark', web.dark],
+  ] as const) {
+    for (const swatch of SWATCHES) {
+      it(`${theme}/${swatch}: --accent-swatch-${swatch}-on on its fill >= 4.5:1`, () => {
+        expect(
+          contrastRatio(
+            colorToken(block, `--accent-swatch-${swatch}-on`),
+            colorToken(block, `--accent-swatch-${swatch}`),
+          ),
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+    }
+  }
+});
+
 describe('WCAG 2.1 AA contrast ratios · light mode', () => {
   it('--background vs --foreground: >= 4.5:1', () => {
     const ratio = contrastRatio(LIGHT_BG, LIGHT_FG);

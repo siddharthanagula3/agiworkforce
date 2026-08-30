@@ -148,7 +148,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
               />
             </div>
             {errors.name && (
-              <p id="cmd-name-error" className="text-xs text-destructive">
+              <p id="cmd-name-error" className="text-xs text-danger">
                 {errors.name}
               </p>
             )}
@@ -177,7 +177,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
             />
             <p className="text-xs text-muted-foreground text-right">{description.length}/100</p>
             {errors.description && (
-              <p id="cmd-description-error" className="text-xs text-destructive">
+              <p id="cmd-description-error" className="text-xs text-danger">
                 {errors.description}
               </p>
             )}
@@ -205,7 +205,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
               className="font-mono text-xs"
             />
             {errors.template && (
-              <p id="cmd-template-error" className="text-xs text-destructive">
+              <p id="cmd-template-error" className="text-xs text-danger">
                 {errors.template}
               </p>
             )}
@@ -299,9 +299,7 @@ export function CustomCommandsSettings() {
                 {cmd.description && (
                   <p className="text-xs text-muted-foreground truncate">{cmd.description}</p>
                 )}
-                <p className="text-xs text-muted-foreground/60 truncate font-mono">
-                  {cmd.template}
-                </p>
+                <p className="text-xs text-muted-foreground truncate font-mono">{cmd.template}</p>
               </div>
               <div className="flex shrink-0 gap-1">
                 <Button

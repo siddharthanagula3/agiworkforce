@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   requireUser: vi.fn(async (..._args: unknown[]) => 'user-1'),
   killSession: vi.fn(async (..._args: unknown[]) => undefined),
   scope: vi.fn((userId: string, conversationId: string) => ({ userId, conversationId })),
+  unpublishForConversations: vi.fn(async (..._args: unknown[]) => [] as string[]),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -18,6 +19,10 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/services/published-artifact-service', () => ({
+  unpublishArtifactsForConversations: (...args: unknown[]) =>
+    mocks.unpublishForConversations(...args),
+}));
 vi.mock('@/lib/e2b/runtime', () => ({
   killE2BSession: (...args: unknown[]) => mocks.killSession(...args),
 }));
@@ -48,6 +53,7 @@ describe('POST /api/chat/conversations/bulk', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requireUser.mockResolvedValue('user-1');
+    mocks.unpublishForConversations.mockResolvedValue([]);
   });
 
   it('archives only the authenticated owners live, unarchived conversations', async () => {
@@ -64,6 +70,7 @@ describe('POST /api/chat/conversations/bulk', () => {
     expect(sql).toContain('archived = false');
     expect(params).toEqual(['user-1', null]);
     expect(mocks.killSession).not.toHaveBeenCalled();
+    expect(mocks.unpublishForConversations).not.toHaveBeenCalled();
   });
 
   it('deletes only archived conversations and releases each owned sandbox', async () => {
@@ -88,5 +95,26 @@ describe('POST /api/chat/conversations/bulk', () => {
     const [sql] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('set deleted_at = now()');
     expect(sql).not.toContain('archived = true');
+  });
+
+  it('revokes published artifacts for every conversation a bulk delete removes', async () => {
+    mocks.query.mockResolvedValue([{ id: 'conversation-1' }, { id: 'conversation-2' }]);
+
+    await post('delete_all');
+
+    expect(mocks.unpublishForConversations).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user-1',
+      conversationIds: ['conversation-1', 'conversation-2'],
+    });
+  });
+
+  it('fails the bulk delete rather than leaving public artifacts behind', async () => {
+    mocks.query.mockResolvedValue([{ id: 'conversation-1' }]);
+    mocks.unpublishForConversations.mockRejectedValue(new Error('db down'));
+
+    const response = await post('delete_all');
+
+    expect(response.status).toBe(500);
+    expect(mocks.killSession).not.toHaveBeenCalled();
   });
 });

@@ -57,7 +57,7 @@ const primaryButtonStyle = {
   border: 0,
   borderRadius: 'var(--radius-md)',
   background: 'var(--chat-accent-primary, #c8892a)',
-  color: '#fff',
+  color: 'var(--chat-accent-on-primary, #1c150b)',
   fontSize: 13,
   fontWeight: 600,
   padding: '8px 14px',
@@ -140,7 +140,7 @@ function InlineError({ error }: { error: Error | null | undefined }) {
       role="alert"
       style={{
         margin: '10px 0 0',
-        color: 'var(--settings-destructive-foreground, #ef4444)',
+        color: 'var(--settings-destructive-text, #d31212)',
         fontSize: 12,
         lineHeight: 1.5,
       }}
@@ -805,7 +805,7 @@ export function TeamSection() {
                   onClick={() => setPendingAction({ kind: 'revoke-invitation', invitation })}
                   style={{
                     ...secondaryButtonStyle,
-                    color: 'var(--settings-destructive-foreground, #ef4444)',
+                    color: 'var(--settings-destructive-text, #d31212)',
                   }}
                 >
                   Revoke
@@ -933,7 +933,7 @@ export function TeamSection() {
                         border: '1px solid var(--settings-border)',
                         borderRadius: 'var(--radius-md)',
                         background: 'transparent',
-                        color: 'var(--settings-destructive-foreground, #ef4444)',
+                        color: 'var(--settings-destructive-text, #d31212)',
                         cursor: 'pointer',
                       }}
                     >
@@ -1000,7 +1000,7 @@ export function TeamSection() {
                 disabled={!successorUserId || leaveOrganization.isPending}
                 style={{
                   ...secondaryButtonStyle,
-                  color: 'var(--settings-destructive-foreground, #ef4444)',
+                  color: 'var(--settings-destructive-text, #d31212)',
                   marginTop: 14,
                 }}
               >
@@ -1020,7 +1020,7 @@ export function TeamSection() {
                 disabled={leaveOrganization.isPending}
                 style={{
                   ...secondaryButtonStyle,
-                  color: 'var(--settings-destructive-foreground, #ef4444)',
+                  color: 'var(--settings-destructive-text, #d31212)',
                   marginTop: 14,
                 }}
               >

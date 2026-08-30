@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cleanSchemaForGemini } from '../lib/clean-for-gemini';
+import { cleanSchemaForGemini, GEMINI_SUPPORTED_SCHEMA_KEYWORDS } from '../lib/clean-for-gemini';
 
 function buildForkingRefChain(length: number): Record<string, unknown> {
   const $defs: Record<string, unknown> = {};
@@ -147,5 +147,126 @@ describe('cleanSchemaForGemini — memoized $ref resolution stays correct', () =
     const properties = cleaned['properties'] as Record<string, unknown>;
     const children = properties['children'] as Record<string, unknown>;
     expect(children['items']).toEqual({});
+  });
+});
+
+describe('cleanSchemaForGemini — only Gemini-known keywords survive', () => {
+  /**
+   * Google rejects the WHOLE request on an unknown field, naming the path:
+   *   Unknown name "propertyNames" at
+   *   tools[0].function_declarations[4].parameters.properties[2].value
+   * Both of these reached production and took every tool-enabled Gemini turn
+   * down with them, because the cleaner was a denylist and neither was on it.
+   */
+  it('drops the keywords that produced the live 400', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        tags: {
+          type: 'object',
+          propertyNames: { pattern: '^[a-z]+$' },
+          additionalProperties: { type: 'string' },
+        },
+        count: { type: 'number', exclusiveMinimum: 0, exclusiveMaximum: 10 },
+      },
+      required: ['tags'],
+    }) as Record<string, unknown>;
+
+    const serialized = JSON.stringify(cleaned);
+    expect(serialized).not.toContain('propertyNames');
+    expect(serialized).not.toContain('exclusiveMinimum');
+    expect(serialized).not.toContain('exclusiveMaximum');
+    expect(cleaned['type']).toBe('object');
+    expect(cleaned['required']).toEqual(['tags']);
+  });
+
+  it('drops every other JSON Schema keyword Gemini has no name for', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        value: {
+          type: 'array',
+          prefixItems: [{ type: 'string' }],
+          contains: { type: 'string' },
+          unevaluatedItems: false,
+          readOnly: true,
+          writeOnly: false,
+          deprecated: true,
+          $comment: 'internal',
+          contentEncoding: 'base64',
+          dependentRequired: { a: ['b'] },
+          if: { type: 'string' },
+          then: { type: 'string' },
+          else: { type: 'number' },
+        },
+      },
+    }) as Record<string, unknown>;
+
+    const value = (cleaned['properties'] as Record<string, Record<string, unknown>>)['value']!;
+    expect(Object.keys(value).sort()).toEqual(['type']);
+  });
+
+  it('keeps the fields a tool call actually needs', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      title: 'Search',
+      description: 'Search the corpus',
+      properties: {
+        query: { type: 'string', description: 'What to look for' },
+        mode: { type: 'string', enum: ['fast', 'deep'], default: 'fast' },
+        limit: { type: 'integer' },
+        filters: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['query'],
+    }) as Record<string, unknown>;
+
+    expect(cleaned['description']).toBe('Search the corpus');
+    expect(cleaned['required']).toEqual(['query']);
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+    expect(props['mode']?.['enum']).toEqual(['fast', 'deep']);
+    expect(props['mode']?.['default']).toBe('fast');
+    expect(props['filters']?.['items']).toEqual({ type: 'string' });
+    expect(props['query']?.['description']).toBe('What to look for');
+  });
+
+  it('turns const into a single-value enum rather than dropping it', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: { kind: { const: 'search' } },
+    }) as Record<string, unknown>;
+    const props = cleaned['properties'] as Record<string, Record<string, unknown>>;
+    expect(props['kind']?.['enum']).toEqual(['search']);
+  });
+
+  it('emits nothing outside the allowlist, at any depth', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        outer: {
+          type: 'object',
+          properties: { inner: { type: 'string', pattern: '^x$', exclusiveMinimum: 1 } },
+        },
+      },
+    });
+
+    // `properties` maps caller-chosen names to schemas, so its KEYS are data,
+    // not keywords — only its values are walked as schemas.
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      for (const [key, value] of Object.entries(node)) {
+        expect(GEMINI_SUPPORTED_SCHEMA_KEYWORDS.has(key), `leaked keyword: ${key}`).toBe(true);
+        if (key === 'properties' && value && typeof value === 'object') {
+          Object.values(value as Record<string, unknown>).forEach(walk);
+          continue;
+        }
+        if (key === 'enum' || key === 'default') continue;
+        walk(value);
+      }
+    };
+    walk(cleaned);
   });
 });

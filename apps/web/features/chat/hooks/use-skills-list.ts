@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { type ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
 import {
-  ManagedSkillsResponseSchema,
-  type ManagedSkillSummary,
-} from '@agiworkforce/cloud-contracts';
+  loadSkillsCatalog,
+  invalidateSkillsCatalog,
+} from '@features/skills/services/skills-catalog';
 import { SKILL_CATALOG_CHANGED_EVENT } from '@shared/events/skill-catalog-events';
 
 export type SkillItem = Pick<ManagedSkillSummary, 'name' | 'description' | 'source'>;
@@ -26,12 +27,9 @@ export function useSkillsList(): UseSkillsListResult {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/skills', { cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const parsed = ManagedSkillsResponseSchema.safeParse(await res.json());
-        if (!parsed.success) throw new Error('Invalid skills response');
+        const all = await loadSkillsCatalog();
         if (!cancelled) {
-          setSkills(parsed.data.skills.filter((skill) => skill.lifecycle === 'included'));
+          setSkills(all.filter((skill) => skill.lifecycle === 'included'));
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -40,6 +38,7 @@ export function useSkillsList(): UseSkillsListResult {
       }
     };
     const handleCatalogChanged = () => {
+      invalidateSkillsCatalog();
       void load();
     };
     window.addEventListener(SKILL_CATALOG_CHANGED_EVENT, handleCatalogChanged);

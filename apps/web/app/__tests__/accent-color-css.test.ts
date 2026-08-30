@@ -18,7 +18,14 @@ describe('Web accent colour picker', () => {
     expect(css).toContain(`html[data-accent='${value}'] {
     --chat-accent-primary: var(--accent-swatch-${value});
     --chat-accent-primary-text: var(--accent-swatch-${value});
+    --chat-accent-on-primary: var(--accent-swatch-${value}-on);
   }`);
+  });
+
+  it.each(ACCENT_COLORS)('defines a paired foreground for the $value swatch', ({ value }) => {
+    // White cleared the light swatches but failed amber (2.97:1) and every dark
+    // swatch, so each fill needs its own legible on-colour.
+    expect(css).toContain(`--accent-swatch-${value}-on:`);
   });
 
   it.each(ACCENT_COLORS)('paints the $value swatch from the same variable', ({ value }) => {
