@@ -129,8 +129,8 @@ export interface QuotaPool {
  * means ineligible — never "assume free because the price field is 0".
  *
  * That rule is not theoretical. Seven models in the current catalog price at
- * zero and at most one is actually free: `openrouter-auto` is a PAID
- * meta-router whose price is merely unknowable at compile time, and five video
+ * zero and at most one is actually free: the provider's automatic meta-router is
+ * PAID even though its price is merely unknowable at compile time, and five video
  * models are zero only because the price fields are token-denominated and cannot
  * express per-second billing.
  */
