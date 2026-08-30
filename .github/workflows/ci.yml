@@ -638,6 +638,17 @@ jobs:
           xvfb-run --auto-servernum cargo test -p agiworkforce-cli
           cargo test --workspace --lib --exclude agiworkforce-desktop --exclude agiworkforce-cli
 
+      - name: Trust boundaries (blocking)
+        # The only other place this runs is the Guardian lane, which is
+        # `mode: shadow` in .agi-guardian.yml and returns neutral for every
+        # finding, so a trust-boundary regression could not fail anything. This
+        # guard is deterministic - it needs the sidecar built above, not a
+        # precision corpus - so it blocks here while the LLM reviewers stay in
+        # shadow until docs/guardian exists.
+        env:
+          CARGO_INCREMENTAL: '0'
+        run: pnpm check:trust-boundaries
+
       - name: Cross-language sync parity (TEST-05)
         # packages/client/sync (TS) and data::cloud_sync (Rust) reimplement the
         # same delta-sync rules and agree only because both replay the golden
