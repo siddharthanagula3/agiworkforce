@@ -47,7 +47,7 @@ function Segment({
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.55 : 1,
         background: active ? 'var(--chat-accent-primary)' : 'transparent',
-        color: active ? 'var(--chat-accent-on-primary)' : 'var(--chat-text-secondary)',
+        color: active ? 'var(--chat-accent-primary-contrast)' : 'var(--chat-text-secondary)',
         fontSize: 12,
         fontWeight: 600,
         transition: 'background 120ms ease, color 120ms ease',
