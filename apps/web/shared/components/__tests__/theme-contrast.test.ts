@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
 
+import { agiPalette, agiCoolPalette, agiChatCssVars } from '@agiworkforce/design-tokens';
+
 function hexToSRGB(hex: string): [number, number, number] {
   const clean = hex.replace('#', '');
   const full =
@@ -340,4 +342,50 @@ describe('contrastRatio utility', () => {
     const r2 = contrastRatio('#e4e4e7', '#0f0f13');
     expect(r1).toBeCloseTo(r2, 10);
   });
+});
+
+describe('design-token palettes consumed by extension, mobile and VS Code', () => {
+  const palettes = { agiPalette, agiCoolPalette };
+  const readableOn = ['base', 'raised', 'overlay', 'sidebar', 'input'] as const;
+
+  for (const [paletteName, palette] of Object.entries(palettes)) {
+    for (const mode of ['light', 'dark'] as const) {
+      const { surface, text } = palette[mode];
+
+      for (const [role, fg] of Object.entries(text)) {
+        for (const surfaceName of readableOn) {
+          const bg = surface[surfaceName];
+
+          it(`${paletteName}.${mode}.text.${role} meets AA on surface.${surfaceName}`, () => {
+            expect(contrastRatio(fg, bg)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+          });
+        }
+      }
+
+      it(`${paletteName}.${mode} keeps primary > secondary > muted in prominence`, () => {
+        const onBase = (hex: string): number => contrastRatio(hex, surface.base);
+
+        expect(onBase(text.primary)).toBeGreaterThan(onBase(text.secondary));
+        expect(onBase(text.secondary)).toBeGreaterThan(onBase(text.muted));
+      });
+    }
+  }
+});
+
+describe('the two emitters of the --chat-* contract agree', () => {
+  const chatCssLight = baseThemeBlocks(chatCss).light;
+
+  const sharedLightTokens = {
+    '--chat-bg': agiChatCssVars.light['--chat-bg'],
+    '--chat-text-primary': agiChatCssVars.light['--chat-text-primary'],
+    '--chat-text-secondary': agiChatCssVars.light['--chat-text-secondary'],
+    '--chat-text-muted': agiChatCssVars.light['--chat-text-muted'],
+    '--chat-text-placeholder': agiChatCssVars.light['--chat-text-placeholder'],
+  };
+
+  for (const [name, fromTs] of Object.entries(sharedLightTokens)) {
+    it(`${name} is identical in chat.css and design-tokens/src/index.ts`, () => {
+      expect(fromTs.toLowerCase()).toBe(token(chatCssLight, name).toLowerCase());
+    });
+  }
 });

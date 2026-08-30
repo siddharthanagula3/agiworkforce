@@ -53,7 +53,11 @@ function walk(dir, out = []) {
       if (['node_modules', 'dist', '.next', 'src-tauri', '__tests__'].includes(entry.name))
         continue;
       walk(rel, out);
-    } else if (/\.tsx?$/.test(entry.name) && !/\.(test|spec)\.tsx?$/.test(entry.name)) {
+    } else if (
+      /\.(tsx?|css)$/.test(entry.name) &&
+      !/\.(test|spec)\.tsx?$/.test(entry.name) &&
+      !/\.d\.ts$/.test(entry.name)
+    ) {
       out.push(rel);
     }
   }
@@ -195,13 +199,24 @@ for (const surface of SURFACES) {
     continue;
   }
 
-  for (const file of [surface.source].flat().flatMap((dir) => walk(dir))) {
+  const surfaceFiles = [surface.source].flat().flatMap((dir) => walk(dir));
+
+  const runtimeProvided = new Set();
+  for (const file of surfaceFiles) {
+    if (!/\.tsx?$/.test(file)) continue;
+    const source = fs.readFileSync(path.join(root, file), 'utf8');
+    for (const m of source.matchAll(/setProperty\(\s*["'`](--[a-zA-Z0-9-]+)/g))
+      runtimeProvided.add(m[1]);
+    for (const m of source.matchAll(/["'`](--[a-zA-Z0-9-]+)["'`]\s*:/g)) runtimeProvided.add(m[1]);
+  }
+
+  for (const file of surfaceFiles) {
     const source = fs.readFileSync(path.join(root, file), 'utf8');
     const lines = source.split('\n');
 
     const runtimeDefined = new Set([
-      ...[...source.matchAll(/setProperty\(\s*["'`](--[a-zA-Z0-9-]+)/g)].map((m) => m[1]),
-      ...[...source.matchAll(/["'`](--[a-zA-Z0-9-]+)["'`]\s*:/g)].map((m) => m[1]),
+      ...runtimeProvided,
+      ...[...source.matchAll(/^\s*(--[a-zA-Z0-9-]+)\s*:/gm)].map((m) => m[1]),
     ]);
 
     lines.forEach((line, index) => {
@@ -221,7 +236,8 @@ for (const surface of SURFACES) {
         }
 
         const usedInsideHsl = new RegExp(`hsl\\(\\s*var\\(\\s*${token}\\b`).test(line);
-        if (hslTriplets.has(token) && !usedInsideHsl) {
+        const aliasedIntoAnotherToken = /^\s*--[a-zA-Z0-9-]+\s*:/.test(line);
+        if (hslTriplets.has(token) && !usedInsideHsl && !aliasedIntoAnotherToken) {
           errors.push(
             `${file}:${index + 1} uses ${token} bare, but it holds a raw HSL channel triplet and is ` +
               `only valid as hsl(var(${token})). Used bare the whole declaration is dropped.`,
