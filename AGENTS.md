@@ -211,7 +211,7 @@ without it.
 | Test everything   | `pnpm test`                                                                                    |
 | Test what changed | `pnpm test:affected`                                                                           |
 | One package       | `pnpm --filter @agiworkforce/web test`                                                         |
-| Priority tiers    | `pnpm test:l1` … `test:l4`, `pnpm test:security`                                               |
+| Priority tiers    | `pnpm test:l1`, `pnpm test:security`                                                           |
 | Build             | `pnpm build` (excludes desktop); `pnpm build:desktop`                                          |
 | Rust tests        | `cargo test -p agiworkforce-desktop --lib`, `-p agiworkforce-cli`                              |
 | Rust lint         | `cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code` |
@@ -228,8 +228,9 @@ Four things that bite:
 - **The guard chain is `&&`.** It stops at the first failure and hides every
   later one. When diagnosing, run the individual guards, not the chain.
 - **Priority tiers match a token against paths under `apps/*/__tests__`.** A tier
-  matching nothing passes while running zero tests; read the warning line, not
-  the exit code.
+  matching nothing now exits 1 rather than reporting success over zero tests.
+  Levels 2 to 4 were removed for that reason; `priority-level-1` and `security`
+  are the tokens that resolve.
 - **`apps/web`'s `tsc --noEmit` exhausts Node's default heap.** Use
   `NODE_OPTIONS=--max-old-space-size=8192` or it dies with SIGABRT.
 
