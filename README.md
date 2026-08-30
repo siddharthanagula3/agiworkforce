@@ -33,7 +33,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 │                          Client Surfaces                                   │
 ├──────────┬──────────┬──────────┬────────┬────────────────┬─────────────────┤
 │  Mobile  │   Web    │ Desktop  │  CLI   │ Chrome Ext.    │  VS Code Ext.   │
-│ Expo 55  │ Next 16  │ Tauri 2  │ Rust   │ Manifest V3    │  Extension API  │
+│ Expo 57  │ Next 16  │ Tauri 2  │ Rust   │ Manifest V3    │  Extension API  │
 │ React    │ React 19 │ React 19 │ clap/  │ Side panel +   │  Webview + API  │
 │ Native   │ App      │ + Vite   │ ratatui│ Native msg     │                 │
 │ 0.83     │ Router   │          │ TUI    │                │                 │
@@ -77,7 +77,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 
 | Directory                   | Contents                                                                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/mobile`               | Expo 55 / React Native iOS + Android app with on-device LLM support                                                                                             |
+| `apps/mobile`               | Expo 57 / React Native iOS + Android app with on-device LLM support                                                                                             |
 | `apps/web`                  | Next.js 16 web application — product site, chat, billing, docs, admin                                                                                           |
 | `apps/desktop`              | Tauri 2 desktop app — React 19 frontend + Rust native backend                                                                                                   |
 | `apps/cli`                  | Rust CLI binary (`agi`) — interactive TUI, one-shot exec, daemon mode                                                                                           |
@@ -94,7 +94,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 ### Frontend
 
 - **React 19** with TypeScript 5.9 — shared across desktop and web
-- **React Native 0.83** / Expo 55 — mobile (iOS + Android)
+- **React Native 0.86** / Expo 57 — mobile (iOS + Android)
 - **Tailwind CSS 4** — styling across all React surfaces
 - **Radix UI** — accessible component primitives
 - **Framer Motion** — animations
