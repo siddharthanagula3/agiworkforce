@@ -141,7 +141,7 @@ test.describe('QA phase 3 — real skill invocation from real prompts', () => {
         method: 'POST',
         idempotencyKey: `qa-skill-${testCase.id}-${Date.now()}`,
         body: {
-          model: TOOL_MODEL.id,
+          model: TOOL_MODEL!.id,
           stream: true,
           messages: [{ role: 'user', content: testCase.prompt }],
         },
@@ -166,7 +166,7 @@ test.describe('QA phase 3 — real skill invocation from real prompts', () => {
 
       results.push({
         ...testCase,
-        model: TOOL_MODEL.id,
+        model: TOOL_MODEL!.id,
         httpStatus: response.status,
         skillToolOffered,
         offeredSkillNames: [],
@@ -181,7 +181,6 @@ test.describe('QA phase 3 — real skill invocation from real prompts', () => {
       mkdirSync(path.join(OUT_DIR, 'raw'), { recursive: true });
       writeFileSync(path.join(OUT_DIR, 'raw', `skill-${testCase.id}.sse.txt`), body);
 
-      // eslint-disable-next-line no-console
       console.log(
         `[qa] ${testCase.id.padEnd(24)} http=${response.status} tools=[${invokedTools.join(',')}] skills=[${loadedSkills.join(',')}] -> ${verdict}`,
       );
@@ -190,11 +189,10 @@ test.describe('QA phase 3 — real skill invocation from real prompts', () => {
     mkdirSync(OUT_DIR, { recursive: true });
     writeFileSync(
       path.join(OUT_DIR, 'skill-invocation-results.json'),
-      JSON.stringify({ model: TOOL_MODEL.id, results }, null, 2),
+      JSON.stringify({ model: TOOL_MODEL!.id, results }, null, 2),
     );
 
     const failures = results.filter((entry) => entry.verdict === 'FAIL');
-    // eslint-disable-next-line no-console
     console.log(
       `[qa] skill invocation: ${results.length - failures.length}/${results.length} pass`,
     );

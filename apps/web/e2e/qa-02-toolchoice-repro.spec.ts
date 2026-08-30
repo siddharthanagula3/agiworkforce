@@ -78,7 +78,6 @@ test.describe('QA — provider tool_choice compatibility', () => {
       };
       mkdirSync(path.join(OUT_DIR, 'raw'), { recursive: true });
       writeFileSync(path.join(OUT_DIR, 'raw', `toolchoice-${variant.id}.sse.txt`), response.body);
-      // eslint-disable-next-line no-console
       console.log(
         `[qa] ${variant.id.padEnd(20)} http=${response.status} bytes=${response.body.length} err=${errors[0] ?? 'none'}`,
       );
