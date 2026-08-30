@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
+vi.mock('undici', async (importOriginal) => {
+  // pinnedPublicFetch calls undici's own fetch so its Agent and its fetch come
+  // from one undici instance; the production runtime rejects a foreign Agent on
+  // the global fetch. These tests drive the network through vi.stubGlobal('fetch'),
+  // so route undici's fetch back to the global one and leave every other export
+  // (Agent, the pinning path) real.
+  const actual = await importOriginal<typeof import('undici')>();
+  return {
+    ...actual,
+    fetch: (...args: unknown[]) =>
+      (globalThis.fetch as unknown as (...a: unknown[]) => unknown)(...args),
+  };
+});
+
 vi.mock('node:dns/promises', () => ({
   default: { lookup: dnsMocks.lookup },
   lookup: dnsMocks.lookup,

@@ -20,7 +20,7 @@ import { ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import type { LookupFunction } from 'node:net';
-import { Agent, type Dispatcher } from 'undici';
+import { Agent, fetch as undiciFetch, type Dispatcher } from 'undici';
 
 const RETIRED_PROVIDER_HOSTS: ReadonlySet<string> = new Set(['api.mulerouter.ai']);
 
@@ -176,7 +176,19 @@ export function pinnedPublicFetch(
   input: string | URL | Request,
   init?: RequestInit,
 ): Promise<Response> {
-  return fetch(input, { ...init, dispatcher: getPinnedPublicDispatcher() } as RequestInit);
+  // Deliberately undici's own fetch, not the global one. The dispatcher below is
+  // an undici Agent from this app's bundled undici; the production runtime
+  // instruments the global fetch with a different undici instance, and handing
+  // one's Agent to the other's fetch is rejected at dispatch with
+  // `invalid onRequestStart method`. That killed every pinned request in
+  // production - MCP capability discovery over both transports, web_fetch, and
+  // audit streaming - while working locally, where the global fetch is plain
+  // undici of the same version. Pairing the Agent with its own fetch keeps the
+  // DNS pinning that defends against rebinding rather than dropping it.
+  return undiciFetch(input as Parameters<typeof undiciFetch>[0], {
+    ...(init as Parameters<typeof undiciFetch>[1]),
+    dispatcher: getPinnedPublicDispatcher(),
+  }) as unknown as Promise<Response>;
 }
 
 export async function assertResolvedPublicHostname(urlString: string): Promise<void> {

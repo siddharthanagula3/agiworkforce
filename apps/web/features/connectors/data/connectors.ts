@@ -6,6 +6,7 @@ import {
   type ConnectorActionSource,
   type ConnectorRiskClass,
 } from '@/lib/connectors/catalog';
+import { isSelfServiceConnector } from '@/lib/connectors/mcp-endpoints';
 
 export type ConnectorCategory =
   | 'Productivity'
@@ -98,6 +99,15 @@ export function buildConnectorDescription(seed: ConnectorSeed): string {
   }
   if (getConnectorCapability(seed.id)?.implementation === 'device-local') {
     return `Desktop Local only — ${seed.capabilitySummary}.`;
+  }
+  if (isSelfServiceConnector(seed.id)) {
+    // Self-service connectors register with the vendor's own authorization server
+    // (CIMD or dynamic registration), so no operator credential stands between the
+    // user and connecting. Saying "an operator can connect this" was false for
+    // these, and read as an outright contradiction on a connector already showing
+    // Connected. Still not a present-tense capability claim: the tool list is
+    // discovered from the server, never asserted here.
+    return `You can connect ${seed.name} yourself for ${seed.capabilitySummary}. Its tools are discovered from ${seed.name}'s own MCP server when you authorize.`;
   }
   return `Not available by default. An operator can connect ${seed.name} for ${seed.capabilitySummary}.`;
 }
