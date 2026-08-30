@@ -699,8 +699,16 @@
     --chat-glass-border: rgba(0, 0, 0, 0.08);
     --chat-input-bg: #ffffff;
     --chat-code-bg: #f6f8fa;
+    /* Web overrides the shared warm ladder in chat.css with neutral greys.
+       All four steps are declared together: overriding only primary and
+       secondary left muted and placeholder resolving from chat.css, which
+       inverted the prominence order (muted read darker than secondary).
+       Worst-case ratios across --chat-bg, --chat-sidebar-bg, --chat-input-bg,
+       --chat-code-bg and --chat-bg-elevated: 15.82 / 5.46 / 5.07 / 4.64. */
     --chat-text-primary: #1a1a1a;
     --chat-text-secondary: #636363;
+    --chat-text-muted: #686868;
+    --chat-text-placeholder: #6e6e6e;
     --chat-accent: #21808d;
     --chat-accent-text: #1c6d78;
     --chat-accent-secondary: #da7756;
@@ -2364,7 +2372,7 @@ html[data-contrast='more'] *:focus-visible {
   flex: 0 0 40px;
   width: 40px;
   height: 40px;
-  color: var(--agi-ink-muted);
+  color: var(--agi-ink-2);
   background: var(--agi-surface-wash);
   border: 1px solid var(--agi-rule);
   border-radius: 10px;
@@ -2377,7 +2385,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-top-mobile-close:hover,
 [data-design='agi'] .agi-top-mobile-close:focus-visible {
   color: var(--agi-ink);
-  background: var(--agi-surface-raised);
+  background: var(--agi-bg-3);
   border-color: var(--agi-rule-strong);
 }
 [data-design='agi'] .agi-top-mobile-products {

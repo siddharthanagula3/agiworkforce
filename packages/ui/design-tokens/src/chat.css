@@ -32,18 +32,21 @@
     --chat-input-bg: #ffffff;
     --chat-code-bg: #f6f8fa;
     --chat-text-primary: #1a1915;
-    /* AUDIT-FIX GOV-34: every value below is used at 11-12px, where WCAG AA
-       requires 4.5:1. Measured against this theme's own surfaces
-       (--chat-bg #faf9f7 and --chat-input-bg #ffffff):
-         secondary   #6b6560  5.46:1 on #faf9f7  (unchanged)
-         muted       #726d67  4.87:1 on #faf9f7 / 5.12:1 on #ffffff (was #8b8680, 3.5:1)
-         placeholder #75706a  4.66:1 on #faf9f7 / 4.90:1 on #ffffff (was #9b9590, 3.0:1)
-       The prominence order primary > secondary > muted > placeholder is
-       preserved — every step is now just above the AA floor instead of below
-       it. */
-    --chat-text-secondary: #6b6560;
-    --chat-text-muted: #726d67;
-    --chat-text-placeholder: #75706a;
+    /* Used at 11-12px, where WCAG AA requires 4.5:1. Ratios below are the
+       WORST case across every light surface a --chat-text-* can land on, not
+       just --chat-bg: sidebar #f5f4f1 and hover #f0eeeb are darker than the
+       page ground and were what the earlier GOV-34 pass missed.
+         secondary   #595450  6.46:1
+         muted       #65615b  5.33:1
+         placeholder #6f6a65  4.61:1
+       The ladder is spaced rather than packed against the floor so the four
+       prominence steps stay visually distinguishable. packages/ui/design-tokens
+       /src/index.ts emits this same --chat-* contract for the extension, mobile
+       and VS Code surfaces and MUST carry identical values; they are asserted
+       together in apps/web/shared/components/__tests__/theme-contrast.test.ts. */
+    --chat-text-secondary: #595450;
+    --chat-text-muted: #65615b;
+    --chat-text-placeholder: #6f6a65;
     --chat-border: rgba(26, 25, 21, 0.08);
     --chat-border-strong: rgba(26, 25, 21, 0.15);
     --chat-border-subtle: rgba(26, 25, 21, 0.08);

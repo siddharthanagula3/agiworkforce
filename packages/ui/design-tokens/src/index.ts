@@ -14,9 +14,9 @@ export const agiPalette = {
     },
     text: {
       primary: '#1a1915',
-      secondary: '#6b6560',
-      muted: '#8b8680',
-      placeholder: '#9b9590',
+      secondary: '#595450',
+      muted: '#65615b',
+      placeholder: '#6f6a65',
     },
     border: {
       subtle: 'rgba(26, 25, 21, 0.08)',
@@ -46,9 +46,9 @@ export const agiPalette = {
     },
     text: {
       primary: '#e8e4db',
-      secondary: '#8b8680',
-      muted: '#5c5955',
-      placeholder: '#6b6560',
+      secondary: '#b5b2ab',
+      muted: '#a4a19b',
+      placeholder: '#97958e',
     },
     border: {
       subtle: 'rgba(255, 235, 205, 0.08)',
