@@ -8,6 +8,32 @@ Split out of root `PLAN.md` on 2026-08-28. `PLAN.md` keeps the standing
 strategy and phase structure; this file carries the dated queue, which is
 expected to go stale and be deleted when the phase closes.
 
+## Frontend UI/UX redesign — phase state
+
+Approved 2026-08-30. Resume from `Current phase` after any interruption.
+
+| Phase | Scope                                                                   | State              |
+| ----- | ----------------------------------------------------------------------- | ------------------ |
+| 0a    | Shipping token defects, css-token guard blind spot                      | Done — `e4a11b4fa` |
+| 0b    | Legibility ratchet guard, theme completeness                            | Done               |
+| 1     | Token layer: one namespace, type scale, spacing, radii, z-index, motion | Next               |
+| 2     | Primitive adoption; resolve the four forked components                  | Pending            |
+| 3     | App shell, navigation, footer                                           | Pending            |
+| 4     | Auth, pricing, upgrade, billing                                         | Pending            |
+| 5     | Marketing page families                                                 | Pending            |
+| 6     | Docs as a product                                                       | Pending            |
+| 7     | Shared runtime convergence, block streaming, citations, workbench       | Pending            |
+
+Standing invariants established in 0a/0b, do not regress:
+
+- Three files emit the `--chat-*` contract (`chat.css`, `design-tokens/src/index.ts`,
+  `apps/web/app/globals.css`). Guards now catch drift; **Phase 1 must reduce this to
+  one owner** rather than leaving the guards to police duplication forever.
+- Contrast is validated against every surface a token can land on, not just the page
+  background, in both themes, and asserted for all four palettes.
+- `scripts/.web-ui-invariants-baseline.json` only shrinks. The redesign is not
+  finished while it is non-empty. Track with `pnpm check:web-ui-invariants --summary`.
+
 ## Execution Ledger
 
 ### Completed And Verified
