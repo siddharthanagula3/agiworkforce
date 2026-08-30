@@ -58,6 +58,28 @@ export function Menu({
 
   const close = () => setOpen(false);
 
+  // role="menu" promises the menu keyboard pattern. Without it a keyboard or
+  // screen-reader user can open this menu and then reach nothing inside it.
+  const menuItems = useCallback((): HTMLElement[] => {
+    const panel = panelRef.current;
+    if (!panel) return [];
+    return Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        '[role="menuitem"]:not([disabled]):not([aria-disabled="true"])',
+      ),
+    );
+  }, []);
+
+  const focusItem = useCallback(
+    (index: number) => {
+      const items = menuItems();
+      if (items.length === 0) return;
+      const next = ((index % items.length) + items.length) % items.length;
+      items[next]?.focus();
+    },
+    [menuItems],
+  );
+
   // A sidebar row near the bottom of the window has no room below it, so a
   // menu anchored to `rect.bottom` runs off-screen and its items become
   // unreachable. Measure the panel, flip it above the trigger when that fits
@@ -133,21 +155,53 @@ export function Menu({
         setOpen(false);
       }
     };
+    // Capture phase: the surrounding sidebar runs its own list navigation on
+    // arrow keys, and in a real browser it consumed ArrowDown before the
+    // panel's React handler ever saw it, walking focus out of the open menu
+    // and into the conversation list. jsdom has no such competing listener,
+    // which is why a passing unit test did not catch this.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        // Closing must hand focus back to the trigger; otherwise focus falls to
+        // <body> and the keyboard user restarts from the top of the page.
+        containerRef.current?.querySelector<HTMLElement>('button, [role="button"]')?.focus();
+        return;
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End', 'Tab'].includes(e.key)) return;
+      const items = menuItems();
+      if (items.length === 0) return;
+      if (e.key === 'Tab') {
+        setOpen(false);
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const current = items.indexOf(document.activeElement as HTMLElement);
+      if (e.key === 'ArrowDown') focusItem(current + 1);
+      else if (e.key === 'ArrowUp') focusItem(current - 1);
+      else if (e.key === 'Home') focusItem(0);
+      else focusItem(items.length - 1);
     };
     const onScrollOrResize = () => computePosition();
     document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('scroll', onScrollOrResize, { capture: true, passive: true });
     window.addEventListener('resize', onScrollOrResize, { passive: true });
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('scroll', onScrollOrResize, { capture: true });
       window.removeEventListener('resize', onScrollOrResize);
     };
-  }, [open, computePosition]);
+  }, [open, computePosition, focusItem, menuItems]);
+
+  useEffect(() => {
+    if (!open) return;
+    const id = window.setTimeout(() => focusItem(0), 0);
+    return () => window.clearTimeout(id);
+  }, [open, focusItem]);
 
   const panel = open ? (
     <div

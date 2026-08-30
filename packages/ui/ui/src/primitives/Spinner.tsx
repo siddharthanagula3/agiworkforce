@@ -5,7 +5,9 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../cn';
 
 const spinnerVariants = cva(
-  'animate-spin rounded-full border-2 border-current border-t-transparent',
+  // WCAG 2.3.3: a viewer who asked for reduced motion should not be given a
+  // perpetually spinning element.
+  'animate-spin motion-reduce:animate-none rounded-full border-2 border-current border-t-transparent',
   {
     variants: {
       size: {
