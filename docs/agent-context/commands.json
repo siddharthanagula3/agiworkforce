@@ -11,14 +11,8 @@
     "testAll": "pnpm test",
     "testAffected": "pnpm test:affected",
     "testL1": "pnpm test:l1",
-    "testL2": "pnpm test:l2",
-    "testL1L2": "pnpm test:l1:l2",
-    "testL3": "pnpm test:l3",
-    "testL4": "pnpm test:l4",
-    "testL3L4": "pnpm test:l3:l4",
     "testSecurity": "pnpm test:security",
     "testCoverage": "pnpm test:coverage",
-    "testL1L2Coverage": "pnpm test:ci",
     "testSinglePackage": "pnpm --filter <workspace-package> test <file-or-pattern>",
     "turboGraph": "pnpm exec turbo run lint typecheck test build --dry=json",
     "turboAffectedGraph": "pnpm exec turbo run lint typecheck test --affected --dry=json",
@@ -88,7 +82,8 @@
     "cssTokens": "pnpm check:css-tokens",
     "capabilityPreconditions": "pnpm check:capability-preconditions",
     "referenceIntegrity": "pnpm check:reference-integrity",
-    "referenceIntegrityBaseline": "node scripts/check-reference-integrity.mjs --write-baseline"
+    "referenceIntegrityBaseline": "node scripts/check-reference-integrity.mjs --write-baseline",
+    "testL1Coverage": "pnpm test:ci"
   },
   "surfaces": {
     "desktop": {
