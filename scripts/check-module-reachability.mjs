@@ -346,7 +346,6 @@ const tsTargets = [
       'apps/desktop/src/integrations/realtime/presenceBridge.ts',
       'apps/desktop/src/lib/browserAutomation.ts',
       'apps/desktop/src/lib/byok-vault.ts',
-      'apps/desktop/src/lib/friendlyErrors.ts',
       'apps/desktop/src/lib/messageActivity.ts',
       'apps/desktop/src/lib/newChatReset.ts',
       'apps/desktop/src/lib/retry.ts',
@@ -425,7 +424,7 @@ const tsTargets = [
       'apps/desktop/src/utils/tokenCount.ts',
       'apps/desktop/src/utils/validation.ts',
     ],
-    maxKnownUnreachable: 235,
+    maxKnownUnreachable: 234,
   },
 ];
 

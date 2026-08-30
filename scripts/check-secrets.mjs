@@ -188,9 +188,25 @@ function documentationHost(host) {
   return reserved && labels.length <= 1;
 }
 
+// A connection string whose password component IS the word for a password authenticates nothing:
+// it is the placeholder every driver's own documentation prints. Matched whole and lowercased, so
+// a real secret that merely contains one of these is untouched, and only the connection rule
+// consults it - key detection keeps the stricter marker vocabulary.
+const PLACEHOLDER_PASSWORDS = new Set([
+  'password',
+  'passwd',
+  'pass',
+  'changeme',
+  'change_me',
+  'your_password',
+  'yourpassword',
+  'mypassword',
+]);
+
 function documentedFixture(pattern, match) {
   if (pattern.connection) {
     const { password, host, ambiguous } = connectionParts(match[0]);
+    if (PLACEHOLDER_PASSWORDS.has(password.toLowerCase())) return true;
     if (fullyMasked(password)) return true;
     if (ambiguous || !documentationHost(host)) return false;
     // A reserved host proves the URL points nowhere, not that the password is fake, and a password
