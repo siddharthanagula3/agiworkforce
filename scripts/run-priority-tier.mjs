@@ -41,14 +41,16 @@ const apps = fs
   .sort();
 
 if (apps.length === 0) {
-  console.log(`\n⚠️  [run-priority-tier] No app owns tests matching "${token}". Nothing to run.`);
+  console.error(
+    `\n❌ [run-priority-tier] No app owns tests matching "${token}".\n` +
+      `A tier wired into CI that matches nothing is not a gate: it reports success for ` +
+      `every change, including the ones it exists to stop. Either add tests under ` +
+      `apps/<app>/__tests__/**/${token}/ or remove the tier from package.json and its workflow.`,
+  );
   if (process.env['GITHUB_ACTIONS'] === 'true') {
-    console.log(
-      `::warning title=Empty test tier::No app owns tests matching "${token}". ` +
-        `This job passed WITHOUT running any tests — it is not gating anything.`,
-    );
+    console.error(`::error title=Empty test tier::No app owns tests matching "${token}".`);
   }
-  process.exit(0);
+  process.exit(1);
 }
 
 console.log(`\n[run-priority-tier] "${token}" → ${apps.join(', ')}`);
