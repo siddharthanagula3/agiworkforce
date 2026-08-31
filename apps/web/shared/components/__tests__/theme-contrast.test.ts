@@ -421,3 +421,124 @@ describe('theme completeness', () => {
     });
   }
 });
+
+describe('foundation layer', () => {
+  const foundationCss = readFileSync(
+    resolve(repoRoot, 'packages/ui/design-tokens/src/foundation.css'),
+    'utf8',
+  );
+  const foundationBlock = (selector: string): string => {
+    const start = foundationCss.indexOf(`${selector} {`);
+    if (start === -1) throw new Error(`foundation.css has no ${selector} block`);
+    let depth = 0;
+    for (let i = foundationCss.indexOf('{', start); i < foundationCss.length; i++) {
+      if (foundationCss[i] === '{') depth++;
+      else if (foundationCss[i] === '}' && --depth === 0)
+        return foundationCss.slice(foundationCss.indexOf('{', start) + 1, i);
+    }
+    throw new Error(`unbalanced ${selector} block`);
+  };
+  const foundationLight = foundationBlock(':root');
+  const foundationDark = foundationBlock('.dark');
+
+  const primitives: Record<string, string> = Object.fromEntries(
+    [...foundationLight.matchAll(/^\s*(--n-\d+)\s*:\s*(#[0-9a-fA-F]{6});/gm)].map((m) => [
+      m[1] as string,
+      m[2] as string,
+    ]),
+  );
+
+  const resolveToken = (block: string, name: string): string => {
+    const raw = token(block, name);
+    const via = raw.match(/var\((--n-\d+)\)/);
+    return via ? (primitives[via[1] as string] as string) : raw;
+  };
+
+  const SURFACES = [
+    '--surface-page',
+    '--surface-subtle',
+    '--surface-elevated',
+    '--surface-hover',
+    '--surface-active',
+    '--surface-selected',
+  ];
+  const TEXTS = ['--text-primary', '--text-secondary', '--text-muted'];
+  const STATUS = ['--accent', '--danger', '--warning', '--success', '--info'];
+
+  for (const [themeName, block] of [
+    ['light', foundationLight],
+    ['dark', foundationDark],
+  ] as const) {
+    for (const text of TEXTS) {
+      it(`${themeName} ${text} meets AA on every surface it can land on`, () => {
+        const fg = resolveToken(block, text);
+        for (const surface of SURFACES) {
+          const bg = resolveToken(block, surface);
+          expect(contrastRatio(fg, bg)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+      });
+    }
+
+    for (const status of STATUS) {
+      it(`${themeName} ${status} text meets AA and its on-fill meets AA on the fill`, () => {
+        const page = resolveToken(block, '--surface-page');
+        expect(contrastRatio(resolveToken(block, `${status}-text`), page)).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+        const fill = resolveToken(block, `${status}-fill`);
+        expect(
+          contrastRatio(resolveToken(block, `${status}-on-fill`), fill),
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      });
+    }
+
+    it(`${themeName} --rule-strong and --focus-ring clear 3:1 for a control boundary`, () => {
+      const page = resolveToken(block, '--surface-page');
+      expect(contrastRatio(resolveToken(block, '--rule-strong'), page)).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+      expect(contrastRatio(resolveToken(block, '--focus-ring'), page)).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+    });
+
+    it(`${themeName} the primary action is legible on itself`, () => {
+      expect(
+        contrastRatio(
+          resolveToken(block, '--action-primary-foreground'),
+          resolveToken(block, '--action-primary'),
+        ),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+
+    it(`${themeName} text roles descend in prominence`, () => {
+      const page = resolveToken(block, '--surface-page');
+      const on = (t: string): number => contrastRatio(resolveToken(block, t), page);
+      expect(on('--text-primary')).toBeGreaterThan(on('--text-secondary'));
+      expect(on('--text-secondary')).toBeGreaterThan(on('--text-muted'));
+    });
+  }
+
+  it('declares no type role below the 12px legibility floor', () => {
+    const remSizes = [...foundationLight.matchAll(/--type-[a-z-]+-size:\s*([0-9.]+)rem/g)].map(
+      (m) => Number(m[1]),
+    );
+    expect(remSizes.length).toBeGreaterThan(0);
+    for (const rem of remSizes) expect(rem * 16).toBeGreaterThanOrEqual(12);
+  });
+
+  it('defines every semantic role in both themes', () => {
+    const roles = [
+      ...SURFACES,
+      ...TEXTS,
+      '--rule',
+      '--rule-subtle',
+      '--rule-strong',
+      '--focus-ring',
+    ];
+    for (const role of roles) {
+      expect(token(foundationLight, role), `${role} missing in light`).not.toBe('');
+      expect(token(foundationDark, role), `${role} missing in dark`).not.toBe('');
+    }
+  });
+});
