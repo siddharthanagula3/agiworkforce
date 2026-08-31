@@ -9,6 +9,7 @@ import {
   type UsageBreakdownRow,
   type UsageDayRow,
 } from '../hooks/use-workspace-usage';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -187,7 +188,7 @@ export function WorkspaceUsageAnalytics() {
           We could not load your workspace usage
         </p>
         <p className="mt-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
-          {error.message}
+          {toUserMessage(error, 'Could not load workspace usage.')}
         </p>
         <button
           type="button"

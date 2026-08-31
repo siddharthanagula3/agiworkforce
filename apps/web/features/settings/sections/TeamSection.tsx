@@ -31,6 +31,7 @@ import {
 } from '../hooks/use-settings-queries';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { SSOPanel } from './team/SSOPanel';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type MemberRole = TeamMember['role'];
 
@@ -145,7 +146,7 @@ function InlineError({ error }: { error: Error | null | undefined }) {
         lineHeight: 1.5,
       }}
     >
-      {error.message}
+      {toUserMessage(error, 'Could not load your team.')}
     </p>
   );
 }
