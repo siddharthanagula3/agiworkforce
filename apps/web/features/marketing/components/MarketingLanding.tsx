@@ -169,13 +169,6 @@ export function MarketingLanding() {
             },
           ]}
         />
-
-        {/* The tones below are held, not alternated. The surface sequence
-            above changes ground six times in 3400px, which is the rhythmic
-            passage of the page; carrying that cadence into the closing half
-            would read as flicker rather than structure. So: one long black
-            passage for the developer story, then a single dark field to the
-            end. */}
         <CapabilityGrid
           stage="ink"
           eyebrow="Capabilities"

@@ -120,19 +120,10 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
   return (
     <footer className={condensed ? 'agi-footer agi-footer--condensed' : 'agi-footer'}>
       <div className="agi-footer-brandband">
-        <div className="agi-footer-brandband-copy">
-          <Link href="/" className="agi-footer-mark" aria-label="AGI home">
-            <AgiMark size={18} />
-            <span className="agi-footer-mark-word">AGI</span>
-          </Link>
-          <p className="agi-footer-tagline">
-            One AI workspace across six surfaces. <em>Local, your keys, or managed cloud</em> — you
-            see the route before anything leaves your device.
-          </p>
-        </div>
-        <span className="agi-footer-wordmark" aria-hidden="true">
-          AGI
-        </span>
+        <Link href="/" className="agi-footer-mark" aria-label="AGI home">
+          <AgiMark size={16} />
+          <span className="agi-footer-mark-word">AGI</span>
+        </Link>
       </div>
       <div className="agi-footer-row">
         {FOOTER_GROUPS.map((group) => (

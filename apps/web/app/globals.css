@@ -3503,61 +3503,31 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 /* footer */
+/* A footer is the quietest thing on the page, and this one was 1213px tall -
+   a tenth of the document - carrying a restated pitch and a 12rem ghosted
+   wordmark above the links people actually came for. The links all stay: 78
+   real destinations is a service, and cutting navigation is a regression
+   dressed as restraint. What goes is the volume around them. */
 [data-design='agi'] .agi-footer {
   position: relative;
-  margin-top: 96px;
-  padding: 56px 0 28px;
+  margin-top: 72px;
+  padding: 40px 0 24px;
   border-top: 1px solid var(--agi-rule);
   overflow: clip;
 }
 [data-design='agi'] .agi-footer-brandband {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 32px;
-  padding-bottom: 44px;
-  margin-bottom: 44px;
+  align-items: center;
+  padding-bottom: 26px;
+  margin-bottom: 30px;
   border-bottom: 1px solid var(--agi-rule);
-}
-[data-design='agi'] .agi-footer-brandband-copy {
-  max-width: 42ch;
-}
-[data-design='agi'] .agi-footer-tagline {
-  margin: 18px 0 0;
-  font-family: var(--agi-font-heading);
-  font-size: clamp(1.15rem, 2.4vw, 1.6rem);
-  line-height: 1.34;
-  color: var(--agi-ink-2);
-}
-/* The italic-amber phrase inside a headline was a tic that repeated across the
-   site. Emphasis here is the sentence's own - the clause is the differentiator
-   - so it takes full-strength ink and drops the italic, which was carrying
-   decoration rather than meaning. */
-[data-design='agi'] .agi-footer-tagline em {
-  font-style: normal;
-  color: var(--agi-ink);
-}
-[data-design='agi'] .agi-footer-wordmark {
-  font-family: var(--agi-font-display);
-  font-weight: 700;
-  font-size: clamp(4rem, 13vw, 12rem);
-  line-height: 0.8;
-  letter-spacing: 0.02em;
-  color: transparent;
-  -webkit-text-stroke: 1px var(--agi-rule-strong);
-  user-select: none;
-  pointer-events: none;
-  flex-shrink: 0;
-}
-[data-design='agi'] .agi-footer--condensed .agi-footer-wordmark {
-  font-size: clamp(2.5rem, 7vw, 5rem);
 }
 [data-design='agi'] .agi-footer-row {
   display: grid;
   grid-template-columns: repeat(6, minmax(108px, 1fr));
   align-items: flex-start;
   column-gap: clamp(20px, 2.4vw, 36px);
-  row-gap: 36px;
+  row-gap: 28px;
 }
 [data-design='agi'] .agi-footer-mark {
   display: inline-flex;
@@ -3604,8 +3574,9 @@ html[data-contrast='more'] *:focus-visible {
   /* WCAG 2.2 SC 2.5.8: a standalone nav link is not the "inline" exception,
      so short labels like "CLI" still need a 24px target. */
   min-width: 24px;
-  padding-block: 4px;
-  font-size: 14px;
+  padding-block: 3px;
+  font-size: 13.5px;
+  line-height: 1.45;
   color: var(--agi-ink-2);
   text-decoration: none;
   transition: color var(--agi-dur-fast) var(--agi-ease-out);
@@ -3614,10 +3585,11 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-ink);
 }
 [data-design='agi'] .agi-footer-strip {
-  margin-top: 48px;
-  padding-top: 22px;
+  margin-top: 40px;
+  padding-top: 20px;
   border-top: 1px solid var(--agi-rule);
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 24px;
   flex-wrap: wrap;
@@ -3635,15 +3607,8 @@ html[data-contrast='more'] *:focus-visible {
 
 @media (max-width: 640px) {
   [data-design='agi'] .agi-footer-brandband {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    padding-bottom: 32px;
-    margin-bottom: 32px;
-  }
-  [data-design='agi'] .agi-footer-wordmark {
-    align-self: flex-end;
-    font-size: 26vw;
+    padding-bottom: 22px;
+    margin-bottom: 24px;
   }
   [data-design='agi'] .agi-footer-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4006,8 +3971,6 @@ html[data-contrast='more'] *:focus-visible {
   max-width: 100vw;
 }
 
-/* A surface row is its own ground, so the hairline that separated rows on one
-   canvas has nothing left to do. */
 [data-design='agi'] .agi-fl-surface-list > .agi-stage {
   border-top: 0;
 }
@@ -4024,10 +3987,6 @@ html[data-contrast='more'] *:focus-visible {
   --agi-ink-2: #4e4e56;
   --agi-ink-quiet: #5f5f67;
   --agi-ink-faint: #5f5f67;
-  /* Tuned against the darkest ground a light stage actually produces - the
-     device-mockup chrome at rgb(219, 213, 199), not the #faf9f6 stage itself.
-     #8a5a10 clears 4.5:1 on the stage and lands at 4.04:1 on the chrome, which
-     is where every small amber label in these rows sits. */
   --agi-amber: #7f530f;
   --agi-amber-soft: rgba(127, 83, 15, 0.12);
   --agi-rule: rgba(22, 22, 26, 0.1);
@@ -4078,14 +4037,6 @@ html[data-contrast='more'] *:focus-visible {
   background: var(--agi-bg);
 }
 
-/* The dark counterpart of the block above, and it exists for the same reason:
-   a stage that forces its own ground has to carry the whole ramp with it. In
-   dark mode these tokens merely repeat what :root already says, which is why
-   the omission was invisible in a dark browser - but in light mode the root
-   ink is #1c150b, so a stage that painted itself black and inherited the
-   page's text colour rendered near-black on black. Measured at 1.16:1 before
-   this block: the surface headings on the CLI and router stages were, in the
-   light theme, functionally not there. */
 [data-design='agi'] .agi-stage--ink,
 [data-design='agi'] .agi-stage--void {
   --agi-ink: #f7f7f5;
@@ -4911,11 +4862,6 @@ html[data-contrast='more'] *:focus-visible {
   line-height: 1.08;
 }
 
-/* The permanent underline was written when this link sat inline in a
-   paragraph, where colour alone would have failed WCAG 1.4.1. It is now the
-   whole heading on its own line, so there is no surrounding text to be
-   confused with, and 1.4.1 does not apply - the rule is about links *within*
-   a block of text. Underline on hover and focus instead. */
 [data-design='agi'] .agi-fl-surface-link {
   color: var(--agi-ink);
   text-decoration: none;
@@ -4929,8 +4875,6 @@ html[data-contrast='more'] *:focus-visible {
   text-decoration: underline;
 }
 
-/* The sequence number is this row's one accent. An amber tagline 40px under
-   an amber number is the same colour doing two jobs in one column. */
 [data-design='agi'] .agi-fl-surface-tagline {
   margin: 10px 0 0;
   font-style: normal;
@@ -7954,12 +7898,6 @@ html[data-contrast='more'] *:focus-visible {
   border-left: 1px solid var(--agi-rule);
 }
 
-/* The route ledger: what each lane above actually commits to.
-   Deliberately not cards. This replaced three bordered rectangles with an
-   eyebrow, a heading, a bullet list and a button each - the pattern reads as
-   filler wherever it appears, and it showed none of the product. A rule over
-   each lane is enough separation when the lanes sit on one ground, and it
-   costs three borders, three radii and three fills less ink. */
 [data-design='agi'] .agi-rf-ledger {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -7967,8 +7905,6 @@ html[data-contrast='more'] *:focus-visible {
   margin: clamp(40px, 5vw, 68px) 0 0;
 }
 
-/* The lanes carry different numbers of facts, so their links land at
-   different heights unless the lane is a column that pushes them down. */
 [data-design='agi'] .agi-rf-ledger-lane {
   display: flex;
   flex-direction: column;
