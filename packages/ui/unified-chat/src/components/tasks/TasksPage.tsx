@@ -375,12 +375,18 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                     selected ? 'border-primary bg-primary/5' : 'hover:bg-accent',
                   )}
                 >
-                  <div className="flex items-start justify-between gap-2">
+                  {/*
+                    The action group is shrink-0, so on a phone it held its
+                    width and left the details button 146px: the task title got
+                    31px of "AGI Work" and the model label 9px of "Gemini 3.5
+                    Flash-Lite". The actions drop to their own line instead.
+                  */}
+                  <div className="flex flex-wrap items-start justify-between gap-2">
                     <button
                       type="button"
                       aria-label={`View details for ${workModeLabel(run.workMode)} task`}
                       aria-pressed={selected}
-                      className="min-w-0 flex-1 text-left"
+                      className="min-w-0 flex-1 basis-full text-left sm:basis-auto"
                       onClick={() => setSelectedRunId(run.id)}
                     >
                       <span className="flex min-w-0 items-center gap-2">
@@ -396,7 +402,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                           {taskStateLabel(run.state)}
                         </span>
                       </span>
-                      <span className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                         <span className="truncate">
                           {getManagedModelPresentationLabel(run.model)}
                         </span>
