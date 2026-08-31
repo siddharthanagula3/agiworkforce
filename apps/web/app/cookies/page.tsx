@@ -63,7 +63,7 @@ const COOKIES: CookieRow[] = [
     category: 'Payment',
     controller: 'Stripe',
     purpose:
-      'Fraud prevention on card payments. Set by Stripe when their payment script loads, which happens only at the moment you confirm a payment — not while you browse, and not on the pricing page. If you never pay, they are never set.',
+      'Fraud prevention on card payments. Set by Stripe when their payment script loads, which happens only at the moment you confirm a payment, not while you browse, and not on the pricing page. If you never pay, they are never set.',
     duration: 'Up to 1 year (mid) and 30 minutes (sid), set by Stripe.',
     source: 'features/billing/services/stripe-payments.ts',
   },
@@ -90,7 +90,7 @@ const STORAGE: StorageRow[] = [
     key: 'agi_secure_key',
     store: 'Local storage',
     holds:
-      'A marker that a browser-held encryption key exists for this session. Not the key itself — the key material is non-extractable and held by the browser.',
+      'A marker that a browser-held encryption key exists for this session. Not the key itself: the key material is non-extractable and held by the browser.',
     clearedBy: 'Clearing site data.',
     source: 'shared/lib/security.ts',
   },
@@ -175,7 +175,7 @@ export default function CookiesPage() {
           <p className="agi-page-lede">
             We use the minimum needed to keep you signed in and the site functional.{' '}
             <strong>
-              No advertising cookies, ever. Analytics is opt-in and the consent check fails closed —
+              No advertising cookies, ever. Analytics is opt-in and the consent check fails closed:
               if we cannot read your choice, analytics stays off.
             </strong>{' '}
             Last updated: {POLICY_LAST_UPDATED.cookies}.
@@ -235,9 +235,9 @@ export default function CookiesPage() {
               you asked.
             </strong>{' '}
             Most of what this product stores on your device is in local or session storage, not
-            cookies &mdash; including your session credentials. None of it is a tracking technology
-            and none of it is shared, but you should be able to see it, so here it is in full. The
-            ones that carry an identifier or a credential are listed first.
+            cookies, including your session credentials. None of it is a tracking technology and
+            none of it is shared, but you should be able to see it, so here it is in full. The ones
+            that carry an identifier or a credential are listed first.
           </p>
           <table className="agi-ledger">
             <thead>
@@ -308,17 +308,16 @@ export default function CookiesPage() {
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
             What this does and does not cost you: analytics is opt-in here regardless, so a browser
-            sending GPC already gets the outcome it is asking for &mdash; nothing loads until you
-            turn it on. The signal would matter for a sale or sharing of personal data for
-            advertising, and we do neither. Reading the signal explicitly is tracked as an open
-            item.
+            sending GPC already gets the outcome it is asking for: nothing loads until you turn it
+            on. The signal would matter for a sale or sharing of personal data for advertising, and
+            we do neither. Reading the signal explicitly is tracked as an open item.
           </p>
         </section>
 
         <section className="agi-section">
           <p className="agi-section-eyebrow">05 &middot; Your choices</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            <CookiePreferencesButton /> at any time — analytics stays off until you turn it on, and
+            <CookiePreferencesButton /> at any time: analytics stays off until you turn it on, and
             switching it back off stops it loading on your next page view. You can also manage
             cookies through your browser; clearing them will sign you out of any active session. For
             data export or deletion, see the{' '}

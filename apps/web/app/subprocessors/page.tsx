@@ -84,7 +84,7 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
   {
     name: 'Expo',
     purpose:
-      'Two roles for the iOS and Android apps. (1) Push delivery: notification titles and bodies — including the names you give scheduled tasks — are relayed through Expo on their way to Apple and Google. (2) Over-the-air updates: every app launch requests an update manifest from Expo, which sees the device IP and build fingerprint.',
+      'Two roles for the iOS and Android apps. (1) Push delivery: notification titles and bodies (including the names you give scheduled tasks) are relayed through Expo on their way to Apple and Google. (2) Over-the-air updates: every app launch requests an update manifest from Expo, which sees the device IP and build fingerprint.',
     region: 'United States',
   },
   {
@@ -177,12 +177,12 @@ export default function SubprocessorsPage() {
               /changelog
             </Link>
             , which you can subscribe to. <strong>We do not promise emailed notice.</strong> The
-            product can send email in three narrow paths &mdash; support escalation, scheduled-task
-            notifications, and operational alerts to us &mdash; and none of them can mail an
-            arbitrary list of customers. Until something can, a commitment to email you about a
-            subprocessor change is one we could not perform. To object to a new subprocessor on
-            reasonable data protection grounds, write to us within 30 days of publication &mdash;
-            the objection and termination route is in section 05 of the{' '}
+            product can send email in three narrow paths (support escalation, scheduled-task
+            notifications, and operational alerts to us) and none of them can mail an arbitrary list
+            of customers. Until something can, a commitment to email you about a subprocessor change
+            is one we could not perform. To object to a new subprocessor on reasonable data
+            protection grounds, write to us within 30 days of publication. The objection and
+            termination route is in section 05 of the{' '}
             <Link href="/dpa#s-05" style={{ color: 'var(--agi-ink)' }}>
               DPA
             </Link>
@@ -213,7 +213,7 @@ export default function SubprocessorsPage() {
               </h3>
               <p className="agi-reason-p">
                 It was delisted because no email package appeared in our dependencies. It does not
-                use one &mdash; it calls the provider&rsquo;s HTTP API directly, so the check that
+                use one: it calls the provider&rsquo;s HTTP API directly, so the check that
                 justified the removal could not have found it. Support transcripts were being
                 emailed the whole time. That is the most serious thing this review found, and it is
                 fixed above.

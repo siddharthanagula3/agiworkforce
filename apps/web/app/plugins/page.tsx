@@ -30,7 +30,7 @@ function statusLabel(entry: PluginRegistryEntry): string {
   if (isPluginEntryWebInstallable(entry)) return 'Available on Web';
   if (isPluginEntryInstallable(entry)) return 'Installable';
   if (entry.status === 'deprecated') return 'Deprecated';
-  return 'Declared — not installable yet';
+  return 'Declared, not installable yet';
 }
 
 export default async function PluginsPage() {
@@ -77,7 +77,7 @@ export default async function PluginsPage() {
               <h3 className="agi-reason-h">Connector wiring</h3>
               <p className="agi-reason-p">
                 A plugin declares which connectors it needs. Connect once, and every skill in the
-                pack can use it — inside the permission boundary you chose.
+                pack can use it, inside the permission boundary you chose.
               </p>
             </li>
             <li className="agi-reason">
@@ -102,7 +102,7 @@ export default async function PluginsPage() {
           {catalog.status !== 'ok' ? (
             <p className="agi-reason-p" style={{ margin: 0 }} role="status">
               The plugin registry is temporarily unreachable, so the catalogue cannot be shown right
-              now. Nothing is wrong with your account — reload in a moment.
+              now. Nothing is wrong with your account. Reload in a moment.
             </p>
           ) : entries.length === 0 ? (
             <p className="agi-reason-p" style={{ margin: 0 }}>

@@ -8,7 +8,7 @@ import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 export const metadata = buildMetadata({
   title: 'Status',
   description:
-    "A health signal for AGI's hosted services, re-checked every minute — with an explicit statement of what the check does and does not cover.",
+    "A health signal for AGI's hosted services, re-checked every minute, with an explicit statement of what the check does and does not cover.",
   path: '/status',
 });
 
@@ -71,7 +71,7 @@ const COVERED: { key: 'environment' | 'database' | 'stripe'; label: string; what
   {
     key: 'stripe',
     label: 'Payments',
-    what: 'A read call to the payments API returns. A failure here degrades billing only — chat is unaffected, so it does not report a platform outage.',
+    what: 'A read call to the payments API returns. A failure here degrades billing only: chat is unaffected, so it does not report a platform outage.',
   },
 ];
 
@@ -108,8 +108,8 @@ export default async function StatusPage() {
           <p className="agi-fl-lede">
             No wall of evergreen badges. This page runs a real health check against AGI&rsquo;s
             hosted services at most once a minute, shows you when that check ran, and tells you
-            exactly what it does not cover. Most of AGI doesn&rsquo;t depend on our servers at all
-            &mdash; Local and BYOK work runs on your device.
+            exactly what it does not cover. Most of AGI doesn&rsquo;t depend on our servers at all :
+            Local and BYOK work runs on your device.
           </p>
           <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <ul className="agi-fl-mode-ribbon" aria-label="Where AGI runs">
@@ -127,14 +127,14 @@ export default async function StatusPage() {
           </h2>
           <p className="agi-fl-section-lede">
             The result below comes from a real run of the checks, shared by everyone who loads this
-            page inside the same window &mdash; the &ldquo;Checked&rdquo; column is the moment it
-            actually ran, not the moment you asked. It calls the health checks directly, in-process,
-            rather than making an HTTP request to our own health endpoint &mdash; building a request
-            URL out of inbound headers is a server-side request forgery vector, so a status page
-            that self-fetches is a status page with a security bug. Running them once per window
-            rather than once per visitor also keeps a traffic spike on this page from becoming load
-            on the very dependencies it is reporting on. Same checks the monitored endpoint runs.
-            Not a hand-edited badge.
+            page inside the same window: the &ldquo;Checked&rdquo; column is the moment it actually
+            ran, not the moment you asked. It calls the health checks directly, in-process, rather
+            than making an HTTP request to our own health endpoint. Building a request URL out of
+            inbound headers is a server-side request forgery vector, so a status page that
+            self-fetches is a status page with a security bug. Running them once per window rather
+            than once per visitor also keeps a traffic spike on this page from becoming load on the
+            very dependencies it is reporting on. Same checks the monitored endpoint runs. Not a
+            hand-edited badge.
           </p>
           <table className="agi-ledger">
             <thead>
@@ -237,9 +237,8 @@ export default async function StatusPage() {
               </p>
               <h3 className="agi-fl-trust-title">Public alpha, open by default.</h3>
               <p className="agi-fl-trust-body">
-                Managed compute is in public alpha &mdash; signed-in users can use it now, with
-                metered usage and visible provider labels. This is the only mode the signal above
-                describes.
+                Managed compute is in public alpha: signed-in users can use it now, with metered
+                usage and visible provider labels. This is the only mode the signal above describes.
               </p>
             </div>
           </div>
@@ -268,8 +267,8 @@ export default async function StatusPage() {
               <tr>
                 <td>Severity 2</td>
                 <td>
-                  A major capability is unavailable or badly degraded for many users — for example
-                  managed chat, sign-in, or file upload — while the rest of the platform serves.
+                  A major capability is unavailable or badly degraded for many users (for example
+                  managed chat, sign-in, or file upload) while the rest of the platform serves.
                 </td>
               </tr>
               <tr>
@@ -298,7 +297,7 @@ export default async function StatusPage() {
               <tr>
                 <td>Security reports</td>
                 <td>
-                  A suspected vulnerability is not a status incident — it goes through coordinated
+                  A suspected vulnerability is not a status incident: it goes through coordinated
                   disclosure, including our scope and safe-harbour terms, on{' '}
                   <Link href="/security#report" style={{ color: 'var(--agi-ink)' }}>
                     /security
