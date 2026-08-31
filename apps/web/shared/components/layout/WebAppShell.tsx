@@ -26,6 +26,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import { Settings, LogOut, ChevronUp, FileText, Menu, Scale, ShieldCheck } from 'lucide-react';
 import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
   Sidebar,
   useConfirm,
   type SidebarSession,
@@ -97,7 +100,6 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const [isNarrowViewport, setIsNarrowViewport] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
-  const mobileNavDrawerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const mql = window.matchMedia('(max-width: 768px)');
@@ -114,19 +116,6 @@ export function WebAppShell({ children }: WebAppShellProps) {
 
   // Escape closes; focus moves into the drawer on open and back to the
   // trigger on close (the cleanup also runs on unmount, which is harmless).
-  useEffect(() => {
-    if (!mobileNavOpen) return;
-    const trigger = mobileNavTriggerRef.current;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMobileNavOpen(false);
-    };
-    document.addEventListener('keydown', onKeyDown);
-    mobileNavDrawerRef.current?.focus();
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      trigger?.focus();
-    };
-  }, [mobileNavOpen]);
 
   // ---- Conversations (recents). useConversations auto-fetches, auth-gated. ----
   const {
@@ -469,26 +458,24 @@ export function WebAppShell({ children }: WebAppShellProps) {
         <div className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</div>
       </div>
 
-      {isNarrowViewport && mobileNavOpen && (
-        <div className="fixed inset-0 z-50 flex">
-          <div
-            data-testid="mobile-nav-backdrop"
-            aria-hidden="true"
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileNavOpen(false)}
-          />
-          <div
+      {isNarrowViewport && (
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetContent
             id="webappshell-mobile-nav"
-            ref={mobileNavDrawerRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Navigation"
-            tabIndex={-1}
-            className="relative z-10 h-full w-[280px] max-w-[85vw] overflow-hidden bg-[hsl(var(--background))] shadow-xl outline-none"
+            side="left"
+            className="w-[280px] max-w-[85vw] gap-0 overflow-y-auto p-0"
+            data-testid="mobile-nav-drawer"
+            onCloseAutoFocus={(event) => {
+              // The sheet is opened from a button outside it, so Radix has no
+              // trigger to hand focus back to and would drop it on the body.
+              event.preventDefault();
+              mobileNavTriggerRef.current?.focus();
+            }}
           >
-            <Sidebar {...sharedSidebarProps} collapsed={false} />
-          </div>
-        </div>
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <Sidebar {...sharedSidebarProps} collapsed={false} width={280} />
+          </SheetContent>
+        </Sheet>
       )}
     </div>
   );
