@@ -112,7 +112,7 @@ function VideoMarker({ overlay }: { overlay: boolean }) {
 function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation }) {
   if (presentation.isRunning) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         {presentation.statusLabel}
       </span>
@@ -120,7 +120,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
   }
   if (presentation.isFailed) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-rose-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-rose-700 dark:text-rose-300">
         <AlertTriangle className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
       </span>

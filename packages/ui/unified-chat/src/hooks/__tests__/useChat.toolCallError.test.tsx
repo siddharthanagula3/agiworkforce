@@ -793,7 +793,10 @@ describe('useChat — registry-backed Auto routing', () => {
     const userMessage = useChatStore
       .getState()
       .messagesByConversation['conv-cloud']?.find((message) => message.role === 'user');
-    expect(userMessage?.metadata?.['sendReplay']).toEqual({ hasSkillInstruction: true });
+    expect(userMessage?.metadata?.['sendReplay']).toEqual({
+      hasSkillInstruction: true,
+      skillName: 'fixture-reviewed-skill',
+    });
   });
 
   it('does not forward a stale Research request through an unsupported runtime', async () => {
