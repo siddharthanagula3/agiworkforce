@@ -86,38 +86,15 @@
      Paper now reads as near-black; graphite is the deepest tier.
      Phosphor mint replaces amber as the rule/accent color.
      Channel-only tokens (*-rgb) feed alpha variants via rgb(var() / α). */
-  --color-rule-rgb: 109 255 172;
-  --color-paper-rgb: 10 13 10;
-  --color-ink-rgb: 233 230 223;
 
-  --color-paper: rgb(var(--color-paper-rgb));
-  --color-paper-2: #11140e;
-  --color-ink: rgb(var(--color-ink-rgb));
-  --color-ink-2: #c8c5bd;
-  --color-graphite: #050705;
-  --color-graphite-2: #0a0d0a;
-  --color-cream-on-graphite: rgb(var(--color-ink-rgb));
   /* On dark, fg-* and fg-paper-* converge — both surfaces are dark. */
-  --color-fg-muted: #a8b0a4;
-  --color-fg-quiet: #6e766a;
-  --color-fg-faint: #4a504a;
-  --color-fg-paper-muted: #a8b0a4; /* ≥7:1 on paper black, body-safe */
-  --color-fg-paper-quiet: #6e766a; /* ≥4.5:1 on paper black, body-safe AA */
-  --color-fg-paper-faint: #4a504a; /* large text only */
 
   /* Brand: phosphor mint as RULE color (structural rule lines, drop-caps, carets). */
-  --color-rule: rgb(var(--color-rule-rgb));
-  --color-rule-soft: rgb(var(--color-rule-rgb) / 0.18);
-  --color-rule-strong: rgb(var(--color-rule-rgb));
 
   /* Aliases retained for backwards-compatibility with existing call sites
      that still reference the old amber-named tokens. */
-  --color-amber-text: rgb(var(--color-rule-rgb));
-  --color-amber-ink: var(--color-graphite);
 
   /* Status stamps — oxblood for "coming soon", phosphor for "ok". */
-  --color-stamp-oxblood: #8b1a1a;
-  --color-stamp-ok: rgb(var(--color-rule-rgb));
 
   /* Motion tokens — operator-broadsheet redesign 2026-05-05.
      Rule: enter at --dur-base, exit at ~70% of enter (~220ms) with --ease-in.
@@ -132,14 +109,8 @@
   --stagger-loose: 80ms;
 
   /* Custom colors - Cream */
-  --color-cream-50: #fcfcf9;
-  --color-cream-100: #f9f9f6;
-  --color-cream-200: #f5f5f2;
 
   /* Custom colors - Charcoal */
-  --color-charcoal-900: #1f2121;
-  --color-charcoal-800: #2a2c2c;
-  --color-charcoal-700: #363838;
 
   /* Custom colors - Terra Cotta */
   --color-terra-cotta: #da7756;
@@ -188,12 +159,6 @@
   --color-agent-warning: #f59e0b;
 
   /* Surface colors */
-  --color-surface-floating: rgba(255, 255, 255, 0.08);
-  --color-surface-floating-hover: rgba(255, 255, 255, 0.12);
-  --color-surface-base: #0f0f0f;
-  --color-surface-elevated: #1a1a1a;
-  --color-surface-overlay: #242424;
-  --color-surface-hover: #2e2e2e;
 
   /* Semantic colors - shadcn base */
   --color-background: hsl(var(--background));
@@ -414,14 +379,6 @@
   100% {
     transform: translateX(-50%);
   }
-}
-
-.animate-marquee {
-  animation: marquee 30s linear infinite;
-}
-
-.animate-marquee:hover {
-  animation-play-state: paused;
 }
 
 @keyframes accordion-down {
@@ -944,17 +901,6 @@
 }
 
 @layer base {
-  /* Editorial specimen drop-cap */
-  .specimen--dropcap > p:first-of-type::first-letter {
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-style: italic;
-    font-size: 4em;
-    line-height: 0.8;
-    padding-right: 0.1em;
-    float: left;
-    color: var(--color-rule);
-  }
 }
 
 @layer base {
@@ -1002,15 +948,6 @@
 }
 
 @layer components {
-  .floating-input {
-    @apply fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4;
-    z-index: 40;
-  }
-
-  .floating-input-container {
-    @apply bg-white/90 dark:bg-charcoal-800/90 backdrop-blur-xl rounded-2xl shadow-floating-input border border-gray-200 dark:border-gray-700;
-  }
-
   .prose {
     font-size: 15px;
     line-height: 1.6;
@@ -1023,11 +960,6 @@
 
   .message-bubble {
     animation: messageIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  /* Message metadata text - timestamp, role badge, streaking indicator */
-  .message-meta {
-    @apply text-xs text-muted-foreground;
   }
 
   /* =====================================================
@@ -1057,16 +989,6 @@
   /* Avatar - 32 × 32 circle matching desktop .message-avatar */
   .message-avatar {
     @apply shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium;
-  }
-
-  /* Assistant avatar gradient (teal-400 → cyan-500) - desktop .message-avatar-assistant */
-  .message-avatar-assistant {
-    @apply bg-gradient-to-br from-teal-400 to-cyan-500 text-white;
-  }
-
-  /* User avatar gradient (blue-500 → indigo-600) - desktop .message-avatar-user */
-  .message-avatar-user {
-    @apply bg-gradient-to-br from-blue-500 to-indigo-600 text-white;
   }
 
   /* Body - fills remaining width, prevents overflow */
@@ -1100,11 +1022,6 @@
     @apply px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-[13px] font-mono;
   }
 
-  /* Timestamp / meta text - 12 px (desktop .message-meta: 11 px, kept at 12 px for web readability) */
-  .message-timestamp {
-    @apply text-[12px] text-muted-foreground;
-  }
-
   /* User message · right-aligned rounded bubble (ChatGPT/Claude pattern). Hugs its
      content and tops out at the column width; background, radius, and text colour
      come from the chat design tokens so it tracks the active palette. */
@@ -1116,33 +1033,6 @@
     color: var(--chat-text-primary);
   }
 
-  /* =====================================================
-     Bottom gradient fade - chat scroll area overlay
-     ===================================================== */
-
-  /*
-   * Sits at the bottom of the message list scroll area to create a soft
-   * fade towards the composer, matching the desktop pattern.
-   */
-  .chat-bottom-fade {
-    pointer-events: none;
-    background: linear-gradient(to bottom, transparent 0%, hsl(var(--background) / 0.85) 100%);
-  }
-
-  /* Chat message max-width matches desktop max-w-5xl */
-  .chat-content-width {
-    @apply mx-auto w-full max-w-5xl px-4;
-  }
-
-  /* Standardized button heights */
-  .btn-h-normal {
-    @apply h-10;
-  }
-
-  .btn-h-compact {
-    @apply h-9;
-  }
-
   /* Code block styling - matches desktop oneDark theme */
   .code-block-container {
     @apply my-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700/50;
@@ -1151,11 +1041,6 @@
 
   .code-block-header-bar {
     @apply flex items-center justify-between px-4 py-2.5 bg-gray-800 dark:bg-gray-900 border-b border-gray-700/50;
-  }
-
-  /* Language label - desktop .code-block-language */
-  .code-block-lang-label {
-    @apply text-xs font-medium text-gray-400 uppercase tracking-wide;
   }
 
   .code-block-body {
@@ -1251,58 +1136,12 @@
     }
   }
 
-  .focus-pill {
-    @apply px-3 py-1 text-xs font-medium rounded-full transition-all duration-200;
-  }
-
-  .focus-pill-active {
-    @apply bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-100;
-  }
-
-  .focus-pill-inactive {
-    @apply bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700;
-  }
-
   .animate-fade-in {
     animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
-  .glass-card {
-    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-white/20 dark:border-gray-700/50;
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  }
-
-  .code-block-wrapper {
-    @apply my-4 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700/50 bg-gray-900 dark:bg-gray-950;
-  }
-
-  .code-block-header {
-    @apply flex items-center justify-between px-4 py-2.5 bg-gray-800 dark:bg-gray-900 border-b border-gray-700/50;
-  }
-
-  /* =====================================================
-     Responsive Design Utilities (Mobile-First)
-     ===================================================== */
-
-  /* Message bubble responsive widths */
-  .message-bubble-content {
-    @apply flex-1 min-w-0; /* Prevent content overflow */
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-  }
-
   /* Mobile: max-width constraints for message bubbles */
   @media (max-width: 375px) {
-    .chat-content-width {
-      @apply px-2; /* Tighter padding on extreme mobile */
-    }
-
-    .message-bubble-content {
-      max-width: 100%;
-    }
-
     .prose {
       font-size: 14px; /* Smaller text on tiny screens */
     }
@@ -1310,22 +1149,10 @@
 
   /* Tablet (768px): adjust message widths */
   @media (min-width: 768px) {
-    .chat-content-width {
-      @apply px-6; /* Increase padding on tablet */
-    }
   }
 
   /* Desktop (1024px+): full-width with max constraint */
   @media (min-width: 1024px) {
-    .chat-content-width {
-      @apply max-w-5xl; /* Constrain to readable width */
-    }
-  }
-
-  /* Touch target sizes (WCAG 2.1 Level AAA: 48x48px minimum) */
-  .touch-target {
-    min-height: 48px;
-    min-width: 48px;
   }
 
   /* Responsive button sizing */
@@ -1426,11 +1253,6 @@
 
   /* Code block responsive */
   @media (max-width: 375px) {
-    .code-block-wrapper,
-    .code-block-container {
-      @apply text-xs;
-    }
-
     pre {
       @apply text-xs overflow-x-auto;
     }
@@ -1443,121 +1265,6 @@
     @apply border-border/50 dark:bg-card/80 border bg-white/80 backdrop-blur-xl;
   }
 
-  .glass-strong {
-    @apply border-border/60 dark:bg-card/90 border bg-white/90 backdrop-blur-2xl;
-  }
-
-  .glow-primary {
-    box-shadow:
-      0 0 40px hsl(var(--glow-primary) / 0.3),
-      0 0 80px hsl(var(--glow-primary) / 0.1);
-  }
-
-  .glow-secondary {
-    box-shadow:
-      0 0 40px hsl(var(--glow-secondary) / 0.3),
-      0 0 80px hsl(var(--glow-secondary) / 0.1);
-  }
-
-  .glow-accent {
-    box-shadow:
-      0 0 40px hsl(var(--accent) / 0.3),
-      0 0 80px hsl(var(--accent) / 0.1);
-  }
-
-  /* Gradient backgrounds */
-  .gradient-primary {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
-  }
-
-  .gradient-secondary {
-    background: linear-gradient(135deg, hsl(var(--secondary)) 0%, hsl(var(--primary)) 100%);
-  }
-
-  .gradient-mesh {
-    background:
-      radial-gradient(at 40% 20%, hsl(var(--primary) / 0.15) 0px, transparent 50%),
-      radial-gradient(at 80% 0%, hsl(var(--accent) / 0.15) 0px, transparent 50%),
-      radial-gradient(at 0% 50%, hsl(var(--secondary) / 0.15) 0px, transparent 50%),
-      radial-gradient(at 80% 50%, hsl(var(--primary) / 0.1) 0px, transparent 50%),
-      radial-gradient(at 0% 100%, hsl(var(--accent) / 0.1) 0px, transparent 50%),
-      radial-gradient(at 80% 100%, hsl(var(--secondary) / 0.1) 0px, transparent 50%),
-      hsl(var(--background));
-  }
-
-  /* Card variants */
-  .card-hover {
-    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-xl;
-  }
-
-  .card-premium {
-    @apply border-border/50 dark:bg-card/80 border bg-white/80 backdrop-blur-xl border-primary/20 shadow-primary/10 border-2 shadow-lg;
-  }
-
-  /* Button glow effect */
-  .btn-glow {
-    @apply relative overflow-hidden;
-    transition:
-      background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .btn-glow::before {
-    content: '';
-    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
-    background: linear-gradient(
-      45deg,
-      transparent 30%,
-      rgba(255, 255, 255, 0.3) 50%,
-      transparent 70%
-    );
-    transform: translateX(-100%);
-  }
-
-  .btn-glow:hover::before {
-    @apply opacity-100;
-    transform: translateX(100%);
-    transition: transform 0.6s ease;
-  }
-
-  /* Chat bubbles */
-  .chat-bubble-user {
-    @apply bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-5 py-3 shadow-md;
-    max-width: 85%;
-    margin-left: auto;
-  }
-
-  .chat-bubble-assistant {
-    @apply border-border/50 dark:bg-card/80 border bg-white/80 backdrop-blur-xl rounded-2xl rounded-bl-sm px-5 py-3;
-    max-width: 85%;
-    margin-right: auto;
-  }
-
-  .chat-bubble-thinking {
-    @apply border-border/50 dark:bg-card/80 border bg-white/80 backdrop-blur-xl border-primary/30 rounded-2xl px-5 py-3;
-    animation: pulse-thinking 2s ease-in-out infinite;
-  }
-
-  /* Status indicators */
-  .status-dot {
-    @apply inline-block h-2 w-2 rounded-full;
-  }
-
-  .status-active {
-    @apply bg-success;
-    animation: pulse-status 2s ease-in-out infinite;
-  }
-
-  .status-idle {
-    @apply bg-warning;
-  }
-
-  .status-offline {
-    @apply bg-muted-foreground;
-  }
-
   /* Loading states */
   .skeleton {
     @apply bg-muted animate-pulse rounded-md;
@@ -1568,35 +1275,6 @@
     background-size: 200% 100%;
     animation: shimmer 2s infinite;
   }
-
-  /* Focus ring */
-  .focus-ring {
-    @apply focus:ring-ring focus:ring-offset-background focus:ring-2 focus:ring-offset-2 focus:outline-none;
-  }
-
-  /* Text gradients */
-  .text-gradient-primary {
-    @apply from-primary to-accent bg-gradient-to-r bg-clip-text text-transparent;
-  }
-
-  .text-gradient-secondary {
-    @apply from-secondary to-primary bg-gradient-to-r bg-clip-text text-transparent;
-  }
-
-  /* Gradient divider */
-  .divider-gradient {
-    height: 1px;
-    background: linear-gradient(90deg, transparent 0%, hsl(var(--border)) 50%, transparent 100%);
-  }
-
-  /* Feature cards */
-  .feature-card {
-    @apply border-border/50 dark:bg-card/80 border bg-white/80 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer;
-  }
-
-  .feature-card-icon {
-    @apply transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3;
-  }
 }
 
 /* Animation utilities */
@@ -1605,31 +1283,14 @@
     animation: fade-in-up 0.4s ease-out;
   }
 
-  .animate-slide-in-right {
-    animation: slide-in-right 0.3s ease-out;
-  }
-
   .animate-shimmer {
     animation: shimmer 2s infinite linear;
     background-size: 200% 100%;
   }
 
-  .animate-pulse-soft {
-    animation: pulse-soft 2s infinite;
-  }
-
   /* Glassmorphism utility classes */
   .glass-surface {
     @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.06];
-  }
-
-  .glass-hover {
-    @apply hover:bg-white/[0.06] hover:border-white/[0.10] transition-all duration-200;
-  }
-
-  .glass-input {
-    @apply bg-white/[0.05] backdrop-blur-xl border border-white/[0.08] rounded-lg;
-    @apply focus:border-white/[0.15] focus:ring-1 focus:ring-white/[0.10] transition-all;
   }
 
   /* Stagger animations for lists */
@@ -1685,188 +1346,8 @@
   background: rgba(75, 85, 99, 0.8);
 }
 
-/* =====================================================
-   AGI Dashboard Theme (agiworkforce design tokens)
-   Scoped to dashboard + chat routes only.
-   Marketing pages (/, /pricing, /about, etc.) are NOT affected.
-   ===================================================== */
-.agi-dashboard-theme {
-  /* Surface colors */
-  --agi-bg: hsl(240, 10%, 3.9%);
-  --agi-fg: hsl(0, 0%, 98%);
-  --agi-surface: hsl(240, 9%, 6%);
-  --agi-surface-elevated: hsl(240, 8%, 9%);
-  --agi-surface-overlay: hsl(240, 7%, 12%);
-
-  /* Card */
-  --agi-card: hsl(240, 8%, 9%);
-  --agi-card-fg: hsl(0, 0%, 98%);
-
-  /* Borders & muted */
-  --agi-border: hsl(240, 6%, 15%);
-  --agi-muted: hsl(240, 6%, 15%);
-  --agi-muted-fg: hsl(240, 5%, 64.9%);
-  --agi-accent: hsl(240, 6%, 12%);
-  --agi-accent-fg: hsl(0, 0%, 98%);
-
-  /* Primary brand */
-  --agi-primary: hsl(200, 98%, 39%);
-  --agi-primary-fg: hsl(0, 0%, 98%);
-  --agi-primary-glow: hsl(200, 100%, 80%);
-  --agi-primary-muted: hsl(200, 50%, 20%);
-
-  /* Agent colors */
-  --agi-agent: hsl(280, 60%, 50%);
-  --agi-agent-fg: hsl(0, 0%, 98%);
-  --agi-agent-glow: hsl(280, 100%, 85%);
-
-  /* Workforce colors */
-  --agi-workforce: hsl(45, 93%, 47%);
-  --agi-workforce-fg: hsl(30, 10%, 9%);
-  --agi-workforce-glow: hsl(45, 100%, 85%);
-
-  /* State colors */
-  --agi-success: hsl(120, 60%, 50%);
-  --agi-error: hsl(0, 84%, 60%);
-  --agi-warning: hsl(38, 92%, 50%);
-
-  /* Glow shadows */
-  --agi-glow-primary: 0 4px 20px hsl(200 98% 39% / 0.25);
-  --agi-glow-agent: 0 4px 20px hsl(280 60% 50% / 0.25);
-  --agi-glow-workforce: 0 4px 20px hsl(45 93% 47% / 0.25);
-  --agi-glow-elevated: 0 8px 32px hsl(240 10% 3.9% / 0.8);
-
-  /* Brand HSL base variables for Tailwind utility generation */
-  --primary-glow: 200 100% 80%;
-  --primary-muted: 200 50% 20%;
-  --agent: 280 60% 50%;
-  --agent-foreground: 0 0% 98%;
-  --agent-glow: 280 100% 85%;
-  --workforce: 45 93% 47%;
-  --workforce-foreground: 30 10% 9%;
-  --workforce-glow: 45 100% 85%;
-  --success: 120 60% 50%;
-  --success-foreground: 0 0% 98%;
-  --error: 0 84% 60%;
-  --error-foreground: 0 0% 98%;
-  --warning: 38 92% 50%;
-  --warning-foreground: 30 10% 9%;
-  --info: 200 98% 39%;
-  --glow-primary: 200 98% 39%;
-  --glow-secondary: 280 60% 50%;
-
-  /* Sidebar */
-  --sidebar-background: 240 9% 6%;
-  --sidebar-foreground: 240 5% 65%;
-  --sidebar-primary: 200 98% 39%;
-  --sidebar-primary-foreground: 0 0% 98%;
-  --sidebar-accent: 240 6% 12%;
-  --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-border: 240 6% 15%;
-  --sidebar-ring: 200 98% 39%;
-
-  /* Override the shadcn/radix semantic HSL variables for dashboard */
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 8% 9%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 8% 9%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 200 98% 39%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 6% 15%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 6% 15%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 6% 12%;
-  --accent-foreground: 0 0% 98%;
-  --border: 240 6% 15%;
-  --input: 240 6% 15%;
-  --ring: 200 98% 39%;
-  --destructive: 0 84% 48%;
-  --destructive-foreground: 0 0% 98%;
-  --destructive-text: 0 84% 65%;
-
-  color-scheme: dark;
-  background-color: hsl(240, 10%, 3.9%);
-  color: hsl(0, 0%, 98%);
-}
-
-/* Dashboard-scoped scrollbar for the agi theme */
-.agi-dashboard-theme ::-webkit-scrollbar-thumb {
-  background: rgba(100, 110, 130, 0.4);
-}
-
-.agi-dashboard-theme ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 110, 130, 0.7);
-}
-
-/* =====================================================
-   Editorial shell — terminal/CLI retheme 2026-05-06.
-   Applied to every EditorialPage wrapper across all 22 marketing pages.
-   Provides phosphor grid + scanline overlay using channel tokens only.
-   ===================================================== */
-
-/* Phosphor grid overlay, viewport-fixed, edge-faded radial mask.
-   Sits above EditorialPage NoiseOverlay (z-0) at z-1, below content (z-10). */
-.editorial-shell::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgb(var(--color-rule-rgb) / 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(var(--color-rule-rgb) / 0.045) 1px, transparent 1px);
-  background-size: 64px 64px;
-  -webkit-mask-image: radial-gradient(ellipse 90% 80% at center, black 30%, transparent 100%);
-  mask-image: radial-gradient(ellipse 90% 80% at center, black 30%, transparent 100%);
-}
-
-/* Faint scanline texture — CRT phosphor afterglow */
-.editorial-shell::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 2px,
-    rgb(var(--color-rule-rgb) / 0.018) 2px,
-    rgb(var(--color-rule-rgb) / 0.018) 3px
-  );
-  mix-blend-mode: screen;
-}
-
-/* Selection on dark editorial surfaces */
-.editorial-shell ::selection {
-  background: rgb(var(--color-rule-rgb) / 0.28);
-  color: var(--color-ink);
-}
-
-/* Drop cap glow */
-.editorial-shell .specimen--dropcap > p:first-of-type::first-letter {
-  color: var(--color-rule);
-  text-shadow: 0 0 24px rgb(var(--color-rule-rgb) / 0.35);
-}
-
-/* Soft phosphor glow on the blinking caret */
-.editorial-shell [class*='animate-[caret-blink'] {
-  box-shadow: 0 0 12px rgb(var(--color-rule-rgb) / 0.6);
-}
-
-/* Headline-emphasis glow utility — phosphor halo on the accented em */
-.text-glow-rule {
-  text-shadow: 0 0 32px rgb(var(--color-rule-rgb) / 0.25);
-}
-
 /* Honor reduced-motion: disable scanline overlay */
 @media (prefers-reduced-motion: reduce) {
-  .editorial-shell::after {
-    display: none;
-  }
 }
 
 /* Selection styles */
@@ -2004,12 +1485,7 @@ html[data-contrast='more'] *:focus-visible {
    a `position: sticky; bottom: 0` element on phones — had none, which put the
    send button under the home indicator.
 
-   `.safe-area-bottom` pads an element's own bottom edge; use it on any sticky
-   or fixed bottom bar. The inset is 0px on every device without a home
-   indicator, so this is inert elsewhere. */
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+   `.safe-area-bottom` pads an element's own bottom edge;
 
 /* Adds the inset ON TOP of an existing bottom padding (e.g. the composer's
    `pb-4`), instead of replacing it. */
@@ -2035,21 +1511,6 @@ html[data-contrast='more'] *:focus-visible {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-/* Override glass classes inside agi-dashboard-theme for dark surfaces */
-.agi-dashboard-theme .glass {
-  background: hsl(240 8% 9% / 0.8);
-  border-color: hsl(240 6% 15% / 0.5);
-}
-
-.agi-dashboard-theme .glass-strong {
-  background: hsl(240 8% 9% / 0.9);
-  border-color: hsl(240 6% 15% / 0.6);
-}
-
-.agi-dashboard-theme .gradient-primary {
-  background: linear-gradient(135deg, hsl(200, 98%, 39%) 0%, hsl(240, 6%, 12%) 100%);
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -2200,11 +1661,6 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-mark svg {
   display: block;
   flex-shrink: 0;
-}
-[data-design='agi'] .agi-mark-dot {
-  color: var(--agi-amber);
-  font-weight: 800;
-  margin: 0 1px;
 }
 [data-design='agi'] .agi-top-right {
   display: inline-flex;
@@ -2640,12 +2096,6 @@ html[data-contrast='more'] *:focus-visible {
   font-weight: 650;
   white-space: nowrap;
 }
-[data-design='agi'] .agi-provider-logo {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-  flex: 0 0 auto;
-}
 @keyframes agi-provider-marquee {
   from {
     transform: translateX(0);
@@ -2703,54 +2153,11 @@ html[data-contrast='more'] *:focus-visible {
   font-size: 11px;
   text-transform: uppercase;
 }
-
-/* hero */
-[data-design='agi'] .agi-hero {
-  padding: 96px 0 56px;
-}
 @media (max-width: 760px) {
-  [data-design='agi'] .agi-hero {
-    padding: 56px 0 36px;
-  }
-}
-[data-design='agi'] .agi-h1 {
-  font-family: var(--agi-font);
-  font-weight: 600;
-  font-size: 2.25rem;
-  line-height: 1.04;
-  letter-spacing: 0;
-  color: var(--agi-ink);
-  margin: 0;
 }
 @media (min-width: 600px) {
-  [data-design='agi'] .agi-h1 {
-    font-size: 3.25rem;
-  }
 }
 @media (min-width: 960px) {
-  [data-design='agi'] .agi-h1 {
-    font-size: 5rem;
-  }
-}
-[data-design='agi'] .agi-h1-line {
-  display: block;
-  white-space: normal;
-  text-wrap: balance;
-}
-[data-design='agi'] .agi-h1-line--quiet {
-  color: var(--agi-ink-2);
-}
-[data-design='agi'] .agi-lede {
-  margin: 32px 0 0;
-  max-width: 60ch;
-  font-size: 1.0625rem;
-  line-height: 1.6;
-  color: var(--agi-ink-2);
-  font-weight: 400;
-}
-[data-design='agi'] .agi-lede strong {
-  color: var(--agi-ink);
-  font-weight: 600;
 }
 [data-design='agi'] .agi-cta-row {
   margin-top: 36px;
@@ -3452,12 +2859,6 @@ html[data-contrast='more'] *:focus-visible {
   flex-direction: column;
   gap: 8px;
 }
-[data-design='agi'] .agi-tier-cta-note {
-  font-size: 12px;
-  color: var(--agi-ink-quiet);
-  text-align: center;
-  margin: 0;
-}
 [data-design='agi'] .agi-tier-cta {
   font-size: 14px;
   font-weight: 600;
@@ -3479,27 +2880,6 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-tier-cta--ghost:hover {
   background: var(--agi-bg-2);
-}
-[data-design='agi'] .agi-tier-note {
-  margin: 36px 0 0;
-  padding-top: 24px;
-  border-top: 1px solid var(--agi-rule);
-  font-size: 14px;
-  color: var(--agi-ink-quiet);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  align-items: baseline;
-}
-[data-design='agi'] .agi-tier-note a {
-  color: var(--agi-ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: var(--agi-rule-strong);
-}
-[data-design='agi'] .agi-tier-note a:hover {
-  text-decoration-color: var(--agi-ink);
 }
 
 /* Featured tier grid (Team/Enterprise) — larger cards, amber-accented, given
@@ -3537,25 +2917,7 @@ html[data-contrast='more'] *:focus-visible {
     grid-template-columns: 1fr;
   }
 }
-
-/* Compact tier grid (Local/BYOK wedge) — smaller cards, lower visual
-   emphasis than Team/Enterprise per the product's local-first-wedge GTM. */
-[data-design='agi'] .agi-tier-grid--compact {
-  grid-template-columns: repeat(2, 1fr);
-  max-width: 720px;
-  gap: 16px;
-}
 @media (max-width: 640px) {
-  [data-design='agi'] .agi-tier-grid--compact {
-    grid-template-columns: 1fr;
-  }
-}
-[data-design='agi'] .agi-tier--compact {
-  padding: 22px 22px 24px;
-  gap: 12px;
-}
-[data-design='agi'] .agi-tier--compact .agi-tier-price-num {
-  font-size: 26px;
 }
 [data-design='agi'] .agi-tier-badge {
   display: inline-block;
@@ -3952,11 +3314,6 @@ html[data-contrast='more'] *:focus-visible {
   font-size: 11.5px;
   letter-spacing: 0.08em;
 }
-
-/* chat panel (homepage demo) */
-[data-design='agi'] .agi-demo {
-  margin: 56px 0 96px;
-}
 [data-design='agi'] .agi-chat {
   background: var(--agi-card);
   border: 1px solid var(--agi-rule);
@@ -4228,73 +3585,9 @@ html[data-contrast='more'] *:focus-visible {
     transition: none;
   }
 }
-
-/* partner perks grid */
-[data-design='agi'] .agi-perks-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
 @media (max-width: 880px) {
-  [data-design='agi'] .agi-perks-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 @media (max-width: 580px) {
-  [data-design='agi'] .agi-perks-grid {
-    grid-template-columns: 1fr;
-  }
-}
-[data-design='agi'] .agi-perk-card {
-  background: var(--agi-card);
-  border: 1px solid var(--agi-rule);
-  border-radius: 14px;
-  padding: 24px 22px 26px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-[data-design='agi'] .agi-perk-partner {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--agi-amber);
-  margin: 0;
-}
-[data-design='agi'] .agi-perk-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--agi-ink);
-  margin: 0;
-  letter-spacing: -0.005em;
-}
-[data-design='agi'] .agi-perk-description {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--agi-ink-2);
-  margin: 0;
-  flex: 1;
-}
-[data-design='agi'] .agi-perk-cta {
-  display: inline-block;
-  margin-top: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-  color: var(--agi-button-ink);
-  background: var(--agi-button-bg);
-  padding: 9px 16px;
-  border-radius: 7px;
-  text-align: center;
-  align-self: flex-start;
-  transition: background var(--agi-dur-fast) var(--agi-ease-out);
-}
-[data-design='agi'] .agi-perk-cta:hover {
-  background: var(--agi-button-bg-hover);
 }
 
 /* light-mode token overrides for [data-design='agi'] pages
@@ -4983,21 +4276,9 @@ html[data-contrast='more'] *:focus-visible {
   animation: hero-fade-up 0.8s var(--agi-ease-out) 0.64s both;
 }
 
-[data-design='agi'] .agi-fl-hero-frame--phone {
-  position: absolute;
-  right: clamp(8px, 4vw, 56px);
-  bottom: clamp(24px, 4vw, 48px);
-  width: clamp(120px, 12vw, 160px);
-  z-index: 2;
-  animation: hero-fade-up 0.8s var(--agi-ease-out) 0.78s both;
-}
-
 @media (max-width: 860px) {
   [data-design='agi'] .agi-fl-hero-console {
     grid-template-columns: 1fr;
-  }
-  [data-design='agi'] .agi-fl-hero-frame--phone {
-    display: none;
   }
 }
 
@@ -5551,10 +4832,6 @@ html[data-contrast='more'] *:focus-visible {
     0 0 0 1px var(--agi-line-soft),
     0 calc(var(--u) * 28) calc(var(--u) * 80) var(--agi-shadow);
   overflow: hidden;
-}
-
-[data-design='agi'] .agi-dev--phone .agi-dev-shell {
-  border-radius: calc(var(--u) * 40);
 }
 
 [data-design='agi'] .agi-dev--image .agi-dev-shell {
@@ -8238,26 +7515,6 @@ html[data-contrast='more'] *:focus-visible {
   flex: 0 0 auto;
 }
 
-[data-design='agi'] .agi-dw-line--del {
-  background: color-mix(in srgb, var(--agi-error) 10%, transparent);
-  border-left: 2px solid var(--agi-error);
-}
-
-[data-design='agi'] .agi-dw-line--add {
-  background: color-mix(in srgb, var(--agi-success) 10%, transparent);
-  border-left: 2px solid var(--agi-success);
-}
-
-[data-design='agi'] .agi-dw-line--del .agi-dw-hl {
-  background: color-mix(in srgb, var(--agi-error) 28%, transparent);
-  border-radius: 3px;
-}
-
-[data-design='agi'] .agi-dw-line--add .agi-dw-hl {
-  background: color-mix(in srgb, var(--agi-success) 28%, transparent);
-  border-radius: 3px;
-}
-
 [data-design='agi'] .agi-dw-foot,
 [data-design='agi'] .agi-ap-foot {
   display: flex;
@@ -8451,12 +7708,6 @@ html[data-contrast='more'] *:focus-visible {
   /* Cap grid: single column at 480px */
   [data-design='agi'] .agi-fl-cap-grid {
     grid-template-columns: 1fr;
-  }
-
-  /* Footer columns */
-  [data-design='agi'] .agi-footer-grid {
-    grid-template-columns: 1fr;
-    gap: 32px;
   }
 
   /* Surface list: ensure visuals are hidden on small screens */
