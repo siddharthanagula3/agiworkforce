@@ -3661,6 +3661,67 @@ export default function WebChatPage() {
   );
 
   /**
+   * The destructive half of an inline edit, run only after the reader has
+   * agreed to lose the messages below the one being replaced.
+   */
+  const runSubmitEdit = useCallback(
+    (
+      id: string,
+      next: string,
+      planned: NonNullable<ReturnType<typeof planMessageEdit>>,
+      conversationId: string,
+    ) => {
+      // Same trust boundary as handleSend / handleRegenerateMessage: an edited
+      // resend replays the whole on-device transcript under `activeModelId`,
+      // so it must refuse rather than silently cross Local → BYOK.
+      const boundaryRefusal = resolveRegenerateBoundaryRefusal({
+        conversation: displayedConversation,
+        messages: displayedMessages,
+        targetModelId: activeModelId,
+      });
+      if (boundaryRefusal) {
+        setChatError(boundaryRefusal, conversationId);
+        return;
+      }
+      // Replay the options the ORIGINAL turn recorded (search / thinking /
+      // code / work mode / style), exactly as Regenerate does — the composer's
+      // current toggles are not what this message was sent with.
+      const editedIndex = displayedMessages.findIndex((m) => m.id === id);
+      const followingAssistant =
+        editedIndex >= 0
+          ? displayedMessages.slice(editedIndex + 1).find((m) => m.role === 'assistant')
+          : undefined;
+      const replayDecision = getRegenerateReplayDecision({
+        userMetadata: planned.message.metadata,
+        assistantMetadata: followingAssistant?.metadata,
+      });
+      if (!replayDecision.ok) {
+        setChatError(replayDecision.message, conversationId);
+        return;
+      }
+      const replayOptions = replayToSendOptions(replayDecision.replay);
+      void sendReplacingMessages(planned.plan.rollbackIds, (onTurnCommitted) =>
+        sendMessage(next, {
+          model: activeModelId,
+          conversationId,
+          attachments: planned.message.attachments,
+          ...replayOptions,
+          onTurnCommitted,
+        }),
+      );
+    },
+
+    [
+      activeModelId,
+      displayedConversation,
+      displayedMessages,
+      sendReplacingMessages,
+      sendMessage,
+      setChatError,
+    ],
+  );
+
+  /**
    * CLR-05: inline edit, wired to the bubble instead of the composer.
    *
    * `beginEdit` runs the guards and answers whether the editor may open.
@@ -3680,44 +3741,27 @@ export default function WebChatPage() {
         if (!planned) return;
         const conversationId = displayedConversationId;
         if (!conversationId) return;
-        // Same trust boundary as handleSend / handleRegenerateMessage: an edited
-        // resend replays the whole on-device transcript under `activeModelId`,
-        // so it must refuse rather than silently cross Local → BYOK.
-        const boundaryRefusal = resolveRegenerateBoundaryRefusal({
-          conversation: displayedConversation,
-          messages: displayedMessages,
-          targetModelId: activeModelId,
-        });
-        if (boundaryRefusal) {
-          setChatError(boundaryRefusal, conversationId);
+        // Resubmitting deletes every message from this turn onward, on the
+        // server as well as on screen, and there is no branch to go back to.
+        // The repository requires a confirmation for anything a user cannot
+        // undo, and the count is what makes the consequence legible.
+        const discarded = planned.plan.rollbackIds.length - 1;
+        if (discarded > 0) {
+          void (async () => {
+            const proceed = await confirmDestructive({
+              title: 'Replace this message?',
+              description:
+                discarded === 1
+                  ? 'The reply below it is deleted and cannot be recovered.'
+                  : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+              confirmText: 'Replace',
+              variant: 'destructive',
+            });
+            if (proceed) runSubmitEdit(id, next, planned, conversationId);
+          })();
           return;
         }
-        // Replay the options the ORIGINAL turn recorded (search / thinking /
-        // code / work mode / style), exactly as Regenerate does — the composer's
-        // current toggles are not what this message was sent with.
-        const editedIndex = displayedMessages.findIndex((m) => m.id === id);
-        const followingAssistant =
-          editedIndex >= 0
-            ? displayedMessages.slice(editedIndex + 1).find((m) => m.role === 'assistant')
-            : undefined;
-        const replayDecision = getRegenerateReplayDecision({
-          userMetadata: planned.message.metadata,
-          assistantMetadata: followingAssistant?.metadata,
-        });
-        if (!replayDecision.ok) {
-          setChatError(replayDecision.message, conversationId);
-          return;
-        }
-        const replayOptions = replayToSendOptions(replayDecision.replay);
-        void sendReplacingMessages(planned.plan.rollbackIds, (onTurnCommitted) =>
-          sendMessage(next, {
-            model: activeModelId,
-            conversationId,
-            attachments: planned.message.attachments,
-            ...replayOptions,
-            onTurnCommitted,
-          }),
-        );
+        runSubmitEdit(id, next, planned, conversationId);
       },
     }),
     [
