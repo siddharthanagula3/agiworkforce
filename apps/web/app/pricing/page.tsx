@@ -113,6 +113,28 @@ function formatLocalizedAmount(
   }).format((entry.amountMinor * multiplier) / 100 / divisor);
 }
 
+/**
+ * Columns of the full comparison. Declared once so the disclosure summary can
+ * count the same list the table renders, rather than a number that drifts.
+ */
+const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
+  ['plan', 'Plan'],
+  ['price', 'Price'],
+  ['billingInterval', 'Billing'],
+  ['usageCapacity', 'Managed usage'],
+  ['projects', 'Projects'],
+  ['customMcp', 'Custom MCP'],
+  ['skillsConnectors', 'Skills & connectors'],
+  ['agiWork', 'AGI Work'],
+  ['imageGeneration', 'Images'],
+  ['videoGeneration', 'Video'],
+  ['apiAccess', 'Managed API'],
+  ['developerSurfaces', 'Developer surfaces'],
+  ['teamControls', 'Team controls'],
+  ['trainingData', 'Trains on your content'],
+  ['bestFor', 'Best for'],
+];
+
 function CheckIcon() {
   return (
     <svg
@@ -779,6 +801,11 @@ export default function PricingPage() {
     },
   ];
 
+  // Filtered once: the table renders these and the disclosure summary counts
+  // them, so the two can never disagree about how many plans are compared.
+  const comparableRows = compareRows.filter((row) => isPlanSelectableOnSurface(row.planId, 'web'));
+  const comparablePlanCount = comparableRows.length;
+
   return (
     <div data-design="agi">
       <main className="agi-shell">
@@ -1325,64 +1352,61 @@ export default function PricingPage() {
             {t('compareHeading')}
           </h2>
           <p className="agi-fl-section-lede">{t('compareSubheading')}</p>
-          <div
-            aria-label="Scrollable plan comparison"
-            role="region"
-            tabIndex={0}
-            style={{ overflowX: 'auto', marginTop: 36 }}
-          >
-            <table
-              aria-label="Plan capabilities"
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: 13,
-                color: 'var(--agi-ink)',
-              }}
+          {/* Fifteen columns and ten rows is a reference, not a thing anyone
+              reads on the way to choosing a plan - and at 390px it was 2065px
+              wide inside a 350px window, roughly six screens of sideways
+              scrolling. A native details element keeps it one keystroke away,
+              stays open on the pages that deep-link into it, and needs no
+              JavaScript to work. */}
+          <details className="agi-compare-disclosure">
+            <summary className="agi-compare-summary">
+              {/* Not the section heading repeated - that sits directly above
+                  this control. This names what opening it reveals. */}
+              <span>Full capability table</span>
+              <span className="agi-compare-summary-hint">
+                {comparablePlanCount} plans across {COMPARISON_COLUMNS.length} capabilities
+              </span>
+            </summary>
+            <div
+              aria-label="Scrollable plan comparison"
+              role="region"
+              tabIndex={0}
+              style={{ overflowX: 'auto', marginTop: 24 }}
             >
-              <thead>
-                <tr>
-                  {[
-                    ['plan', 'Plan'],
-                    ['price', 'Price'],
-                    ['billingInterval', 'Billing'],
-                    ['usageCapacity', 'Managed usage'],
-                    ['projects', 'Projects'],
-                    ['customMcp', 'Custom MCP'],
-                    ['skillsConnectors', 'Skills & connectors'],
-                    ['agiWork', 'AGI Work'],
-                    ['imageGeneration', 'Images'],
-                    ['videoGeneration', 'Video'],
-                    ['apiAccess', 'Managed API'],
-                    ['developerSurfaces', 'Developer surfaces'],
-                    ['teamControls', 'Team controls'],
-                    ['trainingData', 'Trains on your content'],
-                    ['bestFor', 'Best for'],
-                  ].map(([col, label]) => (
-                    <th
-                      key={col}
-                      style={{
-                        textAlign: 'left',
-                        padding: '10px 16px',
-                        borderBottom: '1px solid var(--agi-rule-strong)',
-                        color: 'var(--agi-ink-quiet)',
-                        fontSize: 12,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        fontFamily: 'var(--agi-font-mono)',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {compareRows
-                  .filter((row) => isPlanSelectableOnSurface(row.planId, 'web'))
-                  .map((row, i) => (
+              <table
+                aria-label="Plan capabilities"
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: 13,
+                  color: 'var(--agi-ink)',
+                }}
+              >
+                <thead>
+                  <tr>
+                    {COMPARISON_COLUMNS.map(([col, label]) => (
+                      <th
+                        key={col}
+                        style={{
+                          textAlign: 'left',
+                          padding: '10px 16px',
+                          borderBottom: '1px solid var(--agi-rule-strong)',
+                          color: 'var(--agi-ink-quiet)',
+                          fontSize: 12,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          fontFamily: 'var(--agi-font-mono)',
+                          fontWeight: 500,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparableRows.map((row, i) => (
                     <tr
                       key={row.planId}
                       style={{
@@ -1466,9 +1490,10 @@ export default function PricingPage() {
                       </td>
                     </tr>
                   ))}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+          </details>
         </section>
 
         {/* ──────────────────── Models included, by plan ────────────────────
