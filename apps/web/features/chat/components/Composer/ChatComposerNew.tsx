@@ -452,6 +452,9 @@ const ChatComposerNewComponent = ({
   const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
   const [localNotice, setLocalNotice] = useState<string | null>(null);
+  const [pastedTextUndo, setPastedTextUndo] = useState<{ fileName: string; text: string } | null>(
+    null,
+  );
   // Reset per message so each new draft gets its own warning.
   const secretWarningAcknowledgedRef = useRef(false);
   // CAP-048: optional AGI Work scope fields. Lightweight inline inputs shown
@@ -1273,6 +1276,16 @@ const ChatComposerNewComponent = ({
       if (decision.kind === 'text') return;
       e.preventDefault();
       addChatAttachments(decision.kind === 'files' ? decision.files : [decision.file]);
+      // A long paste turning into a file is a reasonable default and a
+      // surprising one: the composer emptied and a chip appeared, with Remove
+      // as the only affordance and nothing saying what had happened. Say it,
+      // and keep the text so the choice is reversible.
+      if (decision.kind === 'attachment') {
+        setPastedTextUndo({
+          fileName: decision.file.name,
+          text: e.clipboardData.getData('text/plain'),
+        });
+      }
     },
     [addChatAttachments, attachments, disabled, trialExhausted],
   );
@@ -2301,6 +2314,41 @@ const ChatComposerNewComponent = ({
           className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-100"
         >
           {localNotice}
+        </div>
+      )}
+
+      {pastedTextUndo && (
+        <div
+          role="status"
+          data-testid="pasted-text-notice"
+          className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <span>
+            That paste was long, so it was attached as {pastedTextUndo.fileName} instead of filling
+            the message box.
+          </span>
+          <button
+            type="button"
+            data-testid="pasted-text-undo"
+            className="font-medium text-foreground underline underline-offset-2 transition-colors hover:no-underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => {
+              const index = attachments.findIndex((file) => file.name === pastedTextUndo.fileName);
+              if (index >= 0) removeFile(index);
+              setMessage((current) => current + pastedTextUndo.text);
+              setPastedTextUndo(null);
+              textareaRef.current?.focus();
+            }}
+          >
+            Put it back in the message
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss paste notice"
+            className="ml-auto text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setPastedTextUndo(null)}
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
         </div>
       )}
 

@@ -64,3 +64,37 @@ describe('web composer large-paste handling (COMPOSER-002)', () => {
     expect(screen.queryByText('Pasted text.txt')).toBeNull();
   });
 });
+
+describe('what a long paste tells the user', () => {
+  it('explains the conversion and offers the text back', async () => {
+    // The composer emptied and a chip appeared, with Remove as the only
+    // affordance and nothing saying what had happened.
+    render(<ChatComposerNew onSendMessage={vi.fn()} projectPicker={picker()} />);
+    const textarea = screen.getByRole('textbox');
+    const long = 'x'.repeat(LARGE_PASTE_THRESHOLD + 10);
+
+    pasteText(textarea, long);
+
+    const notice = await screen.findByTestId('pasted-text-notice');
+    expect(notice).toHaveTextContent(/attached as Pasted text\.txt/i);
+    expect(screen.getByTestId('pasted-text-undo')).toBeInTheDocument();
+  });
+
+  it('puts the text back in the message box when asked', async () => {
+    render(<ChatComposerNew onSendMessage={vi.fn()} projectPicker={picker()} />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const long = 'y'.repeat(LARGE_PASTE_THRESHOLD + 10);
+
+    pasteText(textarea, long);
+    fireEvent.click(await screen.findByTestId('pasted-text-undo'));
+
+    expect(textarea.value).toContain('y'.repeat(50));
+    expect(screen.queryByTestId('pasted-text-notice')).toBeNull();
+  });
+
+  it('says nothing for a paste short enough to stay inline', () => {
+    render(<ChatComposerNew onSendMessage={vi.fn()} projectPicker={picker()} />);
+    pasteText(screen.getByRole('textbox'), 'a short paste');
+    expect(screen.queryByTestId('pasted-text-notice')).toBeNull();
+  });
+});
