@@ -70,12 +70,46 @@ function isUsableResult(value: unknown): value is NominatimResult {
   );
 }
 
-async function geocodeOne(query: string, signal: AbortSignal): Promise<MapSearchPlace | null> {
+/** Great-circle distance in kilometres. */
+function distanceKm(a: MapSearchPlace, b: MapSearchPlace): number {
+  const toRad = (deg: number): number => (deg * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const h = Math.sin(dLat / 2) ** 2 + Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * Two places named in one request are almost always in one place. Beyond this
+ * radius a second match is far likelier to be a same-name somewhere else than a
+ * genuine destination - the audit found "Millennium Park" beside the Art
+ * Institute of Chicago resolving to Rundu, Namibia, with a route offered.
+ */
+const SAME_CONTEXT_RADIUS_KM = 400;
+
+async function geocodeOne(
+  query: string,
+  signal: AbortSignal,
+  near?: MapSearchPlace,
+): Promise<MapSearchPlace | null> {
   const url = new URL(NOMINATIM_SEARCH_URL);
   url.searchParams.set('q', query);
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('limit', '5');
   url.searchParams.set('addressdetails', '0');
+  if (near) {
+    // Bias, not restrict: a genuine long-distance pair still resolves, it just
+    // has to outrank a local match to do so.
+    const pad = 2.5;
+    url.searchParams.set(
+      'viewbox',
+      [near.longitude - pad, near.latitude + pad, near.longitude + pad, near.latitude - pad].join(
+        ',',
+      ),
+    );
+  }
 
   const response = await fetch(url, {
     signal,
@@ -153,9 +187,26 @@ export async function resolveMapView(
     const targets = route ?? [query];
     const resolved: MapSearchPlace[] = [];
 
+    // The first place establishes the geography; later ones are searched near
+    // it and then checked against it, so a same-name match on another continent
+    // is marked unconfirmed rather than silently accepted.
+    let anchor: MapSearchPlace | undefined;
     for (const target of targets.slice(0, MAP_SEARCH_MAX_PLACES)) {
-      const place = await geocodeOne(target, controller.signal);
-      if (place) resolved.push(place);
+      const place = await geocodeOne(target, controller.signal, anchor);
+      if (!place) continue;
+      if (!anchor) {
+        anchor = place;
+        resolved.push({ ...place, confident: true });
+        continue;
+      }
+      const plausible = distanceKm(anchor, place) <= SAME_CONTEXT_RADIUS_KM;
+      if (!plausible) {
+        logger.warn(
+          { target, anchor: anchor.label, candidate: place.label },
+          'Map place resolved far from the rest of the request; marking it unconfirmed',
+        );
+      }
+      resolved.push({ ...place, confident: plausible });
     }
     if (resolved.length === 0) return null;
 

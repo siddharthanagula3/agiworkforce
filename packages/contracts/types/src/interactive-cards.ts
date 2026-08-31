@@ -194,6 +194,13 @@ export interface MapSearchPlace {
   latitude: number;
   longitude: number;
   kind?: string;
+  /**
+   * False when the place could not be tied to the rest of the request's
+   * geography - a same-name match on another continent, say. A low-confidence
+   * place may still be shown, but it must be labelled as unconfirmed and must
+   * not be offered as a routing destination.
+   */
+  confident?: boolean;
 }
 
 export interface MapSearchView {

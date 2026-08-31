@@ -352,6 +352,7 @@ const MapSearchPlaceSchema = z
     latitude: LatitudeSchema,
     longitude: LongitudeSchema,
     kind: z.string().min(1).max(40).optional(),
+    confident: z.boolean().optional(),
   })
   .strict();
 
