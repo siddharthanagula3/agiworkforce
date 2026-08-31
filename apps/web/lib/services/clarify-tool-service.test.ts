@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ClarifyCardBody, InteractiveCard } from '@agiworkforce/types';
+
 import {
   createClarifyToolDefinition,
   executeClarifyTool,
@@ -8,6 +10,14 @@ import {
 } from './clarify-tool-service';
 
 const ctx = { toolCallId: 'call-1', now: () => new Date('2026-08-31T00:00:00.000Z') };
+
+/** The card union includes an unrecognised variant that carries no body. */
+function recognisedBody(card: InteractiveCard): ClarifyCardBody {
+  if (!card.recognized || card.kind !== 'clarify.v1') {
+    throw new Error(`expected a recognised clarify card, got ${card.kind}`);
+  }
+  return card.body;
+}
 
 const VALID = {
   prompt: 'Two things change the answer here.',
@@ -39,7 +49,7 @@ describe('the clarify tool', () => {
     if (!outcome.ok) return;
     expect(outcome.card.kind).toBe('clarify.v1');
     expect(outcome.card.recognized).toBe(true);
-    const body = outcome.card.body as { questions: unknown[]; state: { status: string } };
+    const body = recognisedBody(outcome.card);
     expect(body.state.status).toBe('pending');
     expect(body.questions).toHaveLength(1);
   });
@@ -49,7 +59,7 @@ describe('the clarify tool', () => {
     // one asked in prose.
     const outcome = executeClarifyTool(VALID, ctx);
     if (!outcome.ok) throw new Error('expected ok');
-    const body = outcome.card.body as { questions: Array<{ isOther: boolean }> };
+    const body = recognisedBody(outcome.card);
     expect(body.questions.every((q) => q.isOther)).toBe(true);
   });
 
@@ -85,9 +95,7 @@ describe('the clarify tool', () => {
   it('gives every option and question a stable id', () => {
     const outcome = executeClarifyTool(VALID, ctx);
     if (!outcome.ok) throw new Error('expected ok');
-    const body = outcome.card.body as {
-      questions: Array<{ id: string; options: Array<{ id: string }> }>;
-    };
+    const body = recognisedBody(outcome.card);
     expect(body.questions[0]!.id).toBe('q1');
     expect(body.questions[0]!.options.map((o) => o.id)).toEqual(['q1o1', 'q1o2']);
   });
