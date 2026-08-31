@@ -43,7 +43,10 @@ export function RouteFlow({
   lede: string;
 }) {
   return (
-    <section className="agi-fl-section agi-rf-section" aria-labelledby="agi-rf-title">
+    <section
+      className="agi-fl-section agi-rf-section agi-stage agi-stage--void"
+      aria-labelledby="agi-rf-title"
+    >
       <p className="agi-fl-eyebrow">{eyebrow}</p>
       <h2 id="agi-rf-title" className="agi-fl-h2">
         {title}

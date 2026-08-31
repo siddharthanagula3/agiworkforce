@@ -5728,18 +5728,8 @@ html[data-contrast='more'] *:focus-visible {
   font-weight: 550;
   color: var(--agi-ink-2);
   background: var(--agi-console-tint);
-  animation: agi-dev-chip-pulse 7s var(--agi-ease-out) infinite;
 }
 
-[data-design='agi'] .agi-web-chips span:nth-child(2) {
-  animation-delay: 1s;
-}
-[data-design='agi'] .agi-web-chips span:nth-child(3) {
-  animation-delay: 2s;
-}
-[data-design='agi'] .agi-web-chips span:nth-child(4) {
-  animation-delay: 3s;
-}
 [data-design='agi'] .agi-web-chips span:nth-child(5) {
   animation-delay: 4s;
 }
@@ -5749,20 +5739,6 @@ html[data-contrast='more'] *:focus-visible {
   background: var(--agi-amber);
   color: var(--agi-button-ink);
   animation: none;
-}
-
-@keyframes agi-dev-chip-pulse {
-  0%,
-  88%,
-  100% {
-    border-color: var(--agi-rule);
-    color: var(--agi-ink-2);
-  }
-  92%,
-  96% {
-    border-color: var(--agi-amber);
-    color: var(--agi-ink);
-  }
 }
 
 [data-design='agi'] .agi-web-composer {
@@ -7802,19 +7778,14 @@ html[data-contrast='more'] *:focus-visible {
   fill: var(--agi-ink-2);
 }
 
+/* The hub was a pulsing amber halo - the glowing-orb idiom this design set out
+   to avoid, and a four-second loop running forever on a page nobody is
+   interacting with. The router earns its weight from precise geometry and real
+   provider names, not from throb. A still ring reads as an instrument. */
 [data-design='agi'] .agi-rf-hub-halo {
-  fill: var(--agi-amber-soft);
-  animation: agi-rf-halo 4s var(--agi-ease-out) infinite;
-}
-
-@keyframes agi-rf-halo {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 1;
-  }
+  fill: none;
+  stroke: var(--agi-rule-strong);
+  stroke-width: 1;
 }
 
 [data-design='agi'] .agi-rf-hub-core {
