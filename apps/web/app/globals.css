@@ -4118,6 +4118,8 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-hero-copy {
   min-width: 0;
+  /* The headline sizes on this column, not the viewport - see .agi-fl-h1. */
+  container-type: inline-size;
 }
 
 [data-design='agi'] .agi-fl-hero-visual {
@@ -4174,12 +4176,16 @@ html[data-contrast='more'] *:focus-visible {
   margin: 0;
   font-family: var(--agi-font-display);
   font-optical-sizing: auto;
-  font-size: clamp(2.6rem, 6.5vw, 5.2rem);
+  /* Sized against the column it occupies rather than the viewport. In a
+     two-column hero the copy gets about a third of the width, so 6.5vw put
+     83px type in a 482px column - roughly five characters a line, and a
+     seventy-seven character sentence broke into ten of them. */
+  font-size: clamp(2.4rem, 11cqw, 4.6rem);
   font-weight: 600;
   letter-spacing: -0.025em;
-  line-height: 1.02;
+  line-height: 1.04;
   color: var(--agi-ink);
-  max-width: 16ch;
+  max-width: 20ch;
   animation: hero-fade-up 0.7s var(--agi-ease-out) 0.05s both;
 }
 
@@ -5208,14 +5214,14 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-dev-pagestrip-title {
-  font-size: calc(var(--u) * 11.5);
+  font-size: calc(var(--u) * 13);
   font-weight: 600;
   color: var(--agi-ink);
   white-space: nowrap;
 }
 
 [data-design='agi'] .agi-dev-pagestrip-meta {
-  font-size: calc(var(--u) * 9.5);
+  font-size: calc(var(--u) * 12.5);
   line-height: 1.35;
   color: var(--agi-ink-quiet);
 }
@@ -5803,9 +5809,15 @@ html[data-contrast='more'] *:focus-visible {
   gap: calc(var(--u) * 10);
 }
 
+/* Legibility floor inside a product frame.
+   The frame renders at ~96% of its design width, so a design size below 12.5
+   lands under the 12px floor this repository already enforces everywhere else.
+   Browser furniture - tab labels, mode chips - stays small because it is small
+   in a real browser and carries no story. The narrative does have to be read:
+   the conversation, the page being acted on, and what is typed into it. */
 [data-design='agi'] .agi-cr-msg {
   margin: 0;
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   line-height: 1.5;
   color: var(--agi-ink-2);
 }
@@ -5836,7 +5848,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-cr-msg-fade {
-  font-size: calc(var(--u) * 9.5) !important;
+  font-size: calc(var(--u) * 12.5) !important;
   color: var(--agi-ink-faint);
 }
 
