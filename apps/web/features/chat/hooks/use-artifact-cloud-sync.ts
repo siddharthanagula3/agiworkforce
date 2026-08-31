@@ -33,9 +33,19 @@ export function useArtifactCloudSync(): void {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const abortController = new AbortController();
 
+    // A hidden tab does not poll. The loop used to reschedule unconditionally,
+    // so one forgotten background tab kept a 30s request going indefinitely and
+    // the database never reached its idle-suspend window - an endpoint held
+    // awake around the clock bills roughly 180 CU-hours a month at the 0.25 CU
+    // floor, for a tab nobody is looking at. Returning to the tab syncs at
+    // once via handleVisibilityChange, so nothing is stale on screen.
     const schedule = (delayMs: number) => {
       if (stopped) return;
       if (timer) clearTimeout(timer);
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        timer = undefined;
+        return;
+      }
       timer = setTimeout(() => void syncNow(), delayMs);
     };
 
