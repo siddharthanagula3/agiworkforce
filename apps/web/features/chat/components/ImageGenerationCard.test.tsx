@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ImageGenerationCard, imageDownloadFilename } from './ImageGenerationCard';
+import { ImageGenerationCard, ShareModal, imageDownloadFilename } from './ImageGenerationCard';
 import { IMAGE_MODELS, resolveImageGenerationRequestOptions } from '../lib/imageGenerationOptions';
 
 const OPENAI_IMAGE_MODEL_ID = (() => {
@@ -264,5 +264,55 @@ describe('ImageGenerationCard theme safety', () => {
     expect(placeholder.className).toContain('bg-muted');
     expect(placeholder.className).not.toMatch(/bg-\[#/);
     expect(placeholder.getAttribute('style')).not.toMatch(/rgba\(255,\s*255,\s*255/);
+  });
+});
+
+describe('ShareModal link', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function copyLinkFrom(imageUrl: string): string | undefined {
+    let written: string | undefined;
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn(async (value: string) => {
+          written = value;
+        }),
+      },
+    });
+    render(<ShareModal imageUrl={imageUrl} prompt="a red apple" onClose={() => {}} />);
+    fireEvent.click(screen.getByLabelText('Copy link'));
+    return written;
+  }
+
+  it('copies an absolute url when the asset path is app-relative', () => {
+    const written = copyLinkFrom('/api/files/47b7a4a4-bcfe-4ad3-a953-263354219d75');
+
+    // A relative app path is meaningless to anything outside the app; the audit
+    // found exactly this value reaching the clipboard and external targets.
+    expect(written?.startsWith('/')).toBe(false);
+    expect(written).toContain('/api/files/47b7a4a4-bcfe-4ad3-a953-263354219d75');
+    expect(written).toMatch(/^https?:\/\//);
+  });
+
+  it('leaves an already-absolute url alone', () => {
+    const written = copyLinkFrom('https://cdn.example.com/generated/apple.png');
+    expect(written).toBe('https://cdn.example.com/generated/apple.png');
+  });
+
+  it('states who the link actually works for', () => {
+    render(<ShareModal imageUrl="/api/files/abc" prompt="a red apple" onClose={() => {}} />);
+    expect(screen.getByText(/only for people signed in to this workspace/i)).toBeTruthy();
+  });
+
+  it('offers no share target that cannot fetch a workspace-scoped asset', () => {
+    const { container } = render(
+      <ShareModal imageUrl="/api/files/abc" prompt="a red apple" onClose={() => {}} />,
+    );
+    const external = [...container.querySelectorAll('a[href]')].map((a) => a.getAttribute('href'));
+    expect(
+      external.filter((href) => /twitter|x\.com|linkedin|reddit|facebook/.test(href ?? '')),
+    ).toEqual([]);
   });
 });
