@@ -7198,10 +7198,14 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-error);
 }
 
-[data-design='agi'] .agi-device-auth-alert a,
-[data-design='agi'] .agi-device-auth-note a,
-[data-design='agi'] .agi-device-auth-cancel a,
-[data-design='agi'] .agi-device-auth-legal a {
+[data-design='agi']
+  :where(
+    .agi-device-auth-alert,
+    .agi-device-auth-note,
+    .agi-device-auth-cancel,
+    .agi-device-auth-legal
+  )
+  a {
   color: var(--agi-ink);
   font-weight: 600;
 }
