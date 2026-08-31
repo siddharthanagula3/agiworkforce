@@ -3274,16 +3274,31 @@ were written would go unnoticed.
 
 ---
 
-## 42. The QA account cannot reach most dialog triggers, so dialog coverage is stuck at three
+## 42. The QA account cannot reach most dialog triggers, so dialog coverage is stuck at four
 
 **Status:** `EXTERNAL`. Needs an account with richer state, not code.
 
 **Blocks:** extending `apps/web/e2e/qa-06-dialogs.spec.ts` past `settings-modal`,
-`settings-modal-security` and `global-search`.
+`settings-modal-security`, `global-search` and `delete-account-confirm`.
 
-About forty components render a dialog. The spec covers three, and the limit is
-reaching the triggers rather than writing the probes. Measured on 2026-08-31
-against the signed-in QA account:
+About forty components render a dialog. The spec covers four, and the limit is
+reaching the triggers rather than writing the probes.
+
+The discriminator is a stable `data-testid` on the trigger, not the label. A
+survey of `apps/web/features` found 108 distinct test ids, of which nine sit on
+a control that opens or destroys something, and exactly one of those was
+reachable without special account state: `delete-account-trigger`. Adding it
+took minutes and found two real defects - `AlertDialogContent` was missing both
+`aria-modal` and focus restoration, and the probe itself could not see nested
+dialogs. So the reachable set is worth exhausting; it is just small.
+
+`cancel-deletion-trigger` is the near miss: a stable id on a second
+confirmation, gated behind `deletionStatus.data?.canCancel`, so it renders only
+once a deletion is actually scheduled. The rest are item-level deletes
+(`knowledge-files-delete`, `sources-delete`) that need content in the list
+first.
+
+Measured on 2026-08-31 against the signed-in QA account:
 
 - **`share-conversation`** — the Share control only renders once a conversation
   has messages (`WebChatPage.tsx`, guarded by `hasMessages`). The sidebar
@@ -3299,13 +3314,17 @@ See also the `max_15x`, no-workspace shape of this account: several admin
 surfaces only ever render their empty state, so a dialog gated behind workspace
 membership cannot be opened at all.
 
-**Do:** point the E2E harness at an account with a workspace and at least one
-conversation carrying messages. Then each remaining dialog needs its trigger
-named explicitly in the spec, one at a time — not discovered by matching
-`aria-label` patterns, which produced four confident findings in a row on
-2026-08-31 that were all measurement artifacts.
+**Do:** point the E2E harness at an account with a workspace, at least one
+conversation carrying messages, and knowledge/source rows in a project. Then add
+each remaining dialog by naming its trigger explicitly - a `data-testid` where
+one exists, added to the component where one does not. Do not discover triggers
+by matching `aria-label` patterns: that produced four confident findings in a
+row on 2026-08-31, every one a measurement artifact.
 
-**Cost of leaving it:** thirty-seven dialogs are unverified for the modal
-contract. That contract is not free: adding `global-search` to the spec found it
-leaving `#main-content` with ninety focusable controls and no `aria-hidden`,
-behind content declaring `aria-modal="true"`. One dialog added, one real defect.
+**Cost of leaving it:** thirty-six dialogs are unverified for the modal
+contract, and that contract is not free. Two dialogs have been added to this
+spec and each found defects: `global-search` was leaving `#main-content` with
+ninety focusable controls and no `aria-hidden` behind content declaring
+`aria-modal="true"`, and `delete-account-confirm` exposed the missing
+`AlertDialogContent` contract that every alert dialog in the product shares.
+The hit rate on this spec is currently one defect per dialog added.
