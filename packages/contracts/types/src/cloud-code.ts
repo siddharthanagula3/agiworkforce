@@ -1,4 +1,3 @@
-
 export const CLOUD_CODE_NETWORK_ACCESS = ['none', 'trusted', 'full'] as const;
 export type CloudCodeNetworkAccess = (typeof CLOUD_CODE_NETWORK_ACCESS)[number];
 
@@ -11,11 +10,29 @@ export const CLOUD_CODE_SESSION_STATES = [
 ] as const;
 export type CloudCodeSessionState = (typeof CLOUD_CODE_SESSION_STATES)[number];
 
+/**
+ * A sandbox image the account may build in. Sourced from the E2B team's own
+ * template list rather than a hardcoded set, so a template added or rebuilt in
+ * the E2B console is offered here without a release.
+ */
+export interface CloudCodeRuntime {
+  /** E2B template id — the value handed to `Sandbox.create`. */
+  id: string;
+  name: string;
+  cpuCount: number;
+  memoryMB: number;
+  diskSizeMB: number;
+  /** Public E2B templates as opposed to the team's own. */
+  isPublic: boolean;
+}
+
 export interface CloudCodeSession {
   id: string;
   title: string;
   repositoryUrl: string | null;
   networkAccess: CloudCodeNetworkAccess;
+  /** Null for sessions created before the runtime was selectable. */
+  runtimeId: string | null;
   state: CloudCodeSessionState;
   workspacePath: string;
   lastError: string | null;
@@ -46,6 +63,8 @@ export interface CloudCodeAvailability {
 export interface CloudCodeSessionListResponse {
   availability: CloudCodeAvailability;
   sessions: CloudCodeSession[];
+  /** Empty when the catalogue cannot be read; the default image is used then. */
+  runtimes: CloudCodeRuntime[];
 }
 
 export interface CreateCloudCodeSessionInput {
@@ -54,6 +73,8 @@ export interface CreateCloudCodeSessionInput {
   repositoryUrl?: string | null;
   networkAccess: CloudCodeNetworkAccess;
   fullNetworkAcknowledged?: boolean;
+  /** Must match a catalogue entry; omitted means the default image. */
+  runtimeId?: string | null;
 }
 
 export interface CreateCloudCodeSessionResponse {

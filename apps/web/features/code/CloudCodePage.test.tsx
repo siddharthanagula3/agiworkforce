@@ -35,6 +35,7 @@ const session: CloudCodeSession = {
   title: 'New workspace',
   repositoryUrl: null,
   networkAccess: 'none',
+  runtimeId: null,
   state: 'ready',
   workspacePath: '/home/user',
   lastError: null,
@@ -54,6 +55,7 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
         maxSessions: 5,
       },
       sessions: [],
+      runtimes: [],
     })),
     get: vi.fn(async () => ({ session, terminalEntries: [] })),
     create: vi.fn(async () => ({ session, terminalEntries: [] })),
@@ -93,6 +95,102 @@ describe('CloudCodePage', () => {
     push.mockReset();
   });
 
+  it('offers the account\u2019s sandbox images and sends the chosen one', async () => {
+    const user = userEvent.setup();
+    const create: CloudCodeApi['create'] = vi.fn(async () => ({ session, terminalEntries: [] }));
+    const api = createApi({
+      create,
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [],
+        runtimes: [
+          {
+            id: 'tpl-base',
+            name: 'base',
+            cpuCount: 2,
+            memoryMB: 4096,
+            diskSizeMB: 20480,
+            isPublic: true,
+          },
+          {
+            id: 'tpl-codex',
+            name: 'codex',
+            cpuCount: 4,
+            memoryMB: 8192,
+            diskSizeMB: 40960,
+            isPublic: true,
+          },
+        ],
+      })),
+    });
+
+    render(<CloudCodePage api={api} />);
+
+    const picker = await screen.findByLabelText('Sandbox image');
+    expect(picker).toBeEnabled();
+    // the resources are part of the label, so the choice is informed
+    expect(
+      screen.getByRole('option', { name: 'codex \u2014 4 vCPU, 8 GB RAM' }),
+    ).toBeInTheDocument();
+
+    await user.selectOptions(picker, 'tpl-codex');
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(vi.mocked(create).mock.calls[0]![0]).toMatchObject({ runtimeId: 'tpl-codex' });
+  });
+
+  it('sends no image when the default is left selected', async () => {
+    const user = userEvent.setup();
+    const create: CloudCodeApi['create'] = vi.fn(async () => ({ session, terminalEntries: [] }));
+    const api = createApi({
+      create,
+      list: vi.fn(async () => ({
+        availability: {
+          deploymentEnabled: true,
+          storageReady: true,
+          planEntitled: true,
+          planTier: 'pro',
+          maxSessions: 5,
+        },
+        sessions: [],
+        runtimes: [
+          {
+            id: 'tpl-base',
+            name: 'base',
+            cpuCount: 2,
+            memoryMB: 4096,
+            diskSizeMB: 20480,
+            isPublic: true,
+          },
+        ],
+      })),
+    });
+
+    render(<CloudCodePage api={api} />);
+    await screen.findByLabelText('Sandbox image');
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(vi.mocked(create).mock.calls[0]![0]).toMatchObject({ runtimeId: null });
+  });
+
+  it('explains an empty catalogue instead of offering a picker that does nothing', async () => {
+    render(<CloudCodePage api={createApi()} />);
+
+    const picker = await screen.findByLabelText('Sandbox image');
+    expect(picker).toBeDisabled();
+    expect(
+      screen.getByText(/No images are published to this account.s E2B team/i),
+    ).toBeInTheDocument();
+  });
+
   it('renders inside the shared app shell instead of a private Code-only nav rail', async () => {
     render(<CloudCodePage api={createApi()} />);
 
@@ -112,6 +210,7 @@ describe('CloudCodePage', () => {
           maxSessions: 5,
         },
         sessions: [],
+        runtimes: [],
       })),
     });
 
@@ -137,6 +236,7 @@ describe('CloudCodePage', () => {
           maxSessions: 5,
         },
         sessions: [session],
+        runtimes: [],
       })),
     });
     const user = userEvent.setup();
@@ -161,6 +261,7 @@ describe('CloudCodePage', () => {
           maxSessions: 5,
         },
         sessions: [],
+        runtimes: [],
       })),
     });
 
@@ -185,6 +286,7 @@ describe('CloudCodePage', () => {
           title: 'New workspace',
           repositoryUrl: null,
           networkAccess: 'none',
+          runtimeId: null,
         }),
       ),
     );
@@ -216,6 +318,7 @@ describe('CloudCodePage', () => {
           maxSessions: 5,
         },
         sessions: [session],
+        runtimes: [],
       })),
     });
     const user = userEvent.setup();
@@ -251,6 +354,7 @@ describe('CloudCodePage', () => {
           maxSessions: 5,
         },
         sessions: [session],
+        runtimes: [],
       })),
       startAgentTurn: vi.fn(async () => ({
         turnId: '22222222-2222-4222-8222-222222222222',
@@ -300,6 +404,7 @@ describe('CloudCodePage', () => {
           maxSessions: 5,
         },
         sessions: [session],
+        runtimes: [],
       })),
       listApprovals: vi.fn(async () => [
         {

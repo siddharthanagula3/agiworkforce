@@ -552,8 +552,11 @@ export function Sidebar(props: SidebarProps) {
                 }
                 className={cn(
                   'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                  // --chat-* rather than --warning-*: this component renders on
+                  // desktop too, which loads chat.css but not foundation.css.
+                  // Measured on the sidebar surface: 6.55:1 light, 8.34:1 dark.
                   showArchived
-                    ? 'text-[var(--warning-text)]'
+                    ? 'bg-[var(--chat-warning-bg)] text-[var(--chat-warning-fg)]'
                     : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
                 )}
               >
