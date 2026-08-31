@@ -329,7 +329,7 @@ export function TimeFocusSection() {
               />
             </label>
           </div>
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-3)' }}>
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
             Times use {draft.quietHours.timezone}. These reminders currently apply on the Website.
           </p>
         </div>

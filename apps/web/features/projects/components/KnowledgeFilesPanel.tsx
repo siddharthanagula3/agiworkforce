@@ -147,7 +147,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
           Knowledge Files
           {files.length > 0 && (
             <span
-              style={{ fontSize: 11, fontWeight: 400, color: 'var(--agi-ink-2)', marginLeft: 6 }}
+              style={{ fontSize: 12, fontWeight: 400, color: 'var(--agi-ink-2)', marginLeft: 6 }}
             >
               {/*
                 The cap was invisible until the upload route refused the 21st
@@ -252,7 +252,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               border: 0,
               padding: 0,
               color: '#f87171',
-              fontSize: 11,
+              fontSize: 12,
               cursor: 'pointer',
               textDecoration: 'underline',
             }}
@@ -379,7 +379,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               >
                 {file.fileName}
               </span>
-              <span style={{ fontSize: 11, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
                 {(file.byteCount / 1024).toFixed(1)} KB
               </span>
               <button
@@ -431,7 +431,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             borderRadius: 8,
             padding: '8px 12px',
             textAlign: 'center',
-            fontSize: 11,
+            fontSize: 12,
             color: 'var(--agi-ink-2)',
             cursor: 'default',
             transition: 'border-color 0.15s',

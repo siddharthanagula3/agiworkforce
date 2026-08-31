@@ -310,7 +310,7 @@ export function AddSourcesModal({
               <p
                 style={{
                   marginTop: 16,
-                  fontSize: 11,
+                  fontSize: 12,
                   color: 'var(--agi-ink-2)',
                   textAlign: 'center',
                   lineHeight: 1.5,
@@ -324,7 +324,7 @@ export function AddSourcesModal({
                     background: 'none',
                     border: 'none',
                     padding: 0,
-                    fontSize: 11,
+                    fontSize: 12,
                     color: 'var(--agi-amber)',
                     cursor: 'pointer',
                     textDecoration: 'underline',
@@ -525,7 +525,7 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
       {badge ? (
         <span
           style={{
-            fontSize: 10,
+            fontSize: 12,
             color: 'var(--agi-amber)',
             background: 'rgba(200,137,42,0.12)',
             borderRadius: 9999,
@@ -538,7 +538,7 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
       ) : (
         <span
           style={{
-            fontSize: 10,
+            fontSize: 12,
             color: 'var(--agi-ink-2)',
             lineHeight: 1.3,
           }}

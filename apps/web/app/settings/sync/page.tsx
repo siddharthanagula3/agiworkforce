@@ -1,4 +1,3 @@
-
 export default function SyncSettingsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -58,7 +57,7 @@ export default function SyncSettingsPage() {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 letterSpacing: '0.04em',
                 color: 'var(--text-3)',
@@ -74,13 +73,13 @@ export default function SyncSettingsPage() {
           </div>
 
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            Personalization and notification preferences sync automatically between Web and
-            Mobile whenever you&apos;re signed in to your AGI Cloud account — no request or opt-in
-            step. Appearance, display language and chat preferences do NOT sync from Web today:
-            they are stored on the device you set them on. Mobile additionally sends its own
-            appearance and language settings, so a change made there will not appear here.
-            Secrets (BYOK/provider keys, local model paths, device settings) never sync and stay
-            on the device where you set them.
+            Personalization and notification preferences sync automatically between Web and Mobile
+            whenever you&apos;re signed in to your AGI Cloud account — no request or opt-in step.
+            Appearance, display language and chat preferences do NOT sync from Web today: they are
+            stored on the device you set them on. Mobile additionally sends its own appearance and
+            language settings, so a change made there will not appear here. Secrets (BYOK/provider
+            keys, local model paths, device settings) never sync and stay on the device where you
+            set them.
           </p>
 
           {/* Row: Desktop status */}
@@ -100,7 +99,7 @@ export default function SyncSettingsPage() {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 letterSpacing: '0.04em',
                 color: 'var(--text-3)',

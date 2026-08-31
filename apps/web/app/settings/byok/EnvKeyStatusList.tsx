@@ -25,7 +25,7 @@ function ProviderIcon({ text }: { text: string }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 10,
+        fontSize: 12,
         fontWeight: 700,
         color: 'var(--text-3)',
         flexShrink: 0,
@@ -46,7 +46,7 @@ function StatusBadge({ isSet }: { isSet: boolean }) {
         gap: 5,
         padding: '3px 8px',
         borderRadius: 100,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 600,
         background: isSet
           ? 'color-mix(in srgb, var(--teal, #2eb88a) 12%, transparent)'
@@ -141,7 +141,7 @@ export function EnvKeyStatusList({ providers }: Props) {
                     <span
                       style={{
                         marginLeft: 6,
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 600,
                         color: 'var(--text-3)',
                         padding: '1px 5px',

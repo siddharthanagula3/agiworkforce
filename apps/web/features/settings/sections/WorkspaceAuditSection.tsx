@@ -49,7 +49,7 @@ function OutcomeChip({ outcome }: { outcome: AuditEventView['outcome'] }) {
   return (
     <span
       style={{
-        fontSize: 10,
+        fontSize: 12,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
         color: tone.fg,
@@ -234,7 +234,7 @@ export function WorkspaceAuditSection() {
                     style={{
                       textAlign: 'left',
                       padding: '8px 20px',
-                      fontSize: 10,
+                      fontSize: 12,
                       letterSpacing: '0.08em',
                       textTransform: 'uppercase',
                       color: 'var(--text-3)',

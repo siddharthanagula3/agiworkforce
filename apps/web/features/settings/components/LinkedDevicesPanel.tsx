@@ -179,7 +179,7 @@ export function LinkedDevicesPanel() {
                 credential
               </caption>
               <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--text-3)', fontSize: 11 }}>
+                <tr style={{ textAlign: 'left', color: 'var(--text-3)', fontSize: 12 }}>
                   <th scope="col" style={{ padding: '10px 16px', fontWeight: 500 }}>
                     Device
                   </th>
@@ -269,7 +269,7 @@ export function LinkedDevicesPanel() {
           </p>
         ) : null}
 
-        <p style={{ padding: '12px 20px 16px', margin: 0, fontSize: 11, color: 'var(--text-3)' }}>
+        <p style={{ padding: '12px 20px 16px', margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
           {credentialStateKnown ? (
             <>
               Unlinking revokes the device&rsquo;s stored credential and removes it from this list.

@@ -523,7 +523,7 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
           </span>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 500,
               color: 'var(--agi-amber)',
               background: 'var(--agi-amber-soft)',
@@ -974,7 +974,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
           </span>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 500,
               color: 'var(--agi-amber)',
               background: 'var(--agi-amber-soft)',

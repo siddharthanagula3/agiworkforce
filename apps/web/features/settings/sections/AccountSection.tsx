@@ -433,7 +433,7 @@ export function AccountSection() {
                 <p
                   role="alert"
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     color: 'var(--settings-destructive-text)',
                     margin: '6px 0 0',
                   }}
@@ -616,7 +616,7 @@ export function AccountSection() {
                       style={{
                         padding: '10px 16px',
                         textAlign: 'left',
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 700,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase',
@@ -645,7 +645,7 @@ export function AccountSection() {
                           style={{
                             marginTop: 2,
                             color: 'var(--text-3)',
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: 400,
                           }}
                         >
@@ -656,7 +656,7 @@ export function AccountSection() {
                         <span
                           style={{
                             marginLeft: 8,
-                            fontSize: 10,
+                            fontSize: 12,
                             fontWeight: 700,
                             letterSpacing: '0.05em',
                             textTransform: 'uppercase',
@@ -744,7 +744,7 @@ export function AccountSection() {
             {sessionActionError}
           </p>
         ) : null}
-        <p style={{ padding: '12px 20px 16px', fontSize: 11, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ padding: '12px 20px 16px', fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           Sessions are reported by your account provider across devices. Revoke anything you do not
           recognize, or use &ldquo;Log out of all devices&rdquo; above.
         </p>
