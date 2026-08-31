@@ -282,15 +282,6 @@ export interface SurfaceIndexItem {
  * because that is where a terminal lives, a browser wants near-white for the
  * same reason. Anything unlisted keeps the default ink canvas.
  */
-/**
- * The ground a section paints itself on. A page that holds one canvas end to
- * end needs no such thing; this one changes canvas as it moves through the
- * suite, so a section has to be able to say which ground it belongs to.
- *
- * Callers pass a tone, not a class, because `agi-stage` and its modifier have
- * to travel together - the modifier alone sets tokens and no background, which
- * is the shape of the bug the light stages already shipped once.
- */
 export type StageTone = 'warm' | 'pearl' | 'ink' | 'void';
 
 const stageClass = (tone: StageTone | undefined, ...rest: string[]) =>

@@ -1,25 +1,5 @@
 import { expect, test } from '@playwright/test';
 
-/**
- * Every text node on the marketing landing, measured against the colour that
- * is actually painted behind it.
- *
- * This guards one specific mistake, which has now been made twice: a token is
- * authored against one ground and then reused on another. The first time it
- * was six accent families serving three different roles from one value. The
- * second was `--agi-console-tint` - `rgba(16, 16, 18, 0.62)`, a near-black
- * wash that reads as a recessed panel over #0a0a0b and as flat mid-grey over
- * #faf9f6. When the landing page gained light stages, the device mockups kept
- * the dark value and their labels fell to roughly 1.5:1.
- *
- * The reason a hand-rolled check missed it is worth stating, because it is the
- * easy way to write this test wrong: resolving an element's background by
- * walking up to the first *opaque* ancestor skips exactly the translucent
- * layer that causes the bug, and then measures the text against a clean white
- * stage it never actually sits on. The walk below composites every layer it
- * passes, in paint order, so a wash counts even though it is see-through.
- */
-
 const ROUTE = '/dev/landing-preview';
 
 type Failure = {
@@ -33,29 +13,17 @@ type Failure = {
 };
 
 test.describe('marketing landing contrast', () => {
-  // Reveal animations interpolate opacity, so an element sampled mid-transition
-  // reports a colour part-way to its real one. See qa-04-ui-sweep.
   test.use({ reducedMotion: 'reduce' } as never);
-
-  // Both themes, because the stages set their own ground either way and each
-  // theme fails a different half. The dark-stage ramp was missing entirely and
-  // only showed up in light mode - in dark mode those tokens happen to match
-  // what :root already says, so a dark browser renders the bug invisible.
   for (const theme of ['light', 'dark'] as const) {
     for (const width of [1440, 390]) {
       test(`every text node clears WCAG AA at ${width}px in ${theme} mode`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
         await page.emulateMedia({ colorScheme: theme });
         await page.goto(ROUTE, { waitUntil: 'networkidle' });
-        // ThemeProvider uses attribute="class", so the resolved theme is the
-        // `dark` class on <html> - setting it directly is what the toggle does.
         await page.evaluate((t) => {
           document.documentElement.classList.toggle('dark', t === 'dark');
         }, theme);
         await page.waitForSelector('.agi-fl-surface-row');
-
-        // Scroll the page so IntersectionObserver-gated sections mount and settle
-        // at their final opacity; an unrevealed element reports its start colour.
         await page.evaluate(async () => {
           for (let y = 0; y < document.body.scrollHeight; y += 600) {
             window.scrollTo(0, y);
@@ -66,14 +34,6 @@ test.describe('marketing landing contrast', () => {
         });
 
         const failures = await page.evaluate(() => {
-          /**
-           * `rgb()`, `rgba()` and `color(srgb ...)` all reach here, and they do
-           * not share a scale: anything produced by `color-mix()` - which is how
-           * the header tints itself - computes to `color(srgb 0.98 0.96 0.93 /
-           * 0.78)`, with 0-1 components. Reading those as 0-255 turns the site's
-           * cream header into near-black and reports the whole nav as a contrast
-           * failure it never had.
-           */
           const parse = (value: string) => {
             const parts = value.match(/[\d.]+/g)?.map(Number) ?? [];
             const scale = value.startsWith('color(') ? 255 : 1;
@@ -93,12 +53,6 @@ test.describe('marketing landing contrast', () => {
             b: top.b * top.a + bottom.b * (1 - top.a),
             a: 1,
           });
-
-          /**
-           * The painted colour behind `el`: every ancestor background composited
-           * bottom-up, including translucent ones. Stopping at the first opaque
-           * ancestor is what hid the console-tint defect.
-           */
           const groundOf = (el: Element): Rgb => {
             const layers: Rgb[] = [];
             let node: Element | null = el;
@@ -145,7 +99,7 @@ test.describe('marketing landing contrast', () => {
             const style = getComputedStyle(el);
             if (style.visibility === 'hidden' || style.display === 'none') continue;
             if (Number(style.opacity) < 0.15) continue;
-            if (style.webkitTextFillColor === 'rgba(0, 0, 0, 0)') continue; // gradient text
+            if (style.webkitTextFillColor === 'rgba(0, 0, 0, 0)') continue;
 
             const box = el.getBoundingClientRect();
             if (box.width < 2 || box.height < 2) continue;
