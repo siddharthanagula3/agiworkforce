@@ -74,9 +74,11 @@ describe('hydrateChatAttachments', () => {
 
     await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
 
+    // Named, because a turn can carry several files and the reader has to know
+    // which one to re-attach.
     expect(messages[0]?.content[1]).toEqual({
       type: 'text',
-      text: '[attachment unavailable \u2014 it was deleted from your Library]',
+      text: '[attachment unavailable \u2014 brief.pdf could not be read: it was deleted from your Library]',
     });
     expect(messages[0]?.content[0]).toEqual({ type: 'text', text: 'Summarize this' });
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
@@ -94,7 +96,10 @@ describe('hydrateChatAttachments', () => {
     await hydrateChatAttachments(messages, 'user-1');
 
     expect(messages[0]?.content).toEqual([
-      { type: 'text', text: '[attachment unavailable \u2014 it was deleted from your Library]' },
+      {
+        type: 'text',
+        text: '[attachment unavailable \u2014 attachment-32b71cf4-c0d1-4cc7-b6c4-776ece82f137 could not be read: it was deleted from your Library]',
+      },
     ]);
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
@@ -218,5 +223,74 @@ describe('hydrateChatAttachments', () => {
       }),
     );
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
+  });
+
+  it('keeps the turn alive when one file\u2019s stored bytes are gone', async () => {
+    // The audit lost an entire four-file turn to a single unreadable file: the
+    // question, the three files that were fine, and any answer at all.
+    const goodId = '11111111-1111-4111-8111-111111111111';
+    const badId = '22222222-2222-4222-8222-222222222222';
+    mocks.getMediaAssetById.mockImplementation(async (id: string) => ({
+      id,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'text/plain',
+      storagePathname: `chat-attachments/user-1/${id}.txt`,
+      metadata: { filename: id === goodId ? 'readable.txt' : 'missing-bytes.txt' },
+      deletedAt: null,
+    }));
+    mocks.readStoredMedia.mockImplementation(async (path: string) =>
+      path.includes(goodId) ? { data: Buffer.from('usable contents') } : null,
+    );
+
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Compare these' },
+          { type: 'file', file: { asset_id: goodId } },
+          { type: 'file', file: { asset_id: badId } },
+        ],
+      },
+    ];
+
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+
+    const parts = messages[0]!.content as Array<{
+      type: string;
+      text?: string;
+      file?: { filename?: string; file_data?: string };
+    }>;
+    expect(parts[0]).toEqual({ type: 'text', text: 'Compare these' });
+    expect(parts[1]?.file?.filename).toBe('readable.txt');
+    expect(Buffer.from(parts[1]!.file!.file_data!.split(',')[1]!, 'base64').toString()).toBe(
+      'usable contents',
+    );
+    expect(parts[2]?.text).toBe(
+      '[attachment unavailable \u2014 missing-bytes.txt could not be read: it is registered but its stored bytes are missing]',
+    );
+  });
+
+  it('names a file that fails its integrity check rather than failing the turn', async () => {
+    const assetId = '33333333-3333-4333-8333-333333333333';
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      kind: 'file',
+      mimeType: 'text/plain',
+      storagePathname: 'chat-attachments/user-1/truncated.txt',
+      metadata: { filename: 'truncated.txt' },
+      deletedAt: null,
+      byteSize: 4096,
+    });
+    mocks.readStoredMedia.mockResolvedValue({ data: Buffer.from('short') });
+
+    const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
+
+    await expect(hydrateChatAttachments(messages, 'user-1')).resolves.toBeUndefined();
+
+    expect((messages[0]!.content as Array<{ text?: string }>)[0]?.text).toBe(
+      '[attachment unavailable \u2014 truncated.txt could not be read: it failed its storage integrity check]',
+    );
   });
 });
