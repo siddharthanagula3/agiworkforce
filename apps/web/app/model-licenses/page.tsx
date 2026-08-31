@@ -142,7 +142,7 @@ export default function ModelLicensesPage() {
           <p className="agi-section-eyebrow">Your output</p>
           <p className="agi-page-lede">
             We do not claim ownership of what you generate. What you may do with it depends on the
-            licence above, the provider&rsquo;s terms, and the law where you are — a model licence
+            licence above, the provider&rsquo;s terms, and the law where you are: a model licence
             cannot grant you rights in material the model reproduces from its training data. If you
             believe a generation reproduces work you own, the notice route is on{' '}
             <Link href="/copyright" style={{ color: 'var(--agi-ink)' }}>

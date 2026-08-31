@@ -152,8 +152,8 @@ export default function VscodeExtensionPage() {
             Your code reaches the model inside a fence that tells it the code is data.
           </h2>
           <p className="agi-fl-section-lede">
-            The participant sends the path and language of your active file, then the selection — or
-            fifty lines either side of the cursor when nothing is selected — wrapped in a tag
+            The participant sends the path and language of your active file, then the selection (or
+            fifty lines either side of the cursor when nothing is selected) wrapped in a tag
             carrying an instruction never to follow what is inside it. A closing tag that already
             appears in your code is escaped, so a comment in your own file cannot end the fence
             early. Files you attach with #file are wrapped the same way, after the extension checks

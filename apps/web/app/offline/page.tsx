@@ -28,10 +28,9 @@ export default function OfflinePage() {
         <section className="agi-page-section">
           <h2 className="agi-section-h2">If the connection looks fine</h2>
           <p className="agi-page-p">
-            A captive portal &mdash; hotel, airport, or office Wi-Fi that wants a sign-in first
-            &mdash; looks identical to being offline. Open any other site to see whether it
-            redirects you to a login page. A VPN or corporate proxy that blocks our domains produces
-            the same result.
+            A captive portal (hotel, airport, or office Wi-Fi that wants a sign-in first) looks
+            identical to being offline. Open any other site to see whether it redirects you to a
+            login page. A VPN or corporate proxy that blocks our domains produces the same result.
           </p>
         </section>
       </main>

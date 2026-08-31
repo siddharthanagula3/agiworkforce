@@ -157,7 +157,7 @@ export default function CopyrightPage() {
           <p className="agi-page-lede">
             Generated text, images, and audio can resemble existing work. If you believe a
             generation reproduces something you own, send a notice the same way and include the
-            prompt or the shared link — we need to be able to reproduce what you saw. Where the
+            prompt or the shared link: we need to be able to reproduce what you saw. Where the
             output came from a third-party model provider, their terms also apply; those providers
             are listed on{' '}
             <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>

@@ -36,8 +36,8 @@ export default function AccessibilityPage() {
                   A skip-link is mounted on every page, and keyboard reachability is a requirement
                   we hold new interactive components to. We have <em>not</em> completed a
                   keyboard-operability audit across all six surfaces and hold no VPAT, so we do not
-                  claim every element passes &mdash; if you find one that does not, it is a bug and
-                  we will treat it as one.
+                  claim every element passes. If you find one that does not, it is a bug and we will
+                  treat it as one.
                 </td>
               </tr>
               <tr>
@@ -68,8 +68,8 @@ export default function AccessibilityPage() {
                 <td>
                   Visible focus rings are the house rule and <code>outline: none</code> is not used
                   without an explicit replacement. As with keyboard operability above, that is a
-                  standard we hold components to rather than a per-element audit result &mdash; we
-                  do not claim every element on every route has been checked.
+                  standard we hold components to rather than a per-element audit result: we do not
+                  claim every element on every route has been checked.
                 </td>
               </tr>
             </tbody>

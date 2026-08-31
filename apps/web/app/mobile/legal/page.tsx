@@ -111,7 +111,7 @@ export default function MobileLegalPage() {
                 REMOVED 2026-08-14 — "Crash reports … Crash monitoring provider"
                 and "Usage analytics … Analytics provider".
                 Neither provider exists in this app. apps/mobile/package.json
-                declares no crash SDK and no analytics SDK — no Sentry, no
+                declares no crash SDK and no analytics SDK: no Sentry, no
                 Crashlytics, no PostHog, Amplitude or Mixpanel. A telemetry queue
                 exists at apps/mobile/storage/telemetry.ts, but nothing calls
                 `enqueueTelemetryEvent` and nothing sends the queue, so no event
@@ -170,9 +170,9 @@ export default function MobileLegalPage() {
             2026-08-14 this page declared both, along with health data. There is no crash-monitoring
             provider and no analytics provider in the app: a local event queue exists in the code,
             but nothing writes to it and nothing sends it, so no usage event is produced and none
-            leaves your device. <strong>HealthKit is not used at all</strong> &mdash; the feature
-            was removed from the app, the iOS privacy manifest carries no HealthKit declaration, and
-            a test enforces that. If a future build adds any of these, this table gains a row in the
+            leaves your device. <strong>HealthKit is not used at all</strong>. The feature was
+            removed from the app, the iOS privacy manifest carries no HealthKit declaration, and a
+            test enforces that. If a future build adds any of these, this table gains a row in the
             same change.
           </p>
 
@@ -402,7 +402,7 @@ export default function MobileLegalPage() {
                 practices. Any text, image, or audio you provide through a Siri/Shortcuts action is
                 sent to
                 {COMPANY} only to the extent necessary to carry out that request and improve the
-                App&rsquo;s responsiveness to it — never for advertising or for training third-party
+                App&rsquo;s responsiveness to it, never for advertising or for training third-party
                 models.
               </span>
             </div>
