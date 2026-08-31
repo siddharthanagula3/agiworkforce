@@ -30,16 +30,33 @@ describe('MessageList Continue Generation control', () => {
     seed([continuable]);
     const onContinue = vi.fn();
     render(
-      <MessageList conversationId="c1" onContinueGeneration={onContinue} showProvenanceFooter={false} />,
+      <MessageList
+        conversationId="c1"
+        onContinueGeneration={onContinue}
+        showProvenanceFooter={false}
+      />,
     );
     fireEvent.click(screen.getByRole('button', { name: CONTINUE_NAME }));
     expect(onContinue).toHaveBeenCalledWith('a1');
   });
 
   it('does NOT offer Continue on a normally-completed turn', () => {
-    seed([{ ...continuable, metadata: { finishReason: 'stop' } }]);
+    // The shared fixture's content is "partial answer that got cut off", which
+    // is what a truncation check exists to catch. A turn that is genuinely
+    // finished needs a finished answer to stand on.
+    seed([
+      {
+        ...continuable,
+        content: 'That covers everything you asked about.',
+        metadata: { finishReason: 'stop' },
+      },
+    ]);
     render(
-      <MessageList conversationId="c1" onContinueGeneration={vi.fn()} showProvenanceFooter={false} />,
+      <MessageList
+        conversationId="c1"
+        onContinueGeneration={vi.fn()}
+        showProvenanceFooter={false}
+      />,
     );
     expect(screen.queryByRole('button', { name: CONTINUE_NAME })).toBeNull();
   });
@@ -53,7 +70,11 @@ describe('MessageList Continue Generation control', () => {
   it('does NOT offer Continue while a stream is in flight', () => {
     seed([continuable], true);
     render(
-      <MessageList conversationId="c1" onContinueGeneration={vi.fn()} showProvenanceFooter={false} />,
+      <MessageList
+        conversationId="c1"
+        onContinueGeneration={vi.fn()}
+        showProvenanceFooter={false}
+      />,
     );
     expect(screen.queryByRole('button', { name: CONTINUE_NAME })).toBeNull();
   });
@@ -64,7 +85,11 @@ describe('MessageList Continue Generation control', () => {
       { id: 'u2', role: 'user', content: 'follow up', createdAt: '2026-05-06T12:01:00.000Z' },
     ]);
     render(
-      <MessageList conversationId="c1" onContinueGeneration={vi.fn()} showProvenanceFooter={false} />,
+      <MessageList
+        conversationId="c1"
+        onContinueGeneration={vi.fn()}
+        showProvenanceFooter={false}
+      />,
     );
     expect(screen.queryByRole('button', { name: CONTINUE_NAME })).toBeNull();
   });
