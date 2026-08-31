@@ -335,6 +335,8 @@ function statusLabel(status: WorkSessionSummary['status']): string {
       return 'Paused';
     case 'completed':
       return 'Complete';
+    case 'partial':
+      return 'Finished with errors';
     case 'failed':
       return 'Failed';
     case 'cancelled':
@@ -353,6 +355,10 @@ function StatusIcon({ status }: { status: ProgressStatus }) {
   }
   if (status === 'failed' || status === 'cancelled') {
     return <CircleAlert className="h-3.5 w-3.5 text-danger" aria-hidden="true" />;
+  }
+  if (status === 'partial') {
+    // Not a success tick: some of the work under this run did not land.
+    return <CircleAlert className="h-3.5 w-3.5 text-warning-text" aria-hidden="true" />;
   }
   if (status === 'awaiting-approval' || status === 'paused') {
     return <CircleAlert className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />;

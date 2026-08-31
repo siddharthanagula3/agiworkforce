@@ -405,3 +405,70 @@ describe('portable agent activity projection', () => {
     );
   });
 });
+
+describe('run outcome versus stop reason', () => {
+  function runWith(toolResults: readonly boolean[]): ReturnType<typeof applyAgentActivityEvent> {
+    let state = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Starting AGI Work',
+      startedAtMs: 900,
+    });
+    let sequence = 0;
+    toolResults.forEach((succeeded, index) => {
+      const toolCallId = `tool-${index}`;
+      state = applyAgentActivityEvent(
+        state,
+        envelope((sequence += 1), {
+          type: 'tool-execution-start',
+          toolCallId,
+          name: 'code_execution',
+          category: 'code',
+          summary: index === 0 ? 'Create Folder' : 'Listing files',
+          input: {},
+        }),
+      );
+      state = applyAgentActivityEvent(
+        state,
+        envelope((sequence += 1), {
+          type: 'tool-execution-end',
+          toolCallId,
+          name: 'code_execution',
+          output: succeeded ? { ok: true } : { error: 'Code execution is unavailable' },
+          isError: !succeeded,
+          elapsedMs: 12,
+        }),
+      );
+    });
+    // The loop ends normally regardless of what the tools did.
+    return applyAgentActivityEvent(
+      state,
+      envelope((sequence += 1), { type: 'stop', reason: 'end-turn' }),
+    );
+  }
+
+  it('does not call a run complete when every tool failed', () => {
+    // The audit's case: Create Folder and Listing files both errored, then the
+    // turn reported "Done / Agent activity completed" with no deliverable.
+    expect(runWith([false, false]).status).toBe('failed');
+  });
+
+  it('reports a mixed run as partial rather than complete', () => {
+    expect(runWith([true, false]).status).toBe('partial');
+  });
+
+  it('still reports a clean run as complete', () => {
+    expect(runWith([true, true]).status).toBe('completed');
+  });
+
+  it('leaves a cancelled run cancelled even if some work succeeded', () => {
+    let state = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Starting AGI Work',
+      startedAtMs: 900,
+    });
+    state = applyAgentActivityEvent(state, envelope(1, { type: 'stop', reason: 'cancelled' }));
+    expect(state.status).toBe('cancelled');
+  });
+});
