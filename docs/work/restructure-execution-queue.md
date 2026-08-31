@@ -30,16 +30,54 @@ Report: `~/.codex/visualizations/2026/08/30/01a05512-999f-7b00-85c2-e3b39e37b07a
 
 Fixed and browser-verified: R1 lossy Formatted view, R2 code-copy `[object Object]`,
 R3 mermaid raw/dropped, T1 false tool completion, MAP1 wrong-continent route,
-I1 relative share URL, S1 blank mobile drawer, DR4 sources-sheet focus escape.
+I1 relative share URL, S1 blank mobile drawer, DR4 sources-sheet focus escape,
+M8 connectors table off-viewport at 320px, M9 connector Add menu clipped.
 
-Open P1: DR1 research fetch before approval, DR2 completed report missing from the
-Report panel, DR3 citations/sources disconnected, F1 attachments ready without
-bytes, A1 artifact restore overwrites edits, A2 interactive artifact stale, SK1
-skill retry loses the skill, M1 continuation seams, M2 stopped labelled complete.
+M3 (drawer children off-canvas after a route change) does not reproduce: the S1
+root-cause change fixed it too. Verified at 320px on Library, Projects, Tasks,
+Schedules and `/chat/code` — panel at x=0..272 with all 102 controls inside it.
+
+Fixed, covered by tests, browser verification still owed: DR1 research fetch
+before approval, M1 truncation and seams, M2 stopped labelled complete, F1 one
+unreadable attachment destroying the turn, DR3 citations not linked to sources,
+G3 "Response complete" announced for a turn that produced nothing. Each is
+blocked on the same thing: the QA account's chat request limiter stays tripped
+for far longer than the "Resets in 1 min" it reports, and every attempt extends
+it. Re-verify these in one batch after a long idle period.
+
+Open P1: DR2 completed report missing from the Report panel, A1 artifact restore
+overwrites edits, A2 interactive artifact stale, SK1 skill retry loses the skill.
 
 Open P2: S2 tablet crowding, S3/C1 composer context density, C2 large paste, C3
 branch affordance, M3 long-response scale, Q1 clarification as prose, I2 video
-failure recovery, G1-G4 generic card language and outcome vocabulary.
+failure recovery, G1/G2/G4 generic card language, M2 projects intro column, M4
+task identity at 320px, M5 conversation title clipping, M7 search-filter focus,
+M11 composer footer rows, M12 skills descriptions, M15 voice card overflow,
+H1/H2/H3 short-viewport dialogs.
+
+Not reproduced — record before re-opening:
+
+- F1's `0 B` attachment chip. A genuine 96-byte upload through the composer's
+  file input reports `96 B`. The chip reads `File.size` directly, so a zero
+  there means the harness supplied an empty `File`. F1's server half was real
+  and is fixed.
+
+Found while fixing, not in the audit:
+
+- **Every stored research report has `citations: []` and `sourcesConsulted: 0`
+  while its prose cites `[1]`..`[10]`.** The model writes its own bibliography as
+  titles with no URLs. Persistence is correct (`sources.toCitations(...)`); the
+  source registry is empty by the time it runs. This is the root of DR3 and
+  probably of DR2. Needs a live research run to diagnose.
+- `MarkdownContent` gave every link `target="_blank"`, so any same-document
+  fragment would have opened a blank tab. Fixed.
+- Backslash-escaped brackets cannot be used for citation link text: `\[` and
+  `\]` are LaTeX display-math delimiters and the math pass consumes them before
+  the link is parsed. Use `&#91;`/`&#93;`.
+- The server capped every answer at a hardcoded 1,024 output tokens while every
+  text model in the catalogue declares 64,000 or more. That is M1's root cause;
+  the ceiling now follows the model, capped by an answer-length policy so the
+  pre-flight cost reservation stays realistic.
 
 Standing invariants established in 0a/0b, do not regress:
 
