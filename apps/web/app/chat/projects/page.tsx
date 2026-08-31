@@ -166,9 +166,22 @@ export default function ProjectsPage() {
               alignItems: 'flex-start',
               justifyContent: 'space-between',
               gap: 16,
+              // Without wrapping, the 177px sort control held its width against
+              // a 320px screen and squeezed the introduction into a 109px
+              // column 304px tall - one and two words per line - while its own
+              // right edge still fell outside the viewport.
+              flexWrap: 'wrap',
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                flex: '1 1 260px',
+                minWidth: 0,
+              }}
+            >
               <h1
                 style={{
                   fontFamily: 'var(--serif)',
