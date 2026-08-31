@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toUserMessageWithStatus } from '@agiworkforce/unified-chat';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,7 +94,7 @@ interface SchedulesPageProps {
 }
 
 function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message.trim() ? error.message : fallback;
+  return toUserMessageWithStatus(error, fallback);
 }
 
 function uniqueSchedules(current: ScheduleTask[], incoming: ScheduleTask[]): ScheduleTask[] {

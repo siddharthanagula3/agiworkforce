@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
+import { toUserMessageWithStatus } from '../../lib/network-error';
 import { getManagedModelPresentationLabel } from '../../lib/modelInfo';
 import { TaskDetailPanel } from './TaskDetailPanel';
 import {
@@ -168,7 +169,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
         setNextCursor(page.nextCursor);
       } catch (err) {
         console.error('[Tasks] Failed to load tasks:', err);
-        setError('Could not load your tasks. Check your connection and retry.');
+        setError(toUserMessageWithStatus(err, 'Could not load your tasks. Retry in a moment.'));
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -354,11 +355,15 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       </div>
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center py-16">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <div role="status" className="flex flex-1 items-center justify-center py-16">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
+          <span className="sr-only">Loading your tasks…</span>
         </div>
       ) : error ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center">
+        <div
+          role="alert"
+          className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-center"
+        >
           <p className="text-sm text-muted-foreground">{error}</p>
           <Button variant="outline" size="sm" onClick={() => void load(filter, null)}>
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Retry

@@ -12,6 +12,7 @@
  */
 
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
+import { toUserMessageWithStatus } from '@agiworkforce/unified-chat';
 import type { Project as UnifiedProject } from '@agiworkforce/unified-chat';
 import { create } from 'zustand';
 import { resetProjectMetaStore } from './project-meta-store';
@@ -101,7 +102,7 @@ export function hydrateManagedCloudProjectStore({
       useManagedCloudProjectSessionStore.setState({
         accountId: normalizedAccountId,
         status: 'error',
-        error: error instanceof Error ? error.message : 'Failed to load projects',
+        error: toUserMessageWithStatus(error, 'Failed to load projects'),
       });
     } finally {
       if (

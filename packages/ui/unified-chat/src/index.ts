@@ -15,7 +15,12 @@ export {
   isArtifactSandboxMessage,
   postRenderToArtifactSandbox,
 } from './lib/artifact-sandbox';
-export { networkErrorMessage, toUserMessage } from './lib/network-error';
+export {
+  httpStatusMessage,
+  networkErrorMessage,
+  toUserMessage,
+  toUserMessageWithStatus,
+} from './lib/network-error';
 export type {
   ArtifactRenderPayload,
   ArtifactSandboxKind,
