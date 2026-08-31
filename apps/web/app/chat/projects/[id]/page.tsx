@@ -23,6 +23,7 @@ import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSet
 import { useManagedCloudProjects } from '@/features/projects';
 import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type Tab = 'chats' | 'sources';
 
@@ -155,9 +156,7 @@ export default function ProjectDetailPage() {
         });
       } catch (error) {
         toast.error(
-          error instanceof Error
-            ? `Could not open the project chat: ${error.message}`
-            : 'Could not open the project chat. Your draft is still here.',
+          toUserMessage(error, 'Could not open the project chat. Your draft is still here.'),
         );
         return false;
       }

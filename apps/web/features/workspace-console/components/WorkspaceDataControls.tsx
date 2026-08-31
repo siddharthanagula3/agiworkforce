@@ -12,6 +12,7 @@ import {
   type LegalHoldScope,
   type RetentionSweepRecord,
 } from '../hooks/use-legal-holds';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -175,7 +176,7 @@ export function WorkspaceDataControls() {
           We could not load your legal holds
         </p>
         <p className="mt-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
-          {error.message}
+          {toUserMessage(error, 'Could not load the data controls.')}
         </p>
         <button
           type="button"

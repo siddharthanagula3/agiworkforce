@@ -9,6 +9,7 @@ import {
   type PostureSignal,
   type PostureState,
 } from '../hooks/use-workspace-posture';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -187,7 +188,7 @@ export function WorkspacePostureOverview() {
           We could not load your workspace posture
         </h2>
         <p className="mt-2 text-sm" style={{ color: 'var(--text-3)' }}>
-          {error.message}
+          {toUserMessage(error, 'Could not load the security posture.')}
         </p>
         <button
           type="button"

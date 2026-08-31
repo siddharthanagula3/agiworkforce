@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { useOrganizationOverview } from '@/features/settings/hooks/use-settings-queries';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -51,7 +52,7 @@ export function WorkspaceBillingSummary() {
           We could not load your plan
         </p>
         <p className="mt-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
-          {error.message}
+          {toUserMessage(error, 'Could not load the billing summary.')}
         </p>
         <button
           type="button"
