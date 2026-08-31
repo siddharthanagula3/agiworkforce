@@ -889,6 +889,16 @@
     --accent-swatch-blue: #60a5fa;
     --accent-swatch-violet: #a78bfa;
     --accent-swatch-rose: #fb7185;
+
+    /* On dark surfaces every fill already clears AA as text - 5.21:1 for green
+       up to 6.56:1 for blue against #0a0a0a - so the text role reuses the fill
+       here. It still has to be stated: the light block defines these, and a
+       token left undefined in one mode inherits the other mode's value. */
+    --accent-swatch-default-text: #c8892a;
+    --accent-swatch-green-text: #10a37f;
+    --accent-swatch-blue-text: #60a5fa;
+    --accent-swatch-violet-text: #a78bfa;
+    --accent-swatch-rose-text: #fb7185;
     --accent-swatch-default-on: #1c150b;
     --accent-swatch-green-on: #1c150b;
     --accent-swatch-blue-on: #1c150b;
