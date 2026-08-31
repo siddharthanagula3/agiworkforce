@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildStreamAnnouncement } from '../ChatMessageList';
-import type { ChatMessage } from '@/lib/stores/chatStore';
+import type { ChatMessage } from '@agiworkforce/unified-chat';
 
 function assistant(overrides: Partial<ChatMessage> = {}): ChatMessage {
   return {
@@ -44,7 +44,7 @@ describe('what the live region tells a screen reader when a turn ends', () => {
       metadata: { agentActivity: { status: 'failed' } },
     } as Partial<ChatMessage>);
     expect(buildStreamAnnouncement(failed)).toBe('Response failed');
-    expect(buildStreamAnnouncement(assistant({ error: true } as Partial<ChatMessage>))).toBe(
+    expect(buildStreamAnnouncement(assistant({ error: 'upstream failed' }))).toBe(
       'Response failed',
     );
   });
