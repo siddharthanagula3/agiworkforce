@@ -15,7 +15,6 @@ import {
   DevBand,
   FinalCta,
   SurfaceIndex,
-  SurfaceTicker,
   TrustTriptych,
 } from '@/features/marketing/components/FlagshipSections';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
@@ -56,8 +55,6 @@ export function MarketingLanding() {
             <HeroAppWindow />
           </div>
         </section>
-
-        <SurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
 
         <RouteFlow
           eyebrow="Routing"
