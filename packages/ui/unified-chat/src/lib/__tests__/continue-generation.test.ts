@@ -58,11 +58,24 @@ describe('isMessageContinuable', () => {
   });
 
   it('does NOT offer Continue on a normally-completed turn', () => {
-    expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
+    // The shared fixture's content is "partial answer that got cut off", which
+    // is exactly what a truncation check should flag - so a turn that is
+    // genuinely finished needs a finished answer to stand on.
+    const finished = { content: 'That covers everything you asked about.' };
+    expect(
+      isMessageContinuable(assistantMessage({ ...finished, metadata: { finishReason: 'stop' } })),
+    ).toBe(false);
+    expect(isMessageContinuable(assistantMessage({ ...finished, metadata: {} }))).toBe(false);
+    expect(isMessageContinuable(assistantMessage({ ...finished, metadata: undefined }))).toBe(
       false,
     );
-    expect(isMessageContinuable(assistantMessage({ metadata: {} }))).toBe(false);
-    expect(isMessageContinuable(assistantMessage({ metadata: undefined }))).toBe(false);
+  });
+
+  it('offers Continue when a stop-finished answer still reads as cut off', () => {
+    // A provider can end a turn mid-sentence and report finish_reason stop.
+    expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
+      true,
+    );
   });
 
   it('does NOT offer Continue when the partial content is empty', () => {

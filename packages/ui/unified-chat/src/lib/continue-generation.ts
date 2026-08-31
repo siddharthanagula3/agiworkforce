@@ -18,9 +18,18 @@ export function isMessageContinuable(message: ContinuableMessageLike | undefined
   if (message.isStreaming) return false;
   if (message.error) return false;
   if (!message.content || !message.content.trim()) return false;
-  return isContinuableFinishReason(
-    (message.metadata as { finishReason?: unknown } | undefined)?.finishReason,
-  );
+  if (
+    isContinuableFinishReason(
+      (message.metadata as { finishReason?: unknown } | undefined)?.finishReason,
+    )
+  ) {
+    return true;
+  }
+  // The finish reason is not the only evidence a turn is unfinished, and it is
+  // not always honest. Continue only appends, so offering it on an answer that
+  // reads as cut off costs a redundant control; withholding it strands the
+  // reader with half an answer and no way to ask for the rest.
+  return looksTruncated(message.content);
 }
 
 export interface StreamErrorInfo {
@@ -66,3 +75,32 @@ export const CONTINUE_GENERATION_INSTRUCTION =
   'Do not repeat any earlier content, do not restart the answer, and do not add any preamble ' +
   'or acknowledgement — output only the direct continuation. If the response was cut off ' +
   'mid-sentence, mid-word, or mid-code-block, resume at that exact point.';
+
+const SENTENCE_ENDINGS = /[.!?:;)\]}"'\u2019\u201d*_|`>-]$/u;
+
+const NON_PROSE_LINE = /^\s*(?:[-*+]\s|\d+[.)]\s|#{1,6}\s|>|\||```|~~~)/;
+
+/**
+ * Whether a finished answer reads as cut off. A provider can end a turn
+ * mid-sentence and still report `stop`: the observed case ended on "ensures
+ * continuous nighttime luminosity" with finish_reason stop and stopReason
+ * end-turn, so nothing in the protocol said the answer was incomplete and the
+ * reader was left with no way to ask for the rest.
+ *
+ * Only prose is judged. A list, a heading, a table row or a code line routinely
+ * ends without punctuation and is not evidence of anything.
+ */
+export function looksTruncated(content: string | undefined | null): boolean {
+  if (typeof content !== 'string') return false;
+  const trimmed = content.trimEnd();
+  if (!trimmed) return false;
+
+  const fences = trimmed.match(/^\s{0,3}(?:```|~~~)/gm);
+  if (fences && fences.length % 2 === 1) return true;
+
+  const lastLine = trimmed.slice(trimmed.lastIndexOf('\n') + 1).trim();
+  if (!lastLine || NON_PROSE_LINE.test(lastLine)) return false;
+  if (lastLine.split(/\s+/).length < 4) return false;
+
+  return !SENTENCE_ENDINGS.test(lastLine);
+}

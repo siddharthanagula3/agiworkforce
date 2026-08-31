@@ -37,6 +37,7 @@ export {
   hasStreamError,
   getStreamErrorMessage,
   CONTINUE_GENERATION_INSTRUCTION,
+  looksTruncated,
 } from './lib/continue-generation';
 export type {
   ContinuableMessageLike,
