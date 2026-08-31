@@ -24,6 +24,23 @@ Approved 2026-08-30. Resume from `Current phase` after any interruption.
 | 6     | Docs as a product                                                       | Pending            |
 | 7     | Shared runtime convergence, block streaming, citations, workbench       | Pending            |
 
+### Codex browser-audit remediation (2026-08-30)
+
+Report: `~/.codex/visualizations/2026/08/30/01a05512-999f-7b00-85c2-e3b39e37b07a/chat-audit/FINAL-AUDIT.md`
+
+Fixed and browser-verified: R1 lossy Formatted view, R2 code-copy `[object Object]`,
+R3 mermaid raw/dropped, T1 false tool completion, MAP1 wrong-continent route,
+I1 relative share URL, S1 blank mobile drawer, DR4 sources-sheet focus escape.
+
+Open P1: DR1 research fetch before approval, DR2 completed report missing from the
+Report panel, DR3 citations/sources disconnected, F1 attachments ready without
+bytes, A1 artifact restore overwrites edits, A2 interactive artifact stale, SK1
+skill retry loses the skill, M1 continuation seams, M2 stopped labelled complete.
+
+Open P2: S2 tablet crowding, S3/C1 composer context density, C2 large paste, C3
+branch affordance, M3 long-response scale, Q1 clarification as prose, I2 video
+failure recovery, G1-G4 generic card language and outcome vocabulary.
+
 Standing invariants established in 0a/0b, do not regress:
 
 - Three files emit the `--chat-*` contract (`chat.css`, `design-tokens/src/index.ts`,
