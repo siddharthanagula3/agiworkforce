@@ -37,7 +37,6 @@ import { AttachmentPreview } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
-import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import {
@@ -142,38 +141,6 @@ interface QueuedFollowUp {
   args: ComposerSendArgs;
   preview: string;
   toolsLabel: string | null;
-}
-
-export const AGI_WORK_MATURITY_LABEL = 'Alpha';
-export const AGI_WORK_MATURITY_TITLE = `AGI Work runs on Managed Cloud, which is in ${MANAGED_CLOUD_STATUS}. Runs can fail or stall, and behaviour may change.`;
-const AGI_WORK_MATURITY_INLINE_ID = 'agi-work-maturity-inline';
-const AGI_WORK_MATURITY_MENU_ID = 'agi-work-maturity-menu';
-
-/**
- * `aria-hidden` because the badge sits inside the AGI Work button: leaving it
- * in the accessibility tree would rename the control from "AGI Work" to
- * "AGI Work Alpha". Assistive tech gets the disclosure from the sibling
- * `AgiWorkMaturityDescription` via `aria-describedby` instead.
- */
-function AgiWorkMaturityBadge() {
-  return (
-    <span
-      aria-hidden="true"
-      data-testid="agi-work-maturity-badge"
-      title={AGI_WORK_MATURITY_TITLE}
-      className="ml-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1 text-[12px] font-medium uppercase leading-4 tracking-wide text-amber-800 dark:text-amber-300"
-    >
-      {AGI_WORK_MATURITY_LABEL}
-    </span>
-  );
-}
-
-function AgiWorkMaturityDescription({ id }: { id: string }) {
-  return (
-    <span id={id} className="sr-only">
-      {AGI_WORK_MATURITY_TITLE}
-    </span>
-  );
 }
 
 const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
@@ -2882,9 +2849,6 @@ const ChatComposerNewComponent = ({
                                 onClick={() => handleWorkModeChange(mode)}
                                 disabled={isTurnActive || composerDisabled}
                                 aria-pressed={workMode === mode}
-                                aria-describedby={
-                                  mode === 'agiwork' ? AGI_WORK_MATURITY_MENU_ID : undefined
-                                }
                                 title={WORK_MODE_TITLES[mode]}
                                 className={cn(
                                   'flex h-7 items-center rounded-full px-3 transition-colors',
@@ -2895,17 +2859,9 @@ const ChatComposerNewComponent = ({
                                     'cursor-not-allowed opacity-50',
                                 )}
                               >
-                                {mode === 'chat' ? (
-                                  'Chat'
-                                ) : (
-                                  <>
-                                    AGI Work
-                                    <AgiWorkMaturityBadge />
-                                  </>
-                                )}
+                                {mode === 'chat' ? 'Chat' : <>AGI Work</>}
                               </button>
                             ))}
-                            <AgiWorkMaturityDescription id={AGI_WORK_MATURITY_MENU_ID} />
                           </div>
                         </div>
                         <div className="my-1 border-t border-border/40" />
@@ -3454,7 +3410,6 @@ const ChatComposerNewComponent = ({
                     onClick={() => handleWorkModeChange(mode)}
                     disabled={isTurnActive || composerDisabled}
                     aria-pressed={workMode === mode}
-                    aria-describedby={mode === 'agiwork' ? AGI_WORK_MATURITY_INLINE_ID : undefined}
                     title={WORK_MODE_TITLES[mode]}
                     className={cn(
                       'flex h-7 items-center rounded-full px-3 transition-colors',
@@ -3464,17 +3419,9 @@ const ChatComposerNewComponent = ({
                       (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                     )}
                   >
-                    {mode === 'chat' ? (
-                      'Chat'
-                    ) : (
-                      <>
-                        AGI Work
-                        <AgiWorkMaturityBadge />
-                      </>
-                    )}
+                    {mode === 'chat' ? 'Chat' : <>AGI Work</>}
                   </button>
                 ))}
-                <AgiWorkMaturityDescription id={AGI_WORK_MATURITY_INLINE_ID} />
               </div>
             )}
 
