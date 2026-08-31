@@ -52,6 +52,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import {
   sanitizeArtifact,
@@ -222,6 +223,7 @@ export function ArtifactPreview({
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
   // Manual source edit. null = not editing; a string = the unsaved draft.
   const [sourceDraft, setSourceDraft] = useState<string | null>(null);
+  const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
 
   // PDF / DOCX viewer state (Fix 39 / Fix 40)
   const isPdf = artifact.type === 'document' && artifact.language?.toLowerCase() === 'pdf';
@@ -1261,9 +1263,27 @@ if (__AgiApp) {
                   <button
                     type="button"
                     onClick={() => {
-                      if (restoreArtifactVersion(artifact.id, shownVersionIndex)) {
-                        setViewedVersionIndex(null);
-                      }
+                      const draftIsUnsaved =
+                        sourceDraft !== null &&
+                        sourceDraft !== versionHistory?.[shownVersionIndex]?.content;
+                      confirmAction({
+                        title: `Restore version ${shownVersionIndex + 1}?`,
+                        description: draftIsUnsaved
+                          ? `This replaces what you are looking at with version ${
+                              shownVersionIndex + 1
+                            }, added as the new latest so the versions in between survive. Your unsaved edits are discarded.`
+                          : `This replaces what you are looking at with version ${
+                              shownVersionIndex + 1
+                            }, added as the new latest so the versions in between survive.`,
+                        confirmLabel: 'Restore',
+                        destructive: draftIsUnsaved,
+                        onConfirm: () => {
+                          if (restoreArtifactVersion(artifact.id, shownVersionIndex)) {
+                            setSourceDraft(null);
+                            setViewedVersionIndex(null);
+                          }
+                        },
+                      });
                     }}
                     className="flex h-6 items-center justify-center rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                     aria-label={`Restore version ${shownVersionIndex + 1}`}
@@ -1657,6 +1677,7 @@ if (__AgiApp) {
               </ScrollArea>
             ))}
         </div>
+        {confirmDialog}
       </div>
     );
   }
@@ -1960,6 +1981,7 @@ if (__AgiApp) {
           </ScrollArea>
         </TabsContent>
       </Tabs>
+      {confirmDialog}
     </div>
   );
 }
