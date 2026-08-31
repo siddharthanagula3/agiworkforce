@@ -51,7 +51,7 @@ const PRODUCT_FACTS: { k: string; v: string }[] = [
   },
   {
     k: 'Pricing posture',
-    v: 'Local and BYOK cost nothing to AGI — users pay their provider directly, or nothing at all when running locally. Managed cloud is metered. Team is priced per seat, with current checkout availability shown on Pricing; Enterprise is sales-assisted.',
+    v: 'Local and BYOK cost nothing to AGI: users pay their provider directly, or nothing at all when running locally. Managed cloud is metered. Team is priced per seat, with current checkout availability shown on Pricing; Enterprise is sales-assisted.',
   },
 ];
 
@@ -145,7 +145,7 @@ export default function PressPage() {
           </h2>
           <p className="agi-fl-section-lede">
             &ldquo;Available now&rdquo; means there is a published release. &ldquo;Built, not yet
-            released&rdquo; means the code exists and nothing has shipped — please do not describe
+            released&rdquo; means the code exists and nothing has shipped. Please do not describe
             those three as products readers can get.
           </p>
           <table className="agi-ledger">
@@ -159,7 +159,7 @@ export default function PressPage() {
             </tbody>
           </table>
           <p className="agi-fl-avail-note">
-            Pricing figures change and are deliberately not restated here — see{' '}
+            Pricing figures change and are deliberately not restated here. See{' '}
             <Link href="/pricing">the pricing page</Link> for current numbers.
           </p>
         </section>
