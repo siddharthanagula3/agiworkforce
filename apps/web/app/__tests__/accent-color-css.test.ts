@@ -17,9 +17,17 @@ describe('Web accent colour picker', () => {
   it.each(selectable)('repoints the chat accent tokens for $value', ({ value }) => {
     expect(css).toContain(`html[data-accent='${value}'] {
     --chat-accent-primary: var(--accent-swatch-${value});
-    --chat-accent-primary-text: var(--accent-swatch-${value});
+    --chat-accent-primary-text: var(--accent-swatch-${value}-text);
     --chat-accent-on-primary: var(--accent-swatch-${value}-on);
   }`);
+  });
+
+  it.each(ACCENT_COLORS)('defines a separate text value for the $value swatch', ({ value }) => {
+    // The fill is not a text colour. Measured against the three light surfaces
+    // these render on - #f9f8f6, #ffffff and the tinted #f8f1e5 - the rose fill
+    // is 4.18:1 on the tint and 4.43:1 on --chat-bg, and blue and green clear
+    // 4.5:1 by under 0.25. Each choice carries its own text value.
+    expect(css).toContain(`--accent-swatch-${value}-text:`);
   });
 
   it.each(ACCENT_COLORS)('defines a paired foreground for the $value swatch', ({ value }) => {
