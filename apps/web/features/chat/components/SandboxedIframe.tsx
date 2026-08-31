@@ -57,6 +57,22 @@ const FALLBACK_ERROR_REPORTER = `<script>
  * the artifact's scripts), after `<html>` otherwise, and prepended for bare
  * fragments. Returns the document unchanged when it is empty.
  */
+const INLINE_SCRIPT = /<script\b(?![^>]*\bsrc\s*=)[^>]*>[\s\S]*?<\/script>/i;
+
+/**
+ * A srcdoc document inherits the embedding page's Content Security Policy, and
+ * this app's CSP requires a nonce for inline script. An artifact's own scripts
+ * carry none, so every one of them is blocked - the layout renders, native
+ * inputs still move because the browser moves them, and nothing recomputes.
+ *
+ * That is worse than refusing to render: it is a convincing replica of a
+ * working tool. The separate sandbox origin exists precisely to escape this,
+ * because a document loaded by src carries its own CSP.
+ */
+export function fallbackWillRunScripts(srcDoc: string): boolean {
+  return !INLINE_SCRIPT.test(srcDoc);
+}
+
 export function withFallbackErrorReporter(srcDoc: string): string {
   if (!srcDoc) return srcDoc;
   if (/<head\b[^>]*>/i.test(srcDoc)) {
@@ -159,6 +175,7 @@ export function SandboxedIframe({
   }, [activateFallback]);
 
   const usingFallback = !sandboxOrigin || useFallback;
+  const scriptsAreDead = usingFallback && !fallbackWillRunScripts(fallbackDocument);
   useEffect(() => {
     if (!usingFallback || !onRenderError) return undefined;
     const onFallbackMessage = (event: MessageEvent) => {
@@ -205,14 +222,26 @@ export function SandboxedIframe({
   }
 
   return (
-    <iframe
-      ref={iframeRef}
-      key={`fallback-${refreshKey}`}
-      title={title}
-      srcDoc={fallbackDocument}
-      sandbox="allow-scripts allow-modals"
-      className={className}
-      style={style}
-    />
+    <>
+      {scriptsAreDead ? (
+        <p
+          role="status"
+          data-testid="artifact-scripts-blocked"
+          className="border-b border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          This artifact&rsquo;s scripts cannot run here, so what you see below is its layout only
+          &mdash; controls will not calculate or update. Open the Source tab to read what it does.
+        </p>
+      ) : null}
+      <iframe
+        ref={iframeRef}
+        key={`fallback-${refreshKey}`}
+        title={title}
+        srcDoc={fallbackDocument}
+        sandbox="allow-scripts allow-modals"
+        className={className}
+        style={style}
+      />
+    </>
   );
 }
