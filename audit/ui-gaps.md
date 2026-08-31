@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 126101a6d33431ebab6cc08936d6ffd70c1b6c48fad067e395f5ef1b3cf9b151 -->
+<!-- ui-gaps-csv-sha256: 5500b349fdaa24a44293448ae13b54e2f667534f6fef375e30273b71b85f0948 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/ui-gaps.csv` is the source of truth; this document is generated with
@@ -6101,7 +6101,7 @@ Add a 2-column grid of 4-6 suggested schedule templates (with icon, title, one-l
 
 - `claude_reference/168-claude-web-home-scheduled-tasks-empty-state-suggested-templates.png`
 
-### GAP-265 — No Advanced account security enrollment, Lockdown mode, or Developer mode toggles on web
+### GAP-265 — No Advanced account security enrollment or Developer mode toggles on web
 
 - **Status:** Open
 - **Owner:** Unassigned
@@ -6110,7 +6110,7 @@ Add a 2-column grid of 4-6 suggested schedule templates (with icon, title, one-l
 
 **Gap**
 
-Reference has three distinct high-security controls: 'Advanced account security' enrollment (stricter sign-in requirements), a 'Lockdown mode' toggle to limit web/external-service-connecting features against prompt-injection, and a 'Developer mode' toggle (with an ELEVATED RISK badge) to allow unverified connectors, plus an 'Enforce CSP in developer mode' sub-toggle. None exist on agiworkforce web; prompt-injection detection exists only as backend tool-loop logic, not a user-facing control.
+Lockdown mode SHIPPED 2026-08-31: Settings > Capabilities carries a toggle that denies every connector tool at the catalogue, enforced in loadConnectorToolPermissions so the completions, approve and resume-input routes all inherit it, and failing closed when the setting cannot be read. What remains of this row is the other two controls. Advanced account security enrollment is the same account-contract blocker recorded in GAP-115. Developer mode would gate custom MCP connector installation, which today is guarded by the ConnectorConsentSummary disclosure shown before connecting rather than by a global switch; making it a switch is a product decision about existing custom-connector users, not an implementation gap.
 
 **Evidence**
 
@@ -6118,7 +6118,7 @@ searched 'lockdown mode', 'advanced account security', 'developer mode', 'elevat
 
 **Suggested fix**
 
-Add an Advanced Security subsection to Settings > Security with: an enrollment flow for stricter sign-in, a user-facing Lockdown Mode toggle that restricts connector/web-fetch tool availability, and a Developer Mode toggle gating unverified/custom MCP connector installation with a visible risk warning.
+Add a Developer Mode toggle gating unverified/custom MCP connector installation with a visible risk warning, if the decision is to gate it globally rather than per-connect. Advanced account security enrollment stays blocked with GAP-115.
 
 **Reference screenshot(s)**
 
