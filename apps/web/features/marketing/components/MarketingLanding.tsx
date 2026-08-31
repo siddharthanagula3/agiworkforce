@@ -15,7 +15,6 @@ import {
   DevBand,
   FinalCta,
   SurfaceIndex,
-  TrustTriptych,
 } from '@/features/marketing/components/FlagshipSections';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
@@ -171,54 +170,14 @@ export function MarketingLanding() {
           ]}
         />
 
-        <TrustTriptych
-          eyebrow="Trust modes"
-          title="Choose the route before work leaves your device."
-          lede="Three routes, separate by design. A Local thread stays Local. Moving work anywhere else takes a label and your consent."
-          cards={[
-            {
-              mode: 'Local',
-              glyph: '◆',
-              title: 'Yours alone.',
-              body: 'Models on your hardware. Works offline. Free.',
-              points: [
-                'Local chats, files, and sessions never silently leave your device',
-                'Ollama, LM Studio, llama.cpp & vLLM on Desktop',
-                'On-device Local Mode on Mobile',
-                'No account required',
-              ],
-              cta: { href: '/local', label: 'Run AGI locally' },
-            },
-            {
-              mode: 'BYOK',
-              glyph: '◇',
-              title: 'Your keys, your bill.',
-              body: 'Bring provider keys on Desktop, CLI, and VS Code.',
-              points: [
-                'Keys stored encrypted, on your machine',
-                'Traffic goes directly to your provider',
-                'Visible provider label on every route',
-                'Explicit, reviewed continuation from Local',
-              ],
-              cta: { href: '/byok', label: 'Set up BYOK' },
-            },
-            {
-              mode: 'AGI Cloud',
-              glyph: '●',
-              title: 'Public alpha.',
-              body: 'Hosted capacity, open by default.',
-              points: [
-                'Public alpha — sign in and start, no waitlist',
-                'Shared across Web, Mobile & Desktop',
-                'AGI-owned routing with clear labels',
-                'Usage metered and transparent',
-              ],
-              cta: { href: '/get-started', label: 'Get started' },
-            },
-          ]}
-        />
-
+        {/* The tones below are held, not alternated. The surface sequence
+            above changes ground six times in 3400px, which is the rhythmic
+            passage of the page; carrying that cadence into the closing half
+            would read as flicker rather than structure. So: one long black
+            passage for the developer story, then a single dark field to the
+            end. */}
         <CapabilityGrid
+          stage="ink"
           eyebrow="Capabilities"
           title="An application suite, not a one-screen chatbot."
           items={[
@@ -262,6 +221,7 @@ export function MarketingLanding() {
         />
 
         <DevBand
+          stage="void"
           eyebrow="For developers"
           title="Serious about the terminal."
           body="AGI Code spans the CLI and VS Code. Sessions resume and fork. Execution is sandboxed. It all runs offline on local models."
@@ -278,6 +238,7 @@ export function MarketingLanding() {
         />
 
         <DevBand
+          stage="void"
           eyebrow="Approvals"
           title="Nothing runs without you."
           body="Every file edit and shell command asks first. Pick how much rope the agent gets — Safe, Plan, Build, or Autopilot — and change it any time with Shift+Tab."
@@ -288,7 +249,10 @@ export function MarketingLanding() {
           visual={<ApprovalWindow />}
         />
 
-        <section className="agi-fl-section" aria-labelledby="agi-mobile-launch-title">
+        <section
+          className="agi-fl-section agi-stage agi-stage--ink"
+          aria-labelledby="agi-mobile-launch-title"
+        >
           <p className="agi-fl-eyebrow">AGI Mobile</p>
           <h2 id="agi-mobile-launch-title" className="agi-fl-h2">
             Local, on-device AI. Built, not yet shipped.
@@ -321,6 +285,7 @@ export function MarketingLanding() {
         </section>
 
         <FinalCta
+          stage="ink"
           eyebrow="Start now"
           title="Start where you work."
           body="AGI Web runs in the browser today. The CLI is released for Local and BYOK work; Desktop Linux assets are published, with installer availability verified live before download."

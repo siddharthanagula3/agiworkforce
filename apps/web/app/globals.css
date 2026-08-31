@@ -7954,6 +7954,119 @@ html[data-contrast='more'] *:focus-visible {
   border-left: 1px solid var(--agi-rule);
 }
 
+/* The route ledger: what each lane above actually commits to.
+   Deliberately not cards. This replaced three bordered rectangles with an
+   eyebrow, a heading, a bullet list and a button each - the pattern reads as
+   filler wherever it appears, and it showed none of the product. A rule over
+   each lane is enough separation when the lanes sit on one ground, and it
+   costs three borders, three radii and three fills less ink. */
+[data-design='agi'] .agi-rf-ledger {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 clamp(24px, 4vw, 56px);
+  margin: clamp(40px, 5vw, 68px) 0 0;
+}
+
+/* The lanes carry different numbers of facts, so their links land at
+   different heights unless the lane is a column that pushes them down. */
+[data-design='agi'] .agi-rf-ledger-lane {
+  display: flex;
+  flex-direction: column;
+  padding-top: 16px;
+  border-top: 1px solid var(--agi-rule-strong);
+}
+
+[data-design='agi'] .agi-rf-ledger-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+[data-design='agi'] .agi-rf-ledger-mode {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--agi-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-rf-ledger-glyph {
+  color: var(--agi-amber);
+  font-size: 10px;
+}
+
+[data-design='agi'] .agi-rf-ledger-summary {
+  margin: 10px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 550;
+  color: var(--agi-ink);
+  max-width: 34ch;
+}
+
+[data-design='agi'] .agi-rf-ledger-facts {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+}
+
+[data-design='agi'] .agi-rf-ledger-facts li {
+  position: relative;
+  padding-left: 15px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--agi-ink-2);
+  max-width: 36ch;
+}
+
+[data-design='agi'] .agi-rf-ledger-facts li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 5px;
+  height: 1px;
+  background: var(--agi-ink-quiet);
+}
+
+[data-design='agi'] .agi-rf-ledger-cta {
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: 18px;
+  font-family: var(--agi-font-mono);
+  font-size: 12.5px;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  color: var(--agi-ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--agi-rule-strong);
+  padding-bottom: 2px;
+  transition:
+    color var(--agi-dur-fast) var(--agi-ease-out),
+    border-color var(--agi-dur-fast) var(--agi-ease-out);
+}
+
+[data-design='agi'] .agi-rf-ledger-cta:hover {
+  color: var(--agi-amber);
+  border-bottom-color: var(--agi-amber);
+}
+
+@media (max-width: 900px) {
+  [data-design='agi'] .agi-rf-ledger {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  [data-design='agi'] .agi-rf-ledger-lane + .agi-rf-ledger-lane {
+    margin-top: 28px;
+  }
+}
+
 @media (max-width: 760px) {
   [data-design='agi'] .agi-rf-col {
     display: none;
