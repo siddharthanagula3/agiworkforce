@@ -176,10 +176,7 @@ export function CommandPalette() {
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <Command
-          className="flex flex-col"
-          loop
-        >
+        <Command className="flex flex-col" loop>
           {/* Search input */}
           <div className="flex items-center gap-2.5 border-b border-[var(--chat-border)] px-3.5 py-3">
             <Search
@@ -221,7 +218,7 @@ export function CommandPalette() {
                 </span>
                 <span className="flex-1">{cmd.label}</span>
                 {cmd.shortcut && (
-                  <kbd className="shrink-0 rounded-[var(--chat-radius-sm)] bg-[var(--chat-surface-elevated)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--chat-text-muted)]">
+                  <kbd className="shrink-0 rounded-[var(--chat-radius-sm)] bg-[var(--chat-surface-elevated)] px-1.5 py-0.5 font-mono text-[12px] text-[var(--chat-text-muted)]">
                     {cmd.shortcut}
                   </kbd>
                 )}
@@ -231,7 +228,7 @@ export function CommandPalette() {
 
           {/* Footer hint */}
           <div className="border-t border-[var(--chat-border)] px-3.5 py-2">
-            <p className="text-[11px] text-[var(--chat-text-muted)]">
+            <p className="text-[12px] text-[var(--chat-text-muted)]">
               <kbd className="rounded bg-[var(--chat-surface-elevated)] px-1 py-0.5 font-mono">
                 ↑↓
               </kbd>{' '}

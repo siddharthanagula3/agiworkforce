@@ -512,7 +512,7 @@ export function SchedulesPage({
               <span
                 data-testid="schedule-maturity-badge"
                 title={SCHEDULE_MATURITY_TITLE}
-                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
+                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
               >
                 {SCHEDULE_MATURITY_LABEL}
               </span>
@@ -603,7 +603,7 @@ export function SchedulesPage({
                     >
                       <span className="text-sm font-medium text-foreground">{template.name}</span>
                       <span className="text-xs text-muted-foreground">{template.description}</span>
-                      <span className="mt-1 text-[11px] text-muted-foreground">
+                      <span className="mt-1 text-[12px] text-muted-foreground">
                         {template.cadenceLabel}
                       </span>
                     </button>

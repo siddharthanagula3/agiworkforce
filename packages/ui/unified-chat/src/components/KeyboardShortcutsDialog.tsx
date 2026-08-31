@@ -161,7 +161,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
             <div className="px-5 py-3 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]">
               <p className="text-xs text-center text-[hsl(var(--muted-foreground))]">
                 Press{' '}
-                <kbd className="px-1.5 py-0.5 bg-[hsl(var(--muted))] rounded border border-[hsl(var(--border))] text-[10px]">
+                <kbd className="px-1.5 py-0.5 bg-[hsl(var(--muted))] rounded border border-[hsl(var(--border))] text-[12px]">
                   Escape
                 </kbd>{' '}
                 to close

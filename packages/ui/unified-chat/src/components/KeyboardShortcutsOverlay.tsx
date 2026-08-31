@@ -1,4 +1,3 @@
-
 import React, { useEffect, useCallback } from 'react';
 import { Keyboard, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -190,7 +189,7 @@ export function KeyboardShortcutsOverlay({
             <div className="px-5 py-3 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 flex items-center justify-between shrink-0">
               <p className="text-xs text-[hsl(var(--muted-foreground))]">
                 Press{' '}
-                <kbd className="bg-[hsl(var(--muted))] border border-[hsl(var(--border))] rounded px-1.5 py-0.5 text-[10px] font-mono">
+                <kbd className="bg-[hsl(var(--muted))] border border-[hsl(var(--border))] rounded px-1.5 py-0.5 text-[12px] font-mono">
                   Esc
                 </kbd>{' '}
                 to close

@@ -174,13 +174,13 @@ function FileDiffBlock({ filePath, lines, additions, deletions }: FileDiff) {
       className="rounded border border-white/8 bg-black/20 overflow-hidden"
     >
       <div className="flex items-center gap-2 px-2 py-1 border-b border-white/8">
-        <span className="flex-1 truncate font-mono text-[10px] text-muted-foreground">
+        <span className="flex-1 truncate font-mono text-[12px] text-muted-foreground">
           {filePath ?? 'diff'}
         </span>
-        <span className="font-mono text-[10px] text-green-500">+{additions}</span>
-        <span className="font-mono text-[10px] text-red-500">-{deletions}</span>
+        <span className="font-mono text-[12px] text-green-500">+{additions}</span>
+        <span className="font-mono text-[12px] text-red-500">-{deletions}</span>
       </div>
-      <div className="max-h-48 overflow-auto font-mono text-[10px] leading-snug">
+      <div className="max-h-48 overflow-auto font-mono text-[12px] leading-snug">
         {visible.map((line, index) => (
           <div
             key={index}
@@ -228,7 +228,7 @@ function HighlightedCodeBlock({ language, code }: { language: string; code: stri
           type="button"
           aria-label={copied ? 'Code copied' : 'Copy code'}
           onClick={handleCopy}
-          className="h-6 gap-1 px-1.5 text-[10px] flex items-center rounded text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100"
+          className="h-6 gap-1 px-1.5 text-[12px] flex items-center rounded text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100"
         >
           {copied ? (
             <Check className="h-2.5 w-2.5" aria-hidden="true" />
@@ -399,7 +399,7 @@ const ToolCallCardComponent = ({
 
         {showParameters && (hasArgs || commandText) && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-[12px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Request
             </p>
             {codeBlock ? (
@@ -407,7 +407,7 @@ const ToolCallCardComponent = ({
             ) : requestDiff ? (
               <FileDiffBlock {...requestDiff} />
             ) : commandText ? (
-              <pre className="font-mono text-[10px] leading-snug p-2 rounded bg-black/20 border border-white/8 overflow-x-auto max-h-48 overflow-y-auto select-text">
+              <pre className="font-mono text-[12px] leading-snug p-2 rounded bg-black/20 border border-white/8 overflow-x-auto max-h-48 overflow-y-auto select-text">
                 {commandText}
               </pre>
             ) : (
@@ -420,7 +420,7 @@ const ToolCallCardComponent = ({
 
         {result && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-[12px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Response
             </p>
             {resultDiff ? (
@@ -435,7 +435,7 @@ const ToolCallCardComponent = ({
 
         {error && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-[12px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Error
             </p>
             <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-red-400 scrollbar-thin">

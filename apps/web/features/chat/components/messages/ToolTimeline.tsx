@@ -220,7 +220,7 @@ function InlineSourceRow({ source, index }: { source: ResearchSource; index: num
       {/* Title: takes remaining space, truncated */}
       <span className="flex-1 truncate text-xs text-foreground">{source.title || displayHost}</span>
       {/* Domain: right-aligned, muted */}
-      <span className="shrink-0 text-[10px] text-muted-foreground ml-2">{displayHost}</span>
+      <span className="shrink-0 text-[12px] text-muted-foreground ml-2">{displayHost}</span>
       <ExternalLink
         className="h-2.5 w-2.5 shrink-0 text-muted-foreground/0 group-hover:text-muted-foreground"
         aria-hidden="true"
@@ -506,7 +506,7 @@ function TimelineStepRow({
       {hasFile && (
         <div className="pl-7">
           <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-0.5 max-w-full">
-            <span className="truncate font-mono text-[10px] text-muted-foreground">{filename}</span>
+            <span className="truncate font-mono text-[12px] text-muted-foreground">{filename}</span>
           </span>
         </div>
       )}
@@ -578,7 +578,7 @@ function ToolPermissionQuickPicker({
       role="group"
       aria-label={`Remember permission for ${toolName}`}
     >
-      <span className="text-[10px] text-muted-foreground">Remember:</span>
+      <span className="text-[12px] text-muted-foreground">Remember:</span>
       {PERMISSION_QUICK_PICKS.map(({ level, label, icon: Icon }) => (
         <button
           key={level}
@@ -587,7 +587,7 @@ function ToolPermissionQuickPicker({
           aria-pressed={current === level}
           title={label}
           className={cn(
-            'flex h-6 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium transition-colors',
+            'flex h-6 items-center gap-1 rounded-md border px-1.5 text-[12px] font-medium transition-colors',
             current === level
               ? 'border-primary/50 bg-primary/10 text-primary'
               : 'border-border/40 text-muted-foreground hover:border-border/70 hover:text-foreground',
@@ -793,7 +793,7 @@ function ToolTimeline({
                         >
                           <div className="flex items-center gap-1 mb-0.5">
                             <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
-                            <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                            <span className="text-[12px] text-blue-400/70 font-mono">parallel</span>
                           </div>
                           {group.entries.map((tool, ti) => {
                             const id = stableId(tool, gi * 100 + ti);

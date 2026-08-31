@@ -424,7 +424,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
             <div className="flex items-center gap-2">
               <span
                 role="alert"
-                className="text-[11px] text-[var(--chat-error,#f43f5e)]"
+                className="text-[12px] text-[var(--chat-error,#f43f5e)]"
                 data-testid="generated-file-download-error"
               >
                 Download failed: {downloadErrors[entry.id]}
@@ -435,7 +435,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
                 onClick={() => void handleDownload(entry)}
                 disabled={Boolean(inFlightIds[entry.id]) || downloadingAll}
                 aria-label={`Retry download of ${entry.fileName}`}
-                className="h-6 gap-1 px-2 text-[11px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                className="h-6 gap-1 px-2 text-[12px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
               >
                 <RotateCcw className="h-3 w-3" aria-hidden />
                 Retry

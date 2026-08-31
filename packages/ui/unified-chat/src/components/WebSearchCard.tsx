@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Globe, ChevronDown } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -56,7 +55,7 @@ export function WebSearchCard({
           {query}
         </span>
         {/* Result count badge */}
-        <span className="web-search-card__count shrink-0 text-[11px] text-[color:var(--chat-text-muted,#8b8680)] tabular-nums">
+        <span className="web-search-card__count shrink-0 text-[12px] text-[color:var(--chat-text-muted,#8b8680)] tabular-nums">
           {resultCount} {resultCount === 1 ? 'result' : 'results'}
         </span>
         <ChevronDown
@@ -119,7 +118,7 @@ export function WebSearchCard({
                 {result.title}
               </span>
               {/* Domain */}
-              <span className="shrink-0 text-[11px] text-[color:var(--chat-text-muted,#8b8680)] truncate max-w-[120px]">
+              <span className="shrink-0 text-[12px] text-[color:var(--chat-text-muted,#8b8680)] truncate max-w-[120px]">
                 {result.domain}
               </span>
             </button>

@@ -153,7 +153,7 @@ export function ProjectSettingsDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="ps-project-name"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+                className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
               >
                 Project name
               </Label>
@@ -188,7 +188,7 @@ export function ProjectSettingsDialog({
             <div className="space-y-1.5">
               <Label
                 htmlFor="ps-instructions"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+                className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
               >
                 Instructions
               </Label>
@@ -218,7 +218,7 @@ export function ProjectSettingsDialog({
               real control now.
             */}
             <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Memory
               </p>
               <label className="flex items-start gap-3">
@@ -232,7 +232,7 @@ export function ProjectSettingsDialog({
                   <span className="text-xs text-foreground">
                     Use memories from outside this project
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[12px] text-muted-foreground">
                     {usesGlobalMemory
                       ? 'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.'
                       : 'Chats here use only this project\u2019s memories. Nothing from your other chats is included.'}
@@ -243,7 +243,7 @@ export function ProjectSettingsDialog({
 
             {/* Knowledge Files */}
             <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Files
               </p>
               <p className="text-xs text-muted-foreground">

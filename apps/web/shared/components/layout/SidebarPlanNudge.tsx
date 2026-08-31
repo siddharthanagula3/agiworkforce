@@ -39,11 +39,11 @@ export function SidebarPlanBadge({
 }) {
   if (!tierLabel) return null;
   return isFreeTier ? (
-    <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/20">
+    <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/20">
       Upgrade
     </span>
   ) : (
-    <span className="shrink-0 rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <span className="shrink-0 rounded-full bg-muted/60 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
       {tierLabel}
     </span>
   );

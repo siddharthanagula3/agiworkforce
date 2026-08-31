@@ -1,4 +1,3 @@
-
 import { X } from 'lucide-react';
 import type { ManagedUsageWarning } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
@@ -46,7 +45,7 @@ export function UsageWarningBanner({
           {warning.headline}
         </p>
         {warning.resetLabel ? (
-          <p className="truncate text-[11px] text-[var(--chat-text-muted)]">{warning.resetLabel}</p>
+          <p className="truncate text-[12px] text-[var(--chat-text-muted)]">{warning.resetLabel}</p>
         ) : null}
       </div>
 

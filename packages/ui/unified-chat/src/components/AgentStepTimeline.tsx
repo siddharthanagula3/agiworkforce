@@ -119,7 +119,7 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
         >
           <span
             className={cn(
-              'text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded',
+              'text-[12px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded',
               agentTypeBadgeClasses(step.agentType),
             )}
           >
@@ -137,7 +137,7 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
           </span>
 
           {duration && step.status === 'complete' && (
-            <span className="text-[10px] text-slate-500 font-mono tabular-nums shrink-0">
+            <span className="text-[12px] text-slate-500 font-mono tabular-nums shrink-0">
               {duration}
             </span>
           )}
@@ -166,7 +166,7 @@ function StepItem({ step, isLast, compact }: StepItemProps) {
               }}
               className="overflow-hidden"
             >
-              <p className="mt-1.5 text-[11px] text-muted-foreground font-mono leading-snug whitespace-pre-wrap bg-card/30 rounded px-2 py-1.5 border border-border/30">
+              <p className="mt-1.5 text-[12px] text-muted-foreground font-mono leading-snug whitespace-pre-wrap bg-card/30 rounded px-2 py-1.5 border border-border/30">
                 {step.details}
               </p>
             </motion.div>

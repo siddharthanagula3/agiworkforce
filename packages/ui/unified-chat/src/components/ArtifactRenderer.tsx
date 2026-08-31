@@ -250,7 +250,7 @@ function CodeArtifact({ artifact }: { artifact: Artifact }) {
   return (
     <div className="overflow-x-auto bg-zinc-900 text-zinc-200" data-testid="code-artifact">
       <pre className="p-4 text-sm font-mono leading-relaxed whitespace-pre">{artifact.content}</pre>
-      <div className="px-4 pb-2 text-[10px] text-zinc-500">{lines.length} lines</div>
+      <div className="px-4 pb-2 text-[12px] text-zinc-500">{lines.length} lines</div>
     </div>
   );
 }

@@ -1,4 +1,3 @@
-
 import React, { type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -81,7 +80,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                     )}
                   </div>
                   {suggestion.isSkill && (
-                    <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-400">
+                    <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[12px] font-medium text-amber-400">
                       skill
                     </span>
                   )}

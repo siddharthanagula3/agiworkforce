@@ -213,7 +213,7 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
           'no-underline transition-colors hover:border-border/50 hover:bg-muted/40',
         )}
       >
-        <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded bg-primary/10 px-1 text-[11px] font-semibold text-primary">
+        <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded bg-primary/10 px-1 text-[12px] font-semibold text-primary">
           {citation.id || index + 1}
         </span>
         <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
@@ -235,7 +235,7 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
           <span className="block truncate text-[13px] font-medium text-foreground group-hover:text-primary">
             {citation.title || host}
           </span>
-          <span className="block truncate text-[11px] text-muted-foreground">{host}</span>
+          <span className="block truncate text-[12px] text-muted-foreground">{host}</span>
         </span>
         <ExternalLink
           className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-muted-foreground"
@@ -360,7 +360,7 @@ export function ResearchReportView({
             <h2 className="truncate text-sm font-semibold text-foreground">
               {report.title || 'Research report'}
             </h2>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
               {report.sourcesConsulted} {report.sourcesConsulted === 1 ? 'source' : 'sources'}
               {typeof report.totalDurationMs === 'number' &&
                 ` · ${Math.round(report.totalDurationMs / 1000)}s`}
@@ -566,7 +566,7 @@ export function ResearchReportView({
               Ask
             </Button>
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 text-[12px] text-muted-foreground">
             The report travels with your question, so the answer stays grounded in it.
           </p>
         </form>

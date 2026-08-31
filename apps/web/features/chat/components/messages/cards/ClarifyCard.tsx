@@ -138,7 +138,7 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
           return (
             <div key={question.id} className="flex flex-col gap-1.5">
               <div className="flex items-baseline gap-2">
-                <span className="rounded bg-[var(--chat-surface-base)] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span className="rounded bg-[var(--chat-surface-base)] px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
                   {question.header}
                 </span>
                 <span className="text-sm text-foreground">{question.question}</span>

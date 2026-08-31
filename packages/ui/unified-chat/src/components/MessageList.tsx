@@ -298,7 +298,7 @@ export function MessageList({
         >
           {unreadCount > 0 ? (
             <span
-              className="inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-tight"
+              className="inline-flex items-center justify-center rounded-full px-1.5 text-[12px] font-semibold leading-tight"
               style={{
                 background: 'var(--chat-accent-primary)',
                 color: 'var(--chat-surface-elevated)',

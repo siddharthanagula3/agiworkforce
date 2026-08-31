@@ -223,7 +223,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               )}
             >
               <span className="flex-1 truncate">{conv.title}</span>
-              <span className="shrink-0 text-[11px] text-[var(--chat-text-muted)]">
+              <span className="shrink-0 text-[12px] text-[var(--chat-text-muted)]">
                 {new Date(conv.updatedAt).toLocaleDateString()}
               </span>
             </button>

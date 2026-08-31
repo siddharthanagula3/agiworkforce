@@ -252,9 +252,9 @@ function SourceLinks({
     <div className="ml-8 mt-1.5 space-y-1.5 pb-1" aria-label="Sources">
       <div className="flex items-center gap-2">
         {entry.query && (
-          <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{entry.query}</p>
+          <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">{entry.query}</p>
         )}
-        <span className="shrink-0 text-[11px] text-muted-foreground">
+        <span className="shrink-0 text-[12px] text-muted-foreground">
           {total} result{total === 1 ? '' : 's'}
         </span>
       </div>
@@ -266,7 +266,7 @@ function SourceLinks({
             <span className="min-w-0 flex-1 truncate text-xs text-foreground">
               {source.title || sourceDomain(source.url)}
             </span>
-            <span className="shrink-0 text-[10px] text-muted-foreground">
+            <span className="shrink-0 text-[12px] text-muted-foreground">
               {sourceDomain(source.url)}
             </span>
             {href && <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />}
@@ -295,7 +295,7 @@ function SourceLinks({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="touch-manipulation rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="touch-manipulation rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           +{hidden} more
         </button>
@@ -393,7 +393,7 @@ function StaticRow({
         />
         <p className="text-sm text-foreground/90">{entry.summary}</p>
         {entry.beforeTokens !== undefined && entry.afterTokens !== undefined && (
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
             {TOKEN_NUMBER_FORMAT.format(entry.beforeTokens)} →{' '}
             {TOKEN_NUMBER_FORMAT.format(entry.afterTokens)} tokens
           </p>
@@ -407,7 +407,7 @@ function StaticRow({
       <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-danger" aria-hidden="true" />
       <p className="break-words text-sm text-danger">{entry.message}</p>
       {entry.retryable && (
-        <p className="mt-0.5 text-[11px] text-muted-foreground">Retry available</p>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">Retry available</p>
       )}
     </div>
   );

@@ -204,7 +204,7 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
 
       {totalRows > rows.length && (
         <div
-          className="border-t bg-muted/20 px-3 py-1.5 text-[10px] text-muted-foreground"
+          className="border-t bg-muted/20 px-3 py-1.5 text-[12px] text-muted-foreground"
           data-testid="chart-truncation-note"
         >
           Plotting the first {CHART_ROW_CAP} of {totalRows} points. Download the JSON for the full

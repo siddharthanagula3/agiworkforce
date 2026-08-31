@@ -1,4 +1,3 @@
-
 import {
   useState,
   useCallback,
@@ -177,7 +176,7 @@ function BadgeIcon({ config }: { config: BadgeConfig }) {
   }
   return (
     <span
-      className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--chat-surface-elevated,rgba(26,25,21,0.06))] text-[color:var(--chat-text-muted,#8b8680)] text-[10px] font-semibold select-none"
+      className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--chat-surface-elevated,rgba(26,25,21,0.06))] text-[color:var(--chat-text-muted,#8b8680)] text-[12px] font-semibold select-none"
       aria-hidden="true"
       data-badge-kind="letter"
       data-badge-letter={config.letter}
@@ -379,7 +378,7 @@ export function InlineToolCall({
         {/* "Result" sub-label below the bar in badge mode (Claude parity) */}
         {showResultLabel ? (
           <span
-            className="inline-tool-call__result-label ml-8 text-[10px] font-mono text-[color:var(--chat-text-muted,#8b8680)] leading-4"
+            className="inline-tool-call__result-label ml-8 text-[12px] font-mono text-[color:var(--chat-text-muted,#8b8680)] leading-4"
             data-result-label=""
           >
             {resultLabel}

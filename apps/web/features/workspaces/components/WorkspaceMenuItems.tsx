@@ -18,7 +18,7 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
 
   return (
     <>
-      <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+      <DropdownMenuLabel className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
         Workspace
       </DropdownMenuLabel>
       {overview.isLoading ? (

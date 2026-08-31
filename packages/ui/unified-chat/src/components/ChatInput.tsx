@@ -876,7 +876,7 @@ export function ChatInput({
           data-testid="composer-skill-suggestions"
           className="mb-2 flex flex-wrap items-center gap-1.5"
         >
-          <span className="text-[11px] text-[var(--chat-text-secondary)]">
+          <span className="text-[12px] text-[var(--chat-text-secondary)]">
             {t('composer.suggestedSkills', 'Suggested skills')}
           </span>
           {visibleSkillSuggestions.map((suggestion) => (
@@ -925,7 +925,7 @@ export function ChatInput({
           <div
             role="status"
             aria-live="polite"
-            className="px-3 pt-2 text-[11px] text-[var(--chat-destructive)]"
+            className="px-3 pt-2 text-[12px] text-[var(--chat-destructive)]"
           >
             {attachmentError}
           </div>
@@ -1072,7 +1072,7 @@ export function ChatInput({
                   >
                     <Plus size={18} />
                     {attachedFiles.length > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-[var(--chat-accent-on-primary)]">
+                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[12px] font-bold text-[var(--chat-accent-on-primary)]">
                         {attachedFiles.length}
                       </span>
                     )}

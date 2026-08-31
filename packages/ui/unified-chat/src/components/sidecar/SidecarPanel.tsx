@@ -124,12 +124,12 @@ export function SidecarPanel({
 
   const securityBadge =
     allowStatus === 'allowed' ? (
-      <div className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+      <div className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-[12px] font-medium text-emerald-700 dark:text-emerald-300">
         <ShieldCheck className="h-3 w-3" />
         {allowedDirectory ?? 'Allowed'}
       </div>
     ) : (
-      <div className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[10px] font-medium text-amber-300">
+      <div className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-[12px] font-medium text-amber-300">
         <ShieldAlert className="h-3 w-3" />
         Restricted
       </div>

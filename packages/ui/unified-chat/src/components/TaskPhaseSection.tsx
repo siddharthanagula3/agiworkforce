@@ -74,7 +74,7 @@ function ToolPill({ entry }: { entry: ToolLabelEntry }) {
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px]',
+        'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[12px]',
         'bg-muted/40 border border-border/30 text-muted-foreground font-mono',
         'max-w-[240px]',
       )}
@@ -118,12 +118,12 @@ export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionPro
           {phase.name}
         </span>
 
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground shrink-0">
+        <span className="text-[12px] px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground shrink-0">
           {toolCount} {toolCount === 1 ? 'tool' : 'tools'}
         </span>
 
         {duration != null && duration > 0 && (
-          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+          <span className="text-[12px] text-muted-foreground tabular-nums shrink-0">
             {formatDuration(duration)}
           </span>
         )}
@@ -140,7 +140,7 @@ export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionPro
           )}
 
           {phase.summary && (
-            <p className="text-[11px] text-muted-foreground leading-relaxed">{phase.summary}</p>
+            <p className="text-[12px] text-muted-foreground leading-relaxed">{phase.summary}</p>
           )}
         </div>
       )}

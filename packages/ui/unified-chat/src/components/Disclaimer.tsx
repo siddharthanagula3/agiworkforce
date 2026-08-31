@@ -10,5 +10,5 @@ export function Disclaimer({ variant = 'default' }: DisclaimerProps) {
         ? 'Review code before running. AI can make mistakes.'
         : 'AI can make mistakes. Verify important information.';
 
-  return <p className="text-center text-[10px] text-[var(--chat-text-muted)] pt-1 pb-1">{text}</p>;
+  return <p className="text-center text-[12px] text-[var(--chat-text-muted)] pt-1 pb-1">{text}</p>;
 }

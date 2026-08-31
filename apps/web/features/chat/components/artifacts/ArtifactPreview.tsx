@@ -1285,7 +1285,7 @@ if (__AgiApp) {
                         },
                       });
                     }}
-                    className="flex h-6 items-center justify-center rounded px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="flex h-6 items-center justify-center rounded px-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
                     aria-label={`Restore version ${shownVersionIndex + 1}`}
                     title={`Restore v${shownVersionIndex + 1} as the latest version`}
                     data-testid="artifact-restore-version"
@@ -1564,7 +1564,7 @@ if (__AgiApp) {
               }
             />
             {generatedFileSummary.localOnly && (
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="mt-2 text-[12px] text-muted-foreground">
                 Local file. Web shares a reference only; it is not uploaded.
               </p>
             )}
@@ -1875,7 +1875,7 @@ if (__AgiApp) {
             }
           />
           {generatedFileSummary.localOnly && (
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-[12px] text-muted-foreground">
               Local file. Web shares a reference only; it is not uploaded.
             </p>
           )}
