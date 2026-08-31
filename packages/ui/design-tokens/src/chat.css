@@ -190,3 +190,106 @@
     --chat-thinking-line: rgba(0, 0, 0, 0.08);
   }
 }
+
+/* Mermaid diagrams.
+ *
+ * The SVG sanitiser strips <style>, which is where mermaid puts almost all of
+ * its colour - correctly, since an embedded stylesheet in model-authored
+ * markup is an injection vector. Styling the stable class names from here
+ * instead keeps the diagram legible, keeps colour in the token layer, and
+ * follows the theme without the component knowing which theme is active.
+ */
+.mermaid-block {
+  margin: 1rem 0;
+}
+
+.mermaid-diagram {
+  overflow-x: auto;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-diagram svg .node rect,
+.mermaid-diagram svg .node circle,
+.mermaid-diagram svg .node ellipse,
+.mermaid-diagram svg .node polygon,
+.mermaid-diagram svg .cluster rect {
+  fill: var(--chat-surface-elevated);
+  stroke: var(--chat-border-strong);
+  stroke-width: 1px;
+}
+
+.mermaid-diagram svg text,
+.mermaid-diagram svg tspan {
+  fill: var(--chat-text-primary);
+  font-family: inherit;
+}
+
+.mermaid-diagram svg .edgePath path,
+.mermaid-diagram svg .flowchart-link,
+.mermaid-diagram svg line {
+  stroke: var(--chat-text-muted);
+  stroke-width: 1.5px;
+  fill: none;
+}
+
+.mermaid-diagram svg marker path,
+.mermaid-diagram svg .arrowMarkerPath {
+  fill: var(--chat-text-muted);
+  stroke: none;
+}
+
+.mermaid-diagram svg .edgeLabel rect,
+.mermaid-diagram svg .labelBkg {
+  fill: var(--chat-bg);
+}
+
+.mermaid-diagram svg .actor,
+.mermaid-diagram svg .labelBox {
+  fill: var(--chat-surface-elevated);
+  stroke: var(--chat-border-strong);
+}
+
+.mermaid-diagram svg .messageLine0,
+.mermaid-diagram svg .messageLine1 {
+  stroke: var(--chat-text-muted);
+}
+
+.mermaid-source {
+  overflow-x: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--chat-border);
+  border-radius: 8px;
+  background: var(--chat-code-bg);
+  font-size: 13px;
+}
+
+.mermaid-error {
+  margin-bottom: 0.5rem;
+  color: var(--chat-warning-fg, var(--chat-text-secondary));
+  font-size: 13px;
+}
+
+.mermaid-pending {
+  margin-bottom: 0.5rem;
+  color: var(--chat-text-muted);
+  font-size: 13px;
+}
+
+.mermaid-caption {
+  margin-top: 0.375rem;
+  font-size: 12px;
+}
+
+.mermaid-caption button {
+  color: var(--chat-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mermaid-caption button:hover {
+  color: var(--chat-text-primary);
+}
