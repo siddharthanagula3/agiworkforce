@@ -101,7 +101,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/data-use',
     label: 'How we use your data',
-    body: 'Plain-English answers to the questions people actually ask: training, who can read your chats, selling, retention, deletion, residency — each linking to the section of the privacy policy that governs it.',
+    body: 'Plain-English answers to the questions people actually ask: training, who can read your chats, selling, retention, deletion, residency, each linking to the section of the privacy policy that governs it.',
   },
   {
     href: '/privacy/india',

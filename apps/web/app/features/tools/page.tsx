@@ -91,7 +91,7 @@ export default function FeaturesToolsPage() {
             },
             {
               k: 'Default',
-              v: 'A connector tool you have never ruled on is Needs approval. If its name reads as a write — create, update, delete, remove — the default is Blocked instead. Nothing becomes allowed by omission.',
+              v: 'A connector tool you have never ruled on is Needs approval. If its name reads as a write (create, update, delete, remove — the default is Blocked instead. Nothing becomes allowed by omission.',
             },
             {
               k: 'The ask',

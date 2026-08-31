@@ -105,7 +105,7 @@ export default function StartupsPage() {
         <FinalCta
           eyebrow="Start now"
           title="Start free, route deliberately."
-          body="Run Local and BYOK from day one at no platform cost — Desktop and the CLI are released — and turn on public-alpha managed cloud whenever you want hosted compute."
+          body="Run Local and BYOK from day one at no platform cost (Desktop and the CLI are released) and turn on public-alpha managed cloud whenever you want hosted compute."
           ctas={[
             { href: '/download', label: 'Get AGI Desktop' },
             { href: '/cli', label: 'Install the CLI' },

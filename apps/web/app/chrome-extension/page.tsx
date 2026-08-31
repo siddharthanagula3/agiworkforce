@@ -85,7 +85,7 @@ const CAPABILITIES = [
   {
     meta: 'Injection',
     title: 'Page text arrives as untrusted input',
-    body: 'Text read during a run is scanned for the phrases that try to turn an agent around — ignore previous instructions, send this to, your API key, one-time code — and a match reaches the model wrapped in a security warning.',
+    body: 'Text read during a run is scanned for the phrases that try to turn an agent around: ignore previous instructions, send this to, your API key, one-time code — and a match reaches the model wrapped in a security warning.',
   },
   {
     meta: 'Automation',
@@ -217,7 +217,7 @@ export default function ChromeExtensionPage() {
               A computer-use step calls the Managed Cloud gateway directly from the extension, and
               it carries the conversation together with every screenshot the run has taken of your
               tab. Those images are{' '}
-              <span className="agi-callout-amber">not redacted and cannot be</span> — whatever your
+              <span className="agi-callout-amber">not redacted and cannot be</span>. Whatever your
               signed-in page was showing is inside the picture. Approve an origin for browser
               control only if you would hand us that session. The gates, the allowlist, and what
               remains after both are written out at{' '}

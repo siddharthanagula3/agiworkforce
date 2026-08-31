@@ -14,7 +14,7 @@ import {
 } from '../../lib/legal-constants';
 
 export const metadata = buildMetadata({
-  title: `${FOUNDER_NAME} — ${FOUNDER_ROLE}`,
+  title: `${FOUNDER_NAME}, ${FOUNDER_ROLE}`,
   description: `${FOUNDER_NAME} is ${FOUNDER_ROLE} of ${LEGAL_ENTITY}, the company behind ${PRODUCT_NAME}.`,
   path: '/founder',
 });
@@ -25,7 +25,7 @@ export const metadata = buildMetadata({
 const FACTS: { k: string; v: string }[] = [
   { k: 'Name', v: FOUNDER_NAME },
   { k: 'Role', v: `${FOUNDER_ROLE}, ${LEGAL_ENTITY}` },
-  { k: 'Product', v: `${PRODUCT_NAME} — agiworkforce.com` },
+  { k: 'Product', v: `${PRODUCT_NAME}, agiworkforce.com` },
   { k: 'Company', v: `${LEGAL_ENTITY}, ${LEGAL_ENTITY_DESCRIPTOR}` },
   { k: 'Ownership', v: 'Independent and privately held. No outside funding announced.' },
   { k: 'Contact', v: CONTACT_EMAIL },
@@ -76,8 +76,8 @@ export default function FounderPage() {
                 <em className="agi-fl-h1-em">&ldquo;You should own the choice of model.&rdquo;</em>
               </h2>
               <p className="agi-fl-section-lede">
-                The person doing the work should decide where it runs and which model answers — not
-                a vendor holding the only key. Local Mode never phones home, BYOK keeps your keys on
+                The person doing the work should decide where it runs and which model answers, not a
+                vendor holding the only key. Local Mode never phones home, BYOK keeps your keys on
                 your own machine, and managed cloud is a choice you make rather than the only door.
                 Every design decision in {PRODUCT_NAME} follows from that.
               </p>
@@ -114,7 +114,7 @@ export default function FounderPage() {
           <p className="agi-fl-section-lede">
             Product feedback, bugs, partnership questions and press all arrive at the same address,
             and it is me reading them. If you are already in the product, the feedback control under
-            the composer is faster — it carries the context with it.
+            the composer is faster: it carries the context with it.
           </p>
           <p className="agi-fl-section-lede">
             <a className="agi-fl-link" href={contactMailto()}>

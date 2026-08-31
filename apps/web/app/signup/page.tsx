@@ -27,7 +27,7 @@ export default async function SignupPage({
       lede="Start with hosted AGI Web, then take the same account to Mobile and Desktop Cloud. Serious work can stay Local or BYOK. No account needed there."
       points={[
         'Chat, projects & artifacts in the browser',
-        'AGI managed cloud is open — start in the browser',
+        'AGI managed cloud is open: start in the browser',
         'Local Mode stays free, private & account-free',
       ]}
     >

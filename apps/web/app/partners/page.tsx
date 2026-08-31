@@ -20,13 +20,13 @@ const OPPORTUNITIES: {
   {
     meta: 'Available today',
     title: 'Build on MCP',
-    body: 'AGI implements the Model Context Protocol, so a connector or tool server you build against the open spec works with AGI Desktop now — behind the same explicit tool-approval prompts as anything else. You do not need an agreement with us, or our permission, to build one.',
+    body: 'AGI implements the Model Context Protocol, so a connector or tool server you build against the open spec works with AGI Desktop now, behind the same explicit tool-approval prompts as anything else. You do not need an agreement with us, or our permission, to build one.',
     status: 'No agreement required',
   },
   {
     meta: 'Looking for',
     title: 'Implementation and delivery partners',
-    body: 'Consultancies and IT service providers who deploy AGI inside a client engagement — usually Local or BYOK, where the client’s data never reaches our infrastructure. We want to learn what the deployment actually requires before we design a program around it.',
+    body: 'Consultancies and IT service providers who deploy AGI inside a client engagement, usually Local or BYOK, where the client’s data never reaches our infrastructure. We want to learn what the deployment actually requires before we design a program around it.',
     status: 'No formal program yet',
   },
   {
@@ -47,7 +47,7 @@ export default function PartnersPage() {
           eyebrow="Partners"
           titleLines={['No program yet.', 'One open door.']}
           em="One open door."
-          lede="We are not going to describe a partner program we have not built — there is no application form, no directory, and no reseller agreement behind this page. What is real today is that AGI speaks MCP, so anything you build against that open protocol already works with it. Beyond that, here is what we are actively looking for."
+          lede="We are not going to describe a partner program we have not built. There is no application form, no directory, and no reseller agreement behind this page. What is real today is that AGI speaks MCP, so anything you build against that open protocol already works with it. Beyond that, here is what we are actively looking for."
           ctas={[
             { href: contactMailto('Partnership enquiry'), label: 'Email partnerships' },
             { href: '/apps', label: 'See tools & connectors' },
