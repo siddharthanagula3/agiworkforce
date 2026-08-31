@@ -17,6 +17,37 @@ import {
   validateCreateCloudCodeSession,
 } from './cloud-code-session-service';
 
+describe('cloud-code-session-service schema detection', () => {
+  it('treats an absent table and an absent column alike', () => {
+    // A half-migrated deployment - table present, column not - is the case a
+    // real deploy hits, and it used to fall through to "An unexpected error
+    // occurred". Reproduced live before this was widened.
+    const missingTable = Object.assign(new Error('relation does not exist'), { code: '42P01' });
+    const missingColumn = Object.assign(
+      new Error('column "runtime_id" of relation "cloud_code_sessions" does not exist'),
+      { code: '42703' },
+    );
+
+    expect(isCloudCodeSchemaUnavailable(missingTable)).toBe(true);
+    expect(isCloudCodeSchemaUnavailable(missingColumn)).toBe(true);
+  });
+
+  it('finds the code through a wrapped cause', () => {
+    const wrapped = Object.assign(new Error('query failed'), {
+      cause: Object.assign(new Error('inner'), { code: '42703' }),
+    });
+    expect(isCloudCodeSchemaUnavailable(wrapped)).toBe(true);
+  });
+
+  it('does not swallow an unrelated database error', () => {
+    expect(
+      isCloudCodeSchemaUnavailable(Object.assign(new Error('deadlock'), { code: '40P01' })),
+    ).toBe(false);
+    expect(isCloudCodeSchemaUnavailable(new Error('plain'))).toBe(false);
+    expect(isCloudCodeSchemaUnavailable(null)).toBe(false);
+  });
+});
+
 describe('cloud-code-session-service validation', () => {
   it('defaults to a credential-free home workspace', () => {
     expect(
@@ -32,7 +63,65 @@ describe('cloud-code-session-service validation', () => {
       networkAccess: 'none',
       workspacePath: '/home/user',
       runtimeId: null,
+      repositoryBranch: null,
     });
+  });
+
+  it('refuses a branch that git would read as an option', () => {
+    // `--branch <ref>` precedes the `--` guarding the URL, so the ref reaches
+    // git as its own argv element and shell quoting does not disarm it.
+    for (const branch of [
+      '--upload-pack=touch /tmp/pwned',
+      '-x',
+      '--exec=whoami',
+      '..',
+      'feature/../../etc',
+      'feature//x',
+      'ends-with-slash/',
+      'ends-with-dot.',
+      'refs/heads/x.lock',
+      'has space',
+      'semi;colon',
+      'back`tick`',
+      '$(whoami)',
+    ]) {
+      expect(
+        () =>
+          validateCreateCloudCodeSession({
+            requestId: 'request_123456',
+            title: 'Repository workspace',
+            repositoryUrl: 'https://github.com/acme/widgets',
+            repositoryBranch: branch,
+            networkAccess: 'trusted',
+          }),
+        `branch ${branch} must be refused`,
+      ).toThrow();
+    }
+  });
+
+  it('accepts ordinary refs', () => {
+    for (const branch of ['main', 'release/2.1', 'feature/add-thing', 'v1.2.3', 'a']) {
+      expect(
+        validateCreateCloudCodeSession({
+          requestId: 'request_123456',
+          title: 'Repository workspace',
+          repositoryUrl: 'https://github.com/acme/widgets',
+          repositoryBranch: branch,
+          networkAccess: 'trusted',
+        }).repositoryBranch,
+      ).toBe(branch);
+    }
+  });
+
+  it('refuses a branch with no repository to clone it from', () => {
+    expect(() =>
+      validateCreateCloudCodeSession({
+        requestId: 'request_123456',
+        title: 'No repo',
+        repositoryBranch: 'main',
+        networkAccess: 'trusted',
+      }),
+    ).toThrow(/needs a repository/i);
   });
 
   it('accepts only public owner/repository GitHub URLs and normalizes clone syntax', () => {

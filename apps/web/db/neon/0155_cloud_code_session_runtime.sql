@@ -1,4 +1,4 @@
--- 0155 — remember which sandbox image a Code session was built from.
+-- 0155 — remember which sandbox image and branch a Code session was built from.
 --
 -- NOT YET APPLIED — draft only, pending explicit approval before running.
 --
@@ -20,3 +20,13 @@ alter table public.cloud_code_sessions
 
 comment on column public.cloud_code_sessions.runtime_id is
   'E2B template id the sandbox was created from. Null means the SDK default image.';
+
+-- The branch is recorded for the same reason: a workspace cloned from a
+-- non-default ref should be able to say so. Null means the repository's own
+-- default branch, which is what every existing row cloned.
+
+alter table public.cloud_code_sessions
+  add column if not exists repository_branch text;
+
+comment on column public.cloud_code_sessions.repository_branch is
+  'Git ref cloned into the workspace. Null means the repository default branch.';

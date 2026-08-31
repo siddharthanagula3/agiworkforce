@@ -16,9 +16,18 @@ export type CloudCodeSessionState = (typeof CLOUD_CODE_SESSION_STATES)[number];
  * the E2B console is offered here without a release.
  */
 export interface CloudCodeRuntime {
-  /** E2B template id — the value handed to `Sandbox.create`. */
+  /** E2B template name or id — the value handed to `Sandbox.create`. */
   id: string;
   name: string;
+  /**
+   * `harness` ships a coding agent's CLI already installed; `image` is a plain
+   * environment the reader drives themselves.
+   */
+  kind: 'harness' | 'image';
+  /** One line on what is in it. */
+  summary: string;
+  /** Command that starts the agent, for a harness. */
+  agentCommand: string | null;
   cpuCount: number;
   memoryMB: number;
   diskSizeMB: number;
@@ -30,6 +39,8 @@ export interface CloudCodeSession {
   id: string;
   title: string;
   repositoryUrl: string | null;
+  /** Git ref cloned into the workspace. Null means the repository's default. */
+  repositoryBranch: string | null;
   networkAccess: CloudCodeNetworkAccess;
   /** Null for sessions created before the runtime was selectable. */
   runtimeId: string | null;
@@ -71,6 +82,7 @@ export interface CreateCloudCodeSessionInput {
   requestId: string;
   title: string;
   repositoryUrl?: string | null;
+  repositoryBranch?: string | null;
   networkAccess: CloudCodeNetworkAccess;
   fullNetworkAcknowledged?: boolean;
   /** Must match a catalogue entry; omitted means the default image. */
