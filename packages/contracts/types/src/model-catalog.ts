@@ -1040,6 +1040,50 @@ export function getModelMetadataById(modelId: string | null | undefined): ModelM
   return modelsCatalog.models[canonicalModelId] ?? null;
 }
 
+const TEXT_PRODUCING_MODEL_TYPES: ReadonlySet<ModelType> = new Set([
+  'chat',
+  'code',
+  'reasoning',
+  'multimodal',
+  'search',
+]);
+
+/**
+ * How long a single answer is allowed to get. This is a product decision, not a
+ * model limit: every text model in the catalogue declares 64k or more, and
+ * asking for all of it would size the pre-flight cost reservation against an
+ * answer nobody writes. 8k covers the longest response the product composes -
+ * a multi-thousand-word structured report - with room to spare.
+ */
+const ANSWER_TOKEN_CEILING = 8_192;
+
+/** Used when the catalogue entry does not state the model's own limit. */
+const UNDECLARED_OUTPUT_TOKENS = 4_096;
+
+/** Non-text models keep a small budget; their output is not measured in tokens. */
+const NON_TEXT_OUTPUT_TOKENS = 1_024;
+
+/**
+ * The output ceiling to send to the provider when the caller did not ask for
+ * one. A fixed default truncates every long answer at the same point and makes
+ * the reader chase it with Continue, which is where continuation seams come
+ * from - so the number has to follow the model.
+ */
+export function resolveMaxOutputTokens(modelId: string | null | undefined): number {
+  const metadata = getModelMetadataById(modelId);
+  if (!metadata) return UNDECLARED_OUTPUT_TOKENS;
+  if (!TEXT_PRODUCING_MODEL_TYPES.has(metadata.modelType)) return NON_TEXT_OUTPUT_TOKENS;
+
+  const declared = metadata.maxOutputTokens ?? UNDECLARED_OUTPUT_TOKENS;
+  const contextWindow = metadata.contextWindow;
+  const withinContext =
+    typeof contextWindow === 'number' && contextWindow > 0
+      ? Math.min(declared, contextWindow)
+      : declared;
+
+  return Math.max(1, Math.min(ANSWER_TOKEN_CEILING, withinContext));
+}
+
 export const modelsById: Record<string, ModelMetadata> = (() => {
   const entries: Record<string, ModelMetadata> = {};
 

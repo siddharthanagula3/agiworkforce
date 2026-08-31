@@ -43,6 +43,7 @@ export type {
   StreamErrorMessageLike,
   StreamErrorInfo,
 } from './lib/continue-generation';
+export { repairContinuationSeam, SEAM_INSPECTION_WINDOW } from './lib/continuation-seam';
 export {
   getRegenerateReplayDecision,
   planRegenerateRollback,
