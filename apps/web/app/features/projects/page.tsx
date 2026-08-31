@@ -130,8 +130,8 @@ export default function ProjectsFeaturePage() {
             A project rebuilds its own context into <em>every prompt you send</em>.
           </h1>
           <p className="agi-page-lede">
-            Open a chat inside a project and AGI reassembles what that project holds — the standing
-            instructions you wrote, the files you uploaded, and the threads you already ran there —
+            Open a chat inside a project and AGI reassembles what that project holds (the standing
+            instructions you wrote, the files you uploaded, and the threads you already ran there)
             into the system message for that one turn. It is built fresh each time and ranked
             against the question you just typed.
           </p>

@@ -55,14 +55,14 @@ export default function EuRepresentativePage() {
           <p className="agi-section-eyebrow">What to do in the meantime</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             The absence of a representative does not reduce your rights or our obligations. Send
-            privacy requests &mdash; access, correction, deletion, portability, objection &mdash;
-            directly to {LEGAL_ENTITY} at{' '}
+            privacy requests (access, correction, deletion, portability, objection) directly to{' '}
+            {LEGAL_ENTITY} at{' '}
             <a href={contactMailto(CONTACT_SUBJECTS.privacy)} style={{ color: 'var(--agi-ink)' }}>
               {CONTACT_EMAIL}
             </a>{' '}
             with the subject line &ldquo;{CONTACT_SUBJECTS.privacy}&rdquo;, or by post to{' '}
             {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We respond within 30 days. Export and account deletion
-            are also self-serve in the product &mdash; see section 06 of the{' '}
+            are also self-serve in the product. See section 06 of the{' '}
             <Link href="/privacy" style={{ color: 'var(--agi-ink)' }}>
               privacy policy
             </Link>

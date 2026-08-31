@@ -23,7 +23,7 @@ const UPTIME: { component: string; target: string; window: string }[] = [
   },
   {
     component: 'Local and BYOK modes',
-    target: 'Not applicable — no AGI service in the path',
+    target: 'Not applicable: no AGI service in the path',
     window: 'Not measured',
   },
 ];

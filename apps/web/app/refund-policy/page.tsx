@@ -98,7 +98,7 @@ export default function RefundPolicyPage() {
             <Link href="/sla" style={{ color: 'var(--agi-ink)' }}>
               /sla
             </Link>{' '}
-            — this page used to promise one business day for everyone, which did not match those
+            . This page used to promise one business day for everyone, which did not match those
             targets. Approved refunds are returned through the original payment method on the
             payment processor&rsquo;s timeline.
           </p>

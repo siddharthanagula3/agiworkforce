@@ -44,7 +44,7 @@ export default async function CopyrightReportPage({
           <p className="agi-section-eyebrow">Copyright &middot; notice and takedown</p>
           <h1 className="agi-page-h1">Report infringing content.</h1>
           <p className="agi-page-lede">
-            This form is for material published here at a public URL — a shared conversation under
+            This form is for material published here at a public URL: a shared conversation under
             /share, or a published artifact under /shared-artifact. It records the notice, gives you
             a reference, and forwards it to the contact who can disable the link. The policy behind
             it, including counter-notices and repeat infringers, is on{' '}

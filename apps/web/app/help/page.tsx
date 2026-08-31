@@ -57,7 +57,7 @@ export default function HelpPage() {
             {
               meta: 'BYOK',
               title: 'Add your API key',
-              body: `Bring your own provider keys on ${BYOK_SURFACES.label} — Desktop and the CLI have published releases; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion} The key stays in the local runtime and requests go straight to your provider.`,
+              body: `Bring your own provider keys on ${BYOK_SURFACES.label}. Desktop and the CLI have published releases; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion} The key stays in the local runtime and requests go straight to your provider.`,
               href: '/byok',
             },
             {

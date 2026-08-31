@@ -139,7 +139,7 @@ export default function BusinessPage() {
               <h3 className="agi-reason-h">Overage stays switched off</h3>
               <p className="agi-reason-p">
                 Continuing past a managed usage limit spends prepaid credits, and only once the
-                account turns that on. Leave the switch alone and the limit simply holds — there is
+                account turns that on. Leave the switch alone and the limit simply holds: there is
                 no balance to drain and no charge beyond the plan.
               </p>
             </li>
@@ -164,7 +164,7 @@ export default function BusinessPage() {
               <dt className="agi-colophon-key">Seats</dt>
               <dd className="agi-colophon-val">
                 {TEAM_PLAN.label} is billed per seat from a {MIN_PURCHASABLE_SEATS}-seat minimum.
-                What those seats unlock — shared projects, membership, connector approvals — is
+                What those seats unlock (shared projects, membership, connector approvals) is
                 written up on the <Link href="/teams">teams page</Link>.
               </dd>
             </div>
