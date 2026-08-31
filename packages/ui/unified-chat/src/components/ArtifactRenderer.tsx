@@ -308,7 +308,10 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
     let mounted = true;
 
     const renderDiagram = async () => {
-      if (!artifact.content) return;
+      if (!artifact.content || !artifact.content.trim()) {
+        if (mounted) setError('This diagram has no content.');
+        return;
+      }
       try {
         const mermaid = (await import('mermaid')).default;
         mermaid.initialize({
@@ -322,9 +325,16 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
         if (!artifact.content.trim()) throw new Error('Empty diagram content');
 
         const { svg } = await mermaid.render(id, artifact.content);
-        if (mounted) {
+        // render() can succeed on markup the sanitiser then strips to nothing.
+        // Committing that as success left a permanent "Rendering diagram..."
+        // pulse - a loading state for work that had already finished.
+        const cleaned = sanitizeSvg(svg);
+        if (!mounted) return;
+        if (cleaned) {
           setSvg(svg);
           setError(null);
+        } else {
+          setError('The diagram could not be displayed safely.');
         }
       } catch (err) {
         if (mounted) {
@@ -341,9 +351,16 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
 
   if (error) {
     return (
-      <div className="p-4 border border-rose-500/20 bg-rose-500/10 rounded-lg">
-        <p className="text-sm font-medium text-rose-400 mb-2">Failed to render diagram</p>
-        <pre className="text-xs text-rose-300 whitespace-pre-wrap">{error}</pre>
+      <div className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-4">
+        <p className="mb-2 text-sm font-medium text-rose-400">Failed to render diagram</p>
+        <pre className="whitespace-pre-wrap text-xs text-rose-300">{error}</pre>
+        {/* The transcript is lossless: a diagram that cannot be drawn still
+            has to hand back the text it was drawn from. */}
+        {artifact.content ? (
+          <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-black/20 p-3 text-xs text-muted-foreground">
+            {artifact.content}
+          </pre>
+        ) : null}
       </div>
     );
   }

@@ -54,7 +54,7 @@ exports[`shared-primitive DOM snapshots > locks the GeneratedFileCard rendered s
           Snapshot report
         </span>
         <span
-          class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
+          class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
         >
           <svg
             aria-hidden="true"
@@ -80,7 +80,7 @@ exports[`shared-primitive DOM snapshots > locks the GeneratedFileCard rendered s
         </span>
       </div>
       <div
-        class="flex flex-wrap items-center gap-2 text-[11px] text-[var(--chat-text-muted)]"
+        class="flex flex-wrap items-center gap-2 text-[12px] text-[var(--chat-text-muted)]"
       >
         <span>
           PDF
@@ -100,7 +100,7 @@ exports[`shared-primitive DOM snapshots > locks the GeneratedFileCard rendered s
         class="flex flex-wrap items-center gap-1.5 pt-0.5"
       >
         <span
-          class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]"
+          class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]"
         >
           <svg
             aria-hidden="true"
@@ -130,12 +130,12 @@ exports[`shared-primitive DOM snapshots > locks the GeneratedFileCard rendered s
           Local
         </span>
         <span
-          class="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]"
+          class="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]"
         >
           Local
         </span>
         <span
-          class="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]"
+          class="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]"
         >
           Desktop
         </span>
@@ -189,7 +189,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
           Snapshot Project
         </h2>
         <span
-          class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide border-violet-500/40 bg-violet-500/10 text-violet-300"
+          class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[12px] uppercase tracking-wide border-violet-500/40 bg-violet-500/10 text-violet-300"
           data-testid="project-header-imported-from"
         >
           Created in AGI
@@ -206,7 +206,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
     class="flex flex-wrap items-center gap-1.5"
   >
     <span
-      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] font-medium border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
       data-stays-local="true"
       data-testid="project-header-privacy-chip"
     >
@@ -240,7 +240,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
       </span>
     </span>
     <span
-      class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5"
+      class="inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/5"
       data-provider-mode="Local"
       data-testid="project-header-provider-chip"
     >
@@ -248,7 +248,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
     </span>
   </div>
   <div
-    class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--chat-text-muted)]"
+    class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--chat-text-muted)]"
     data-testid="project-header-meta-row"
   >
     <span
@@ -305,17 +305,17 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
     data-testid="project-header-surface-chips"
   >
     <span
-      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
+      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[12px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
     >
       Web
     </span>
     <span
-      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
+      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[12px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
     >
       Desktop
     </span>
     <span
-      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
+      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[12px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
     >
       Mobile
     </span>
@@ -362,7 +362,7 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
       Sent to api.anthropic.com
     </span>
     <span
-      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
+      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
     >
       <svg
         aria-hidden="true"
@@ -392,13 +392,13 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
       BYOK
     </span>
     <span
-      class="ml-auto text-[10px] text-[var(--chat-text-muted)]"
+      class="ml-auto text-[12px] text-[var(--chat-text-muted)]"
     >
       Direct Model Fixture
     </span>
   </div>
   <p
-    class="text-[11px] leading-relaxed text-[var(--chat-text-secondary)]"
+    class="text-[12px] leading-relaxed text-[var(--chat-text-secondary)]"
   >
     BYOK turn. The request, attachments, and system prompt go directly to api.anthropic.com via your API key. AGI does not receive a copy of the payload.
   </p>
@@ -447,7 +447,7 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
       Stays on this device
     </span>
     <span
-      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
+      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
     >
       <svg
         aria-hidden="true"
@@ -477,20 +477,20 @@ exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structu
       Local
     </span>
     <span
-      class="ml-auto text-[10px] text-[var(--chat-text-muted)]"
+      class="ml-auto text-[12px] text-[var(--chat-text-muted)]"
     >
       Local Model Fixture
     </span>
   </div>
   <p
-    class="text-[11px] leading-relaxed text-[var(--chat-text-secondary)]"
+    class="text-[12px] leading-relaxed text-[var(--chat-text-secondary)]"
   >
     Local turn. The model runs on your device and nothing is uploaded to AGI cloud or third-party providers.
   </p>
   <button
     aria-controls="send-preview-details"
     aria-expanded="false"
-    class="inline-flex items-center gap-1 self-start text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+    class="inline-flex items-center gap-1 self-start text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
     type="button"
   >
     <svg
