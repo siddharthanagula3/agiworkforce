@@ -160,7 +160,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                     size="sm"
                     onClick={() => onSetKeyToDelete(apiKey.id)}
                     aria-label={`Delete ${apiKey.name}`}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -183,11 +183,11 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
             <div className="text-muted-foreground">
               {generatedAPIKey ? (
                 <div className="space-y-4">
-                  <p className="text-yellow-400">
+                  <p className="text-yellow-700 dark:text-yellow-400">
                     <AlertTriangle className="mr-2 inline h-4 w-4" />
                     Save this key now. You will not be able to see it again!
                   </p>
-                  <div className="break-all rounded border border-border bg-background/50 p-3 font-mono text-sm text-green-400">
+                  <div className="break-all rounded border border-border bg-background/50 p-3 font-mono text-sm text-green-700 dark:text-green-400">
                     {generatedAPIKey}
                   </div>
                   <Button onClick={() => onCopyAPIKey(generatedAPIKey)} className="w-full">
