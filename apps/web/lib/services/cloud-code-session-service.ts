@@ -100,11 +100,25 @@ export class CloudCodeUnavailableError extends Error {
   }
 }
 
+/**
+ * Postgres codes that mean "this deployment has not run the migrations yet":
+ * 42P01 is an absent table, 42703 an absent column.
+ *
+ * The column case is the one a real deployment hits — a table added long ago
+ * and a column added since. Matching only the table left a half-migrated
+ * deployment answering "An unexpected error occurred", which tells the reader
+ * nothing and the operator less. Reproduced against a live database with
+ * `runtime_id` not yet added.
+ */
+const SCHEMA_NOT_MIGRATED_CODES = new Set(['42P01', '42703']);
+
 export function isCloudCodeSchemaUnavailable(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth += 1) {
     const candidate = current as { code?: unknown; cause?: unknown };
-    if (candidate.code === '42P01') return true;
+    if (typeof candidate.code === 'string' && SCHEMA_NOT_MIGRATED_CODES.has(candidate.code)) {
+      return true;
+    }
     current = candidate.cause;
   }
   return false;
@@ -119,6 +133,7 @@ interface SessionRow extends Record<string, unknown> {
   repository_url: string | null;
   network_access: string;
   runtime_id?: string | null;
+  repository_branch?: string | null;
   state: string;
   workspace_path: string;
   last_error: string | null;
@@ -147,6 +162,7 @@ interface ValidatedCreateInput {
   networkAccess: CloudCodeNetworkAccess;
   workspacePath: string;
   runtimeId: string | null;
+  repositoryBranch: string | null;
 }
 
 function iso(value: string | Date): string {
@@ -174,6 +190,7 @@ export function mapCloudCodeSession(row: SessionRow): CloudCodeSession {
     id: row.id,
     title: row.title,
     repositoryUrl: row.repository_url,
+    repositoryBranch: row.repository_branch ?? null,
     networkAccess: asNetworkAccess(row.network_access),
     runtimeId: row.runtime_id ?? null,
     state: asSessionState(row.state),
@@ -230,6 +247,34 @@ function validateRepositoryUrl(value: unknown): string | null {
   return `https://github.com/${pathParts[0]}/${pathParts[1]}.git`;
 }
 
+/**
+ * Accept only refs that cannot be mistaken for a git option.
+ *
+ * `--branch` has to precede the `--` that protects the URL, so the ref reaches
+ * git as its own argv element: shell quoting does not stop `--upload-pack=...`
+ * from being read as a flag. Requiring an alphanumeric first character removes
+ * that whole class, and the rest follows git-check-ref-format.
+ */
+const GIT_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
+
+function validateRepositoryBranch(value: string | null | undefined): string | null {
+  const branch = typeof value === 'string' ? value.trim() : '';
+  if (!branch) return null;
+  const rejected =
+    !GIT_REF_RE.test(branch) ||
+    branch.includes('..') ||
+    branch.includes('//') ||
+    branch.endsWith('/') ||
+    branch.endsWith('.') ||
+    branch.endsWith('.lock');
+  if (rejected) {
+    throw new CloudCodeValidationError(
+      'Branch must be a plain git ref: letters, digits, dot, dash, underscore and slash, starting with a letter or digit.',
+    );
+  }
+  return branch;
+}
+
 export function validateCreateCloudCodeSession(
   input: CreateCloudCodeSessionInput,
 ): ValidatedCreateInput {
@@ -249,6 +294,10 @@ export function validateCreateCloudCodeSession(
     );
   }
   const repositoryUrl = validateRepositoryUrl(input.repositoryUrl);
+  const repositoryBranch = validateRepositoryBranch(input.repositoryBranch);
+  if (repositoryBranch && !repositoryUrl) {
+    throw new CloudCodeValidationError('A branch needs a repository to clone it from');
+  }
   if (repositoryUrl && input.networkAccess === 'none') {
     throw new CloudCodeValidationError(
       'Repository setup requires Trusted hosts or Full network access',
@@ -263,6 +312,7 @@ export function validateCreateCloudCodeSession(
     // Checked against the live catalogue in createCloudCodeSession, which can
     // await; this stays synchronous for the callers that only shape-check.
     runtimeId: typeof input.runtimeId === 'string' ? input.runtimeId.trim() || null : null,
+    repositoryBranch,
   };
 }
 
@@ -465,7 +515,8 @@ function sameCreateRequest(row: SessionRow, input: ValidatedCreateInput): boolea
     row.title === input.title &&
     row.repository_url === input.repositoryUrl &&
     row.network_access === input.networkAccess &&
-    (row.runtime_id ?? null) === input.runtimeId
+    (row.runtime_id ?? null) === input.runtimeId &&
+    (row.repository_branch ?? null) === input.repositoryBranch
   );
 }
 
@@ -526,8 +577,8 @@ export async function createCloudCodeSession(
       const inserted = await tx.query<SessionRow>(
         `insert into cloud_code_sessions (
            user_id, organization_id, request_id, title, repository_url,
-           network_access, state, workspace_path, runtime_id
-         ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7, $8)
+           network_access, state, workspace_path, runtime_id, repository_branch
+         ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7, $8, $9)
          returning *`,
         [
           owner.userId,
@@ -538,6 +589,7 @@ export async function createCloudCodeSession(
           validated.networkAccess,
           validated.workspacePath,
           validated.runtimeId,
+          validated.repositoryBranch,
         ],
       );
       return { row: inserted[0]!, reused: false };
@@ -577,9 +629,11 @@ export async function createCloudCodeSession(
   try {
     if (validated.repositoryUrl) {
       const clone = await executor.runCommand({
-        command: `git clone --depth=1 -- ${shellQuote(validated.repositoryUrl)} ${shellQuote(
-          REPOSITORY_WORKSPACE_PATH,
-        )}`,
+        // The ref goes before `--`, which is why validateRepositoryBranch
+        // refuses anything that could read as a flag.
+        command: `git clone --depth=1 ${
+          validated.repositoryBranch ? `--branch ${shellQuote(validated.repositoryBranch)} ` : ''
+        }-- ${shellQuote(validated.repositoryUrl)} ${shellQuote(REPOSITORY_WORKSPACE_PATH)}`,
         cwd: DEFAULT_WORKSPACE_PATH,
         timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
       });

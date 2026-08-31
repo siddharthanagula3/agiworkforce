@@ -39,7 +39,7 @@ function rethrowCloudCodeError(error: unknown): never {
     throw createError.serviceUnavailable(error.message);
   }
   if (isCloudCodeSchemaUnavailable(error)) {
-    throw createError.serviceUnavailable(
+    throw createError.capabilityUnavailable(
       'Managed Code is coming soon. Cloud sessions are not available yet.',
     );
   }
@@ -104,12 +104,12 @@ async function handleCreate(request: NextRequest) {
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   if (!e2bProvisioningReady()) {
-    throw createError.serviceUnavailable(
+    throw createError.capabilityUnavailable(
       'Managed Code is not enabled for this deployment. Use the desktop app for local code.',
     );
   }
   if (!isManagedComputePrivateBetaEnabled()) {
-    throw createError.serviceUnavailable(
+    throw createError.capabilityUnavailable(
       'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
     );
   }

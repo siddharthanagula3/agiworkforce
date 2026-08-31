@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Download,
   ExternalLink,
+  GitBranch,
   GitFork,
   Globe2,
   Loader2,
@@ -82,8 +83,10 @@ function makeRequestId(): string {
 function describeRuntime(runtime: CloudCodeRuntime): string {
   const cores = runtime.cpuCount > 0 ? `${runtime.cpuCount} vCPU` : null;
   const memory = runtime.memoryMB > 0 ? `${Math.round(runtime.memoryMB / 1024)} GB RAM` : null;
-  const specs = [cores, memory].filter(Boolean).join(', ');
-  return specs ? `${runtime.name} — ${specs}` : runtime.name;
+  const detail = [runtime.summary, [cores, memory].filter(Boolean).join(', ')]
+    .filter(Boolean)
+    .join(' · ');
+  return detail ? `${runtime.name} — ${detail}` : runtime.name;
 }
 
 function friendlyError(error: unknown): string {
@@ -135,6 +138,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState('New workspace');
   const [repositoryUrl, setRepositoryUrl] = useState('');
+  const [repositoryBranch, setRepositoryBranch] = useState('');
   const [networkAccess, setNetworkAccess] = useState<CloudCodeNetworkAccess>('none');
   // Empty string is "the default image" — the catalogue never contains one, so
   // it cannot collide with a real template id.
@@ -142,6 +146,18 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const [taskGoal, setTaskGoal] = useState('');
   const taskFieldId = useId();
   const runtimeFieldId = useId();
+  const harnessRuntimes = useMemo(
+    () => runtimes.filter((runtime) => runtime.kind === 'harness'),
+    [runtimes],
+  );
+  const imageRuntimes = useMemo(
+    () => runtimes.filter((runtime) => runtime.kind === 'image'),
+    [runtimes],
+  );
+  const selectedRuntime = useMemo(
+    () => runtimes.find((runtime) => runtime.id === runtimeId) ?? null,
+    [runtimes, runtimeId],
+  );
   const runtimeHelpId = `${runtimeFieldId}-help`;
   const [fullNetworkAccepted, setFullNetworkAccepted] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -278,6 +294,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         requestId: makeRequestId(),
         title,
         repositoryUrl: repositoryUrl.trim() || null,
+        repositoryBranch: repositoryBranch.trim() || null,
         networkAccess,
         fullNetworkAcknowledged: networkAccess === 'full' ? fullNetworkAccepted : undefined,
         runtimeId: runtimeId || null,
@@ -288,6 +305,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
       setShowCreate(false);
       setTitle('New workspace');
       setRepositoryUrl('');
+      setRepositoryBranch('');
       setNetworkAccess('none');
       setFullNetworkAccepted(false);
       setRuntimeId('');
@@ -610,12 +628,39 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                       </span>
                     </label>
 
+                    {/* Only meaningful once there is something to clone, which is
+                        why it appears with the repository rather than sitting
+                        permanently disabled. */}
+                    {repositoryUrl.trim() ? (
+                      <label className={styles['field']}>
+                        <span className={styles['label']}>Branch (optional)</span>
+                        <div style={{ position: 'relative' }}>
+                          <GitBranch
+                            size={15}
+                            style={{ position: 'absolute', left: 11, top: 12, opacity: 0.55 }}
+                          />
+                          <input
+                            className={styles['input']}
+                            style={{ paddingLeft: 34 }}
+                            value={repositoryBranch}
+                            onChange={(event) => setRepositoryBranch(event.target.value)}
+                            placeholder="main"
+                            maxLength={255}
+                            disabled={creating}
+                          />
+                        </div>
+                        <span className={styles['help']}>
+                          Leave it empty to clone the repository&rsquo;s default branch.
+                        </span>
+                      </label>
+                    ) : null}
+
                     {/* htmlFor rather than a wrapping label: the help text is a
                         sibling, so it describes the control instead of being read
                         out as part of its name. */}
                     <div className={styles['field']}>
                       <label className={styles['label']} htmlFor={runtimeFieldId}>
-                        Sandbox image
+                        Coding harness
                       </label>
                       <select
                         id={runtimeFieldId}
@@ -626,18 +671,33 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         disabled={creating || runtimes.length === 0}
                       >
                         <option value="">
-                          Default image — Python 3, Node.js, git, curl, build-essential, GitHub CLI
+                          No agent — Python 3, Node.js, git, curl, build-essential, GitHub CLI
                         </option>
-                        {runtimes.map((runtime) => (
-                          <option key={runtime.id} value={runtime.id}>
-                            {describeRuntime(runtime)}
-                          </option>
-                        ))}
+                        {harnessRuntimes.length > 0 && (
+                          <optgroup label="Coding agents">
+                            {harnessRuntimes.map((runtime) => (
+                              <option key={runtime.id} value={runtime.id}>
+                                {describeRuntime(runtime)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {imageRuntimes.length > 0 && (
+                          <optgroup label="Environments">
+                            {imageRuntimes.map((runtime) => (
+                              <option key={runtime.id} value={runtime.id}>
+                                {describeRuntime(runtime)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                       <span className={styles['help']} id={runtimeHelpId}>
                         {runtimes.length === 0
-                          ? 'No images are published to this account\u2019s E2B team, so every session uses the Debian default above. Publish a template in the E2B console to choose one here.'
-                          : 'The image decides which languages, runtimes and tools are already installed. It cannot be changed after the session is created.'}
+                          ? 'Managed Code is not configured for this deployment, so no harness can be started.'
+                          : selectedRuntime?.agentCommand
+                            ? `The workspace starts with ${selectedRuntime.name} installed; run \`${selectedRuntime.agentCommand}\` in the terminal to use it. This cannot be changed after the session is created.`
+                            : 'Pick a coding agent to have its CLI already installed in the workspace, or an environment to drive yourself. This cannot be changed after the session is created.'}
                       </span>
                     </div>
 

@@ -1,14 +1,26 @@
 /**
- * The account's E2B template catalogue — the images a Code session may build in.
+ * What a Code session can run in: a coding harness, or a plain image.
  *
- * Read from E2B rather than declared here: the team's templates change in the
- * E2B console, and a hardcoded list would drift the moment one is added,
- * renamed, or rebuilt. It is also the allowlist — a session may only name a
- * template this returns, so a client cannot reach an arbitrary image id.
+ * A harness is an E2B template with a coding agent's CLI already installed —
+ * you cannot code in a browser without a sandbox, so the sandbox is where the
+ * agent lives. E2B publishes one per agent and documents them under
+ * https://docs.e2b.dev/agents.
  *
- * Fails soft, unlike the executor: an unreadable catalogue means the picker is
- * empty and every session uses the SDK's default image, which is exactly the
- * behaviour before the runtime was selectable.
+ * The harnesses are declared rather than discovered because E2B has no endpoint
+ * that lists public templates: `GET /templates` returns only the team's own,
+ * and `/templates/aliases/{alias}` answers 403 for a public name. Spawning one
+ * by name works regardless, which is how they are reachable at all.
+ *
+ * Every entry below was verified by spawning it on 2026-08-31 and locating the
+ * binary inside; the paths in `agentCommand` are the observed ones, not
+ * documentation's word. Do not add an entry that has not been spawned.
+ *
+ * The team's own templates are read live on top, so a template published in the
+ * E2B console appears without a release. The merged list is also the allowlist:
+ * a client may only name something it contains.
+ *
+ * Fails soft, unlike the executor: if the live read fails the harnesses still
+ * stand, and a session with no choice uses the SDK's default image.
  */
 import 'server-only';
 
@@ -40,6 +52,112 @@ const TemplateSchema = z.looseObject({
   diskSizeMB: z.number().optional(),
   spawnCount: z.number().optional(),
 });
+
+/**
+ * Coding agents E2B ships a template for, each verified to spawn and to carry
+ * the binary named here.
+ */
+const CODING_HARNESSES: readonly CloudCodeRuntime[] = [
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    kind: 'harness',
+    summary: 'Anthropic’s agentic CLI, ready to run.',
+    agentCommand: 'claude',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+  {
+    id: 'codex',
+    name: 'Codex',
+    kind: 'harness',
+    summary: 'OpenAI’s coding agent CLI.',
+    agentCommand: 'codex',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+  {
+    id: 'droid',
+    name: 'Droid',
+    kind: 'harness',
+    summary: 'Factory’s software engineering agent.',
+    agentCommand: 'droid',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+  {
+    id: 'amp',
+    name: 'Amp',
+    kind: 'harness',
+    summary: 'Sourcegraph’s coding agent.',
+    agentCommand: 'amp',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+  {
+    id: 'opencode',
+    name: 'OpenCode',
+    kind: 'harness',
+    summary: 'Open-source terminal coding agent.',
+    agentCommand: 'opencode',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+  {
+    id: 'grok',
+    name: 'Grok CLI',
+    kind: 'harness',
+    summary: 'xAI’s coding agent CLI.',
+    agentCommand: 'grok',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+  {
+    id: 'openclaw',
+    name: 'OpenClaw',
+    kind: 'harness',
+    summary: 'Open-source agent harness.',
+    agentCommand: 'openclaw',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+  {
+    id: 'code-interpreter-v1',
+    name: 'Code Interpreter',
+    kind: 'image',
+    summary: 'Python with Jupyter, pandas, numpy and plotting.',
+    agentCommand: null,
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+  {
+    id: 'k3s',
+    name: 'Kubernetes (k3s)',
+    kind: 'image',
+    summary: 'A single-node cluster with kubectl.',
+    agentCommand: null,
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+  },
+];
 
 function apiBaseUrl(): string {
   const explicit = process.env[E2B_API_URL_ENV]?.trim();
@@ -83,6 +201,9 @@ async function fetchTemplates(apiKey: string): Promise<CloudCodeRuntime[]> {
     .map((template) => ({
       id: template.templateID,
       name: templateLabel(template),
+      kind: 'image' as const,
+      summary: 'Published by this team in the E2B console.',
+      agentCommand: null,
       cpuCount: template.cpuCount ?? 0,
       memoryMB: template.memoryMB ?? 0,
       diskSizeMB: template.diskSizeMB ?? 0,
@@ -91,22 +212,29 @@ async function fetchTemplates(apiKey: string): Promise<CloudCodeRuntime[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Team templates win on a name collision — their own build is the one they mean. */
+function merge(teamTemplates: readonly CloudCodeRuntime[]): CloudCodeRuntime[] {
+  const claimed = new Set(teamTemplates.map((runtime) => runtime.id));
+  return [...CODING_HARNESSES.filter((harness) => !claimed.has(harness.id)), ...teamTemplates];
+}
+
 export async function listCloudCodeRuntimes(): Promise<CloudCodeRuntime[]> {
   const apiKey = process.env[E2B_API_KEY_ENV]?.trim();
+  // Without a key nothing can be spawned at all, so offering a harness would be
+  // a promise the deployment cannot keep.
   if (!apiKey || !e2bExecutionEnabled()) return [];
 
   const now = Date.now();
   if (cache && now - cache.at < CATALOGUE_TTL_MS) return cache.runtimes;
 
   try {
-    const runtimes = await fetchTemplates(apiKey);
+    const runtimes = merge(await fetchTemplates(apiKey));
     cache = { at: now, runtimes };
     return runtimes;
   } catch (err) {
-    logger.warn({ err }, '[e2b] could not read the template catalogue');
-    // Serve a stale catalogue over none: the picker keeps working through a
-    // transient E2B outage, and a template that has since been deleted fails
-    // at create time with an explicit error rather than silently vanishing.
-    return cache?.runtimes ?? [];
+    logger.warn({ err }, '[e2b] could not read the team template catalogue');
+    // The harnesses are public and do not depend on that read, so a transient
+    // E2B outage costs the team's own templates and nothing else.
+    return cache?.runtimes ?? merge([]);
   }
 }

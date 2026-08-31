@@ -105,6 +105,14 @@ export const createError = {
   serviceUnavailable: (message = 'Service unavailable'): AppError =>
     appError(ErrorCode.SERVICE_UNAVAILABLE, message),
 
+  /**
+   * Use when the deployment simply does not offer something and the message
+   * says so in the reader's terms. Unlike serviceUnavailable, that message is
+   * delivered rather than replaced, so it must contain no internal detail.
+   */
+  capabilityUnavailable: (message: string): AppError =>
+    appError(ErrorCode.CAPABILITY_UNAVAILABLE, message),
+
   timeout: (message = 'Operation timed out'): AppError => appError(ErrorCode.TIMEOUT, message),
 
   network: (message = 'Network error'): AppError => appError(ErrorCode.NETWORK_ERROR, message),
@@ -194,6 +202,12 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     title: 'Service Unavailable',
     message: 'The service is temporarily unavailable.',
     suggestion: 'Please try again in a few minutes.',
+    icon: 'warning',
+  },
+  [ErrorCode.CAPABILITY_UNAVAILABLE]: {
+    title: 'Not available here',
+    message: 'This deployment does not offer that.',
+    suggestion: 'Check whether the feature is enabled for your plan or workspace.',
     icon: 'warning',
   },
   [ErrorCode.TIMEOUT]: {

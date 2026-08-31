@@ -34,6 +34,7 @@ const session: CloudCodeSession = {
   id: '11111111-1111-4111-8111-111111111111',
   title: 'New workspace',
   repositoryUrl: null,
+  repositoryBranch: null,
   networkAccess: 'none',
   runtimeId: null,
   state: 'ready',
@@ -113,6 +114,9 @@ describe('CloudCodePage', () => {
           {
             id: 'tpl-base',
             name: 'base',
+            kind: 'image' as const,
+            summary: 'Plain Linux.',
+            agentCommand: null,
             cpuCount: 2,
             memoryMB: 4096,
             diskSizeMB: 20480,
@@ -121,6 +125,9 @@ describe('CloudCodePage', () => {
           {
             id: 'tpl-codex',
             name: 'codex',
+            kind: 'harness' as const,
+            summary: 'OpenAI’s coding agent CLI.',
+            agentCommand: 'codex',
             cpuCount: 4,
             memoryMB: 8192,
             diskSizeMB: 40960,
@@ -132,12 +139,18 @@ describe('CloudCodePage', () => {
 
     render(<CloudCodePage api={api} />);
 
-    const picker = await screen.findByLabelText('Sandbox image');
+    const picker = await screen.findByLabelText('Coding harness');
     expect(picker).toBeEnabled();
-    // the resources are part of the label, so the choice is informed
+    // what the agent is and what it runs on are both in the label, so the
+    // choice is informed rather than a bare template name
     expect(
-      screen.getByRole('option', { name: 'codex \u2014 4 vCPU, 8 GB RAM' }),
+      screen.getByRole('option', {
+        name: 'codex \u2014 OpenAI\u2019s coding agent CLI. \u00b7 4 vCPU, 8 GB RAM',
+      }),
     ).toBeInTheDocument();
+    // agents and plain environments are told apart
+    expect(screen.getByRole('group', { name: 'Coding agents' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Environments' })).toBeInTheDocument();
 
     await user.selectOptions(picker, 'tpl-codex');
     await user.click(screen.getByRole('button', { name: 'Create session' }));
@@ -164,6 +177,9 @@ describe('CloudCodePage', () => {
           {
             id: 'tpl-base',
             name: 'base',
+            kind: 'image' as const,
+            summary: 'Plain Linux.',
+            agentCommand: null,
             cpuCount: 2,
             memoryMB: 4096,
             diskSizeMB: 20480,
@@ -174,7 +190,7 @@ describe('CloudCodePage', () => {
     });
 
     render(<CloudCodePage api={api} />);
-    await screen.findByLabelText('Sandbox image');
+    await screen.findByLabelText('Coding harness');
     await user.click(screen.getByRole('button', { name: 'Create session' }));
 
     await waitFor(() => expect(create).toHaveBeenCalled());
@@ -223,10 +239,10 @@ describe('CloudCodePage', () => {
   it('explains an empty catalogue instead of offering a picker that does nothing', async () => {
     render(<CloudCodePage api={createApi()} />);
 
-    const picker = await screen.findByLabelText('Sandbox image');
+    const picker = await screen.findByLabelText('Coding harness');
     expect(picker).toBeDisabled();
     expect(
-      screen.getByText(/No images are published to this account.s E2B team/i),
+      screen.getByText(/Managed Code is not configured for this deployment/i),
     ).toBeInTheDocument();
   });
 
@@ -324,6 +340,7 @@ describe('CloudCodePage', () => {
         expect.objectContaining({
           title: 'New workspace',
           repositoryUrl: null,
+          repositoryBranch: null,
           networkAccess: 'none',
           runtimeId: null,
         }),
