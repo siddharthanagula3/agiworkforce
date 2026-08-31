@@ -16,7 +16,7 @@ import {
 import { CONSENT_PURPOSES } from '@/lib/consent-purposes';
 
 export const metadata = buildMetadata({
-  title: 'India — DPDP notice',
+  title: 'India: DPDP notice',
   description:
     'The notice required by the Digital Personal Data Protection Act, 2023: what personal data AGI processes, for which purposes, who it goes to, how to exercise your rights as a Data Principal, and the grievance contact.',
   path: '/privacy/india',

@@ -114,6 +114,7 @@ const allowedLiveNonMarkdownFiles = new Set([
   'audit/ui-gaps.csv',
   'audit/theme-only-text-colours.json',
   'audit/raw-error-to-user.json',
+  'audit/em-dash-in-copy.json',
 ]);
 
 const SCAN_ROOTS = [

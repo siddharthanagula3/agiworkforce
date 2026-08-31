@@ -839,7 +839,7 @@ export default function PricingPage() {
               here, where it holds regardless of which audience tab is open. */}
           {!CHECKOUT_ENABLED ? (
             <p role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
-              Checkout is temporarily unavailable. Please try again later — existing plans and
+              Checkout is temporarily unavailable. Please try again later. Existing plans and
               Enterprise contact are unaffected.
             </p>
           ) : null}

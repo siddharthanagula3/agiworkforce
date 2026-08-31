@@ -105,7 +105,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   },
   {
     href: '/privacy/india',
-    label: 'India — DPDP notice',
+    label: 'India: DPDP notice',
     body: 'The itemised notice under the Digital Personal Data Protection Act, 2023: what is collected, for which purpose, who it is shared with, your rights as a Data Principal, and the grievance contact.',
   },
   {
