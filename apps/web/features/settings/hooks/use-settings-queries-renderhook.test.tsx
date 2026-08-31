@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -92,6 +91,15 @@ function makeWrapper() {
   Wrapper.displayName = 'TestWrapper';
   return Wrapper;
 }
+
+// Resolving this module pulls in a large dependency graph, and every test here
+// imports it. Doing that inside a test spends the cost against the 5s per-test
+// budget, which fits when the file runs alone and does not under full-suite
+// parallel load - the first test to arrive timed out while the rest passed.
+// Warm it once, outside any test's budget; later imports hit the module cache.
+beforeAll(async () => {
+  await import('./use-settings-queries');
+}, 60_000);
 
 describe('useOrganizationSettings · renderHook (GET /api/settings/organization)', () => {
   beforeEach(async () => {
