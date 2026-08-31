@@ -52,11 +52,20 @@ describe('isMessageContinuable', () => {
   });
 
   it('does NOT offer Continue on a normally-completed turn', () => {
-    expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
+    const finished = { content: 'Here is the whole answer, and it ends properly.' };
+    expect(
+      isMessageContinuable(assistantMessage({ ...finished, metadata: { finishReason: 'stop' } })),
+    ).toBe(false);
+    expect(isMessageContinuable(assistantMessage({ ...finished, metadata: {} }))).toBe(false);
+    expect(isMessageContinuable(assistantMessage({ ...finished, metadata: undefined }))).toBe(
       false,
     );
-    expect(isMessageContinuable(assistantMessage({ metadata: {} }))).toBe(false);
-    expect(isMessageContinuable(assistantMessage({ metadata: undefined }))).toBe(false);
+  });
+
+  it('offers Continue when the text reads as cut off however the turn was reported', () => {
+    expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
+      true,
+    );
   });
 
   it('does NOT offer Continue when the partial content is empty', () => {
