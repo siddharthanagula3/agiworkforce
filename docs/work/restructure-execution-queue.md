@@ -45,8 +45,36 @@ blocked on the same thing: the QA account's chat request limiter stays tripped
 for far longer than the "Resets in 1 min" it reports, and every attempt extends
 it. Re-verify these in one batch after a long idle period.
 
-Open P1: DR2 completed report missing from the Report panel, A1 artifact restore
-overwrites edits, A2 interactive artifact stale, SK1 skill retry loses the skill.
+Open P1: A2 interactive artifact stale.
+
+**DR1, DR2 and SK1 are resolved, and DR2 was not what the audit thought.**
+Verified against the running product on 2026-08-30:
+
+- DR1: a research turn now stops at `phase: awaiting_approval` with a real
+  four-step plan and `searches: 0, sources: 0`. Nothing is fetched before the
+  reader approves, and `Start research` runs it.
+- DR2: persistence was never broken. The read path returns the right row when
+  filtered by conversation, and an approved run wrote its row even on the
+  failure path. The audit's urban-tree conversation has **no research metadata
+  at all** - its turns carry `tools`, `searchResults` and `thinkingContent`, the
+  ordinary chat path. The research loop never ran, so there was never a report,
+  and the panel was telling the truth.
+  Why it never ran: `researchModeAllowed` needs the routed model to declare the
+  `research` capability, and neither `gemini-3.5-flash-lite` nor `gpt-5.6-luna`
+  does. The composer correctly disables Deep Research for those - but
+  `modelSupportsResearch` short-circuits on `isAutoSelected`, and the disabled
+  control's own tooltip says "Choose Auto". Under Auto the router can land on a
+  model that cannot research, and the turn silently degraded. The only
+  disclosure was a line in the capability preamble asking the model to mention
+  it; the observed turn instead produced a confident answer with its own
+  bibliography. It now travels on the fallback-reason header.
+- SK1: the replay carries `skillName`, so Regenerate reproduces the turn with
+  its skill instead of refusing. The skill's body is still never persisted -
+  the name is what the send path uses.
+
+Still true and still unexplained: a research run that reaches the loop can end
+with `sources: 0` after a search. That is a search-provider question, not a UI
+one, and needs a working environment to diagnose.
 
 Open P2: S2 tablet crowding, S3/C1 composer context density, C2 large paste, C3
 branch affordance, M3 long-response scale, Q1 clarification as prose, I2 video
