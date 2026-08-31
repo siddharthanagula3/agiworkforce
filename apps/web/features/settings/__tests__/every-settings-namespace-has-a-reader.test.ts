@@ -29,6 +29,12 @@ interface NamespaceConsumer {
 const NAMESPACE_CONSUMERS: Readonly<Record<string, NamespaceConsumer>> = {
   capabilities: { file: 'lib/services/managed-memory-context-service.ts' },
   general: { file: 'lib/server/user-identity.ts' },
+  // Read on the path that assembles a completion's tool list, so the denial
+  // reaches every route that resolves connector permissions through it.
+  lockdown: {
+    file: 'app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts',
+    token: 'parseLockdownEnabled',
+  },
   memory: { file: 'lib/services/managed-memory-context-service.ts' },
   notifications: { file: 'lib/services/schedule-notification-service.ts' },
   personalization: { file: 'lib/server/user-identity.ts' },

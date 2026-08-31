@@ -477,9 +477,13 @@ describe('every authorization gate still refuses on the degraded transport', () 
   });
 
   it('connector permissions: a tool blocked since the pause is rejected, not run, inline', async () => {
-    db.query.mockResolvedValueOnce([
-      { connector_id: 'github', tool_name: 'get_pull_request_diff', level: 'blocked' },
-    ]);
+    // Keyed on the SQL rather than call order: resolving permissions also reads
+    // user_settings for lockdown, so a positional mock feeds the wrong query.
+    db.query.mockImplementation(async (sql: string) =>
+      sql.includes('connector_tool_permissions')
+        ? [{ connector_id: 'github', tool_name: 'get_pull_request_diff', level: 'blocked' }]
+        : [],
+    );
 
     await (await POST(makeRequest(resumeBody))).text();
 
