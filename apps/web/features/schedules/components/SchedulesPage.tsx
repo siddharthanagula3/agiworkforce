@@ -29,15 +29,19 @@ import {
   validateAndBuildScheduleRequest,
 } from '../lib/schedule-form';
 import { scheduleApi, type ScheduleApi } from '../services/schedule-api';
-import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import {
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
   MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
 } from '@agiworkforce/cloud-contracts';
 import type { ScheduleDraft, ScheduleFormErrors, ScheduleRun, ScheduleTask } from '../types';
 
-export const SCHEDULE_MATURITY_LABEL = 'Alpha';
-export const SCHEDULE_MATURITY_TITLE = `Schedules run on Managed Cloud, which is in ${MANAGED_CLOUD_STATUS}. An unattended run can fail or be skipped, and behaviour may change.`;
+/**
+ * Kept as prose in the create dialog, where someone is about to rely on an
+ * unattended run, rather than as a maturity chip in the header. The warning is
+ * the load-bearing half; the alpha framing was branding.
+ */
+export const SCHEDULE_RELIABILITY_NOTE =
+  'An unattended run can fail or be skipped, and behaviour may change.';
 
 const SCHEDULE_PAGE_SIZE = MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE;
 const RUN_PAGE_SIZE = MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE;
@@ -509,13 +513,6 @@ export function SchedulesPage({
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
               <CalendarClock className="h-4 w-4" aria-hidden="true" />
               Managed Cloud
-              <span
-                data-testid="schedule-maturity-badge"
-                title={SCHEDULE_MATURITY_TITLE}
-                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
-              >
-                {SCHEDULE_MATURITY_LABEL}
-              </span>
             </div>
             <h1 className="text-balance font-[var(--chat-font-serif)] text-[28px] font-medium">
               Schedules
@@ -728,7 +725,7 @@ export function SchedulesPage({
             <DialogTitle>{editing ? 'Edit Schedule' : 'Create Schedule'}</DialogTitle>
             <DialogDescription>
               Configure a text-only Managed Cloud task. The server validates timing again before
-              saving. {SCHEDULE_MATURITY_TITLE}
+              saving. {SCHEDULE_RELIABILITY_NOTE}
             </DialogDescription>
           </DialogHeader>
           <ScheduleForm
