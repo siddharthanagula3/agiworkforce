@@ -139,6 +139,8 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   // Empty string is "the default image" — the catalogue never contains one, so
   // it cannot collide with a real template id.
   const [runtimeId, setRuntimeId] = useState('');
+  const [taskGoal, setTaskGoal] = useState('');
+  const taskFieldId = useId();
   const runtimeFieldId = useId();
   const runtimeHelpId = `${runtimeFieldId}-help`;
   const [fullNetworkAccepted, setFullNetworkAccepted] = useState(false);
@@ -289,6 +291,15 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
       setNetworkAccess('none');
       setFullNetworkAccepted(false);
       setRuntimeId('');
+
+      // createCloudCodeSession provisions synchronously and returns the session
+      // already `ready`, so the task can start in the same gesture rather than
+      // making the reader find the agent box afterwards.
+      const submittedGoal = taskGoal.trim();
+      setTaskGoal('');
+      if (submittedGoal && body.session.state === 'ready') {
+        await startAgentTurnForSession(body.session, submittedGoal);
+      }
     } catch (createError) {
       setError(friendlyError(createError));
     } finally {
@@ -334,18 +345,24 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     );
   }
 
-  async function handleAgentTurn(event: FormEvent) {
-    event.preventDefault();
-    if (!canRun || !selectedSession || !goal.trim() || agentBusy) return;
-    if (selectedSession.state !== 'ready') return;
-    const submitted = goal.trim();
-    setGoal('');
+  /**
+   * Shared by the task box on the create form and the one in an open session, so
+   * a turn started either way reports progress and failure identically.
+   *
+   * `restoreGoal` puts the text back where the reader typed it when the turn is
+   * refused — losing what they wrote is worse than the failure itself.
+   */
+  async function startAgentTurnForSession(
+    session: CloudCodeSession,
+    submitted: string,
+    restoreGoal?: (value: string) => void,
+  ) {
     setAgentBusy(true);
     setAgentTurn(null);
     setPendingApprovals([]);
     setError(null);
     try {
-      const turn = await api.startAgentTurn(selectedSession.id, {
+      const turn = await api.startAgentTurn(session.id, {
         goal: submitted,
         model: AGENT_MODEL_ID,
         idempotencyKey: makeRequestId(),
@@ -353,13 +370,22 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
       applyAgentTurn(turn, submitted);
       void loadSessions();
     } catch (turnError) {
-      setGoal(submitted);
+      restoreGoal?.(submitted);
       setAgentGoal('');
       setError(friendlyError(turnError));
       void loadSessions();
     } finally {
       setAgentBusy(false);
     }
+  }
+
+  async function handleAgentTurn(event: FormEvent) {
+    event.preventDefault();
+    if (!canRun || !selectedSession || !goal.trim() || agentBusy) return;
+    if (selectedSession.state !== 'ready') return;
+    const submitted = goal.trim();
+    setGoal('');
+    await startAgentTurnForSession(selectedSession, submitted, setGoal);
   }
 
   async function handleApproval(approval: ApprovalPrompt, decision: 'approve' | 'reject') {
@@ -472,26 +498,23 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
             </div>
           ) : (
             <div className={styles['grid']}>
-              <section className={styles['panel']} aria-label="Code sessions">
-                <div className={styles['panelHeader']}>
-                  <h2 className={styles['panelTitle']}>Sessions</h2>
-                  <button
-                    className={styles['ghostButton']}
-                    onClick={() => void loadSessions()}
-                    aria-label="Refresh sessions"
-                  >
-                    <RefreshCw size={13} />
-                  </button>
-                </div>
-                <div className={styles['sessionList']}>
-                  {sessions.length === 0 ? (
-                    <div className={styles['emptySessions']}>
-                      No Code sessions yet.
-                      <br />
-                      Start with a network-isolated workspace.
-                    </div>
-                  ) : (
-                    sessions.map((session) => (
+              {/* A sessions panel whose only content is "no sessions yet" pushed
+                  the task box below the fold and said nothing the panel beside it
+                  did not. It appears once there is a session to list. */}
+              {sessions.length > 0 && (
+                <section className={styles['panel']} aria-label="Code sessions">
+                  <div className={styles['panelHeader']}>
+                    <h2 className={styles['panelTitle']}>Sessions</h2>
+                    <button
+                      className={styles['ghostButton']}
+                      onClick={() => void loadSessions()}
+                      aria-label="Refresh sessions"
+                    >
+                      <RefreshCw size={13} />
+                    </button>
+                  </div>
+                  <div className={styles['sessionList']}>
+                    {sessions.map((session) => (
                       <button
                         key={session.id}
                         className={`${styles['sessionButton']} ${
@@ -516,19 +539,43 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         </span>
                         <ChevronRight size={14} />
                       </button>
-                    ))
-                  )}
-                </div>
-              </section>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {showCreate ? (
                 <section className={`${styles['panel']} ${styles['createPanel']}`}>
-                  <h2 className={styles['createHeading']}>Create a Code session</h2>
+                  <h2 className={styles['createHeading']}>What should we build?</h2>
                   <p className={styles['createDescription']}>
-                    Sessions persist between requests but pause when idle to stop compute billing.
-                    No environment receives your browser cookies, local SSH keys, or local files.
+                    Describe a task and the agent starts on it in a fresh isolated workspace. It
+                    asks before running anything that needs approval. No environment receives your
+                    browser cookies, local SSH keys, or local files.
                   </p>
                   <form onSubmit={handleCreate}>
+                    {/* The task leads, and the workspace settings below are its
+                        configuration. It used to be the other way round: you filled
+                        in a provisioning form, created a session, and only then found
+                        the box that actually does the work. */}
+                    <div className={styles['field']}>
+                      <label className={styles['label']} htmlFor={taskFieldId}>
+                        Task
+                      </label>
+                      <textarea
+                        id={taskFieldId}
+                        className={styles['input']}
+                        style={{ minHeight: 86, padding: '10px 11px', resize: 'vertical' }}
+                        value={taskGoal}
+                        onChange={(event) => setTaskGoal(event.target.value)}
+                        placeholder="Install dependencies and run the test suite"
+                        maxLength={8000}
+                        disabled={creating}
+                      />
+                      <span className={styles['help']}>
+                        Optional. Leave it empty to open an empty workspace and drive it yourself.
+                      </span>
+                    </div>
+
                     <label className={styles['field']}>
                       <span className={styles['label']}>Session name</span>
                       <input
@@ -578,7 +625,9 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         onChange={(event) => setRuntimeId(event.target.value)}
                         disabled={creating || runtimes.length === 0}
                       >
-                        <option value="">Default image</option>
+                        <option value="">
+                          Default image — Python 3, Node.js, git, curl, build-essential, GitHub CLI
+                        </option>
                         {runtimes.map((runtime) => (
                           <option key={runtime.id} value={runtime.id}>
                             {describeRuntime(runtime)}
@@ -587,7 +636,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                       </select>
                       <span className={styles['help']} id={runtimeHelpId}>
                         {runtimes.length === 0
-                          ? 'No images are published to this account\u2019s E2B team, so sessions use the default image. Publish a template in the E2B console to choose one here.'
+                          ? 'No images are published to this account\u2019s E2B team, so every session uses the Debian default above. Publish a template in the E2B console to choose one here.'
                           : 'The image decides which languages, runtimes and tools are already installed. It cannot be changed after the session is created.'}
                       </span>
                     </div>
@@ -666,7 +715,11 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         ) : (
                           <Plus size={14} />
                         )}
-                        {creating ? 'Provisioning…' : 'Create session'}
+                        {creating
+                          ? 'Provisioning…'
+                          : taskGoal.trim()
+                            ? 'Start task'
+                            : 'Create session'}
                       </button>
                     </div>
                   </form>
