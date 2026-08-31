@@ -305,7 +305,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
         <span
           data-testid="agi-work-maturity-badge"
           title={AGI_WORK_MATURITY_TITLE}
-          className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
+          className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
         >
           {AGI_WORK_MATURITY_LABEL}
         </span>
@@ -395,7 +395,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                         </span>
                         <span
                           className={cn(
-                            'shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                            'shrink-0 rounded-full border px-2 py-0.5 text-[12px] font-medium',
                             TASK_TONE_BADGE_CLASS[tone],
                           )}
                         >
@@ -467,7 +467,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                             <span className="block truncate text-xs font-medium text-foreground">
                               {call.name}
                             </span>
-                            <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                            <span className="block truncate font-mono text-[12px] text-muted-foreground">
                               {call.argsPreview}
                             </span>
                           </li>
@@ -510,7 +510,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                         >
                           Deny
                         </Button>
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-[12px] text-muted-foreground">
                           asked{' '}
                           {formatDistanceToNow(new Date(run.pendingApproval.requestedAt), {
                             addSuffix: true,

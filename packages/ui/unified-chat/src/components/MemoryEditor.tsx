@@ -193,7 +193,7 @@ export function MemoryEditor({
             Add
           </button>
         </div>
-        <div className="text-[10px] text-[var(--chat-text-muted)]">
+        <div className="text-[12px] text-[var(--chat-text-muted)]">
           {draft.length} / {MAX_FACT_CHARS}
         </div>
       </form>
@@ -289,13 +289,13 @@ export function MemoryEditor({
                       */}
                       {fact.projectId ? (
                         <span
-                          className="self-start rounded px-1.5 py-0.5 text-[10px] text-[var(--chat-text-secondary)]"
+                          className="self-start rounded px-1.5 py-0.5 text-[12px] text-[var(--chat-text-secondary)]"
                           style={{ background: 'var(--chat-surface-hover)' }}
                         >
                           Only in {fact.projectName ?? 'a project'}
                         </span>
                       ) : null}
-                      <div className="flex items-center justify-between text-[10px] text-[var(--chat-text-muted)]">
+                      <div className="flex items-center justify-between text-[12px] text-[var(--chat-text-muted)]">
                         <span>
                           {fact.pending ? (
                             'Saving…'

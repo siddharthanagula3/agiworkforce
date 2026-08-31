@@ -74,7 +74,7 @@ export function SendPreview({
           aria-controls={detailsId}
           aria-label={`${presentation.destinationLabel}. ${expanded ? 'Hide' : 'Show'} send details`}
           title={presentation.destinationLabel}
-          className="inline-flex h-6 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-overlay)] hover:text-[var(--chat-text-secondary)]"
+          className="inline-flex h-6 items-center gap-1 rounded-full px-1.5 text-[12px] font-medium text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-overlay)] hover:text-[var(--chat-text-secondary)]"
         >
           <DestinationIcon presentation={presentation} compact />
           <span>{compactDestinationLabel(presentation)}</span>
@@ -101,16 +101,16 @@ export function SendPreview({
               <span className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--chat-text-primary)]">
                 {presentation.destinationLabel}
               </span>
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]">
+              <span className="inline-flex items-center gap-1 text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]">
                 <Lock className="h-3 w-3" aria-hidden />
                 {presentation.privacyShortLabel}
               </span>
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-[var(--chat-text-secondary)]">
+            <p className="mt-2 text-[12px] leading-relaxed text-[var(--chat-text-secondary)]">
               {presentation.bannerCopy}
             </p>
             {detailsAvailable ? (
-              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-[var(--chat-text-secondary)]">
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-[var(--chat-text-secondary)]">
                 {presentation.bodyCharLabel ? (
                   <DetailRow term="Message" definition={presentation.bodyCharLabel} />
                 ) : null}
@@ -153,17 +153,17 @@ export function SendPreview({
         <span className="font-medium text-[var(--chat-text-primary)]">
           {presentation.destinationLabel}
         </span>
-        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]">
+        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]">
           <Lock className="h-3 w-3" aria-hidden />
           {presentation.privacyShortLabel}
         </span>
         {presentation.modelLabel ? (
-          <span className="ml-auto text-[10px] text-[var(--chat-text-muted)]">
+          <span className="ml-auto text-[12px] text-[var(--chat-text-muted)]">
             {presentation.modelLabel}
           </span>
         ) : null}
       </div>
-      <p className="text-[11px] leading-relaxed text-[var(--chat-text-secondary)]">
+      <p className="text-[12px] leading-relaxed text-[var(--chat-text-secondary)]">
         {presentation.bannerCopy}
       </p>
       {detailsAvailable ? (
@@ -172,7 +172,7 @@ export function SendPreview({
           onClick={() => setExpanded((prev) => !prev)}
           aria-expanded={expanded}
           aria-controls={detailsId}
-          className="inline-flex items-center gap-1 self-start text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+          className="inline-flex items-center gap-1 self-start text-[12px] font-medium uppercase tracking-wide text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
         >
           {expanded ? (
             <>
@@ -191,7 +191,7 @@ export function SendPreview({
         <dl
           id={detailsId}
           data-testid="send-preview-details"
-          className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-[var(--chat-text-secondary)]"
+          className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] text-[var(--chat-text-secondary)]"
         >
           {presentation.bodyCharLabel ? (
             <DetailRow term="Message" definition={presentation.bodyCharLabel} />

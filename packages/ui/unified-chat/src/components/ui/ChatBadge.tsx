@@ -11,7 +11,7 @@ export function ChatBadge({ className, variant = 'default', ...props }: ChatBadg
     <Badge
       variant="outline"
       className={cn(
-        'border-transparent px-2 py-0.5 text-[11px] font-medium',
+        'border-transparent px-2 py-0.5 text-[12px] font-medium',
         {
           'bg-[var(--chat-surface-hover)] text-[var(--chat-text-secondary)]': variant === 'default',
           'bg-[var(--chat-badge-result)]/20 text-[var(--chat-badge-result)]': variant === 'result',

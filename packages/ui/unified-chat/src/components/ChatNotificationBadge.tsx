@@ -1,4 +1,3 @@
-
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 
@@ -44,7 +43,7 @@ export function ChatNotificationBadge({
           className={cn(
             'absolute -top-1 -right-1 flex items-center justify-center',
             'min-w-[18px] h-[18px] rounded-full',
-            'text-[10px] text-white font-bold leading-none',
+            'text-[12px] text-white font-bold leading-none',
             'ring-2 ring-[hsl(var(--card))]',
             bgClass,
             label === '' && 'min-w-[10px] h-[10px] -top-0.5 -right-0.5',

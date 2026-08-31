@@ -112,7 +112,7 @@ function VideoMarker({ overlay }: { overlay: boolean }) {
 function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation }) {
   if (presentation.isRunning) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-300">
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         {presentation.statusLabel}
       </span>
@@ -120,7 +120,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
   }
   if (presentation.isFailed) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-rose-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-rose-300">
         <AlertTriangle className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
       </span>
@@ -128,14 +128,14 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
   }
   if (presentation.isComplete) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
         <ShieldCheck className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-300">
+    <span className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-zinc-300">
       <Clock className="h-3 w-3" aria-hidden />
       {presentation.statusLabel}
     </span>
@@ -204,7 +204,7 @@ export function GeneratedFileCard({
             </span>
             <StatusBadge presentation={presentation} />
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--chat-text-muted)]">
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--chat-text-muted)]">
             <span>{presentation.kindLabel}</span>
             {previewFailed ? <span>· Preview unavailable</span> : null}
             {presentation.byteCountLabel ? <span>· {presentation.byteCountLabel}</span> : null}
@@ -218,18 +218,18 @@ export function GeneratedFileCard({
             presentation.sourceSurfaceLabel) && (
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               {presentation.privacyShortLabel ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]">
                   <Lock className="h-3 w-3" aria-hidden />
                   {presentation.privacyShortLabel}
                 </span>
               ) : null}
               {presentation.providerLabel ? (
-                <span className="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]">
+                <span className="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]">
                   {presentation.providerLabel}
                 </span>
               ) : null}
               {presentation.sourceSurfaceLabel ? (
-                <span className="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]">
+                <span className="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]">
                   {presentation.sourceSurfaceLabel}
                 </span>
               ) : null}
@@ -278,7 +278,7 @@ export function GeneratedFileCard({
             <button
               type="button"
               onClick={onOpenSourceSession}
-              className="ml-auto text-[11px] font-medium text-[var(--chat-text-muted)] underline-offset-2 hover:text-[var(--chat-text-secondary)] hover:underline"
+              className="ml-auto text-[12px] font-medium text-[var(--chat-text-muted)] underline-offset-2 hover:text-[var(--chat-text-secondary)] hover:underline"
             >
               {presentation.sourceSessionLabel}
             </button>

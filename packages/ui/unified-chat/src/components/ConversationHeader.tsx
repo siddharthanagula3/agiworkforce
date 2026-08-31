@@ -161,7 +161,7 @@ function HeaderAction({
     >
       <Icon className="h-4 w-4" aria-hidden />
       {badge === undefined ? null : (
-        <span className="text-[11px] font-medium leading-none" aria-hidden>
+        <span className="text-[12px] font-medium leading-none" aria-hidden>
           {badge}
         </span>
       )}

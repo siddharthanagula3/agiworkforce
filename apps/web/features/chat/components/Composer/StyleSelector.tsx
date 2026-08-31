@@ -160,7 +160,7 @@ export function StyleSelector() {
       >
         <div>
           {/* Preset styles */}
-          <div className="mb-1.5 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="mb-1.5 px-2 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
             Response Style
           </div>
           {STYLES.map((s) => {
@@ -190,7 +190,7 @@ export function StyleSelector() {
 
           {/* Response length · AUDIT-FIX CMP-6/CMP-7. Orthogonal to style: this
               is the verbosity axis the surface previously had no control for. */}
-          <div className="mb-1.5 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="mb-1.5 px-2 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
             Response Length
           </div>
           <div
@@ -221,7 +221,7 @@ export function StyleSelector() {
           <div className="my-2 border-t border-border/40" />
 
           {/* Custom styles section */}
-          <div className="mb-1.5 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="mb-1.5 px-2 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
             Custom Styles
           </div>
 

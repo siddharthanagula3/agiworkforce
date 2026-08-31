@@ -499,7 +499,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                           <Clock className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
                           <span className="max-w-[150px] truncate">{search.query}</span>
                           {search.resultCount > 0 && (
-                            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+                            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[12px]">
                               {search.resultCount}
                             </Badge>
                           )}
@@ -527,7 +527,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                           <span className="max-w-[150px] truncate">{search.query}</span>
                           <Badge
                             variant="outline"
-                            className="ml-1 border-primary/20 px-1.5 py-0 text-[10px] text-primary/70"
+                            className="ml-1 border-primary/20 px-1.5 py-0 text-[12px] text-primary/70"
                           >
                             {search.searchCount} searches
                           </Badge>
@@ -613,7 +613,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
 
                     {/* Badges */}
                     <div className="mt-2 flex items-center gap-2">
-                      <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                      <Badge variant="outline" className="px-1.5 py-0 text-[12px]">
                         {result.type === 'project'
                           ? 'Project'
                           : result.type === 'file'

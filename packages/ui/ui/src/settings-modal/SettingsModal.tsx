@@ -632,7 +632,7 @@ function DirectoryBrowse({
               <span className="block truncate text-sm font-medium text-foreground">
                 {connector.name}
               </span>
-              <span className="text-[11px] text-muted-foreground">{connector.category}</span>
+              <span className="text-[12px] text-muted-foreground">{connector.category}</span>
             </div>
           </div>
           <div className="shrink-0">
@@ -672,7 +672,7 @@ function DirectoryBrowse({
                 <Plus className="h-4 w-4" />
               </button>
             ) : (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[12px] text-muted-foreground">
                 {connector.statusLabel ?? 'Not connected'}
               </span>
             )}
@@ -682,7 +682,7 @@ function DirectoryBrowse({
           {connector.description}
         </p>
         {error && (
-          <p role="alert" className="text-[11px] text-danger">
+          <p role="alert" className="text-[12px] text-danger">
             {error}
           </p>
         )}
@@ -927,7 +927,7 @@ function DirectoryBrowse({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-mono text-sm text-foreground">/{skill.name}</span>
-                  <div className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
+                  <div className="flex shrink-0 items-center gap-2 text-[12px] text-muted-foreground">
                     <span>{skill.statusLabel ?? skillAuthorLabel(skill.source)}</span>
                     <SkillDownloadAction adapter={adapter} skill={skill} />
                   </div>
@@ -992,10 +992,10 @@ function DirectoryBrowse({
                     <span className="block truncate text-sm font-medium text-foreground">
                       {plugin.name}
                     </span>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
                       {plugin.author && <span>{plugin.author}</span>}
                       {plugin.category && (
-                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium">
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[12px] font-medium">
                           {plugin.category}
                         </span>
                       )}
@@ -1013,7 +1013,7 @@ function DirectoryBrowse({
                   ) : plugin.installed ? (
                     <span
                       className={cn(
-                        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                        'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold',
                         plugin.enabled
                           ? 'bg-primary/15 text-primary'
                           : 'bg-muted text-muted-foreground',
@@ -1026,14 +1026,14 @@ function DirectoryBrowse({
                       type="button"
                       onClick={() => setConfirmingInstallPlugin(plugin)}
                       className={cn(
-                        'shrink-0 rounded-lg bg-foreground px-2.5 py-1 text-[11px] font-medium text-background hover:bg-foreground/90',
+                        'shrink-0 rounded-lg bg-foreground px-2.5 py-1 text-[12px] font-medium text-background hover:bg-foreground/90',
                         FOCUS_RING,
                       )}
                     >
                       Install
                     </button>
                   ) : (
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-[12px] text-muted-foreground">
                       {plugin.statusLabel ?? 'Unavailable'}
                     </span>
                   )}
@@ -1088,7 +1088,7 @@ function DirectoryBrowse({
                   </div>
                 )}
                 {plugin.error ? (
-                  <p role="alert" className="text-[11px] text-danger">
+                  <p role="alert" className="text-[12px] text-danger">
                     {plugin.error}
                   </p>
                 ) : null}
@@ -1129,7 +1129,7 @@ function DirectoryBrowse({
                   {confirmingInstallPlugin.declaredSkills.map((skill) => (
                     <span
                       key={skill}
-                      className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-foreground"
+                      className="rounded-full bg-muted px-2 py-0.5 font-mono text-[12px] text-foreground"
                     >
                       {skill}
                     </span>
@@ -1147,13 +1147,13 @@ function DirectoryBrowse({
                     {confirmingInstallPlugin.requiredConnectors.map((connector) => (
                       <span
                         key={connector}
-                        className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground"
+                        className="rounded-full bg-muted px-2 py-0.5 text-[12px] text-foreground"
                       >
                         {connector}
                       </span>
                     ))}
                   </div>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  <p className="mt-1.5 text-[12px] text-muted-foreground">
                     Connectors run through the OAuth/MCP connection you set up separately in
                     Connectors — installing this pack does not connect them for you.
                   </p>
@@ -1315,7 +1315,7 @@ function AddCustomConnectorForm({
       <div>
         <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
           Add custom connector
-          <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-accent-foreground">
+          <span className="rounded-full bg-accent px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wider text-accent-foreground">
             Beta
           </span>
         </h2>
@@ -1369,12 +1369,12 @@ function AddCustomConnectorForm({
           )}
         />
         {jsonImportError && (
-          <p role="alert" className="text-[11px] text-danger">
+          <p role="alert" className="text-[12px] text-danger">
             {jsonImportError}
           </p>
         )}
         {jsonImportNote && (
-          <p role="status" className="text-[11px] text-amber-600 dark:text-amber-500">
+          <p role="status" className="text-[12px] text-amber-600 dark:text-amber-500">
             {jsonImportNote}
           </p>
         )}
@@ -1383,7 +1383,7 @@ function AddCustomConnectorForm({
           onClick={handleImportJsonConfig}
           disabled={jsonConfigText.trim().length === 0}
           className={cn(
-            'w-fit rounded-lg border border-border px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+            'w-fit rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
             FOCUS_RING,
           )}
         >
@@ -1441,7 +1441,7 @@ function AddCustomConnectorForm({
             data-bwignore
             className={inputClass}
           />
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[12px] text-muted-foreground">
             Sent only to this MCP server and never shown again.
           </span>
         </label>
@@ -1461,7 +1461,7 @@ function AddCustomConnectorForm({
           className={inputClass}
         />
         {trimmedUrl.length > 0 && !urlValid && (
-          <span id="custom-connector-url-error" className="text-[11px] text-danger">
+          <span id="custom-connector-url-error" className="text-[12px] text-danger">
             Enter a valid https:// URL.
           </span>
         )}
@@ -1751,7 +1751,7 @@ function ConnectorsPanel({
             <section aria-labelledby="connector-suggestions" className="flex flex-col gap-2">
               <h3
                 id="connector-suggestions"
-                className="text-[11px] uppercase tracking-wider text-muted-foreground"
+                className="text-[12px] uppercase tracking-wider text-muted-foreground"
               >
                 Suggested for {workRole}
               </h3>
@@ -1765,7 +1765,7 @@ function ConnectorsPanel({
                   >
                     <span
                       aria-hidden="true"
-                      className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold"
+                      className="flex h-5 w-5 items-center justify-center rounded text-[12px] font-semibold"
                       style={{ background: connector.iconBg, color: connector.iconText }}
                     >
                       {connector.name.slice(0, 1).toUpperCase()}
@@ -1897,7 +1897,7 @@ function ConnectorsPanel({
             <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
               <table className="w-full table-fixed border-collapse text-left">
                 <thead>
-                  <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b border-border/60 text-[12px] uppercase tracking-wider text-muted-foreground">
                     <th scope="col" className="w-[62%] px-3 py-2 font-semibold sm:w-[46%]">
                       Connector
                     </th>
@@ -1945,7 +1945,7 @@ function ConnectorsPanel({
                                 {connector.category}
                               </p>
                               {rowError && (
-                                <p role="alert" className="mt-0.5 text-[11px] text-danger">
+                                <p role="alert" className="mt-0.5 text-[12px] text-danger">
                                   {rowError}
                                 </p>
                               )}
@@ -2086,7 +2086,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
           <table className="w-full table-fixed border-collapse text-left">
             <thead>
-              <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+              <tr className="border-b border-border/60 text-[12px] uppercase tracking-wider text-muted-foreground">
                 <th scope="col" className="w-[64%] px-3 py-2 font-semibold sm:w-[54%]">
                   Skill
                 </th>
@@ -2311,7 +2311,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
           <table className="w-full table-fixed border-collapse text-left">
             <thead>
-              <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+              <tr className="border-b border-border/60 text-[12px] uppercase tracking-wider text-muted-foreground">
                 <th
                   scope="col"
                   className={cn(
@@ -2354,7 +2354,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         </p>
                         <span
                           className={cn(
-                            'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                            'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold',
                             plugin.enabled
                               ? 'bg-primary/15 text-primary'
                               : 'bg-muted text-muted-foreground',
@@ -2420,7 +2420,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         ) : null}
                       </div>
                       {plugin.error ? (
-                        <p role="alert" className="mt-1 text-right text-[11px] text-danger">
+                        <p role="alert" className="mt-1 text-right text-[12px] text-danger">
                           {plugin.error}
                         </p>
                       ) : null}
@@ -2482,7 +2482,7 @@ function NavButton({
         <span
           className={cn(
             'ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5',
-            'bg-destructive text-[11px] font-semibold leading-none text-destructive-foreground',
+            'bg-destructive text-[12px] font-semibold leading-none text-destructive-foreground',
           )}
           // The count alone ("2") tells a screen-reader user nothing about what
           // needs attention, so the caller supplies the sentence.
@@ -2685,7 +2685,7 @@ export function SettingsModal({
               {visibleGroups.map((group, gi) => (
                 <div key={group.label ?? `group-${gi}`} className="flex flex-col gap-0.5">
                   {group.label && (
-                    <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div className="px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                       {group.label}
                     </div>
                   )}

@@ -137,7 +137,7 @@ function CodeBlock({ code, language }: CodeBlockProps) {
     <div className="relative my-3 rounded-[var(--chat-radius-lg)] bg-[var(--chat-surface-overlay)] overflow-hidden">
       {language && (
         <div className="flex items-center justify-between px-4 py-1.5 border-b border-[var(--chat-border)]">
-          <span className="text-[11px] font-medium text-[var(--chat-text-muted)] uppercase tracking-wide">
+          <span className="text-[12px] font-medium text-[var(--chat-text-muted)] uppercase tracking-wide">
             {language}
           </span>
           <Button
@@ -448,7 +448,7 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
         </div>
         <span
           className={cn(
-            'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+            'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium',
             toolCall.status === 'failed'
               ? 'bg-red-500/10 text-red-300'
               : toolCall.status === 'completed'

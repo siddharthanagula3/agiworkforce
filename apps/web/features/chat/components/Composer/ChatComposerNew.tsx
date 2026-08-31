@@ -161,7 +161,7 @@ function AgiWorkMaturityBadge() {
       aria-hidden="true"
       data-testid="agi-work-maturity-badge"
       title={AGI_WORK_MATURITY_TITLE}
-      className="ml-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1 text-[9px] font-medium uppercase leading-4 tracking-wide text-amber-800 dark:text-amber-300"
+      className="ml-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1 text-[12px] font-medium uppercase leading-4 tracking-wide text-amber-800 dark:text-amber-300"
     >
       {AGI_WORK_MATURITY_LABEL}
     </span>
@@ -2635,7 +2635,7 @@ const ChatComposerNewComponent = ({
           className="w-72"
         >
           <div className="p-1.5" role="listbox" aria-label="Mentions">
-            <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="mb-1.5 px-3 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
               Skills
             </div>
             {skillsLoading ? (
@@ -2661,7 +2661,7 @@ const ChatComposerNewComponent = ({
                   )}
                 >
                   <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <span className="text-[10px] font-bold">
+                    <span className="text-[12px] font-bold">
                       {skill.name.substring(0, 2).toUpperCase()}
                     </span>
                   </div>
@@ -2677,7 +2677,7 @@ const ChatComposerNewComponent = ({
 
             {projectScopeSelectable && (
               <>
-                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
                   Projects
                 </div>
                 {filteredMentionProjects.length === 0 ? (
@@ -2775,7 +2775,7 @@ const ChatComposerNewComponent = ({
                 id="composer-char-counter"
                 role="status"
                 className={cn(
-                  'absolute bottom-0 right-2 z-20 text-[10px] tabular-nums',
+                  'absolute bottom-0 right-2 z-20 text-[12px] tabular-nums',
                   charCounterExceeded ? 'text-danger' : 'text-muted-foreground',
                 )}
               >
@@ -2788,7 +2788,7 @@ const ChatComposerNewComponent = ({
           {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
               before the user presses Enter. */}
           {pendingSlashCommand && pendingSlashOutcome && (
-            <p className="px-2 text-[11px] text-muted-foreground" role="status">
+            <p className="px-2 text-[12px] text-muted-foreground" role="status">
               {pendingSlashOutcome.status === 'unavailable' ? (
                 pendingSlashOutcome.notice
               ) : (
@@ -2840,7 +2840,7 @@ const ChatComposerNewComponent = ({
                 {hasOverflowActive && (
                   <span
                     aria-hidden="true"
-                    className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground"
+                    className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground"
                   >
                     {overflowActiveCount}
                   </span>
@@ -2940,7 +2940,7 @@ const ChatComposerNewComponent = ({
                       <Paperclip className="h-4 w-4 text-muted-foreground" />
                       <span className="flex-1 text-left">Add photos &amp; files</span>
                       {mediaModeActive && (
-                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                           Not used here
                         </span>
                       )}
@@ -3018,16 +3018,16 @@ const ChatComposerNewComponent = ({
                           />
                           <span className="flex-1 text-left">Create image</span>
                           {!billingPolicyReady ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                               {billingPolicyError ? 'Retry' : 'Checking'}
                             </span>
                           ) : mediaAvailabilityStatus !== 'ready' ||
                             availableImageModels.length === 0 ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                               {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
                             </span>
                           ) : !canUseImageGeneration ? (
-                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
                               Upgrade
                             </span>
                           ) : null}
@@ -3109,16 +3109,16 @@ const ChatComposerNewComponent = ({
                           />
                           <span className="flex-1 text-left">Create video</span>
                           {!billingPolicyReady ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                               {billingPolicyError ? 'Retry' : 'Checking'}
                             </span>
                           ) : mediaAvailabilityStatus !== 'ready' ||
                             availableVideoModels.length === 0 ? (
-                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                               {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
                             </span>
                           ) : !canUseVideoGeneration ? (
-                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
                               Upgrade
                             </span>
                           ) : null}
@@ -3226,7 +3226,7 @@ const ChatComposerNewComponent = ({
                           </button>
                         )}
                         {!canPickFolder && (
-                          <span className="text-[10px] text-muted-foreground">Not supported</span>
+                          <span className="text-[12px] text-muted-foreground">Not supported</span>
                         )}
                       </button>
                     )}
@@ -3424,7 +3424,7 @@ const ChatComposerNewComponent = ({
                   .map((option) => option.label)
                   .join(', ')}`}
                 title={overflowActiveOptions.map((option) => option.label).join(', ')}
-                className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-[11px] font-medium text-[var(--chat-accent-primary-text)]"
+                className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-[12px] font-medium text-[var(--chat-accent-primary-text)]"
               >
                 <PrimaryOverflowIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
                 <span className="hidden max-w-24 truncate sm:inline">
@@ -3667,7 +3667,7 @@ const ChatComposerNewComponent = ({
                         >
                           <span className="flex-1 text-left">{opt.label}</span>
                           {opt.durationSecs && (
-                            <span className="shrink-0 text-[10px] text-muted-foreground">
+                            <span className="shrink-0 text-[12px] text-muted-foreground">
                               {opt.durationSecs.join('/')}s only
                             </span>
                           )}
@@ -4054,13 +4054,13 @@ const ChatComposerNewComponent = ({
                 <button
                   type="button"
                   onClick={() => setAgiWorkFieldsOpen(false)}
-                  className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  className="rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                 >
                   {tAgiWork('agiWork.compose.scopeHide')}
                 </button>
               </div>
               <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">
+                <span className="text-[12px] font-medium text-muted-foreground">
                   {tAgiWork('agiWork.compose.constraintsLabel')}
                 </span>
                 <input
@@ -4073,7 +4073,7 @@ const ChatComposerNewComponent = ({
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-medium text-muted-foreground">
+                <span className="text-[12px] font-medium text-muted-foreground">
                   {tAgiWork('agiWork.compose.deliverableLabel')}
                 </span>
                 <input
@@ -4090,7 +4090,7 @@ const ChatComposerNewComponent = ({
             <button
               type="button"
               onClick={() => setAgiWorkFieldsOpen(true)}
-              className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-2.5 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
             >
               <ListChecks className="h-3 w-3" />
               {tAgiWork('agiWork.compose.scopeAdd')}
@@ -4109,7 +4109,7 @@ const ChatComposerNewComponent = ({
           instead of consuming a full banner above the textarea. The destination
           remains visible before send and expands to the complete payload/tool
           explanation only when requested. */}
-      <div className="mt-2 flex min-h-5 flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-[11px] text-muted-foreground">
+      <div className="mt-2 flex min-h-5 flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-[12px] text-muted-foreground">
         {/* Standing web-search indicator. Search is ambient by design (the manual
             toggle was removed), which left nothing on screen saying whether the
             current turn can search — `webSearchEnabled` reached the user only

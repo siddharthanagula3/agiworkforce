@@ -66,7 +66,7 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
 function PrivacyChip({ label }: { label: string }) {
   return (
     <div
-      className="absolute -bottom-1 left-1 z-10 flex items-center gap-0.5 rounded-full border border-border bg-background/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-foreground shadow-sm"
+      className="absolute -bottom-1 left-1 z-10 flex items-center gap-0.5 rounded-full border border-border bg-background/90 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-foreground shadow-sm"
       aria-label={`Outbound destination: ${label}`}
     >
       <Lock className="h-2.5 w-2.5" />
@@ -148,12 +148,12 @@ function DocumentChip({
             {displayName}
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-[12px] text-muted-foreground">
               {formatSize(preview.file.size)}
             </span>
             {privacyShortLabel ? (
               <span
-                className="inline-flex items-center gap-0.5 rounded-full border border-border/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
+                className="inline-flex items-center gap-0.5 rounded-full border border-border/60 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground"
                 aria-label={`Outbound destination: ${privacyShortLabel}`}
               >
                 <Lock className="h-2.5 w-2.5" />

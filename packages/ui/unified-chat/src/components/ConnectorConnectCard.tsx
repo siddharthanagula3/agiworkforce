@@ -82,35 +82,35 @@ function ConnectorConnectCardImpl({ request, onRetryTurn, className }: Connector
           <div className="space-y-1">
             <p className="font-medium text-foreground">{headline}</p>
             <p className="text-xs text-muted-foreground">{explanation}</p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[12px] text-muted-foreground">
               Requested by <span className="font-mono">{request.qualifiedToolName}</span>
             </p>
           </div>
 
           {visibleScopes.length > 0 ? (
             <div className="space-y-1">
-              <p className="text-[11px] font-medium text-muted-foreground">
+              <p className="text-[12px] font-medium text-muted-foreground">
                 {href === null ? 'Would request' : 'This will request'}
               </p>
               <ul className="flex flex-wrap gap-1" aria-label="Requested permissions">
                 {visibleScopes.map((scope) => (
                   <li
                     key={scope}
-                    className="max-w-full truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                    className="max-w-full truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12px] text-muted-foreground"
                     title={scope}
                   >
                     {scope}
                   </li>
                 ))}
                 {hiddenScopeCount > 0 ? (
-                  <li className="rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  <li className="rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground">
                     +{hiddenScopeCount} more
                   </li>
                 ) : null}
               </ul>
             </div>
           ) : (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[12px] text-muted-foreground">
               This deployment lists no scopes for {request.connectorName}.
             </p>
           )}
@@ -140,7 +140,7 @@ function ConnectorConnectCardImpl({ request, onRetryTurn, className }: Connector
           </div>
 
           {href !== null ? (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[12px] text-muted-foreground">
               Connecting opens {request.connectorName} in this tab and brings you back here. It does
               not resume this turn — use Retry after you return to re-run it from your last message.
             </p>

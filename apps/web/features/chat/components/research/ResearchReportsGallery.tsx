@@ -68,7 +68,7 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
         <Telescope className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" aria-hidden="true" />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-foreground">{label}</span>
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+          <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
             {formatCreatedAt(report.createdAt)}
             {` · ${report.sourcesConsulted} ${report.sourcesConsulted === 1 ? 'source' : 'sources'}`}
             {report.model ? ` · ${report.model}` : ''}
@@ -76,7 +76,7 @@ function ReportRow({ report, onOpen }: { report: GalleryReport; onOpen: () => vo
         </span>
         {incomplete && (
           <span
-            className="mt-0.5 flex shrink-0 items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+            className="mt-0.5 flex shrink-0 items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5 text-[12px] font-medium text-muted-foreground"
             title={report.error ?? undefined}
           >
             <TriangleAlert className="h-2.5 w-2.5" aria-hidden="true" />
@@ -130,7 +130,7 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
         <button
           type="button"
           onClick={() => setOpenReport(null)}
-          className="flex shrink-0 items-center gap-1 border-b border-border/20 px-4 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+          className="flex shrink-0 items-center gap-1 border-b border-border/20 px-4 py-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
         >
           <ChevronLeft className="h-3 w-3" aria-hidden="true" />
           All reports

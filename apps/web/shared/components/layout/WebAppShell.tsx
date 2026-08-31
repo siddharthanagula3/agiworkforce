@@ -318,7 +318,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
                 <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={isFreeTier} />
               </div>
               {user?.email && (
-                <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
+                <p className="truncate text-[12px] text-muted-foreground">{user.email}</p>
               )}
             </div>
             <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />

@@ -600,7 +600,7 @@ function EditPanel({
             client sends `mask_image`, so the strip advertised a capability no
             code backs; it is gone rather than left as a permanent promise. */}
         <div className="border-t border-border/30 p-3 space-y-2">
-          <p className="px-1 text-[11px] leading-snug text-muted-foreground">
+          <p className="px-1 text-[12px] leading-snug text-muted-foreground">
             Describing a change generates a new image from the updated description. The image above
             is not modified.
           </p>
@@ -805,7 +805,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
         </div>
 
         {modelLabel && (
-          <span className="ml-auto truncate pr-1 text-[11px] text-muted-foreground">
+          <span className="ml-auto truncate pr-1 text-[12px] text-muted-foreground">
             Generated with {modelLabel}
           </span>
         )}

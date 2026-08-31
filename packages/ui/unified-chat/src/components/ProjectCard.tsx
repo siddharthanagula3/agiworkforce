@@ -322,7 +322,7 @@ export function ProjectCard({
         </p>
       ) : null}
 
-      <div className="pointer-events-none relative z-10 flex items-center justify-between text-[11px] text-[var(--chat-text-muted)]">
+      <div className="pointer-events-none relative z-10 flex items-center justify-between text-[12px] text-[var(--chat-text-muted)]">
         <span>
           {conversationCount === 0
             ? 'No conversations yet'

@@ -41,7 +41,7 @@ export function LanguageSelector() {
       </select>
       <p
         id="display-language-scope"
-        className="max-w-xs text-[11px] leading-snug text-muted-foreground sm:text-right"
+        className="max-w-xs text-[12px] leading-snug text-muted-foreground sm:text-right"
       >
         {t('translationScope', TRANSLATION_SCOPE_FALLBACK)}
       </p>

@@ -261,7 +261,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="font-semibold text-sm">{item.name}</h4>
                   {winner === item.name && (
-                    <Badge className="gap-1 border-0 bg-[var(--chat-warning-bg)] text-[10px] text-[var(--chat-warning-fg)]">
+                    <Badge className="gap-1 border-0 bg-[var(--chat-warning-bg)] text-[12px] text-[var(--chat-warning-fg)]">
                       <Trophy className="h-3 w-3" aria-hidden="true" />
                       Winner
                     </Badge>

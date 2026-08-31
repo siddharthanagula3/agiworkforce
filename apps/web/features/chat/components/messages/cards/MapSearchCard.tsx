@@ -206,7 +206,7 @@ function MapTiles({
                 {/* Numbered so a pin can be matched to its row in the list
                     beside the map — two identical pins leave the reader
                     guessing which end of a route is which. */}
-                <span className="relative grid size-6 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground shadow-md ring-2 ring-background">
+                <span className="relative grid size-6 place-items-center rounded-full bg-primary text-[12px] font-semibold text-primary-foreground shadow-md ring-2 ring-background">
                   {index + 1}
                 </span>
               </span>
@@ -249,7 +249,7 @@ function MapTiles({
         )}
       </div>
 
-      <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-background/75 px-1.5 py-0.5 text-[10px] text-muted-foreground backdrop-blur">
+      <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-background/75 px-1.5 py-0.5 text-[12px] text-muted-foreground backdrop-blur">
         {view.attribution}
       </span>
 
@@ -306,7 +306,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
                   >
                     <span
                       className={cn(
-                        'grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold',
+                        'grid size-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold',
                         place.confident === false
                           ? 'bg-warning-fill text-warning-on-fill'
                           : 'bg-primary text-primary-foreground',

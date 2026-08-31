@@ -299,7 +299,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
               <X className="w-4 h-4" />
             </button>
           )}
-          <kbd className="text-[10px] text-foreground bg-muted border border-border rounded px-1.5 py-0.5 hidden sm:block">
+          <kbd className="text-[12px] text-foreground bg-muted border border-border rounded px-1.5 py-0.5 hidden sm:block">
             ESC
           </kbd>
         </div>
@@ -311,7 +311,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
           ) : (
             Object.entries(groups).map(([group, items]) => (
               <div key={group}>
-                <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <p className="px-4 py-1.5 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {group}
                 </p>
                 {items.map((cmd) => {
@@ -358,7 +358,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-border bg-muted/50 px-4 py-2">
-          <div className="flex items-center gap-3 text-[10px] text-foreground">
+          <div className="flex items-center gap-3 text-[12px] text-foreground">
             <span>
               <kbd className="bg-muted border border-border rounded px-1 py-0.5 font-mono">↑↓</kbd>{' '}
               navigate
@@ -372,7 +372,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
               {activeSubMenu ? 'back' : 'close'}
             </span>
           </div>
-          <span className="text-[10px] text-foreground">{filtered.length} results</span>
+          <span className="text-[12px] text-foreground">{filtered.length} results</span>
         </div>
       </DialogContent>
     </Dialog>

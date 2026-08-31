@@ -386,7 +386,7 @@ function SectionHeader({
     <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
       <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
       <span>{label}</span>
-      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[12px] text-muted-foreground">
         {count}
       </span>
       <ChevronRight
@@ -431,7 +431,7 @@ export function WorkSessionToggleButton({
     >
       <PanelRight className="h-4 w-4" aria-hidden="true" />
       {summary.outputs.length > 0 && !open && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground">
           {summary.outputs.length > 99 ? '99+' : summary.outputs.length}
         </span>
       )}
@@ -531,7 +531,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                 <span
                   data-testid="agi-work-maturity-badge"
                   title={AGI_WORK_MATURITY_TITLE}
-                  className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
+                  className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
                 >
                   {AGI_WORK_MATURITY_LABEL}
                 </span>
@@ -551,7 +551,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
           </div>
 
           <div className="mt-3">
-            <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+            <div className="mb-1 flex items-center justify-between text-[12px] text-muted-foreground">
               <span>Task progress</span>
               <span>
                 {completed}/{summary.progress.length} complete
@@ -588,7 +588,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                     <div className="min-w-0 flex-1">
                       <p className="text-xs leading-relaxed text-foreground">{item.label}</p>
                       {item.detail && (
-                        <p className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">
+                        <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
                           {item.detail}
                         </p>
                       )}
@@ -619,7 +619,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                         <p className="truncate text-xs font-medium text-foreground">
                           {output.name}
                         </p>
-                        <p className="truncate text-[10px] text-muted-foreground">
+                        <p className="truncate text-[12px] text-muted-foreground">
                           {[output.mimeType, byteLabel(output.byteCount)]
                             .filter(Boolean)
                             .join(' · ') || 'Artifact'}
@@ -632,7 +632,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-7 px-2 text-[11px]"
+                          className="h-7 px-2 text-[12px]"
                           onClick={() => openOutput(output)}
                           aria-label={`Open ${output.name}`}
                         >
@@ -643,7 +643,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                         <Button
                           type="button"
                           size="sm"
-                          className="h-7 gap-1 px-2 text-[11px]"
+                          className="h-7 gap-1 px-2 text-[12px]"
                           onClick={() => void downloadOutput(output)}
                           aria-label={`Download ${output.name}`}
                         >
@@ -682,7 +682,7 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                     <div className="min-w-0 flex-1">
                       <p className="break-words text-xs text-foreground">{item.label}</p>
                       {item.detail && (
-                        <p className="text-[10px] text-muted-foreground">{item.detail}</p>
+                        <p className="text-[12px] text-muted-foreground">{item.detail}</p>
                       )}
                     </div>
                   </li>

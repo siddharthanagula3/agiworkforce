@@ -4298,7 +4298,7 @@ export default function WebChatPage() {
                 <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={currentTier === 'free'} />
               </div>
               {!isAccountLoading && user?.email && (
-                <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
+                <p className="truncate text-[12px] text-muted-foreground">{user.email}</p>
               )}
             </div>
             <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -4340,7 +4340,7 @@ export default function WebChatPage() {
           <DropdownMenuItem onClick={() => setKeyboardShortcutsOpen(true)}>
             <Keyboard className="mr-2 h-4 w-4" />
             {t('common:navKeyboardShortcuts')}
-            <span className="ml-auto text-[10px] text-muted-foreground">{shortcutLabel('/')}</span>
+            <span className="ml-auto text-[12px] text-muted-foreground">{shortcutLabel('/')}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

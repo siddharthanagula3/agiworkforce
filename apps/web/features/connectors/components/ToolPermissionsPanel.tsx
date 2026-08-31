@@ -116,7 +116,7 @@ function PermissionLegend() {
         <div key={level} className="flex items-center gap-1.5">
           <span
             className={cn(
-              'flex h-5 w-5 items-center justify-center rounded border text-[10px]',
+              'flex h-5 w-5 items-center justify-center rounded border text-[12px]',
               activeClass,
             )}
           >

@@ -1,4 +1,3 @@
-
 import { ArrowDown, ArrowUp, FileSpreadsheet } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
@@ -121,7 +120,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
             {data.columns.length === 1 ? 'column' : 'columns'}
           </span>
         </div>
-        <span className="text-[11px] text-muted-foreground pr-1" aria-live="polite">
+        <span className="text-[12px] text-muted-foreground pr-1" aria-live="polite">
           {copiedCell ? 'Cell copied' : selected ? 'Ctrl/⌘+C to copy cell' : ''}
         </span>
       </div>
@@ -137,7 +136,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
         <table className="w-full border-collapse text-sm" data-testid="spreadsheet-table">
           <thead className="sticky top-0 z-10 shadow-sm ring-1 ring-border">
             <tr>
-              <th className="w-10 border-r border-b border-border bg-muted p-1 text-center text-[10px] text-muted-foreground font-medium select-none">
+              <th className="w-10 border-r border-b border-border bg-muted p-1 text-center text-[12px] text-muted-foreground font-medium select-none">
                 #
               </th>
               {data.columns.map((col, colIdx) => {
@@ -188,7 +187,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
             ) : (
               visibleRows.map((row, rowIndex) => (
                 <tr key={rowIndex} className="group">
-                  <td className="border-r border-b border-border bg-muted/30 p-1 text-center text-[10px] text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors">
+                  <td className="border-r border-b border-border bg-muted/30 p-1 text-center text-[12px] text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors">
                     {rowIndex + 1}
                   </td>
                   {row.map((value, colIdx) => {
@@ -227,7 +226,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
       {/* Footer — honest truncation note */}
       {truncated && (
         <div
-          className="border-t bg-muted/20 px-3 py-1.5 text-[10px] text-muted-foreground"
+          className="border-t bg-muted/20 px-3 py-1.5 text-[12px] text-muted-foreground"
           data-testid="spreadsheet-truncation-note"
         >
           Showing first {SPREADSHEET_ROW_CAP} of {sortedRows.length} rows. Download the CSV for the

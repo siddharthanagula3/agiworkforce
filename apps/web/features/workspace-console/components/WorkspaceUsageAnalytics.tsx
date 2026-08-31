@@ -37,7 +37,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   return (
     <div className="flex flex-col gap-1 px-5 py-4">
       <span
-        className="text-[10px] font-medium uppercase tracking-[0.1em]"
+        className="text-[12px] font-medium uppercase tracking-[0.1em]"
         style={{ color: 'var(--text-3)' }}
       >
         {label}
@@ -46,7 +46,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
         {value}
       </span>
       {note ? (
-        <span className="text-[11px]" style={{ color: 'var(--text-3)' }}>
+        <span className="text-[12px]" style={{ color: 'var(--text-3)' }}>
           {note}
         </span>
       ) : null}

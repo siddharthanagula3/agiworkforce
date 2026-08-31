@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, XCircle, ChevronDown, Circle, Loader2 } from 'lucide-react';
@@ -97,7 +96,7 @@ function StepRow({ step, isLast }: StepRowProps) {
 
           <div className="flex shrink-0 items-center gap-2">
             {duration && (
-              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+              <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
                 {duration}
               </span>
             )}
@@ -126,7 +125,7 @@ function StepRow({ step, isLast }: StepRowProps) {
               }}
               className="overflow-hidden"
             >
-              <pre className="mt-2 overflow-x-auto rounded border border-white/10 bg-card/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
+              <pre className="mt-2 overflow-x-auto rounded border border-white/10 bg-card/60 px-3 py-2 font-mono text-[12px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
                 {step.output}
               </pre>
             </motion.div>

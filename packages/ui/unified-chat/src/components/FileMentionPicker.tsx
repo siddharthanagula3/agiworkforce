@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { File, FileText, Folder, Loader2, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -193,7 +192,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-3 py-2">
-        <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+        <span className="flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
           {isSearchMode ? (
             <>
               <Search size={10} />
@@ -235,16 +234,16 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
             {getFileIcon(entry)}
             <span className="flex-1 truncate font-medium">{entry.name}</span>
             {isSearchMode && (
-              <span className="shrink-0 max-w-[120px] truncate text-[10px] text-muted-foreground">
+              <span className="shrink-0 max-w-[120px] truncate text-[12px] text-muted-foreground">
                 {shortPath(entry.path, projectRoot)}
               </span>
             )}
             {!entry.isDir && !isSearchMode && entry.size > 0 && (
-              <span className="shrink-0 text-[10px] text-muted-foreground">
+              <span className="shrink-0 text-[12px] text-muted-foreground">
                 {formatSize(entry.size)}
               </span>
             )}
-            {entry.isDir && <span className="shrink-0 text-[10px] text-muted-foreground">/</span>}
+            {entry.isDir && <span className="shrink-0 text-[12px] text-muted-foreground">/</span>}
           </button>
         ))
       )}

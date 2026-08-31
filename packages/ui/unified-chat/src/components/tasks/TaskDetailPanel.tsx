@@ -141,7 +141,7 @@ function ProgressRow({ entry }: { entry: AgentActivityProgressEntry | AgentActiv
       )}
       <span className="min-w-0">
         <span className="block text-foreground">{summary}</span>
-        <span className="text-[11px] text-muted-foreground">{progressStatus(entry)}</span>
+        <span className="text-[12px] text-muted-foreground">{progressStatus(entry)}</span>
         {entry.kind === 'progress' && entry.detail ? (
           <span className="mt-0.5 block text-muted-foreground">{entry.detail}</span>
         ) : null}
@@ -156,7 +156,7 @@ function OutputRow({ output }: { output: AgentActivityArtifactEntry }) {
   return (
     <li className="rounded-md border border-border/70 p-2">
       <div className="truncate text-xs font-medium text-foreground">{output.name}</div>
-      <div className="mt-0.5 text-[11px] text-muted-foreground">
+      <div className="mt-0.5 text-[12px] text-muted-foreground">
         {output.mimeType}
         {size ? ` · ${size}` : ''}
       </div>
@@ -165,13 +165,13 @@ function OutputRow({ output }: { output: AgentActivityArtifactEntry }) {
           href={output.uri}
           target="_blank"
           rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] font-medium text-foreground hover:bg-accent"
+          className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[12px] font-medium text-foreground hover:bg-accent"
         >
           <Download className="h-3 w-3" />
           Download and open
         </a>
       ) : (
-        <div className="mt-2 text-[11px] text-muted-foreground">
+        <div className="mt-2 text-[12px] text-muted-foreground">
           Download unavailable for this historical output.
         </div>
       )}
@@ -188,7 +188,7 @@ function TaskCostSection({ run }: { run: CloudAgentRun }) {
       aria-label="Task cost and usage"
       className="mx-4 mb-4 rounded-md border border-border/70 p-3"
     >
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
         Cost and usage
       </p>
       {usage ? (
@@ -202,7 +202,7 @@ function TaskCostSection({ run }: { run: CloudAgentRun }) {
               {formatTaskCost(usage.costCents)}
             </p>
           )}
-          <p className="mt-1 text-[11px] text-muted-foreground">
+          <p className="mt-1 text-[12px] text-muted-foreground">
             {formatTaskTokens(usage.inputTokens)} in · {formatTaskTokens(usage.outputTokens)} out
             {usage.reasoningTokens > 0
               ? ` · ${formatTaskTokens(usage.reasoningTokens)} reasoning`
@@ -210,7 +210,7 @@ function TaskCostSection({ run }: { run: CloudAgentRun }) {
             · {usage.providerCalls} model {usage.providerCalls === 1 ? 'call' : 'calls'}
           </p>
           {live ? (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
+            <p className="mt-1.5 text-[12px] text-muted-foreground">
               This is what has settled so far. The total grows while the task keeps working.
             </p>
           ) : null}
@@ -315,7 +315,7 @@ export function TaskDetailPanel({
           </div>
           <span
             className={cn(
-              'mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium',
+              'mt-1 inline-flex rounded-full border px-2 py-0.5 text-[12px] font-medium',
               TASK_TONE_BADGE_CLASS[tone],
             )}
           >
@@ -324,7 +324,7 @@ export function TaskDetailPanel({
           {autoRefreshing ? (
             <span
               data-testid="task-auto-refreshing"
-              className="ml-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground"
+              className="ml-2 inline-flex items-center gap-1 text-[12px] text-muted-foreground"
             >
               <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
               Updating automatically
@@ -370,7 +370,7 @@ export function TaskDetailPanel({
           aria-label="Task goal"
           className="m-4 rounded-md border border-border/70 bg-muted/30 p-3"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
             Goal
           </p>
           <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-foreground">
@@ -403,7 +403,7 @@ export function TaskDetailPanel({
           aria-label="Task plan"
           className="mx-4 mb-4 rounded-md border border-border/70 p-3"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
             Plan · {planSteps.length}
           </p>
           <ol className="mt-2 flex flex-col gap-1.5">
@@ -444,7 +444,7 @@ export function TaskDetailPanel({
                     {failure.message}
                   </span>
                   {failure.code || failure.retryable ? (
-                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                    <span className="mt-0.5 block text-[12px] text-muted-foreground">
                       {failure.code ? failure.code : null}
                       {failure.code && failure.retryable ? ' · ' : null}
                       {failure.retryable ? 'Temporary — safe to run again' : null}
@@ -528,7 +528,7 @@ export function TaskDetailPanel({
               Open source chat
             </Button>
           ) : (
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-[12px] text-muted-foreground">
               This historical run has no source-conversation reference.
             </p>
           )}
@@ -536,7 +536,7 @@ export function TaskDetailPanel({
       </div>
 
       {truncated ? (
-        <p className="border-t p-4 text-[11px] text-muted-foreground">
+        <p className="border-t p-4 text-[12px] text-muted-foreground">
           This unusually long journal is truncated after 4,000 events. Open the source chat for the
           complete transcript.
         </p>

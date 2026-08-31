@@ -141,7 +141,7 @@ function SessionItemBase({
             <div className="truncate text-xs text-[hsl(var(--muted-foreground))]">{preview}</div>
           )}
           {projectName && (
-            <div className="mt-0.5 truncate text-[10px] text-[hsl(var(--muted-foreground))]">
+            <div className="mt-0.5 truncate text-[12px] text-[hsl(var(--muted-foreground))]">
               {t('sidebar.inProject', 'in {{name}}', { name: projectName })}
             </div>
           )}
@@ -229,7 +229,7 @@ function SessionItemBase({
                 {!simple && onMoveToProject && projects && projects.length > 0 && (
                   <>
                     <MenuSeparator />
-                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                    <div className="px-2 py-1 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                       {t('sidebar.moveToProject', 'Move to project')}
                     </div>
                     {projects.map((project) => (
