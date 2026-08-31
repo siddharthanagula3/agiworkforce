@@ -51,14 +51,19 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
       }}
       className={cn(
         'absolute -right-1.5 -top-1.5 z-10',
-        'flex h-5 w-5 items-center justify-center rounded-full',
+        // 20px was under the 24px target minimum this repository already
+        // states. The dot stays small because it sits on the corner of a
+        // thumbnail; the pseudo-element gives the finger a 40px target without
+        // changing what is drawn or how the row lays out.
+        'flex h-6 w-6 items-center justify-center rounded-full',
+        "before:absolute before:-inset-2 before:content-['']",
         'bg-background/90 border border-border shadow-sm',
         'text-muted-foreground hover:text-foreground hover:bg-muted',
         'transition-colors duration-100',
       )}
       aria-label={label}
     >
-      <X className="h-3 w-3" />
+      <X className="h-3.5 w-3.5" />
     </button>
   );
 }
