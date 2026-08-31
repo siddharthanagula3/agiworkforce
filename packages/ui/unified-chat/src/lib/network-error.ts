@@ -1,6 +1,4 @@
 /**
- * Turns a caught value into something a person can act on.
- *
  * `err instanceof Error ? err.message : String(err)` reaches the screen with
  * the browser's own wording when the network drops: "Failed to fetch" in
  * Chrome, "Load failed" in Safari, "NetworkError when attempting to fetch
@@ -18,20 +16,14 @@ export function networkErrorMessage(error: unknown): string | null {
     : 'Could not reach the server.';
 }
 
-export function toUserMessage(error: unknown, fallback: string): string {
-  const network = networkErrorMessage(error);
-  if (network) return network;
-  return error instanceof Error && error.message.trim() ? error.message.trim() : fallback;
-}
-
 /**
  * The human answer for an HTTP failure, or null when the status carries no
  * better wording than the server's own message.
  *
  * A status code is a machine's vocabulary. "HTTP 429: Too many requests" tells
- * a reader nothing they can act on; "you are going faster than the service
- * allows, wait a moment" does. Codes also leak shape - a 403 on a list request
- * is a permissions answer, not a fault the reader caused.
+ * a reader nothing they can act on; "you are going a little fast, wait a
+ * moment" does. Codes also leak shape - a 403 on a list request is a
+ * permissions answer, not a fault the reader caused.
  */
 export function httpStatusMessage(status: number | undefined): string | null {
   if (typeof status !== 'number') return null;
@@ -59,13 +51,63 @@ function statusOf(error: unknown): number | undefined {
 }
 
 /**
- * `toUserMessage`, plus the HTTP status ladder. Prefer this wherever a caught
- * value may be an HTTP failure rather than only a transport failure.
+ * A message the transport formatted, rather than one anybody wrote: either the
+ * "HTTP 500: ..." shape, or a bare HTTP reason phrase. A reason phrase carries
+ * nothing the status does not - "Forbidden" restates 403 - so it defers to the
+ * ladder. Matched whole-string, so "Forbidden: your plan does not include this"
+ * is still somebody's sentence and survives.
  */
-export function toUserMessageWithStatus(error: unknown, fallback: string): string {
+const REASON_PHRASES = [
+  'bad request',
+  'unauthorized',
+  'unauthorised',
+  'payment required',
+  'forbidden',
+  'not found',
+  'method not allowed',
+  'request timeout',
+  'conflict',
+  'gone',
+  'payload too large',
+  'unprocessable entity',
+  'too many requests',
+  'internal error',
+  'internal server error',
+  'not implemented',
+  'bad gateway',
+  'service unavailable',
+  'gateway timeout',
+  'unknown error',
+];
+
+function isMachineShaped(message: string): boolean {
+  if (/^\s*HTTP\s+\d{3}\b/.test(message)) return true;
+  const normalised = message
+    .trim()
+    .replace(/[.!]+$/, '')
+    .toLowerCase();
+  return REASON_PHRASES.includes(normalised);
+}
+
+/**
+ * The message to put on screen for a caught value.
+ *
+ * The error's own words win when somebody wrote them: "Model is overloaded"
+ * and "Provider down" say more than any status sentence could, and replacing
+ * them with a generic 5xx line loses the only useful detail in the failure.
+ * The status ladder is for the case where the message is the transport talking
+ * to itself - "HTTP 500: nope" names no condition, so 500 becomes a sentence
+ * instead.
+ */
+export function toUserMessage(error: unknown, fallback: string): string {
   const network = networkErrorMessage(error);
   if (network) return network;
-  const byStatus = httpStatusMessage(statusOf(error));
-  if (byStatus) return byStatus;
-  return toUserMessage(error, fallback);
+
+  const own = error instanceof Error ? error.message.trim() : '';
+  if (own && !isMachineShaped(own)) return own;
+
+  return httpStatusMessage(statusOf(error)) ?? fallback;
 }
+
+/** Retained name for callers that state the intent explicitly. */
+export const toUserMessageWithStatus = toUserMessage;
