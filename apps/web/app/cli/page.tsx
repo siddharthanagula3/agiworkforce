@@ -155,18 +155,33 @@ export default function CliPage() {
             completion. Run agi with no subcommand and you land in the interactive TUI instead,
             where --no-tui drops you to the line-based REPL.
           </p>
-          <table className="agi-ledger">
-            <tbody>
-              {SUBCOMMANDS.map((s) => (
-                <tr key={s.cmd}>
-                  <td style={{ fontFamily: 'var(--agi-font-mono)', textTransform: 'lowercase' }}>
-                    {s.cmd}
-                  </td>
-                  <td>{s.desc}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* The complete subcommand list is reference material - it belongs in
+              docs, and repeating it open on a marketing page put twenty-five
+              rows between the reader and the next thing worth reading. It stays
+              here because it is true and someone evaluating the CLI may want
+              it, but it opens on demand. */}
+          <details className="agi-compare-disclosure">
+            <summary className="agi-compare-summary">
+              <span>Every subcommand</span>
+              <span className="agi-compare-summary-hint">{SUBCOMMANDS.length} commands</span>
+            </summary>
+            <div>
+              <table className="agi-ledger">
+                <tbody>
+                  {SUBCOMMANDS.map((s) => (
+                    <tr key={s.cmd}>
+                      <td
+                        style={{ fontFamily: 'var(--agi-font-mono)', textTransform: 'lowercase' }}
+                      >
+                        {s.cmd}
+                      </td>
+                      <td>{s.desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </section>
 
         <DevBand
