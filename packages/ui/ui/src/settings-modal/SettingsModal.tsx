@@ -1895,16 +1895,19 @@ function ConnectorsPanel({
             )
           ) : (
             <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
-              <table className="w-full border-collapse text-left">
+              <table className="w-full table-fixed border-collapse text-left">
                 <thead>
                   <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
-                    <th scope="col" className="px-3 py-2 font-semibold">
+                    <th scope="col" className="w-[62%] px-3 py-2 font-semibold sm:w-[46%]">
                       Connector
                     </th>
-                    <th scope="col" className="px-3 py-2 font-semibold">
+                    <th
+                      scope="col"
+                      className="hidden px-3 py-2 font-semibold sm:table-cell sm:w-[24%]"
+                    >
                       Type
                     </th>
-                    <th scope="col" className="px-3 py-2 font-semibold">
+                    <th scope="col" className="w-[38%] px-3 py-2 font-semibold sm:w-[30%]">
                       Status
                     </th>
                   </tr>
@@ -1938,6 +1941,9 @@ function ConnectorsPanel({
                               >
                                 {connector.name}
                               </button>
+                              <p className="truncate text-xs text-muted-foreground sm:hidden">
+                                {connector.category}
+                              </p>
                               {rowError && (
                                 <p role="alert" className="mt-0.5 text-[11px] text-danger">
                                   {rowError}
@@ -1946,7 +1952,7 @@ function ConnectorsPanel({
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                        <td className="hidden px-3 py-2.5 text-xs text-muted-foreground sm:table-cell">
                           {connector.category}
                         </td>
                         <td className="px-3 py-2.5">

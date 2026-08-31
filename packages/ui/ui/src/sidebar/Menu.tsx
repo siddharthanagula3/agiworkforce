@@ -24,6 +24,12 @@ export interface MenuProps {
 }
 
 const VIEWPORT_MARGIN = 8;
+/**
+ * The shift is derived from where the panel actually rendered, so one pass
+ * lands it. Re-running would have to re-measure a box the browser has already
+ * moved, which is a loop when anything reports a stale rect.
+ */
+const MAX_SHIFT_PASSES = 1;
 const TRIGGER_GAP = 4;
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -42,6 +48,8 @@ export function Menu({
   const containerRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const shiftRef = useRef(0);
+  const shiftPassRef = useRef(0);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -92,6 +100,30 @@ export function Menu({
     const panelHeight = panel?.offsetHeight ?? 0;
     const panelWidth = panel?.offsetWidth ?? 0;
 
+    const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - panelWidth - VIEWPORT_MARGIN);
+    const preferredLeft = align === 'end' ? rect.right - panelWidth : rect.left;
+    const clampedLeft = Math.min(Math.max(preferredLeft, VIEWPORT_MARGIN), maxLeft);
+
+    // An absolutely positioned panel is placed against its container, and a
+    // container can sit outside the viewport - the connectors table is wider
+    // than a phone screen, so its right-aligned Add menu rendered entirely off
+    // the right edge with no way to scroll to it.
+    //
+    // Correct it from where the panel actually landed rather than from the
+    // container's box. Which ancestor forms the containing block depends on
+    // transforms and filters applied above this component, so a shift derived
+    // from the trigger's coordinates can be measured against the wrong origin.
+    if (!portalled) {
+      if (!panel || shiftPassRef.current >= MAX_SHIFT_PASSES) return;
+      shiftPassRef.current += 1;
+      const unshifted = panel.getBoundingClientRect().left - shiftRef.current;
+      const shift = clampedLeft - unshifted;
+      if (Math.abs(shift - shiftRef.current) < 0.5) return;
+      shiftRef.current = shift;
+      setMenuStyle({ transform: `translateX(${shift}px)` });
+      return;
+    }
+
     const spaceBelow = window.innerHeight - rect.bottom - TRIGGER_GAP - VIEWPORT_MARGIN;
     const spaceAbove = rect.top - TRIGGER_GAP - VIEWPORT_MARGIN;
     const preferAbove = side === 'top';
@@ -108,11 +140,7 @@ export function Menu({
         }
       : { top: rect.bottom + TRIGGER_GAP, maxHeight: Math.max(spaceBelow, 0) };
 
-    const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - panelWidth - VIEWPORT_MARGIN);
-    style.left = Math.min(
-      Math.max(align === 'end' ? rect.right - panelWidth : rect.left, VIEWPORT_MARGIN),
-      maxLeft,
-    );
+    style.left = clampedLeft;
 
     setMenuStyle((current) =>
       current.top === style.top &&
@@ -122,21 +150,20 @@ export function Menu({
         ? current
         : style,
     );
-  }, [align, side]);
+  }, [align, side, portalled]);
 
-  const toggle = () => {
-    setOpen((v) => {
-      if (!v) computePosition();
-      return !v;
-    });
-  };
+  const toggle = () => setOpen((v) => !v);
 
   // Runs after the panel is in the DOM but before paint, so the measured
   // placement is the first one the user ever sees.
   useIsomorphicLayoutEffect(() => {
-    if (!open || !portalled) return;
+    if (!open) {
+      shiftRef.current = 0;
+      shiftPassRef.current = 0;
+      return;
+    }
     computePosition();
-  }, [open, portalled, computePosition]);
+  }, [open, menuStyle, computePosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -184,7 +211,10 @@ export function Menu({
       else if (e.key === 'Home') focusItem(0);
       else focusItem(items.length - 1);
     };
-    const onScrollOrResize = () => computePosition();
+    const onScrollOrResize = () => {
+      shiftPassRef.current = 0;
+      computePosition();
+    };
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('scroll', onScrollOrResize, { capture: true, passive: true });
@@ -207,14 +237,13 @@ export function Menu({
     <div
       ref={panelRef}
       role="menu"
-      style={portalled ? menuStyle : undefined}
+      style={menuStyle}
       className={cn(
         portalled
           ? 'fixed z-[9999]'
           : cn(
               'absolute z-50 mt-1 max-h-[min(24rem,60vh)]',
               side === 'top' ? 'bottom-full mb-1 mt-0' : 'top-full',
-              align === 'end' ? 'right-0' : 'left-0',
             ),
         'min-w-[12rem] overflow-y-auto overscroll-contain rounded-md border p-1 shadow-lg',
         'border-[hsl(var(--border))] bg-[hsl(var(--popover))] text-[hsl(var(--popover-foreground))]',
