@@ -21,6 +21,9 @@ const CASES = [
   { status: 500, body: { error: { message: 'Internal error' } } },
   { status: 403, body: { error: { message: 'Forbidden' } } },
   { status: 429, body: { error: { message: 'Too many requests' } } },
+  // 401 has its own answer: the reader is not at fault and retrying will not
+  // help until they sign in again.
+  { status: 401, body: { error: { message: 'Unauthorized' } } },
 ];
 
 test('server error states are announced, actionable and free of raw detail', async ({ page }) => {
@@ -93,4 +96,13 @@ test('server error states are announced, actionable and free of raw detail', asy
 
   const blank = results.filter((f) => f.visibleChars < 60).map((f) => `${f.status} ${f.route}`);
   expect(blank, `blank on error: ${blank.join(', ')}`).toEqual([]);
+
+  // 401 is not a generic failure: retrying cannot help until the reader signs
+  // in again, so the answer has to say so rather than offering the same
+  // "something went wrong" as a 500.
+  const vagueOn401 = results
+    .filter((f) => f.status === 401)
+    .filter((f) => !/sign in|session/i.test(f.announced.join(' ')))
+    .map((f) => `${f.route}: ${f.announced.join(' ').slice(0, 60)}`);
+  expect(vagueOn401, `401 answered generically on: ${vagueOn401.join(', ')}`).toEqual([]);
 });
