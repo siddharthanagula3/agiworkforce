@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toUserMessage } from '../../lib/network-error';
 import { FolderOpen, Loader2, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
@@ -277,7 +278,7 @@ export function LibraryView({
         }));
       } catch (err) {
         if (seq !== requestSeq.current) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(toUserMessage(err, 'Something went wrong.'));
       } finally {
         if (seq === requestSeq.current) {
           setLoading(false);

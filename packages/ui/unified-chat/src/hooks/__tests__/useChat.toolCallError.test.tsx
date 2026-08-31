@@ -78,7 +78,10 @@ describe('useChat — tool call left stuck at running on a transport-level error
 
     const finalCall = lastAssistantMessage()?.toolCalls?.[0];
     expect(finalCall?.status).toBe('failed');
-    expect(finalCall?.error).toBe('Network request failed');
+    // The tool call's error renders in the timeline, so it carries a message a
+    // person can act on rather than the browser's own wording for a dropped
+    // connection.
+    expect(finalCall?.error).toBe('Could not reach the server.');
   });
 
   it('does not touch a tool call that already completed before the error', () => {

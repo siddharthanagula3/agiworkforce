@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toUserMessage } from '@/lib/user-error-message';
 import { useAuth } from '@clerk/nextjs';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
@@ -182,7 +183,7 @@ export function useConversations(): UseConversationsReturn {
       nextOffsetRef.current = data.nextOffset;
       setHasMoreConversations(data.hasMore);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch conversations';
+      const message = toUserMessage(err, 'Failed to fetch conversations');
       setError(message);
       setListError(message);
     } finally {
@@ -221,7 +222,7 @@ export function useConversations(): UseConversationsReturn {
       nextOffsetRef.current = data.nextOffset;
       setHasMoreConversations(data.hasMore);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load more conversations');
+      setError(toUserMessage(err, 'Failed to load more conversations'));
     } finally {
       setIsLoadingMoreConversations(false);
     }
@@ -276,7 +277,7 @@ export function useConversations(): UseConversationsReturn {
 
         return conversation;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create conversation');
+        setError(toUserMessage(err, 'Failed to create conversation'));
         return null;
       } finally {
         setIsCreatingConversation(false);
@@ -373,7 +374,7 @@ export function useConversations(): UseConversationsReturn {
         return true;
       } catch (err) {
         if (cancelled()) return true;
-        setError(err instanceof Error ? err.message : 'Failed to load conversation', id);
+        setError(toUserMessage(err, 'Failed to load conversation'), id);
         return false;
       } finally {
         if (!cancelled()) setIsOpeningConversation(false);
@@ -435,7 +436,7 @@ export function useConversations(): UseConversationsReturn {
         }
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to update conversation', id);
+        setError(toUserMessage(err, 'Failed to update conversation'), id);
         return false;
       }
     },
@@ -461,7 +462,7 @@ export function useConversations(): UseConversationsReturn {
         deleteConversationFromStore(id);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to delete conversation', id);
+        setError(toUserMessage(err, 'Failed to delete conversation'), id);
         return false;
       }
     },
@@ -569,7 +570,7 @@ export function useProjectConversations(
         setHasMore(data.hasMore);
       } catch (caught) {
         if (requestVersion !== requestVersionRef.current) return;
-        setError(caught instanceof Error ? caught.message : 'Failed to fetch project chats');
+        setError(toUserMessage(caught, 'Failed to fetch project chats'));
         if (!append) {
           setConversations([]);
           setHasMore(false);
