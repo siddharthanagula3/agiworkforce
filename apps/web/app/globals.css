@@ -3998,11 +3998,18 @@ html[data-contrast='more'] *:focus-visible {
    rather than a change of ground - and the seam at the shell's max-width is
    exactly the bordered-rectangle look these stages exist to remove. The
    content inside stays on the text column; only the surface breaks out. */
-[data-design='agi'] .agi-shell > .agi-stage {
+[data-design='agi'] .agi-shell > .agi-stage,
+[data-design='agi'] .agi-fl-surface-list > .agi-stage {
   margin-inline: calc(50% - 50vw);
   padding-inline: max(28px, calc(50vw - 590px + 28px));
   width: 100vw;
   max-width: 100vw;
+}
+
+/* A surface row is its own ground, so the hairline that separated rows on one
+   canvas has nothing left to do. */
+[data-design='agi'] .agi-fl-surface-list > .agi-stage {
+  border-top: 0;
 }
 
 /* No hairline between stages: the canvas change separates them. A rule is only
@@ -4017,8 +4024,12 @@ html[data-contrast='more'] *:focus-visible {
   --agi-ink-2: #4e4e56;
   --agi-ink-quiet: #5f5f67;
   --agi-ink-faint: #5f5f67;
-  --agi-amber: #8a5a10;
-  --agi-amber-soft: rgba(138, 90, 16, 0.12);
+  /* Tuned against the darkest ground a light stage actually produces - the
+     device-mockup chrome at rgb(219, 213, 199), not the #faf9f6 stage itself.
+     #8a5a10 clears 4.5:1 on the stage and lands at 4.04:1 on the chrome, which
+     is where every small amber label in these rows sits. */
+  --agi-amber: #7f530f;
+  --agi-amber-soft: rgba(127, 83, 15, 0.12);
   --agi-rule: rgba(22, 22, 26, 0.1);
   --agi-rule-strong: rgba(22, 22, 26, 0.18);
   --agi-surface-wash: rgba(22, 22, 26, 0.03);
@@ -4029,6 +4040,21 @@ html[data-contrast='more'] *:focus-visible {
   --agi-button-ink: #faf9f6;
   --agi-code-bg: rgba(22, 22, 26, 0.05);
   --agi-shadow: rgba(22, 22, 26, 0.14);
+
+  /* Everything below is a token whose dark-ground value is actively wrong
+     here, not merely suboptimal. --agi-console-tint is rgba(16, 16, 18, 0.62):
+     a near-black wash that reads as a recessed panel over #0a0a0b and as flat
+     mid-grey over #faf9f6, which is what it composited to before this block
+     existed - the device mockups' chrome went grey and their labels fell to
+     about 1.5:1. A retint that stops at ink and background is not a retint;
+     every token that carries a hue or an alpha has to come with it. */
+  --agi-error: #c23a2c;
+  --agi-success: #1f6b43;
+  --agi-code-function: #245b96;
+  --agi-code-type: #176555;
+  --agi-header-sheen: rgba(22, 22, 26, 0.04);
+  --agi-selection-bg: rgba(127, 83, 15, 0.22);
+  --agi-selection-text: var(--agi-ink);
   color: var(--agi-ink);
 }
 
@@ -4037,6 +4063,8 @@ html[data-contrast='more'] *:focus-visible {
   --agi-bg-2: #f2f1ed;
   --agi-bg-3: #e9e8e3;
   --agi-card: #ffffff;
+  --agi-console-tint: rgba(238, 237, 232, 0.85);
+  --agi-console-tint-strong: rgba(255, 255, 255, 0.92);
   background: var(--agi-bg);
 }
 
@@ -4045,11 +4073,55 @@ html[data-contrast='more'] *:focus-visible {
   --agi-bg-2: #e9e8e3;
   --agi-bg-3: #dedcd6;
   --agi-card: #faf9f6;
+  --agi-console-tint: rgba(230, 229, 223, 0.85);
+  --agi-console-tint-strong: rgba(250, 249, 246, 0.92);
   background: var(--agi-bg);
+}
+
+/* The dark counterpart of the block above, and it exists for the same reason:
+   a stage that forces its own ground has to carry the whole ramp with it. In
+   dark mode these tokens merely repeat what :root already says, which is why
+   the omission was invisible in a dark browser - but in light mode the root
+   ink is #1c150b, so a stage that painted itself black and inherited the
+   page's text colour rendered near-black on black. Measured at 1.16:1 before
+   this block: the surface headings on the CLI and router stages were, in the
+   light theme, functionally not there. */
+[data-design='agi'] .agi-stage--ink,
+[data-design='agi'] .agi-stage--void {
+  --agi-ink: #f7f7f5;
+  --agi-ink-2: #a8a8a6;
+  --agi-ink-quiet: #8c8c8a;
+  --agi-ink-faint: #8c8c8a;
+  --agi-amber: #f0a84a;
+  --agi-amber-soft: rgba(240, 168, 74, 0.14);
+  --agi-rule: rgba(255, 255, 255, 0.08);
+  --agi-rule-strong: rgba(255, 255, 255, 0.16);
+  --agi-surface-wash: rgba(255, 255, 255, 0.03);
+  --agi-line-soft: rgba(255, 255, 255, 0.05);
+  --agi-glow-soft: rgba(255, 255, 255, 0.05);
+  --agi-button-bg: #f7f7f5;
+  --agi-button-bg-hover: #e4e4e1;
+  --agi-button-ink: #0a0a0b;
+  --agi-code-bg: rgba(255, 255, 255, 0.055);
+  --agi-shadow: rgba(0, 0, 0, 0.5);
+  --agi-error: #eb6a55;
+  --agi-success: #58bd7f;
+  --agi-code-function: #7bb0f5;
+  --agi-code-type: #4ec9b0;
+  --agi-header-sheen: rgba(255, 255, 255, 0.02);
+  --agi-selection-bg: rgba(240, 168, 74, 0.32);
+  --agi-selection-text: var(--agi-ink);
+  color: var(--agi-ink);
 }
 
 /* The default canvas, named so a stage sequence can return to it explicitly. */
 [data-design='agi'] .agi-stage--ink {
+  --agi-bg: #0a0a0b;
+  --agi-bg-2: #101012;
+  --agi-bg-3: #16161a;
+  --agi-card: #0f0f11;
+  --agi-console-tint: rgba(16, 16, 18, 0.62);
+  --agi-console-tint-strong: rgba(16, 16, 18, 0.84);
   background: var(--agi-bg);
 }
 
@@ -4060,6 +4132,8 @@ html[data-contrast='more'] *:focus-visible {
   --agi-bg-2: #0a0a0b;
   --agi-bg-3: #121214;
   --agi-card: #0a0a0b;
+  --agi-console-tint: rgba(10, 10, 11, 0.72);
+  --agi-console-tint-strong: rgba(10, 10, 11, 0.9);
   background: var(--agi-bg);
 }
 
@@ -4837,26 +4911,33 @@ html[data-contrast='more'] *:focus-visible {
   line-height: 1.08;
 }
 
-/* Inside a paragraph this sat at 2.01:1 against the surrounding text with no
-   underline, so colour alone had to carry it (WCAG 1.4.1). */
+/* The permanent underline was written when this link sat inline in a
+   paragraph, where colour alone would have failed WCAG 1.4.1. It is now the
+   whole heading on its own line, so there is no surrounding text to be
+   confused with, and 1.4.1 does not apply - the rule is about links *within*
+   a block of text. Underline on hover and focus instead. */
 [data-design='agi'] .agi-fl-surface-link {
   color: var(--agi-ink);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
   transition: color var(--agi-dur-fast) var(--agi-ease-out);
 }
 
-[data-design='agi'] .agi-fl-surface-link:hover {
-  color: var(--agi-amber);
+[data-design='agi'] .agi-fl-surface-link:hover,
+[data-design='agi'] .agi-fl-surface-link:focus-visible {
+  text-decoration: underline;
 }
 
+/* The sequence number is this row's one accent. An amber tagline 40px under
+   an amber number is the same colour doing two jobs in one column. */
 [data-design='agi'] .agi-fl-surface-tagline {
   margin: 10px 0 0;
   font-style: normal;
   font-family: var(--agi-font);
   font-size: 1rem;
   font-weight: 550;
-  color: var(--agi-amber);
+  color: var(--agi-ink);
 }
 
 [data-design='agi'] .agi-fl-surface-body {

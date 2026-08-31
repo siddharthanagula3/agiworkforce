@@ -275,6 +275,22 @@ export interface SurfaceIndexItem {
   visual?: ReactNode;
 }
 
+/**
+ * Which ground each surface stands on.
+ *
+ * Chosen for the surface rather than alternated: a terminal wants true black
+ * because that is where a terminal lives, a browser wants near-white for the
+ * same reason. Anything unlisted keeps the default ink canvas.
+ */
+const SURFACE_STAGE_TONE: Record<string, string> = {
+  'AGI Web': 'agi-stage--warm',
+  'AGI Desktop': 'agi-stage--ink',
+  'AGI CLI': 'agi-stage--void',
+  'AGI in VS Code': 'agi-stage--ink',
+  'AGI in Chrome': 'agi-stage--pearl',
+  'AGI Mobile': 'agi-stage--warm',
+};
+
 export function SurfaceIndex({
   eyebrow,
   title,
@@ -294,16 +310,23 @@ export function SurfaceIndex({
       </h2>
       <p className="agi-fl-section-lede">{lede}</p>
 
+      {/* Each surface takes its own ground rather than six rows on one canvas.
+          A page that changes surface as it moves through the suite reads as a
+          sequence; six rows separated by hairlines reads as a list. The tone
+          is chosen per surface, not alternated blindly - a terminal belongs on
+          black, a browser on near-white. */}
       <ol className="agi-fl-surface-list">
         {items.map((item) => (
           <Reveal
             as="li"
             key={item.index}
-            className={
+            className={[
               item.frame || item.visual
                 ? 'agi-fl-surface-row'
-                : 'agi-fl-surface-row agi-fl-surface-row--text'
-            }
+                : 'agi-fl-surface-row agi-fl-surface-row--text',
+              'agi-stage',
+              SURFACE_STAGE_TONE[item.name] ?? 'agi-stage--ink',
+            ].join(' ')}
           >
             <div className="agi-fl-surface-copy">
               <span className="agi-fl-surface-num" aria-hidden="true">
