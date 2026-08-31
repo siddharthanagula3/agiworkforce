@@ -23,10 +23,6 @@ import {
   workModeLabel,
 } from './task-display';
 
-export const AGI_WORK_MATURITY_LABEL = 'Alpha';
-export const AGI_WORK_MATURITY_TITLE =
-  'AGI Work runs on Managed Cloud, which is in public alpha. Runs can fail or stall, and behaviour may change.';
-
 type TaskFilter = 'active' | 'all';
 
 const ALL_STATES: AgentTaskState[] = [
@@ -334,13 +330,6 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       <header className="mb-4 flex flex-wrap items-center gap-2">
         <ListChecks className="h-5 w-5 text-primary" />
         <h1 className="font-[var(--chat-font-serif)] text-[28px] font-medium">Tasks</h1>
-        <span
-          data-testid="agi-work-maturity-badge"
-          title={AGI_WORK_MATURITY_TITLE}
-          className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
-        >
-          {AGI_WORK_MATURITY_LABEL}
-        </span>
         <span className="text-sm text-muted-foreground">— your Cloud work runs</span>
       </header>
 

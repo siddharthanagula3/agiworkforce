@@ -22,7 +22,6 @@ import type {
   AgentActivityStepStatus,
 } from '@agiworkforce/client-runtime';
 import type { CloudWorkMode } from '@agiworkforce/types';
-import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import type { Message } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -41,9 +40,6 @@ type ProgressStatus =
   | 'failed'
   | 'cancelled'
   | 'awaiting-approval';
-
-export const AGI_WORK_MATURITY_LABEL = 'Alpha';
-export const AGI_WORK_MATURITY_TITLE = `AGI Work runs on Managed Cloud, which is in ${MANAGED_CLOUD_STATUS}. Runs can fail or stall, and behaviour may change.`;
 
 export interface WorkSessionProgressItem {
   id: string;
@@ -528,13 +524,6 @@ export function WorkSessionPanel({ messages, open, onClose }: WorkSessionPanelPr
                 >
                   {summary.title ?? WORK_SESSION_FALLBACK_TITLE}
                 </h2>
-                <span
-                  data-testid="agi-work-maturity-badge"
-                  title={AGI_WORK_MATURITY_TITLE}
-                  className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wide text-amber-800 dark:text-amber-300"
-                >
-                  {AGI_WORK_MATURITY_LABEL}
-                </span>
               </div>
               <p className="text-xs text-muted-foreground">{statusLabel(summary.status)}</p>
             </div>
