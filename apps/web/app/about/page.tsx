@@ -24,7 +24,7 @@ export const metadata = buildMetadata({
 const PRINCIPLES: { title: string; body: string }[] = [
   {
     title: 'The route is always visible.',
-    body: 'Local, BYOK, and managed cloud are separate trust boundaries. A Local thread stays Local. Moving work anywhere else takes a label and your consent — never a silent hand-off.',
+    body: 'Local, BYOK, and managed cloud are separate trust boundaries. A Local thread stays Local. Moving work anywhere else takes a label and your consent, never a silent hand-off.',
   },
   {
     title: 'Your keys, your bill, no markup.',
@@ -104,8 +104,8 @@ export default function AboutPage() {
           <p className="agi-fl-section-lede">
             An AI application suite across six surfaces, with one difference that decides the rest:
             you choose whether a request runs on Local models, on your own provider keys, or on AGI
-            managed cloud. That choice is architectural, not a setting bolted on late — these are
-            the rules the product is built around.
+            managed cloud. That choice is architectural, not a setting bolted on late. These are the
+            rules the product is built around.
           </p>
           <div className="agi-about-principles">
             {PRINCIPLES.map((p) => (
@@ -129,7 +129,7 @@ export default function AboutPage() {
               </h2>
               <p className="agi-fl-section-lede">
                 AGI is built on a single conviction: the person doing the work should decide where
-                it runs and which model answers — not a vendor lock-in. Everything here follows from
+                it runs and which model answers, not a vendor lock-in. Everything here follows from
                 that, from Local Mode that never phones home to BYOK that keeps your keys on your
                 machine.
               </p>
@@ -150,7 +150,7 @@ export default function AboutPage() {
           </h2>
           <p className="agi-fl-section-lede">
             The entity, the licence, and how the product is put together. No founding mythology, no
-            team-size or funding theatre — just what can be checked.
+            team-size or funding theatre, just what can be checked.
           </p>
           <dl className="agi-colophon">
             {COLOPHON.map((row) => (

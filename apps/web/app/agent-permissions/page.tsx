@@ -21,7 +21,7 @@ const NO_ASK: { k: string; v: string }[] = [
   },
   {
     k: 'Run code',
-    v: 'Executes model-authored code in an isolated cloud sandbox belonging to that conversation — not on your device. Classified as an irreversible execute action that creates an egress path.',
+    v: 'Executes model-authored code in an isolated cloud sandbox belonging to that conversation, not on your device. Classified as an irreversible execute action that creates an egress path.',
   },
   {
     k: 'Write a file, create a folder',
@@ -32,7 +32,7 @@ const NO_ASK: { k: string; v: string }[] = [
     // Only the formats create_office_file's schema accepts may be named here.
     // apps/web/app/agent-permissions/__tests__/office-file-claims.test.ts
     // derives that enum and fails this row if it drifts.
-    v: 'Generates a Word document (.docx) or a PowerPoint deck (.pptx) on our servers and attaches it to the conversation for you to download. Those two formats are the whole of it — no other Office format, and no editing of a file you already have. Reversible, no egress path.',
+    v: 'Generates a Word document (.docx) or a PowerPoint deck (.pptx) on our servers and attaches it to the conversation for you to download. Those two formats are the whole of it: no other Office format, and no editing of a file you already have. Reversible, no egress path.',
   },
   {
     k: 'Run a skill',
@@ -55,7 +55,7 @@ const REVOKE: { k: string; v: string }[] = [
   },
   {
     k: 'Unlink GitHub',
-    v: 'Disconnecting GitHub deletes your installation records so GitHub tools stop being offered. The GitHub App itself remains installed on your GitHub account until you remove it at github.com/settings/installations — do both for full revocation.',
+    v: 'Disconnecting GitHub deletes your installation records so GitHub tools stop being offered. The GitHub App itself remains installed on your GitHub account until you remove it at github.com/settings/installations. Do both for full revocation.',
   },
   {
     k: 'Delete a custom MCP connector',
@@ -82,7 +82,7 @@ const DESKTOP_SCOPES: { k: string; v: string }[] = [
   },
   {
     k: 'Google Calendar',
-    v: 'calendar.readonly (read events), calendar.events (read and write events), and auth/calendar — the unrestricted calendar scope, which is broader than the other two and makes them redundant.',
+    v: 'calendar.readonly (read events), calendar.events (read and write events), and auth/calendar: the unrestricted calendar scope, which is broader than the other two and makes them redundant.',
   },
   {
     k: 'Outlook Calendar',
@@ -111,7 +111,7 @@ export default function AgentPermissionsPage() {
             back.{' '}
             <strong>
               Some of this is less flattering than a marketing page would write it. That is the
-              point — you cannot review a permission model you have to infer.
+              point. You cannot review a permission model you have to infer.
             </strong>{' '}
             The rules that govern how you use it are at{' '}
             <Link href="/acceptable-use" style={{ color: 'var(--agi-ink)' }}>
@@ -160,7 +160,7 @@ export default function AgentPermissionsPage() {
               <p className="agi-reason-p">
                 When a turn carries any connector or MCP tool, the whole turn switches to manual
                 approval mode. These tools cross an external or mutating boundary, so they are gated
-                by default and on every turn — not once at connect time.
+                by default and on every turn, not once at connect time.
               </p>
             </li>
             <li className="agi-reason">
@@ -231,9 +231,9 @@ export default function AgentPermissionsPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Pasted and attached content is not counted</h3>
               <p className="agi-reason-p">
-                Untrusted content is recognised when a tool fetched it — a web page, a search
-                result, a pull-request diff. Content you paste or attach yourself is not counted,
-                and that is a real injection vector this check does not see.
+                Untrusted content is recognised when a tool fetched it: a web page, a search result,
+                a pull-request diff. Content you paste or attach yourself is not counted, and that
+                is a real injection vector this check does not see.
               </p>
             </li>
             <li className="agi-reason">
@@ -248,7 +248,7 @@ export default function AgentPermissionsPage() {
               <h3 className="agi-reason-h">Undeclared exfiltration is invisible</h3>
               <p className="agi-reason-p">
                 Whether a call can move data out is per-tool metadata. An MCP server that phones
-                home during what it declares as a read is not visible to this check — which is
+                home during what it declares as a read is not visible to this check, which is
                 exactly why any tool we have not classified is treated as creating an egress path.
               </p>
             </li>
@@ -269,10 +269,10 @@ export default function AgentPermissionsPage() {
           </h2>
           <p className="agi-fl-section-lede">
             Blocking a tool is not a client-side preference. The verdict is stored against your
-            account and checked on the server before any side effect — on the streaming tool loop
-            and again when an approval is resumed. A modified client, or a request you write
-            yourself against the API, cannot execute a tool you blocked; the model is told the tool
-            is blocked and instructed not to retry it.
+            account and checked on the server before any side effect, on the streaming tool loop and
+            again when an approval is resumed. A modified client, or a request you write yourself
+            against the API, cannot execute a tool you blocked; the model is told the tool is
+            blocked and instructed not to retry it.
           </p>
           <p className="agi-fl-section-lede" style={{ marginTop: 16 }}>
             <strong>One thing a Block does not do:</strong> it does not hide the tool from the
@@ -288,7 +288,7 @@ export default function AgentPermissionsPage() {
           </h2>
           <p className="agi-fl-section-lede">
             The Chrome extension can drive a tab through the Chrome debugger. Starting a session is
-            always an explicit action — you type a goal and click. Once running:
+            always an explicit action: you type a goal and click. Once running:
           </p>
           <table className="agi-ledger" style={{ marginTop: 24 }}>
             <tbody>
@@ -320,7 +320,7 @@ export default function AgentPermissionsPage() {
                 <td>Screenshots</td>
                 <td>
                   <strong>
-                    Screenshots are not redacted and cannot be — you cannot scrub secrets out of a
+                    Screenshots are not redacted and cannot be. You cannot scrub secrets out of a
                     PNG.
                   </strong>{' '}
                   They reach the Managed Cloud gateway. If a page has a secret visibly rendered on
@@ -348,7 +348,7 @@ export default function AgentPermissionsPage() {
             Desktop runs tools on your machine, so it carries its own gate: dangerous tools prompt
             in manual mode, per-tool approval policies are stored and reapplied, and connector
             settings expose a standing Always allow / Needs approval / Blocked control for each
-            tool. Desktop is also the only surface today that completes a real OAuth flow — see the
+            tool. Desktop is also the only surface today that completes a real OAuth flow. See the
             next section.
           </p>
         </section>
@@ -403,9 +403,8 @@ export default function AgentPermissionsPage() {
             Attempting to connect one returns an explicit &ldquo;not implemented&rdquo; response
             rather than a fake connected state. No OAuth token for Gmail, Drive, Slack, Notion, or
             any other branded catalog connector is stored in your AGI account, because no such flow
-            exists on the web. The record we keep for a connector is an enablement flag — a
-            connector id, an auth type, and whether it is active. It holds no tokens and no endpoint
-            URLs.
+            exists on the web. The record we keep for a connector is an enablement flag: a connector
+            id, an auth type, and whether it is active. It holds no tokens and no endpoint URLs.
           </p>
 
           <h3 className="agi-reason-h" style={{ marginTop: 40 }}>
@@ -429,10 +428,10 @@ export default function AgentPermissionsPage() {
             </tbody>
           </table>
           <p className="agi-fl-section-lede" style={{ marginTop: 20 }}>
-            Two of those requests are broader than the feature needs — Gmail&rsquo;s modify scope
-            and Google Calendar&rsquo;s unrestricted scope. We are naming them rather than
-            describing the narrower scope we wish we asked for. Narrowing them changes behaviour for
-            existing connections, so it is tracked as engineering work, not a wording change.
+            Two of those requests are broader than the feature needs: Gmail&rsquo;s modify scope and
+            Google Calendar&rsquo;s unrestricted scope. We are naming them rather than describing
+            the narrower scope we wish we asked for. Narrowing them changes behaviour for existing
+            connections, so it is tracked as engineering work, not a wording change.
           </p>
 
           <h3 className="agi-reason-h" style={{ marginTop: 40 }}>
@@ -441,10 +440,10 @@ export default function AgentPermissionsPage() {
           <p className="agi-fl-section-lede" style={{ marginTop: 8 }}>
             AGI does not vet the remote MCP servers you add. The operator of that server sees the
             conversation context you send to its tools, and any token you enter is transmitted to
-            it. We validate that the URL resolves to a public host — private and link-local
-            addresses are rejected — and we encrypt the token at rest and scope it to your account.
-            That is infrastructure hygiene, not an endorsement of the server. Add servers you trust,
-            the way you would add a dependency.
+            it. We validate that the URL resolves to a public host (private and link-local addresses
+            are rejected), and we encrypt the token at rest and scope it to your account. That is
+            infrastructure hygiene, not an endorsement of the server. Add servers you trust, the way
+            you would add a dependency.
           </p>
         </section>
 
@@ -465,7 +464,7 @@ export default function AgentPermissionsPage() {
           </table>
           <p className="agi-fl-section-lede" style={{ marginTop: 24 }}>
             On the web today, per-tool permissions are set from the approval card shown in the
-            conversation when a tool asks — that is where Always allow, Needs approval, and Blocked
+            conversation when a tool asks: that is where Always allow, Needs approval, and Blocked
             live. A standing per-tool settings panel exists on Desktop. Connecting and disconnecting
             a connector is recorded in your account&rsquo;s security audit events.
           </p>

@@ -83,7 +83,7 @@ export default function TermsPage() {
             <Link href="/privacy" style={{ color: 'var(--agi-ink)' }}>
               privacy policy
             </Link>
-            , and &mdash; where AGI processes personal data on your behalf &mdash; the{' '}
+            , and, where AGI processes personal data on your behalf, the{' '}
             <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
               data processing addendum
             </Link>
@@ -98,9 +98,9 @@ export default function TermsPage() {
             in your own name. Users aged 13 to 17 may use AGI only through an account opened and
             supervised by a parent, guardian or their school, who accepts these terms on their
             behalf and is responsible for their use. AGI is not offered to children under 13, and in
-            jurisdictions setting a higher digital-consent age &mdash; including the European Union
-            and the United Kingdom, where it may be 16, and India, where processing children&rsquo;s
-            data requires verifiable parental consent &mdash; that higher threshold applies instead.
+            jurisdictions setting a higher digital-consent age, including the European Union and the
+            United Kingdom, where it may be 16, and India, where processing children&rsquo;s data
+            requires verifiable parental consent, that higher threshold applies instead.
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16 }}>
             If you accept these terms for an organisation, you represent that you are authorised to
@@ -125,7 +125,7 @@ export default function TermsPage() {
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             You are responsible for keeping your account credentials and your master password
             secure, and for the activity that occurs through your account. We cannot recover the
-            master password used to encrypt your local key vault &mdash; see the{' '}
+            master password used to encrypt your local key vault. See the{' '}
             <Link href="/byok" style={{ color: 'var(--agi-ink)' }}>
               BYOK posture
             </Link>
@@ -140,9 +140,9 @@ export default function TermsPage() {
             you submit remain yours, as does the output generated for you, to the extent it is
             capable of ownership. You grant {LEGAL_ENTITY} a worldwide, non-exclusive, royalty-free
             licence to host, store, transmit, display and process that content{' '}
-            <em>solely to operate the service for you</em> &mdash; including transmitting prompt
-            content to the model provider serving the model you select. That licence ends when the
-            content is deleted, subject to the deletion mechanics in section 12.
+            <em>solely to operate the service for you</em>, including transmitting prompt content to
+            the model provider serving the model you select. That licence ends when the content is
+            deleted, subject to the deletion mechanics in section 12.
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16 }}>
             We do not train AGI-owned models on your content. You are responsible for having the
@@ -269,7 +269,7 @@ export default function TermsPage() {
             payment fails and is not cured, where we are legally required to, or where continued
             access presents a security risk to other customers or to the service. We give notice
             where it is reasonable to do so, and we act with the narrowest measure that addresses
-            the problem. Suspended accounts may appeal &mdash; the route is in section 05 of the{' '}
+            the problem. Suspended accounts may appeal: the route is in section 05 of the{' '}
             <Link href="/acceptable-use" style={{ color: 'var(--agi-ink)' }}>
               acceptable use policy
             </Link>
@@ -290,9 +290,9 @@ export default function TermsPage() {
             provider. No confirmation email is sent, because the product has no account-lifecycle
             mailing path, but cancellation is self-serve: sign back in and cancel from Settings &gt;
             Account any time within the 24-hour window. Sections that by their nature survive
-            &mdash; licence restrictions, your content representations, intellectual property,
-            disclaimers, limitation of liability, indemnification, governing law and disputes
-            &mdash; survive termination.
+            (licence restrictions, your content representations, intellectual property, disclaimers,
+            limitation of liability, indemnification, governing law and disputes) survive
+            termination.
           </p>
         </section>
 
@@ -529,9 +529,9 @@ export default function TermsPage() {
                 <td>
                   If you invite a colleague, provision users from your directory, or upload content
                   containing someone else&rsquo;s personal data, you confirm you are entitled to
-                  give it to us for that purpose &mdash; including having given any notice or
-                  obtained any consent their law requires. We do not contact those individuals to
-                  obtain it on your behalf, and nothing in the product does so today.
+                  give it to us for that purpose, including having given any notice or obtained any
+                  consent their law requires. We do not contact those individuals to obtain it on
+                  your behalf, and nothing in the product does so today.
                 </td>
               </tr>
               <tr>

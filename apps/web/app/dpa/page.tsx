@@ -445,13 +445,13 @@ export default function DpaPage() {
             >
               /changelog
             </Link>
-            , which is the notice mechanism AGI can actually operate today &mdash; no mailing path
-            in the product can reach an arbitrary list of customers, so this DPA does not promise
-            emailed notice. The Customer may subscribe to the changelog feed to receive changes. A
-            Customer may object to a new sub-processor on reasonable data protection grounds by
-            writing to {CONTACT_EMAIL} within 30 days of publication; if AGI cannot offer a
-            reasonable alternative, the Customer may terminate the affected subscription and receive
-            a pro-rata refund of prepaid fees for the unused term.
+            , which is the notice mechanism AGI can actually operate today: no mailing path in the
+            product can reach an arbitrary list of customers, so this DPA does not promise emailed
+            notice. The Customer may subscribe to the changelog feed to receive changes. A Customer
+            may object to a new sub-processor on reasonable data protection grounds by writing to{' '}
+            {CONTACT_EMAIL} within 30 days of publication; if AGI cannot offer a reasonable
+            alternative, the Customer may terminate the affected subscription and receive a pro-rata
+            refund of prepaid fees for the unused term.
           </p>
         </section>
 
@@ -520,7 +520,7 @@ export default function DpaPage() {
         </section>
 
         <section className="agi-section" id="s-07">
-          <p className="agi-section-eyebrow">07 &middot; Annex I &mdash; processing details</p>
+          <p className="agi-section-eyebrow">07 &middot; Annex I: processing details</p>
           <table className="agi-ledger">
             <tbody>
               {ANNEX_I.map((row) => (
@@ -541,7 +541,7 @@ export default function DpaPage() {
 
         <section className="agi-section" id="s-08">
           <p className="agi-section-eyebrow">
-            08 &middot; Annex II &mdash; technical and organisational measures
+            08 &middot; Annex II: technical and organisational measures
           </p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Each measure is listed with its limit in the same row. A security annex that omits its
@@ -616,13 +616,13 @@ export default function DpaPage() {
             Customer&rsquo;s back. Two commitments keep that from being the place the obligation
             disappears. First, where the Customer instructs AGI in writing to deliver the notice,
             AGI delivers it through the surfaces AGI controls. Second, where AGI is itself the
-            controller or Data Fiduciary of the affected data &mdash; the account, billing,
-            security-log and telemetry records described in section 03, and its own direct users
-            &mdash; AGI notifies each affected individual directly, and where the DPDP Act applies
-            also intimates the Data Protection Board of India, without waiting for its investigation
-            to conclude and without sequencing the individual notice behind the regulator one. The
-            DPDP Act carries no low-risk exception and does not let a public notice stand in for
-            individual intimation where the individuals are identifiable.
+            controller or Data Fiduciary of the affected data (the account, billing, security-log
+            and telemetry records described in section 03, and its own direct users), AGI notifies
+            each affected individual directly, and where the DPDP Act applies also intimates the
+            Data Protection Board of India, without waiting for its investigation to conclude and
+            without sequencing the individual notice behind the regulator one. The DPDP Act carries
+            no low-risk exception and does not let a public notice stand in for individual
+            intimation where the individuals are identifiable.
           </p>
           <p className="agi-page-lede" style={{ marginTop: 16 }}>
             <strong>How that notice is delivered, honestly.</strong> The product sends
@@ -662,7 +662,7 @@ export default function DpaPage() {
           <p className="agi-section-eyebrow">12 &middot; Alpha status, liability, and term</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Managed Cloud is in public alpha. Its features, capacity and operational controls change
-            as it develops, and no service level agreement applies during alpha &mdash; see{' '}
+            as it develops, and no service level agreement applies during alpha. See{' '}
             <Link href="/sla" style={{ color: 'var(--agi-ink)', textDecoration: 'underline' }}>
               /sla
             </Link>
@@ -681,7 +681,7 @@ export default function DpaPage() {
         </section>
 
         <section className="agi-section" id="s-13" data-legal-review="pending-counsel">
-          <p className="agi-section-eyebrow">13 &middot; Annex IV &mdash; India (DPDP Act, 2023)</p>
+          <p className="agi-section-eyebrow">13 &middot; Annex IV: India (DPDP Act, 2023)</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             This annex applies where AGI processes digital personal data in connection with offering
             the service to Data Principals in India. It is written out rather than folded into the
@@ -734,9 +734,9 @@ export default function DpaPage() {
               </a>{' '}
               with the subject line &ldquo;{CONTACT_SUBJECTS.dpdpGrievance}&rdquo;, or post to{' '}
               {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We aim to respond within{' '}
-              {GRIEVANCE_RESPONSE_TARGET_DAYS} days &mdash; our commitment, not a statutory deadline
-              being quoted back to you. If our response does not resolve it, a Data Principal may
-              complain to the Data Protection Board of India.
+              {GRIEVANCE_RESPONSE_TARGET_DAYS} days, our commitment, not a statutory deadline being
+              quoted back to you. If our response does not resolve it, a Data Principal may complain
+              to the Data Protection Board of India.
             </p>
           </div>
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
@@ -779,7 +779,7 @@ export default function DpaPage() {
               Request a countersigned copy
             </a>
             <Link href="/subprocessors" className="agi-cta-ghost">
-              Annex III &mdash; subprocessors &rarr;
+              Annex III: subprocessors &rarr;
             </Link>
             <Link href="/privacy" className="agi-cta-ghost">
               Privacy policy &rarr;
