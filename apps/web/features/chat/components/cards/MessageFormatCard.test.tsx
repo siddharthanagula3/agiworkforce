@@ -59,19 +59,52 @@ describe('RecipeCard content preservation', () => {
 });
 
 describe('MessageFormatCard', () => {
-  it('shows the card by default and the exact original on demand', () => {
+  it('renders the response itself by default, never a reinterpretation of it', () => {
     render(
       <MessageFormatCard content={RECIPE_WITH_NOTES} cardType="recipe">
         <pre data-testid="original">{RECIPE_WITH_NOTES}</pre>
       </MessageFormatCard>,
     );
 
-    expect(screen.queryByTestId('original')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Original response' }));
+    // The transcript is the source of truth. A card is chosen by a text
+    // heuristic and can drop headings, emphasis, links, nesting, code and
+    // tables, so it must never be what the reader sees first.
     expect(screen.getByTestId('original')).toHaveTextContent('Overripe bananas');
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Formatted view' }));
-    expect(screen.queryByTestId('original')).toBeNull();
+  it('offers the card as an addition and keeps the response visible alongside it', () => {
+    render(
+      <MessageFormatCard content={RECIPE_WITH_NOTES} cardType="recipe">
+        <pre data-testid="original">{RECIPE_WITH_NOTES}</pre>
+      </MessageFormatCard>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /view as recipe/i }));
+
+    expect(screen.getByTestId('original')).toBeInTheDocument();
+    expect(screen.getByText('3 ripe bananas')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /hide recipe view/i }));
+    expect(screen.getByTestId('original')).toBeInTheDocument();
+  });
+
+  it('classifies a general answer carrying display math as a calculation', () => {
+    // Not a bug report about detection so much as the reason the default
+    // matters: this specimen is a renderer test, not a calculation.
+    const specimen = [
+      '# Heading',
+      '',
+      'Body with **bold** and a [link](https://example.com).',
+      '',
+      '$$E = mc^2$$',
+      '',
+      '$$\\int_0^1 x^2 dx = \\frac{1}{3}$$',
+      '',
+      '| a | b |',
+      '| - | - |',
+      '| 1 | 2 |',
+    ].join('\n');
+
+    expect(detectCardType(specimen)).toBe('calculation');
   });
 });
