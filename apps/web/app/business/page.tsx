@@ -63,45 +63,57 @@ export default function BusinessPage() {
           <h2 id="agi-business-payer-title" className="agi-fl-h2">
             Each route sends the bill somewhere different.
           </h2>
-          <table className="agi-ledger">
-            <thead>
-              <tr>
-                <th scope="col">Route</th>
-                <th scope="col">Who invoices you</th>
-                <th scope="col">What AGI charges</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Local</td>
-                <td>
-                  No one. The model runs on hardware you already own, at whatever that hardware
-                  costs you to keep running.
-                </td>
-                <td>{FREE_ROUTE_CHARGE}</td>
-              </tr>
-              <tr>
-                <td>BYOK</td>
-                <td>
-                  Your provider, on the rate card and contract you already hold. Keys stay in the{' '}
-                  {BYOK_SURFACES.label} runtimes, so we never sit in the payment path.
-                </td>
-                <td>{FREE_ROUTE_CHARGE}</td>
-              </tr>
-              <tr>
-                <td>AGI managed cloud</td>
-                <td>
-                  AGI, on the plan the account carries. This is the only route where the compute
-                  lands on our invoice.
-                </td>
-                <td>
-                  ${TEAM_PLAN.monthlyPriceUsd} per seat each month on {TEAM_PLAN.label}, sold from{' '}
-                  {MIN_PURCHASABLE_SEATS} seats. Individual plans and contract pricing are on the{' '}
-                  <Link href="/pricing">pricing page</Link>.
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          {/* `.agi-ledger` has no overflow handling of its own — see the same
+              fix in LedgerSection (LandingSections.tsx) and /docs/byok-env.
+              This table's prose wraps at word boundaries today, but nothing
+              stops a future edit from dropping in an unbreakable value and
+              forcing it past the viewport silently. */}
+          <div
+            aria-label="Each route sends the bill somewhere different"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <thead>
+                <tr>
+                  <th scope="col">Route</th>
+                  <th scope="col">Who invoices you</th>
+                  <th scope="col">What AGI charges</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Local</td>
+                  <td>
+                    No one. The model runs on hardware you already own, at whatever that hardware
+                    costs you to keep running.
+                  </td>
+                  <td>{FREE_ROUTE_CHARGE}</td>
+                </tr>
+                <tr>
+                  <td>BYOK</td>
+                  <td>
+                    Your provider, on the rate card and contract you already hold. Keys stay in the{' '}
+                    {BYOK_SURFACES.label} runtimes, so we never sit in the payment path.
+                  </td>
+                  <td>{FREE_ROUTE_CHARGE}</td>
+                </tr>
+                <tr>
+                  <td>AGI managed cloud</td>
+                  <td>
+                    AGI, on the plan the account carries. This is the only route where the compute
+                    lands on our invoice.
+                  </td>
+                  <td>
+                    ${TEAM_PLAN.monthlyPriceUsd} per seat each month on {TEAM_PLAN.label}, sold from{' '}
+                    {MIN_PURCHASABLE_SEATS} seats. Individual plans and contract pricing are on the{' '}
+                    <Link href="/pricing">pricing page</Link>.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="agi-business-controls-title">

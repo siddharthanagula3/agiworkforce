@@ -215,10 +215,22 @@ function MapTiles({
         </div>
       </div>
 
-      {/* Zoom controls sit bottom-left: the place panel occupies the right side
-          on desktop and the bottom strip on mobile, and controls stacked under
-          either of those become unclickable. */}
-      <div className="absolute bottom-2 left-2 flex flex-col gap-1">
+      {/* Zoom controls sit bottom-left on desktop, where the place panel is a
+          right-side column (sm:right-3) and never reaches that corner. On
+          mobile the panel is a FULL-WIDTH bottom strip (inset-x-0 bottom-0),
+          which covers bottom-left too - controls parked there sit underneath
+          its opaque chips and stop being clickable. Top-right is the one
+          corner the mobile strip and the top-left title chip both leave
+          free, so controls move there below sm only when a strip is actually
+          rendered (places.length > 0). */}
+      <div
+        className={cn(
+          'absolute flex flex-col gap-1',
+          places.length > 0
+            ? 'right-2 top-2 sm:right-auto sm:top-auto sm:bottom-2 sm:left-2'
+            : 'bottom-2 left-2',
+        )}
+      >
         <button
           type="button"
           onClick={() => changeZoom(1)}

@@ -68,7 +68,7 @@ export default function SyncSettingsPage() {
                 textTransform: 'uppercase',
               }}
             >
-              Live
+              Available
             </span>
           </div>
 
@@ -110,7 +110,7 @@ export default function SyncSettingsPage() {
                 textTransform: 'uppercase',
               }}
             >
-              Live
+              Available
             </span>
           </div>
 

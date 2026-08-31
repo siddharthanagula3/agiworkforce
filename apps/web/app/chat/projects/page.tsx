@@ -425,7 +425,12 @@ export default function ProjectsPage() {
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                      // `min(260px, 100%)` keeps the 260px preferred column on
+                      // wide viewports but lets it shrink to fit rather than
+                      // forcing a horizontal scrollbar: a 320px phone has only
+                      // 256px of content width inside this page's 32px side
+                      // padding, 4px short of a bare 260px floor.
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))',
                       gap: 12,
                     }}
                   >

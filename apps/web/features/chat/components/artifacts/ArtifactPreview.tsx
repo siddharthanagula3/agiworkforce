@@ -843,12 +843,21 @@ if (__AgiApp) {
       .join('\n');
 
     if (navigator.share && generatedFileSummary.primaryUri?.startsWith('http')) {
-      await navigator.share({
-        title: generatedFileSummary.title,
-        text: shareText,
-        url: generatedFileSummary.primaryUri,
-      });
-      return;
+      try {
+        await navigator.share({
+          title: generatedFileSummary.title,
+          text: shareText,
+          url: generatedFileSummary.primaryUri,
+        });
+        return;
+      } catch (error) {
+        // AbortError: the user dismissed the native share sheet - not a
+        // failure, nothing to report. Anything else (permission denied, no
+        // share target) falls through to the clipboard fallback below instead
+        // of leaving an unhandled rejection and a share button that did
+        // nothing visible.
+        if (error instanceof Error && error.name === 'AbortError') return;
+      }
     }
 
     // AUDIT-FIX ART-24: guarded — an unavailable clipboard used to reject
@@ -1698,24 +1707,31 @@ if (__AgiApp) {
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border bg-muted/50 px-4 py-2">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Code className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-semibold">{artifact.title || 'Artifact'}</span>
+      {/* @container: this card can sit inside a narrow chat column, same
+          reasoning as the panel toolbar's @container below. min-w-0 +
+          truncate on the title is what lets the left group give way instead
+          of pushing the action buttons past the right edge, where they would
+          be clipped and unreachable rather than merely hidden. */}
+      <div className="@container flex items-center justify-between gap-2 border-b border-border bg-muted/50 px-4 py-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <Code className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 truncate text-sm font-semibold">
+              {artifact.title || 'Artifact'}
+            </span>
           </div>
           {artifact.type && (
-            <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            <span className="shrink-0 rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
               {artifact.type}
             </span>
           )}
           {hasGeneratedFileManifest && (
             <>
-              <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              <span className="hidden shrink-0 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground @[28rem]:inline">
                 {generatedFileSummary.statusLabel}
               </span>
               {generatedFileSummary.privacyShortLabel && (
-                <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                <span className="hidden shrink-0 items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground @[28rem]:inline-flex">
                   <Shield className="h-3 w-3" />
                   {generatedFileSummary.privacyShortLabel}
                 </span>
@@ -1724,7 +1740,7 @@ if (__AgiApp) {
           )}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           {/*
             There is no second version control here. The card variant used to
             render a `History` dropdown over an `artifact.versions[]` side-map,
@@ -1735,16 +1751,23 @@ if (__AgiApp) {
             surfaced by the panel version chip above.
           */}
           {!isImage && (
-            <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 px-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopy}
+              className="h-7 px-2"
+              aria-label={copied ? 'Copied' : 'Copy artifact'}
+              title="Copy"
+            >
               {copied ? (
                 <>
                   <Check className="h-3.5 w-3.5 text-green-500" />
-                  <span className="ml-1 text-xs">Copied</span>
+                  <span className="ml-1 hidden text-xs @[30rem]:inline">Copied</span>
                 </>
               ) : (
                 <>
                   <Copy className="h-3.5 w-3.5" />
-                  <span className="ml-1 text-xs">Copy</span>
+                  <span className="ml-1 hidden text-xs @[30rem]:inline">Copy</span>
                 </>
               )}
             </Button>
@@ -1830,7 +1853,7 @@ if (__AgiApp) {
                 variant="ghost"
                 size="sm"
                 onClick={handleOpenInNewTab}
-                className="h-7 px-2"
+                className="hidden h-7 px-2 @[22rem]:flex"
                 aria-label="Open source in new tab"
                 title="Open source in new tab"
               >
@@ -1841,7 +1864,7 @@ if (__AgiApp) {
                 variant="ghost"
                 size="sm"
                 onClick={handleFullscreen}
-                className="h-7 px-2"
+                className="hidden h-7 px-2 @[22rem]:flex"
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                 title="Fullscreen"
               >

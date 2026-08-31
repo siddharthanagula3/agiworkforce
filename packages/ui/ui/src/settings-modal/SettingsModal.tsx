@@ -1010,6 +1010,13 @@ function DirectoryBrowse({
                   </div>
                   {plugin.mutating ? (
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : plugin.installed && plugin.installable === false ? (
+                    <span
+                      title="No longer available on this surface — installed, but the server does not run it."
+                      className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-muted-foreground"
+                    >
+                      {plugin.statusLabel ?? 'Unavailable'}
+                    </span>
                   ) : plugin.installed ? (
                     <span
                       className={cn(
@@ -2352,16 +2359,25 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         <p className="truncate text-sm font-medium text-foreground">
                           {plugin.name}
                         </p>
-                        <span
-                          className={cn(
-                            'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold',
-                            plugin.enabled
-                              ? 'bg-primary/15 text-primary'
-                              : 'bg-muted text-muted-foreground',
-                          )}
-                        >
-                          {plugin.enabled ? 'Enabled' : 'Disabled'}
-                        </span>
+                        {plugin.installable === false ? (
+                          <span
+                            title="No longer available on this surface — installed, but the server does not run it."
+                            className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-muted-foreground"
+                          >
+                            {plugin.statusLabel ?? 'Unavailable'}
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold',
+                              plugin.enabled
+                                ? 'bg-primary/15 text-primary'
+                                : 'bg-muted text-muted-foreground',
+                            )}
+                          >
+                            {plugin.enabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                        )}
                       </div>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {plugin.description || 'No description.'}

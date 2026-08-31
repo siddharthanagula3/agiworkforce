@@ -144,6 +144,27 @@ const TERMINAL_BILLING_STATUSES = new Set([
   'incomplete_expired',
 ]);
 
+const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
+  active: 'Active',
+  trialing: 'Trial',
+  past_due: 'Past due',
+  unpaid: 'Unpaid',
+  canceled: 'Canceled',
+  cancelled: 'Canceled',
+  incomplete: 'Incomplete',
+  incomplete_expired: 'Incomplete (expired)',
+  paused: 'Paused',
+  expired: 'Expired',
+  none: 'Inactive',
+};
+
+function humanizeStatus(status: string): string {
+  return (
+    SUBSCRIPTION_STATUS_LABEL[status] ??
+    status.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
+  );
+}
+
 function formatMoney(minorUnits: number, currency: string): string {
   try {
     return new Intl.NumberFormat('en-US', {
@@ -700,8 +721,8 @@ export function BillingSection() {
           {!isFreeTier && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
               <Row label="Status">
-                <span style={{ fontSize: 14, color: 'var(--text-2)', textTransform: 'capitalize' }}>
-                  {subscription?.status ?? 'inactive'}
+                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
+                  {humanizeStatus(subscription?.status ?? 'none')}
                 </span>
               </Row>
               {billingSource && billingSource !== 'none' && (

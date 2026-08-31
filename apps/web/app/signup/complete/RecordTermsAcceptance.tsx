@@ -3,6 +3,7 @@
 import { useAuth } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Spinner } from '@agiworkforce/ui';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
@@ -105,8 +106,8 @@ export function RecordTermsAcceptance({
   }
 
   return (
-    <div className="flex flex-col items-center gap-4" role="status">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary" />
+    <div className="flex flex-col items-center gap-4" role="status" aria-live="polite">
+      <Spinner size="lg" className="text-primary" aria-hidden="true" />
       <p className="text-sm text-muted-foreground">Finishing setting up your account…</p>
     </div>
   );

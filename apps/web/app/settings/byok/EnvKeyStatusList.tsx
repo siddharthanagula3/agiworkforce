@@ -72,6 +72,38 @@ function StatusBadge({ isSet }: { isSet: boolean }) {
   );
 }
 
+function UnknownStatusBadge() {
+  return (
+    <span
+      title="We couldn't confirm this provider's key status. This does not mean the key is missing."
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '3px 8px',
+        borderRadius: 100,
+        fontSize: 12,
+        fontWeight: 600,
+        background: 'var(--bg-elev)',
+        color: 'var(--settings-destructive-text, #d31212)',
+        border: '1px solid var(--settings-border)',
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          width: 5,
+          height: 5,
+          borderRadius: '50%',
+          background: 'var(--settings-destructive-text, #d31212)',
+          flexShrink: 0,
+        }}
+      />
+      Couldn&apos;t check
+    </span>
+  );
+}
+
 interface Props {
   providers: ReadonlyArray<ByokProvider>;
 }
@@ -79,11 +111,15 @@ interface Props {
 export function EnvKeyStatusList({ providers }: Props) {
   const [statuses, setStatuses] = useState<Map<string, boolean>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchStatus() {
+      setLoading(true);
+      setHasError(false);
       try {
         const res = await fetch('/api/byok/env-key-status');
         if (!res.ok) throw new Error('status fetch failed');
@@ -95,7 +131,7 @@ export function EnvKeyStatusList({ providers }: Props) {
         }
         setStatuses(map);
       } catch {
-        // Silently fail · statuses remain unknown (neither Set nor Not set shown)
+        if (!cancelled) setHasError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -105,76 +141,111 @@ export function EnvKeyStatusList({ providers }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   return (
-    <section
-      aria-label="API key status by provider"
-      style={{
-        border: '1px solid var(--settings-border)',
-        borderRadius: 'var(--radius-lg)',
-        background: 'var(--bg-elev)',
-        overflow: 'hidden',
-      }}
-    >
-      {providers.map((provider, idx) => {
-        const isSet = statuses.get(provider.id);
-        return (
-          <div
-            key={provider.id}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {hasError && (
+        <p
+          role="alert"
+          style={{
+            fontSize: 12,
+            color: 'var(--settings-destructive-text, #d31212)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          Couldn&apos;t check key status. This does not mean any key is missing.
+          <button
+            type="button"
+            onClick={() => setAttempt((value) => value + 1)}
             style={{
-              padding: '12px 18px',
-              borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'inherit',
+              textDecoration: 'underline',
+              background: 'none',
+              border: 'none',
+              padding: '6px 4px',
+              margin: '-6px -4px',
+              cursor: 'pointer',
             }}
           >
-            {/* Icon + name + env var */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <ProviderIcon text={provider.iconText} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
-                  {provider.label}
-                  {provider.pendingAdapter && (
-                    <span
-                      style={{
-                        marginLeft: 6,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: 'var(--text-3)',
-                        padding: '1px 5px',
-                        border: '1px solid var(--settings-border)',
-                        borderRadius: 4,
-                        verticalAlign: 'middle',
-                      }}
-                    >
-                      adapter pending
-                    </span>
-                  )}
-                </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontFamily: 'var(--mono)',
-                    color: 'var(--text-3)',
-                  }}
-                >
-                  {provider.envVar}
-                </span>
+            Retry
+          </button>
+        </p>
+      )}
+      <section
+        aria-label="API key status by provider"
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          overflow: 'hidden',
+        }}
+      >
+        {providers.map((provider, idx) => {
+          const isSet = statuses.get(provider.id);
+          return (
+            <div
+              key={provider.id}
+              style={{
+                padding: '12px 18px',
+                borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              {/* Icon + name + env var */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <ProviderIcon text={provider.iconText} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
+                    {provider.label}
+                    {provider.pendingAdapter && (
+                      <span
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: 'var(--text-3)',
+                          padding: '1px 5px',
+                          border: '1px solid var(--settings-border)',
+                          borderRadius: 4,
+                          verticalAlign: 'middle',
+                        }}
+                      >
+                        adapter pending
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontFamily: 'var(--mono)',
+                      color: 'var(--text-3)',
+                    }}
+                  >
+                    {provider.envVar}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            {/* Status badge · only presence, never value */}
-            {loading ? (
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Checking...</span>
-            ) : (
-              <StatusBadge isSet={Boolean(isSet)} />
-            )}
-          </div>
-        );
-      })}
-    </section>
+              {/* Status badge · only presence, never value */}
+              {loading ? (
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Checking...</span>
+              ) : hasError ? (
+                <UnknownStatusBadge />
+              ) : (
+                <StatusBadge isSet={Boolean(isSet)} />
+              )}
+            </div>
+          );
+        })}
+      </section>
+    </div>
   );
 }

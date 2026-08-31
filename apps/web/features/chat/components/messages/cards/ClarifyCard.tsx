@@ -199,7 +199,7 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
             type="button"
             disabled={!canSubmit}
             onClick={submit}
-            className="rounded-md bg-[var(--chat-accent-primary)] px-3 py-1.5 text-xs font-medium text-[var(--chat-surface-elevated)] disabled:opacity-40"
+            className="rounded-md bg-[var(--chat-accent-primary)] px-3 py-1.5 text-xs font-medium text-[var(--chat-accent-on-primary)] disabled:opacity-40"
           >
             Send answers
           </button>

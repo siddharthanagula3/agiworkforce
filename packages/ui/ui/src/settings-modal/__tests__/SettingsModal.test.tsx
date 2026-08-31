@@ -178,6 +178,31 @@ describe('SettingsModal nav (web IA)', () => {
     expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
   });
 
+  it('does not claim a deprecated, server-gated plugin is Enabled just because the stale installation row still says so', () => {
+    renderModal(
+      { activeSection: 'plugins' },
+      {
+        plugins: [
+          {
+            id: 'legacy-pack',
+            name: 'Legacy Pack',
+            description: 'Deprecated tool bundle.',
+            enabled: true,
+            installed: true,
+            installable: false,
+            statusLabel: 'Deprecated',
+          },
+        ],
+        setPluginEnabled: vi.fn(),
+        removePlugin: vi.fn(),
+      },
+    );
+
+    expect(screen.getByText('Legacy Pack')).toBeTruthy();
+    expect(screen.getByText('Deprecated')).toBeTruthy();
+    expect(screen.queryByText('Enabled')).toBeNull();
+  });
+
   it('finds the real General personalization surface from custom-instructions language', () => {
     renderModal();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search settings' }), {
@@ -369,7 +394,10 @@ describe('Connectors pane (table)', () => {
     const githubRow = screen.getByRole('button', { name: 'GitHub' }).closest('tr');
     expect(githubRow).toBeTruthy();
 
-    fireEvent.click(within(githubRow!).getByText('Developer'));
+    // "Developer" renders twice in this row: the mobile-only inline category
+    // (sm:hidden) and the desktop-only category column (hidden sm:table-cell)
+    // added when the Type column moved under the name below sm.
+    fireEvent.click(within(githubRow!).getAllByText('Developer')[0]!);
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
   });
 

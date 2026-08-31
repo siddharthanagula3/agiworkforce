@@ -290,6 +290,17 @@ describe('BillingSection', () => {
     expect(await screen.findByText('No card on file')).toBeTruthy();
   });
 
+  it('humanizes the raw subscription status enum instead of leaking underscores', async () => {
+    mockSubscription.status = 'past_due';
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(await screen.findByText('Past due')).toBeTruthy();
+    expect(screen.queryByText('past_due')).toBeNull();
+    expect(screen.queryByText('Past_due')).toBeNull();
+  });
+
   it('distinguishes renewal from a scheduled cancellation', () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
 
