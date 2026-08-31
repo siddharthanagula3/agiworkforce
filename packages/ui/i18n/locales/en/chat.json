@@ -60,6 +60,7 @@
   "placeholderEmpty": "How can I help you today?",
   "shareConversation": "Share conversation",
   "openNavigation": "Open navigation",
+  "openPanels": "Panels",
   "artifactPublish": {
     "untitled": "Published artifact",
     "publishedOn": "Published {{date}}",
