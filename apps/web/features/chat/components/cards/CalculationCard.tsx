@@ -203,7 +203,15 @@ export function CalculationCard({ content }: CalculationCardProps) {
 
   const handleCopyResult = useCallback(async () => {
     if (!calc.result) return;
-    await navigator.clipboard.writeText(calc.result);
+    // Unguarded before this: an insecure context, a denied permission, or an
+    // unfocused document rejects `writeText`, which threw past the toast and
+    // the "Copied" state and left the button giving no feedback at all.
+    try {
+      await navigator.clipboard.writeText(calc.result);
+    } catch {
+      toast.error('Could not copy the result');
+      return;
+    }
     setCopied(true);
     toast.success('Result copied');
     setTimeout(() => setCopied(false), 2000);

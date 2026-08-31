@@ -695,7 +695,7 @@ export function Sidebar(props: SidebarProps) {
                     <div
                       className={cn(
                         'flex shrink-0 items-center gap-0.5 transition-opacity',
-                        'opacity-0 group-hover/projhdr:opacity-100 group-focus-within/projhdr:opacity-100',
+                        'opacity-0 group-hover/projhdr:opacity-100 group-focus-within/projhdr:opacity-100 [@media(hover:none)]:opacity-100',
                         projectsHeaderMenuOpen && 'opacity-100',
                       )}
                     >
@@ -708,7 +708,7 @@ export function Sidebar(props: SidebarProps) {
                             e.stopPropagation();
                             onProjectCreate();
                           }}
-                          className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+                          className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
                         >
                           <Plus className="h-3 w-3" aria-hidden="true" />
                         </button>
@@ -726,7 +726,7 @@ export function Sidebar(props: SidebarProps) {
                               e.stopPropagation();
                               toggle();
                             }}
-                            className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+                            className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
                           >
                             <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
                           </button>
@@ -1136,7 +1136,7 @@ function ProjectRow({
         <div
           className={cn(
             'flex shrink-0 items-center gap-0.5 transition-opacity',
-            'opacity-0 group-hover/projrow:opacity-100 group-focus-within/projrow:opacity-100',
+            'opacity-0 group-hover/projrow:opacity-100 group-focus-within/projrow:opacity-100 [@media(hover:none)]:opacity-100',
             menuOpen && 'opacity-100',
           )}
         >
@@ -1152,7 +1152,7 @@ function ProjectRow({
                 e.stopPropagation();
                 onNewChat(project.id);
               }}
-              className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+              className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
             >
               <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -1173,7 +1173,7 @@ function ProjectRow({
                   e.stopPropagation();
                   toggle();
                 }}
-                className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
               >
                 <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
               </button>

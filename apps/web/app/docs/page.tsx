@@ -257,6 +257,67 @@ export default function DocsPage() {
           </div>
         </nav>
 
+        {/* `.agi-docs-sidebar` is `display: none` below 900px with no
+            replacement — every section link (Local Mode, BYOK, Providers,
+            FAQ, Privacy…) becomes unreachable from this page on tablet and
+            phone widths, since the tab strip above only covers the top-level
+            surfaces. A native disclosure needs no client JS and is keyboard-
+            and screen-reader-operable without extra ARIA wiring. */}
+        <div
+          className="hidden max-[900px]:block"
+          style={{ borderBottom: '1px solid var(--agi-rule)' }}
+        >
+          <details>
+            <summary
+              style={{
+                cursor: 'pointer',
+                padding: '14px 20px',
+                fontSize: 13.5,
+                fontWeight: 500,
+                color: 'var(--agi-amber)',
+              }}
+            >
+              Browse documentation
+            </summary>
+            <nav aria-label="Documentation navigation" style={{ padding: '4px 20px 20px' }}>
+              {SIDEBAR.map((section) => (
+                <div key={section.heading} style={{ marginBottom: 16 }}>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: '0.065em',
+                      textTransform: 'uppercase',
+                      color: 'var(--agi-ink-quiet)',
+                      margin: '0 0 6px',
+                    }}
+                  >
+                    {section.heading}
+                  </p>
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                    {section.links.map((link) => (
+                      <li key={link.label}>
+                        <Link
+                          href={link.href}
+                          style={{
+                            display: 'block',
+                            padding: '7px 0',
+                            fontSize: 13.5,
+                            color: 'var(--agi-ink-2)',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          {link.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </nav>
+          </details>
+        </div>
+
         {/* Sidebar + content */}
         <div className="agi-docs-layout">
           <aside className="agi-docs-sidebar" aria-label="Documentation navigation">

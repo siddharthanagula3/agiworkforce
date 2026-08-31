@@ -76,7 +76,17 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
           class: { htmlLabels: false },
         });
         const { svg } = await mermaid.render(diagramId, source);
-        if (!cancelled) setState({ phase: 'ready', svg: sanitizeSvg(svg) });
+        if (cancelled) return;
+        const sanitized = sanitizeSvg(svg);
+        // A render that succeeds but sanitizes down to nothing (malformed
+        // markup, an unexpected root element) must not present as 'ready' with
+        // an empty container - that is the empty-output-with-source-available
+        // case the source fallback exists to prevent.
+        if (!sanitized) {
+          setState({ phase: 'failed', reason: 'The rendered diagram had no displayable content' });
+          return;
+        }
+        setState({ phase: 'ready', svg: sanitized });
       } catch (error) {
         if (cancelled) return;
         const reason = error instanceof Error ? error.message : 'Unknown diagram error';

@@ -55,28 +55,40 @@ export default function ByokEnvDocsPage() {
           <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 16px' }}>
             Set any combination below. Only providers with a key present will be active.
           </p>
-          <table className="agi-ledger">
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left' }}>Provider</th>
-                <th style={{ textAlign: 'left' }}>Environment variable</th>
-                <th style={{ textAlign: 'left' }}>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {BYOK_PROVIDERS.map((p) => (
-                <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>{p.label}</td>
-                  <td>
-                    <code style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{p.envVar}</code>
-                  </td>
-                  <td style={{ color: 'var(--text-3)', fontSize: 13 }}>
-                    {p.pendingAdapter ? 'Planned adapter' : 'Active in v1'}
-                  </td>
+          {/* `.agi-ledger` has no overflow handling of its own, and these
+              `..._API_KEY` env var names run 17-19 characters with no break
+              opportunity — at 320-390px that forces the table past the
+              viewport instead of shrinking. A focusable scroll region is the
+              same pattern the pricing comparison tables use. */}
+          <div
+            aria-label="Supported providers and env vars"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Provider</th>
+                  <th style={{ textAlign: 'left' }}>Environment variable</th>
+                  <th style={{ textAlign: 'left' }}>Notes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {BYOK_PROVIDERS.map((p) => (
+                  <tr key={p.id}>
+                    <td style={{ fontWeight: 600 }}>{p.label}</td>
+                    <td>
+                      <code style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{p.envVar}</code>
+                    </td>
+                    <td style={{ color: 'var(--text-3)', fontSize: 13 }}>
+                      {p.pendingAdapter ? 'Planned adapter' : 'Active in v1'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="agi-section">

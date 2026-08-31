@@ -385,16 +385,24 @@ export function LedgerSection({
     <section className="agi-section">
       <p className="agi-section-eyebrow">{eyebrow}</p>
       <h2 className="agi-section-h2">{title}</h2>
-      <table className="agi-ledger">
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.k}>
-              <td>{row.k}</td>
-              <td>{row.v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* `.agi-ledger` has no `table-layout: fixed` and no overflow handling
+          of its own, so a row value with no break opportunity (a long env
+          var, an unbroken path) forces the table past the viewport instead
+          of shrinking. `/docs/byok-env`'s provider table hits this with
+          19-character `..._API_KEY` names. A focusable scroll region is the
+          same pattern the pricing comparison tables already use. */}
+      <div aria-label={title} role="region" tabIndex={0} style={{ overflowX: 'auto' }}>
+        <table className="agi-ledger">
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.k}>
+                <td>{row.k}</td>
+                <td>{row.v}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

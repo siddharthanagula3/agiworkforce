@@ -447,26 +447,33 @@ export default function SecurityPage() {
             </Link>
             .
           </p>
-          <table className="agi-ledger">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Local</th>
-                <th>BYOK</th>
-                <th>Managed Cloud</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DATA_ROWS.map((row) => (
-                <tr key={row.category}>
-                  <td style={{ width: '22%' }}>{row.category}</td>
-                  <td>{row.local}</td>
-                  <td>{row.byok}</td>
-                  <td>{row.cloud}</td>
+          <div
+            aria-label="Where data lives, by category and mode"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Local</th>
+                  <th>BYOK</th>
+                  <th>Managed Cloud</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {DATA_ROWS.map((row) => (
+                  <tr key={row.category}>
+                    <td style={{ width: '22%' }}>{row.category}</td>
+                    <td>{row.local}</td>
+                    <td>{row.byok}</td>
+                    <td>{row.cloud}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="agi-security-transit-title">
@@ -474,16 +481,23 @@ export default function SecurityPage() {
           <h2 id="agi-security-transit-title" className="agi-fl-h2">
             What the browser is told, and enforced with.
           </h2>
-          <table className="agi-ledger">
-            <tbody>
-              {TRANSIT.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '22%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div
+            aria-label="Encryption in transit"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <tbody>
+                {TRANSIT.map((row) => (
+                  <tr key={row.k}>
+                    <td style={{ width: '22%' }}>{row.k}</td>
+                    <td>{row.v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="agi-security-rest-title">
@@ -491,16 +505,23 @@ export default function SecurityPage() {
           <h2 id="agi-security-rest-title" className="agi-fl-h2">
             Named algorithms, named parameters.
           </h2>
-          <table className="agi-ledger">
-            <tbody>
-              {AT_REST.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '22%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div
+            aria-label="Encryption at rest"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <tbody>
+                {AT_REST.map((row) => (
+                  <tr key={row.k}>
+                    <td style={{ width: '22%' }}>{row.k}</td>
+                    <td>{row.v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="agi-security-access-title">
@@ -527,16 +548,23 @@ export default function SecurityPage() {
             This is the section most vendors round up. We are not going to, because the number is
             checkable and rounding it up is exactly the failure a review is meant to catch.
           </p>
-          <table className="agi-ledger">
-            <tbody>
-              {DB_ROWS.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '24%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div
+            aria-label="Database isolation"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <tbody>
+                {DB_ROWS.map((row) => (
+                  <tr key={row.k}>
+                    <td style={{ width: '24%' }}>{row.k}</td>
+                    <td>{row.v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="agi-security-isolation-title">
@@ -563,16 +591,18 @@ export default function SecurityPage() {
           <h2 id="agi-security-logging-title" className="agi-fl-h2">
             What is captured, and what is deliberately not.
           </h2>
-          <table className="agi-ledger">
-            <tbody>
-              {LOGGING.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '24%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div aria-label="Logging" role="region" tabIndex={0} style={{ overflowX: 'auto' }}>
+            <table className="agi-ledger">
+              <tbody>
+                {LOGGING.map((row) => (
+                  <tr key={row.k}>
+                    <td style={{ width: '24%' }}>{row.k}</td>
+                    <td>{row.v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="agi-security-deletion-title">
@@ -599,16 +629,23 @@ export default function SecurityPage() {
           <h2 id="agi-security-release-title" className="agi-fl-h2">
             What runs before anything ships.
           </h2>
-          <table className="agi-ledger">
-            <tbody>
-              {RELEASE.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '24%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div
+            aria-label="Release integrity"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <tbody>
+                {RELEASE.map((row) => (
+                  <tr key={row.k}>
+                    <td style={{ width: '24%' }}>{row.k}</td>
+                    <td>{row.v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section id="report" className="agi-fl-section" aria-labelledby="agi-security-report-title">
@@ -628,60 +665,67 @@ export default function SecurityPage() {
             mailbox that is actually monitored; we would rather publish one address that works than
             a dedicated alias that bounces.
           </p>
-          <table className="agi-ledger">
-            <tbody>
-              <tr>
-                <td style={{ width: '24%' }}>Include</td>
-                <td>
-                  The affected surface (web, desktop, mobile, extension, CLI), the version or URL,
-                  steps to reproduce, and what an attacker gains. A proof of concept helps. Please
-                  do not send video only.
-                </td>
-              </tr>
-              <tr>
-                <td>In scope</td>
-                <td>
-                  agiworkforce.com and its subdomains, the hosted API, the artifact sandbox origin,
-                  the desktop application and its updater, the CLI, and the browser and editor
-                  extensions.
-                </td>
-              </tr>
-              <tr>
-                <td>Out of scope</td>
-                <td>
-                  Findings in third-party services we consume — report those to the vendor. Denial
-                  of service, volumetric or brute-force testing, social engineering of our staff or
-                  users, physical attacks, spam or rate-limit exhaustion, and reports produced by a
-                  scanner with no demonstrated impact.
-                </td>
-              </tr>
-              <tr>
-                <td>Safe harbour</td>
-                <td>
-                  If you research in good faith, stay within the scope above, avoid privacy
-                  violations and service degradation, use only accounts you own or have permission
-                  to test, and give us a reasonable chance to fix the issue before disclosing it, we
-                  will not pursue or support legal action against you, and we will say so in writing
-                  if you ask.
-                </td>
-              </tr>
-              <tr>
-                <td>Response</td>
-                <td>
-                  We do not publish a fixed acknowledgement or remediation time. This is not a 24/7
-                  reporting channel; reports are reviewed on a best-effort basis during working
-                  hours.
-                </td>
-              </tr>
-              <tr>
-                <td>Reward</td>
-                <td>
-                  There is no paid bounty programme. We will credit you by name in the changelog if
-                  you want the credit, and decline to name you if you do not.
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div
+            aria-label="Reporting a vulnerability"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <tbody>
+                <tr>
+                  <td style={{ width: '24%' }}>Include</td>
+                  <td>
+                    The affected surface (web, desktop, mobile, extension, CLI), the version or URL,
+                    steps to reproduce, and what an attacker gains. A proof of concept helps. Please
+                    do not send video only.
+                  </td>
+                </tr>
+                <tr>
+                  <td>In scope</td>
+                  <td>
+                    agiworkforce.com and its subdomains, the hosted API, the artifact sandbox
+                    origin, the desktop application and its updater, the CLI, and the browser and
+                    editor extensions.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Out of scope</td>
+                  <td>
+                    Findings in third-party services we consume — report those to the vendor. Denial
+                    of service, volumetric or brute-force testing, social engineering of our staff
+                    or users, physical attacks, spam or rate-limit exhaustion, and reports produced
+                    by a scanner with no demonstrated impact.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Safe harbour</td>
+                  <td>
+                    If you research in good faith, stay within the scope above, avoid privacy
+                    violations and service degradation, use only accounts you own or have permission
+                    to test, and give us a reasonable chance to fix the issue before disclosing it,
+                    we will not pursue or support legal action against you, and we will say so in
+                    writing if you ask.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Response</td>
+                  <td>
+                    We do not publish a fixed acknowledgement or remediation time. This is not a
+                    24/7 reporting channel; reports are reviewed on a best-effort basis during
+                    working hours.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Reward</td>
+                  <td>
+                    There is no paid bounty programme. We will credit you by name in the changelog
+                    if you want the credit, and decline to name you if you do not.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section id="not-done" className="agi-fl-section" aria-labelledby="agi-security-gaps-title">
@@ -693,16 +737,23 @@ export default function SecurityPage() {
             No dates are attached to any of these. A date we cannot keep is worse than an admission
             we can. As of {LAST_REVIEWED}:
           </p>
-          <table className="agi-ledger">
-            <tbody>
-              {NOT_DONE.map((row) => (
-                <tr key={row.k}>
-                  <td style={{ width: '24%' }}>{row.k}</td>
-                  <td>{row.v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div
+            aria-label="What we have not done"
+            role="region"
+            tabIndex={0}
+            style={{ overflowX: 'auto' }}
+          >
+            <table className="agi-ledger">
+              <tbody>
+                {NOT_DONE.map((row) => (
+                  <tr key={row.k}>
+                    <td style={{ width: '24%' }}>{row.k}</td>
+                    <td>{row.v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="agi-security-more-title">
