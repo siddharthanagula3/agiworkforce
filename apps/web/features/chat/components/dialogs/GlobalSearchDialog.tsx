@@ -52,6 +52,25 @@ interface GlobalSearchDialogProps {
 }
 
 export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogProps) {
+  // Radix hides a modal dialog's siblings, but which nodes that reaches depends
+  // on where the Dialog root sits, and here it does not reach the app's main
+  // region: measured with this dialog open, #main-content kept 90 focusable
+  // controls and no aria-hidden, behind content declaring aria-modal="true".
+  // The settings modal is marked correctly, so this is specific to where this
+  // one mounts rather than a gap in the shared primitive - hiding it there made
+  // every control unreachable to getByRole on pages with no dialog open.
+  useEffect(() => {
+    if (!open || typeof document === 'undefined') return;
+    const main = document.getElementById('main-content');
+    if (!main) return;
+    const previous = main.getAttribute('aria-hidden');
+    main.setAttribute('aria-hidden', 'true');
+    return () => {
+      if (previous === null) main.removeAttribute('aria-hidden');
+      else main.setAttribute('aria-hidden', previous);
+    };
+  }, [open]);
+
   const router = useRouter();
   const { user } = useAuthStore();
   const [query, setQuery] = useState('');
