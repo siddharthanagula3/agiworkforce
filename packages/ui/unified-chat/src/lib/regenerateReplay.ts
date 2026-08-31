@@ -1,8 +1,9 @@
-
 import type { CloudWorkMode } from '@agiworkforce/types';
 
-const SKILL_REGENERATE_MESSAGE =
-  'Regenerate is unavailable for skill-guided turns. Re-send the prompt to keep the same skill instructions.';
+// Only a turn recorded before the skill's name was carried in the replay. A
+// turn that names its skill regenerates with that skill.
+const UNIDENTIFIED_SKILL_REGENERATE_MESSAGE =
+  'Regenerate is unavailable for this older skill-guided turn. Re-send the prompt to keep the same skill instructions.';
 
 const LEGACY_TOOL_REGENERATE_MESSAGE =
   'Regenerate is unavailable for this older tool-assisted turn. Re-send the prompt to preserve search, tools, files, or style options.';
@@ -15,6 +16,7 @@ export interface SendReplayMetadataLike {
   workMode?: CloudWorkMode;
   styleMode?: string;
   hasSkillInstruction?: boolean;
+  skillName?: string;
 }
 
 export type RegenerateReplayDecision<R extends SendReplayMetadataLike = SendReplayMetadataLike> =
@@ -56,8 +58,8 @@ export function getRegenerateReplayDecision<
     params.assistantMetadata?.agentActivity || params.assistantMetadata?.cloudAgentRun
       ? 'agiwork'
       : undefined;
-  if (replay?.hasSkillInstruction) {
-    return { ok: false, message: SKILL_REGENERATE_MESSAGE };
+  if (replay?.hasSkillInstruction && !replay.skillName) {
+    return { ok: false, message: UNIDENTIFIED_SKILL_REGENERATE_MESSAGE };
   }
 
   if (!replay && !inferredWorkMode && hasLegacyToolAssistedOutput(params.assistantMetadata)) {
@@ -83,6 +85,7 @@ export function replayToSendOptions<R extends SendReplayMetadataLike = SendRepla
   officeCreation?: boolean;
   workMode?: R['workMode'];
   styleMode?: R['styleMode'];
+  skillName?: string;
 } {
   return {
     webSearch: replay?.webSearchEnabled,
@@ -91,6 +94,7 @@ export function replayToSendOptions<R extends SendReplayMetadataLike = SendRepla
     officeCreation: replay?.officeCreationEnabled,
     workMode: replay?.workMode,
     styleMode: replay?.styleMode,
+    skillName: replay?.skillName,
   };
 }
 
