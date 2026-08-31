@@ -171,16 +171,21 @@ const markdownComponents: Components = {
     <th className="border border-border bg-muted px-3 py-2 text-left font-semibold">{children}</th>
   ),
   td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      className="text-primary hover:underline"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {children}
-    </a>
-  ),
+  a: ({ href, children }) => {
+    // A fragment points inside this same document - a citation marker reaching
+    // its source, a heading link. Opening it in a new tab lands the reader on a
+    // blank page instead of the thing they asked to see.
+    const samePage = typeof href === 'string' && href.startsWith('#');
+    return (
+      <a
+        href={href}
+        className="text-primary hover:underline"
+        {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+      >
+        {children}
+      </a>
+    );
+  },
 };
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks] satisfies React.ComponentProps<

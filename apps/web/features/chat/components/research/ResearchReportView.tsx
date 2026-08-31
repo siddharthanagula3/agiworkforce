@@ -30,6 +30,7 @@ import {
 import type { Citation, ResearchReport } from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
+import { citationAnchorId, citedSourceNumbers, linkifyCitations } from '../../lib/citation-links';
 import { cn } from '@shared/lib/utils';
 import type { DocumentFormat } from '../../types/message-metadata';
 import { documentExportService } from '../../services/document-export-service';
@@ -186,6 +187,7 @@ export function researchReportFilename(report: ResearchReport): string {
 
 function CitationRow({ citation, index }: { citation: Citation; index: number }) {
   const [faviconError, setFaviconError] = useState(false);
+  const anchorId = citationAnchorId(index + 1);
 
   let host = citation.url;
   let faviconSrc: string | undefined;
@@ -201,7 +203,7 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
   }
 
   return (
-    <li>
+    <li id={anchorId} className="scroll-mt-4 target:rounded-lg target:ring-2 target:ring-ring">
       <a
         href={citation.url}
         target="_blank"
@@ -289,6 +291,14 @@ export function ResearchReportView({
 
   const markdown = useMemo(() => researchReportToMarkdown(report), [report]);
   const headings = useMemo(() => extractMarkdownHeadings(report.content), [report.content]);
+  const citedContent = useMemo(
+    () => linkifyCitations(report.content, report.citations.length),
+    [report.content, report.citations.length],
+  );
+  const uncapturedSources = useMemo(
+    () => (report.citations.length > 0 ? [] : citedSourceNumbers(report.content)),
+    [report.citations.length, report.content],
+  );
   const bodyRef = useRef<HTMLElement | null>(null);
 
   // The markdown renderer emits plain headings with no ids, so the anchors the
@@ -479,10 +489,10 @@ export function ResearchReportView({
           className="text-sm leading-relaxed text-foreground"
           data-testid="research-report-content"
         >
-          <MarkdownContent content={report.content} />
+          <MarkdownContent content={citedContent} />
         </article>
 
-        {report.citations.length > 0 && (
+        {report.citations.length > 0 ? (
           <section className="mt-5" aria-labelledby="research-report-sources">
             <h3
               id="research-report-sources"
@@ -496,7 +506,30 @@ export function ResearchReportView({
               ))}
             </ul>
           </section>
-        )}
+        ) : uncapturedSources.length > 0 ? (
+          /*
+           * The report cites sources the run never captured a link for. Hiding
+           * the whole section leaves numbered references in the prose pointing
+           * at nothing, and a reader cannot tell whether the report has no
+           * sources or whether the product lost them.
+           */
+          <section className="mt-5" aria-labelledby="research-report-sources">
+            <h3
+              id="research-report-sources"
+              className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              Sources
+            </h3>
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="research-report-uncaptured-sources"
+            >
+              {`This report refers to ${uncapturedSources.length} numbered ${
+                uncapturedSources.length === 1 ? 'source' : 'sources'
+              }, but the run recorded no links for them. The references in the text above are the report's own and cannot be opened from here.`}
+            </p>
+          </section>
+        ) : null}
       </div>
 
       {onAskFollowUp && (
