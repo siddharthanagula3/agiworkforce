@@ -1,7 +1,7 @@
+import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { HeroAppWindow } from '@/features/marketing/components/HeroAppWindow';
-import { MobileHeroVisual } from '@/features/marketing/components/MobileHeroVisual';
 import {
   MobileMockup,
   VSCodeMockup,
@@ -14,7 +14,6 @@ import {
   CapabilityGrid,
   DevBand,
   FinalCta,
-  FlagshipHero,
   SurfaceIndex,
   SurfaceTicker,
   TrustTriptych,
@@ -29,21 +28,34 @@ export function MarketingLanding() {
     <div data-design="agi">
       <Header />
       <main className="agi-shell">
-        <FlagshipHero
-          brand="AGI"
-          eyebrow="the AI application suite"
-          ctas={[
-            { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
-            { href: '/download', label: 'Get AGI Desktop' },
-          ]}
-          ctas2={[
-            { href: '/vscode-extension', label: 'VS Code extension' },
-            { href: '/chrome-extension', label: 'Chrome extension' },
-          ]}
-          lede="One assistant across six surfaces — and you choose where each request actually runs."
-          modeRibbon={[]}
-          visual={<MobileHeroVisual />}
-        />
+        {/* The product takes the stage. This hero used to lead with a wordmark
+            and put a phone in the column beside it, where it rendered around
+            250px in a 1440px viewport - small enough that the interface could
+            not be read, which makes it decoration rather than the thing being
+            sold. Statement above, application beneath it, at a size where the
+            composer, the model picker and the route are all legible. */}
+        <section className="agi-hero-stage" aria-labelledby="agi-fl-hero-title">
+          <div className="agi-hero-stage-copy">
+            <h1 id="agi-fl-hero-title" className="agi-hero-stage-title">
+              One workspace. Every surface.
+            </h1>
+            <p className="agi-hero-stage-lede">
+              One assistant across six surfaces — and you choose where each request actually runs.
+            </p>
+            <div className="agi-fl-cta-row">
+              <Link href={WEB_CHAT_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
+                Try AGI Web
+              </Link>
+              <Link href="/download" className="agi-fl-cta agi-fl-cta--ghost">
+                Get AGI Desktop
+              </Link>
+            </div>
+          </div>
+
+          <div className="agi-hero-stage-product">
+            <HeroAppWindow />
+          </div>
+        </section>
 
         <SurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
 

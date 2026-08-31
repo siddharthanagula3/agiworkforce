@@ -4103,6 +4103,76 @@ html[data-contrast='more'] *:focus-visible {
   max-width: none;
 }
 
+/* Product-first hero.
+ *
+ * The flagship hero put a wordmark in the primary position and the product in
+ * a column beside it, where a phone rendered around 250px in a 1440px viewport
+ * - too small for its interface to be read, which makes it decoration.
+ *
+ * The statement goes above and the product takes the stage beneath it, so the
+ * thing being sold is the thing you look at. Copy is short enough to sit on
+ * one column; the product is not constrained to one.
+ */
+[data-design='agi'] .agi-hero-stage {
+  display: grid;
+  justify-items: center;
+  gap: clamp(32px, 3.5vw, 52px);
+  padding: clamp(48px, 5vw, 76px) 0 0;
+  text-align: center;
+}
+
+/* Width lives on the elements, not the wrapper: a ch on this container
+   resolves against the body font, so a 22ch cap here was about 176px and broke
+   the display headline to one word per line. */
+[data-design='agi'] .agi-hero-stage-copy {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+}
+
+[data-design='agi'] .agi-hero-stage-title {
+  margin: 0;
+  max-width: 18ch;
+  font-family: var(--agi-font-display);
+  font-optical-sizing: auto;
+  font-size: clamp(2.8rem, 6vw, 4.6rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.03;
+  color: var(--agi-ink);
+  text-wrap: balance;
+}
+
+[data-design='agi'] .agi-hero-stage-lede {
+  margin: 0;
+  max-width: 46ch;
+  font-size: clamp(1.05rem, 1.5vw, 1.25rem);
+  line-height: 1.5;
+  color: var(--agi-ink-2);
+  text-wrap: pretty;
+}
+
+/* The product sits on the floor of the hero, cropped by the fold rather than
+   shrunk to fit it - the interface stays at a size where it can be read. */
+[data-design='agi'] .agi-hero-stage-product {
+  width: min(100%, 1240px);
+  margin-top: clamp(8px, 2vw, 24px);
+}
+
+[data-design='agi'] .agi-hero-stage-product .agi-dev {
+  max-width: none;
+}
+
+@media (max-width: 720px) {
+  [data-design='agi'] .agi-hero-stage {
+    gap: 32px;
+  }
+  [data-design='agi'] .agi-hero-stage-copy {
+    max-width: 100%;
+  }
+}
+
 /* ── shared section scaffolding ─────────────────────────────────────── */
 
 [data-design='agi'] .agi-fl-section {
