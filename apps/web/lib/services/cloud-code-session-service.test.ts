@@ -31,6 +31,7 @@ describe('cloud-code-session-service validation', () => {
       repositoryUrl: null,
       networkAccess: 'none',
       workspacePath: '/home/user',
+      runtimeId: null,
     });
   });
 

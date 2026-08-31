@@ -370,6 +370,7 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   if (conversationId) metadata['conversationId'] = conversationId;
   if (codeSessionId) metadata['codeSessionId'] = codeSessionId;
   if (scope?.userId) metadata['userId'] = scope.userId;
+  const template = scope?.templateId?.trim() || null;
   const createOpts = scope
     ? {
         timeoutMs: sandboxTimeoutMs,
@@ -382,9 +383,15 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   async function createFresh(): Promise<SandboxInstance | null> {
     const create = async (): Promise<SandboxInstance | null> => {
       try {
-        return (await SandboxCtor.create(createOpts)) as SandboxInstance;
+        // Sandbox.create is overloaded: (opts) uses the SDK's default image,
+        // (template, opts) picks one. The id reaching here has already been
+        // matched against the account's catalogue, so it is never client text.
+        const sandbox = template
+          ? await SandboxCtor.create(template, createOpts)
+          : await SandboxCtor.create(createOpts);
+        return sandbox as SandboxInstance;
       } catch (err) {
-        logger.warn({ err }, '[e2b] sandbox create failed; fail-closed');
+        logger.warn({ err, template }, '[e2b] sandbox create failed; fail-closed');
         return null;
       }
     };

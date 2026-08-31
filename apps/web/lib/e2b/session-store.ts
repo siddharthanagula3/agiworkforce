@@ -33,6 +33,8 @@ export interface E2BSessionScope {
   };
   networkAccess?: CloudCodeNetworkAccess;
   planTier?: string;
+  /** E2B template id. Omitted means the SDK's default image. */
+  templateId?: string | null;
 }
 
 export const MANAGED_CLOUD_E2B_TENANT_ID = 'managed-cloud';
@@ -54,6 +56,7 @@ export function managedCloudCodeSessionScope(
   codeSessionId: string,
   networkAccess: CloudCodeNetworkAccess,
   planTier?: string,
+  templateId?: string | null,
 ): E2BSessionScope {
   return {
     tenantId: MANAGED_CLOUD_E2B_TENANT_ID,
@@ -61,6 +64,7 @@ export function managedCloudCodeSessionScope(
     resource: { kind: 'code_session', id: codeSessionId },
     networkAccess,
     ...(planTier ? { planTier } : {}),
+    ...(templateId ? { templateId } : {}),
   };
 }
 

@@ -28,6 +28,7 @@ const sessionSchema = z.object({
   title: z.string(),
   repositoryUrl: z.string().nullable(),
   networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS),
+  runtimeId: z.string().nullable().default(null),
   state: z.enum(CLOUD_CODE_SESSION_STATES),
   workspacePath: z.string(),
   lastError: z.string().nullable(),
@@ -47,6 +48,15 @@ const terminalEntrySchema = z.object({
   completedAt: z.string().datetime(),
 });
 
+const runtimeSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  cpuCount: z.number().nonnegative(),
+  memoryMB: z.number().nonnegative(),
+  diskSizeMB: z.number().nonnegative(),
+  isPublic: z.boolean(),
+});
+
 const listSchema = z.object({
   availability: z.object({
     deploymentEnabled: z.boolean(),
@@ -56,6 +66,7 @@ const listSchema = z.object({
     maxSessions: z.number().int().nonnegative(),
   }),
   sessions: z.array(sessionSchema),
+  runtimes: z.array(runtimeSchema).default([]),
 });
 
 const sessionDetailSchema = z.object({

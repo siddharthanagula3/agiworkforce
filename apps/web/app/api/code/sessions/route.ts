@@ -12,6 +12,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -79,6 +80,10 @@ async function handleList(request: NextRequest) {
     storageReady = false;
     sessions = [];
   }
+  // Offered only to an entitled account: the catalogue is a read against the
+  // team's E2B org, not public information, and an unentitled caller cannot
+  // create a session with any of it.
+  const runtimes = maxSessions > 0 ? await listCloudCodeRuntimes() : [];
   return NextResponse.json({
     availability: {
       deploymentEnabled: e2bProvisioningReady(),
@@ -88,6 +93,7 @@ async function handleList(request: NextRequest) {
       maxSessions,
     },
     sessions,
+    runtimes,
   });
 }
 
