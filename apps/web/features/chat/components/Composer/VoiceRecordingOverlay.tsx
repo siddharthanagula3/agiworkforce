@@ -71,10 +71,15 @@ function VoiceRecordingOverlayComponent({
 
       <div
         className={cn(
-          'absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-50',
+          // Centred on the mic button rather than the screen, a 200px card
+          // ended 9px past the right edge at 320px and 430px - the dismiss
+          // control sat in the clipped part. Anchor it to the button's right
+          // edge on a phone, which cannot leave the viewport, and keep the
+          // centred placement where there is room for it.
+          'absolute bottom-full right-0 mb-3 z-50 sm:left-1/2 sm:right-auto sm:-translate-x-1/2',
           'flex flex-col items-center gap-3 rounded-2xl',
           'border border-border/60 bg-popover/95 px-6 py-4 shadow-xl backdrop-blur-xl',
-          'min-w-[200px]',
+          'min-w-[200px] max-w-[calc(100vw-1.5rem)]',
         )}
         role={failed ? 'alert' : 'status'}
         aria-live={failed ? 'assertive' : 'polite'}
