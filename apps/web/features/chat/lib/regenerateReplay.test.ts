@@ -52,13 +52,44 @@ describe('regenerate replay decisions', () => {
     });
   });
 
-  it('blocks skill-guided turns without persisting raw skill body text', () => {
+  it('blocks a skill turn recorded before the skill was named', () => {
+    // The block exists so the skill's body text never lands in message
+    // metadata. A turn from before the name was recorded still cannot be
+    // reproduced, so it still refuses.
     const decision = getRegenerateReplayDecision({
       userMetadata: { sendReplay: { hasSkillInstruction: true } },
     });
 
     expect(decision.ok).toBe(false);
     expect(decision.ok ? '' : decision.message).toMatch(/skill-guided/i);
+  });
+
+  it('regenerates a skill turn that names its skill, keeping the skill', () => {
+    // The name is enough: the send path identifies a skill by skill_name. A
+    // failed skill turn used to offer only "re-send the prompt", which loses
+    // the turn and asks the user to retype it.
+    const decision = getRegenerateReplayDecision({
+      userMetadata: {
+        sendReplay: { hasSkillInstruction: true, skillName: 'literature-review' },
+      },
+    });
+
+    expect(decision.ok).toBe(true);
+    expect(decision.ok ? decision.replay?.skillName : null).toBe('literature-review');
+    expect(replayToSendOptions(decision.ok ? decision.replay : undefined).skillName).toBe(
+      'literature-review',
+    );
+  });
+
+  it('carries no skill name for a turn that used none', () => {
+    const decision = getRegenerateReplayDecision({
+      userMetadata: { sendReplay: { webSearchEnabled: true } },
+    });
+
+    expect(decision.ok).toBe(true);
+    expect(
+      replayToSendOptions(decision.ok ? decision.replay : undefined).skillName,
+    ).toBeUndefined();
   });
 
   it('blocks older tool-assisted turns that lack replay metadata', () => {

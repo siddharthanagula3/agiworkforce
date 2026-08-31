@@ -1,4 +1,3 @@
-
 import type { SearchResponse, SearchResult } from './search-media';
 import type { CloudWorkMode } from '@agiworkforce/types';
 export type { SearchResponse, SearchResult, MediaGenerationResult } from './search-media';
@@ -27,6 +26,7 @@ export interface SendReplayMetadata {
   workMode?: CloudWorkMode;
   styleMode?: WebChatStyleMode;
   hasSkillInstruction?: boolean;
+  skillName?: string;
 }
 
 export function isWebSearchResponse(value: unknown): value is SearchResponse {
@@ -65,6 +65,7 @@ export function createSendReplayMetadata(params: {
   workMode?: CloudWorkMode;
   styleMode?: string;
   hasSkillInstruction?: boolean;
+  skillName?: string;
 }): SendReplayMetadata | undefined {
   const replay: SendReplayMetadata = {};
   if (typeof params.webSearchEnabled === 'boolean')
@@ -81,6 +82,9 @@ export function createSendReplayMetadata(params: {
   }
   if (isWebChatStyleMode(params.styleMode)) replay.styleMode = params.styleMode;
   if (params.hasSkillInstruction) replay.hasSkillInstruction = true;
+  // The name is what makes the turn replayable; without it Regenerate can only
+  // refuse, because it cannot reproduce the instructions the answer was given.
+  if (params.skillName) replay.skillName = params.skillName;
   return Object.keys(replay).length > 0 ? replay : undefined;
 }
 
