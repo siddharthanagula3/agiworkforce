@@ -32,6 +32,7 @@
     --n-600: #5d636f;
     --n-700: #454a54;
     --n-800: #2d3139;
+    --n-850: #23272e;
     --n-900: #1b1e24;
     --n-950: #101216;
     --n-1000: #080a0c;
@@ -43,8 +44,8 @@
      * --neutral-* in chat.css and into the desktop surface, so it is migrated in
      * its own verified pass rather than shadowed here. Until then this layer
      * names the surface and text roles it does own. */
-    --surface-page: var(--n-0);
-    --surface-subtle: var(--n-25);
+    --surface-page: var(--n-25);
+    --surface-subtle: var(--n-50);
     --surface-elevated: var(--n-0);
 
     --text-primary: var(--n-950); /* 16.15 */
@@ -55,11 +56,13 @@
 
     --rule-subtle: var(--n-100);
     --rule: var(--n-200);
-    --rule-strong: #8d93a0; /* 3.07 on surface-page — carries state, so 1.4.11 applies */
+    --rule-strong: #8a919e; /* 3.07 on surface-page — carries state, so 1.4.11 applies */
 
-    --surface-hover: var(--n-50);
-    --surface-active: var(--n-100);
-    --surface-selected: var(--n-100);
+    --surface-hover: var(--n-100);
+    --surface-active: var(--n-200);
+    /* Selection is one of the few jobs colour is reserved for, so it reads as
+       state rather than as another grey. */
+    --surface-selected: color-mix(in srgb, var(--accent-text) 8%, var(--n-0));
 
     /* The primary action is the inverse of the page, not a hue. Colour is
      * reserved for focus, selection, links and status. */
@@ -88,9 +91,9 @@
     --info-on-fill: var(--n-0);
 
     /* ---- layer 2: mode-invariant ---------------------------------------- */
-    --radius-control: 6px;
-    --radius-surface: 10px;
-    --radius-pill: 9999px;
+    --corner-control: 6px;
+    --corner-surface: 10px;
+    --corner-pill: 9999px;
 
     --space-1: 4px;
     --space-2: 8px;
@@ -123,9 +126,9 @@
     --duration-instant: 90ms;
     --duration-quick: 160ms;
     --duration-moved: 260ms;
-    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
-    --ease-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+    --curve-standard: cubic-bezier(0.2, 0, 0, 1);
+    --curve-exit: cubic-bezier(0.4, 0, 1, 1);
+    --curve-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
 
     --elevation-1: 0 1px 2px rgb(8 10 12 / 0.06);
     --elevation-2: 0 2px 4px rgb(8 10 12 / 0.06), 0 4px 12px -4px rgb(8 10 12 / 0.1);
@@ -207,9 +210,9 @@
     --rule: var(--n-800);
     --rule-strong: #585e6a; /* 3.04 on surface-page */
 
-    --surface-hover: var(--n-900);
+    --surface-hover: var(--n-850);
     --surface-active: var(--n-800);
-    --surface-selected: var(--n-800);
+    --surface-selected: color-mix(in srgb, var(--accent-text) 16%, var(--n-1000));
 
     --action-primary: var(--n-25);
     --action-primary-foreground: var(--n-1000); /* 19.13 */
