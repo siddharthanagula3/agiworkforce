@@ -13,6 +13,7 @@ import {
 import { logger } from '@/lib/logger';
 import { CLOUD_CODE_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 import { getE2BExecutor, killE2BSession } from '@/lib/e2b/runtime';
+import { listCloudCodeRuntimes } from '@/lib/e2b/templates';
 import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
 
 const MAX_TITLE_LENGTH = 120;
@@ -117,6 +118,7 @@ interface SessionRow extends Record<string, unknown> {
   title: string;
   repository_url: string | null;
   network_access: string;
+  runtime_id?: string | null;
   state: string;
   workspace_path: string;
   last_error: string | null;
@@ -144,6 +146,7 @@ interface ValidatedCreateInput {
   repositoryUrl: string | null;
   networkAccess: CloudCodeNetworkAccess;
   workspacePath: string;
+  runtimeId: string | null;
 }
 
 function iso(value: string | Date): string {
@@ -172,6 +175,7 @@ export function mapCloudCodeSession(row: SessionRow): CloudCodeSession {
     title: row.title,
     repositoryUrl: row.repository_url,
     networkAccess: asNetworkAccess(row.network_access),
+    runtimeId: row.runtime_id ?? null,
     state: asSessionState(row.state),
     workspacePath: row.workspace_path,
     lastError: row.last_error,
@@ -256,7 +260,28 @@ export function validateCreateCloudCodeSession(
     repositoryUrl,
     networkAccess: input.networkAccess,
     workspacePath: repositoryUrl ? REPOSITORY_WORKSPACE_PATH : DEFAULT_WORKSPACE_PATH,
+    // Checked against the live catalogue in createCloudCodeSession, which can
+    // await; this stays synchronous for the callers that only shape-check.
+    runtimeId: typeof input.runtimeId === 'string' ? input.runtimeId.trim() || null : null,
   };
+}
+
+/**
+ * A requested image must be one the account actually has.
+ *
+ * Rejected rather than quietly replaced with the default: a session built from
+ * a different image than the one asked for is a silent lie about what the code
+ * will run against.
+ */
+async function assertRuntimeIsAvailable(runtimeId: string | null): Promise<void> {
+  if (!runtimeId) return;
+  const runtimes = await listCloudCodeRuntimes();
+  if (runtimes.some((runtime) => runtime.id === runtimeId)) return;
+  throw new CloudCodeValidationError(
+    runtimes.length === 0
+      ? 'No sandbox images are available for this account, so one cannot be chosen.'
+      : 'That sandbox image is not available for this account.',
+  );
 }
 
 export function validateCloudCodeSessionId(sessionId: string): string {
@@ -439,7 +464,8 @@ function sameCreateRequest(row: SessionRow, input: ValidatedCreateInput): boolea
   return (
     row.title === input.title &&
     row.repository_url === input.repositoryUrl &&
-    row.network_access === input.networkAccess
+    row.network_access === input.networkAccess &&
+    (row.runtime_id ?? null) === input.runtimeId
   );
 }
 
@@ -454,6 +480,7 @@ export async function createCloudCodeSession(
   planTier: string,
 ): Promise<CloudCodeSession> {
   const validated = validateCreateCloudCodeSession(input);
+  await assertRuntimeIsAvailable(validated.runtimeId);
 
   let claimed: { row: SessionRow; reused: boolean };
   try {
@@ -499,8 +526,8 @@ export async function createCloudCodeSession(
       const inserted = await tx.query<SessionRow>(
         `insert into cloud_code_sessions (
            user_id, organization_id, request_id, title, repository_url,
-           network_access, state, workspace_path
-         ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7)
+           network_access, state, workspace_path, runtime_id
+         ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7, $8)
          returning *`,
         [
           owner.userId,
@@ -510,6 +537,7 @@ export async function createCloudCodeSession(
           validated.repositoryUrl,
           validated.networkAccess,
           validated.workspacePath,
+          validated.runtimeId,
         ],
       );
       return { row: inserted[0]!, reused: false };
@@ -531,6 +559,7 @@ export async function createCloudCodeSession(
     sessionId,
     validated.networkAccess,
     planTier,
+    validated.runtimeId,
   );
   const executor = await getE2BExecutor(scope);
   if (!executor?.runCommand) {
@@ -682,6 +711,7 @@ export async function runCloudCodeCommand(
     sessionId,
     claim.session.networkAccess,
     planTier,
+    claim.session.runtimeId,
   );
   const startedAt = new Date();
   const executor = await getE2BExecutor(scope);

@@ -351,6 +351,7 @@ async function runClaimedAgentTurn(
     sessionId,
     session.networkAccess,
     planTier,
+    session.runtimeId,
   );
   const executor = await getE2BExecutor(scope);
   if (!executor) {

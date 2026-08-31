@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Blocks,
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type {
   CloudCodeAvailability,
+  CloudCodeRuntime,
   CloudCodeNetworkAccess,
   CloudCodeSession,
   CloudCodeTerminalEntry,
@@ -78,6 +79,13 @@ function makeRequestId(): string {
   return `code_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
+function describeRuntime(runtime: CloudCodeRuntime): string {
+  const cores = runtime.cpuCount > 0 ? `${runtime.cpuCount} vCPU` : null;
+  const memory = runtime.memoryMB > 0 ? `${Math.round(runtime.memoryMB / 1024)} GB RAM` : null;
+  const specs = [cores, memory].filter(Boolean).join(', ');
+  return specs ? `${runtime.name} — ${specs}` : runtime.name;
+}
+
 function friendlyError(error: unknown): string {
   if (error instanceof CloudCodeApiError) return error.message;
   if (error instanceof Error) return error.message;
@@ -118,6 +126,7 @@ export interface CloudCodePageProps {
 export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const terminalEndRef = useRef<HTMLDivElement>(null);
   const [availability, setAvailability] = useState<CloudCodeAvailability | null>(null);
+  const [runtimes, setRuntimes] = useState<CloudCodeRuntime[]>([]);
   const [sessions, setSessions] = useState<CloudCodeSession[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [entries, setEntries] = useState<CloudCodeTerminalEntry[]>([]);
@@ -127,6 +136,11 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
   const [title, setTitle] = useState('New workspace');
   const [repositoryUrl, setRepositoryUrl] = useState('');
   const [networkAccess, setNetworkAccess] = useState<CloudCodeNetworkAccess>('none');
+  // Empty string is "the default image" — the catalogue never contains one, so
+  // it cannot collide with a real template id.
+  const [runtimeId, setRuntimeId] = useState('');
+  const runtimeFieldId = useId();
+  const runtimeHelpId = `${runtimeFieldId}-help`;
   const [fullNetworkAccepted, setFullNetworkAccepted] = useState(false);
   const [creating, setCreating] = useState(false);
   const [command, setCommand] = useState('');
@@ -162,7 +176,11 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
       try {
         const body = await api.list(signal);
         setAvailability(body.availability);
+        setRuntimes(body.runtimes);
         setSessions(body.sessions);
+        setRuntimeId((current) =>
+          current && body.runtimes.some((runtime) => runtime.id === current) ? current : '',
+        );
         setSelectedId((current) => {
           if (current && body.sessions.some((session) => session.id === current)) return current;
           return (
@@ -260,6 +278,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
         repositoryUrl: repositoryUrl.trim() || null,
         networkAccess,
         fullNetworkAcknowledged: networkAccess === 'full' ? fullNetworkAccepted : undefined,
+        runtimeId: runtimeId || null,
       });
       replaceSession(body.session);
       setSelectedId(body.session.id);
@@ -269,6 +288,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
       setRepositoryUrl('');
       setNetworkAccess('none');
       setFullNetworkAccepted(false);
+      setRuntimeId('');
     } catch (createError) {
       setError(friendlyError(createError));
     } finally {
@@ -542,6 +562,35 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                         first release. Repository setup requires Trusted hosts or Full network.
                       </span>
                     </label>
+
+                    {/* htmlFor rather than a wrapping label: the help text is a
+                        sibling, so it describes the control instead of being read
+                        out as part of its name. */}
+                    <div className={styles['field']}>
+                      <label className={styles['label']} htmlFor={runtimeFieldId}>
+                        Sandbox image
+                      </label>
+                      <select
+                        id={runtimeFieldId}
+                        aria-describedby={runtimeHelpId}
+                        className={styles['input']}
+                        value={runtimeId}
+                        onChange={(event) => setRuntimeId(event.target.value)}
+                        disabled={creating || runtimes.length === 0}
+                      >
+                        <option value="">Default image</option>
+                        {runtimes.map((runtime) => (
+                          <option key={runtime.id} value={runtime.id}>
+                            {describeRuntime(runtime)}
+                          </option>
+                        ))}
+                      </select>
+                      <span className={styles['help']} id={runtimeHelpId}>
+                        {runtimes.length === 0
+                          ? 'No images are published to this account\u2019s E2B team, so sessions use the default image. Publish a template in the E2B console to choose one here.'
+                          : 'The image decides which languages, runtimes and tools are already installed. It cannot be changed after the session is created.'}
+                      </span>
+                    </div>
 
                     <fieldset className={styles['field']} style={{ border: 0, padding: 0 }}>
                       <legend className={styles['label']}>Network access</legend>
