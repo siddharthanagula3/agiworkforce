@@ -84,6 +84,7 @@ import {
   CONTINUE_GENERATION_INSTRUCTION,
   isMessageContinuable,
 } from '@/features/chat/lib/continue-generation';
+import { repairContinuationSeam, SEAM_INSPECTION_WINDOW } from '@agiworkforce/unified-chat';
 import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import { networkErrorMessage, toUserMessage } from '@/lib/user-error-message';
@@ -1023,6 +1024,30 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const HOLD_BACK = 11;
 
+  const seamSeed = ctx.seedContent ?? '';
+  let seamPending = seamSeed.length > 0;
+  let seamBuffer = '';
+
+  const emitPublicText = (text: string, isFinal: boolean): void => {
+    if (seamPending) {
+      seamBuffer += text;
+      if (!isFinal && seamBuffer.length < SEAM_INSPECTION_WINDOW) return;
+      const repaired = repairContinuationSeam(seamSeed, seamBuffer);
+      seamPending = false;
+      seamBuffer = '';
+      if (!repaired) return;
+      fullAssistantContent += repaired;
+      unacknowledgedPublicText += repaired;
+      appendToMessage(assistantMessageId, repaired, conversationId);
+      return;
+    }
+
+    if (!text) return;
+    fullAssistantContent += text;
+    unacknowledgedPublicText += text;
+    appendToMessage(assistantMessageId, text, conversationId);
+  };
+
   const flushContentBuffer = (isFinal = false) => {
     while (true) {
       const openIdx = contentBuffer.indexOf('<thinking>');
@@ -1030,11 +1055,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
       if (!inThinkingBlock && openIdx !== -1) {
         const before = contentBuffer.slice(0, openIdx);
-        if (before) {
-          fullAssistantContent += before;
-          unacknowledgedPublicText += before;
-          appendToMessage(assistantMessageId, before, conversationId);
-        }
+        emitPublicText(before, isFinal);
         inThinkingBlock = true;
         openThinkingSegment();
         contentBuffer = contentBuffer.slice(openIdx + '<thinking>'.length);
@@ -1057,9 +1078,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (inThinkingBlock) {
             appendThinkingText(contentBuffer);
           } else {
-            fullAssistantContent += contentBuffer;
-            unacknowledgedPublicText += contentBuffer;
-            appendToMessage(assistantMessageId, contentBuffer, conversationId);
+            emitPublicText(contentBuffer, true);
           }
           contentBuffer = '';
         }
@@ -1068,12 +1087,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         if (inThinkingBlock) {
           appendThinkingText(safe);
         } else {
-          fullAssistantContent += safe;
-          unacknowledgedPublicText += safe;
-          appendToMessage(assistantMessageId, safe, conversationId);
+          emitPublicText(safe, false);
         }
         contentBuffer = contentBuffer.slice(contentBuffer.length - HOLD_BACK);
       }
+      if (isFinal && seamPending && seamBuffer) emitPublicText('', true);
       break;
     }
   };
@@ -1621,10 +1639,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     const researchActive = currentResearch && currentResearch.phase !== 'complete';
 
     if (isAbort && !researchActive) {
-      if (fullAssistantContent) {
-        finishReason = 'stopped';
-        patchMessageMeta({ finishReason });
-      }
+      // The user stopped this turn, so the turn is stopped - whether or not
+      // this particular request had produced any text yet. Gating the stamp on
+      // new content meant a continuation stopped early kept no stopped marker,
+      // so the message announced "Response complete" over partial text and lost
+      // its Continue action, leaving only Regenerate.
+      finishReason = 'stopped';
+      patchMessageMeta({ finishReason });
       if (fullAssistantContent || currentAgentActivity) {
         persistAssistant(fullAssistantContent);
       }

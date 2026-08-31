@@ -52,6 +52,7 @@ import {
   normalizeModelId,
   canUseBillingPlanCapability,
   isValidIanaTimeZone,
+  resolveMaxOutputTokens,
 } from '@agiworkforce/types';
 import type { ModelCapabilities, RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
 import {
@@ -2515,9 +2516,10 @@ export async function processRequest(
     };
   }
 
-  const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
   let maxTokens =
-    chatRequest.max_tokens || chatRequest.max_completion_tokens || DEFAULT_MAX_OUTPUT_TOKENS;
+    chatRequest.max_tokens ||
+    chatRequest.max_completion_tokens ||
+    resolveMaxOutputTokens(chatRequest.model);
   if (
     providerLower === 'anthropic' &&
     thinkingConfig?.type === 'enabled' &&
