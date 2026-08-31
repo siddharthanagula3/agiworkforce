@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
 
 /**
  * A route in the sitemap that exports no metadata inherits the app-wide default
@@ -33,6 +34,57 @@ describe('sitemap-indexed client routes carry their own title', () => {
       const layout = readFileSync(join(APP_DIR, route, 'layout.tsx'), 'utf8');
       expect(layout).toContain(`path: '/${route}'`);
       expect(layout).not.toContain('One AI workspace across models and tools');
+    }
+  });
+});
+
+/**
+ * The signed-in rail is noindex, so the sitemap check above never covered it —
+ * and /chat/projects and /chat/library both shipped showing the marketing
+ * title in the browser tab, history and bookmarks while /tasks and /chat/code
+ * beside them showed their own.
+ *
+ * Derived from the rail rather than a second hand-maintained list, so adding a
+ * destination cannot forget this.
+ */
+describe('every rail destination carries its own title', () => {
+  /**
+   * `/chat` is the one destination whose title is not static: it shows the open
+   * conversation's name, which is what both claude.ai and chatgpt.com do. That
+   * belongs to DocumentTitleSync, asserted below so this exemption cannot
+   * quietly become untrue.
+   */
+  const DYNAMIC_TITLE_ROUTES = new Set(['/chat']);
+
+  const railRoutes = APP_NAV_DESTINATIONS.map((destination) => destination.href)
+    // an admin subroute lives outside this app dir's own metadata conventions
+    .filter((href) => !href.startsWith('/admin'))
+    .filter((href) => !DYNAMIC_TITLE_ROUTES.has(href));
+
+  it('/chat takes its title from the open conversation', () => {
+    const sync = readFileSync(
+      join(APP_DIR, '..', 'features', 'chat', 'components', 'DocumentTitleSync.tsx'),
+      'utf8',
+    );
+    expect(sync).toContain('document.title =');
+    expect(sync).toContain('conversationTitle');
+  });
+
+  it.each(railRoutes)('%s declares metadata', (href) => {
+    expect(routeDeclaresMetadata(href.replace(/^\//, ''))).toBe(true);
+  });
+
+  it('none of them fall back to the marketing title', () => {
+    for (const href of railRoutes) {
+      const dir = join(APP_DIR, href.replace(/^\//, ''));
+      const source = ['layout.tsx', 'page.tsx']
+        .map((file) => join(dir, file))
+        .filter((path) => existsSync(path))
+        .map((path) => readFileSync(path, 'utf8'))
+        .join('\n');
+      expect(source, `${href} must not inherit the app-wide title`).not.toContain(
+        'One AI workspace across models and tools',
+      );
     }
   });
 });
