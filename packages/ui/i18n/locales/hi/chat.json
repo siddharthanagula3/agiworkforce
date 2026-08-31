@@ -69,12 +69,10 @@
   },
   "sidebar": {
     "activeConversation": "सक्रिय बातचीत",
-    "allConversations": "सभी बातचीत",
     "archive": "संग्रहित करें",
     "archivedCount": "संग्रहित ({{count}})",
     "budgetUsed": "टोकन बजट का {{percent}}% उपयोग हुआ",
     "chats": "चैट",
-    "clearFilter": "फ़िल्टर साफ़ करें",
     "closeSearch": "खोज बंद करें",
     "cloud": "क्लाउड",
     "collapseProject": "प्रोजेक्ट {{name}} संक्षिप्त करें",

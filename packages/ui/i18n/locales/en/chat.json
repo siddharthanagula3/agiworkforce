@@ -70,12 +70,10 @@
   },
   "sidebar": {
     "activeConversation": "Active conversation",
-    "allConversations": "All Conversations",
     "archive": "Archive",
     "archivedCount": "Archived ({{count}})",
     "budgetUsed": "{{percent}}% of token budget used",
     "chats": "Chats",
-    "clearFilter": "Clear filter",
     "closeSearch": "Close search",
     "cloud": "Cloud",
     "collapseProject": "Collapse project {{name}}",

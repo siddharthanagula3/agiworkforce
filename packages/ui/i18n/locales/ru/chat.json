@@ -69,12 +69,10 @@
   },
   "sidebar": {
     "activeConversation": "Активный чат",
-    "allConversations": "Все чаты",
     "archive": "В архив",
     "archivedCount": "В архиве ({{count}})",
     "budgetUsed": "Использовано {{percent}}% бюджета токенов",
     "chats": "Чаты",
-    "clearFilter": "Очистить фильтр",
     "closeSearch": "Закрыть поиск",
     "cloud": "Облако",
     "collapseProject": "Свернуть проект {{name}}",
