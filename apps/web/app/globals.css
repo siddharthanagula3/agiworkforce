@@ -2323,7 +2323,7 @@ html[data-contrast='more'] *:focus-visible {
   justify-content: center;
 }
 [data-design='agi'] .agi-campaign-title {
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
   font-size: clamp(2.55rem, 6.6vw, 5.6rem);
   line-height: 1.02;
@@ -2335,7 +2335,7 @@ html[data-contrast='more'] *:focus-visible {
   text-wrap: balance;
 }
 [data-design='agi'] .agi-campaign-title em {
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-style: normal;
   font-weight: 500;
   color: var(--agi-ink);
@@ -2762,18 +2762,18 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-ink-faint);
 }
 [data-design='agi'] .agi-section-h2 {
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
   font-size: clamp(1.65rem, 3.4vw, 2.5rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.08;
+  font-weight: 550;
+  letter-spacing: -0.024em;
+  line-height: 1.06;
   margin: 0 0 24px;
   color: var(--agi-ink);
   text-wrap: balance;
 }
 [data-design='agi'] .agi-section-h2 em {
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-style: normal;
   font-weight: 500;
   color: var(--agi-ink);
@@ -3325,7 +3325,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-about-principle-title {
   margin: 0 0 12px;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-size: 1.32rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -3511,7 +3511,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-footer-tagline {
   margin: 18px 0 0;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-size: clamp(1.15rem, 2.4vw, 1.6rem);
   line-height: 1.34;
   color: var(--agi-ink-2);
@@ -3868,7 +3868,16 @@ html[data-contrast='more'] *:focus-visible {
    ══════════════════════════════════════════════════════════════════════ */
 
 [data-design='agi'] {
+  /* Serif is the brand's editorial voice, not its default heading treatment.
+     It was on every H1, every H2, section titles, docs titles, auth titles and
+     the footer tagline - 21 rules - which made "editorial" the wallpaper
+     rather than a moment. It now marks one statement per page and the
+     wordmark; everything structural takes the grotesk below. */
   --agi-font-display: var(--font-newsreader), 'Iowan Old Style', Georgia, serif;
+
+  /* Section and UI headings. Same family as body text, separated by weight,
+     size and tightened tracking rather than by a second typeface. */
+  --agi-font-heading: var(--agi-font);
 }
 
 /* ── shared section scaffolding ─────────────────────────────────────── */
@@ -3896,12 +3905,15 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-fl-h2 {
   margin: 0;
   max-width: 24ch;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
   font-size: clamp(2rem, 4.6vw, 3.4rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.06;
+  /* A grotesk needs tighter tracking than the serif it replaced to hold the
+     same optical colour at display size, and one step less weight to avoid
+     reading heavier than the serif did at the same nominal value. */
+  font-weight: 550;
+  letter-spacing: -0.028em;
+  line-height: 1.04;
   color: var(--agi-ink);
   text-wrap: balance;
 }
@@ -4467,7 +4479,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-surface-name {
   margin: 0;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
   font-size: clamp(1.7rem, 3.2vw, 2.4rem);
   font-weight: 600;
@@ -4682,7 +4694,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-trust-title {
   margin: 14px 0 0;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-size: 1.45rem;
   font-weight: 600;
   letter-spacing: -0.008em;
@@ -4736,6 +4748,36 @@ html[data-contrast='more'] *:focus-visible {
   margin-top: clamp(32px, 5vw, 52px);
 }
 
+/* A count that is not a multiple of three left the last card stranded in a
+   third of a row beside two empty tracks, which reads as a layout that broke
+   rather than one that ended. A lone trailing card takes the whole row; a
+   trailing pair splits it. */
+[data-design='agi'] .agi-fl-cap-grid > *:last-child:nth-child(3n + 1) {
+  grid-column: span 3;
+}
+
+[data-design='agi'] .agi-fl-cap-grid > *:nth-last-child(2):nth-child(3n + 1),
+[data-design='agi'] .agi-fl-cap-grid > *:nth-last-child(2):nth-child(3n + 1) ~ * {
+  grid-column: span 3;
+}
+
+@media (max-width: 900px) {
+  [data-design='agi'] .agi-fl-cap-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  [data-design='agi'] .agi-fl-cap-grid > *:last-child:nth-child(3n + 1),
+  [data-design='agi'] .agi-fl-cap-grid > *:nth-last-child(2):nth-child(3n + 1),
+  [data-design='agi'] .agi-fl-cap-grid > *:nth-last-child(2):nth-child(3n + 1) ~ * {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  [data-design='agi'] .agi-fl-cap-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 860px) {
   [data-design='agi'] .agi-fl-cap-grid {
     grid-template-columns: 1fr;
@@ -4748,7 +4790,10 @@ html[data-contrast='more'] *:focus-visible {
   flex-direction: column;
   gap: 8px;
   min-height: 150px;
-  padding: 20px;
+  /* The arrow is absolutely positioned in the bottom-right corner, so the copy
+     needs a reserved lane or it runs underneath it - which it did on any card
+     whose last line reached the bottom. */
+  padding: 20px 20px 46px;
   border: 1px solid var(--agi-rule);
   border-radius: 12px;
   background: var(--agi-card);
@@ -4838,12 +4883,14 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-fl-final-title {
   margin: 0 auto;
   max-width: 20ch;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
   font-size: clamp(2.2rem, 5.4vw, 4rem);
-  font-weight: 600;
-  letter-spacing: -0.022em;
-  line-height: 1.05;
+  /* Matches the heading scale set on .agi-fl-h2; it was the one section title
+     left a weight heavier and a tracking looser than its siblings. */
+  font-weight: 550;
+  letter-spacing: -0.03em;
+  line-height: 1.03;
   color: var(--agi-ink);
   text-wrap: balance;
 }
@@ -6395,7 +6442,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-auth-title {
   margin: 26px 0 0;
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
   font-size: clamp(1.9rem, 1.2vw + 1.35rem, 2.6rem);
   font-weight: 600;
@@ -6731,7 +6778,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-device-auth-title {
   margin: 0;
   color: var(--agi-ink);
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-size: clamp(2rem, 5vw, 2.75rem);
   font-optical-sizing: auto;
   font-weight: 600;
@@ -8000,7 +8047,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-docs-h1 {
-  font-family: var(--agi-font-display);
+  font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
   font-size: clamp(28px, 3vw, 40px);
   font-weight: 600;
