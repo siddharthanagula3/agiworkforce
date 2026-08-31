@@ -1,7 +1,16 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { ChevronDown, Download, GitFork, Pencil, Printer, Trash2, FolderInput } from 'lucide-react';
+import {
+  ChevronDown,
+  Download,
+  GitFork,
+  Pencil,
+  Printer,
+  Share2,
+  Trash2,
+  FolderInput,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +30,7 @@ export interface ConversationTitleMenuProps {
   onDelete: () => void;
   onPrint?: () => void;
   onExport?: () => void;
+  onShare?: () => void;
   onFork?: () => void;
 }
 
@@ -33,6 +43,7 @@ export function ConversationTitleMenu({
   onFork,
   onPrint,
   onExport,
+  onShare,
 }: ConversationTitleMenuProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -99,6 +110,17 @@ export function ConversationTitleMenu({
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+            )}
+            {/*
+              Share also has a header button, which a phone hides: at 320px the
+              header's two fixed groups left the title 24px of a 255px name.
+              The action has to keep a home before the button can go.
+            */}
+            {onShare && (
+              <DropdownMenuItem onSelect={() => onShare()}>
+                <Share2 className="mr-2 h-4 w-4" />
+                Share…
+              </DropdownMenuItem>
             )}
             {onPrint && (
               <DropdownMenuItem onSelect={() => onPrint()}>
