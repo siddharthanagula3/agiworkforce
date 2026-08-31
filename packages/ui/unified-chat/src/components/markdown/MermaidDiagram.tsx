@@ -74,7 +74,6 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
           // markup entirely.
           flowchart: { htmlLabels: false, useMaxWidth: true },
           class: { htmlLabels: false },
-          state: { htmlLabels: false },
         });
         const { svg } = await mermaid.render(diagramId, source);
         if (!cancelled) setState({ phase: 'ready', svg: sanitizeSvg(svg) });

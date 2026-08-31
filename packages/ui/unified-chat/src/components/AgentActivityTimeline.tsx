@@ -76,7 +76,8 @@ export function buildAgentActivitySummary(activity: AgentActivityState): string 
     return active ? `Needs approval · ${active}` : 'Needs approval';
   }
   if (activity.status === 'paused') return active ?? 'Paused';
-  if (activity.status === 'failed') return finalSummary(activity) ?? 'Stopped';
+  if (activity.status === 'failed') return finalSummary(activity) ?? 'Failed';
+  if (activity.status === 'partial') return finalSummary(activity) ?? 'Finished with errors';
   if (activity.status === 'cancelled') return finalSummary(activity) ?? 'Cancelled';
   if (activity.status === 'completed') return finalSummary(activity) ?? 'Done';
   return active ?? 'Working…';
@@ -89,6 +90,7 @@ function buildAgentActivityAnnouncement(activity: AgentActivityState): string {
   }
   if (activity.status === 'paused') return 'Agent activity paused';
   if (activity.status === 'failed') return 'Agent activity failed';
+  if (activity.status === 'partial') return 'Agent activity finished with errors';
   if (activity.status === 'cancelled') return 'Agent activity cancelled';
   if (activity.status === 'completed') return 'Agent activity completed';
   return active ? `Agent working: ${active}` : 'Agent working';
