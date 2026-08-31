@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { toUserMessage } from '@/lib/user-error-message';
 import type { ManagedUsageBucketReading } from '@agiworkforce/types';
 import { normalizeUsagePercentage, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 
@@ -35,7 +36,7 @@ export function useManagedUsageSummary(): ManagedUsageSummaryState {
       setStale(false);
       if (background) setError(null);
     } catch (err) {
-      if (!background) setError(err instanceof Error ? err.message : 'Could not load usage');
+      if (!background) setError(toUserMessage(err, 'Could not load usage'));
       setStale(true);
     } finally {
       if (!background) setLoading(false);

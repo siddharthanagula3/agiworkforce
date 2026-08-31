@@ -15,6 +15,7 @@ import {
   type RoutingTrustMode,
 } from '@agiworkforce/routing';
 import type { ChatHostBridge } from '../lib/hostBridge';
+import { toUserMessage } from '../lib/network-error';
 import type {
   ChatRuntime,
   CloudApprovalTurnProjection,
@@ -742,7 +743,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           if (assistantMessageIdRef.current) {
             const failingId = assistantMessageIdRef.current;
             const current = store.messagesByConversation[convId]?.find((m) => m.id === failingId);
-            const failureMessage = event.error || 'Request failed';
+            const failureMessage = toUserMessage(event.error, 'Request failed');
             const currentActivity = current?.metadata?.['agentActivity'] as
               | AgentActivityState
               | undefined;
@@ -781,7 +782,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           }
           assistantMessageIdRef.current = null;
           store.stopStreaming(convId);
-          toast.error(event.error || 'Failed to get response');
+          toast.error(toUserMessage(event.error, 'Failed to get response'));
           break;
         }
       }
@@ -1100,7 +1101,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           }
         })
         .catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toUserMessage(err, 'Failed to send message');
           const failedStore = useChatStore.getState();
           if (replacement) {
             failedStore.setMessages(convId, replacement.snapshot);
@@ -1252,7 +1253,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           continuationMessageId: assistantMessageId,
         })
         .catch((err: unknown) => {
-          const errMessage = err instanceof Error ? err.message : String(err);
+          const errMessage = toUserMessage(err, 'Failed to continue generation');
           const failedStore = useChatStore.getState();
           const failedMessage = failedStore.messagesByConversation[convId]?.find(
             (candidate) => candidate.id === assistantMessageId,
@@ -1451,7 +1452,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       void runtime
         .resolveToolApproval(convId, toolCallId, decision)
         .catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toUserMessage(err, 'Failed to send message');
           const failedStore = useChatStore.getState();
           const failedMessage = failedStore.messagesByConversation[convId]?.find(
             (candidate) => candidate.id === assistantMessageId,

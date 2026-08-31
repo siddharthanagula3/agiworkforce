@@ -17,6 +17,7 @@ import {
   Table2,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { toUserMessage } from '../lib/network-error';
 import { cn } from '../lib/utils';
 import { ARTIFACT_SANDBOX_ATTR, buildSandboxedHtml } from '../lib/artifact-sandbox';
 import {
@@ -338,7 +339,7 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
         }
       } catch (err) {
         if (mounted) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(toUserMessage(err, 'Something went wrong.'));
         }
       }
     };

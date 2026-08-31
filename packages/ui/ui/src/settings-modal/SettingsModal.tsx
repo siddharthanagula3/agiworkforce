@@ -18,6 +18,7 @@
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
+import { toUserMessage } from '../lib/network-error';
 import {
   Search,
   Check,
@@ -1288,7 +1289,7 @@ function AddCustomConnectorForm({
       });
       onBack();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add connector. Try again.');
+      setError(toUserMessage(err, 'Could not add connector. Try again.'));
     } finally {
       setSubmitting(false);
     }
