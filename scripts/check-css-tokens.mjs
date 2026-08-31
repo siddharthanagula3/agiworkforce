@@ -211,7 +211,10 @@ for (const surface of SURFACES) {
   }
 
   for (const file of surfaceFiles) {
-    const source = fs.readFileSync(path.join(root, file), 'utf8');
+    const raw = fs.readFileSync(path.join(root, file), 'utf8');
+    // Blank out comment bodies while preserving line numbering, so a token
+    // named in prose is not read as a reference.
+    const source = raw.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '));
     const lines = source.split('\n');
 
     const runtimeDefined = new Set([
