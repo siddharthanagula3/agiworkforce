@@ -21,7 +21,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toUserMessage } from '../../lib/network-error';
+import { toUserMessageWithStatus } from '../../lib/network-error';
 import { FolderOpen, Loader2, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
@@ -278,7 +278,7 @@ export function LibraryView({
         }));
       } catch (err) {
         if (seq !== requestSeq.current) return;
-        setError(toUserMessage(err, 'Something went wrong.'));
+        setError(toUserMessageWithStatus(err, 'Something went wrong.'));
       } finally {
         if (seq === requestSeq.current) {
           setLoading(false);
@@ -570,9 +570,10 @@ export function LibraryView({
       {error ? (
         <div
           data-testid="library-error"
+          role="alert"
           className="flex items-center gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-sm text-[var(--chat-destructive)]"
         >
-          <span>Couldn&apos;t load your library ({error}).</span>
+          <span>{error}</span>
           <Button
             variant="ghost"
             size="sm"
