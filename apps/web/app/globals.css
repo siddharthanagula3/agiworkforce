@@ -1400,10 +1400,6 @@
   background: rgba(75, 85, 99, 0.8);
 }
 
-/* Honor reduced-motion: disable scanline overlay */
-@media (prefers-reduced-motion: reduce) {
-}
-
 /* Selection styles */
 ::selection {
   background: hsl(var(--primary) / 0.2);
@@ -1555,15 +1551,32 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 
-/* Reduced motion support */
+/* Reduced motion.
+ *
+ * Reduced motion is a request for a gentler equivalent, not for a dead
+ * interface. Killing every transition outright also kills the press, hover and
+ * focus feedback that tells someone their input registered - the one thing an
+ * interface cannot afford to lose - and it removes opacity changes that carry
+ * no vestibular risk at all.
+ *
+ * So: scripted and looping animation stops, because that is the vestibular
+ * part - ten infinite loops here including two full-width marquees. Transitions
+ * survive as a short cross-fade. Components that translate on entry disarm
+ * themselves separately (see .agi-reveal-armed), which is where a slide should
+ * be replaced rather than merely accelerated. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 120ms !important;
   }
 }
 
@@ -5090,7 +5103,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-dev-title {
   min-width: 0;
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 12.5);
   letter-spacing: 0.05em;
   color: var(--agi-ink-quiet);
   white-space: nowrap;
@@ -5204,7 +5217,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 5) calc(var(--u) * 10);
   border: 1px solid var(--agi-rule);
   border-radius: calc(var(--u) * 8);
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   font-weight: 600;
   color: var(--agi-ink);
   background: var(--agi-console-tint);
@@ -5254,7 +5267,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 3) calc(var(--u) * 7);
   border-radius: calc(var(--u) * 4);
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 8.5);
+  font-size: calc(var(--u) * 12.5);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--agi-amber);
@@ -5285,7 +5298,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-dev-panelcomposer-ghost {
   flex: 1;
   min-width: 0;
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-quiet);
   white-space: nowrap;
 }
@@ -5296,7 +5309,7 @@ html[data-contrast='more'] *:focus-visible {
   gap: calc(var(--u) * 10);
   padding: 0 calc(var(--u) * 12) calc(var(--u) * 9);
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 9);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-faint);
 }
 
@@ -5314,7 +5327,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 16);
   border-right: 1px solid var(--agi-rule);
   background: var(--agi-console-tint);
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-2);
   min-width: 0;
   overflow: hidden;
@@ -5358,7 +5371,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 1) calc(var(--u) * 5);
   border: 1px solid var(--agi-amber-soft);
   border-radius: calc(var(--u) * 5);
-  font-size: calc(var(--u) * 9);
+  font-size: calc(var(--u) * 12.5);
   letter-spacing: 0.06em;
   color: var(--agi-amber);
 }
@@ -5366,7 +5379,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-desk-group {
   margin-top: calc(var(--u) * 10);
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 9.5);
+  font-size: calc(var(--u) * 12.5);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--agi-ink-faint);
@@ -5399,7 +5412,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 5) calc(var(--u) * 13);
   border: 1px solid var(--agi-rule);
   border-radius: 999px;
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   font-weight: 550;
   color: var(--agi-ink-2);
   background: var(--agi-console-tint);
@@ -5417,7 +5430,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-desk-hint {
   margin: 0;
-  font-size: calc(var(--u) * 10);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-faint);
   white-space: nowrap;
 }
@@ -5473,7 +5486,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 5) calc(var(--u) * 11);
   border: 1px solid var(--agi-rule);
   border-radius: 999px;
-  font-size: calc(var(--u) * 11.5);
+  font-size: calc(var(--u) * 12.5);
   white-space: nowrap;
   font-weight: 550;
   color: var(--agi-ink-2);
@@ -5550,7 +5563,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-web-count {
   flex: 0 0 auto;
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 10.5);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-faint);
 }
 
@@ -5562,7 +5575,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 6) calc(var(--u) * 11);
   border: 1px solid var(--agi-rule);
   border-radius: calc(var(--u) * 8);
-  font-size: calc(var(--u) * 11.5);
+  font-size: calc(var(--u) * 12.5);
   font-weight: 600;
   color: var(--agi-ink);
   background: var(--agi-console-tint);
@@ -5582,7 +5595,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 9) calc(var(--u) * 15);
   border-top: 1px solid var(--agi-rule);
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 10);
+  font-size: calc(var(--u) * 12.5);
   letter-spacing: 0.03em;
   color: var(--agi-ink-faint);
   white-space: nowrap;
@@ -5650,7 +5663,7 @@ html[data-contrast='more'] *:focus-visible {
   gap: calc(var(--u) * 5);
   padding: calc(var(--u) * 7) calc(var(--u) * 12);
   border-radius: calc(var(--u) * 8) calc(var(--u) * 8) 0 0;
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-quiet);
   white-space: nowrap;
 }
@@ -5699,7 +5712,7 @@ html[data-contrast='more'] *:focus-visible {
   background: var(--agi-console-tint);
   border-radius: 999px;
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 10.5);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-2);
   white-space: nowrap;
   overflow: hidden;
@@ -5717,7 +5730,7 @@ html[data-contrast='more'] *:focus-visible {
   background: var(--agi-amber);
   color: var(--agi-button-ink);
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 10);
+  font-size: calc(var(--u) * 12.5);
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -5817,7 +5830,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-cr-panel-mode {
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 10);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-amber);
 }
 
@@ -5855,7 +5868,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-cr-msg--agi p {
   margin: 0 0 calc(var(--u) * 4);
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   line-height: 1.5;
 }
 
@@ -5863,7 +5876,7 @@ html[data-contrast='more'] *:focus-visible {
   display: inline-block;
   margin-bottom: calc(var(--u) * 4);
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 9.5);
+  font-size: calc(var(--u) * 12.5);
   font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--agi-amber);
@@ -5899,7 +5912,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 5) calc(var(--u) * 11);
   border: 1px solid var(--agi-rule);
   border-radius: 999px;
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   font-weight: 550;
   white-space: nowrap;
   color: var(--agi-ink-2);
@@ -5919,14 +5932,14 @@ html[data-contrast='more'] *:focus-visible {
   padding: calc(var(--u) * 8) calc(var(--u) * 11);
   border-radius: calc(var(--u) * 10) calc(var(--u) * 10) calc(var(--u) * 2) calc(var(--u) * 10);
   background: var(--agi-console-tint);
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 12.5);
   line-height: 1.5;
   color: var(--agi-ink);
 }
 
 [data-design='agi'] .agi-pn-line {
   margin: 0;
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 12.5);
   line-height: 1.55;
   color: var(--agi-ink-2);
 }
@@ -6034,14 +6047,14 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-ed-panel-title {
   font-weight: 600;
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink);
 }
 
 [data-design='agi'] .agi-ed-chip {
   flex: 0 0 auto;
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 10);
+  font-size: calc(var(--u) * 12.5);
   padding: calc(var(--u) * 2) calc(var(--u) * 6);
   border-radius: calc(var(--u) * 4);
   background: var(--agi-amber-soft);
@@ -6073,7 +6086,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-ed-msg code {
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 12.5);
   padding: calc(var(--u) * 1) calc(var(--u) * 4);
   border-radius: calc(var(--u) * 3);
   background: var(--agi-console-tint);
@@ -6178,7 +6191,7 @@ html[data-contrast='more'] *:focus-visible {
   align-items: center;
   justify-content: space-between;
   padding: calc(var(--u) * 12) calc(var(--u) * 22) calc(var(--u) * 4);
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   font-weight: 600;
   color: var(--agi-ink);
 }
@@ -6268,7 +6281,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-ph-toggle-btn {
   padding: calc(var(--u) * 6) calc(var(--u) * 14);
   border-radius: 999px;
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   font-weight: 500;
   white-space: nowrap;
   color: var(--agi-ink-2);
@@ -6291,7 +6304,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-ph-sub {
   margin: 0;
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-quiet);
   text-align: center;
   line-height: 1.5;
@@ -6314,7 +6327,7 @@ html[data-contrast='more'] *:focus-visible {
   border: 1px solid var(--agi-rule);
   border-radius: calc(var(--u) * 10);
   background: var(--agi-console-tint);
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-2);
   white-space: nowrap;
 }
@@ -6333,7 +6346,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-ph-ghost {
   margin: 0;
   padding: calc(var(--u) * 10) calc(var(--u) * 14);
-  font-size: calc(var(--u) * 12);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-quiet);
   white-space: nowrap;
 }
@@ -6352,7 +6365,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-ph-model {
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   color: var(--agi-ink-2);
   white-space: nowrap;
 }
