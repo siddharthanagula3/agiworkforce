@@ -4116,15 +4116,29 @@ const ChatComposerNewComponent = ({
           <ComposerFeedbackDialog key="feedback" conversationId={conversationId} />,
         ]
           .filter(Boolean)
-          .map((entry, index) => (
-            <span
-              key={(entry as { key: string }).key}
-              className="inline-flex items-center gap-x-1 whitespace-nowrap"
-            >
-              {index > 0 && <span aria-hidden="true">·</span>}
-              {entry}
-            </span>
-          ))}
+          .map((entry, index) => {
+            const key = (entry as { key: string }).key;
+            // Measured on 2026-08-30: neither chatgpt.com nor claude.ai puts
+            // anything below its composer at 390px. This footer ran to three
+            // rows and made the composer 136px against ChatGPT's 87px. Privacy
+            // is a route reachable from settings and several pages, and
+            // Feedback has a second entry point in the transcript, so a phone
+            // loses no reach by dropping them here. The accuracy disclaimer
+            // stays on every width - see the Article 50(1) note above.
+            const deskOnly = key === 'privacy' || key === 'feedback';
+            return (
+              <span
+                key={key}
+                className={cn(
+                  'items-center gap-x-1 whitespace-nowrap',
+                  deskOnly ? 'hidden sm:inline-flex' : 'inline-flex',
+                )}
+              >
+                {index > 0 && <span aria-hidden="true">·</span>}
+                {entry}
+              </span>
+            );
+          })}
 
         {/* Webcam capture. Owns its own permission prompt, live preview, and
             stream teardown; the captured frame joins the same attachment
