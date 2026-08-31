@@ -44,7 +44,13 @@ async function probeDialog(
   await page.waitForTimeout(900);
 
   const shape = await page.evaluate(() => {
-    const dialog = document.querySelector('[role="dialog"], [role="alertdialog"]');
+    // The topmost dialog, not the first in document order. A confirmation
+    // opened from inside the settings modal leaves two in the DOM, and reading
+    // the first one measures the wrong dialog: it reports focus outside, Tab
+    // escaping and Escape not closing, all of which describe the modal
+    // underneath rather than the one the reader is looking at.
+    const stack = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')];
+    const dialog = stack[stack.length - 1] ?? null;
     if (!dialog) return null;
     const focusables = dialog.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
@@ -82,6 +88,10 @@ async function probeDialog(
     return report;
   }
 
+  const dialogCountOnOpen = await page.evaluate(
+    () => document.querySelectorAll('[role="dialog"], [role="alertdialog"]').length,
+  );
+
   report.opened = true;
   report.role = shape.role;
   report.ariaModal = shape.ariaModal;
@@ -97,7 +107,8 @@ async function probeDialog(
   for (let i = 0; i < Math.min(shape.focusCount + 3, 30); i++) {
     await page.keyboard.press('Tab');
     const inside = await page.evaluate(() => {
-      const d = document.querySelector('[role="dialog"], [role="alertdialog"]');
+      const open = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')];
+      const d = open[open.length - 1] ?? null;
       return d ? d.contains(document.activeElement) : true;
     });
     if (!inside) {
@@ -110,17 +121,33 @@ async function probeDialog(
 
   await page.keyboard.press('Escape');
   await page.waitForTimeout(700);
+  // Escape closes the dialog under test. A modal underneath may legitimately
+  // stay open, so count rather than assert the DOM is empty of dialogs.
   const closed = await page.evaluate(
-    () => !document.querySelector('[role="dialog"], [role="alertdialog"]'),
+    (openedWith: number) =>
+      document.querySelectorAll('[role="dialog"], [role="alertdialog"]').length < openedWith,
+    dialogCountOnOpen,
   );
   report.escapeCloses = closed;
   if (!closed) notes.push('Escape did not close the dialog');
 
   if (closed) {
-    report.focusRestored = await page.evaluate(
-      () => document.activeElement !== document.body && document.activeElement !== null,
-    );
-    if (!report.focusRestored) notes.push('focus fell back to <body> after close');
+    // What "restored" means depends on whether anything is still open. For a
+    // top-level dialog, focus must not fall to <body> - a keyboard reader would
+    // restart from the top of the page. For one opened from inside another, the
+    // parent's own focus management runs after the child's and wins, so the
+    // contract is that the reader is left somewhere inside the parent rather
+    // than on the exact control that opened the child.
+    report.focusRestored = await page.evaluate(() => {
+      const active = document.activeElement;
+      if (!active || active === document.body) return false;
+      const remaining = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')];
+      const parent = remaining[remaining.length - 1];
+      return parent ? parent.contains(active) : true;
+    });
+    if (!report.focusRestored) {
+      notes.push('focus fell to <body>, or outside the dialog still open beneath');
+    }
   }
 
   return report;
@@ -162,6 +189,22 @@ test.describe('QA dialogs — focus, escape, inertness', () => {
           );
           (target as HTMLElement | undefined)?.click();
         });
+      }),
+    );
+
+    // A confirmation dialog, reached by a stable test id rather than a label
+    // guess. The probe only opens it, tabs within it and presses Escape - it
+    // never activates a control, and this dialog additionally requires an exact
+    // typed confirmation, so there is no path from here to a deletion.
+    reports.push(
+      await probeDialog(page, 'delete-account-confirm', async () => {
+        await page.goto('/settings/account', { waitUntil: 'networkidle' }).catch(() => undefined);
+        await page.waitForTimeout(3500);
+        await page
+          .locator('[data-testid="delete-account-trigger"]')
+          .first()
+          .click({ timeout: 8000 })
+          .catch(() => undefined);
       }),
     );
 
