@@ -552,13 +552,13 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
   });
 
   it('overrides approval when the persisted connector permission blocks the tool', async () => {
-    db.query.mockResolvedValueOnce([
-      {
-        connector_id: 'github',
-        tool_name: 'get_pull_request_diff',
-        level: 'blocked',
-      },
-    ]);
+    // Keyed on the SQL rather than call order: resolving permissions also reads
+    // user_settings for lockdown, so a positional mock feeds the wrong query.
+    db.query.mockImplementation(async (sql: string) =>
+      sql.includes('connector_tool_permissions')
+        ? [{ connector_id: 'github', tool_name: 'get_pull_request_diff', level: 'blocked' }]
+        : [],
+    );
 
     const response = await POST(makeRequest(resumeBody()));
     await response.text();

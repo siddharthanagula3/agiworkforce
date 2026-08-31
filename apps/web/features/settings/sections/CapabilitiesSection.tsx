@@ -10,6 +10,7 @@ import {
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 import { SettingsSectionLink } from '../components/SettingsSectionLink';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
+import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
 import { toUserMessage } from '@/lib/user-error-message';
 
 type CapabilitiesSettings = {
@@ -205,6 +206,8 @@ export function CapabilitiesSection() {
       </section>
 
       <ToolApprovalDefaultsPanel />
+
+      <LockdownModePanel />
 
       <p className="text-xs text-muted-foreground">
         Skills have moved to{' '}
