@@ -1296,13 +1296,25 @@ export async function* runResearchLoop(
     // ── Approval gate ──
     // The plan is the user's to accept: searching costs their budget, so the
     // run stops here and the client re-sends the approved steps as
-    // `research_resume`. A plan that could not be parsed has nothing to approve
-    // and must not strand the run, so it falls through to the rounds below.
-    if (
-      options.requirePlanApproval &&
-      approvedPlan.length === 0 &&
-      pendingPlanStepIds().length > 0
-    ) {
+    // `research_resume`.
+    //
+    // This gate must not fail open. It used to also require a parsed plan, so
+    // two paths reached the network with approval still outstanding: a budget
+    // too small to afford a planning turn at all, and a planning turn whose
+    // output did not parse into steps. Both spent the user's budget on searches
+    // they never saw, which is the decision the gate exists to protect.
+    //
+    // When there is nothing to show, the run still stops and says so. The user
+    // decides whether to proceed blind; the loop does not decide for them.
+    if (options.requirePlanApproval && approvedPlan.length === 0) {
+      if (pendingPlanStepIds().length === 0) {
+        plan.push({
+          id: `plan-${plan.length + 1}`,
+          type: 'search',
+          description: 'Search for sources on this question',
+          status: 'pending',
+        });
+      }
       awaitingApproval = true;
       yield planEvent();
       yield status('awaiting_approval', 'Review the plan to start searching');
