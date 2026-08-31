@@ -37,11 +37,42 @@ interface AlertDialogContentProps extends React.ComponentPropsWithoutRef<
 }
 
 function AlertDialogContent({ className, ref, ...props }: AlertDialogContentProps) {
+  // The same two things DialogContent already does, which this sibling was
+  // missing. An alert dialog is the destructive-confirmation surface, so losing
+  // your place on close costs more here than anywhere: measured on the delete
+  // account confirmation, Escape dropped focus onto <body> while the settings
+  // modal it was opened from stayed open behind it.
+  // Captured in onOpenAutoFocus, which Radix fires before it moves focus into
+  // the content - at that moment document.activeElement is still whatever
+  // opened this. Reading it during the first render is a beat too late here:
+  // measured on the delete-account confirmation, that path left focus on <body>
+  // after close while the settings modal it came from stayed open, so a
+  // keyboard reader was dropped out of the modal entirely.
+  const openerRef = React.useRef<HTMLElement | null>(null);
+
+  const captureOpener = React.useCallback((event: Event) => {
+    const active = document.activeElement;
+    openerRef.current = active instanceof HTMLElement ? active : null;
+    props.onOpenAutoFocus?.(event as never);
+  }, []);
+
+  const restoreFocus = React.useCallback((event: Event) => {
+    if (event.defaultPrevented) return;
+    const opener = openerRef.current;
+    if (opener && document.contains(opener)) {
+      event.preventDefault();
+      opener.focus();
+    }
+  }, []);
+
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
       <AlertDialogPrimitive.Content
         ref={ref}
+        aria-modal="true"
+        onOpenAutoFocus={captureOpener}
+        onCloseAutoFocus={restoreFocus}
         className={cn(
           // The height cap without a scroll path is what put a dialog's own
           // actions outside it: at 667x375 the feedback dialog ended at y=359
