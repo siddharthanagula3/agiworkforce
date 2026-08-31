@@ -8824,3 +8824,13 @@ html[data-contrast='more'] *:focus-visible {
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
+
+/* A spinner is the signal that a wait is in progress, so reduced motion slows
+   it rather than stopping it - a frozen spinner reads as a hung screen, which
+   is a worse answer than a slow one. Tailwind's animate-spin is otherwise a
+   fixed 1s loop with no reduced-motion variant. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin {
+    animation-duration: 3s;
+  }
+}
