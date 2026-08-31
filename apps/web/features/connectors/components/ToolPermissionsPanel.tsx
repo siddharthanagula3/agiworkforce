@@ -176,7 +176,11 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
           ) : discoveryFailed ? (
             <div className="rounded-lg border border-border bg-muted/50 px-4 py-5 text-center">
               <p className="text-sm text-muted-foreground">Tool discovery could not be loaded.</p>
-              <button type="button" onClick={retry} className="mt-2 text-xs font-medium underline">
+              <button
+                type="button"
+                onClick={retry}
+                className="mt-2 inline-flex min-h-6 items-center px-1 text-xs font-medium underline"
+              >
                 Retry
               </button>
             </div>
@@ -185,7 +189,11 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
               {error ? (
                 <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                   <span>Live tool discovery failed; showing known tools.</span>
-                  <button type="button" onClick={retry} className="font-medium underline">
+                  <button
+                    type="button"
+                    onClick={retry}
+                    className="inline-flex min-h-6 items-center px-1 font-medium underline"
+                  >
                     Retry
                   </button>
                 </div>
