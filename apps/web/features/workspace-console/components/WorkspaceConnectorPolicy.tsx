@@ -8,6 +8,7 @@ import {
   useUpdateConnectorPolicy,
   type ConnectorPolicyLists,
 } from '../hooks/use-connector-policy';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -98,7 +99,7 @@ export function WorkspaceConnectorPolicy() {
           We could not load your connector policy
         </p>
         <p className="mt-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
-          {error.message}
+          {toUserMessage(error, 'Could not load the connector policy.')}
         </p>
         <button
           type="button"

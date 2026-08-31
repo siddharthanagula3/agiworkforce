@@ -9,6 +9,7 @@ import {
   type CatalogModel,
   type ModelPolicyLists,
 } from '../hooks/use-model-policy';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -126,7 +127,7 @@ export function WorkspaceModelPolicy() {
           We could not load your model policy
         </p>
         <p className="mt-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
-          {error.message}
+          {toUserMessage(error, 'Could not load the model policy.')}
         </p>
         <button
           type="button"
