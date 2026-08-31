@@ -41,8 +41,19 @@ export class ChatAttachmentHydrationError extends Error {
   }
 }
 
-const ATTACHMENT_UNAVAILABLE_PLACEHOLDER =
-  '[attachment unavailable \u2014 it was deleted from your Library]';
+/**
+ * A file the request cannot read is one file, not the whole turn. Rejecting
+ * the request threw away the user's question and every other attachment with
+ * it, and named none of them - so the reader could not tell which file to
+ * remove or re-attach. Each failure becomes a note the model can answer around.
+ */
+function unreadableAttachment(filename: string, reason: string): string {
+  return `[attachment unavailable \u2014 ${filename} could not be read: ${reason}]`;
+}
+
+const ATTACHMENT_DELETED_REASON = 'it was deleted from your Library';
+const ATTACHMENT_BYTES_MISSING_REASON = 'it is registered but its stored bytes are missing';
+const ATTACHMENT_INTEGRITY_REASON = 'it failed its storage integrity check';
 
 function filenameFromMetadata(metadata: Record<string, unknown>, fallback: string): string {
   const filename = metadata['filename'];
@@ -177,7 +188,12 @@ export async function hydrateChatAttachments(
       if (!asset || asset.deletedAt || !asset.storagePathname) {
         hydrated.push({
           type: 'text',
-          text: ATTACHMENT_UNAVAILABLE_PLACEHOLDER,
+          text: unreadableAttachment(
+            asset
+              ? filenameFromMetadata(asset.metadata, `attachment-${asset.id}`)
+              : `attachment-${assetId}`,
+            ATTACHMENT_DELETED_REASON,
+          ),
         });
         continue;
       }
@@ -192,18 +208,18 @@ export async function hydrateChatAttachments(
 
       const object = await readStoredMedia(asset.storagePathname);
       if (!object) {
-        throw new ChatAttachmentHydrationError(
-          404,
-          'attachment_bytes_missing',
-          `${filename} is registered but its stored bytes are missing.`,
-        );
+        hydrated.push({
+          type: 'text',
+          text: unreadableAttachment(filename, ATTACHMENT_BYTES_MISSING_REASON),
+        });
+        continue;
       }
       if (asset.byteSize != null && object.data.byteLength !== asset.byteSize) {
-        throw new ChatAttachmentHydrationError(
-          409,
-          'attachment_size_mismatch',
-          `${filename} failed its storage integrity check.`,
-        );
+        hydrated.push({
+          type: 'text',
+          text: unreadableAttachment(filename, ATTACHMENT_INTEGRITY_REASON),
+        });
+        continue;
       }
       totalBytes += object.data.byteLength;
       if (totalBytes > MAX_REQUEST_ATTACHMENT_BYTES) {
