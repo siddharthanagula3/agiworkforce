@@ -5103,8 +5103,11 @@ html[data-contrast='more'] *:focus-visible {
   border: 1px solid var(--agi-amber-soft);
   border-radius: 999px;
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 10);
-  letter-spacing: 0.14em;
+  /* Names the routing mode - Local, BYOK, the side panel - which is the one
+     thing in a frame's chrome that is state rather than furniture, so it has
+     to clear the legibility floor even at design scale. */
+  font-size: calc(var(--u) * 12.5);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--agi-amber);
   background: var(--agi-amber-soft);
