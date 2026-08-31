@@ -276,7 +276,16 @@ function DeviceForm() {
             <strong>{accountName || accountEmail || t('auth:device.signedInFallback')}</strong>
             {accountEmail && accountEmail !== accountName ? <small>{accountEmail}</small> : null}
           </div>
-          <button type="button" onClick={() => void onSwitchAccount()} disabled={switchingAccount}>
+          <button
+            type="button"
+            onClick={() => void onSwitchAccount()}
+            disabled={switchingAccount}
+            // .agi-device-auth-account button (globals.css) renders this as
+            // zero-padding text at 0.76rem — under the 24px target minimum in
+            // the block axis. The pseudo-element grows the hit area without
+            // touching the visual, matching AttachmentPreview.tsx's pattern.
+            className="relative before:absolute before:-inset-2 before:content-['']"
+          >
             {switchingAccount ? t('auth:device.switching') : t('auth:device.useDifferentAccount')}
           </button>
         </div>

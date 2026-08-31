@@ -35,14 +35,29 @@ export default function DownloadError({
       )}
 
       <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-        <button type="button" onClick={reset} className="agi-fl-cta agi-fl-cta--primary">
+        {/* `.agi-fl-cta*` only resolves under a `[data-design="agi"]` ancestor.
+            download/page.tsx sets that on its own root, but an error boundary
+            replaces that entire tree, so the class rendered these as bare
+            unstyled text. Plain semantic tokens match loading.tsx, the sibling
+            boundary for this same route, which already avoids the same trap. */}
+        <button
+          type="button"
+          onClick={reset}
+          className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
           <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
           Try again
         </button>
-        <Link href="/login?redirectTo=%2F" className="agi-fl-cta agi-fl-cta--secondary">
+        <Link
+          href="/login?redirectTo=%2F"
+          className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+        >
           Use AGI Web
         </Link>
-        <Link href="/cli" className="agi-fl-cta agi-fl-cta--ghost">
+        <Link
+          href="/cli"
+          className="inline-flex h-10 items-center justify-center rounded-full px-6 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
           See CLI availability
         </Link>
       </div>

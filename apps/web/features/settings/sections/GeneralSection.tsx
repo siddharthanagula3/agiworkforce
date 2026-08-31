@@ -209,10 +209,37 @@ export function GeneralSection() {
 
   const profilePreferencesReady = preferencesLoaded && loadError === null;
 
+  const latestFormValuesRef = useRef({
+    preferredName,
+    workDescription,
+    instructions,
+    personalization,
+  });
+  latestFormValuesRef.current = { preferredName, workDescription, instructions, personalization };
+
+  const flushPendingSave = useCallback(() => {
+    if (!dirtyRef.current) return;
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    dirtyRef.current = false;
+    const values = latestFormValuesRef.current;
+    void Promise.all([
+      savePreferenceNamespace<GeneralSettings>(PREF_NAMESPACE, {
+        preferredName: values.preferredName.trim(),
+        workDescription: values.workDescription,
+        instructions: values.instructions,
+      }),
+      savePreferenceNamespace(PERSONALIZATION_NAMESPACE, values.personalization),
+    ]).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!mounted || !preferencesLoaded || !dirtyRef.current || loadError !== null) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
       const next: GeneralSettings = {
         preferredName: preferredName.trim(),
         workDescription,
@@ -223,6 +250,7 @@ export function GeneralSection() {
         savePreferenceNamespace(PERSONALIZATION_NAMESPACE, personalization),
       ])
         .then(() => {
+          dirtyRef.current = false;
           setSaveError(null);
           return refreshProfileConsumers();
         })
@@ -242,6 +270,8 @@ export function GeneralSection() {
     preferredName,
     workDescription,
   ]);
+
+  useEffect(() => () => flushPendingSave(), [flushPendingSave]);
 
   const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 

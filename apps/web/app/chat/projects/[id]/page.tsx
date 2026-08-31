@@ -241,7 +241,19 @@ export default function ProjectDetailPage() {
           }}
         >
           <p role="alert">{projectError ?? 'Projects could not be loaded.'}</p>
-          <button type="button" onClick={retryProjects}>
+          <button
+            type="button"
+            onClick={retryProjects}
+            style={{
+              border: '1px solid var(--agi-rule-strong)',
+              background: 'transparent',
+              color: 'var(--agi-ink-2)',
+              padding: '6px 12px',
+              borderRadius: 8,
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
             Retry
           </button>
         </main>
@@ -594,7 +606,9 @@ export default function ProjectDetailPage() {
                 key={t}
                 type="button"
                 role="tab"
+                id={`project-detail-tab-${t}`}
                 aria-selected={tab === t}
+                aria-controls={`project-detail-panel-${t}`}
                 onClick={() => setTab(t)}
                 data-testid={`project-detail-tab-${t}`}
                 style={{
@@ -621,6 +635,9 @@ export default function ProjectDetailPage() {
           {/* ---------------------------------------------------------------- */}
           <div
             style={{ flex: 1, paddingTop: 20, paddingBottom: 40 }}
+            role="tabpanel"
+            id={`project-detail-panel-${tab}`}
+            aria-labelledby={`project-detail-tab-${tab}`}
             data-testid={`project-detail-panel-${tab}`}
           >
             {tab === 'chats' ? (
@@ -636,7 +653,19 @@ export default function ProjectDetailPage() {
                   <p role="alert" style={{ color: 'var(--agi-ink-2)', fontSize: 13 }}>
                     {projectChatsError}
                   </p>
-                  <button type="button" onClick={() => void retryProjectChats()}>
+                  <button
+                    type="button"
+                    onClick={() => void retryProjectChats()}
+                    style={{
+                      border: '1px solid var(--agi-rule-strong)',
+                      background: 'transparent',
+                      color: 'var(--agi-ink-2)',
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
                     Retry
                   </button>
                 </div>
@@ -733,6 +762,16 @@ export default function ProjectDetailPage() {
                         type="button"
                         onClick={() => void loadMoreProjectChats()}
                         disabled={isLoadingMoreProjectChats}
+                        style={{
+                          border: '1px solid var(--agi-rule-strong)',
+                          background: 'transparent',
+                          color: 'var(--agi-ink-2)',
+                          padding: '6px 12px',
+                          borderRadius: 8,
+                          fontSize: 12,
+                          cursor: isLoadingMoreProjectChats ? 'default' : 'pointer',
+                          opacity: isLoadingMoreProjectChats ? 0.6 : 1,
+                        }}
                       >
                         {isLoadingMoreProjectChats ? 'Loading...' : 'Load more chats'}
                       </button>

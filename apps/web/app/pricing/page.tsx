@@ -805,6 +805,17 @@ export default function PricingPage() {
             {t('pageTitle')}
           </h1>
           <p className="agi-fl-section-lede">{t('heroLede')}</p>
+          {/* CHECKOUT_ENABLED is an incident-response kill switch (see its
+              definition above): when it trips, every paid-plan button below
+              disables itself with no other visible change, which reads as a
+              broken page rather than a deliberate pause. State the reason once,
+              here, where it holds regardless of which audience tab is open. */}
+          {!CHECKOUT_ENABLED ? (
+            <p role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
+              Checkout is temporarily unavailable. Please try again later — existing plans and
+              Enterprise contact are unaffected.
+            </p>
+          ) : null}
         </section>
 
         {/* ──────────────── Audience + billing-cadence controls ─────────────
@@ -949,7 +960,15 @@ export default function PricingPage() {
                     : t('seatCadenceMonthly', { count: teamSeats })}
                 </span>
               </p>
-              <p className="agi-tier-seats-total" style={{ marginTop: -8, marginBottom: 16 }}>
+              <p
+                className="agi-tier-seats-total"
+                style={{
+                  marginTop: -8,
+                  marginBottom: 16,
+                  fontSize: 13,
+                  color: 'var(--agi-ink-quiet)',
+                }}
+              >
                 {teamInterval === 'yearly'
                   ? t('perSeatPriceAnnual', { price: teamYearlySeatPricePerMonth })
                   : t('perSeatPrice', { price: teamSeatPrice })}
@@ -973,13 +992,23 @@ export default function PricingPage() {
                   {t('teamFeature4')}
                 </li>
               </ul>
-              {/* `.agi-tier-seats` is `display: block` with no gap, so the label
-                  and the number input sat flush and read as one word, "Seats1". */}
+              {/* `.agi-tier-seats`, `-label`, `-input` and `-total` carry no rule
+                  anywhere in globals.css. Unstyled, the number input rendered as
+                  a bare native spinner with no guaranteed touch height, and the
+                  label/total lines inherited full-strength `--agi-ink` body text
+                  instead of the muted sub-line style every sibling (e.g.
+                  `.agi-tier-price-sub`) uses. Styled inline here rather than in
+                  the shared stylesheet, matching the flex fix already applied to
+                  `.agi-tier-seats` on the line below. */}
               <div
                 className="agi-tier-seats"
                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
               >
-                <label className="agi-tier-seats-label" htmlFor="team-seat-count">
+                <label
+                  className="agi-tier-seats-label"
+                  htmlFor="team-seat-count"
+                  style={{ fontSize: 13, color: 'var(--agi-ink-2)' }}
+                >
                   {t('seatCountLabel')}
                 </label>
                 <input
@@ -991,6 +1020,17 @@ export default function PricingPage() {
                   max={MAX_PURCHASABLE_SEATS}
                   step={1}
                   value={teamSeats}
+                  style={{
+                    width: 88,
+                    minHeight: 36,
+                    padding: '6px 10px',
+                    background: 'var(--agi-bg-2)',
+                    border: '1px solid var(--agi-rule)',
+                    borderRadius: 6,
+                    color: 'var(--agi-ink)',
+                    fontSize: 14,
+                    fontFamily: 'inherit',
+                  }}
                   onChange={(event) => {
                     // Clamp here as well as server-side: the number input still
                     // lets a keyboard user type 0 or a huge value, and the total

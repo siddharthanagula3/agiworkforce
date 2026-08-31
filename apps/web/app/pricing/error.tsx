@@ -21,8 +21,8 @@ export default function PricingError({
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
-      <div className="w-20 h-20 rounded-full bg-red-500/10 mx-auto mb-6 flex items-center justify-center">
-        <AlertTriangle className="h-10 w-10 text-red-500" />
+      <div className="w-20 h-20 rounded-full bg-destructive/10 mx-auto mb-6 flex items-center justify-center">
+        <AlertTriangle aria-hidden="true" className="h-10 w-10 text-danger" />
       </div>
 
       <h1 className="text-2xl font-bold text-foreground mb-3">Unable to Load Pricing</h1>
@@ -36,17 +36,18 @@ export default function PricingError({
 
       <div className="flex flex-col sm:flex-row gap-3 justify-center mt-6">
         <button
+          type="button"
           onClick={reset}
-          className="inline-flex h-10 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-medium hover:bg-blue-700 transition-colors text-white"
+          className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
-          <RefreshCw className="h-4 w-4 mr-2" />
+          <RefreshCw aria-hidden="true" className="h-4 w-4 mr-2" />
           Try Again
         </button>
         <Link
           href="/"
-          className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium hover:bg-accent transition-colors text-foreground"
+          className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium hover:bg-muted transition-colors text-foreground"
         >
-          <Home className="h-4 w-4 mr-2" />
+          <Home aria-hidden="true" className="h-4 w-4 mr-2" />
           Go Home
         </Link>
       </div>
@@ -54,10 +55,7 @@ export default function PricingError({
       <div className="mt-12 pt-6 border-t border-border w-full max-w-sm">
         <p className="text-muted-foreground text-sm">
           If this problem persists,{' '}
-          <Link
-            href="/contact"
-            className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-          >
+          <Link href="/contact" className="text-primary hover:opacity-80">
             contact our support team
           </Link>
         </p>

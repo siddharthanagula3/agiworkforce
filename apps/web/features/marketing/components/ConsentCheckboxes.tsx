@@ -33,15 +33,25 @@ export function ConsentCheckboxes({
         return (
           <div key={purpose.id} className="agi-consent-item">
             <label htmlFor={inputId} className="agi-consent-label">
-              <input
-                id={inputId}
-                type="checkbox"
-                name={`consent-${purpose.id}`}
-                checked={value.includes(purpose.id)}
-                disabled={disabled}
-                onChange={(event) => toggle(purpose.id, event.target.checked)}
-                className="agi-consent-checkbox"
-              />
+              {/* `.agi-consent-checkbox` is a 16x16 box with no hit-area
+                  expansion, under the 24x24 target minimum. The wrapping
+                  `<label>` already extends the click target sideways across
+                  the text, but a single-line purpose renders under 24px
+                  tall. Extending via a wrapper span's pseudo-element (rather
+                  than one on the input itself, which has inconsistent
+                  cross-browser support for generated content on form
+                  controls) keeps the drawn checkbox the same size. */}
+              <span className="relative inline-flex shrink-0 before:absolute before:-inset-2 before:content-['']">
+                <input
+                  id={inputId}
+                  type="checkbox"
+                  name={`consent-${purpose.id}`}
+                  checked={value.includes(purpose.id)}
+                  disabled={disabled}
+                  onChange={(event) => toggle(purpose.id, event.target.checked)}
+                  className="agi-consent-checkbox"
+                />
+              </span>
               <span>
                 {purpose.label}{' '}
                 <span className="agi-consent-optionality">

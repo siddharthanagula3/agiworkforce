@@ -20,7 +20,7 @@ import {
   X,
   type LucideProps,
 } from 'lucide-react';
-import type { ComponentType } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type RefObject } from 'react';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope, AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import {
@@ -45,6 +45,99 @@ import {
   TASK_TONE_BADGE_CLASS,
   workModeLabel,
 } from './task-display';
+
+// Below `lg` the list and this panel can no longer sit side by side, so
+// selecting a task switches it from a sticky sidebar to a `fixed inset-0`
+// takeover of the whole screen. Only the takeover form is actually a dialog —
+// on a wide viewport the run list beside it stays live and must not be
+// treated as inert.
+const MOBILE_TAKEOVER_QUERY = '(max-width: 1023.98px)';
+
+function useIsNarrowViewport(query: string): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia(query);
+    const update = () => setNarrow(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, [query]);
+  return narrow;
+}
+
+function focusableWithin(root: HTMLElement): HTMLElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => element.offsetParent !== null);
+}
+
+/**
+ * Contain focus inside the panel while it is covering the screen, close it on
+ * Escape, and hand focus back to whatever opened it — without this, a
+ * keyboard or screen-reader user opening a task on a phone could tab past the
+ * (visually hidden but still-present) run list underneath, and Escape did
+ * nothing.
+ */
+function useMobileTakeoverDialog(
+  panelRef: RefObject<HTMLElement | null>,
+  active: boolean,
+  onDismiss: () => void,
+): void {
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  // `onDismiss` is `() => setSelectedRunId(null)` at the call site — a fresh
+  // closure every render, not memoized. A live task re-renders its caller
+  // every poll tick (TASK_JOURNAL_POLL_INTERVAL_MS), so depending on the
+  // callback directly would tear the listener down and steal focus back to
+  // the panel's first control every few seconds instead of only on open.
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
+  useEffect(() => {
+    if (!active) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    restoreFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const initial = focusableWithin(panel)[0] ?? panel;
+    initial.focus();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onDismissRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = focusableWithin(panel);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      const activeElement = document.activeElement;
+      if (event.shiftKey && (activeElement === first || activeElement === panel)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    panel.addEventListener('keydown', onKeyDown);
+    return () => {
+      panel.removeEventListener('keydown', onKeyDown);
+      const restore = restoreFocusRef.current;
+      restoreFocusRef.current = null;
+      if (restore && document.contains(restore)) restore.focus();
+    };
+  }, [active, panelRef]);
+}
 
 function parseGoalDetail(detail: string | undefined): {
   constraints?: string;
@@ -251,6 +344,11 @@ export function TaskDetailPanel({
   onOpenConversation,
   onRerun,
 }: TaskDetailPanelProps) {
+  const isMobileTakeover = useIsNarrowViewport(MOBILE_TAKEOVER_QUERY);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const dialogActive = isMobileTakeover && run !== null;
+  useMobileTakeoverDialog(panelRef, dialogActive, onClose);
+
   if (!run) {
     return (
       <aside
@@ -305,8 +403,10 @@ export function TaskDetailPanel({
 
   return (
     <aside
+      ref={panelRef}
       aria-label="Task details"
       className="fixed inset-0 z-50 min-h-0 overflow-y-auto bg-card lg:sticky lg:inset-auto lg:z-auto lg:max-h-[calc(100vh-10rem)] lg:rounded-xl lg:border"
+      {...(dialogActive ? { role: 'dialog' as const, 'aria-modal': true, tabIndex: -1 } : {})}
     >
       <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b bg-card p-4">
         <div className="min-w-0">

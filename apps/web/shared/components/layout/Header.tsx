@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { useTheme } from 'next-themes';
 import { Moon, Sun, X } from 'lucide-react';
+import { useMenuKeyboard } from '@agiworkforce/ui';
 import { AgiMark } from '../agi/AgiMark';
 import { SURFACE_STATUS } from '@/lib/marketing-constants';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -79,6 +80,8 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProductsOpen, setIsProductsOpen] = useState(false);
   const productsRef = useRef<HTMLDivElement | null>(null);
+  const productsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const productsMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuCloseRef = useRef<HTMLButtonElement | null>(null);
@@ -100,16 +103,23 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
         setIsProductsOpen(false);
       }
     };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsProductsOpen(false);
-    };
     document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
     };
   }, [isProductsOpen]);
+
+  const closeProducts = useCallback(() => setIsProductsOpen(false), []);
+
+  // Arrow-key roving focus, Escape, and focus-return to the trigger — the
+  // outside-pointerdown close above stays separate since the hook only owns
+  // keyboard behaviour.
+  useMenuKeyboard({
+    open: isProductsOpen,
+    onClose: closeProducts,
+    panelRef: productsMenuRef,
+    triggerRef: productsButtonRef,
+  });
 
   // Lock body scroll, keep keyboard focus inside the modal drawer, and return
   // focus to the control that opened it when the user dismisses the drawer.
@@ -191,6 +201,7 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
           <span className="agi-top-nav-desktop">
             <div className="agi-top-products" ref={productsRef}>
               <button
+                ref={productsButtonRef}
                 type="button"
                 className="agi-top-link agi-top-products-button"
                 aria-expanded={isProductsOpen}
@@ -203,7 +214,12 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
                 </span>
               </button>
               {isProductsOpen && (
-                <div className="agi-top-products-menu" role="menu" aria-label="AGI products">
+                <div
+                  ref={productsMenuRef}
+                  className="agi-top-products-menu"
+                  role="menu"
+                  aria-label="AGI products"
+                >
                   {PRODUCT_ITEMS.map((item) => (
                     <Link
                       key={item.href}
