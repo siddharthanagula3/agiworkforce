@@ -2117,8 +2117,16 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         <BookOpen className="h-4 w-4" aria-hidden="true" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{skill.name}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {/*
+                          A phone gives this cell about 100px. Truncating to one
+                          line rendered every description as a fragment - "Review
+                          code for…" - so the table listed skills nobody could
+                          tell apart. Wrapping costs height, which scrolls.
+                        */}
+                        <p className="text-sm font-medium text-foreground sm:truncate">
+                          {skill.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground sm:truncate">
                           {skill.description || skill.source}
                         </p>
                       </div>
