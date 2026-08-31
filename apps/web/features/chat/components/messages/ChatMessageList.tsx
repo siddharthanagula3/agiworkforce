@@ -721,8 +721,12 @@ const SCROLL_THRESHOLD_PX = 120;
 const DEFAULT_TRANSCRIPT_ROW_HEIGHT = 160;
 const DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT = 640;
 
-function buildStreamAnnouncement(message: ChatMessage | undefined): string {
-  if (!message || message.role !== 'assistant') return 'Response complete';
+export function buildStreamAnnouncement(message: ChatMessage | undefined): string {
+  // Reached when a turn ends without ever producing an assistant message - a
+  // rate limit, a rejected request, a dropped connection. Announcing the
+  // default here told a screen-reader user the response was complete when
+  // nothing had been written at all.
+  if (!message || message.role !== 'assistant') return 'No response was generated';
   const activity = message.metadata?.['agentActivity'];
   const activityStatus =
     activity && typeof activity === 'object' && 'status' in activity
