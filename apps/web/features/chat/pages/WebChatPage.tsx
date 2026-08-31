@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useClerk, useUser } from '@clerk/nextjs';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
@@ -3793,6 +3794,14 @@ export default function WebChatPage() {
     [],
   );
 
+  // A failed turn leaves the user's message trailing with no reply. The error
+  // banner offers to resend it, so recovering does not mean hunting for the
+  // regenerate action on a message whose reply never arrived.
+  const retryableTurnId = useMemo(
+    () => retryableUserMessageId(displayedMessages, isStreaming),
+    [displayedMessages, isStreaming],
+  );
+
   const handleRegenerateMessage = useCallback(
     async (id: string) => {
       if (!displayedConversationId || isStreaming) return;
@@ -4637,6 +4646,18 @@ export default function WebChatPage() {
               <span className="min-w-0 flex-1 break-words font-medium text-red-800 dark:text-red-100">
                 {chatError}
               </span>
+              {retryableTurnId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatError(null);
+                    void handleRegenerateMessage(retryableTurnId);
+                  }}
+                  className="shrink-0 rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-800 transition-colors hover:bg-red-100 dark:border-red-500/40 dark:text-red-100 dark:hover:bg-red-500/20"
+                >
+                  Retry
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setChatError(null)}

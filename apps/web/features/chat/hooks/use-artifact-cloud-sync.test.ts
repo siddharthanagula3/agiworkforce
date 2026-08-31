@@ -78,6 +78,35 @@ describe('useArtifactCloudSync', () => {
     act(() => unmount());
   });
 
+  it('stops polling while the tab is hidden, and resumes the moment it returns', async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('visible');
+    pullArtifactCloudChanges.mockResolvedValue('1');
+
+    const { unmount } = renderHook(() => useArtifactCloudSync());
+    await vi.waitFor(() => expect(pullArtifactCloudChanges).toHaveBeenCalledTimes(1));
+
+    // Hidden: the loop must not schedule another round, however long we wait.
+    visibility.mockReturnValue('hidden');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+    });
+    expect(pullArtifactCloudChanges).toHaveBeenCalledTimes(1);
+
+    // Visible again: sync immediately rather than waiting out the interval.
+    visibility.mockReturnValue('visible');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await vi.waitFor(() => expect(pullArtifactCloudChanges).toHaveBeenCalledTimes(2));
+
+    unmount();
+    visibility.mockRestore();
+    vi.useRealTimers();
+  });
+
   it('surfaces a failed pull as retrying instead of silently claiming sync', async () => {
     pullArtifactCloudChanges.mockRejectedValueOnce(new Error('network unavailable'));
 
