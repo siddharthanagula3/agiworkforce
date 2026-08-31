@@ -2763,6 +2763,14 @@ export async function processRequest(
     });
   }
 
+  // Asking the model to disclose the downgrade is not the same as disclosing
+  // it: the preamble below tells the model to say Deep Research did not run,
+  // and the observed turn instead produced a confident answer with its own
+  // bibliography. The header does not depend on the model complying.
+  if (researchUnavailable && !fallbackReason) {
+    fallbackReason = 'research_unsupported_model';
+  }
+
   let codeExecutionUnavailable = false;
   if (chatRequest.code_execution) {
     const turnCodeExecution = resolveTurnCodeExecutionTools({

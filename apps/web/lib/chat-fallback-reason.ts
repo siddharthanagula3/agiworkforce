@@ -4,6 +4,7 @@ export const FALLBACK_REASON_CODES = [
   'managed_failover',
   'openrouter_route_failover',
   'insufficient_credits',
+  'research_unsupported_model',
 ] as const;
 
 export type FallbackReasonCode = (typeof FALLBACK_REASON_CODES)[number];
@@ -12,7 +13,9 @@ export function toFallbackReasonHeaderValue(source: {
   usedFallback?: boolean;
   fallbackReason?: string | undefined;
 }): string | null {
-  if (!source.usedFallback) return null;
+  // A downgrade is worth reporting even when the model itself did not change:
+  // the request the user asked for is not the request that ran.
+  if (!source.usedFallback && source.fallbackReason !== 'research_unsupported_model') return null;
   const raw = source.fallbackReason?.trim();
   if (!raw) return null;
   const safe = raw.replace(/[^\w.:-]/g, '_').slice(0, 120);
@@ -47,6 +50,10 @@ export function describeFallbackReason(
       return servedBy
         ? `You were out of credits for the model you picked, so this reply used ${servedBy}.`
         : 'You were out of credits for the model you picked, so a cheaper model answered.';
+    case 'research_unsupported_model':
+      return servedBy
+        ? `${servedBy} cannot run Deep Research, so this reply used web search instead. No research report was saved.`
+        : 'This model cannot run Deep Research, so this reply used web search instead. No research report was saved.';
     default:
       return servedBy
         ? `This reply came from ${servedBy} instead of the model you picked.`
