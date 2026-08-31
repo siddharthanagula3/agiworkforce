@@ -27,6 +27,7 @@ const sessionSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
   repositoryUrl: z.string().nullable(),
+  repositoryBranch: z.string().nullable().default(null),
   networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS),
   runtimeId: z.string().nullable().default(null),
   state: z.enum(CLOUD_CODE_SESSION_STATES),
@@ -51,6 +52,9 @@ const terminalEntrySchema = z.object({
 const runtimeSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  kind: z.enum(['harness', 'image']),
+  summary: z.string(),
+  agentCommand: z.string().nullable(),
   cpuCount: z.number().nonnegative(),
   memoryMB: z.number().nonnegative(),
   diskSizeMB: z.number().nonnegative(),

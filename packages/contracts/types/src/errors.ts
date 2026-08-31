@@ -20,6 +20,15 @@ export const ErrorCode = {
 
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  /**
+   * A capability this deployment does not offer, as opposed to one that broke.
+   *
+   * Separate from SERVICE_UNAVAILABLE so its message can reach the reader: the
+   * generic 503 text is deliberately opaque because most 503s carry internal
+   * detail, but "Managed Code is not enabled for this deployment" is written
+   * for the reader and is useless if replaced.
+   */
+  CAPABILITY_UNAVAILABLE: 'CAPABILITY_UNAVAILABLE',
   TIMEOUT: 'TIMEOUT',
 
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
@@ -107,6 +116,7 @@ export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.CONFLICT]: 409,
   [ErrorCode.INTERNAL_ERROR]: 500,
   [ErrorCode.SERVICE_UNAVAILABLE]: 503,
+  [ErrorCode.CAPABILITY_UNAVAILABLE]: 503,
   [ErrorCode.TIMEOUT]: 504,
   [ErrorCode.RATE_LIMIT_EXCEEDED]: 429,
   [ErrorCode.STRIPE_ERROR]: 502,
