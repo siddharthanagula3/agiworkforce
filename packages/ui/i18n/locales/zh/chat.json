@@ -69,12 +69,10 @@
   },
   "sidebar": {
     "activeConversation": "当前对话",
-    "allConversations": "所有对话",
     "archive": "归档",
     "archivedCount": "已归档（{{count}}）",
     "budgetUsed": "已使用 {{percent}}% 的令牌预算",
     "chats": "对话",
-    "clearFilter": "清除筛选",
     "closeSearch": "关闭搜索",
     "cloud": "云端",
     "collapseProject": "折叠项目 {{name}}",

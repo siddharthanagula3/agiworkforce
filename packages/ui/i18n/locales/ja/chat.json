@@ -69,12 +69,10 @@
   },
   "sidebar": {
     "activeConversation": "アクティブな会話",
-    "allConversations": "すべての会話",
     "archive": "アーカイブ",
     "archivedCount": "アーカイブ済み（{{count}}）",
     "budgetUsed": "トークン予算の{{percent}}%を使用",
     "chats": "チャット",
-    "clearFilter": "フィルターを解除",
     "closeSearch": "検索を閉じる",
     "cloud": "クラウド",
     "collapseProject": "プロジェクト {{name}} を折りたたむ",

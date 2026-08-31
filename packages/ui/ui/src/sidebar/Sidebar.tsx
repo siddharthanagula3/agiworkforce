@@ -5,12 +5,10 @@ import {
   Archive,
   Calendar,
   Check,
-  ChevronDown,
   ChevronRight,
   Clock,
   Folder,
   FolderOpen,
-  Layers,
   List,
   MessageSquare,
   MoreHorizontal,
@@ -23,7 +21,6 @@ import {
   SquarePen,
   Trash2,
   Upload,
-  X,
 } from 'lucide-react';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
@@ -43,7 +40,6 @@ export interface SidebarProps extends SessionItemHandlers {
   sessions: SidebarSession[];
   activeSessionId?: string;
   projects?: SidebarProject[];
-  selectedProjectFilter?: string | null;
   isLoading?: boolean;
   error?: string | null;
 
@@ -58,7 +54,6 @@ export interface SidebarProps extends SessionItemHandlers {
 
   onNewChat: () => void;
   onToggleCollapse?: () => void;
-  onSelectProjectFilter?: (projectId: string | null) => void;
   onOpenSearch?: () => void;
   onOpenUsage?: () => void;
 
@@ -85,7 +80,6 @@ export function Sidebar(props: SidebarProps) {
     sessions,
     activeSessionId,
     projects = [],
-    selectedProjectFilter = null,
     isLoading = false,
     error = null,
     className,
@@ -97,7 +91,6 @@ export function Sidebar(props: SidebarProps) {
     showUsageWidget = false,
     onNewChat,
     onToggleCollapse,
-    onSelectProjectFilter,
     onOpenSearch,
     onOpenUsage,
     onProjectOpen,
@@ -175,11 +168,6 @@ export function Sidebar(props: SidebarProps) {
     return map;
   }, [projects]);
 
-  const selectedProject = useMemo(
-    () => (selectedProjectFilter ? projects.find((p) => p.id === selectedProjectFilter) : null),
-    [projects, selectedProjectFilter],
-  );
-
   const archivedCount = useMemo(
     () => sessions.filter((s) => s.archived === true).length,
     [sessions],
@@ -190,23 +178,14 @@ export function Sidebar(props: SidebarProps) {
     let base = showArchived
       ? sessions.filter((s) => s.archived === true)
       : sessions.filter((s) => !s.archived);
-    if (selectedProjectFilter) {
-      base = base.filter((s) => s.projectId === selectedProjectFilter);
-    } else if (organizeMode === 'by-project' && projectListEnabled) {
+    if (organizeMode === 'by-project' && projectListEnabled) {
       base = base.filter((s) => !s.projectId);
     }
     if (!term) return base;
     return base.filter((s) =>
       `${s.title ?? ''} ${s.lastMessage ?? s.preview ?? ''}`.toLowerCase().includes(term),
     );
-  }, [
-    sessions,
-    searchQuery,
-    showArchived,
-    selectedProjectFilter,
-    organizeMode,
-    projectListEnabled,
-  ]);
+  }, [sessions, searchQuery, showArchived, organizeMode, projectListEnabled]);
 
   const pinned = useMemo(
     () =>
@@ -550,112 +529,36 @@ export function Sidebar(props: SidebarProps) {
             </div>
           )}
 
-          {/* Filter bar: project folder filter + archive toggle */}
-          {!isSimpleMode && (projects.length > 0 || archivedCount > 0) && (
-            <div className="flex shrink-0 items-center gap-1 px-3 py-2">
-              {projects.length > 0 && (
-                <Menu
-                  align="start"
-                  trigger={({ toggle }) => (
-                    <button
-                      type="button"
-                      onClick={toggle}
-                      className={cn(
-                        'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
-                        selectedProjectFilter
-                          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                          : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))]',
-                      )}
-                    >
-                      <span
-                        className="flex h-4 w-4 items-center justify-center rounded"
-                        style={
-                          selectedProject?.color
-                            ? {
-                                backgroundColor: `${selectedProject.color}20`,
-                                color: selectedProject.color,
-                              }
-                            : undefined
-                        }
-                      >
-                        <FolderOpen className="h-3 w-3" />
-                      </span>
-                      <span className="max-w-[100px] truncate">
-                        {selectedProject?.name || tCommon('all', 'All')}
-                      </span>
-                      <ChevronDown className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
-                    </button>
-                  )}
-                  menuClassName="w-56"
-                >
-                  {({ close }) => (
-                    <>
-                      <MenuItem
-                        close={close}
-                        onSelect={() => onSelectProjectFilter?.(null)}
-                        icon={<MessageSquare className="h-4 w-4" />}
-                        active={!selectedProjectFilter}
-                      >
-                        {t('sidebar.allConversations', 'All Conversations')}
-                      </MenuItem>
-                      <MenuSeparator />
-                      {projects.map((project) => (
-                        <MenuItem
-                          key={project.id}
-                          close={close}
-                          onSelect={() => onSelectProjectFilter?.(project.id)}
-                          active={selectedProjectFilter === project.id}
-                          trailing={project.conversationCount}
-                          icon={
-                            <span
-                              className="flex h-4 w-4 items-center justify-center rounded"
-                              style={{ backgroundColor: project.color || 'hsl(var(--primary))' }}
-                            >
-                              <Layers className="h-2.5 w-2.5 text-white" />
-                            </span>
-                          }
-                        >
-                          {project.name}
-                        </MenuItem>
-                      ))}
-                    </>
-                  )}
-                </Menu>
-              )}
-
-              {selectedProjectFilter && onSelectProjectFilter && (
-                <button
-                  type="button"
-                  onClick={() => onSelectProjectFilter(null)}
-                  aria-label={t('sidebar.clearFilter', 'Clear filter')}
-                  title={t('sidebar.clearFilter', 'Clear filter')}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-
-              <div className="flex-1" />
-
-              {archivedCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowArchived((v) => !v)}
-                  title={
-                    showArchived
-                      ? t('sidebar.showActive', 'Show active')
-                      : t('sidebar.archivedCount', 'Archived ({{count}})', { count: archivedCount })
-                  }
-                  className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-                    showArchived
-                      ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
-                  )}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                </button>
-              )}
+          {/* Archive toggle. The project folder filter that used to lead this row
+              was never wired: no caller passed `onSelectProjectFilter`, so
+              picking a project called `undefined?.()` and the trigger stayed
+              on "All". Projects are reached from the rail and the Projects
+              section below, which is also where claude.ai scopes them. */}
+          {!isSimpleMode && archivedCount > 0 && (
+            <div className="flex shrink-0 items-center justify-end px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setShowArchived((v) => !v)}
+                aria-pressed={showArchived}
+                aria-label={
+                  showArchived
+                    ? t('sidebar.showActive', 'Show active')
+                    : t('sidebar.archivedCount', 'Archived ({{count}})', { count: archivedCount })
+                }
+                title={
+                  showArchived
+                    ? t('sidebar.showActive', 'Show active')
+                    : t('sidebar.archivedCount', 'Archived ({{count}})', { count: archivedCount })
+                }
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                  showArchived
+                    ? 'text-[var(--warning-text)]'
+                    : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
+                )}
+              >
+                <Archive className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
 
