@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-30
+Last updated: 2026-08-31
 
 Things the remediation cannot finish in code, because they need a dashboard, a
 credential, a paid account, or a product decision that is not mine to make.
@@ -3224,3 +3224,88 @@ claims this suite exists to back are actually being measured in CI. The offline
 harness job (`pnpm exec vitest run tools/evals`, no live model) still runs and
 passes on every change to the directory, so the grading logic itself is
 exercised — only the live measurement against a real model is dark.
+
+---
+
+## 41. The reference half of the parity audit cannot run: claude.ai serves a bot challenge, and the Playwright MCP bridge is dead
+
+**Status:** `EXTERNAL`. Blocks the reference-comparison loop, not the code.
+
+**Blocks:** auditing AGI Web against the live logged-in claude.ai and
+chatgpt.com experiences. chatgpt.com is reachable; claude.ai is not.
+
+The Playwright MCP server failed to connect for the whole of 2026-08-31 and its
+tools stayed unavailable. Its browser process survived, but it launches with
+`--remote-debugging-pipe` rather than a port, so the CDP channel is a file
+descriptor owned by the dead server and no new process can attach. It also holds
+`SingletonLock` on its profile, which refuses a second browser on that directory.
+
+The workaround, and its limit, verified by measurement:
+
+```
+SRC=~/Library/Caches/ms-playwright-mcp/mcp-chrome-413342f
+rsync -a --exclude 'Singleton*' --exclude 'Cache' --exclude 'Code Cache' \
+  --exclude 'GPUCache' "$SRC"/ /tmp/refprofile/
+```
+
+then `chromium.launchPersistentContext('/tmp/refprofile', { headless: false,
+channel: 'chrome' })`, run from inside the repo so `playwright` resolves.
+
+| target      | headless                   | headed + `channel: 'chrome'` |
+| ----------- | -------------------------- | ---------------------------- |
+| chatgpt.com | Cloudflare "Just a moment" | **works, signed in**         |
+| claude.ai   | Cloudflare                 | still Cloudflare, 3 x 60s    |
+
+`headless: true` is the tell — both sites challenge it even with valid session
+cookies. Headed clears ChatGPT. claude.ai issues `/api/challenge_redirect` and
+never settles.
+
+**Do:** restart the Playwright MCP server. That is the whole fix, and it is a
+host action rather than a repository change. Defeating the bot check is not an
+option worth taking: it is circumventing an access control on someone else's
+service, and the standing instruction for this work is to use those products as
+references without probing them.
+
+**Cost of leaving it:** every parity claim against claude.ai rests on recorded
+observations rather than a live check. `audit/ui-gaps.csv` carries 341
+reference-derived records, so the comparison has been done before and written
+down — but it cannot be refreshed, and a claude.ai change since those records
+were written would go unnoticed.
+
+---
+
+## 42. The QA account cannot reach most dialog triggers, so dialog coverage is stuck at three
+
+**Status:** `EXTERNAL`. Needs an account with richer state, not code.
+
+**Blocks:** extending `apps/web/e2e/qa-06-dialogs.spec.ts` past `settings-modal`,
+`settings-modal-security` and `global-search`.
+
+About forty components render a dialog. The spec covers three, and the limit is
+reaching the triggers rather than writing the probes. Measured on 2026-08-31
+against the signed-in QA account:
+
+- **`share-conversation`** — the Share control only renders once a conversation
+  has messages (`WebChatPage.tsx`, guarded by `hasMessages`). The sidebar
+  conversation list did not render any anchor or labelled entry within 12s, so
+  no conversation could be opened to make the control appear, even though the
+  account has 25 conversations.
+- **`create-project`** — `/chat/projects` carries two controls that read the
+  same: a page-level "New" that opens the dialog, and a sidebar "New project"
+  that navigates to `/chat`. Only the first is the dialog trigger.
+- **`export` / `feedback`** — behind menus rather than direct controls.
+
+See also the `max_15x`, no-workspace shape of this account: several admin
+surfaces only ever render their empty state, so a dialog gated behind workspace
+membership cannot be opened at all.
+
+**Do:** point the E2E harness at an account with a workspace and at least one
+conversation carrying messages. Then each remaining dialog needs its trigger
+named explicitly in the spec, one at a time — not discovered by matching
+`aria-label` patterns, which produced four confident findings in a row on
+2026-08-31 that were all measurement artifacts.
+
+**Cost of leaving it:** thirty-seven dialogs are unverified for the modal
+contract. That contract is not free: adding `global-search` to the spec found it
+leaving `#main-content` with ninety focusable controls and no `aria-hidden`,
+behind content declaring `aria-modal="true"`. One dialog added, one real defect.
