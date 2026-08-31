@@ -181,6 +181,45 @@ describe('CloudCodePage', () => {
     expect(vi.mocked(create).mock.calls[0]![0]).toMatchObject({ runtimeId: null });
   });
 
+  it('starts the described task in the same gesture as creating the workspace', async () => {
+    const user = userEvent.setup();
+    const create = vi.fn(async () => ({ session, terminalEntries: [] }));
+    const startAgentTurn: CloudCodeApi['startAgentTurn'] = vi.fn(async () => ({
+      turnId: '22222222-2222-4222-8222-222222222222',
+      stopReason: 'done' as const,
+      stepsUsed: 2,
+      finalMessage: 'Ran the tests.',
+    }));
+    const api = createApi({ create, startAgentTurn });
+
+    render(<CloudCodePage api={api} />);
+
+    const task = await screen.findByLabelText('Task');
+    await user.type(task, 'Install dependencies and run the test suite');
+    // the control names what it will do, not just what it provisions
+    await user.click(await screen.findByRole('button', { name: 'Start task' }));
+
+    await waitFor(() => expect(startAgentTurn).toHaveBeenCalled());
+    expect(vi.mocked(startAgentTurn).mock.calls[0]![1]).toMatchObject({
+      goal: 'Install dependencies and run the test suite',
+    });
+    expect(vi.mocked(create)).toHaveBeenCalledBefore(vi.mocked(startAgentTurn));
+  });
+
+  it('opens an empty workspace when no task is described', async () => {
+    const user = userEvent.setup();
+    const create = vi.fn(async () => ({ session, terminalEntries: [] }));
+    const startAgentTurn = vi.fn();
+    const api = createApi({ create, startAgentTurn });
+
+    render(<CloudCodePage api={api} />);
+    await screen.findByLabelText('Task');
+    await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    expect(startAgentTurn).not.toHaveBeenCalled();
+  });
+
   it('explains an empty catalogue instead of offering a picker that does nothing', async () => {
     render(<CloudCodePage api={createApi()} />);
 
