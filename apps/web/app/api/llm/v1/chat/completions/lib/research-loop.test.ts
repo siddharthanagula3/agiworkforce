@@ -1046,6 +1046,46 @@ describe('plan approval gate', () => {
     expect(run.doneCount).toBe(1);
   });
 
+  it('waits even when the budget is too small to afford a planning turn', async () => {
+    // maxIterations below the planning threshold skips the planning turn
+    // entirely. The gate used to require a parsed plan, so this path reached
+    // the network with approval still outstanding and spent the user's budget
+    // on searches they never saw.
+    streamRequestMock.mockResolvedValueOnce(planStream(['alpha query']));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { requirePlanApproval: true, maxIterations: 2 }),
+    );
+
+    const phases = researchStatuses(run).map((s) => s['phase']);
+    expect(phases.at(-1)).toBe('awaiting_approval');
+    expect(forwardedContent(run)).toBe('');
+  });
+
+  it('waits even when the planning turn produced nothing parseable', async () => {
+    // A planning turn that returns prose rather than queries yields no steps.
+    // That is a reason to ask the user, not a reason to start searching.
+    streamRequestMock.mockResolvedValueOnce(planStream([]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { requirePlanApproval: true }),
+    );
+
+    const phases = researchStatuses(run).map((s) => s['phase']);
+    expect(phases.at(-1)).toBe('awaiting_approval');
+    expect(forwardedContent(run)).toBe('');
+  });
+
+  it('offers something concrete to accept when no plan could be drafted', async () => {
+    streamRequestMock.mockResolvedValueOnce(planStream([]));
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { requirePlanApproval: true }),
+    );
+
+    expect(planSteps(researchPlans(run).at(-1)).length).toBeGreaterThan(0);
+  });
+
   it('never persists a report for a run nobody approved', async () => {
     streamRequestMock.mockResolvedValueOnce(planStream(['alpha query']));
     const persistReport = vi.fn(async () => undefined);
@@ -1089,7 +1129,15 @@ describe('plan approval gate', () => {
     expect(forwardedContent(run)).toContain('# Report');
   });
 
-  it('runs rather than stranding the user when the plan could not be parsed', async () => {
+  it('asks rather than searching when the plan could not be parsed', async () => {
+    // This previously asserted the opposite: an unparseable plan fell through
+    // and the run searched to completion, on the reasoning that a plan nobody
+    // could read should not strand the user. The browser audit found that this
+    // is how research reached the network with approval still outstanding.
+    //
+    // The concern was right and is still honoured - the user is not stranded,
+    // they are asked. What changed is that the loop no longer decides for them
+    // that spending their budget is fine.
     streamRequestMock
       .mockResolvedValueOnce(sseStream([contentEvent('I will look into it.'), finishEvent()]))
       .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
@@ -1099,8 +1147,13 @@ describe('plan approval gate', () => {
       runResearchLoop(makeProcessed(), BILLING, { requirePlanApproval: true }),
     );
 
-    expect(researchStatuses(run).map((s) => s['phase'])).not.toContain('awaiting_approval');
-    expect(forwardedContent(run)).toBe('report');
+    expect(
+      researchStatuses(run)
+        .map((s) => s['phase'])
+        .at(-1),
+    ).toBe('awaiting_approval');
+    expect(forwardedContent(run)).toBe('');
+    expect(planSteps(researchPlans(run).at(-1)).length).toBeGreaterThan(0);
   });
 });
 
