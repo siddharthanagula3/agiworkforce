@@ -12,12 +12,23 @@ export interface ContinuableMessageLike {
   metadata?: { finishReason?: unknown } | Record<string, unknown>;
 }
 
+/**
+ * A failed turn persists a single zero-width space as its content, and
+ * String.trim does not remove U+200B - it is not Unicode White_Space. A bare
+ * trim therefore reads an empty failed turn as having content.
+ */
+export function hasVisibleContent(content: string | undefined | null): boolean {
+  return (
+    typeof content === 'string' && content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim().length > 0
+  );
+}
+
 export function isMessageContinuable(message: ContinuableMessageLike | undefined | null): boolean {
   if (!message) return false;
   if (message.role !== 'assistant') return false;
   if (message.isStreaming) return false;
   if (message.error) return false;
-  if (!message.content || !message.content.trim()) return false;
+  if (!hasVisibleContent(message.content)) return false;
   if (
     isContinuableFinishReason(
       (message.metadata as { finishReason?: unknown } | undefined)?.finishReason,

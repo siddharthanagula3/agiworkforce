@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isMessageContinuable, looksTruncated } from '../continue-generation';
+import { hasVisibleContent, isMessageContinuable, looksTruncated } from '../continue-generation';
 
 describe('looksTruncated', () => {
   it('flags prose that stops mid-sentence', () => {
@@ -85,5 +85,32 @@ describe('isMessageContinuable', () => {
     expect(isMessageContinuable({ ...base, isStreaming: true, content: cut })).toBe(false);
     expect(isMessageContinuable({ ...base, content: cut, error: 'boom' })).toBe(false);
     expect(isMessageContinuable({ role: 'user', content: cut })).toBe(false);
+  });
+});
+
+describe('hasVisibleContent', () => {
+  it('treats a zero-width space as empty', () => {
+    // A failed turn persists exactly this, and String.trim leaves it standing.
+    expect('​'.trim().length).toBe(1);
+    expect(hasVisibleContent('​')).toBe(false);
+    expect(hasVisibleContent('﻿  ‍')).toBe(false);
+  });
+
+  it('accepts real content and rejects ordinary blanks', () => {
+    expect(hasVisibleContent('an answer')).toBe(true);
+    expect(hasVisibleContent('   ')).toBe(false);
+    expect(hasVisibleContent('')).toBe(false);
+    expect(hasVisibleContent(null)).toBe(false);
+  });
+
+  it('does not offer Continue on a failed turn that only holds a zero-width space', () => {
+    expect(
+      isMessageContinuable({
+        role: 'assistant',
+        isStreaming: false,
+        content: '​',
+        metadata: { finishReason: 'length' },
+      }),
+    ).toBe(false);
   });
 });
