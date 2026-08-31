@@ -96,7 +96,7 @@ const TRUST = [
   { href: '/privacy', label: 'Privacy' },
   { href: '/data-use', label: 'How we use your data' },
   { href: '/privacy/requests', label: 'Data rights & consent' },
-  { href: '/privacy/india', label: 'India — DPDP notice' },
+  { href: '/privacy/india', label: 'India: DPDP notice' },
   { href: '/terms', label: 'Terms' },
   { href: '/acceptable-use', label: 'Acceptable use' },
   { href: '/cookies', label: 'Cookies' },

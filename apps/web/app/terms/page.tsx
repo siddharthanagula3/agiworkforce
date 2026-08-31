@@ -590,7 +590,7 @@ export default function TermsPage() {
               Privacy &rarr;
             </Link>
             <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-cta-ghost">
-              India &mdash; DPDP notice &rarr;
+              India: DPDP notice &rarr;
             </Link>
             <Link href="/dpa" className="agi-cta-ghost">
               DPA &rarr;

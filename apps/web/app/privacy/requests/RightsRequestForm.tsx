@@ -7,32 +7,32 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 const REQUEST_TYPES = [
   {
     id: 'access',
-    label: 'Access — send me a summary of the personal data you hold about me',
+    label: 'Access: send me a summary of the personal data you hold about me',
     hint: 'If you have an account, the fastest route is the export in your account settings. Use this when you cannot sign in, or when you want the summary of who it has been shared with.',
   },
   {
     id: 'correction',
-    label: 'Correction — something you hold about me is wrong or incomplete',
+    label: 'Correction: something you hold about me is wrong or incomplete',
     hint: 'Say what is wrong and what it should be.',
   },
   {
     id: 'erasure',
-    label: 'Erasure — delete personal data you hold about me',
+    label: 'Erasure: delete personal data you hold about me',
     hint: 'If you have an account, deleting it from settings is faster and self-serve. Use this for an email address on a list, where there is no account to delete.',
   },
   {
     id: 'withdrawal',
-    label: 'Withdraw consent — stop processing that depends on my consent',
+    label: 'Withdraw consent: stop processing that depends on my consent',
     hint: 'If you are signed in, the consent panel above does this immediately. Use this for consent given against an email address without an account.',
   },
   {
     id: 'nomination',
-    label: 'Nomination — record someone who may act for me if I cannot',
+    label: 'Nomination: record someone who may act for me if I cannot',
     hint: 'There is no nomination field in the product yet, so this is recorded manually. Give the nominee’s name and how to reach them.',
   },
   {
     id: 'grievance',
-    label: 'Grievance — I am dissatisfied with how my data has been handled',
+    label: 'Grievance: I am dissatisfied with how my data has been handled',
     hint: 'Describe what happened. Use this route before approaching the Data Protection Board.',
   },
 ] as const;
@@ -111,7 +111,7 @@ export function RightsRequestForm() {
   if (reference) {
     return (
       <div className="agi-callout" role="status">
-        <h3 className="agi-callout-h">Request recorded — reference {reference}</h3>
+        <h3 className="agi-callout-h">Request recorded, reference {reference}</h3>
         <p className="agi-callout-p">
           Keep that reference; quoting it saves you describing the request again.{' '}
           {operatorNotified ? (

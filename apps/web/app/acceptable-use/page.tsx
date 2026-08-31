@@ -282,8 +282,8 @@ export default function AcceptableUsePage() {
           <p className="agi-section-eyebrow">04 &middot; What happens on a violation</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Enforcement is a ladder, not a single switch. Which rung applies depends on severity and
-            on whether the behaviour continues. Severe abuse — CSAM, credible threats, active attack
-            traffic — goes straight to the top of the ladder.
+            on whether the behaviour continues. Severe abuse (CSAM, credible threats, active attack
+            traffic) goes straight to the top of the ladder.
           </p>
           <table className="agi-ledger" style={{ marginTop: 20 }}>
             <tbody>
