@@ -77,7 +77,12 @@ export function SendPreview({
           className="inline-flex h-6 items-center gap-1 rounded-full px-1.5 text-[12px] font-medium text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-overlay)] hover:text-[var(--chat-text-secondary)]"
         >
           <DestinationIcon presentation={presentation} compact />
-          <span>{compactDestinationLabel(presentation)}</span>
+          {/* Icon-only on a phone. The strip below the composer has to fit one
+              line there - chatgpt.com shows one, claude.ai none - and the
+              destination is still announced: the button's aria-label and title
+              both carry the full label, and expanding it names the destination
+              in full. */}
+          <span className="hidden sm:inline">{compactDestinationLabel(presentation)}</span>
           {expanded ? (
             <ChevronDown className="h-2.5 w-2.5 rotate-180" aria-hidden />
           ) : (

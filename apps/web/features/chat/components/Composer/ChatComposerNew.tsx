@@ -4111,8 +4111,10 @@ const ChatComposerNewComponent = ({
           <ComposerFeedbackDialog key="feedback" conversationId={conversationId} />,
         ]
           .filter(Boolean)
-          .map((entry, index) => {
+          .map((entry, index, entries) => {
             const key = (entry as { key: string }).key;
+            const isDeskOnly = (candidate: unknown) =>
+              ['privacy', 'feedback', 'web-search'].includes((candidate as { key: string }).key);
             // Measured on 2026-08-30: neither chatgpt.com nor claude.ai puts
             // anything below its composer at 390px. This footer ran to three
             // rows and made the composer 136px against ChatGPT's 87px. Privacy
@@ -4120,7 +4122,18 @@ const ChatComposerNewComponent = ({
             // Feedback has a second entry point in the transcript, so a phone
             // loses no reach by dropping them here. The accuracy disclaimer
             // stays on every width - see the Article 50(1) note above.
-            const deskOnly = key === 'privacy' || key === 'feedback';
+            // Measured at 390px on 2026-08-31: chatgpt.com shows one line here
+            // and puts it above its composer; claude.ai shows nothing at all.
+            // Ours ran to two rows. The composer's own control row is full at
+            // that width (312 of 324px), so nothing can move into it.
+            //
+            // Web search joins the desk-only set because it is the one entry
+            // that says nothing new on a phone: it is derived from the resolved
+            // model, whose picker sits directly above it. The route disclosure
+            // stays at every width - it is the only thing on screen saying
+            // where the message is about to go - and so does the accuracy
+            // caveat.
+            const deskOnly = key === 'privacy' || key === 'feedback' || key === 'web-search';
             return (
               <span
                 key={key}
@@ -4129,7 +4142,22 @@ const ChatComposerNewComponent = ({
                   deskOnly ? 'hidden sm:inline-flex' : 'inline-flex',
                 )}
               >
-                {index > 0 && <span aria-hidden="true">·</span>}
+                {/* The separator has to follow what is VISIBLE at this
+                    breakpoint, not the array position: hiding an entry with a
+                    class left the row starting on a dangling "·", which is the
+                    same defect the ordering above was written to avoid. */}
+                {index > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      entries.slice(0, index).some((prior) => !isDeskOnly(prior))
+                        ? 'inline'
+                        : 'hidden sm:inline',
+                    )}
+                  >
+                    ·
+                  </span>
+                )}
                 {entry}
               </span>
             );
