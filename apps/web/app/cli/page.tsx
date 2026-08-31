@@ -4,7 +4,8 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import type { TerminalLine } from '@/features/marketing/components/DeviceMockups';
 import { FeatureGrid } from '@/features/marketing/components/LandingSections';
-import { DevBand, FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
+import Link from 'next/link';
+import { FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
@@ -184,15 +185,22 @@ export default function CliPage() {
           </details>
         </section>
 
-        <DevBand
-          eyebrow="At the prompt"
-          title="The prompt refuses to convert a session already running."
-          body="Type /privacy-mode byok inside a local session and nothing moves. The CLI answers that a local session needs an explicit reviewable handoff and points at /continue-with-byok, which drafts a fork carrying the context you selected, runs a secret scan over it, and shows you the payload before you send it. /privacy-settings prints the rest of the boundary in one screen: which roots the agent may read, what --add-dir has added, where sync stays opt-in. What Local, BYOK and managed cloud each mean is written out on the pages that own them."
-          ctas={[
-            { href: '/local', label: 'Run it against a local model' },
-            { href: '/byok', label: 'Set up BYOK' },
-          ]}
-          visual={
+        {/* The terminal is the artifact on this page, so it takes the whole
+            stage on true black rather than a column beside a paragraph. The
+            session below refuses a privacy-mode switch mid-run; that exchange
+            is the argument, and it reads better than a description of it. */}
+        <section
+          className="agi-stage agi-stage--void agi-terminal-stage"
+          aria-labelledby="agi-cli-boundary-title"
+        >
+          <div className="agi-terminal-stage-caption">
+            <p className="agi-fl-eyebrow">At the prompt</p>
+            <h2 id="agi-cli-boundary-title" className="agi-fl-h2">
+              A local session will not silently become a remote one.
+            </h2>
+          </div>
+
+          <div className="agi-terminal-stage-frame">
             <ProductFrame
               variant="terminal"
               title="agi · zsh"
@@ -201,8 +209,17 @@ export default function CliPage() {
               session={BOUNDARY_SESSION}
               hud={BOUNDARY_HUD}
             />
-          }
-        />
+          </div>
+
+          <div className="agi-fl-cta-row">
+            <Link href="/local" className="agi-fl-cta agi-fl-cta--ghost">
+              Run it against a local model
+            </Link>
+            <Link href="/byok" className="agi-fl-cta agi-fl-cta--ghost">
+              Set up BYOK
+            </Link>
+          </div>
+        </section>
 
         <FinalCta
           eyebrow={SURFACE_STATUS.cli}

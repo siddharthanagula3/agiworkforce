@@ -3994,6 +3994,17 @@ html[data-contrast='more'] *:focus-visible {
   padding: clamp(72px, 10vw, 132px) 0;
 }
 
+/* A stage's canvas has to reach the viewport edge or it reads as a wide card
+   rather than a change of ground - and the seam at the shell's max-width is
+   exactly the bordered-rectangle look these stages exist to remove. The
+   content inside stays on the text column; only the surface breaks out. */
+[data-design='agi'] .agi-shell > .agi-stage {
+  margin-inline: calc(50% - 50vw);
+  padding-inline: max(28px, calc(50vw - 590px + 28px));
+  width: 100vw;
+  max-width: 100vw;
+}
+
 /* No hairline between stages: the canvas change separates them. A rule is only
    needed where two stages share a tone. */
 [data-design='agi'] .agi-stage + .agi-stage {
@@ -4055,6 +4066,40 @@ html[data-contrast='more'] *:focus-visible {
 /* A stage whose product media should break the text column. */
 [data-design='agi'] .agi-stage-bleed {
   width: 100%;
+  max-width: none;
+}
+
+/* Terminal stage.
+ *
+ * The terminal is the artifact on this page, so it gets the composition rather
+ * than a column beside a paragraph: copy sits above it as a caption, the frame
+ * runs wide beneath, and the canvas goes to true black so the terminal's own
+ * ground and the page's are the same surface - no box, no border, no frame
+ * around a frame.
+ */
+[data-design='agi'] .agi-terminal-stage {
+  display: grid;
+  justify-items: center;
+  gap: clamp(36px, 5vw, 64px);
+  padding: clamp(80px, 11vw, 148px) 0;
+}
+
+[data-design='agi'] .agi-terminal-stage-caption {
+  max-width: 46ch;
+  text-align: center;
+}
+
+[data-design='agi'] .agi-terminal-stage-caption .agi-fl-h2 {
+  max-width: none;
+}
+
+[data-design='agi'] .agi-terminal-stage-frame {
+  width: min(100%, 1080px);
+}
+
+/* The frame is the page here, so it drops the chrome it would carry when
+   sitting inside a section beside copy. */
+[data-design='agi'] .agi-terminal-stage-frame .agi-dev {
   max-width: none;
 }
 
