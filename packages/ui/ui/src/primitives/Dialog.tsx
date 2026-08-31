@@ -57,8 +57,36 @@ function DialogContent({
   hideCloseButton = false,
   disableAnimation = false,
   overlayProps,
+  onCloseAutoFocus,
   ...props
 }: DialogContentProps) {
+  // Radix restores focus to its own DialogTrigger. A controlled dialog - opened
+  // from a button somewhere else, which is most of them here - has no trigger to
+  // restore to, so Escape dropped focus onto <body> and a keyboard user
+  // restarted from the top of the page. Remember what was focused when the
+  // dialog mounted and put it back.
+  // Captured during the first render, not in an effect: by the time an effect
+  // runs the content has mounted and Radix has already moved focus inside, so
+  // an effect records the dialog's own field instead of what opened it.
+  const openerRef = React.useRef<HTMLElement | null>(
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
+
+  const restoreFocus = React.useCallback(
+    (event: Event) => {
+      onCloseAutoFocus?.(event);
+      if (event.defaultPrevented) return;
+      const opener = openerRef.current;
+      if (opener && document.contains(opener)) {
+        event.preventDefault();
+        opener.focus();
+      }
+    },
+    [onCloseAutoFocus],
+  );
+
   return (
     <DialogPortal>
       <DialogOverlay disableAnimation={disableAnimation} {...overlayProps} />
@@ -76,6 +104,7 @@ function DialogContent({
           className,
         )}
         aria-modal="true"
+        onCloseAutoFocus={restoreFocus}
         {...props}
       >
         {children}
