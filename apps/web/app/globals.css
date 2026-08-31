@@ -3423,7 +3423,10 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-msg-text code {
   font-family: var(--agi-font-mono);
-  font-size: 0.92em;
+  /* A relative size on a monospace element compounds twice: the browser's own
+     fixed-width default is smaller than its proportional one, so 0.92em of a
+     12.5px parent rendered at 11.5px. The floor holds regardless of context. */
+  font-size: max(0.92em, 12px);
   background: var(--agi-code-bg);
   padding: 1px 6px;
   border-radius: 4px;
@@ -6777,7 +6780,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-device-auth-request > span {
   color: var(--agi-ink-quiet);
   font-family: var(--agi-font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   letter-spacing: 0.065em;
   text-transform: uppercase;
 }
@@ -6918,7 +6921,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-device-auth-request li small {
   color: var(--agi-ink-2);
-  font-size: 0.73rem;
+  font-size: 0.75rem;
   line-height: 1.45;
 }
 
@@ -7812,11 +7815,31 @@ html[data-contrast='more'] *:focus-visible {
   background: var(--agi-bg);
 }
 
+[data-design='agi'] code,
+[data-design='agi'] kbd,
+[data-design='agi'] samp {
+  font-size: max(0.92em, 12px);
+}
+
 [data-design='agi'] .agi-docs-tabs {
   display: flex;
   align-items: stretch;
   height: 100%;
   gap: 0;
+  /* Seven tabs need 506px. At 382px the last two sat entirely past the right
+     edge with overflow visible and nothing scrollable, so the Chrome and VS
+     Code documentation had no route to it on a phone. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+[data-design='agi'] .agi-docs-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+[data-design='agi'] .agi-docs-tab {
+  flex: 0 0 auto;
 }
 
 [data-design='agi'] .agi-docs-tab {
