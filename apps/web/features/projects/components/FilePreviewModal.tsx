@@ -288,7 +288,7 @@ export function FilePreviewModal({ file, onClose }: Props) {
             >
               {file.fileName}
             </p>
-            <p style={{ fontSize: 11, color: 'var(--agi-ink-2)', margin: '2px 0 0' }}>
+            <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: '2px 0 0' }}>
               {file.mimeType} &middot; {formatSize(file.byteCount)}
             </p>
           </div>

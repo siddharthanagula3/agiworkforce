@@ -737,7 +737,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                       >
                         <div
                           className={styles['eyebrow']}
-                          style={{ fontSize: 11, letterSpacing: '0.07em' }}
+                          style={{ fontSize: 12, letterSpacing: '0.07em' }}
                         >
                           <Bot size={13} /> Agent
                         </div>

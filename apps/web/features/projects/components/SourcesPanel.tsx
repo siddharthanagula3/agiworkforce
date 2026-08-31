@@ -172,7 +172,7 @@ export function SourcesPanel({ projectId }: Props) {
               border: 0,
               padding: 0,
               color: '#f87171',
-              fontSize: 11,
+              fontSize: 12,
               cursor: 'pointer',
               textDecoration: 'underline',
             }}
@@ -436,7 +436,7 @@ export function SourcesPanel({ projectId }: Props) {
                   >
                     {file.fileName}
                   </span>
-                  <span style={{ fontSize: 11, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
+                  <span style={{ fontSize: 12, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
                     {(file.byteCount / 1024).toFixed(1)} KB
                   </span>
                   <button
@@ -544,7 +544,7 @@ function DropOverlay({ onDrop }: { onDrop: (file: File) => void }) {
         borderRadius: 8,
         padding: '8px 12px',
         textAlign: 'center',
-        fontSize: 11,
+        fontSize: 12,
         color: 'var(--agi-ink-2)',
         cursor: 'default',
         transition: 'border-color 0.15s',

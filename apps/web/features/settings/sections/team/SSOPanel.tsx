@@ -105,7 +105,7 @@ async function readError(response: Response, fallback: string): Promise<string> 
 function CopyRow({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: 'grid', gap: 2, marginTop: 8 }}>
-      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{label}</span>
       <code style={monoStyle}>{value}</code>
     </div>
   );
@@ -333,7 +333,7 @@ export function SSOPanel({
                       value={connection.domainVerification.recordValue}
                     />
                     {connection.domainChallengeExpiresAt ? (
-                      <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 11 }}>
+                      <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
                         This challenge expires{' '}
                         {new Date(connection.domainChallengeExpiresAt).toLocaleString()}. Reissue it
                         to get a fresh record.
@@ -352,7 +352,7 @@ export function SSOPanel({
 
                 {connection.serviceProvider.acsUrl ? (
                   <div style={{ marginTop: 10 }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
                       Paste these into your identity provider:
                     </div>
                     <CopyRow label="ACS URL" value={connection.serviceProvider.acsUrl} />
@@ -530,7 +530,7 @@ export function SSOPanel({
                       style={controlStyle}
                     />
                   </label>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
                     The client secret is requested when you activate the connection. It is passed to
                     the identity provider and never stored here.
                   </p>

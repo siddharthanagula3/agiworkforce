@@ -715,7 +715,7 @@ export default function ProjectDetailPage() {
                               <span
                                 style={{
                                   color: 'var(--agi-ink-2)',
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   flexShrink: 0,
                                 }}
                               >

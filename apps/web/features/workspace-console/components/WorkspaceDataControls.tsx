@@ -47,7 +47,7 @@ function OutcomeChip({ sweep }: { sweep: RetentionSweepRecord }) {
   return (
     <span
       style={{
-        fontSize: 10,
+        fontSize: 12,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
         whiteSpace: 'nowrap',

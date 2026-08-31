@@ -209,7 +209,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                 >
                   <div>
                     <div style={{ fontSize: 13, color: 'var(--text-1)' }}>{project.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
                       Read-only · visible to {visibleTo.length} of {overview.members.length} members
                     </div>
                   </div>
@@ -349,7 +349,7 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
                 <div style={{ fontSize: 13, color: 'var(--text-1)' }}>{connector.name}</div>
                 <div
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     color: 'var(--text-3)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',

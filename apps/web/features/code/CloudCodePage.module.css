@@ -230,7 +230,7 @@
 .sessionState {
   margin-top: 2px;
   color: var(--chat-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: capitalize;
 }
 
@@ -291,7 +291,7 @@
 .help {
   margin: 0;
   color: var(--chat-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -332,7 +332,7 @@
 
 .networkCopy {
   color: var(--chat-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -386,7 +386,7 @@
   gap: 9px;
   margin-top: 4px;
   color: var(--chat-text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .statusDot {
@@ -441,7 +441,7 @@
 .exitCode {
   margin-top: 5px;
   color: #8796a8;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .commandForm {
@@ -504,7 +504,7 @@
 .linkCard span {
   display: block;
   color: var(--chat-text-muted);
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 2px;
 }
 
