@@ -52,7 +52,7 @@ export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps)
 
   return (
     <div
-      className="mt-1 flex flex-col gap-0.5 text-[11px] leading-tight"
+      className="mt-1 flex flex-col gap-0.5 text-[12px] leading-tight"
       style={{ color: 'var(--chat-text-muted)' }}
       data-component="provenance-footer"
     >
@@ -85,7 +85,7 @@ export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps)
             <button
               type="button"
               onClick={() => onPinModel(routing)}
-              className="ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors hover:bg-[var(--chat-surface-hover)]"
+              className="ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] transition-colors hover:bg-[var(--chat-surface-hover)]"
               style={{
                 borderColor: 'var(--chat-border)',
                 color: 'var(--chat-text-secondary)',

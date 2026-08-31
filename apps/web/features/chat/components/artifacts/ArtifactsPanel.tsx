@@ -413,7 +413,7 @@ export function ArtifactsPanel() {
             <PanelRightOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
             <h2 className="shrink-0 text-sm font-semibold text-foreground">Artifacts</h2>
             {artifacts.length > 0 && (
-              <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[12px] font-medium text-primary">
                 {artifacts.length}
               </span>
             )}
@@ -421,7 +421,7 @@ export function ArtifactsPanel() {
                 hidden. Without this the artifacts simply vanish on reload. */}
             {persistenceDegraded && (
               <span
-                className="shrink-0 whitespace-nowrap text-[10px] text-danger"
+                className="shrink-0 whitespace-nowrap text-[12px] text-danger"
                 title="Browser storage is full, so artifacts are not being saved. They will disappear when this tab is closed."
               >
                 Not saved
@@ -430,7 +430,7 @@ export function ArtifactsPanel() {
             {cloudSyncStatus !== 'idle' && (
               <span
                 className={cn(
-                  'shrink-0 whitespace-nowrap text-[10px]',
+                  'shrink-0 whitespace-nowrap text-[12px]',
                   cloudSyncStatus === 'error' ? 'text-danger' : 'text-muted-foreground',
                 )}
                 title={cloudSyncStatus === 'error' ? (cloudSyncError ?? undefined) : undefined}
@@ -560,7 +560,7 @@ export function ArtifactsToggleButton() {
       <Code2 className="h-4 w-4" />
       {/* Badge showing count */}
       {artifacts.length > 0 && !panelOpen && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground">
           {artifacts.length}
         </span>
       )}

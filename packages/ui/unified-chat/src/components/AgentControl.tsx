@@ -45,7 +45,7 @@ function OverrideDot({ show }: OverrideDotProps) {
           <Tooltip.Content
             side="top"
             className={cn(
-              'z-50 rounded-md px-2 py-1 text-[10px] shadow-md',
+              'z-50 rounded-md px-2 py-1 text-[12px] shadow-md',
               'bg-[var(--chat-surface-elevated)] border border-[var(--chat-border)]',
               'text-[var(--chat-text-secondary)]',
             )}
@@ -62,7 +62,7 @@ function OverrideDot({ show }: OverrideDotProps) {
 function chipClass(active?: boolean) {
   return cn(
     'relative inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1',
-    'text-[11px] font-medium transition-colors duration-150 select-none',
+    'text-[12px] font-medium transition-colors duration-150 select-none',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
     active
       ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
@@ -117,7 +117,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
             )}
           >
             <div className="border-b border-[var(--chat-border)] px-3 py-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
+              <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
                 Agent Mode
               </span>
             </div>
@@ -142,14 +142,14 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-medium">{AGENT_MODE_LABEL[mode]}</span>
                           {mode === 'bypass' && (
-                            <span className="rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide bg-red-500/15 text-red-500">
+                            <span className="rounded px-1 py-0.5 text-[12px] font-semibold uppercase tracking-wide bg-red-500/15 text-red-500">
                               danger
                             </span>
                           )}
                         </div>
                         <p
                           className={cn(
-                            'mt-0.5 text-[10px]',
+                            'mt-0.5 text-[12px]',
                             isSelected
                               ? 'text-[var(--chat-accent-primary-text)]'
                               : 'text-[var(--chat-text-muted)]',
@@ -226,10 +226,10 @@ function EffortChip({ conversationId, projectId, modelId, effortOptions }: Effor
           )}
         >
           <div className="flex items-center justify-between gap-2 border-b border-[var(--chat-border)] px-3 py-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
+            <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
               Reasoning Effort
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--chat-text-secondary)]">
+            <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-secondary)]">
               {EFFORT_LABEL[effectiveEffort]}
             </span>
           </div>

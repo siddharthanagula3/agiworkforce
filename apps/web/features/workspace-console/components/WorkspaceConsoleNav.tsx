@@ -126,7 +126,7 @@ export function WorkspaceConsoleNav() {
       {SECTIONS.map((section) => (
         <div key={section.title} className="flex flex-col gap-1">
           <p
-            className="px-3 pb-1 text-[10px] font-medium uppercase tracking-[0.12em]"
+            className="px-3 pb-1 text-[12px] font-medium uppercase tracking-[0.12em]"
             style={{ color: 'var(--text-3)' }}
           >
             {section.title}
@@ -148,7 +148,7 @@ export function WorkspaceConsoleNav() {
                 <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
                 <span className="flex min-w-0 flex-col">
                   <span className="text-sm font-medium leading-tight">{link.label}</span>
-                  <span className="text-[11px] leading-snug" style={{ color: 'var(--text-3)' }}>
+                  <span className="text-[12px] leading-snug" style={{ color: 'var(--text-3)' }}>
                     {link.hint}
                   </span>
                 </span>

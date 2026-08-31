@@ -46,7 +46,7 @@ export function ConnectorConsentSummary({ className }: { className?: string }) {
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-[11px] text-muted-foreground">
+      <p className="mt-3 text-[12px] text-muted-foreground">
         Full detail:{' '}
         <a href="/agent-permissions" className="underline hover:text-foreground">
           agent permissions

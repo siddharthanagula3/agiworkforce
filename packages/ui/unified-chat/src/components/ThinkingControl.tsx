@@ -29,7 +29,7 @@ export function ThinkingControl({ modelId, disabled, className }: ThinkingContro
         title="This model always uses extended thinking."
         className={cn(
           'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1',
-          'text-[11px] font-medium select-none',
+          'text-[12px] font-medium select-none',
           'text-[var(--chat-accent-primary-text)] bg-[var(--chat-accent-primary)]/15',
           className,
         )}
@@ -57,7 +57,7 @@ export function ThinkingControl({ modelId, disabled, className }: ThinkingContro
       }
       className={cn(
         'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1',
-        'text-[11px] font-medium transition-colors duration-150 select-none',
+        'text-[12px] font-medium transition-colors duration-150 select-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
         thinkingEnabled
           ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'

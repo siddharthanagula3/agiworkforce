@@ -93,7 +93,7 @@ function SectionPlaceholder({ title, body }: { title: string; body: string }) {
       <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{body}</p>
       <p className="text-xs italic text-[var(--chat-text-muted)]">
         This section is the shared shell. Host apps can supply concrete content via the
-        <code className="mx-1 rounded bg-[var(--chat-surface-hover)] px-1 py-0.5 text-[10px]">
+        <code className="mx-1 rounded bg-[var(--chat-surface-hover)] px-1 py-0.5 text-[12px]">
           render
         </code>
         function on the matching SettingsSection.

@@ -112,7 +112,7 @@ export function EditableMessage({
             </span>
           )}
           <span>
-            <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px]">
+            <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[12px]">
               {typeof navigator !== 'undefined' && navigator.platform?.includes('Mac')
                 ? '\u2318'
                 : 'Ctrl'}

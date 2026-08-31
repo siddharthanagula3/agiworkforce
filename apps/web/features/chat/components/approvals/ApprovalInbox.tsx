@@ -156,7 +156,7 @@ export function ApprovalInbox({
           <span className="hidden text-xs sm:inline">Approvals</span>
           {approvals.length > 0 && (
             <span
-              className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold leading-none text-amber-950"
+              className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[12px] font-semibold leading-none text-amber-950"
               aria-hidden="true"
             >
               {approvals.length > 99 ? '99+' : approvals.length}
@@ -201,14 +201,14 @@ export function ApprovalInbox({
                     />
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-medium">{item.label}</h3>
-                      <p className="truncate font-mono text-[10px] text-muted-foreground">
+                      <p className="truncate font-mono text-[12px] text-muted-foreground">
                         {item.name}
                       </p>
                     </div>
                   </div>
 
                   {item.input && (
-                    <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-all rounded-md bg-background/70 p-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
+                    <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-all rounded-md bg-background/70 p-2 font-mono text-[12px] leading-relaxed text-muted-foreground">
                       {item.input}
                     </pre>
                   )}

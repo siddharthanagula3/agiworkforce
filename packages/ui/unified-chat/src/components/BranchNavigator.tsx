@@ -1,4 +1,3 @@
-
 import { memo, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -70,7 +69,7 @@ function BranchNavigatorComponent({
       </button>
 
       <span
-        className="min-w-[28px] cursor-default px-0.5 text-center font-mono text-[10px] text-muted-foreground"
+        className="min-w-[28px] cursor-default px-0.5 text-center font-mono text-[12px] text-muted-foreground"
         title={activeBranch?.name ?? activeBranchId}
       >
         {displayIndex}/{total}

@@ -88,7 +88,7 @@ function EnforcementBadge({ enforcement }: { enforcement: PostureEnforcement }) 
   return (
     <span
       title={title}
-      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em]"
+      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-[0.08em]"
       style={{
         // `--settings-destructive-foreground` is the colour to put ON a
         // destructive background, not a destructive text colour: it resolves

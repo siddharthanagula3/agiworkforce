@@ -489,7 +489,7 @@ export function GeneralSection() {
           {STYLE_TRAITS.map((trait) => (
             <FieldRow key={trait.key} label={trait.label} htmlFor={`general-trait-${trait.key}`}>
               <span className="flex items-center gap-2">
-                <span className="w-16 shrink-0 text-right text-[11px] text-muted-foreground">
+                <span className="w-16 shrink-0 text-right text-[12px] text-muted-foreground">
                   {trait.low}
                 </span>
                 <input
@@ -515,7 +515,7 @@ export function GeneralSection() {
                   }
                   className="w-full"
                 />
-                <span className="w-16 shrink-0 text-[11px] text-muted-foreground">
+                <span className="w-16 shrink-0 text-[12px] text-muted-foreground">
                   {trait.high}
                 </span>
               </span>
@@ -542,7 +542,7 @@ export function GeneralSection() {
               className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring"
               style={{ fontFamily: 'inherit' }}
             />
-            <span className="text-right text-[11px] text-muted-foreground">
+            <span className="text-right text-[12px] text-muted-foreground">
               {instructions.length} / 2000
             </span>
           </label>
@@ -1115,7 +1115,7 @@ function Row({
     <div className="flex min-h-9 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span className={`flex min-w-0 flex-col gap-0.5 ${hint ? '' : 'sm:shrink-0'}`}>
         <span className="text-sm text-foreground">{label}</span>
-        {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+        {hint && <span className="text-[12px] text-muted-foreground">{hint}</span>}
       </span>
       {children}
     </div>
@@ -1137,7 +1137,7 @@ function FieldRow({
     <div className="flex flex-col items-stretch gap-2 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <label htmlFor={htmlFor} className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[13px] font-medium text-foreground">{label}</span>
-        {helper && <span className="text-[11px] text-muted-foreground">{helper}</span>}
+        {helper && <span className="text-[12px] text-muted-foreground">{helper}</span>}
       </label>
       <div className="w-full min-w-0 sm:w-auto sm:shrink-0">{children}</div>
     </div>

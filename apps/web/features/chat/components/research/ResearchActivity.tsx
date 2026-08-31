@@ -79,7 +79,7 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
       >
         {step.description}
       </span>
-      <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+      <span className="shrink-0 text-[12px] uppercase tracking-wide text-muted-foreground">
         {STEP_STATUS_LABELS[step.status]}
       </span>
     </li>
@@ -203,7 +203,7 @@ export function ResearchActivity({
                 disabled={isRetrying}
                 className={cn(
                   'inline-flex items-center gap-1 rounded-md bg-primary px-2 py-0.5',
-                  'text-[11px] font-medium text-primary-foreground transition-opacity',
+                  'text-[12px] font-medium text-primary-foreground transition-opacity',
                   'hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60',
                 )}
                 data-testid="research-plan-start"
@@ -218,7 +218,7 @@ export function ResearchActivity({
                 disabled={isRetrying}
                 className={cn(
                   'inline-flex items-center gap-1 rounded-md border border-border/40 px-2 py-0.5',
-                  'text-[11px] font-medium text-foreground transition-colors',
+                  'text-[12px] font-medium text-foreground transition-colors',
                   'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
                 )}
                 data-testid="research-plan-cancel"
@@ -235,7 +235,7 @@ export function ResearchActivity({
               disabled={isRetrying}
               className={cn(
                 'inline-flex items-center gap-1 rounded-md border border-border/40 px-2 py-0.5',
-                'text-[11px] font-medium text-foreground transition-colors',
+                'text-[12px] font-medium text-foreground transition-colors',
                 'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
               )}
               data-testid="research-retry"

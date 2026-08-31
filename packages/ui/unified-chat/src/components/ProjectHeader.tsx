@@ -46,7 +46,7 @@ function PrivacyChip({ presentation }: { presentation: ProjectHeaderPresentation
       data-testid="project-header-privacy-chip"
       data-stays-local={presentation.staysLocal ? 'true' : 'false'}
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium',
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] font-medium',
         presentation.staysLocal
           ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
           : 'border-zinc-500/40 bg-zinc-500/10 text-zinc-200',
@@ -65,7 +65,7 @@ function ProviderChip({ presentation }: { presentation: ProjectHeaderPresentatio
       data-testid="project-header-provider-chip"
       data-provider-mode={presentation.providerMode}
       className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium',
         tone,
       )}
     >
@@ -87,7 +87,7 @@ function MetaRow({ presentation }: { presentation: ProjectHeaderPresentation }) 
   return (
     <div
       data-testid="project-header-meta-row"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--chat-text-muted)]"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--chat-text-muted)]"
     >
       {items.map((item, index) => (
         <span key={item + index} className="inline-flex items-center gap-1">
@@ -109,7 +109,7 @@ function SurfaceChips({ presentation }: { presentation: ProjectHeaderPresentatio
         <span
           key={label}
           className={cn(
-            'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
+            'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[12px] uppercase tracking-wide',
             'border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]',
           )}
         >
@@ -150,7 +150,7 @@ export function ProjectHeader({ presentation, className, compact = false }: Proj
                 <span
                   data-testid="project-header-imported-from"
                   className={cn(
-                    'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
+                    'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[12px] uppercase tracking-wide',
                     'border-violet-500/40 bg-violet-500/10 text-violet-300',
                   )}
                 >
@@ -172,7 +172,7 @@ export function ProjectHeader({ presentation, className, compact = false }: Proj
           <span
             data-testid="project-header-imported-from"
             className={cn(
-              'rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
+              'rounded-full border px-1.5 py-0.5 text-[12px] uppercase tracking-wide',
               'border-violet-500/40 bg-violet-500/10 text-violet-300',
             )}
           >

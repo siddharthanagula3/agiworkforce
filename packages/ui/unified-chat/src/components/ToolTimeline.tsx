@@ -181,7 +181,7 @@ export function ToolTimeline({
                     >
                       <div className="flex items-center gap-1 mb-0.5">
                         <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
-                        <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                        <span className="text-[12px] text-blue-400/70 font-mono">parallel</span>
                       </div>
                       {group.entries.map((entry) => (
                         <ToolCallCard

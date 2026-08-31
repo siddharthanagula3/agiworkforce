@@ -76,23 +76,23 @@ function ActionLogItem({ entry }: { entry: ActionLogEntry }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-xs font-medium">{entry.title}</p>
-            <span className="shrink-0 text-[10px] uppercase tracking-wide opacity-80">
+            <span className="shrink-0 text-[12px] uppercase tracking-wide opacity-80">
               {entry.status}
             </span>
           </div>
-          {entry.description && <p className="mt-1 text-[11px] opacity-85">{entry.description}</p>}
+          {entry.description && <p className="mt-1 text-[12px] opacity-85">{entry.description}</p>}
           {entry.result && (
-            <p className="mt-1 text-[11px] text-emerald-200/90 line-clamp-3">{entry.result}</p>
+            <p className="mt-1 text-[12px] text-emerald-200/90 line-clamp-3">{entry.result}</p>
           )}
           {entry.error && (
-            <p className="mt-1 text-[11px] text-red-200/90 line-clamp-3">{entry.error}</p>
+            <p className="mt-1 text-[12px] text-red-200/90 line-clamp-3">{entry.error}</p>
           )}
           {details && (
             <div className="mt-1.5">
               <button
                 type="button"
                 onClick={() => setIsDetailsOpen((value) => !value)}
-                className="flex items-center gap-1 text-[10px] opacity-80 transition-colors hover:opacity-100"
+                className="flex items-center gap-1 text-[12px] opacity-80 transition-colors hover:opacity-100"
                 aria-expanded={isDetailsOpen}
               >
                 <motion.div
@@ -110,7 +110,7 @@ function ActionLogItem({ entry }: { entry: ActionLogEntry }) {
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.18 }}
-                    className="mt-1 overflow-hidden whitespace-pre-wrap rounded bg-black/20 px-2 py-1.5 text-[10px] text-slate-300/90"
+                    className="mt-1 overflow-hidden whitespace-pre-wrap rounded bg-black/20 px-2 py-1.5 text-[12px] text-slate-300/90"
                   >
                     {details}
                   </motion.pre>
@@ -171,7 +171,7 @@ export function ActionLogTimelineContent({ entries, className }: ActionLogTimeli
           <span className="ml-1 text-muted-foreground">({entries.length})</span>
         </span>
         {statusSummary.length > 0 && (
-          <span className="ml-auto text-[10px] text-muted-foreground">
+          <span className="ml-auto text-[12px] text-muted-foreground">
             {statusSummary.join(' · ')}
           </span>
         )}

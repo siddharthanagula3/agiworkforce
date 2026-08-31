@@ -208,7 +208,7 @@ export function Sidebar() {
                 <>
                   <span className="flex-1 text-left text-sm">{item.label}</span>
                   {item.shortcut && (
-                    <span className="text-[11px] text-[var(--chat-text-muted)]">
+                    <span className="text-[12px] text-[var(--chat-text-muted)]">
                       {item.shortcut}
                     </span>
                   )}
@@ -244,7 +244,7 @@ export function Sidebar() {
             <>
               {orderedGroups.map((group) => (
                 <div key={group} className="mb-1">
-                  <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-[var(--chat-text-muted)]">
+                  <p className="px-2 py-1 text-[12px] font-medium uppercase tracking-wider text-[var(--chat-text-muted)]">
                     {group}
                   </p>
                   {groupedConversations[group]!.map((conv) => (

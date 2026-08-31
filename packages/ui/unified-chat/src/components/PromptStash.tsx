@@ -47,7 +47,7 @@ function EntryRow({ entry, onSelect, onDelete }: EntryRowProps) {
         <p className="text-xs font-medium text-foreground truncate leading-snug">
           {entryPreview(entry)}
         </p>
-        <p className="text-[10px] text-muted-foreground mt-0.5">{formatDate(entry.createdAt)}</p>
+        <p className="text-[12px] text-muted-foreground mt-0.5">{formatDate(entry.createdAt)}</p>
       </div>
       <button
         type="button"
@@ -177,7 +177,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
             <div className="py-6 px-4 text-center">
               <Bookmark className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">No saved prompts yet.</p>
-              <p className="text-[10px] text-muted-foreground mt-1">
+              <p className="text-[12px] text-muted-foreground mt-1">
                 Type a prompt and click &quot;Save current prompt&quot; above.
               </p>
             </div>
@@ -199,7 +199,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
                 <button
                   type="button"
                   onClick={handleClearAll}
-                  className="flex w-full items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] text-muted-foreground hover:text-danger hover:bg-destructive/10 transition-colors"
+                  className="flex w-full items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground hover:text-danger hover:bg-destructive/10 transition-colors"
                 >
                   <Trash2 className="h-3 w-3" />
                   Clear all

@@ -60,13 +60,13 @@ function StepResult({ result }: StepResultProps) {
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
-        className="flex items-center gap-1 text-[11px] text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] transition-colors"
+        className="flex items-center gap-1 text-[12px] text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] transition-colors"
       >
         {collapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
         <span>{collapsed ? 'Show result' : 'Hide result'}</span>
       </button>
       {!collapsed && (
-        <pre className="mt-1 rounded-[var(--chat-radius-sm)] bg-[var(--chat-surface-overlay)] px-3 py-2 text-[11px] font-mono text-[var(--chat-text-muted)] leading-relaxed overflow-x-auto whitespace-pre-wrap break-words">
+        <pre className="mt-1 rounded-[var(--chat-radius-sm)] bg-[var(--chat-surface-overlay)] px-3 py-2 text-[12px] font-mono text-[var(--chat-text-muted)] leading-relaxed overflow-x-auto whitespace-pre-wrap break-words">
           {result}
         </pre>
       )}
@@ -238,7 +238,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
         <span className="truncate">{block.summary}</span>
         <div className="flex items-center gap-2 shrink-0">
           {block.durationMs !== undefined && !summaryIncludesDuration && (
-            <span className="text-[11px] font-normal text-[var(--chat-text-muted)]">
+            <span className="text-[12px] font-normal text-[var(--chat-text-muted)]">
               {formatDuration(block.durationMs)}
             </span>
           )}

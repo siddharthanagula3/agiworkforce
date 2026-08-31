@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '../lib/utils';
 
@@ -88,7 +87,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
       aria-label="Skill mentions"
     >
       <div className="px-3 py-2 border-b border-[hsl(var(--border))]">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+        <span className="text-[12px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
           AI Skills — type to filter
         </span>
       </div>
@@ -108,7 +107,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
           onMouseEnter={() => setSelectedIndex(i)}
         >
           <span className="font-medium truncate">{skill.name}</span>
-          <span className="text-[10px] text-muted-foreground shrink-0">{skill.category}</span>
+          <span className="text-[12px] text-muted-foreground shrink-0">{skill.category}</span>
         </button>
       ))}
     </div>

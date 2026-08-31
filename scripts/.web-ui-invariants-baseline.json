@@ -4,7 +4,6 @@
     "raw-palette": 1287,
     "raw-bw": 83,
     "opacity-diluted-text": 29,
-    "tiny-type": 380,
     "hover-only-affordance": 14,
     "arbitrary-color": 2
   },
@@ -478,30 +477,6 @@
       "literal": "text-foreground/40"
     },
     {
-      "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
-      "line": 302,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
-      "line": 314,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
-      "line": 361,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
-      "line": 375,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
       "file": "apps/web/shared/components/OfflineIndicator.tsx",
       "line": 77,
       "rule": "raw-palette",
@@ -752,24 +727,6 @@
       "line": 23,
       "rule": "raw-bw",
       "literal": "text-white"
-    },
-    {
-      "file": "apps/web/shared/components/layout/SidebarPlanNudge.tsx",
-      "line": 42,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "apps/web/shared/components/layout/SidebarPlanNudge.tsx",
-      "line": 46,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "apps/web/shared/components/layout/WebAppShell.tsx",
-      "line": 321,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/admin/components/ContentReportQueuePanel.tsx",
@@ -1552,36 +1509,6 @@
       "literal": "text-red-300"
     },
     {
-      "file": "apps/web/features/chat/components/Budget/BudgetTrackerDisplay.tsx",
-      "line": 70,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Budget/BudgetTrackerDisplay.tsx",
-      "line": 106,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
-      "line": 69,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
-      "line": 151,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/AttachmentPreview.tsx",
-      "line": 156,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
       "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
       "line": 164,
       "rule": "raw-palette",
@@ -1604,12 +1531,6 @@
       "line": 164,
       "rule": "raw-palette",
       "literal": "text-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 164,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
     },
     {
       "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
@@ -1853,84 +1774,6 @@
     },
     {
       "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 2638,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 2664,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 2680,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 2778,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 2791,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 2843,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 2943,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3021,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3026,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3030,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3112,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3117,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3121,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
       "line": 3203,
       "rule": "raw-palette",
       "literal": "text-amber-300"
@@ -1940,54 +1783,6 @@
       "line": 3208,
       "rule": "raw-palette",
       "literal": "text-amber-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3229,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3427,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 3670,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 4057,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 4063,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 4076,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 4093,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
-      "line": 4112,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
@@ -2000,12 +1795,6 @@
       "line": 467,
       "rule": "opacity-diluted-text",
       "literal": "text-foreground/80"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 483,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
     },
     {
       "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
@@ -2027,63 +1816,9 @@
     },
     {
       "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 512,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 521,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 530,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 539,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
       "line": 930,
       "rule": "opacity-diluted-text",
       "literal": "text-foreground/85"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 942,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 953,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 1007,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 1036,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-      "line": 1048,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "apps/web/features/chat/components/Composer/SendButton.tsx",
@@ -2126,24 +1861,6 @@
       "line": 125,
       "rule": "raw-palette",
       "literal": "text-amber-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
-      "line": 163,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
-      "line": 193,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
-      "line": 224,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/chat/components/Composer/StyleSelector.tsx",
@@ -2200,12 +1917,6 @@
       "literal": "text-white"
     },
     {
-      "file": "apps/web/features/chat/components/Composer/VoiceInputButton.tsx",
-      "line": 181,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
       "file": "apps/web/features/chat/components/Composer/VoiceRecordingOverlay.tsx",
       "line": 33,
       "rule": "raw-palette",
@@ -2237,12 +1948,6 @@
     },
     {
       "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
-      "line": 603,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
       "line": 609,
       "rule": "raw-palette",
       "literal": "text-amber-700"
@@ -2270,12 +1975,6 @@
       "line": 741,
       "rule": "raw-bw",
       "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
-      "line": 808,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/chat/components/ImageLightbox.tsx",
@@ -2609,12 +2308,6 @@
     },
     {
       "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 159,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
       "line": 199,
       "rule": "raw-palette",
       "literal": "text-amber-600"
@@ -2624,18 +2317,6 @@
       "line": 199,
       "rule": "raw-palette",
       "literal": "text-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 204,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 211,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
@@ -2654,12 +2335,6 @@
       "line": 217,
       "rule": "raw-palette",
       "literal": "text-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1288,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
@@ -2690,12 +2365,6 @@
       "line": 1546,
       "rule": "raw-palette",
       "literal": "text-yellow-800"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1567,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
@@ -2765,12 +2434,6 @@
     },
     {
       "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1878,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
       "line": 1907,
       "rule": "raw-bw",
       "literal": "bg-white"
@@ -2786,30 +2449,6 @@
       "line": 1979,
       "rule": "raw-palette",
       "literal": "text-gray-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
-      "line": 416,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
-      "line": 424,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
-      "line": 433,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
-      "line": 563,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
@@ -2932,24 +2571,6 @@
       "literal": "opacity-0"
     },
     {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 224,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 233,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 240,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
       "line": 57,
       "rule": "raw-palette",
@@ -2996,12 +2617,6 @@
       "line": 234,
       "rule": "raw-palette",
       "literal": "text-indigo-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 264,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
@@ -3154,18 +2769,6 @@
       "literal": "text-white"
     },
     {
-      "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
-      "line": 127,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/dialogs/CreateProjectDialog.tsx",
-      "line": 177,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
       "line": 49,
       "rule": "raw-palette",
@@ -3209,24 +2812,6 @@
     },
     {
       "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
-      "line": 502,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
-      "line": 530,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
-      "line": 616,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
       "line": 636,
       "rule": "raw-palette",
       "literal": "border-gray-200"
@@ -3296,30 +2881,6 @@
       "line": 640,
       "rule": "raw-palette",
       "literal": "text-gray-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/dialogs/UpgradePlanDialog.tsx",
-      "line": 167,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/dialogs/UpgradePlanDialog.tsx",
-      "line": 183,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/dialogs/UpgradePlanDialog.tsx",
-      "line": 188,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/dialogs/UpgradePlanDialog.tsx",
-      "line": 398,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
@@ -3362,12 +2923,6 @@
       "line": 110,
       "rule": "raw-palette",
       "literal": "text-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/EditableMessage.tsx",
-      "line": 115,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "apps/web/features/chat/components/messages/FileTypeIcon.tsx",
@@ -3520,22 +3075,10 @@
       "literal": "text-emerald-500"
     },
     {
-      "file": "apps/web/features/chat/components/messages/FileTypeIcon.tsx",
-      "line": 93,
-      "rule": "tiny-type",
-      "literal": "text-[6px]"
-    },
-    {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
       "line": 1316,
       "rule": "raw-palette",
       "literal": "text-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 1330,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
     },
     {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
@@ -3551,51 +3094,15 @@
     },
     {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 1688,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
       "line": 1894,
       "rule": "raw-bw",
       "literal": "text-white"
     },
     {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 1946,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
       "line": 1993,
       "rule": "raw-bw",
       "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 1993,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 2011,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 2029,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 2048,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
@@ -3611,45 +3118,15 @@
     },
     {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 2081,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
       "line": 2113,
       "rule": "raw-palette",
       "literal": "text-amber-500"
     },
     {
       "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
-      "line": 223,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
       "line": 225,
       "rule": "opacity-diluted-text",
       "literal": "text-muted-foreground/0"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
-      "line": 509,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
-      "line": 581,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
-      "line": 590,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
@@ -3682,160 +3159,10 @@
       "literal": "text-blue-400"
     },
     {
-      "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
-      "line": 796,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/cards/ClarifyCard.tsx",
-      "line": 141,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/cards/MapSearchCard.tsx",
-      "line": 209,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/cards/MapSearchCard.tsx",
-      "line": 252,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/cards/MapSearchCard.tsx",
-      "line": 309,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
-      "line": 82,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
-      "line": 206,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
-      "line": 221,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchActivity.tsx",
-      "line": 238,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 68,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 91,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 93,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
       "line": 99,
       "rule": "opacity-diluted-text",
       "literal": "text-muted-foreground/0"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 344,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 423,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 473,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 478,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 512,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
-      "line": 524,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
-      "line": 216,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
-      "line": 238,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
-      "line": 363,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
-      "line": 569,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchReportsGallery.tsx",
-      "line": 71,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchReportsGallery.tsx",
-      "line": 79,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/research/ResearchReportsGallery.tsx",
-      "line": 133,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
@@ -3929,18 +3256,6 @@
     },
     {
       "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 389,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 434,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
       "line": 534,
       "rule": "raw-palette",
       "literal": "border-amber-500"
@@ -3962,60 +3277,6 @@
       "line": 534,
       "rule": "raw-palette",
       "literal": "text-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 534,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 554,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 591,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 622,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 635,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 646,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
-      "line": 685,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/chat/pages/WebChatPage.tsx",
-      "line": 4301,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/chat/pages/WebChatPage.tsx",
-      "line": 4343,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "apps/web/features/chat/pages/WebChatPage.tsx",
@@ -4114,36 +3375,6 @@
       "literal": "text-white"
     },
     {
-      "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
-      "line": 35,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
-      "line": 86,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
-      "line": 164,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
-      "line": 197,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/connectors/components/ConnectorCapabilitiesPanel.tsx",
-      "line": 202,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "apps/web/features/connectors/components/ConnectorConsentSummary.tsx",
       "line": 32,
       "rule": "raw-palette",
@@ -4172,12 +3403,6 @@
       "line": 42,
       "rule": "raw-palette",
       "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/connectors/components/ConnectorConsentSummary.tsx",
-      "line": 49,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/connectors/components/OfficialConnectorLogo.tsx",
@@ -4304,12 +3529,6 @@
       "line": 68,
       "rule": "raw-palette",
       "literal": "text-red-400"
-    },
-    {
-      "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
-      "line": 119,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "apps/web/features/connectors/data/connectors.ts",
@@ -5380,36 +4599,6 @@
       "literal": "to-indigo-800"
     },
     {
-      "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
-      "line": 156,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
-      "line": 191,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
-      "line": 221,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
-      "line": 235,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
-      "line": 246,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
       "line": 116,
       "rule": "raw-palette",
@@ -5513,12 +4702,6 @@
     },
     {
       "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
-      "line": 515,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
       "line": 544,
       "rule": "raw-palette",
       "literal": "text-emerald-700"
@@ -5528,12 +4711,6 @@
       "line": 544,
       "rule": "raw-palette",
       "literal": "text-emerald-300"
-    },
-    {
-      "file": "apps/web/features/schedules/components/SchedulesPage.tsx",
-      "line": 606,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
@@ -5564,12 +4741,6 @@
       "line": 317,
       "rule": "raw-palette",
       "literal": "text-red-400"
-    },
-    {
-      "file": "apps/web/features/settings/components/LanguageSelector.tsx",
-      "line": 44,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
@@ -5675,24 +4846,6 @@
     },
     {
       "file": "apps/web/features/settings/sections/GeneralSection.tsx",
-      "line": 492,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
-      "line": 518,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
-      "line": 545,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
       "line": 556,
       "rule": "raw-palette",
       "literal": "bg-amber-700"
@@ -5726,114 +4879,6 @@
       "line": 794,
       "rule": "raw-bw",
       "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
-      "line": 1118,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
-      "line": 1140,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
-      "line": 40,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
-      "line": 225,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx",
-      "line": 247,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
-      "line": 129,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceConsoleNav.tsx",
-      "line": 151,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceConsoleShell.tsx",
-      "line": 101,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
-      "line": 56,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
-      "line": 218,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
-      "line": 240,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
-      "line": 317,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
-      "line": 337,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceModelPolicy.tsx",
-      "line": 358,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspacePostureOverview.tsx",
-      "line": 91,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceUsageAnalytics.tsx",
-      "line": 40,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "apps/web/features/workspace-console/components/WorkspaceUsageAnalytics.tsx",
-      "line": 49,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "apps/web/features/workspaces/components/WorkspaceMenuItems.tsx",
-      "line": 21,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/ui/src/primitives/Alert.tsx",
@@ -6059,96 +5104,6 @@
     },
     {
       "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 635,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 675,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 685,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 930,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 995,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 998,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1016,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1029,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1036,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1091,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1132,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1150,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1156,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1318,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1372,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
       "line": 1377,
       "rule": "raw-palette",
       "literal": "text-amber-600"
@@ -6158,90 +5113,6 @@
       "line": 1377,
       "rule": "raw-palette",
       "literal": "text-amber-500"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1377,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1386,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1444,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1464,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1754,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1768,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1900,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 1948,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 2089,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 2314,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 2357,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 2423,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 2485,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
-      "line": 2688,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/ui/src/sidebar/Menu.tsx",
@@ -6275,12 +5146,6 @@
     },
     {
       "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
-      "line": 144,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
       "line": 158,
       "rule": "hover-only-affordance",
       "literal": "opacity-0"
@@ -6290,12 +5155,6 @@
       "line": 167,
       "rule": "raw-palette",
       "literal": "text-amber-500"
-    },
-    {
-      "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
-      "line": 232,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
@@ -6347,30 +5206,6 @@
     },
     {
       "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
-      "line": 680,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
-      "line": 739,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
-      "line": 778,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
-      "line": 850,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
       "line": 917,
       "rule": "raw-palette",
       "literal": "text-red-400"
@@ -6392,12 +5227,6 @@
       "line": 979,
       "rule": "raw-palette",
       "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/ui/src/sidebar/Sidebar.tsx",
-      "line": 986,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
@@ -6479,27 +5308,9 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
-      "line": 79,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
-      "line": 83,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
       "line": 85,
       "rule": "raw-palette",
       "literal": "text-emerald-200"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
-      "line": 85,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
@@ -6509,57 +5320,9 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
-      "line": 88,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
-      "line": 95,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
       "line": 113,
       "rule": "raw-palette",
       "literal": "text-slate-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
-      "line": 113,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx",
-      "line": 174,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
-      "line": 255,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
-      "line": 257,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
-      "line": 269,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
-      "line": 298,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
@@ -6586,40 +5349,10 @@
       "literal": "text-foreground/90"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
-      "line": 396,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx",
-      "line": 410,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
       "line": 41,
       "rule": "raw-palette",
       "literal": "bg-amber-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
-      "line": 48,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
-      "line": 65,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
-      "line": 120,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
@@ -6632,30 +5365,6 @@
       "line": 145,
       "rule": "raw-palette",
       "literal": "text-red-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
-      "line": 145,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
-      "line": 152,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
-      "line": 229,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentControl.tsx",
-      "line": 232,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgentProgressFooter.tsx",
@@ -6671,21 +5380,9 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgentProgressFooter.tsx",
-      "line": 87,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentProgressFooter.tsx",
       "line": 92,
       "rule": "raw-palette",
       "literal": "bg-teal-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentProgressFooter.tsx",
-      "line": 101,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgentProgressFooter.tsx",
@@ -6869,33 +5566,15 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgentStepTimeline.tsx",
-      "line": 122,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentStepTimeline.tsx",
       "line": 140,
       "rule": "raw-palette",
       "literal": "text-slate-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentStepTimeline.tsx",
-      "line": 140,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgentStepTimeline.tsx",
       "line": 149,
       "rule": "raw-palette",
       "literal": "text-slate-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/AgentStepTimeline.tsx",
-      "line": 169,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
@@ -6941,63 +5620,15 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
-      "line": 193,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
-      "line": 220,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
-      "line": 227,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
-      "line": 597,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
       "line": 719,
       "rule": "raw-bw",
       "literal": "bg-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
-      "line": 771,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
-      "line": 797,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
-      "line": 808,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
       "line": 841,
       "rule": "raw-bw",
       "literal": "bg-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
-      "line": 913,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
@@ -7028,12 +5659,6 @@
       "line": 253,
       "rule": "raw-palette",
       "literal": "text-zinc-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
-      "line": 253,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
@@ -7118,12 +5743,6 @@
       "line": 684,
       "rule": "raw-palette",
       "literal": "text-cyan-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/BranchNavigator.tsx",
-      "line": 73,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/BrandedGreeting.tsx",
@@ -7318,24 +5937,6 @@
       "literal": "bg-emerald-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/ChatInput.tsx",
-      "line": 879,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatInput.tsx",
-      "line": 928,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatInput.tsx",
-      "line": 1075,
-      "rule": "tiny-type",
-      "literal": "text-[8px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
       "line": 73,
       "rule": "raw-palette",
@@ -7408,12 +6009,6 @@
       "literal": "text-white"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/ChatInterface.tsx",
-      "line": 226,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/ChatNotificationBadge.tsx",
       "line": 14,
       "rule": "raw-palette",
@@ -7436,12 +6031,6 @@
       "line": 47,
       "rule": "raw-bw",
       "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatNotificationBadge.tsx",
-      "line": 47,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
@@ -7642,12 +6231,6 @@
       "literal": "opacity-0"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/CitationPill.tsx",
-      "line": 27,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/CodeExecutionOutput.tsx",
       "line": 113,
       "rule": "raw-palette",
@@ -7688,60 +6271,6 @@
       "line": 178,
       "rule": "raw-palette",
       "literal": "text-rose-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/CommandPalette.tsx",
-      "line": 224,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/CommandPalette.tsx",
-      "line": 234,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
-      "line": 85,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
-      "line": 92,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
-      "line": 99,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
-      "line": 106,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
-      "line": 113,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx",
-      "line": 143,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ConversationHeader.tsx",
-      "line": 164,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/CurrentActionBadge.tsx",
@@ -7888,12 +6417,6 @@
       "literal": "text-rose-400"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/Disclaimer.tsx",
-      "line": 13,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/FileMentionPicker.tsx",
       "line": 25,
       "rule": "raw-palette",
@@ -7904,30 +6427,6 @@
       "line": 47,
       "rule": "raw-palette",
       "literal": "text-emerald-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/FileMentionPicker.tsx",
-      "line": 196,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/FileMentionPicker.tsx",
-      "line": 238,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/FileMentionPicker.tsx",
-      "line": 243,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/FileMentionPicker.tsx",
-      "line": 247,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
@@ -8009,12 +6508,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 115,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
       "line": 123,
       "rule": "raw-palette",
       "literal": "bg-rose-500"
@@ -8024,12 +6517,6 @@
       "line": 123,
       "rule": "raw-palette",
       "literal": "text-rose-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 123,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
@@ -8051,12 +6538,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 131,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
       "line": 138,
       "rule": "raw-palette",
       "literal": "bg-zinc-500"
@@ -8066,66 +6547,6 @@
       "line": 138,
       "rule": "raw-palette",
       "literal": "text-zinc-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 138,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 207,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 221,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 227,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 232,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 281,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
-      "line": 180,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
-      "line": 382,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/KeyboardShortcutsDialog.tsx",
-      "line": 164,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/KeyboardShortcutsOverlay.tsx",
-      "line": 193,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/LocalByokHandoffDialog.tsx",
@@ -8260,36 +6681,6 @@
       "literal": "text-emerald-300"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
-      "line": 196,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
-      "line": 292,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/MemoryEditor.tsx",
-      "line": 298,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
-      "line": 140,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
-      "line": 451,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
       "line": 453,
       "rule": "raw-palette",
@@ -8345,18 +6736,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx",
-      "line": 427,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx",
-      "line": 438,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx",
       "line": 490,
       "rule": "raw-palette",
       "literal": "text-rose-400"
@@ -8392,114 +6771,6 @@
       "literal": "text-amber-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/MessageList.tsx",
-      "line": 301,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 189,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 203,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 216,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 261,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 313,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 326,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 330,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 336,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 597,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 600,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 758,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 827,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 832,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 843,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 855,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 861,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ModelSelector.tsx",
-      "line": 878,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
       "line": 253,
       "rule": "raw-palette",
@@ -8528,18 +6799,6 @@
       "line": 288,
       "rule": "raw-palette",
       "literal": "bg-red-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
-      "line": 325,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
-      "line": 300,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
@@ -8741,12 +7000,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
-      "line": 49,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
       "line": 51,
       "rule": "raw-palette",
       "literal": "border-emerald-500"
@@ -8789,30 +7042,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
-      "line": 68,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
-      "line": 90,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
-      "line": 112,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
-      "line": 153,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
       "line": 154,
       "rule": "raw-palette",
       "literal": "border-violet-500"
@@ -8831,12 +7060,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
-      "line": 175,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProjectHeader.tsx",
       "line": 176,
       "rule": "raw-palette",
       "literal": "border-violet-500"
@@ -8852,12 +7075,6 @@
       "line": 176,
       "rule": "raw-palette",
       "literal": "text-violet-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/PromptStash.tsx",
-      "line": 50,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/PromptStash.tsx",
@@ -8876,18 +7093,6 @@
       "line": 142,
       "rule": "raw-palette",
       "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/PromptStash.tsx",
-      "line": 180,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/PromptStash.tsx",
-      "line": 202,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/PromptSuggestionsDropdown.tsx",
@@ -8984,18 +7189,6 @@
       "line": 28,
       "rule": "raw-palette",
       "literal": "text-orange-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProvenanceFooter.tsx",
-      "line": 55,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ProvenanceFooter.tsx",
-      "line": 88,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/RewindTimeline.tsx",
@@ -9184,90 +7377,6 @@
       "literal": "bg-sky-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 77,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 104,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 109,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 113,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 156,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 161,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 166,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 175,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
-      "line": 194,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SettingsShell.tsx",
-      "line": 96,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/Sidebar.tsx",
-      "line": 211,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/Sidebar.tsx",
-      "line": 247,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SkillMentionPicker.tsx",
-      "line": 91,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SkillMentionPicker.tsx",
-      "line": 111,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/SlashCommandMenu.tsx",
       "line": 84,
       "rule": "raw-palette",
@@ -9278,12 +7387,6 @@
       "line": 84,
       "rule": "raw-palette",
       "literal": "text-amber-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SlashCommandMenu.tsx",
-      "line": 84,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
@@ -9376,18 +7479,6 @@
       "literal": "bg-red-400"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 100,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 129,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
       "line": 28,
       "rule": "raw-palette",
@@ -9443,69 +7534,9 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 77,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
       "line": 117,
       "rule": "opacity-diluted-text",
       "literal": "text-foreground/90"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 121,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 126,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 143,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ThinkingBlock.tsx",
-      "line": 63,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ThinkingBlock.tsx",
-      "line": 69,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ThinkingBlock.tsx",
-      "line": 241,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ThinkingControl.tsx",
-      "line": 32,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ThinkingControl.tsx",
-      "line": 60,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 103,
-      "rule": "tiny-type",
-      "literal": "text-[9px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
@@ -9518,12 +7549,6 @@
       "line": 153,
       "rule": "raw-palette",
       "literal": "bg-green-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 173,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
@@ -9562,24 +7587,6 @@
       "literal": "text-green-400"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 251,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 270,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 177,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
       "line": 180,
       "rule": "raw-palette",
@@ -9587,27 +7594,9 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 180,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
       "line": 181,
       "rule": "raw-palette",
       "literal": "text-red-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 181,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 183,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
@@ -9674,12 +7663,6 @@
       "line": 231,
       "rule": "raw-palette",
       "literal": "bg-gray-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 231,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
@@ -9755,30 +7738,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 402,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 410,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 423,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 438,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
       "line": 441,
       "rule": "raw-palette",
       "literal": "text-red-400"
@@ -9848,12 +7807,6 @@
       "line": 184,
       "rule": "raw-palette",
       "literal": "text-blue-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
-      "line": 184,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/UsageLimitBanner.tsx",
@@ -9964,36 +7917,6 @@
       "literal": "text-amber-400"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
-      "line": 49,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 84,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 93,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 106,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 121,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
       "line": 130,
       "rule": "raw-palette",
@@ -10004,12 +7927,6 @@
       "line": 130,
       "rule": "raw-palette",
       "literal": "text-blue-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 130,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
@@ -10028,24 +7945,6 @@
       "line": 196,
       "rule": "raw-bw",
       "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 196,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 223,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 263,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
@@ -10070,18 +7969,6 @@
       "line": 268,
       "rule": "raw-palette",
       "literal": "text-purple-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 275,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 420,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
@@ -10118,24 +8005,6 @@
       "line": 127,
       "rule": "raw-bw",
       "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/WebSearchCard.tsx",
-      "line": 59,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/WebSearchCard.tsx",
-      "line": 122,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/ChartArtifact.tsx",
-      "line": 207,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/artifact-components/EmailArtifact.tsx",
@@ -10214,30 +8083,6 @@
       "line": 115,
       "rule": "raw-palette",
       "literal": "text-green-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
-      "line": 124,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
-      "line": 140,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
-      "line": 191,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
-      "line": 230,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
@@ -10481,12 +8326,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/sidecar/SidecarPanel.tsx",
-      "line": 127,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/sidecar/SidecarPanel.tsx",
       "line": 132,
       "rule": "raw-palette",
       "literal": "border-amber-400"
@@ -10504,12 +8343,6 @@
       "literal": "text-amber-300"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/sidecar/SidecarPanel.tsx",
-      "line": 132,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
       "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
       "line": 110,
       "rule": "raw-palette",
@@ -10523,93 +8356,9 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 144,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 159,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 168,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 174,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 191,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 205,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 213,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 318,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 327,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 373,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 406,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
       "line": 416,
       "rule": "raw-palette",
       "literal": "bg-emerald-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 447,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 531,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 539,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
@@ -10637,18 +8386,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
-      "line": 308,
-      "rule": "tiny-type",
-      "literal": "text-[10px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
-      "line": 398,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
       "line": 458,
       "rule": "raw-palette",
       "literal": "border-amber-500"
@@ -10664,18 +8401,6 @@
       "line": 461,
       "rule": "raw-palette",
       "literal": "text-amber-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
-      "line": 470,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
-      "line": 513,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/tasks/task-display.ts",
@@ -10772,12 +8497,6 @@
       "line": 91,
       "rule": "raw-palette",
       "literal": "text-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ui/ChatBadge.tsx",
-      "line": 14,
-      "rule": "tiny-type",
-      "literal": "text-[11px]"
     }
   ]
 }

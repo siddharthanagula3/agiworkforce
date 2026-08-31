@@ -98,7 +98,7 @@ export function WorkspaceConsoleShell({
       <aside className="w-full shrink-0 md:w-60">
         <div className="mb-6">
           <p
-            className="text-[10px] font-medium uppercase tracking-[0.14em]"
+            className="text-[12px] font-medium uppercase tracking-[0.14em]"
             style={{ color: 'var(--text-3)' }}
           >
             Administration

@@ -100,7 +100,7 @@ export const TokenCounter = ({
             {(showWarning || showDanger) && (
               <span
                 className={cn(
-                  'ml-0.5 rounded px-1 py-0.5 text-[9px] font-semibold',
+                  'ml-0.5 rounded px-1 py-0.5 text-[12px] font-semibold',
                   showWarning && 'bg-warning/20 text-warning',
                   showDanger && 'bg-destructive/20 text-danger',
                 )}
@@ -170,7 +170,7 @@ export const TokenCounter = ({
             />
           )}
         </div>
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+        <div className="flex items-center justify-between text-[12px] text-muted-foreground">
           <span>{percentage.toFixed(1)}% used</span>
           {(inputTokens > 0 || outputTokens > 0) && (
             <span className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export const TokenCounter = ({
                   <button
                     type="button"
                     onClick={onCompact}
-                    className="ml-auto flex items-center gap-1 rounded bg-warning/20 px-1.5 py-0.5 text-[10px] font-medium transition-colors hover:bg-warning/30"
+                    className="ml-auto flex items-center gap-1 rounded bg-warning/20 px-1.5 py-0.5 text-[12px] font-medium transition-colors hover:bg-warning/30"
                   >
                     <Scissors className="h-2.5 w-2.5" />
                     Compact
@@ -267,7 +267,7 @@ export const TokenCounter = ({
                   <button
                     type="button"
                     onClick={onCompact}
-                    className="ml-auto flex items-center gap-1 rounded bg-destructive/20 px-1.5 py-0.5 text-[10px] font-medium transition-colors hover:bg-destructive/30"
+                    className="ml-auto flex items-center gap-1 rounded bg-destructive/20 px-1.5 py-0.5 text-[12px] font-medium transition-colors hover:bg-destructive/30"
                   >
                     <Scissors className="h-2.5 w-2.5" />
                     Compact now

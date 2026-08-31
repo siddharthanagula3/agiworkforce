@@ -677,7 +677,7 @@ export function Sidebar(props: SidebarProps) {
                           ? t('sidebar.expandProjects', 'Expand projects')
                           : t('sidebar.collapseProjects', 'Collapse projects')
                       }
-                      className="flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                      className="flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
                     >
                       <span>{t('sidebar.projects', 'Projects')}</span>
                       <ChevronRight
@@ -736,7 +736,7 @@ export function Sidebar(props: SidebarProps) {
                         {({ close }) => (
                           <>
                             {/* Non-interactive section label */}
-                            <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                            <div className="px-2 py-1 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                               {t('sidebar.organizeChats', 'Organize chats')}
                             </div>
                             <MenuSeparator />
@@ -775,7 +775,7 @@ export function Sidebar(props: SidebarProps) {
                       {/* Pinned sub-section */}
                       {pinnedProjects.length > 0 && (
                         <div className="mb-2">
-                          <div className="mb-0.5 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                          <div className="mb-0.5 px-3 py-0.5 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                             {t('sidebar.pinned', 'Pinned')}
                           </div>
                           {pinnedProjects.map((project) => (
@@ -847,7 +847,7 @@ export function Sidebar(props: SidebarProps) {
 
               {/* Chats section header + pinned sessions */}
               {(pinned.length > 0 || grouped.size > 0) && (
-                <div className="mb-1 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                <div className="mb-1 px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
                   {t('sidebar.chats', 'Chats')}
                 </div>
               )}
@@ -983,7 +983,7 @@ export function Sidebar(props: SidebarProps) {
               </div>
               <span
                 aria-hidden="true"
-                className="shrink-0 text-[10px] tabular-nums text-[hsl(var(--muted-foreground))]"
+                className="shrink-0 text-[12px] tabular-nums text-[hsl(var(--muted-foreground))]"
               >
                 {Math.round(budgetPercent)}%
               </span>

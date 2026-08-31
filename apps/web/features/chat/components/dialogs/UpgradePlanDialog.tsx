@@ -164,7 +164,7 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
       )}
     >
       {plan.popular && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary-foreground">
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary-foreground">
           Popular
         </span>
       )}
@@ -180,12 +180,12 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
           )}
         </div>
         {usesAnnual && savingsPct > 0 && (
-          <span className="mt-0.5 inline-block text-[11px] font-medium text-primary">
+          <span className="mt-0.5 inline-block text-[12px] font-medium text-primary">
             save {String(savingsPct)}% annually
           </span>
         )}
         {annual && plan.monthlyPrice > 0 && !plan.annualAvailable ? (
-          <span className="mt-0.5 inline-block text-[11px] text-muted-foreground">
+          <span className="mt-0.5 inline-block text-[12px] text-muted-foreground">
             Monthly only
           </span>
         ) : null}
@@ -395,7 +395,7 @@ export function UpgradePlanDialog({
 
         {/* Footer note */}
         <div className="border-t border-border/60 px-6 py-4">
-          <p className="text-center text-[11px] text-muted-foreground">
+          <p className="text-center text-[12px] text-muted-foreground">
             Managed cloud is in public alpha and open by default. Paid tiers add higher hosted
             capacity. Local and BYOK always remain free on Desktop and CLI.
           </p>

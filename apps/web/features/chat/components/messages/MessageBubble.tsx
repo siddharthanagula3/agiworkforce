@@ -1327,7 +1327,7 @@ const MessageBubbleComponent = function MessageBubble({
                 />
               )}
               {isUser && message.metadata?.isPasted && (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                   pasted
                 </span>
               )}
@@ -1685,7 +1685,7 @@ const MessageBubbleComponent = function MessageBubble({
                           chip read as a placeholder. Only rendered when the
                           byte count is actually known. */}
                       {typeof attachment.size === 'number' && attachment.size > 0 && (
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-[12px] text-muted-foreground">
                           {formatBytes(attachment.size)}
                         </span>
                       )}
@@ -1943,7 +1943,7 @@ const MessageBubbleComponent = function MessageBubble({
                       key={`thinking-step-${stepIndex}-${step.slice(0, 20)}`}
                       className="flex gap-2 text-xs text-muted-foreground"
                     >
-                      <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-semibold text-primary">
+                      <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-[12px] font-semibold text-primary">
                         {stepIndex + 1}
                       </span>
                       <span>{step}</span>
@@ -1990,7 +1990,7 @@ const MessageBubbleComponent = function MessageBubble({
                             <AvatarImage src={collab.employeeAvatar} />
                           )}
                         <AvatarFallback
-                          className="text-[10px] font-semibold text-white"
+                          className="text-[12px] font-semibold text-white"
                           style={{
                             backgroundColor:
                               collab.employeeAvatar &&
@@ -2008,7 +2008,7 @@ const MessageBubbleComponent = function MessageBubble({
                       </Avatar>
                       <span className="text-xs font-medium">{collab.employeeName}</span>
                       {collab.messageType && (
-                        <Badge variant="secondary" className="h-4 text-[10px]">
+                        <Badge variant="secondary" className="h-4 text-[12px]">
                           {collab.messageType}
                         </Badge>
                       )}
@@ -2026,7 +2026,7 @@ const MessageBubbleComponent = function MessageBubble({
             <div
               role="status"
               data-testid="fallback-reason-notice"
-              className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[11px] text-[var(--chat-text-muted)]"
+              className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
             >
               <AlertCircle className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
               <span className="flex-1">{fallbackNotice}</span>
@@ -2045,7 +2045,7 @@ const MessageBubbleComponent = function MessageBubble({
               Read from top-level message.model first (set by useChatStream), then fall
               back to message.metadata.model (set on messages loaded from DB). */}
           {!isUser && !message.isStreaming && (message.model ?? message.metadata?.model) && (
-            <div className="mt-1.5 text-[11px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <div className="mt-1.5 text-[12px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
               {getManagedModelPresentationLabel(message.model ?? message.metadata?.model)}
             </div>
           )}
@@ -2078,7 +2078,7 @@ const MessageBubbleComponent = function MessageBubble({
                 data-testid="message-timestamp"
                 dateTime={message.timestamp.toISOString()}
                 title={message.timestamp.toLocaleString()}
-                className="px-1 text-[11px] tabular-nums text-[var(--chat-text-muted)]"
+                className="px-1 text-[12px] tabular-nums text-[var(--chat-text-muted)]"
               >
                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </time>

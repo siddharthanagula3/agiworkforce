@@ -221,7 +221,7 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
           </span>
           <span
             className={cn(
-              'shrink-0 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-tight tracking-wide',
+              'shrink-0 inline-block rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase leading-tight tracking-wide',
               badgeClass(artifact.type),
             )}
           >
@@ -230,14 +230,14 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
         </div>
 
         {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel && (
-          <span className="inline-flex w-fit items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-tight text-muted-foreground">
+          <span className="inline-flex w-fit items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[12px] font-semibold uppercase leading-tight text-muted-foreground">
             <Shield className="h-2.5 w-2.5" aria-hidden="true" />
             {generatedFileSummary.privacyShortLabel}
           </span>
         )}
 
         {/* Claude-style "{Kind} · {EXT}" subtitle (e.g. "Document · MD", "Code · HTML"). */}
-        <span className="text-[11px] text-muted-foreground truncate">
+        <span className="text-[12px] text-muted-foreground truncate">
           {kindLabel(artifact.type)} · {extLabel(artifact)}
         </span>
       </div>

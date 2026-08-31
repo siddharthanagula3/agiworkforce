@@ -32,7 +32,7 @@ function CapabilityGroup({
             title={item.name}
             disabled={!onSelect}
             onClick={() => onSelect?.(item)}
-            className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground enabled:hover:text-foreground"
+            className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-[12px] text-muted-foreground enabled:hover:text-foreground"
           >
             {item.title ?? item.name}
           </button>
@@ -83,7 +83,7 @@ export function ConnectorCapabilitiesPanel({
   const modelTools = catalog.tools.filter((tool) => tool.visibility !== 'app');
   return (
     <div className="space-y-2" aria-label="Live MCP capabilities">
-      <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
         <span className="rounded-full border border-border px-2 py-0.5">
           {catalog.protocolEra === 'modern' ? 'MCP 2026 stateless' : 'Legacy adapter'}
         </span>
@@ -161,7 +161,7 @@ export function ConnectorCapabilitiesPanel({
           {catalog.prompts
             .find((prompt) => prompt.name === pendingPromptName)
             ?.arguments.map((argument) => (
-              <label key={argument.name} className="block text-[11px] text-muted-foreground">
+              <label key={argument.name} className="block text-[12px] text-muted-foreground">
                 {argument.name}
                 <input
                   required={argument.required === true}
@@ -194,12 +194,12 @@ export function ConnectorCapabilitiesPanel({
         </form>
       ) : null}
       {catalog.resources.length > 0 || catalog.prompts.length > 0 ? (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[12px] text-muted-foreground">
           Select a resource or prompt to attach it to your next chat turn.
         </p>
       ) : null}
       {catalog.discoveryErrors.length > 0 ? (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[12px] text-muted-foreground">
           Some capability groups were unavailable during discovery.
         </p>
       ) : null}

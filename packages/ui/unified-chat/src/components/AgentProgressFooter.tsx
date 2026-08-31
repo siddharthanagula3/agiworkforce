@@ -84,7 +84,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
 
       {hasStepInfo && (
         <div className="flex shrink-0 flex-col items-center gap-0.5">
-          <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+          <span className="text-[12px] font-medium tabular-nums text-muted-foreground">
             Step {completedSteps}/{totalSteps}
           </span>
           <div className="h-1 w-24 overflow-hidden rounded-full bg-white/10">
@@ -98,7 +98,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
       )}
 
       <div className="flex shrink-0 items-center gap-2">
-        <div className="flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
+        <div className="flex items-center gap-1 text-[12px] tabular-nums text-muted-foreground">
           <Timer className="h-3 w-3" aria-hidden="true" />
           <span>{formatElapsed(elapsedMs)}</span>
         </div>

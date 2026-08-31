@@ -190,7 +190,7 @@ function CodeView({ content }: { content: string }) {
       {copyFailed && (
         <div
           role="status"
-          className="absolute top-10 right-2 z-10 rounded border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-[11px] text-red-400"
+          className="absolute top-10 right-2 z-10 rounded border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-[12px] text-red-400"
         >
           Copy failed — clipboard unavailable
         </div>
@@ -217,14 +217,14 @@ function CodeView({ content }: { content: string }) {
 
         {hiddenLineCount > 0 && (
           <div className="flex items-center gap-3 border-t border-[var(--chat-border)] px-4 py-2">
-            <span className="text-[11px] text-[var(--chat-text-muted)]">
+            <span className="text-[12px] text-[var(--chat-text-muted)]">
               {hiddenLineCount.toLocaleString()} more {hiddenLineCount === 1 ? 'line' : 'lines'} not
               shown
             </span>
             <button
               type="button"
               onClick={() => setVisibleLines((n) => n + CODE_VIEW_LINE_WINDOW)}
-              className="rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[11px] text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+              className="rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
             >
               Show {Math.min(hiddenLineCount, CODE_VIEW_LINE_WINDOW).toLocaleString()} more
             </button>
@@ -594,7 +594,7 @@ export function ArtifactPanel({
             >
               <ChevronLeft size={13} />
             </Button>
-            <span className="px-1 text-[11px] font-mono tabular-nums text-[var(--chat-text-secondary)]">
+            <span className="px-1 text-[12px] font-mono tabular-nums text-[var(--chat-text-secondary)]">
               v{currentVersionIndex + 1}/{sortedVersions.length}
             </span>
             <Button
@@ -768,7 +768,7 @@ export function ArtifactPanel({
           <div className="flex h-full flex-col" data-testid="artifact-panel-html-preview">
             <div className="flex items-center gap-2 border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5">
               <Globe size={12} className="text-[var(--chat-text-muted)]" />
-              <span className="text-[11px] text-[var(--chat-text-muted)]">HTML preview</span>
+              <span className="text-[12px] text-[var(--chat-text-muted)]">HTML preview</span>
               <div className="flex-1" />
               <Button
                 variant="ghost"
@@ -794,7 +794,7 @@ export function ArtifactPanel({
               <p
                 role="note"
                 data-testid="artifact-preview-scripts-blocked"
-                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[11px] text-[var(--chat-text-muted)]"
+                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
               >
                 {SCRIPTS_BLOCKED_NOTICE}
               </p>
@@ -805,7 +805,7 @@ export function ArtifactPanel({
               <p
                 role="note"
                 data-testid="artifact-preview-render-error"
-                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[11px] text-[var(--chat-text-muted)]"
+                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
               >
                 {htmlPreviewError}
               </p>
@@ -910,7 +910,7 @@ export function ArtifactPanel({
                 variant="ghost"
                 size="sm"
                 onClick={handleDownload}
-                className="ml-auto h-6 shrink-0 px-2 text-[11px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                className="ml-auto h-6 shrink-0 px-2 text-[12px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
               >
                 Download instead
               </Button>

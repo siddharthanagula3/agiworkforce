@@ -297,7 +297,7 @@ export function ProjectGallery({
             data-testid="project-create-presets"
             className="flex flex-wrap items-center gap-1.5 pt-1"
           >
-            <span className="text-[10px] uppercase tracking-wide text-[var(--chat-text-muted)]">
+            <span className="text-[12px] uppercase tracking-wide text-[var(--chat-text-muted)]">
               Quick start
             </span>
             {PROJECT_PRESETS.map((preset) => (

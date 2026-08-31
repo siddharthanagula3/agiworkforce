@@ -65,7 +65,7 @@ function SourceRow({ source, index }: { source: ResearchSource; index: number })
       )}
     >
       {/* Citation index badge */}
-      <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded bg-primary/10 px-1 text-[11px] font-semibold text-primary">
+      <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded bg-primary/10 px-1 text-[12px] font-semibold text-primary">
         {source.citationIndex ?? index + 1}
       </span>
 
@@ -88,9 +88,9 @@ function SourceRow({ source, index }: { source: ResearchSource; index: number })
         <h4 className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
           {source.title || displayHost}
         </h4>
-        <p className="truncate text-[11px] text-muted-foreground">{displayHost}</p>
+        <p className="truncate text-[12px] text-muted-foreground">{displayHost}</p>
         {source.snippet && (
-          <p className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="line-clamp-2 text-[12px] leading-relaxed text-muted-foreground">
             {source.snippet}
           </p>
         )}
@@ -341,7 +341,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
               </button>
             </div>
             {tab === 'sources' && sources.length > 0 && (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[12px] font-medium text-primary">
                 {sources.length}
               </span>
             )}
@@ -420,7 +420,7 @@ export function ResearchToggleButton({ count = 0 }: { count?: number }) {
     >
       <Globe className="h-4 w-4" />
       {count > 0 && !panelOpen && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground">
           {count}
         </span>
       )}
@@ -470,12 +470,12 @@ function SourcePill({ source, index }: { source: ResearchSource; index: number }
       aria-label={`Source ${number}: ${label}`}
       className={cn(
         'inline-flex items-center gap-1 rounded-full border border-border/30',
-        'bg-muted/30 px-2 py-0.5 text-[11px] no-underline',
+        'bg-muted/30 px-2 py-0.5 text-[12px] no-underline',
         'text-muted-foreground hover:border-border/60 hover:bg-muted/60 hover:text-foreground',
         'transition-colors duration-100',
       )}
     >
-      <span className="flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-primary/15 px-0.5 text-[9px] font-bold text-primary">
+      <span className="flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-primary/15 px-0.5 text-[12px] font-bold text-primary">
         {number}
       </span>
       {favicon && !imgError ? (
@@ -509,7 +509,7 @@ export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
       aria-label={query ? `Sources for "${query}"` : 'Web search sources'}
     >
       {/* Compact "Sources" label (claude.ai parity) with the deduped count. */}
-      <span className="mr-0.5 text-[11px] font-medium text-muted-foreground">
+      <span className="mr-0.5 text-[12px] font-medium text-muted-foreground">
         {sources.length} {sources.length === 1 ? 'source' : 'sources'}
       </span>
 
@@ -521,7 +521,7 @@ export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
       <button
         type="button"
         onClick={() => openPanel(activeConversationId, sources, query)}
-        className="inline-flex items-center gap-1 rounded-full border border-border/20 bg-transparent px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-border/50 hover:text-primary"
+        className="inline-flex items-center gap-1 rounded-full border border-border/20 bg-transparent px-2 py-0.5 text-[12px] text-muted-foreground transition-colors hover:border-border/50 hover:text-primary"
         aria-label="Open all sources in panel"
       >
         <PanelRight className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />

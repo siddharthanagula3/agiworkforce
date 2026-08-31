@@ -480,7 +480,7 @@ function ModelRow({
             {capabilityBadges.map((badge) => (
               <span
                 key={badge}
-                className="rounded bg-muted/60 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-muted-foreground"
+                className="rounded bg-muted/60 px-1 py-px text-[12px] font-medium uppercase tracking-wide text-muted-foreground"
               >
                 {badge}
               </span>
@@ -509,7 +509,7 @@ function ModelRow({
       </span>
       {deprecationWarning && (
         <span
-          className="ml-auto shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400"
+          className="ml-auto shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400"
           aria-label={`Leaving on ${deprecationWarning.fullLabel}`}
           title={`Leaving on ${deprecationWarning.fullLabel}`}
         >
@@ -518,7 +518,7 @@ function ModelRow({
       )}
       {isComingSoon && (
         <span
-          className="ml-auto shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          className="ml-auto shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground"
           aria-label={lockReason ?? 'coming soon'}
           title={lockReason}
         >
@@ -527,7 +527,7 @@ function ModelRow({
       )}
       {isEnvLocked && (
         <span
-          className="ml-auto shrink-0 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          className="ml-auto shrink-0 rounded-full bg-muted/60 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground"
           aria-label={lockReason ?? 'environment not available'}
           title={lockReason}
         >
@@ -536,7 +536,7 @@ function ModelRow({
       )}
       {!isHardDisabled && isLocked && (
         <span
-          className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+          className="ml-auto shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-primary"
           aria-label="Requires upgrade"
         >
           {pickerTier === 'premium' ? 'Pro' : 'Upgrade'}
@@ -939,7 +939,7 @@ export function ComposerFooter({
                         </span>
                       </span>
                       {isAlwaysOn ? (
-                        <span className="shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span className="shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                           Always on
                         </span>
                       ) : showThinkingSwitch ? (
@@ -950,7 +950,7 @@ export function ComposerFooter({
                           className="h-5 w-9"
                         />
                       ) : effortSliderVisible ? (
-                        <span className="shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span className="shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
                           {selectedEffortLabel}
                         </span>
                       ) : null}
@@ -1004,7 +1004,7 @@ export function ComposerFooter({
                 <div className="min-h-0 flex-1 overflow-y-auto py-1">
                   {/* Recommended section label */}
                   {!isSearching && (
-                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <div className="px-3 py-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Available
                     </div>
                   )}
@@ -1033,7 +1033,7 @@ export function ComposerFooter({
                     <>
                       <div className="my-1 border-t border-border/40" />
                       <button
-                        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                         onClick={() => setMoreExpanded((v) => !v)}
                         aria-expanded={showMore}
                       >
@@ -1045,7 +1045,7 @@ export function ComposerFooter({
                           aria-hidden="true"
                         />
                         More models
-                        <span className="ml-auto rounded bg-muted/50 px-1 text-[10px]">
+                        <span className="ml-auto rounded bg-muted/50 px-1 text-[12px]">
                           {more.length}
                         </span>
                       </button>

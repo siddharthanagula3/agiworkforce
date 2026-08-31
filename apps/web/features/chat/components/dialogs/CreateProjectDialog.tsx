@@ -124,7 +124,7 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
           <div className="space-y-1.5">
             <Label
               htmlFor="create-project-name"
-              className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
+              className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"
             >
               Project name
             </Label>
@@ -174,7 +174,7 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
               not typed their own, so the common path is: pick a template, press
               Enter. */}
           <fieldset className="mt-4">
-            <legend className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <legend className="mb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Start from
             </legend>
             <div className="flex flex-wrap gap-1.5">
