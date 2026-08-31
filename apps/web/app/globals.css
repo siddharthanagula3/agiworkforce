@@ -1573,42 +1573,54 @@ html[data-contrast='more'] *:focus-visible {
  * ────────────────────────────────────────────────────────────────────── */
 
 [data-design='agi'] {
-  /* ── "Editorial Terminal" palette ──────────────────────────────────────
-     Warm near-black ink canvas + warm paper text + a single amber-gold
-     signal accent. A distinctive editorial-technical identity, not the
-     periwinkle-on-graphite AI default this replaces. */
-  --agi-bg: #0b0a08;
-  --agi-bg-2: #131109;
-  --agi-bg-3: #1b1810;
-  --agi-card: #131109;
+  /* ── Neutral instrument palette ────────────────────────────────────────
+     Every neutral used to be amber-tinted - the canvas (#0b0a08), the text
+     (#f5f0e6), both greys (#c4bcac, #948b79) and every rule. Nothing on the
+     page could be neutral, so the accent had nothing to stand against and
+     the whole site read as amber-washed.
 
-  --agi-rule: rgba(245, 240, 230, 0.09);
-  --agi-rule-strong: rgba(245, 240, 230, 0.17);
+     The ramp is now genuinely neutral with a whisper of warmth in the ink
+     only, which is what makes it read as chosen rather than default grey.
+     Amber survives untouched as a value but stops being ambient: it belongs
+     on routing, selection, progress and live state, not on backgrounds.
 
-  --agi-ink: #f5f0e6;
-  --agi-ink-2: #c4bcac;
-  --agi-ink-quiet: #948b79;
+     Measured against every surface below: ink 18.45:1, ink-2 8.31:1,
+     ink-quiet 5.36:1 at worst, amber 8.94:1 at worst. */
+  --agi-bg: #0a0a0b;
+  --agi-bg-2: #101012;
+  --agi-bg-3: #16161a;
+  --agi-card: #0f0f11;
+
+  --agi-rule: rgba(255, 255, 255, 0.08);
+  --agi-rule-strong: rgba(255, 255, 255, 0.16);
+
+  --agi-ink: #f7f7f5;
+  --agi-ink-2: #a8a8a6;
+  --agi-ink-quiet: #8c8c8a;
   /* Small tertiary labels still need 4.5:1 contrast on the darkest device
      mockup surfaces. Keep a separate semantic token, but do not dim it below
      the accessible quiet-text value. */
-  --agi-ink-faint: #948b79;
+  --agi-ink-faint: #8c8c8a;
 
-  /* amber-gold signal — the variable name is finally true */
+  /* Signal accent. Reserved for meaning - active route, selection, progress,
+     the one control that matters on a screen - not for decoration. */
   --agi-amber: #f0a84a;
-  --agi-amber-soft: rgba(240, 168, 74, 0.16);
-  --agi-surface-wash: rgba(245, 240, 230, 0.035);
-  --agi-line-soft: rgba(245, 240, 230, 0.05);
-  --agi-glow-soft: rgba(240, 168, 74, 0.13);
-  --agi-console-tint: rgba(19, 17, 9, 0.62);
-  --agi-console-tint-strong: rgba(19, 17, 9, 0.82);
-  --agi-button-bg: #f5f0e6;
-  --agi-button-bg-hover: #e3dac6;
-  --agi-button-ink: #0b0a08;
+  --agi-amber-soft: rgba(240, 168, 74, 0.14);
+  --agi-surface-wash: rgba(255, 255, 255, 0.03);
+  --agi-line-soft: rgba(255, 255, 255, 0.05);
+  /* Was an amber glow behind ordinary sections, which is most of where the
+     ambient wash came from. Neutral, so a glow reads as light and not brand. */
+  --agi-glow-soft: rgba(255, 255, 255, 0.05);
+  --agi-console-tint: rgba(16, 16, 18, 0.62);
+  --agi-console-tint-strong: rgba(16, 16, 18, 0.84);
+  --agi-button-bg: #f7f7f5;
+  --agi-button-bg-hover: #e4e4e1;
+  --agi-button-ink: #0a0a0b;
   --agi-error: #eb6a55;
   --agi-success: #58bd7f;
   --agi-shadow: rgba(0, 0, 0, 0.5);
-  --agi-header-sheen: rgba(245, 240, 230, 0.02);
-  --agi-code-bg: rgba(245, 240, 230, 0.06);
+  --agi-header-sheen: rgba(255, 255, 255, 0.02);
+  --agi-code-bg: rgba(255, 255, 255, 0.055);
   --agi-selection-bg: rgba(240, 168, 74, 0.32);
   --agi-selection-text: var(--agi-ink);
   --agi-code-function: #7bb0f5;
@@ -2279,9 +2291,9 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-page-h1 em {
   font-family: var(--agi-font-display);
-  font-style: italic;
+  font-style: normal;
   font-weight: 500;
-  color: var(--agi-amber);
+  color: var(--agi-ink);
 }
 [data-design='agi'] .agi-page-lede {
   margin: 22px 0 0;
@@ -2324,9 +2336,9 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-campaign-title em {
   font-family: var(--agi-font-display);
-  font-style: italic;
+  font-style: normal;
   font-weight: 500;
-  color: var(--agi-amber);
+  color: var(--agi-ink);
 }
 [data-design='agi'] .agi-campaign-lede {
   margin: 26px 0 0;
@@ -2735,13 +2747,14 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-section:last-of-type {
   border-bottom: none;
 }
+/* Second of the two section-label classes; same reasoning as .agi-fl-eyebrow. */
 [data-design='agi'] .agi-section-eyebrow {
   font-family: var(--agi-font-mono);
   font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--agi-amber);
+  color: var(--agi-ink-quiet);
   margin: 0 0 16px;
 }
 [data-design='agi'] .agi-section-eyebrow::before {
@@ -2761,9 +2774,9 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-section-h2 em {
   font-family: var(--agi-font-display);
-  font-style: italic;
+  font-style: normal;
   font-weight: 500;
-  color: var(--agi-amber);
+  color: var(--agi-ink);
 }
 
 /* tier grid */
@@ -2903,10 +2916,12 @@ html[data-contrast='more'] *:focus-visible {
   align-items: flex-start;
   gap: 8px;
 }
+/* "Included" is not an alert. Twenty amber ticks per pricing screen spent the
+   accent on the least meaningful mark on the page. */
 [data-design='agi'] .agi-tier-check-icon {
   flex-shrink: 0;
   margin-top: 2px;
-  color: var(--agi-amber);
+  color: var(--agi-ink-quiet);
 }
 [data-design='agi'] .agi-tier-cta-group {
   display: flex;
@@ -3501,9 +3516,13 @@ html[data-contrast='more'] *:focus-visible {
   line-height: 1.34;
   color: var(--agi-ink-2);
 }
+/* The italic-amber phrase inside a headline was a tic that repeated across the
+   site. Emphasis here is the sentence's own - the clause is the differentiator
+   - so it takes full-strength ink and drops the italic, which was carrying
+   decoration rather than meaning. */
 [data-design='agi'] .agi-footer-tagline em {
-  font-style: italic;
-  color: var(--agi-amber);
+  font-style: normal;
+  color: var(--agi-ink);
 }
 [data-design='agi'] .agi-footer-wordmark {
   font-family: var(--agi-font-display);
@@ -3859,19 +3878,19 @@ html[data-contrast='more'] *:focus-visible {
   border-bottom: 1px solid var(--agi-rule);
 }
 
+/* Section label. Used on 43 pages, and until now amber on every one of them -
+   the single most repeated reason the site read as amber-washed. A section
+   label is orientation, not signal, so it takes quiet ink and leaves the
+   accent for state that actually changes. The em-dash prefix went with it:
+   it was decoration standing in for hierarchy the type already carries. */
 [data-design='agi'] .agi-fl-eyebrow {
   margin: 0 0 18px;
   font-family: var(--agi-font-mono);
   font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--agi-amber);
-}
-
-[data-design='agi'] .agi-fl-eyebrow::before {
-  content: '— ';
-  color: var(--agi-ink-faint);
+  color: var(--agi-ink-quiet);
 }
 
 [data-design='agi'] .agi-fl-h2 {
@@ -4135,9 +4154,9 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-h1-em {
   font-family: var(--agi-font-display);
-  font-style: italic;
+  font-style: normal;
   font-weight: 500;
-  color: var(--agi-amber);
+  color: var(--agi-ink);
 }
 
 [data-design='agi'] .agi-fl-hero .agi-fl-lede {
@@ -4814,10 +4833,6 @@ html[data-contrast='more'] *:focus-visible {
   z-index: -1;
   pointer-events: none;
   background: radial-gradient(46% 56% at 50% 64%, var(--agi-glow-soft), transparent 75%);
-}
-
-[data-design='agi'] .agi-fl-final .agi-fl-eyebrow::before {
-  content: '';
 }
 
 [data-design='agi'] .agi-fl-final-title {
