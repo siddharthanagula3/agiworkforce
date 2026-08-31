@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
+import { parseLockdownEnabled } from '@shared/types/lockdownMode';
 
 export type ConnectorToolPermissionLevel = 'allow' | 'ask' | 'deny';
 
@@ -68,6 +69,24 @@ export const EMPTY_CONNECTOR_TOOL_PERMISSIONS: ConnectorToolPermissions = buildP
   new Map(),
 );
 
+/**
+ * Every connector tool denied, whatever the per-tool verdicts say.
+ *
+ * Lockdown has to deny rather than downgrade to "ask". An injected instruction
+ * arrives as ordinary model output, so the approval prompt would describe the
+ * attacker's call in the attacker's words, and a reader cannot tell that from
+ * a call they asked for. Denying at the catalogue means the tool is never
+ * offered to the model, so there is no call to mis-approve.
+ */
+export const LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS: ConnectorToolPermissions = {
+  entries: [],
+  levelFor: () => 'deny',
+  levelForConnectorTool: () => 'deny',
+  isDenied: () => true,
+  isConnectorToolDenied: () => true,
+  size: 0,
+};
+
 export function connectorToolPermissionsFromEntries(
   entries: ReadonlyArray<ConnectorToolPermissionEntry>,
 ): ConnectorToolPermissions {
@@ -93,11 +112,34 @@ interface PermissionRow {
   level: string;
 }
 
+async function isLockedDown(db: DatabaseAdapter, userId: string): Promise<boolean> {
+  try {
+    const [row] = await db.query<{ settings: unknown }>(
+      'select settings from public.user_settings where user_id = $1 limit 1',
+      [userId],
+    );
+    return parseLockdownEnabled(row?.settings ?? {});
+  } catch (error) {
+    // Failing open here would hand an account that asked for lockdown its full
+    // connector surface the moment a query hiccups, which is the one outcome
+    // the setting exists to prevent. A read error denies.
+    logger.warn(
+      { error: error instanceof Error ? error.message : error, userId },
+      '[lockdown] account setting unavailable; denying connector tools',
+    );
+    return true;
+  }
+}
+
 export async function loadConnectorToolPermissions(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<ConnectorToolPermissions> {
   if (!userId) return EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  // Checked here rather than at each caller: the completions, approve and
+  // resume-input routes all resolve permissions through this function, so a
+  // route added later inherits lockdown instead of having to remember it.
+  if (await isLockedDown(db, userId)) return LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS;
   let rows: PermissionRow[];
   try {
     rows = await db.query<PermissionRow>(
