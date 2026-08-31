@@ -50,6 +50,35 @@ describe('toUserMessage', () => {
     expect(toUserMessage(new Error('Model is overloaded'), 'fallback')).toBe('Model is overloaded');
   });
 
+  it('keeps a message a person wrote, even when a status is attached', () => {
+    setOnline(true);
+    const err = Object.assign(new Error('Provider down'), { status: 500 });
+    expect(toUserMessage(err, 'fallback')).toBe('Provider down');
+  });
+
+  it('prefers the ladder only when the message is the transport talking', () => {
+    setOnline(true);
+    const err = Object.assign(new Error('HTTP 500: nope'), { status: 500 });
+    expect(toUserMessage(err, 'fallback')).toMatch(/on our side/i);
+  });
+
+  it.each(['Forbidden', 'Internal error', 'Too Many Requests', 'Not Found.', 'unauthorized'])(
+    'treats the bare reason phrase %s as the transport talking',
+    (phrase) => {
+      setOnline(true);
+      const err = Object.assign(new Error(phrase), { status: 403 });
+      expect(toUserMessage(err, 'fallback')).toMatch(/do not have access/i);
+    },
+  );
+
+  it('keeps a reason phrase that carries a real sentence after it', () => {
+    setOnline(true);
+    const err = Object.assign(new Error('Forbidden: your plan does not include this'), {
+      status: 403,
+    });
+    expect(toUserMessage(err, 'fallback')).toBe('Forbidden: your plan does not include this');
+  });
+
   it('falls back when the error carries nothing to say', () => {
     setOnline(true);
     for (const empty of [new Error(''), new Error('   '), undefined, null, {}]) {
