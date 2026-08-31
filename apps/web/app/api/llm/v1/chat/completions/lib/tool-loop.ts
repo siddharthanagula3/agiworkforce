@@ -152,6 +152,7 @@ import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
 import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
+import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import { applyFreeTrialProviderBudget } from '@/lib/services/free-trial-service';
 import {
@@ -422,7 +423,10 @@ export interface PendingToolCall {
 export type CloudAgentToolRetrySafety = 'safe' | 'unsafe';
 
 export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySafety {
-  return isUrlFetchTool(toolName) || isMapSearchTool(toolName) || toolName === SKILL_TOOL_NAME
+  return isUrlFetchTool(toolName) ||
+    isMapSearchTool(toolName) ||
+    isClarifyTool(toolName) ||
+    toolName === SKILL_TOOL_NAME
     ? 'safe'
     : 'unsafe';
 }
@@ -497,6 +501,7 @@ function canonicalToolCategory(
   if (isUrlFetchTool(toolName)) return 'web-fetch';
   if (isManagedOfficeFileTool(toolName)) return 'artifact';
   if (isMapSearchTool(toolName)) return 'web-search';
+  if (isClarifyTool(toolName)) return 'other';
   if (toolName === 'execute_code') return 'code-execution';
   if (
     toolName === 'write_file' ||
@@ -1256,6 +1261,16 @@ async function runMcpTool(
       : { content: outcome.content, isError: true };
   }
 
+  if (isClarifyTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = executeClarifyTool(toolCall.args, { toolCallId: toolCall.id });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : { content: outcome.content, isError: true };
+  }
+
   if (isUrlFetchTool(toolCall.qualifiedName)) {
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
@@ -1482,7 +1497,8 @@ export function isToolOffered(
     isExecutionTool(qualifiedName) ||
     isUrlFetchTool(qualifiedName) ||
     isWebSearchTool(qualifiedName) ||
-    isMapSearchTool(qualifiedName)
+    isMapSearchTool(qualifiedName) ||
+    isClarifyTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
   }

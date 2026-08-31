@@ -39,6 +39,10 @@ import {
 import { canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
+  CLARIFY_TOOL_NAME,
+  createClarifyToolDefinition,
+} from '@/lib/services/clarify-tool-service';
+import {
   ANTHROPIC_THINKING_BUDGET,
   CLOUD_WORK_MODES,
   getEconomyFallbackModels,
@@ -486,6 +490,31 @@ export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): 
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MANAGED_OFFICE_FILE_TOOL_NAME),
     createManagedOfficeFileToolDefinition(),
+  ];
+}
+
+/**
+ * Offer the model a way to ask a real question. The clarify card's renderer,
+ * contract and answer path were all built and nothing produced one, so an
+ * ambiguous request came back as prose asking the reader to describe their
+ * choice in words. Offered, never forced: unlike the map tool this sets no
+ * tool_choice, because most turns should just be answered.
+ */
+export function applyClarifyCardCapability(
+  request: ChatCompletionRequest,
+  params: { surface: CloudChatSurface; toolsCapable: boolean },
+): void {
+  if (
+    (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
+    !params.toolsCapable ||
+    !request.stream ||
+    !request.x_interactive_cards?.supported.includes('clarify.v1')
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => tool.function.name !== CLARIFY_TOOL_NAME),
+    createClarifyToolDefinition(),
   ];
 }
 
@@ -2334,6 +2363,11 @@ export async function processRequest(
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
+  });
+
+  applyClarifyCardCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
   });
 
   const originalModel = chatRequest.model;
