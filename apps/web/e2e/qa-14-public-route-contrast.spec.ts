@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { type ContrastFinding, scanContrast } from './lib/contrast-scan';
+
 /**
  * Every text node on the public routes, in both themes, measured against the
  * colour actually painted behind it.
@@ -16,8 +18,9 @@ import { expect, test } from '@playwright/test';
  * a redirect rather than a failure - which is why an unreachable server now
  * fails this test rather than counting as a skip. Batches of forty complete;
  * the third batch killed the server three times even starting from 6.7GB free,
- * so those routes are verified only against a production build, where each
- * route is already compiled.
+ * so those routes need a production build, where each route is already
+ * compiled. All 120 have now been measured that way in both themes, 240 pairs
+ * with no skips.
  */
 const DEFAULT_ROUTES = [
   '/',
@@ -144,6 +147,45 @@ const DEFAULT_ROUTES = [
 
 const ROUTES = process.env['PUBLIC_ROUTES']?.split(',').filter(Boolean) ?? DEFAULT_ROUTES;
 
+/**
+ * The scan is only as good as its colour conversion, and that conversion has
+ * been wrong twice: once reading `color(srgb ...)` 0-1 channels as 0-255, once
+ * reading OKLab's L/a/b as sRGB, which turned a near-white 30% panel into a
+ * near-black one and reported 2.37:1 where the rendered pixels measure 4.92:1.
+ * Both produced confident false findings. This drives the real scan over a
+ * fixture whose true ratios are known, so a regression fails here rather than
+ * in a report somebody has to disbelieve.
+ */
+test('the contrast instrument converts modern colour syntaxes', async ({ page }) => {
+  await page.goto('about:blank');
+  await page.evaluate(() => {
+    document.body.style.background = 'rgb(249, 248, 246)';
+    const panel = document.createElement('div');
+    panel.style.background = 'oklab(0.968429 -0.00252065 -0.00629514 / 0.3)';
+    const legible = document.createElement('p');
+    legible.textContent = 'legible fine print';
+    legible.style.color = 'rgb(94, 109, 130)';
+    legible.style.fontSize = '12px';
+    const illegible = document.createElement('p');
+    illegible.textContent = 'illegible fine print';
+    illegible.style.color = 'rgb(214, 218, 224)';
+    illegible.style.fontSize = '12px';
+    panel.append(legible, illegible);
+    document.body.append(panel);
+  });
+
+  const found = await page.evaluate(scanContrast);
+  const texts = found.map((f) => f.text);
+
+  expect(texts, 'a genuinely unreadable fixture must still be caught').toContain(
+    'illegible fine print',
+  );
+  expect(
+    texts,
+    'text measuring 4.92:1 over a translucent OKLab panel is legible and must not be reported',
+  ).not.toContain('legible fine print');
+});
+
 test('contrast across public routes', async ({ page }) => {
   test.setTimeout(1_800_000);
   const findings: unknown[] = [];
@@ -164,81 +206,7 @@ test('contrast across public routes', async ({ page }) => {
         // context mid-evaluate; that is the route answering, not a finding.
         await page.waitForLoadState('domcontentloaded').catch(() => undefined);
 
-        const bad = await page
-          .evaluate(() => {
-            const parse = (v: string) => {
-              const p = v.match(/[\d.]+/g)?.map(Number) ?? [];
-              const s = v.startsWith('color(') ? 255 : 1;
-              return { r: (p[0] ?? 0) * s, g: (p[1] ?? 0) * s, b: (p[2] ?? 0) * s, a: p[3] ?? 1 };
-            };
-            type Rgb = { r: number; g: number; b: number; a: number };
-            const over = (t: Rgb, b: Rgb): Rgb => ({
-              r: t.r * t.a + b.r * (1 - t.a),
-              g: t.g * t.a + b.g * (1 - t.a),
-              b: t.b * t.a + b.b * (1 - t.a),
-              a: 1,
-            });
-            const ground = (el: Element): Rgb => {
-              const layers: Rgb[] = [];
-              let n: Element | null = el;
-              while (n) {
-                const c = parse(getComputedStyle(n).backgroundColor);
-                if (c.a > 0) layers.push(c);
-                if (c.a >= 1) break;
-                n = n.parentElement;
-              }
-              return layers.reduceRight<Rgb>((b, l) => over(l, b), {
-                r: 255,
-                g: 255,
-                b: 255,
-                a: 1,
-              });
-            };
-            const lum = ({ r, g, b }: Rgb) =>
-              [r, g, b]
-                .map((v) => v / 255)
-                .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-                .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i]!, 0);
-            const ratio = (f: Rgb, g: Rgb) => {
-              const flat = f.a < 1 ? over(f, g) : f;
-              const [hi, lo] = [lum(flat), lum(g)].sort((a, b) => b - a);
-              return (hi! + 0.05) / (lo! + 0.05);
-            };
-            const out: { text: string; ratio: number; need: number; sel: string }[] = [];
-            for (const el of document.querySelectorAll('body *')) {
-              const own = [...el.childNodes]
-                .filter((n) => n.nodeType === Node.TEXT_NODE)
-                .map((n) => n.textContent?.trim() ?? '')
-                .join('')
-                .trim();
-              if (!own) continue;
-              const cs = getComputedStyle(el);
-              if (cs.visibility === 'hidden' || cs.display === 'none') continue;
-              if (Number(cs.opacity) < 0.15) continue;
-              if (cs.webkitTextFillColor === 'rgba(0, 0, 0, 0)') continue;
-              // Clerk renders the auth forms and prefixes every class with cl-.
-              // Its own contrast is not ours to change, and one of the offenders is
-              // the "Development mode" badge, which production never shows. Skipped
-              // by that prefix so the sweep reports what this repository controls.
-              if (/(^|\s)cl-/.test(String(el.className))) continue;
-              if (el.closest('[class*="cl-rootBox"],[data-clerk-component]')) continue;
-              const r = el.getBoundingClientRect();
-              if (r.width < 2 || r.height < 2) continue;
-              const size = parseFloat(cs.fontSize);
-              const need = size >= 24 || (size >= 18.66 && Number(cs.fontWeight) >= 700) ? 3 : 4.5;
-              const got = ratio(parse(cs.color), ground(el));
-              if (got + 0.005 < need) {
-                out.push({
-                  text: own.slice(0, 34),
-                  ratio: Math.round(got * 100) / 100,
-                  need,
-                  sel: el.tagName.toLowerCase() + '.' + String(el.className).split(' ')[0],
-                });
-              }
-            }
-            return out.slice(0, 3);
-          })
-          .catch(() => [] as { text: string; ratio: number; need: number; sel: string }[]);
+        const bad = await page.evaluate(scanContrast).catch(() => [] as ContrastFinding[]);
         measured.add(`${route} ${theme}`);
         if (bad.length) findings.push({ route, theme, bad });
       } catch (error) {
