@@ -14,7 +14,11 @@ const SURFACES = [
   {
     name: 'web',
     source: ['apps/web', 'packages/ui'],
-    stylesheets: ['apps/web/app/globals.css', 'packages/ui/design-tokens/src/chat.css'],
+    stylesheets: [
+      'apps/web/app/globals.css',
+      'packages/ui/design-tokens/src/chat.css',
+      'packages/ui/design-tokens/src/foundation.css',
+    ],
   },
   {
     name: 'chrome',
@@ -188,8 +192,29 @@ function checkInvalidTailwindArbitraryCandidates() {
 const errors = [];
 let referenced = 0;
 
+function checkSelfReferentialTokens() {
+  for (const surface of SURFACES) {
+    for (const sheet of surface.stylesheets) {
+      if (!sheet.endsWith('.css')) continue;
+      const abs = path.join(root, sheet);
+      if (!fs.existsSync(abs)) continue;
+      const lines = fs.readFileSync(abs, 'utf8').split('\n');
+      lines.forEach((line, index) => {
+        const m = line.match(/^\s*(--[a-zA-Z0-9-]+)\s*:\s*var\(\s*(--[a-zA-Z0-9-]+)/);
+        if (m && m[1] === m[2]) {
+          errors.push(
+            `${sheet}:${index + 1} declares ${m[1]} as var(${m[1]}). A custom property that ` +
+              `references itself is invalid at computed-value time and silently falls back.`,
+          );
+        }
+      });
+    }
+  }
+}
+
 checkPortalOverlays();
 checkInvalidTailwindArbitraryCandidates();
+checkSelfReferentialTokens();
 
 for (const surface of SURFACES) {
   const { declared, hslTriplets } = declaredTokens(surface.stylesheets);
