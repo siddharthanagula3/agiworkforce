@@ -721,6 +721,13 @@ const SCROLL_THRESHOLD_PX = 120;
 const DEFAULT_TRANSCRIPT_ROW_HEIGHT = 160;
 const DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT = 640;
 
+function readAgentActivityStatus(message: ChatMessage | undefined | null): unknown {
+  const activity = message?.metadata?.['agentActivity'];
+  return activity && typeof activity === 'object' && 'status' in activity
+    ? (activity as { status?: unknown }).status
+    : undefined;
+}
+
 export function buildStreamAnnouncement(message: ChatMessage | undefined): string {
   // Reached when a turn ends without ever producing an assistant message - a
   // rate limit, a rejected request, a dropped connection. Announcing the
@@ -879,12 +886,28 @@ const ChatMessageListComponent = ({
     isIncompleteTurn(lastMessage),
   );
 
+  // A turn that failed, was refused, stopped short, or is offering Continue
+  // already has its specific next action on screen. Offering "Can you go deeper
+  // on one of these points?" underneath "Video generation service is
+  // temporarily unavailable" competes with that action and answers a question
+  // nobody asked - the suggestions are picked by matching words in the message,
+  // so an error message reads to them as an ordinary topic.
+  const lastTurnFailed = Boolean(
+    lastMessage?.error ||
+    showStreamErrorNotice ||
+    showRefusalNotice ||
+    showIncompleteTurnNotice ||
+    showContinue ||
+    readAgentActivityStatus(lastMessage) === 'failed',
+  );
+
   const showFollowUps =
     onSendMessage &&
     !isLoading &&
     lastMessage?.role === 'assistant' &&
     !lastMessage?.isStreaming &&
-    lastMessage.content.length > 20;
+    lastMessage.content.length > 20 &&
+    !lastTurnFailed;
 
   // `MessageSearch` was complete but never exported or mounted, and nothing
   const [searchOpen, setSearchOpen] = useState(false);
