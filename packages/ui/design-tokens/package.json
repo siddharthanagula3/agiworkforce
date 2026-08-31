@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./chat.css": "./src/chat.css"
+    "./chat.css": "./src/chat.css",
+    "./foundation.css": "./src/foundation.css"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

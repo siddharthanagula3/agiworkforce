@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '@agiworkforce/design-tokens/foundation.css';
 @import '@agiworkforce/design-tokens/chat.css';
 @plugin "tailwindcss-animate";
 
