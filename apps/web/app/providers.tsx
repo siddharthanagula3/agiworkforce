@@ -15,6 +15,7 @@ import { AppearancePreferences } from '@shared/components/AppearancePreferences'
 import { TelemetryConsentSync } from '@shared/components/TelemetryConsentSync';
 import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { SupportWidgetMount } from '@/features/support/components/SupportWidgetMount';
+import { ConnectorOutcomeAnnouncer } from '@/features/connectors/components/ConnectorOutcomeAnnouncer';
 import { seoService } from '@/lib/seo/seo-optimizer';
 
 export default function Providers({
@@ -46,6 +47,7 @@ export default function Providers({
                   NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED === '1'. */}
               <SupportWidgetMount />
               <Toaster position="top-center" richColors closeButton />
+              <ConnectorOutcomeAnnouncer />
             </WaitlistModalProvider>
           </I18nextProvider>
         </QueryProvider>

@@ -5,6 +5,7 @@ import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { CONNECTORS } from '@/features/connectors/data/connectors';
 
 export type ConnectorSource = 'user' | 'github-app' | 'custom' | 'oauth';
 
@@ -93,6 +94,74 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
 }
 
 const BROKER_OUTCOME_PARAMS = ['connector', 'status'] as const;
+
+type BrokerOutcome = {
+  tone: 'success' | 'error' | 'info';
+  message: (name: string) => string;
+};
+
+const BROKER_OUTCOMES: Record<string, BrokerOutcome> = {
+  connected: { tone: 'success', message: (name) => `${name} is connected.` },
+  open: { tone: 'info', message: (name) => `${name} needs no authorization and is ready to use.` },
+  denied: {
+    tone: 'error',
+    message: (name) => `Authorization for ${name} was declined. Nothing was connected.`,
+  },
+  failed: {
+    tone: 'error',
+    message: (name) => `${name} did not finish authorizing. Try connecting it again.`,
+  },
+  invalid_state: {
+    tone: 'error',
+    message: (name) =>
+      `The authorization for ${name} expired before it completed. Start the connection again.`,
+  },
+  unavailable: {
+    tone: 'error',
+    message: (name) => `${name} cannot be connected right now. Try again later.`,
+  },
+  error: {
+    tone: 'error',
+    message: (name) => `Something went wrong connecting ${name}. Try again.`,
+  },
+};
+
+function connectorDisplayName(id: string): string {
+  return CONNECTORS.find((c) => c.id === id)?.name ?? 'This connector';
+}
+
+export function useBrokerOutcome(onConnected: () => void): void {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status');
+    if (!status) return;
+
+    const outcome = BROKER_OUTCOMES[status];
+    const name = connectorDisplayName(params.get('connector') ?? '');
+
+    for (const key of BROKER_OUTCOME_PARAMS) params.delete(key);
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+    );
+
+    if (!outcome) return;
+
+    const message = outcome.message(name);
+    if (outcome.tone === 'success') {
+      toast.success(message);
+      onConnected();
+    } else if (outcome.tone === 'info') {
+      toast.info(message);
+    } else {
+      toast.error(message);
+    }
+  }, [onConnected]);
+}
 
 export function currentConnectorReturnPath(): string {
   if (typeof window === 'undefined') return '/connectors';
@@ -197,6 +266,8 @@ export function useConnectors(): ConnectorStatus {
     invalidateConnectorsCache();
     setRetryCount((n) => n + 1);
   }, []);
+
+  useBrokerOutcome(retry);
 
   const runConnect = useCallback(
     async (id: string, authType: string, options: { optimistic: boolean }) => {
