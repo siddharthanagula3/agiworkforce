@@ -384,7 +384,7 @@
   background: var(--agi-card) !important;
   border: 1px solid var(--agi-rule-strong) !important;
   color: color-mix(in srgb, var(--agi-ink) 72%, transparent) !important;
-  font-size: 10.5px !important;
+  font-size: 12px !important;
   font-weight: 550 !important;
   line-height: 1.45 !important;
   letter-spacing: 0.02em !important;
@@ -3262,7 +3262,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-colophon-key {
   color: var(--agi-ink-quiet);
   font-family: var(--agi-font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-weight: 500;
@@ -3297,7 +3297,7 @@ html[data-contrast='more'] *:focus-visible {
 }
 [data-design='agi'] .agi-plugin-connector-note {
   font-family: var(--agi-font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--agi-ink-quiet);
@@ -3380,7 +3380,7 @@ html[data-contrast='more'] *:focus-visible {
   font-weight: 400;
   color: var(--agi-ink-quiet);
   text-transform: uppercase;
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 [data-design='agi'] .agi-chat {
@@ -4499,7 +4499,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-stat-label {
   font-family: var(--agi-font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--agi-ink-quiet);
@@ -4630,7 +4630,7 @@ html[data-contrast='more'] *:focus-visible {
   gap: 18px;
   margin: 18px 0 0;
   font-family: var(--agi-font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--agi-ink-quiet);
@@ -4992,7 +4992,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-fl-final-stamp {
   margin: 30px 0 0;
   font-family: var(--agi-font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--agi-ink-quiet);
@@ -5956,7 +5956,7 @@ html[data-contrast='more'] *:focus-visible {
   column-gap: calc(var(--u) * 6);
   padding: 0 calc(var(--u) * 10);
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   line-height: 1.7;
   white-space: nowrap;
 }
@@ -6039,7 +6039,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-ed-msg {
   display: flex;
   gap: calc(var(--u) * 8);
-  font-size: calc(var(--u) * 11);
+  font-size: calc(var(--u) * 12.5);
   line-height: 1.5;
   color: var(--agi-ink-2);
 }
@@ -6051,7 +6051,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-ed-msg code {
   font-family: var(--agi-font-mono);
-  font-size: calc(var(--u) * 10);
+  font-size: calc(var(--u) * 12);
   padding: calc(var(--u) * 1) calc(var(--u) * 4);
   border-radius: calc(var(--u) * 3);
   background: var(--agi-console-tint);
@@ -6428,7 +6428,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-top-mobile-group {
   font-family: var(--agi-font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--agi-ink-quiet);
@@ -6567,7 +6567,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-auth-continuity-title {
   margin: 0 0 17px;
   font-family: var(--agi-font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -6731,7 +6731,7 @@ html[data-contrast='more'] *:focus-visible {
   }
   [data-design='agi'] .agi-auth-surface-list small {
     margin-top: 3px;
-    font-size: 10.5px;
+    font-size: 12px;
   }
 }
 
@@ -6804,7 +6804,7 @@ html[data-contrast='more'] *:focus-visible {
   background: color-mix(in srgb, var(--agi-success) 9%, transparent);
   color: color-mix(in srgb, var(--agi-success) 82%, var(--agi-ink));
   font-family: var(--agi-font-mono);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -7223,7 +7223,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-consent-legend {
   padding: 0 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -7598,7 +7598,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-rf-node--surface {
   font-family: var(--agi-font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -7621,7 +7621,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-rf-modes li {
   padding: 8px 16px;
   font-family: var(--agi-font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.05em;
   color: var(--agi-ink-2);
 }
@@ -7677,7 +7677,7 @@ html[data-contrast='more'] *:focus-visible {
   padding: 0 14px;
   border-bottom: 1px solid var(--agi-rule);
   background: var(--agi-console-tint);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   color: var(--agi-ink-quiet);
 }
@@ -7713,7 +7713,7 @@ html[data-contrast='more'] *:focus-visible {
   gap: 10px;
   margin: 0;
   padding: 3px 14px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.6;
   color: var(--agi-ink-2);
   white-space: pre;
@@ -7732,7 +7732,7 @@ html[data-contrast='more'] *:focus-visible {
   gap: 12px;
   padding: 10px 14px;
   border-top: 1px solid var(--agi-rule);
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.05em;
   color: var(--agi-ink-faint);
 }
@@ -7830,7 +7830,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-ap-mode {
   padding: 3px 10px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 
@@ -8224,7 +8224,7 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-docs-card-cta code {
   font-family: var(--font-geist-mono, ui-monospace, monospace);
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 1px 5px;
   background: color-mix(in srgb, var(--agi-ink) 8%, transparent);
   border-radius: 4px;
