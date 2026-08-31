@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Menu, MenuItem } from '../Menu';
 
-function renderMenu(triggerRect: Partial<DOMRect>, panelHeight: number) {
+function renderMenu(triggerRect: Partial<DOMRect>, panelHeight: number, portalled = true) {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
@@ -21,7 +21,11 @@ function renderMenu(triggerRect: Partial<DOMRect>, panelHeight: number) {
   });
 
   render(
-    <Menu align="end" trigger={({ toggle }) => <button onClick={toggle}>Open</button>}>
+    <Menu
+      align="end"
+      portalled={portalled}
+      trigger={({ toggle }) => <button onClick={toggle}>Open</button>}
+    >
       {({ close }) => (
         <MenuItem close={close} onSelect={() => {}}>
           Pin
@@ -64,5 +68,29 @@ describe('Menu placement', () => {
   it('keeps an end-aligned menu inside the left edge', () => {
     const menu = renderMenu({ top: 100, bottom: 124, left: 10, right: 34 }, 200);
     expect(parseInt(menu.style.left, 10)).toBeGreaterThanOrEqual(8);
+  });
+
+  describe('a panel positioned against its container rather than the viewport', () => {
+    // The connectors table is wider than a phone screen, so the container its
+    // Add menu is anchored to sits partly outside the viewport. A CSS-only
+    // right alignment follows the container off the edge; the panel has to be
+    // measured and pulled back. The mocked panel reports left 0, so the applied
+    // shift is the viewport position the panel ends up at.
+    it('pulls a menu back inside a container that overflows the screen', () => {
+      window.innerWidth = 320;
+      const menu = renderMenu({ top: 100, bottom: 124, left: 413, right: 437 }, 200, false);
+
+      const shift = Number(/translateX\((-?[\d.]+)px\)/.exec(menu.style.transform)?.[1]);
+      expect(shift).toBeGreaterThanOrEqual(8);
+      expect(shift + 208).toBeLessThanOrEqual(320 - 8);
+    });
+
+    it('right-aligns to the trigger when there is room for it', () => {
+      window.innerWidth = 1200;
+      const menu = renderMenu({ top: 100, bottom: 124, left: 400, right: 424 }, 200, false);
+
+      const shift = Number(/translateX\((-?[\d.]+)px\)/.exec(menu.style.transform)?.[1]);
+      expect(shift).toBe(424 - 208);
+    });
   });
 });
