@@ -736,6 +736,9 @@ function buildStreamAnnouncement(message: ChatMessage | undefined): string {
   if (activityStatus === 'failed' || message.error) {
     return 'Response failed';
   }
+  if (activityStatus === 'partial') {
+    return 'Response finished with errors';
+  }
   if (message.metadata?.['finishReason'] === 'stopped') {
     return 'Response cancelled. Partial response saved.';
   }

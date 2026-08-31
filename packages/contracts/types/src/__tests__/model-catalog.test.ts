@@ -18,6 +18,8 @@ import {
   getModelContextLimits,
   getEconomyFallbackModels,
   getModelIdsForProvider,
+  resolveMaxOutputTokens,
+  modelsById,
   getModelMetadataById,
   isAutoModeModelId,
   isExecutableImageModel,
@@ -827,5 +829,58 @@ describe('model env-gating (requiresEnvironment)', () => {
         expect(metadata.capabilities.search, `${metadata.id} capabilities.search`).toBe(true);
       }
     });
+  });
+});
+
+describe('resolveMaxOutputTokens', () => {
+  const ANSWER_TOKEN_CEILING = 8_192;
+  const TEXT_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal', 'search']);
+
+  it('gives a text model room for a long answer', () => {
+    // A fixed 1024-token default cut every long response short and made the
+    // reader chase the rest with Continue, which is where seams come from.
+    expect(resolveMaxOutputTokens('gemini-3.5-flash-lite')).toBe(ANSWER_TOKEN_CEILING);
+    expect(resolveMaxOutputTokens('claude-opus-5')).toBe(ANSWER_TOKEN_CEILING);
+  });
+
+  it('never exceeds what the model itself declares', () => {
+    for (const metadata of Object.values(modelsById)) {
+      const resolved = resolveMaxOutputTokens(metadata.id);
+      if (typeof metadata.maxOutputTokens === 'number') {
+        expect(resolved, `${metadata.id} output limit`).toBeLessThanOrEqual(
+          metadata.maxOutputTokens,
+        );
+      }
+      if (typeof metadata.contextWindow === 'number' && metadata.contextWindow > 0) {
+        expect(resolved, `${metadata.id} context window`).toBeLessThanOrEqual(
+          metadata.contextWindow,
+        );
+      }
+    }
+  });
+
+  it('keeps every text model above the old fixed ceiling', () => {
+    for (const metadata of Object.values(modelsById)) {
+      if (!TEXT_TYPES.has(metadata.modelType)) continue;
+      expect(resolveMaxOutputTokens(metadata.id), `${metadata.id}`).toBeGreaterThan(1024);
+    }
+  });
+
+  it('does not hand a token budget to a model that does not emit tokens', () => {
+    for (const metadata of Object.values(modelsById)) {
+      if (TEXT_TYPES.has(metadata.modelType)) continue;
+      expect(resolveMaxOutputTokens(metadata.id), `${metadata.id}`).toBeLessThanOrEqual(1024);
+    }
+  });
+
+  it('resolves an alias the same way as its canonical model', () => {
+    expect(resolveMaxOutputTokens('gemini-3.5-flash-lite')).toBe(
+      resolveMaxOutputTokens(normalizeModelId('gemini-3.5-flash-lite')),
+    );
+  });
+
+  it('falls back for an id the catalogue does not carry', () => {
+    expect(resolveMaxOutputTokens('not-a-model')).toBeGreaterThan(1024);
+    expect(resolveMaxOutputTokens(null)).toBeGreaterThan(1024);
   });
 });
