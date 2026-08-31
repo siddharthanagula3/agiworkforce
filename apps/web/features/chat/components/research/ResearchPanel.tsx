@@ -11,7 +11,7 @@
  * programmatically via useResearchPanelStore.openPanel(...).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Globe, X, ExternalLink, Search, PanelRight, Telescope } from 'lucide-react';
 import type { ResearchReport } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
@@ -22,6 +22,7 @@ import { useArtifactsStore } from '../../stores/artifacts-store';
 import { ResearchReportView, type ReportArtifactInput } from './ResearchReportView';
 import { ResearchReportsGallery } from './ResearchReportsGallery';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useOverlayDialog, useOverlayLayout } from '../../hooks/use-overlay-dialog';
 
 // ============================================================================
 // Source row
@@ -257,6 +258,11 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
       }
     : undefined;
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  const layout = useOverlayLayout();
+  const isModalOverlay = layout === 'mobile' && panelOpen;
+  useOverlayDialog(panelRef, isModalOverlay, closePanel);
+
   if (!panelOpen) return null;
 
   return (
@@ -270,6 +276,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
 
       {/* Panel */}
       <div
+        ref={panelRef}
         className={cn(
           'flex flex-col border-l border-border/30',
           'bg-card/95 backdrop-blur-xl',
@@ -281,6 +288,9 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
           'animate-in slide-in-from-right duration-300',
         )}
         aria-label="Research panel"
+        // Only the covering form is a dialog. Beside the conversation this is an
+        // ordinary region and must not trap focus or swallow Escape.
+        {...(isModalOverlay ? { role: 'dialog' as const, 'aria-modal': true, tabIndex: -1 } : {})}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/30 px-4 py-3">
