@@ -91,9 +91,7 @@ describe('Tasks task-detail panel', () => {
         />,
       );
 
-      fireEvent.click(
-        await screen.findByRole('button', { name: 'View details for AGI Work task' }),
-      );
+      fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
 
       expect(screen.getByText('Unavailable model')).toBeTruthy();
       expect(screen.queryByText(run.model)).toBeNull();
@@ -159,7 +157,7 @@ describe('Tasks task-detail panel', () => {
 
     expect(await screen.findByRole('heading', { name: 'Select a task' })).toBeTruthy();
     expect(screen.getByLabelText('Task details').className.split(' ')).toContain('lg:self-start');
-    fireEvent.click(await screen.findByRole('button', { name: 'View details for AGI Work task' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
     await waitFor(() => expect(screen.getByLabelText('Task details')).toBeTruthy());
     expect(openConversation).not.toHaveBeenCalled();
 
@@ -178,7 +176,7 @@ describe('Tasks task-detail panel', () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View details for AGI Work task' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
 
     const details = screen.getByLabelText('Task details');
     expect(details.className.split(' ')).toEqual(

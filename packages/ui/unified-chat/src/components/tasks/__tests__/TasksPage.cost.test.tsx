@@ -40,7 +40,7 @@ function renderTasks(run: CloudAgentRun) {
 }
 
 async function openDetails() {
-  fireEvent.click(await screen.findByRole('button', { name: 'View details for AGI Work task' }));
+  fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
 }
 
 describe('Tasks per-task cost and usage', () => {
