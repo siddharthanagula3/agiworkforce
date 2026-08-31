@@ -49,10 +49,9 @@ export default function IndiaDpdpNoticePage() {
           <p className="agi-section-eyebrow">00 &middot; Who is responsible</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             {LEGAL_ENTITY}, {NOTICE_ADDRESS}, is the <strong>Data Fiduciary</strong> for the
-            processing described here &mdash; it decides why and how your personal data is
-            processed. You are the <strong>Data Principal</strong>. AGI has no establishment in
-            India and no data centre in India; your data is hosted in the United States, which
-            section 06 explains.
+            processing described here: it decides why and how your personal data is processed. You
+            are the <strong>Data Principal</strong>. AGI has no establishment in India and no data
+            centre in India; your data is hosted in the United States, which section 06 explains.
           </p>
         </section>
 
@@ -132,8 +131,8 @@ export default function IndiaDpdpNoticePage() {
                   your password.
                 </td>
                 <td>
-                  Your request &mdash; you asked us to create the account, and the account cannot
-                  exist without it.
+                  Your request: you asked us to create the account, and the account cannot exist
+                  without it.
                 </td>
               </tr>
               <tr>
@@ -164,7 +163,7 @@ export default function IndiaDpdpNoticePage() {
                 </td>
                 <td style={{ verticalAlign: 'top' }}>
                   Diagnosing crashes. Content-scrubbed, but a stable user id is retained so a crash
-                  can be tied to a session &mdash; pseudonymous, not anonymous.
+                  can be tied to a session, so they are pseudonymous, not anonymous.
                 </td>
                 <td>Your consent. Off until you turn it on.</td>
               </tr>
@@ -183,8 +182,8 @@ export default function IndiaDpdpNoticePage() {
                   Email address given on the early-access list
                 </td>
                 <td style={{ verticalAlign: 'top' }}>
-                  Telling you when enterprise features open. Optionally, product updates &mdash; a
-                  separate box you can leave unticked or withdraw on its own.
+                  Telling you when enterprise features open. Optionally, product updates: a separate
+                  box you can leave unticked or withdraw on its own.
                 </td>
                 <td>Your consent, recorded before the address is stored.</td>
               </tr>
@@ -214,9 +213,9 @@ export default function IndiaDpdpNoticePage() {
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Consent under this Act has to be specific, unbundled, and given by a clear affirmative
             action. So every box is unticked when you meet it, an optional purpose never blocks a
-            necessary one, and every decision &mdash; including the boxes you leave unticked &mdash;
-            is recorded against the revision of this notice that was on screen. These are the
-            purposes we ask about:
+            necessary one, and every decision (including the boxes you leave unticked) is recorded
+            against the revision of this notice that was on screen. These are the purposes we ask
+            about:
           </p>
           <table className="agi-ledger">
             <thead>
@@ -234,7 +233,7 @@ export default function IndiaDpdpNoticePage() {
                   <td style={{ width: '18%', verticalAlign: 'top' }}>
                     {purpose.necessaryForRequest
                       ? 'Required for the thing you asked for'
-                      : 'Optional — declining costs you nothing'}
+                      : 'Optional, declining costs you nothing'}
                   </td>
                 </tr>
               ))}
@@ -247,7 +246,7 @@ export default function IndiaDpdpNoticePage() {
             </Link>
             , with no email and no support ticket. Withdrawal stops the future processing that
             depended on it; it does not undo processing that already lawfully happened, and it does
-            not delete your account &mdash; that is a separate request on the same page.{' '}
+            not delete your account. That is a separate request on the same page.{' '}
             <strong>
               AGI is not registered with a Consent Manager under section 6(7), so consent is given
               to us directly rather than through one.
@@ -395,7 +394,7 @@ export default function IndiaDpdpNoticePage() {
             <tbody>
               <tr>
                 <td style={{ width: '26%', verticalAlign: 'top' }}>
-                  Access &mdash; a summary of your data and who it has been shared with
+                  Access: a summary of your data and who it has been shared with
                 </td>
                 <td>
                   Signed in, export your data from the account export endpoint at any time. It is
@@ -423,9 +422,9 @@ export default function IndiaDpdpNoticePage() {
                   Request account deletion in the product. Erasure is scheduled 24 hours later and
                   then performed. Two limits, stated plainly: you get no confirmation email, because
                   the only email this product sends is support-escalation and scheduled-task
-                  notification &mdash; there is no account-lifecycle email path; and there is no
-                  self-serve way to cancel a scheduled deletion, so inside that 24-hour window you
-                  must reach us.
+                  notification: there is no account-lifecycle email path; and there is no self-serve
+                  way to cancel a scheduled deletion, so inside that 24-hour window you must reach
+                  us.
                 </td>
               </tr>
               <tr>
@@ -437,14 +436,14 @@ export default function IndiaDpdpNoticePage() {
                   >
                     /privacy/requests
                   </Link>{' '}
-                  &mdash; per purpose, immediately, without contacting anyone.
+                  , per purpose, immediately, without contacting anyone.
                 </td>
               </tr>
               <tr>
                 <td style={{ verticalAlign: 'top' }}>Grievance redressal</td>
                 <td>
-                  Section 08. Use it before approaching the Data Protection Board &mdash; the Act
-                  expects you to have exhausted our route first.
+                  Section 08. Use it before approaching the Data Protection Board: the Act expects
+                  you to have exhausted our route first.
                 </td>
               </tr>
               <tr>
@@ -525,8 +524,8 @@ export default function IndiaDpdpNoticePage() {
             <Link href={CANONICAL_POLICY_ROUTES.security} style={{ color: 'var(--agi-ink)' }}>
               /security
             </Link>
-            . The internal procedure for a breach &mdash; who declares it, what goes in the Board
-            notification, and what you would receive &mdash; is written down and rehearsed against a
+            . The internal procedure for a breach (who declares it, what goes in the Board
+            notification, and what you would receive) is written down and rehearsed against a
             72-hour clock. The email this product can send today is support-escalation and
             scheduled-task notification; there is no account-lifecycle mailing path, so a
             user-facing breach notice would be delivered in-product and at a public URL rather than
