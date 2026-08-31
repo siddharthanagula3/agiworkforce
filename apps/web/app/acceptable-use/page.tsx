@@ -30,7 +30,7 @@ const SUMMARY: { k: string; v: string }[] = [
   },
   {
     k: 'Connectors ask first',
-    v: 'Every connector and MCP tool requires approval by default. Built-in web search, page fetch, and sandbox tools do not — see the full authority map on agent permissions.',
+    v: 'Every connector and MCP tool requires approval by default. Built-in web search, page fetch, and sandbox tools do not. See the full authority map on agent permissions.',
   },
   {
     k: 'A Block is absolute',
@@ -38,7 +38,7 @@ const SUMMARY: { k: string; v: string }[] = [
   },
   {
     k: 'You can revoke everything',
-    v: 'Disconnect a connector, reset a tool’s saved permission, or remove a site from the browser allowlist — all listed on the agent permissions page.',
+    v: 'Disconnect a connector, reset a tool’s saved permission, or remove a site from the browser allowlist, all listed on the agent permissions page.',
   },
   {
     k: 'Breaking these rules costs access',
@@ -49,7 +49,7 @@ const SUMMARY: { k: string; v: string }[] = [
 const LIMITS: { k: string; v: string }[] = [
   {
     k: 'Per-user request ceiling',
-    v: 'Chat completions are rate limited per authenticated user — 30 requests per minute at the time of writing. The limiter is fail-closed: if the rate-limit store is unavailable, requests are refused rather than allowed through.',
+    v: 'Chat completions are rate limited per authenticated user: 30 requests per minute at the time of writing. The limiter is fail-closed: if the rate-limit store is unavailable, requests are refused rather than allowed through.',
   },
   {
     k: 'Per-IP request ceiling',
@@ -132,8 +132,8 @@ export default function AcceptableUsePage() {
             </tbody>
           </table>
           <p className="agi-page-lede" style={{ marginTop: 20 }}>
-            The precise default authority for every tool — what runs without asking, what always
-            asks, and how to revoke — is on{' '}
+            The precise default authority for every tool (what runs without asking, what always
+            asks, and how to revoke) is on{' '}
             <Link href="/agent-permissions" style={{ color: 'var(--agi-ink)' }}>
               /agent-permissions
             </Link>
@@ -144,8 +144,8 @@ export default function AcceptableUsePage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">01 &middot; What this covers</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            These rules apply to every AGI surface — web, desktop, mobile, the Chrome extension, the
-            VS Code extension, and the CLI — and to all three trust boundaries: Local on-device
+            These rules apply to every AGI surface (web, desktop, mobile, the Chrome extension, the
+            VS Code extension, and the CLI) and to all three trust boundaries: Local on-device
             execution, BYOK using your own provider keys, and Managed Cloud that AGI hosts and
             meters.
           </p>
@@ -153,7 +153,7 @@ export default function AcceptableUsePage() {
             <strong>Managed Cloud is in {MANAGED_CLOUD_STATUS} and open by default.</strong> Read
             this page as the rules for an alpha service, not as a general-availability contract.
             Where you use BYOK, the provider whose key you supply also applies their own terms to
-            your usage, and those govern that traffic — see &ldquo;Third-party services and
+            your usage, and those govern that traffic. See &ldquo;Third-party services and
             connectors&rdquo; in the{' '}
             <Link href="/terms" style={{ color: 'var(--agi-ink)' }}>
               Terms
@@ -170,7 +170,7 @@ export default function AcceptableUsePage() {
           </p>
 
           <h3 className="agi-reason-h" style={{ marginTop: 28 }}>
-            (a) Browser control &mdash; systems you are not authorized to use
+            (a) Browser control: systems you are not authorized to use
           </h3>
           <p className="agi-page-lede" style={{ marginTop: 8 }}>
             The Chrome extension can drive a browser tab through the Chrome debugger on sites you
@@ -188,7 +188,7 @@ export default function AcceptableUsePage() {
           <p className="agi-page-lede" style={{ marginTop: 8 }}>
             Model-authored code runs in an isolated ephemeral cloud sandbox with a bounded lifetime
             and a per-plan concurrency allowance. A Code session carries one of three outbound
-            network policies — <code>none</code> (no outbound access), <code>trusted</code> (a fixed
+            network policies: <code>none</code> (no outbound access), <code>trusted</code> (a fixed
             allowlist of package and source hosts, everything else denied), or <code>full</code>{' '}
             (unrestricted outbound access). Choosing <code>full</code> does not widen what these
             rules permit: the restrictions below apply at every network setting. Do not use it for
@@ -206,9 +206,9 @@ export default function AcceptableUsePage() {
             Connectors let the agent act inside third-party systems on your behalf. Do not connect
             an account you do not own or administer, or one you are not permitted to automate. Do
             not use a connected account to read, send, post, or comment on behalf of people who have
-            not authorized it — including sending mail from a connected mailbox to recipients who
-            did not consent, or posting into a shared workspace under a colleague&rsquo;s identity.
-            Do not use connectors to collect or move a third party&rsquo;s data out of a system that
+            not authorized it, including sending mail from a connected mailbox to recipients who did
+            not consent, or posting into a shared workspace under a colleague&rsquo;s identity. Do
+            not use connectors to collect or move a third party&rsquo;s data out of a system that
             party controls.
           </p>
 
@@ -233,12 +233,12 @@ export default function AcceptableUsePage() {
             develop weapons, including chemical, biological, radiological, nuclear, or high-yield
             explosives; to build tooling for unlawful surveillance; or to generate fraud, phishing,
             or impersonation material. Do not use output to make automated decisions about a person
-            &mdash; employment, credit, housing, insurance, medical, education, or legal status —
-            without meaningful human review. Do not use AGI for practices prohibited under Art. 5 of
-            the EU AI Act (Regulation (EU) 2024/1689): biometric categorisation to infer protected
-            or sensitive attributes, real-time remote biometric identification in public spaces,
-            social scoring, emotion inference in workplace or educational settings, or predictive
-            policing based solely on automated profiling.
+            (employment, credit, housing, insurance, medical, education, or legal status) without
+            meaningful human review. Do not use AGI for practices prohibited under Art. 5 of the EU
+            AI Act (Regulation (EU) 2024/1689): biometric categorisation to infer protected or
+            sensitive attributes, real-time remote biometric identification in public spaces, social
+            scoring, emotion inference in workplace or educational settings, or predictive policing
+            based solely on automated profiling.
           </p>
 
           <h3 className="agi-reason-h" style={{ marginTop: 28 }}>
@@ -248,7 +248,7 @@ export default function AcceptableUsePage() {
             Do not resell, sublicense, or white-label AGI without a written agreement. Do not
             reverse-engineer or decompile the software except where applicable law permits, and do
             not conduct penetration testing or load testing against the service without our written
-            consent — if you want to test, write to us first and we will scope it. Do not
+            consent. If you want to test, write to us first and we will scope it. Do not
             misrepresent AGI-generated output as reviewed or endorsed by AGI Automation LLC.
           </p>
         </section>
@@ -310,9 +310,9 @@ export default function AcceptableUsePage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">05 &middot; Reporting abuse</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            <strong>If an AGI agent is acting against you or your systems</strong> — unwanted
-            automated traffic, messages from a connected account, or activity you did not authorize
-            — email{' '}
+            <strong>If an AGI agent is acting against you or your systems</strong> (unwanted
+            automated traffic, messages from a connected account, or activity you did not
+            authorize), email{' '}
             <a href={contactMailto(CONTACT_SUBJECTS.abuse)} style={{ color: 'var(--agi-ink)' }}>
               {CONTACT_EMAIL}
             </a>{' '}

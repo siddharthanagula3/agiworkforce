@@ -52,9 +52,9 @@ export default function DataRightsPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">01 &middot; Consent recorded against your account</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Withdrawing has to be as easy as giving, so it is one click here &mdash; no email, no
-            ticket, no waiting on us. Each change is appended to your consent record with the
-            revision of the notice that was on screen.
+            Withdrawing has to be as easy as giving, so it is one click here: no email, no ticket,
+            no waiting on us. Each change is appended to your consent record with the revision of
+            the notice that was on screen.
           </p>
           <ConsentCentre />
         </section>
@@ -68,8 +68,8 @@ export default function DataRightsPage() {
                 <td>
                   Signed in, export from your account settings at any time. It is rate limited and
                   each export is recorded in the security audit log. It does not yet cover every
-                  category the schema holds &mdash; that gap is tracked, and until it closes, use
-                  the access request below if something is missing.
+                  category the schema holds. That gap is tracked, and until it closes, use the
+                  access request below if something is missing.
                 </td>
               </tr>
               <tr>
@@ -96,11 +96,11 @@ export default function DataRightsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">03 &middot; Everything else &mdash; make a request</p>
+          <p className="agi-section-eyebrow">03 &middot; Everything else: make a request</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Access, correction, erasure without an account, withdrawal of consent given without an
-            account, nomination, and grievances. You do not need an account to use this &mdash; your
-            rights do not depend on having one.
+            account, nomination, and grievances. You do not need an account to use this: your rights
+            do not depend on having one.
           </p>
           <RightsRequestForm />
         </section>
@@ -119,9 +119,9 @@ export default function DataRightsPage() {
               </a>{' '}
               with the subject line &ldquo;{CONTACT_SUBJECTS.dpdpGrievance}&rdquo;, or post to{' '}
               {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We aim to respond within{' '}
-              {GRIEVANCE_RESPONSE_TARGET_DAYS} days &mdash; our commitment, not a statutory deadline
-              we are quoting. If our response does not resolve it, data principals in India may
-              complain to the Data Protection Board of India.
+              {GRIEVANCE_RESPONSE_TARGET_DAYS} days, our commitment, not a statutory deadline we are
+              quoting. If our response does not resolve it, data principals in India may complain to
+              the Data Protection Board of India.
             </p>
           </div>
           <div className="agi-cta-row" style={{ marginTop: 28 }}>

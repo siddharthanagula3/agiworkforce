@@ -5,9 +5,9 @@ import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitli
 import { Reveal } from '@/features/marketing/components/Reveal';
 
 export const metadata = buildMetadata({
-  title: 'AGI Cloud is open — Enterprise governance early access',
+  title: 'AGI Cloud is open: Enterprise governance early access',
   description:
-    'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Pricing shows current Team checkout availability. Join the list for contract-scoped Enterprise SSO, custom retention, and governance requirements.',
+    'AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist. Pricing shows current Team checkout availability. Join the list for contract-scoped Enterprise SSO, custom retention, and governance requirements.',
   path: '/waitlist',
 });
 
@@ -45,7 +45,7 @@ export default function WaitlistPage() {
             </span>
           </h1>
           <p className="agi-fl-lede">
-            AGI managed cloud is in public alpha and open by default —{' '}
+            AGI managed cloud is in public alpha and open by default:{' '}
             <a href="/get-started" className="agi-fl-surface-link">
               sign in and start
             </a>
@@ -53,16 +53,16 @@ export default function WaitlistPage() {
             <a href="/pricing" className="agi-fl-surface-link">
               See Team pricing and checkout availability
             </a>
-            . This list is for <strong>Enterprise early access</strong> — advanced org controls,
-            SSO, custom retention, and centralized governance beyond the self-serve Team scope.
-            Leave your email and we will reach out as those land.
+            . This list is for <strong>Enterprise early access</strong>: advanced org controls, SSO,
+            custom retention, and centralized governance beyond the self-serve Team scope. Leave
+            your email and we will reach out as those land.
           </p>
           <div style={{ maxWidth: 560, marginTop: 34, paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <PublicWaitlistForm source="website" ctaLabel="Request Org/SSO Early Access" />
             <p className="agi-fl-final-stamp" style={{ marginTop: 18, textTransform: 'none' }}>
-              One email when Enterprise org/SSO features land, sent by a person &mdash; nothing here
-              mails this list automatically, so there is no unsubscribe link in a message to click.
-              No marketing drip. To come off the list, record a withdrawal at{' '}
+              One email when Enterprise org/SSO features land, sent by a person, nothing here mails
+              this list automatically, so there is no unsubscribe link in a message to click. No
+              marketing drip. To come off the list, record a withdrawal at{' '}
               <a href="/privacy/requests" className="agi-fl-surface-link">
                 /privacy/requests
               </a>

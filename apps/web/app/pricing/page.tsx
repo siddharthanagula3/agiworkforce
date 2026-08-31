@@ -1117,7 +1117,7 @@ export default function PricingPage() {
                       across 11 locales and outside this surface's owned files,
                       so correct it (or retire it) in packages/ui/i18n. */}
                   <CheckIcon />
-                  SSO, SCIM directory sync, and audit logs — shipped, gated on the Enterprise
+                  SSO, SCIM directory sync, and audit logs: shipped, gated on the Enterprise
                   plan&apos;s entitlement. Retention windows stay contract-scoped.
                 </li>
                 <li>
@@ -1509,7 +1509,7 @@ export default function PricingPage() {
           </h2>
           <p className="agi-fl-section-lede">
             Auto routes each message to the best model for the task, your plan, and cost; the
-            ceiling it can reach rises with the plan. Manual model selection widens the same way —
+            ceiling it can reach rises with the plan. Manual model selection widens the same way:
             this is how many of each provider&apos;s models are reachable at each level, read live
             from our model catalog.
           </p>

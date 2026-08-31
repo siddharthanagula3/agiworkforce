@@ -139,7 +139,7 @@ export default function PrivacyPage() {
 
         <PolicyContents
           sections={SECTIONS}
-          intro="Start with section 00 — which mode you run changes almost every answer below it."
+          intro="Start with section 00: which mode you run changes almost every answer below it."
         />
 
         <section className="agi-section" id="s-00">
@@ -190,8 +190,7 @@ export default function PrivacyPage() {
                 </td>
                 <td>
                   Conversations, files, projects, memories, schedules and settings, so they sync
-                  across your devices. This is the only mode where we act as your processor &mdash;
-                  see the{' '}
+                  across your devices. This is the only mode where we act as your processor. See the{' '}
                   <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
                     DPA
                   </Link>
@@ -271,7 +270,7 @@ export default function PrivacyPage() {
                 <td>
                   Operational visibility. Error reports are content-scrubbed and send no default
                   personal data, but they <em>do</em> retain a stable user id so a crash can be tied
-                  to a session &mdash; they are pseudonymous, not anonymous.
+                  to a session, so they are pseudonymous, not anonymous.
                 </td>
               </tr>
               <tr>
@@ -313,8 +312,8 @@ export default function PrivacyPage() {
                   settings.
                 </td>
                 <td>
-                  Personalising the product. Optional means optional &mdash; nothing here is
-                  required to use an account.
+                  Personalising the product. Optional means optional: nothing here is required to
+                  use an account.
                 </td>
               </tr>
               <tr>
@@ -332,18 +331,17 @@ export default function PrivacyPage() {
                 <td>Devices and downloads</td>
                 <td>
                   Push tokens for the mobile apps. For a desktop download: a hashed IP, the
-                  user-agent, the referring page and a coarse country in the download record &mdash;
-                  and separately, your <em>unhashed</em> IP address in our server logs.
+                  user-agent, the referring page and a coarse country in the download record, and
+                  separately, your <em>unhashed</em> IP address in our server logs.
                 </td>
                 <td>
                   Delivering notifications you asked for, and understanding which builds are being
                   downloaded.{' '}
                   <strong>
                     Two honest caveats. The hash in the download record uses a fixed salt, so it is
-                    pseudonymous rather than anonymous &mdash; anyone holding both the hash and a
-                    candidate address can confirm a match. And the download endpoint separately
-                    writes the raw IP to application logs for abuse detection, which the hashing
-                    does not cover.
+                    pseudonymous rather than anonymous: anyone holding both the hash and a candidate
+                    address can confirm a match. And the download endpoint separately writes the raw
+                    IP to application logs for abuse detection, which the hashing does not cover.
                   </strong>{' '}
                   Both are improvements we owe you rather than controls we are claiming.
                 </td>
@@ -379,8 +377,8 @@ export default function PrivacyPage() {
               OpenRouter is additionally the failover for every other chat model in the catalogue
             </strong>
             , so if a direct route fails, prompt content for a model from any provider can pass
-            through it &mdash; we would rather say that than let the three named families imply a
-            narrower answer. The full current list with regions is at{' '}
+            through it. We would rather say that than let the three named families imply a narrower
+            answer. The full current list with regions is at{' '}
             <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
               /subprocessors
             </Link>
@@ -396,16 +394,16 @@ export default function PrivacyPage() {
               written to everyone else. Text typed or pasted into a chat, files uploaded to it, and
               whatever a connector fetches when an account holder points the agent at a mailbox,
               calendar, drive or CRM routinely carries personal data about people who never signed
-              up &mdash; a colleague on the thread, a guest on the invite, a name in the
-              spreadsheet. So do the identities an employer&rsquo;s directory provisions for people
-              who may never sign in. We do not ask those people for anything and we do not contact
-              them; nothing in the product does.
+              up: a colleague on the thread, a guest on the invite, a name in the spreadsheet. So do
+              the identities an employer&rsquo;s directory provisions for people who may never sign
+              in. We do not ask those people for anything and we do not contact them; nothing in the
+              product does.
             </p>
             <p className="agi-callout-p">
               <strong>What happens to it.</strong> It is kept as part of the record it arrived in
-              and gets that record&rsquo;s treatment &mdash; the storage described in the table
-              above and the clock in section 05, nothing separate. In Local it never reaches us. In
-              BYOK it goes from the account holder&rsquo;s client to their provider, not to us.
+              and gets that record&rsquo;s treatment: the storage described in the table above and
+              the clock in section 05, nothing separate. In Local it never reaches us. In BYOK it
+              goes from the account holder&rsquo;s client to their provider, not to us.
             </p>
             <p className="agi-callout-p">
               <strong>On what basis.</strong> In Managed Cloud we hold it as the account
@@ -429,10 +427,10 @@ export default function PrivacyPage() {
               <Link href="/privacy/requests" style={{ color: 'var(--agi-ink)' }}>
                 /privacy/requests
               </Link>{' '}
-              without signing in &mdash; the form asks for a contact address, not an account. Two
-              limits, said here rather than discovered later: we can only act on a record we can
-              locate, so the request needs enough detail to find it; and where the data sits inside
-              a customer&rsquo;s account we hold it on that customer&rsquo;s instruction, so we will
+              without signing in: the form asks for a contact address, not an account. Two limits,
+              said here rather than discovered later: we can only act on a record we can locate, so
+              the request needs enough detail to find it; and where the data sits inside a
+              customer&rsquo;s account we hold it on that customer&rsquo;s instruction, so we will
               usually have to route your request to them rather than act on it ourselves.
             </p>
           </div>
@@ -482,8 +480,8 @@ export default function PrivacyPage() {
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             One row per purpose, rather than a sentence listing four bases and leaving you to work
             out which applies to what. Where a row says <em>legitimate interests</em>, it also says
-            why we think ours do not override yours &mdash; that balancing test is the part a bare
-            list omits.
+            why we think ours do not override yours. That balancing test is the part a bare list
+            omits.
           </p>
           <table className="agi-ledger">
             <thead>
@@ -552,8 +550,8 @@ export default function PrivacyPage() {
               <tr>
                 <td style={{ verticalAlign: 'top' }}>Understanding which builds are downloaded</td>
                 <td style={{ verticalAlign: 'top' }}>
-                  Download records: hashed IP, user-agent, referrer, coarse country &mdash; plus the
-                  raw IP in server logs, as section 01 says.
+                  Download records: hashed IP, user-agent, referrer, coarse country, plus the raw IP
+                  in server logs, as section 01 says.
                 </td>
                 <td>
                   <strong>Legitimate interests.</strong> Narrow, and the honest caveats about the
@@ -575,7 +573,7 @@ export default function PrivacyPage() {
                 <td style={{ verticalAlign: 'top' }}>Aggregated page views.</td>
                 <td>
                   <strong>Your consent.</strong> Nothing loads until you give it, and the gate fails
-                  closed &mdash; if your choice cannot be read, analytics stays off.
+                  closed: if your choice cannot be read, analytics stays off.
                 </td>
               </tr>
               <tr>
@@ -654,8 +652,8 @@ export default function PrivacyPage() {
                 <td style={{ width: '22%', verticalAlign: 'top' }}>Billing records</td>
                 <td style={{ verticalAlign: 'top' }}>
                   Erased with the account, or aged out at the end of the statutory record-keeping
-                  period &mdash; {STATUTORY_RECORD_RETENTION_YEARS} years &mdash; whichever comes
-                  first for that row.
+                  period ({STATUTORY_RECORD_RETENTION_YEARS} years), whichever comes first for that
+                  row.
                 </td>
                 <td>
                   Your subscription, credit ledger and usage rows are erased with everything else.
@@ -665,21 +663,20 @@ export default function PrivacyPage() {
                   double-charge protection keys and any payment still moving when you delete are
                   kept, because deleting those can charge you twice or lose money we owe you; and
                   Stripe holds its own record of your payments and invoices under its retention, not
-                  ours &mdash; card numbers go to Stripe directly and never reach us. A daily
-                  scheduled job now enforces a maximum age on the rows that outlive an account.
-                  Books of account &mdash; the credit ledger and the organisation usage ledger
-                  &mdash; are kept {STATUTORY_RECORD_RETENTION_YEARS} years and then deleted, and
-                  the request-shaped metadata beside them is emptied after{' '}
-                  {METERING_EVIDENCE_RETENTION_YEARS} years because the amount, the type and the
-                  date are the record, not the routing detail. Metering events are deleted after{' '}
-                  {METERING_EVIDENCE_RETENTION_YEARS} years and their metadata emptied after 180
-                  days. Double-charge protection keys are deleted once their 24-hour window closes,
-                  completed settlement jobs 90 days after they finish, and payment-webhook receipts
-                  180 days after processing, with any error text they captured cleared after 30
-                  days. Two things carry no maximum age and we will not pretend otherwise: your
-                  current plan row and your current credit balance, because ageing those out would
-                  cancel a live subscription or delete credits you paid for. They go when the
-                  account goes.
+                  ours: card numbers go to Stripe directly and never reach us. A daily scheduled job
+                  now enforces a maximum age on the rows that outlive an account. Books of account
+                  (the credit ledger and the organisation usage ledger) are kept{' '}
+                  {STATUTORY_RECORD_RETENTION_YEARS} years and then deleted, and the request-shaped
+                  metadata beside them is emptied after {METERING_EVIDENCE_RETENTION_YEARS} years
+                  because the amount, the type and the date are the record, not the routing detail.
+                  Metering events are deleted after {METERING_EVIDENCE_RETENTION_YEARS} years and
+                  their metadata emptied after 180 days. Double-charge protection keys are deleted
+                  once their 24-hour window closes, completed settlement jobs 90 days after they
+                  finish, and payment-webhook receipts 180 days after processing, with any error
+                  text they captured cleared after 30 days. Two things carry no maximum age and we
+                  will not pretend otherwise: your current plan row and your current credit balance,
+                  because ageing those out would cancel a live subscription or delete credits you
+                  paid for. They go when the account goes.
                 </td>
               </tr>
               <tr>
@@ -718,8 +715,8 @@ export default function PrivacyPage() {
                   Within 24 hours of creation, or sooner once its resume mapping is gone.
                 </td>
                 <td>
-                  A daily scheduled job enforces a 24-hour age cap on every sandbox — matching the
-                  resume mapping&rsquo;s own 24-hour expiry — and reclaims it at that cap or as soon
+                  A daily scheduled job enforces a 24-hour age cap on every sandbox (matching the
+                  resume mapping&rsquo;s own 24-hour expiry) and reclaims it at that cap or as soon
                   as the mapping no longer points to it, whichever comes first.
                 </td>
               </tr>
@@ -728,7 +725,7 @@ export default function PrivacyPage() {
                 <td style={{ verticalAlign: 'top' }}>90 days.</td>
                 <td>
                   A database routine deletes entries older than 90 days, run by a{' '}
-                  <strong>scheduled job every night</strong> —{' '}
+                  <strong>scheduled job every night</strong>:{' '}
                   <code>/api/cron/purge-security-audit-logs</code> at 02:30 UTC, registered in{' '}
                   <code>vercel.json</code>. This entry previously said the routine was run by an
                   administrator rather than on a schedule; that stopped being true when the cron was
@@ -855,8 +852,8 @@ export default function PrivacyPage() {
                 <td>
                   Account settings. Returns your account data as a download. It is rate limited, and
                   every export is written to the security audit log. It does not yet cover every
-                  category this page lists &mdash; where something is missing, use the access
-                  request in the next section.
+                  category this page lists. Where something is missing, use the access request in
+                  the next section.
                 </td>
               </tr>
               <tr>
@@ -892,8 +889,8 @@ export default function PrivacyPage() {
                 <td style={{ verticalAlign: 'top' }}>Turn crash reporting off</td>
                 <td>
                   Settings. A separate switch from analytics, in a different place, because they are
-                  different vendors doing different things &mdash; we would rather say that than
-                  imply one toggle covers both.
+                  different vendors doing different things. We would rather say that than imply one
+                  toggle covers both.
                 </td>
               </tr>
               <tr>
@@ -926,7 +923,7 @@ export default function PrivacyPage() {
                 <td>
                   The mode selector. Local keeps the conversation on your machine and sends us
                   nothing; BYOK goes from your client straight to your provider on your key. Both
-                  are desktop, CLI and VS Code capabilities &mdash; the web app is cloud-only.
+                  are desktop, CLI and VS Code capabilities: the web app is cloud-only.
                 </td>
               </tr>
             </tbody>
@@ -956,11 +953,11 @@ export default function PrivacyPage() {
                   Request account deletion from the product. Erasure is scheduled 24 hours later and
                   then performed. You get no confirmation email, because the only email this product
                   sends is support escalation, scheduled-task notifications and operational alerts
-                  to us &mdash; there is no account-lifecycle mail. Cancellation is self-serve: sign
-                  back in and cancel from Settings &gt; Account any time before the 24 hours are up,
-                  and the request is discarded without touching your data. Once that window has
-                  closed the product refuses to cancel, so the request cannot be revived after
-                  erasure begins.
+                  to us: there is no account-lifecycle mail. Cancellation is self-serve: sign back
+                  in and cancel from Settings &gt; Account any time before the 24 hours are up, and
+                  the request is discarded without touching your data. Once that window has closed
+                  the product refuses to cancel, so the request cannot be revived after erasure
+                  begins.
                 </td>
               </tr>
               <tr>
