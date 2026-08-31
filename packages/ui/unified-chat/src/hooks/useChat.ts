@@ -953,7 +953,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           ? {
               metadata: {
                 sendReplay: {
-                  ...(skillName ? { hasSkillInstruction: true } : {}),
+                  ...(skillName ? { hasSkillInstruction: true, skillName } : {}),
                   ...(localToolScope === 'web_search' ? { webSearchEnabled: true } : {}),
                 },
               },

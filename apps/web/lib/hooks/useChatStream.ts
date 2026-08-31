@@ -1758,6 +1758,7 @@ export function useChatStream(): UseChatStreamReturn {
         workMode: options.workMode,
         styleMode: options.styleMode,
         hasSkillInstruction: Boolean(options.skillName),
+        ...(options.skillName ? { skillName: options.skillName } : {}),
       });
       const persistedAttachments = durableAttachmentDescriptors(options.attachments);
       const userMetadata: MessageMetadata | undefined =
