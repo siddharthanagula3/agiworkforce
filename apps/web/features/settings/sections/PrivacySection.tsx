@@ -445,7 +445,7 @@ export function PrivacySection() {
                   <span
                     style={{
                       marginLeft: 8,
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: 700,
                       color: 'var(--text-3)',
                       textTransform: 'uppercase',

@@ -901,7 +901,7 @@ export function BillingSection() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: 700,
                   color: 'var(--text-3)',
                   fontFamily: 'var(--mono)',
@@ -1167,7 +1167,7 @@ export function BillingSection() {
                       style={{
                         padding: '10px 16px',
                         textAlign: col === 'Amount' ? 'right' : 'left',
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 700,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase',
@@ -1275,7 +1275,7 @@ export function BillingSection() {
                       style={{
                         padding: '10px 16px',
                         textAlign: i === 3 ? 'right' : 'left',
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 700,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase',

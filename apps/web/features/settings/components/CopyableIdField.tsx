@@ -93,7 +93,7 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
       </div>
-      <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '8px 0 0' }}>{hint}</p>
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '8px 0 0' }}>{hint}</p>
     </>
   );
 }

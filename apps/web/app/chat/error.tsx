@@ -63,7 +63,7 @@ export default function ChatError({
           </a>
         </div>
         {error.digest && (
-          <p style={{ marginTop: 16, fontSize: 11, color: 'var(--text-3)' }}>
+          <p style={{ marginTop: 16, fontSize: 12, color: 'var(--text-3)' }}>
             Error ID: {error.digest}
           </p>
         )}

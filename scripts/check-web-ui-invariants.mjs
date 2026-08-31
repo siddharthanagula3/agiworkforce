@@ -99,6 +99,19 @@ const RULES = [
     advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor — use the caption or metadata role`,
   },
   {
+    // The class-based rules above read TSX only, so 32 declarations sat in
+    // stylesheets where nothing could see them - eyebrows, badges, docs
+    // headings and exit codes down to 9px, on live marketing routes.
+    id: 'tiny-type-css',
+    // Stylesheets only. The same declaration inside a TSX template literal is
+    // usually a sandboxed srcdoc for a decorative thumbnail, and the class and
+    // inline rules above already cover real component type.
+    extensions: new Set(['.css']),
+    regex: /font-size:\s*(\d+(?:\.\d+)?)px/g,
+    predicate: (m) => Number(m[1]) < MIN_FONT_SIZE_PX,
+    advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor — raise it or use a role token`,
+  },
+  {
     id: 'hover-only-affordance',
     regex: /\bopacity-0\b/g,
     predicate: (_m, line) =>
@@ -151,6 +164,7 @@ function scanSource(source, file) {
     const code = line.replace(/\/\/.*$/, '');
 
     for (const rule of RULES) {
+      if (rule.extensions && !rule.extensions.has(path.extname(file))) continue;
       rule.regex.lastIndex = 0;
       let match;
       while ((match = rule.regex.exec(code)) !== null) {

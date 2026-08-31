@@ -57,7 +57,7 @@ export default function ByokSettingsPage() {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 10,
+            fontSize: 12,
             flexShrink: 0,
           }}
         >
@@ -70,7 +70,7 @@ export default function ByokSettingsPage() {
       <section>
         <div
           style={{
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 700,
             letterSpacing: '0.08em',
             color: 'var(--text-3)',

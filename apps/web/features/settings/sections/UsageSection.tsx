@@ -94,7 +94,7 @@ function UsageBar({
         }
         style={{ background: 'var(--chat-border-strong)' }}
       />
-      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
+      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
         {unknown ? 'Could not read your usage. Retry to load it.' : detail}
       </span>
     </div>
