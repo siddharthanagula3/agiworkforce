@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { toUserMessage } from '@/lib/user-error-message';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
@@ -82,7 +83,7 @@ export function useShareConversation(conversationTitle?: string, modelId?: strin
         setActiveShare(readCreatedShare(await res.json()));
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not create the public link.');
+        setError(toUserMessage(err, 'Could not create the public link.'));
         return false;
       } finally {
         setIsSharing(false);
@@ -107,7 +108,7 @@ export function useShareConversation(conversationTitle?: string, modelId?: strin
       setActiveShare(null);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not revoke the public link.');
+      setError(toUserMessage(err, 'Could not revoke the public link.'));
       return false;
     } finally {
       setIsSharing(false);

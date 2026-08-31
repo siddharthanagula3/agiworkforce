@@ -1,23 +1,5 @@
 /**
- * Turns a caught value into something a person can act on.
- *
- * The usual `err instanceof Error ? err.message : fallback` reaches the screen
- * with the browser's own wording when the network drops: "Failed to fetch" in
- * Chrome, "Load failed" in Safari, "NetworkError when attempting to fetch
- * resource" in Firefox. Those name no condition and suggest no action, so a
- * user whose wifi died is told nothing. Name the condition instead.
+ * Re-exported from the shared chat package so the app and the chat hooks
+ * cannot drift into two different answers for the same caught error.
  */
-const NETWORK_FAILURE = /failed to fetch|networkerror|network request failed|load failed/i;
-
-export function networkErrorMessage(error: unknown): string | null {
-  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
-  if (!(error instanceof TypeError || NETWORK_FAILURE.test(raw))) return null;
-  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-  return offline ? 'You appear to be offline. Check your connection.' : 'Could not reach the server.';
-}
-
-export function toUserMessage(error: unknown, fallback: string): string {
-  return networkErrorMessage(error) ?? (error instanceof Error && error.message.trim()
-    ? error.message.trim()
-    : fallback);
-}
+export { networkErrorMessage, toUserMessage } from '@agiworkforce/unified-chat';

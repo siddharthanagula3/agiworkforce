@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toUserMessage } from '@/lib/user-error-message';
 import { type ManagedSkillSummary } from '@agiworkforce/cloud-contracts';
 import {
   loadSkillsCatalog,
@@ -32,7 +33,7 @@ export function useSkillsList(): UseSkillsListResult {
           setSkills(all.filter((skill) => skill.lifecycle === 'included'));
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setError(toUserMessage(err, 'Something went wrong.'));
       } finally {
         if (!cancelled) setLoading(false);
       }
