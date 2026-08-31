@@ -3880,6 +3880,85 @@ html[data-contrast='more'] *:focus-visible {
   --agi-font-heading: var(--agi-font);
 }
 
+/* Full-comparison disclosure. The table it holds is a reference someone
+   consults deliberately, not something they read on the way to picking a plan,
+   so it opens on demand instead of occupying a screen and a half by default. */
+[data-design='agi'] .agi-compare-disclosure {
+  margin-top: 36px;
+  border: 1px solid var(--agi-rule);
+  border-radius: 12px;
+  background: var(--agi-bg-2);
+}
+
+[data-design='agi'] .agi-compare-summary {
+  display: flex;
+  align-items: baseline;
+  /* Not space-between: that spread the caret, the label and the hint into
+     three separate corners, so the caret no longer read as belonging to the
+     label it opens. */
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--agi-ink);
+  list-style: none;
+  border-radius: 12px;
+  transition: background var(--agi-dur-fast) var(--agi-ease-out);
+}
+
+[data-design='agi'] .agi-compare-summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-design='agi'] .agi-compare-summary:hover {
+  background: var(--agi-surface-wash);
+}
+
+[data-design='agi'] .agi-compare-summary:focus-visible {
+  outline: 2px solid var(--agi-amber);
+  outline-offset: 2px;
+}
+
+[data-design='agi'] .agi-compare-summary-hint {
+  margin-left: auto;
+  font-family: var(--agi-font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--agi-ink-quiet);
+}
+
+/* The affordance is a caret that turns, drawn with a border rather than a glyph
+   so it inherits colour and needs no icon font. */
+[data-design='agi'] .agi-compare-summary::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin-right: 12px;
+  border-right: 1.5px solid var(--agi-ink-quiet);
+  border-bottom: 1.5px solid var(--agi-ink-quiet);
+  transform: rotate(-45deg);
+  transition: transform var(--agi-dur-fast) var(--agi-ease-out);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+[data-design='agi'] .agi-compare-disclosure[open] .agi-compare-summary::before {
+  transform: rotate(45deg);
+}
+
+[data-design='agi'] .agi-compare-disclosure > div {
+  padding: 0 20px 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design='agi'] .agi-compare-summary::before {
+    transition: none;
+  }
+}
+
 /* ── shared section scaffolding ─────────────────────────────────────── */
 
 [data-design='agi'] .agi-fl-section {
