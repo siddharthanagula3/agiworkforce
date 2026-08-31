@@ -13,6 +13,7 @@ export type AgentActivityRunStatus =
   | 'paused'
   | 'awaiting-approval'
   | 'completed'
+  | 'partial'
   | 'failed'
   | 'cancelled';
 
@@ -190,6 +191,40 @@ function stopStatus(reason: AgentEventStopReason): AgentActivityRunStatus {
   if (reason === 'cancelled') return 'cancelled';
   if (reason === 'tool-use') return 'running';
   return 'completed';
+}
+
+/**
+ * Why a run stopped and what it achieved are two different questions. The loop
+ * reaching its end only answers the first: a turn whose every tool call errored
+ * still stops with a normal reason, and reporting that as Complete told users a
+ * folder had been created when nothing had.
+ *
+ * A run that ended normally is only Complete if nothing under it failed. If
+ * some work failed it is Partial, and if everything that was attempted failed
+ * it is Failed.
+ */
+export function deriveRunOutcome(
+  stopped: AgentActivityRunStatus,
+  entries: readonly AgentActivityEntry[],
+): AgentActivityRunStatus {
+  if (stopped !== 'completed') return stopped;
+
+  let attempted = 0;
+  let failed = 0;
+  for (const entry of entries) {
+    if (entry.kind === 'error') {
+      attempted += 1;
+      failed += 1;
+      continue;
+    }
+    if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
+    if (entry.status === 'pending' || entry.status === 'running') continue;
+    attempted += 1;
+    if (entry.status === 'failed') failed += 1;
+  }
+
+  if (failed === 0) return 'completed';
+  return failed === attempted ? 'failed' : 'partial';
 }
 
 function updateAt<T extends AgentActivityEntry>(
@@ -514,7 +549,7 @@ export function applyAgentActivityEvent(
       return next;
 
     case 'stop': {
-      const status = stopStatus(event.reason);
+      const status = deriveRunOutcome(stopStatus(event.reason), next.entries);
       next.status = status;
       next.stopReason = event.reason;
       if (status !== 'running') next.completedAtMs = envelope.emittedAtMs;
