@@ -3972,6 +3972,92 @@ html[data-contrast='more'] *:focus-visible {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+ * Surface stages
+ *
+ * The site was dark end to end, which is most of why it read as repetitive:
+ * with one canvas, every section needs a border or a card to say where it
+ * begins, and thirty hairline dividers is what that looks like.
+ *
+ * A stage retints the token layer rather than restyling components, so
+ * everything inside - rules, cards, quiet text, code wells - adapts without
+ * knowing which canvas it landed on. The canvas change is then strong enough
+ * to be the divider itself, and the hairline can go.
+ *
+ * Measured on the light stages: ink 14.71:1 at worst, secondary 6.72:1, quiet
+ * 5.16:1, accent 4.82:1. The accent darkens on light ground because the dark
+ * amber would not hold 4.5:1 there - same role, different value, which is the
+ * point of naming roles rather than hues.
+ * ══════════════════════════════════════════════════════════════════════ */
+
+[data-design='agi'] .agi-stage {
+  padding: clamp(72px, 10vw, 132px) 0;
+}
+
+/* No hairline between stages: the canvas change separates them. A rule is only
+   needed where two stages share a tone. */
+[data-design='agi'] .agi-stage + .agi-stage {
+  border-top: 0;
+}
+
+[data-design='agi'] .agi-stage--warm,
+[data-design='agi'] .agi-stage--pearl {
+  --agi-ink: #16161a;
+  --agi-ink-2: #4e4e56;
+  --agi-ink-quiet: #5f5f67;
+  --agi-ink-faint: #5f5f67;
+  --agi-amber: #8a5a10;
+  --agi-amber-soft: rgba(138, 90, 16, 0.12);
+  --agi-rule: rgba(22, 22, 26, 0.1);
+  --agi-rule-strong: rgba(22, 22, 26, 0.18);
+  --agi-surface-wash: rgba(22, 22, 26, 0.03);
+  --agi-line-soft: rgba(22, 22, 26, 0.06);
+  --agi-glow-soft: rgba(22, 22, 26, 0.04);
+  --agi-button-bg: #16161a;
+  --agi-button-bg-hover: #2a2a30;
+  --agi-button-ink: #faf9f6;
+  --agi-code-bg: rgba(22, 22, 26, 0.05);
+  --agi-shadow: rgba(22, 22, 26, 0.14);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-stage--warm {
+  --agi-bg: #faf9f6;
+  --agi-bg-2: #f2f1ed;
+  --agi-bg-3: #e9e8e3;
+  --agi-card: #ffffff;
+  background: var(--agi-bg);
+}
+
+[data-design='agi'] .agi-stage--pearl {
+  --agi-bg: #f2f1ed;
+  --agi-bg-2: #e9e8e3;
+  --agi-bg-3: #dedcd6;
+  --agi-card: #faf9f6;
+  background: var(--agi-bg);
+}
+
+/* The default canvas, named so a stage sequence can return to it explicitly. */
+[data-design='agi'] .agi-stage--ink {
+  background: var(--agi-bg);
+}
+
+/* True black earns its place only where the content is a terminal or a
+   routing stage - somewhere the darkness is the subject, not the wallpaper. */
+[data-design='agi'] .agi-stage--void {
+  --agi-bg: #000000;
+  --agi-bg-2: #0a0a0b;
+  --agi-bg-3: #121214;
+  --agi-card: #0a0a0b;
+  background: var(--agi-bg);
+}
+
+/* A stage whose product media should break the text column. */
+[data-design='agi'] .agi-stage-bleed {
+  width: 100%;
+  max-width: none;
+}
+
 /* ── shared section scaffolding ─────────────────────────────────────── */
 
 [data-design='agi'] .agi-fl-section {
@@ -4096,6 +4182,42 @@ html[data-contrast='more'] *:focus-visible {
   color: var(--agi-ink);
   background: var(--agi-surface-wash);
   border-color: var(--agi-rule-strong);
+}
+
+/* Press feedback.
+ *
+ * The whole marketing surface carried exactly one :active rule, and
+ * .agi-fl-cta went as far as declaring a transform transition for a transform
+ * that was never written. So every CTA on the site confirmed a press only by
+ * navigating - which, on a slow route, reads as a click that did not land.
+ *
+ * Feedback belongs on pointer-down, not on release, and it has to be quick
+ * enough to feel like the surface answering rather than animating: 90ms, and a
+ * scale small enough to register as pressure rather than movement.
+ *
+ * Under reduced motion the scale is dropped - a transform is the part worth
+ * removing - and the press is carried by a brightness shift instead, so the
+ * feedback survives in a form with no vestibular cost. */
+[data-design='agi'] .agi-fl-cta:active,
+[data-design='agi'] .agi-cta-primary:active,
+[data-design='agi'] .agi-cta-ghost:active,
+[data-design='agi'] .agi-cta-hero-secondary:active,
+[data-design='agi'] .agi-cta-hero-tertiary:active,
+[data-design='agi'] .agi-tier-cta:active {
+  transform: scale(0.97);
+  transition-duration: 90ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design='agi'] .agi-fl-cta:active,
+  [data-design='agi'] .agi-cta-primary:active,
+  [data-design='agi'] .agi-cta-ghost:active,
+  [data-design='agi'] .agi-cta-hero-secondary:active,
+  [data-design='agi'] .agi-cta-hero-tertiary:active,
+  [data-design='agi'] .agi-tier-cta:active {
+    transform: none;
+    filter: brightness(0.92);
+  }
 }
 
 /* ── reveal (IntersectionObserver adds .is-revealed) ────────────────── */
