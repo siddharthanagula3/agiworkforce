@@ -60,6 +60,7 @@ import { accountInitial, normalizeDisplayName } from '@agiworkforce/utils/displa
 import {
   Menu,
   Share2,
+  PanelsTopLeft,
   Bell,
   X as XIcon,
   Settings,
@@ -4487,7 +4488,7 @@ export default function WebChatPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setShareDialogOpen(true)}
-                  className="gap-1.5"
+                  className="hidden gap-1.5 sm:inline-flex"
                   aria-label={t('chat:shareConversation')}
                 >
                   <Share2 className="h-4 w-4" aria-hidden="true" />
@@ -4515,6 +4516,7 @@ export default function WebChatPage() {
                   // the DOM and the result would look complete.
                   onPrint={() => void printConversation()}
                   onExport={() => setExportDialogOpen(true)}
+                  onShare={() => setShareDialogOpen(true)}
                   // Conversation-level fork. The branch API and its hook were
                   // already live for per-message branching; only this entry
                   // point was missing. Branching from the LAST message
@@ -4530,7 +4532,43 @@ export default function WebChatPage() {
                 />
               )}
 
-            <div className="flex shrink-0 items-center gap-1.5">
+            {/*
+              Four fixed controls and a fixed left group left the conversation
+              title 24px of a 255px name at 320px - one character and an
+              ellipsis. The panel toggles collapse behind one control on a
+              phone; they keep their own state and labels, so nothing is lost
+              but the width.
+            */}
+            <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+              {hasMessages && (
+                <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0"
+                    aria-label={t('chat:openPanels', 'Panels')}
+                  >
+                    <PanelsTopLeft className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="flex w-auto flex-row gap-1.5 p-1.5">
+                  {hasMessages && showWorkSession && (
+                    <WorkSessionToggleButton
+                      messages={displayedMessages}
+                      open={workSessionPanelOpen}
+                      onToggle={() => setWorkSessionPanelOpen((open) => !open)}
+                    />
+                  )}
+                  <ResearchToggleButton count={researchSourceCount} />
+                  <ArtifactsToggleButton />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
               {hasMessages && (
                 <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
               )}
