@@ -69,6 +69,12 @@ export const CloudAgentRunSchema = z.object({
   userId: z.string().min(1),
   requestId: z.string().min(1),
   conversationId: z.string().min(1).nullable(),
+  /**
+   * Title of the conversation the run belongs to, so a list of runs can name
+   * them. Optional: only the list endpoint joins it, and a run whose
+   * conversation is gone has none.
+   */
+  conversationTitle: z.string().min(1).nullable().optional(),
   originSurface: CloudAgentOriginSurfaceSchema,
   workMode: CloudAgentWorkModeSchema,
   state: AgentTaskStateSchema,

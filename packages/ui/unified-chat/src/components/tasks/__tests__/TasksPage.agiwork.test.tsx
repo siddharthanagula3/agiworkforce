@@ -77,7 +77,7 @@ function client(overrides: Partial<ManagedCloudAgentRunClient> = {}): ManagedClo
 }
 
 async function openDetails() {
-  fireEvent.click(await screen.findByRole('button', { name: 'View details for AGI Work task' }));
+  fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
 }
 
 describe('Tasks — AGI Work goal + plan', () => {
