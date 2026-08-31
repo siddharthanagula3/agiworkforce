@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { ProviderLogo, hasProviderLogo } from './ProviderLogo';
 
 const PROVIDERS: { name: string; slug?: string }[] = [
@@ -12,6 +14,55 @@ const PROVIDERS: { name: string; slug?: string }[] = [
 ];
 
 const SURFACES = ['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code'];
+
+/**
+ * What each of the three lanes above actually commits to.
+ *
+ * These facts used to be a second section further down the page, built as
+ * three bordered cards that restated this section's own headline - the page
+ * asked "which route?" twice, 5000px apart, and answered it in a card grid
+ * that showed none of the product. The facts are worth keeping and the
+ * section was not: they belong under the diagram that names the lanes, dense
+ * and unboxed, where the reader is already looking at routing.
+ */
+const ROUTE_LEDGER = [
+  {
+    mode: 'Local',
+    glyph: '\u25c6',
+    summary: 'On your hardware. Works offline. Free.',
+    facts: [
+      'Chats, files and sessions never silently leave the device',
+      'Ollama, LM Studio, llama.cpp and vLLM on Desktop',
+      'On-device Local Mode on Mobile',
+      'No account required',
+    ],
+    cta: { href: '/local', label: 'Run AGI locally' },
+  },
+  {
+    mode: 'BYOK',
+    glyph: '\u25c7',
+    summary: 'Your keys, your bill, straight to the provider.',
+    facts: [
+      'Keys stored encrypted, on your machine',
+      'Traffic goes directly to your provider',
+      'Visible provider label on every route',
+      'Explicit, reviewed continuation from Local',
+    ],
+    cta: { href: '/byok', label: 'Set up BYOK' },
+  },
+  {
+    mode: 'AGI Cloud',
+    glyph: '\u25cf',
+    summary: 'Hosted capacity, open by default.',
+    facts: [
+      'Public alpha \u2014 sign in and start, no waitlist',
+      'Shared across Web, Mobile and Desktop',
+      'AGI-owned routing with clear labels',
+      'Usage metered and transparent',
+    ],
+    cta: { href: '/get-started', label: 'Get started' },
+  },
+];
 
 const W = 960;
 const H = 460;
@@ -135,6 +186,30 @@ export function RouteFlow({
           <li>Cloud · public alpha</li>
         </ul>
       </div>
+
+      <dl className="agi-rf-ledger">
+        {ROUTE_LEDGER.map((route) => (
+          <div key={route.mode} className="agi-rf-ledger-lane">
+            <dt className="agi-rf-ledger-mode">
+              <span className="agi-rf-ledger-glyph" aria-hidden="true">
+                {route.glyph}
+              </span>
+              {route.mode}
+            </dt>
+            <dd className="agi-rf-ledger-body">
+              <p className="agi-rf-ledger-summary">{route.summary}</p>
+              <ul className="agi-rf-ledger-facts">
+                {route.facts.map((fact) => (
+                  <li key={fact}>{fact}</li>
+                ))}
+              </ul>
+              <Link href={route.cta.href} className="agi-rf-ledger-cta">
+                {route.cta.label}
+              </Link>
+            </dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

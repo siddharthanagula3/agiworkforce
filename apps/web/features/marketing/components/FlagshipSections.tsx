@@ -282,6 +282,20 @@ export interface SurfaceIndexItem {
  * because that is where a terminal lives, a browser wants near-white for the
  * same reason. Anything unlisted keeps the default ink canvas.
  */
+/**
+ * The ground a section paints itself on. A page that holds one canvas end to
+ * end needs no such thing; this one changes canvas as it moves through the
+ * suite, so a section has to be able to say which ground it belongs to.
+ *
+ * Callers pass a tone, not a class, because `agi-stage` and its modifier have
+ * to travel together - the modifier alone sets tokens and no background, which
+ * is the shape of the bug the light stages already shipped once.
+ */
+export type StageTone = 'warm' | 'pearl' | 'ink' | 'void';
+
+const stageClass = (tone: StageTone | undefined, ...rest: string[]) =>
+  [...rest, tone ? `agi-stage agi-stage--${tone}` : ''].filter(Boolean).join(' ');
+
 const SURFACE_STAGE_TONE: Record<string, string> = {
   'AGI Web': 'agi-stage--warm',
   'AGI Desktop': 'agi-stage--ink',
@@ -370,54 +384,6 @@ export function SurfaceIndex({
   );
 }
 
-export interface TrustModeCard {
-  mode: string;
-  glyph: string;
-  title: string;
-  body: string;
-  points: string[];
-  cta: FlagshipCta;
-}
-
-export function TrustTriptych({
-  eyebrow,
-  title,
-  lede,
-  cards,
-}: {
-  eyebrow: string;
-  title: string;
-  lede: string;
-  cards: TrustModeCard[];
-}) {
-  return (
-    <section className="agi-fl-section" aria-labelledby="agi-fl-trust-title">
-      <p className="agi-fl-eyebrow">{eyebrow}</p>
-      <h2 id="agi-fl-trust-title" className="agi-fl-h2">
-        {title}
-      </h2>
-      <p className="agi-fl-section-lede">{lede}</p>
-      <div className="agi-fl-trust-grid">
-        {cards.map((card, i) => (
-          <Reveal key={card.mode} delay={i * 80} className="agi-fl-trust-card">
-            <p className="agi-fl-trust-mode">
-              <span aria-hidden="true">{card.glyph}</span> {card.mode}
-            </p>
-            <h3 className="agi-fl-trust-title">{card.title}</h3>
-            <p className="agi-fl-trust-body">{card.body}</p>
-            <ul className="agi-fl-trust-points">
-              {card.points.map((point) => (
-                <li key={point}>{point}</li>
-              ))}
-            </ul>
-            <CtaButton cta={card.cta} kind={card.cta.waitlist ? 'primary' : 'ghost'} />
-          </Reveal>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export interface CapabilityItem {
   meta: string;
   title: string;
@@ -429,10 +395,12 @@ export function CapabilityGrid({
   eyebrow,
   title,
   items,
+  stage,
 }: {
   eyebrow: string;
   title: string;
   items: CapabilityItem[];
+  stage?: StageTone;
 }) {
   // /features renders two capability grids, and a fixed id made both sections
   // point `aria-labelledby` at the first heading, so the second landmark was
@@ -443,7 +411,7 @@ export function CapabilityGrid({
     .replace(/(^-|-$)/g, '')}`;
 
   return (
-    <section className="agi-fl-section" aria-labelledby={titleId}>
+    <section className={stageClass(stage, 'agi-fl-section')} aria-labelledby={titleId}>
       <p className="agi-fl-eyebrow">{eyebrow}</p>
       <h2 id={titleId} className="agi-fl-h2">
         {title}
@@ -472,19 +440,21 @@ export function DevBand({
   body,
   ctas,
   visual,
+  stage,
 }: {
   eyebrow: string;
   title: string;
   body: string;
   ctas: FlagshipCta[];
   visual?: ReactNode;
+  stage?: StageTone;
 }) {
   const titleId = `agi-fl-dev-title-${eyebrow
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')}`;
   return (
-    <section className="agi-fl-devband" aria-labelledby={titleId}>
+    <section className={stageClass(stage, 'agi-fl-devband')} aria-labelledby={titleId}>
       <div className="agi-fl-devband-copy">
         <p className="agi-fl-eyebrow">{eyebrow}</p>
         <h2 id={titleId} className="agi-fl-h2">
@@ -510,15 +480,17 @@ export function FinalCta({
   body,
   ctas,
   stamp,
+  stage,
 }: {
   eyebrow: string;
   title: string;
   body: string;
   ctas: FlagshipCta[];
   stamp?: string;
+  stage?: StageTone;
 }) {
   return (
-    <section className="agi-fl-final" aria-labelledby="agi-fl-final-title">
+    <section className={stageClass(stage, 'agi-fl-final')} aria-labelledby="agi-fl-final-title">
       <p className="agi-fl-eyebrow">{eyebrow}</p>
       <h2 id="agi-fl-final-title" className="agi-fl-final-title">
         {title}
