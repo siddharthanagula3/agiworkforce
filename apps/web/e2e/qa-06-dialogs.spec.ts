@@ -148,6 +148,23 @@ test.describe('QA dialogs — focus, escape, inertness', () => {
       }),
     );
 
+    // Named deliberately rather than discovered by label pattern: /chat/projects
+    // carries both a page-level "New" that opens a dialog and a sidebar "New
+    // project" that navigates to /chat, and a probe guessing between them
+    // measures the navigation and reports it as a focus bug.
+    reports.push(
+      await probeDialog(page, 'global-search', async () => {
+        await page.goto('/chat', { waitUntil: 'networkidle' }).catch(() => undefined);
+        await page.waitForTimeout(3000);
+        await page.evaluate(() => {
+          const target = [...document.querySelectorAll('button')].find((b) =>
+            /^search/i.test((b.getAttribute('aria-label') || b.textContent || '').trim()),
+          );
+          (target as HTMLElement | undefined)?.click();
+        });
+      }),
+    );
+
     mkdirSync(OUT_DIR, { recursive: true });
     writeFileSync(path.join(OUT_DIR, 'dialogs.json'), JSON.stringify(reports, null, 2));
 
