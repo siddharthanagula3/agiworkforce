@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { getNextUpgradeTier } from '@agiworkforce/types';
-import { Spinner } from '@agiworkforce/ui';
+import { Progress, Spinner } from '@agiworkforce/ui';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -21,6 +21,26 @@ function priceLabel(usd: number | null): string {
   if (usd === null) return 'Custom';
   if (usd === 0) return 'Free';
   return `${formatCatalogPrice(usd)}/month`;
+}
+
+/** Same shape the billing panels use, so a date reads identically everywhere. */
+function formatRenewalDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+/**
+ * Whether the period end is something to act on. A cancelled subscription ends
+ * rather than renews, and saying "renews" there would be wrong.
+ */
+function periodEndLabel(status: string | null | undefined): string {
+  return status === 'canceled' || status === 'cancelled' ? 'Access ends' : 'Renews';
 }
 
 const secondaryLinkClassName =
@@ -64,8 +84,17 @@ export function UpgradeChooser() {
 
   const showProrationNote = ready && !ownerBlocked && nextTier !== null;
 
+  // Rounded for display only; the raw value drives nothing here. A fractional
+  // percentage reads as false precision on a plan summary.
+  const rawUsedPercent = billing?.usage?.usedPercent;
+  const usedPercent =
+    typeof rawUsedPercent === 'number' && Number.isFinite(rawUsedPercent)
+      ? Math.max(0, Math.min(100, Math.round(rawUsedPercent)))
+      : null;
+  const renewalDate = formatRenewalDate(billing?.current_period_end ?? null);
+
   return (
-    <div className="mx-auto w-full max-w-2xl px-6 py-14">
+    <div className="mx-auto w-full max-w-2xl px-6">
       <Link
         href="/chat"
         className="text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -92,6 +121,11 @@ export function UpgradeChooser() {
         </div>
       ) : (
         <div className="mt-10 flex flex-col gap-6">
+          {/* The page already fetched the period and the usage and then showed
+              neither, so someone deciding whether to move plans could not see
+              how much of the one they have they are actually using, or when it
+              renews. Every value here comes from /api/usage; nothing is
+              derived or assumed, and each part renders only when present. */}
           <section
             data-testid="upgrade-current-plan"
             className="rounded-2xl border border-border bg-muted/30 p-5"
@@ -107,6 +141,28 @@ export function UpgradeChooser() {
                 {priceLabel(currentDisplay.monthlyPriceUsd)}
               </span>
             </div>
+
+            {usedPercent !== null ? (
+              <div className="mt-5">
+                <div className="flex items-baseline justify-between gap-4 text-sm">
+                  <span className="text-muted-foreground">Usage this period</span>
+                  <span className="font-medium tabular-nums" data-testid="upgrade-usage-percent">
+                    {usedPercent}%
+                  </span>
+                </div>
+                <Progress
+                  value={usedPercent}
+                  className="mt-2 h-1.5"
+                  aria-label={`${usedPercent}% of this period's usage used`}
+                />
+              </div>
+            ) : null}
+
+            {renewalDate ? (
+              <p className="mt-4 text-sm text-muted-foreground" data-testid="upgrade-renewal">
+                {periodEndLabel(billing?.status)} {renewalDate}
+              </p>
+            ) : null}
           </section>
 
           {ownerBlocked ? (
