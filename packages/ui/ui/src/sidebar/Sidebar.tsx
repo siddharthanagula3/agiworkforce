@@ -485,7 +485,12 @@ export function Sidebar(props: SidebarProps) {
 
       <div
         className={cn(
-          'relative flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out',
+          // inset-auto is load-bearing: the root is positioned only so its own
+          // descendants can anchor to it, and it is never itself offset. Without
+          // saying so, a narrow container resolved its inline end to 100% and
+          // pushed the whole sidebar exactly one container-width off-canvas,
+          // which is what left the mobile drawer rendering as an empty panel.
+          'relative inset-auto flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-[width] duration-300 ease-in-out',
           className,
         )}
         style={{ width }}

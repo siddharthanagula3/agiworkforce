@@ -62,33 +62,99 @@ vi.mock('@/features/workspaces/components/WorkspaceMenuItems', () => ({
   WorkspaceMenuItems: () => null,
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
-  Sidebar: (props: { collapsed?: boolean; isLoading?: boolean; footerSlot?: React.ReactNode }) => (
-    <div
-      data-testid="app-sidebar"
-      data-collapsed={String(props.collapsed ?? false)}
-      data-loading={String(props.isLoading ?? false)}
-    >
-      {props.footerSlot}
-    </div>
-  ),
-  DropdownMenu: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  // Content and items render their children rather than returning null. The
-  // stub used to swallow both, which meant nothing inside the account menu
-  // could be asserted on — including whether the product offers any route to
-  // its own policies. `asChild` is accepted and ignored; the child is already
-  // the element we want in the tree.
-  DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  DropdownMenuLabel: () => null,
-  DropdownMenuSeparator: () => null,
-  // shell-nav-ia-gap-01: the shell's destructive confirms (delete conversation,
-  // delete project) go through the shared AlertDialog wrapper instead of
-  // window.confirm. Stable identity so the shell's useCallback deps do not
-  // churn on every render, matching the real hook.
-  useConfirm: () => confirmStub,
-}));
+vi.mock('@agiworkforce/ui', async () => {
+  const React = await import('react');
+  return {
+    Sidebar: (props: {
+      collapsed?: boolean;
+      isLoading?: boolean;
+      footerSlot?: React.ReactNode;
+    }) => (
+      <div
+        data-testid="app-sidebar"
+        data-collapsed={String(props.collapsed ?? false)}
+        data-loading={String(props.isLoading ?? false)}
+      >
+        {props.footerSlot}
+      </div>
+    ),
+    // The mobile drawer is the shared Sheet. The stub keeps the parts the shell
+    // depends on - open gating, Escape, focus restoration - so the drawer
+    // assertions below still exercise real behaviour rather than the stub.
+    Sheet: ({
+      open,
+      onOpenChange,
+      children,
+    }: {
+      open?: boolean;
+      onOpenChange?: (next: boolean) => void;
+      children?: React.ReactNode;
+    }) => {
+      React.useEffect(() => {
+        if (!open) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+          if (event.key === 'Escape') onOpenChange?.(false);
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+      }, [open, onOpenChange]);
+      if (!open) return null;
+      return (
+        <div>
+          <div data-testid="mobile-nav-backdrop" onClick={() => onOpenChange?.(false)} />
+          {children}
+        </div>
+      );
+    },
+    SheetContent: ({
+      children,
+      onCloseAutoFocus,
+      ...rest
+    }: {
+      children?: React.ReactNode;
+      onCloseAutoFocus?: (event: { preventDefault: () => void }) => void;
+      [key: string]: unknown;
+    }) => {
+      const ref = React.useRef<HTMLDivElement>(null);
+      React.useEffect(() => {
+        ref.current?.focus();
+        return () => onCloseAutoFocus?.({ preventDefault: () => {} });
+      }, [onCloseAutoFocus]);
+      const { id, className, 'data-testid': testId } = rest as Record<string, string>;
+      return (
+        <div
+          ref={ref}
+          id={id}
+          className={className}
+          data-testid={testId}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation"
+          tabIndex={-1}
+        >
+          {children}
+        </div>
+      );
+    },
+    SheetTitle: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DropdownMenu: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    // Content and items render their children rather than returning null. The
+    // stub used to swallow both, which meant nothing inside the account menu
+    // could be asserted on — including whether the product offers any route to
+    // its own policies. `asChild` is accepted and ignored; the child is already
+    // the element we want in the tree.
+    DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DropdownMenuLabel: () => null,
+    DropdownMenuSeparator: () => null,
+    // shell-nav-ia-gap-01: the shell's destructive confirms (delete conversation,
+    // delete project) go through the shared AlertDialog wrapper instead of
+    // window.confirm. Stable identity so the shell's useCallback deps do not
+    // churn on every render, matching the real hook.
+    useConfirm: () => confirmStub,
+  };
+});
 
 vi.mock('@/lib/hooks/useConversations', () => ({
   useConversations: () => ({
