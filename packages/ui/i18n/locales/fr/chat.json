@@ -69,12 +69,10 @@
   },
   "sidebar": {
     "activeConversation": "Conversation active",
-    "allConversations": "Toutes les conversations",
     "archive": "Archiver",
     "archivedCount": "Archivées ({{count}})",
     "budgetUsed": "{{percent}} % du budget de tokens utilisé",
     "chats": "Conversations",
-    "clearFilter": "Effacer le filtre",
     "closeSearch": "Fermer la recherche",
     "cloud": "Cloud",
     "collapseProject": "Réduire le projet {{name}}",

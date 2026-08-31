@@ -69,12 +69,10 @@
   },
   "sidebar": {
     "activeConversation": "활성 대화",
-    "allConversations": "모든 대화",
     "archive": "보관",
     "archivedCount": "보관됨 ({{count}})",
     "budgetUsed": "토큰 예산의 {{percent}}% 사용됨",
     "chats": "채팅",
-    "clearFilter": "필터 지우기",
     "closeSearch": "검색 닫기",
     "cloud": "클라우드",
     "collapseProject": "{{name}} 프로젝트 접기",

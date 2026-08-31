@@ -69,12 +69,10 @@
   },
   "sidebar": {
     "activeConversation": "المحادثة النشطة",
-    "allConversations": "جميع المحادثات",
     "archive": "أرشفة",
     "archivedCount": "مؤرشفة ({{count}})",
     "budgetUsed": "تم استخدام {{percent}}% من ميزانية الرموز",
     "chats": "المحادثات",
-    "clearFilter": "مسح التصفية",
     "closeSearch": "إغلاق البحث",
     "cloud": "سحابي",
     "collapseProject": "طي المشروع {{name}}",
