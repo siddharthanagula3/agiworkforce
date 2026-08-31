@@ -10,6 +10,7 @@ import {
   type MapSearchPlace,
   type MapSearchView,
 } from '@agiworkforce/types';
+import { cn } from '@shared/lib/utils';
 
 interface MapSearchCardProps {
   body: MapSearchCardBody;
@@ -260,6 +261,9 @@ function MapTiles({
 export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
   const view = body.view;
   const places = body.places ?? [];
+  // A place that could not be tied to the rest of the request's geography may
+  // still be shown, but routing to it is exactly the unsafe action.
+  const hasUnconfirmedPlace = places.some((place) => place.confident === false);
   const primaryAction =
     body.actions.find((action) => action.provider === 'google_maps') ?? body.actions[0];
 
@@ -284,7 +288,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
           {places.length > 0 && (
             <div className="absolute inset-x-0 bottom-0 p-3 sm:inset-x-auto sm:bottom-auto sm:right-3 sm:top-14 sm:w-64 sm:p-0">
               <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-col sm:overflow-visible sm:pb-0">
-                {primaryAction && (
+                {primaryAction && !hasUnconfirmedPlace && (
                   <button
                     type="button"
                     onClick={() => ctx.onOpenUrl?.(primaryAction.url)}
@@ -300,7 +304,14 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
                     key={`${place.latitude},${place.longitude}`}
                     className="flex min-w-[13rem] shrink-0 items-center gap-2.5 rounded-xl bg-background/95 px-2.5 py-2 shadow-sm backdrop-blur sm:min-w-0"
                   >
-                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+                    <span
+                      className={cn(
+                        'grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-semibold',
+                        place.confident === false
+                          ? 'bg-warning-fill text-warning-on-fill'
+                          : 'bg-primary text-primary-foreground',
+                      )}
+                    >
                       {index + 1}
                     </span>
                     <span className="min-w-0">
@@ -311,6 +322,12 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
                         {place.kind ? `${place.kind} · ` : ''}
                         {place.label.split(',').slice(1, 3).join(',').trim() || body.query}
                       </span>
+                      {place.confident === false && (
+                        <span className="mt-0.5 block text-xs text-warning-text">
+                          Far from the other places in this request — check this is the one you
+                          meant.
+                        </span>
+                      )}
                     </span>
                   </div>
                 ))}
@@ -348,7 +365,9 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
         ))}
       </div>
       <p className="px-4 pb-3 text-xs text-muted-foreground">
-        Opens a provider search. Confirm the place before navigating.
+        {hasUnconfirmedPlace
+          ? 'One of these places could not be matched to the area the others are in, so no route is offered. Open each place to check it first.'
+          : 'Opens a provider search. Confirm the place before navigating.'}
       </p>
     </section>
   );
