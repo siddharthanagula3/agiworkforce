@@ -1,9 +1,9 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 const toastError = vi.fn();
 const toastSuccess = vi.fn();
+const toastInfo = vi.fn();
 const routerPush = vi.hoisted(() => vi.fn());
 const clerkUserState = vi.hoisted(() => ({ isLoaded: true, isSignedIn: true }));
 
@@ -15,6 +15,7 @@ vi.mock('sonner', () => ({
   toast: {
     error: (...args: unknown[]) => toastError(...args),
     success: (...args: unknown[]) => toastSuccess(...args),
+    info: (...args: unknown[]) => toastInfo(...args),
   },
 }));
 
@@ -28,6 +29,7 @@ vi.mock('@/lib/client/csrf', () => ({
 
 import {
   useConnectors,
+  useBrokerOutcome,
   invalidateConnectorsCache,
   withConnectorReturnPath,
   currentConnectorReturnPath,
@@ -49,6 +51,7 @@ function stubLocation(href: string): { current: string } {
       set href(next: string) {
         record.current = next;
       },
+      hash: url.hash,
     },
   });
   return record;
@@ -311,5 +314,81 @@ describe('connector OAuth start-path helpers', () => {
   it('strips a previous broker outcome out of the return path', () => {
     stubLocation('https://app.example.com/connectors?status=denied&connector=linear&tab=all');
     expect(currentConnectorReturnPath()).toBe('/connectors?tab=all');
+  });
+});
+
+describe('useBrokerOutcome', () => {
+  const replaceState = vi.fn();
+  const originalReplaceState = window.history.replaceState;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.history.replaceState = replaceState as typeof window.history.replaceState;
+  });
+
+  afterEach(() => {
+    window.history.replaceState = originalReplaceState;
+    if (originalLocation) Object.defineProperty(window, 'location', originalLocation);
+  });
+
+  it.each([
+    ['connected', 'success', 'Notion is connected.'],
+    ['denied', 'error', 'Authorization for Notion was declined. Nothing was connected.'],
+    ['failed', 'error', 'Notion did not finish authorizing. Try connecting it again.'],
+    [
+      'invalid_state',
+      'error',
+      'The authorization for Notion expired before it completed. Start the connection again.',
+    ],
+    ['unavailable', 'error', 'Notion cannot be connected right now. Try again later.'],
+    ['error', 'error', 'Something went wrong connecting Notion. Try again.'],
+    ['open', 'info', 'Notion needs no authorization and is ready to use.'],
+  ])('announces %s', (status, tone, message) => {
+    stubLocation(`https://app.example.com/chat?connector=notion&status=${status}`);
+    const onConnected = vi.fn();
+
+    renderHook(() => useBrokerOutcome(onConnected));
+
+    const sink = tone === 'success' ? toastSuccess : tone === 'info' ? toastInfo : toastError;
+    expect(sink).toHaveBeenCalledWith(message);
+    expect(onConnected).toHaveBeenCalledTimes(tone === 'success' ? 1 : 0);
+  });
+
+  it('names an unrecognised connector generically rather than printing its id', () => {
+    stubLocation('https://app.example.com/chat?connector=not-a-real-one&status=denied');
+
+    renderHook(() => useBrokerOutcome(vi.fn()));
+
+    expect(toastError).toHaveBeenCalledWith(
+      'Authorization for This connector was declined. Nothing was connected.',
+    );
+  });
+
+  it('clears the outcome params so a reload does not replay the toast', () => {
+    stubLocation('https://app.example.com/chat?connector=notion&status=denied&tab=all');
+
+    renderHook(() => useBrokerOutcome(vi.fn()));
+
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/chat?tab=all');
+  });
+
+  it('stays silent when there is no outcome to report', () => {
+    stubLocation('https://app.example.com/chat');
+
+    renderHook(() => useBrokerOutcome(vi.fn()));
+
+    expect(toastError).not.toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it('clears an unknown status without announcing anything', () => {
+    stubLocation('https://app.example.com/chat?connector=notion&status=weird');
+
+    renderHook(() => useBrokerOutcome(vi.fn()));
+
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/chat');
+    expect(toastError).not.toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
