@@ -164,11 +164,41 @@ describe('ResearchReportView', () => {
     expect(screen.getByText(/Research was cancelled\./)).toBeInTheDocument();
   });
 
-  it('renders nothing for sections the report lacks', () => {
-    render(<ResearchReportView report={makeReport({ keyFindings: [], citations: [] })} />);
+  it('renders nothing for sections the report genuinely lacks', () => {
+    render(
+      <ResearchReportView
+        report={makeReport({
+          keyFindings: [],
+          citations: [],
+          content: '## Overview\n\nNode 24 is LTS. Node 26 is Current.',
+        })}
+      />,
+    );
 
     expect(screen.queryByText('Key findings')).not.toBeInTheDocument();
     expect(screen.queryByText('Sources')).not.toBeInTheDocument();
+  });
+
+  it('says so when the report cites sources the run never captured', () => {
+    // Every stored report on the QA account is in this state: the prose cites
+    // [1]..[n] and the citations array is empty. Hiding the section left
+    // numbered references pointing at nothing, with no way for the reader to
+    // tell whether the report had no sources or the product lost them.
+    render(<ResearchReportView report={makeReport({ citations: [] })} />);
+
+    expect(screen.getByText('Sources')).toBeInTheDocument();
+    expect(screen.getByTestId('research-report-uncaptured-sources')).toHaveTextContent(
+      'refers to 2 numbered sources',
+    );
+  });
+
+  it('links an inline marker to the source it names', () => {
+    render(<ResearchReportView report={makeReport()} />);
+
+    const marker = screen.getByRole('link', { name: '[2]' });
+    expect(marker).toHaveAttribute('href', '#research-source-2');
+    expect(marker).not.toHaveAttribute('target');
+    expect(document.getElementById('research-source-2')).toBeInTheDocument();
   });
 });
 
