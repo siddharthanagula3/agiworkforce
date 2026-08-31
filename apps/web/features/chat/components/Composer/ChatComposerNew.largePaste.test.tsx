@@ -69,7 +69,7 @@ describe('what a long paste tells the user', () => {
   it('explains the conversion and offers the text back', async () => {
     // The composer emptied and a chip appeared, with Remove as the only
     // affordance and nothing saying what had happened.
-    render(<ChatComposerNew onSendMessage={vi.fn()} projectPicker={picker()} />);
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker()} />);
     const textarea = screen.getByRole('textbox');
     const long = 'x'.repeat(LARGE_PASTE_THRESHOLD + 10);
 
@@ -81,7 +81,7 @@ describe('what a long paste tells the user', () => {
   });
 
   it('puts the text back in the message box when asked', async () => {
-    render(<ChatComposerNew onSendMessage={vi.fn()} projectPicker={picker()} />);
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker()} />);
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     const long = 'y'.repeat(LARGE_PASTE_THRESHOLD + 10);
 
@@ -93,7 +93,7 @@ describe('what a long paste tells the user', () => {
   });
 
   it('says nothing for a paste short enough to stay inline', () => {
-    render(<ChatComposerNew onSendMessage={vi.fn()} projectPicker={picker()} />);
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker()} />);
     pasteText(screen.getByRole('textbox'), 'a short paste');
     expect(screen.queryByTestId('pasted-text-notice')).toBeNull();
   });
