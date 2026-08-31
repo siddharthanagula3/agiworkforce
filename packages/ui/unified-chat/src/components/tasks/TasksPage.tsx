@@ -99,6 +99,19 @@ export async function readTaskJournal(
   return { ...latest, events, truncated: afterSequence < latest.run.lastEventSequence };
 }
 
+/**
+ * Replace a run in the list without losing its name.
+ *
+ * Only the list endpoint joins `conversationTitle`; the journal read and the
+ * cancel response do not. Merging one of those in raw would blank the row's
+ * headline back to its work-mode label the moment a task was opened or
+ * cancelled.
+ */
+function mergeRun(previous: CloudAgentRun, next: CloudAgentRun): CloudAgentRun {
+  if (next.conversationTitle || !previous.conversationTitle) return next;
+  return { ...next, conversationTitle: previous.conversationTitle };
+}
+
 function approvalFailureMessage(error: unknown): string {
   const name = error instanceof Error ? error.name : '';
   if (name === 'ManagedCloudAgentRunAlreadyResumingError') {
@@ -113,6 +126,13 @@ function approvalFailureMessage(error: unknown): string {
 export interface TasksTransport {
   client: ManagedCloudAgentRunClient;
   openConversation(conversationId: string): void;
+  /**
+   * Fallback name for a run whose own `conversationTitle` is absent, resolved
+   * by the host from whatever it already holds. The list endpoint joins the
+   * title server-side, so this only covers a run read through another path.
+   * Returning nothing is fine; the row falls back to its work-mode label.
+   */
+  conversationTitle?(conversationId: string): string | null | undefined;
   notifyError(message: string): void;
   startWork?: () => void;
   rerunWork?(goal: AgiWorkRerunGoal): void;
@@ -188,7 +208,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
           : page;
         journalRef.current = next;
         setJournal(next);
-        setRuns((prev) => prev.map((r) => (r.id === next.run.id ? next.run : r)));
+        setRuns((prev) => prev.map((r) => (r.id === next.run.id ? mergeRun(r, next.run) : r)));
       } catch (err) {
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) return;
         console.error('[Tasks] Failed to load task journal:', err);
@@ -224,7 +244,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       setCancellingId(runId);
       try {
         const updated = await getClient().cancelRun(runId);
-        setRuns((prev) => prev.map((r) => (r.id === runId ? updated : r)));
+        setRuns((prev) => prev.map((r) => (r.id === runId ? mergeRun(r, updated) : r)));
         const openJournal = journalRef.current;
         if (openJournal?.run.id === runId) {
           const next = { ...openJournal, run: updated };
@@ -269,6 +289,18 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
       }
     },
     [filter, getClient, guidanceByRunId, load, loadJournal, selectedRunId, transport],
+  );
+
+  const runTitle = useCallback(
+    (run: CloudAgentRun): { title: string; isFallback: boolean } => {
+      const resolved =
+        run.conversationTitle?.trim() ||
+        (run.conversationId ? transport.conversationTitle?.(run.conversationId)?.trim() : null);
+      return resolved
+        ? { title: resolved, isFallback: false }
+        : { title: workModeLabel(run.workMode), isFallback: true };
+    },
+    [transport],
   );
 
   const openConversation = useCallback(
@@ -367,6 +399,7 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
               const tone = taskStateTone(run.state);
               const cancellable = isCancellableState(run.state);
               const selected = selectedRunId === run.id;
+              const { title, isFallback } = runTitle(run);
               return (
                 <div
                   key={run.id}
@@ -384,15 +417,13 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <button
                       type="button"
-                      aria-label={`View details for ${workModeLabel(run.workMode)} task`}
+                      aria-label={`View details for ${title}, ${taskStateLabel(run.state)}`}
                       aria-pressed={selected}
                       className="min-w-0 flex-1 basis-full text-left sm:basis-auto"
                       onClick={() => setSelectedRunId(run.id)}
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-sm font-medium">
-                          {workModeLabel(run.workMode)}
-                        </span>
+                        <span className="truncate text-sm font-medium">{title}</span>
                         <span
                           className={cn(
                             'shrink-0 rounded-full border px-2 py-0.5 text-[12px] font-medium',
@@ -403,6 +434,12 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                         </span>
                       </span>
                       <span className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                        {isFallback ? null : (
+                          <>
+                            <span className="shrink-0">{workModeLabel(run.workMode)}</span>
+                            <span aria-hidden>·</span>
+                          </>
+                        )}
                         <span className="truncate">
                           {getManagedModelPresentationLabel(run.model)}
                         </span>

@@ -38,6 +38,8 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   user_id: string;
   request_id: string;
   conversation_id: string | null;
+  /** Joined by {@link listCloudAgentRuns} only; absent on every other read. */
+  conversation_title?: string | null;
   origin_surface: string;
   work_mode: string;
   state: string;
@@ -435,6 +437,7 @@ function mapRun(row: CloudAgentRunRow): CloudAgentRun {
     userId: row.user_id,
     requestId: row.request_id,
     conversationId: row.conversation_id,
+    ...(row.conversation_title ? { conversationTitle: row.conversation_title } : {}),
     originSurface: row.origin_surface,
     workMode: row.work_mode,
     state: row.state,
@@ -870,9 +873,17 @@ export async function listCloudAgentRuns(
     : null;
   const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 25)));
   const workModes = input.workModes?.length ? [...input.workModes] : null;
+  // The conversation title is the only human name a run has: the runs table
+  // stores none, so a list of them is otherwise headed by its work mode and
+  // every agiwork row reads identically. Left-joined because a run may have no
+  // conversation, and the row is dropped when the conversation is.
   const rows = await db.query<CloudAgentRunRow>(
-    `select runs.*, ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}
+    `select runs.*, conversations.title as conversation_title,
+            ${PENDING_APPROVAL_COLUMNS}, ${PENDING_INPUT_COLUMNS}
        from public.cloud_agent_runs runs
+       left join public.web_conversations conversations
+         on conversations.id = runs.conversation_id
+        and conversations.deleted_at is null
        ${PENDING_APPROVAL_LATERAL}
        ${PENDING_INPUT_LATERAL}
       where runs.user_id = $1
