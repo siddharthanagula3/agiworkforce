@@ -8151,10 +8151,11 @@ html[data-contrast='more'] *:focus-visible {
   max-width: 900px;
 }
 
+/* A breadcrumb is orientation, like the section eyebrows it sits alongside. */
 [data-design='agi'] .agi-docs-breadcrumb {
   font-size: 13px;
   font-weight: 500;
-  color: var(--agi-amber);
+  color: var(--agi-ink-quiet);
   margin-bottom: 12px;
 }
 
@@ -8203,6 +8204,8 @@ html[data-contrast='more'] *:focus-visible {
   background: color-mix(in srgb, var(--agi-ink) 5%, var(--agi-bg));
 }
 
+/* Eight identical amber-tinted squares was most of the accent on this page,
+   spent on decoration. The icon distinguishes the cards; the tint did not. */
 [data-design='agi'] .agi-docs-card-icon {
   display: flex;
   align-items: center;
@@ -8210,9 +8213,15 @@ html[data-contrast='more'] *:focus-visible {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--agi-amber) 14%, transparent);
-  color: var(--agi-amber);
+  background: var(--agi-surface-wash);
+  border: 1px solid var(--agi-rule);
+  color: var(--agi-ink-2);
   flex-shrink: 0;
+}
+
+[data-design='agi'] .agi-docs-card:hover .agi-docs-card-icon {
+  color: var(--agi-ink);
+  border-color: var(--agi-rule-strong);
 }
 
 [data-design='agi'] .agi-docs-card-icon svg {
