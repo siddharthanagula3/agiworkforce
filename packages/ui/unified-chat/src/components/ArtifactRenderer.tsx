@@ -87,6 +87,12 @@ const SVG_ALLOWED_TAGS = new Set([
   'feOffset',
 ]);
 
+// The comparison lowercases the tag name, so the allow list has to be keyed
+// the same way. Written as authored, the camel-cased SVG element names
+// (linearGradient, feGaussianBlur, ...) never matched and every gradient and
+// filter primitive was being stripped out of otherwise valid artwork.
+const SVG_ALLOWED_TAG_KEYS = new Set([...SVG_ALLOWED_TAGS].map((tag) => tag.toLowerCase()));
+
 const SVG_ALLOWED_ATTRS = new Set([
   'fill',
   'fill-opacity',
@@ -156,7 +162,7 @@ export function sanitizeSvg(raw: string): string {
 
     function sanitizeNode(node: Element) {
       const tagName = node.tagName.toLowerCase();
-      if (!SVG_ALLOWED_TAGS.has(tagName)) {
+      if (!SVG_ALLOWED_TAG_KEYS.has(tagName)) {
         node.parentNode?.removeChild(node);
         return;
       }
@@ -279,6 +285,7 @@ function SvgArtifact({ artifact }: { artifact: Artifact }) {
     >
       <div
         className="w-full flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
+        // llm-guardrail-allow: sanitised above before it reaches this sink
         dangerouslySetInnerHTML={{
           __html: sanitized,
         }}
@@ -351,6 +358,7 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
       {sanitized ? (
         <div
           ref={containerRef}
+          // llm-guardrail-allow: sanitised above before it reaches this sink
           dangerouslySetInnerHTML={{
             __html: sanitized,
           }}

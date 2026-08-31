@@ -10,6 +10,8 @@ import rehypeSanitize from 'rehype-sanitize';
 import { cn } from '../../lib/utils';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
+import { reactNodeText } from './reactNodeText';
+import { MermaidDiagram } from './MermaidDiagram';
 import type { Components } from 'react-markdown';
 import { Button } from '@agiworkforce/ui';
 import { Copy, Check, ImageOff } from 'lucide-react';
@@ -20,13 +22,24 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
   const [copied, setCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
-  const codeString = String(children).replace(/\n$/, '');
+  const codeString = reactNodeText(children).replace(/\n$/, '');
 
+  const [copyFailed, setCopyFailed] = useState(false);
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(codeString);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(codeString);
+      setCopyFailed(false);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 4000);
+    }
   };
+
+  if (language === 'mermaid') {
+    return <MermaidDiagram source={codeString} className="mermaid-block my-4" />;
+  }
 
   if (!match) {
     return (
@@ -45,14 +58,14 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
           size="sm"
           onClick={handleCopy}
           className="h-7 gap-1.5 px-2 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
-          aria-label={copied ? 'Code copied' : 'Copy code'}
+          aria-label={copyFailed ? 'Copying code failed' : copied ? 'Code copied' : 'Copy code'}
         >
           {copied ? (
             <Check className="h-3 w-3" aria-hidden="true" />
           ) : (
             <Copy className="h-3 w-3" aria-hidden="true" />
           )}
-          {copied ? 'Copied' : 'Copy'}
+          {copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy'}
         </Button>
       </div>
       <div className="code-block-body">
