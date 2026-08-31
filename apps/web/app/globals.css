@@ -3964,6 +3964,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-fl-section {
   padding: clamp(64px, 9vw, 112px) 0;
   border-bottom: 1px solid var(--agi-rule);
+  container-type: inline-size;
 }
 
 /* Section label. Used on 43 pages, and until now amber on every one of them -
@@ -3986,7 +3987,10 @@ html[data-contrast='more'] *:focus-visible {
   max-width: 24ch;
   font-family: var(--agi-font-heading);
   font-optical-sizing: auto;
-  font-size: clamp(2rem, 4.6vw, 3.4rem);
+  /* Sized on the column, for the same reason as the hero headline: a section
+     heading in a narrow band column had no business taking a viewport-scaled
+     size. */
+  font-size: clamp(1.9rem, 7cqw, 3.4rem);
   /* A grotesk needs tighter tracking than the serif it replaced to hold the
      same optical colour at display size, and one step less weight to avoid
      reading heavier than the serif did at the same nominal value. */
@@ -4516,8 +4520,11 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-surface-row {
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: clamp(28px, 5vw, 64px);
+  /* The visual column holds a device frame at a fixed design width. An even
+     split rendered a 720px editor at 572px - 0.79 scale - and its code at
+     9.9px. Weighted so a frame lands near design size and stays readable. */
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: clamp(24px, 3.5vw, 48px);
   align-items: center;
   padding: clamp(36px, 5vw, 56px) 0;
   border-top: 1px solid var(--agi-rule);
@@ -4529,6 +4536,14 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-surface-row:nth-child(even) .agi-fl-surface-copy {
   order: 2;
+}
+
+/* Alternating rows put the frame on the other side using `order`, which moves
+   the element but not the track it lands in - so on even rows the frame was
+   dropped into the narrow column and rendered at 0.79 scale. The weights swap
+   with it. */
+[data-design='agi'] .agi-fl-surface-row:nth-child(even) {
+  grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.72fr);
 }
 
 [data-design='agi'] .agi-fl-surface-row:nth-child(even) .agi-fl-surface-visual {
@@ -4934,8 +4949,12 @@ html[data-contrast='more'] *:focus-visible {
 
 [data-design='agi'] .agi-fl-devband {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-  gap: clamp(32px, 6vw, 72px);
+  /* The product frame gets the larger share. At an even split a 720px editor
+     rendered at 572px - 0.79 scale - which pushed its code down to 9.9px and
+     made the screenshot decoration rather than something anyone could read.
+     Roughly three fifths of the stage keeps a frame near its design size. */
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  gap: clamp(28px, 4vw, 56px);
   align-items: center;
   padding: clamp(64px, 9vw, 112px) 0;
   border-bottom: 1px solid var(--agi-rule);
@@ -7850,6 +7869,8 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-fl-devband-copy {
+  /* Headings inside size against this column, not the viewport. */
+  container-type: inline-size;
   min-width: 0;
 }
 
