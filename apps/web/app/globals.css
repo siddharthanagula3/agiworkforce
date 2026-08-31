@@ -70,6 +70,59 @@
 
 /* Tailwind v4 CSS-based configuration */
 @theme {
+  /* Foundation bridge. Tailwind v4 turns each entry here into a utility, so a
+     component writes `bg-surface-page` or `text-secondary` and never a hue.
+     The values are indirections into packages/ui/design-tokens/src/foundation.css,
+     which stays the single owner. */
+  --color-surface-page: var(--surface-page);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
+  --color-surface-selected: var(--surface-selected);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+  --color-text-inverse: var(--text-inverse);
+
+  --color-rule: var(--rule);
+  --color-rule-subtle: var(--rule-subtle);
+  --color-rule-strong: var(--rule-strong);
+  --color-focus-ring: var(--focus-ring);
+
+  --color-action-primary: var(--action-primary);
+  --color-action-primary-foreground: var(--action-primary-foreground);
+
+  --color-accent-text: var(--accent-text);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-on-fill: var(--accent-on-fill);
+  --color-danger-text: var(--danger-text);
+  --color-danger-fill: var(--danger-fill);
+  --color-danger-on-fill: var(--danger-on-fill);
+  --color-warning-text: var(--warning-text);
+  --color-warning-fill: var(--warning-fill);
+  --color-warning-on-fill: var(--warning-on-fill);
+  --color-success-text: var(--success-text);
+  --color-success-fill: var(--success-fill);
+  --color-success-on-fill: var(--success-on-fill);
+  --color-info-text: var(--info-text);
+  --color-info-fill: var(--info-fill);
+  --color-info-on-fill: var(--info-on-fill);
+
+  --radius-control: var(--corner-control);
+  --radius-surface: var(--corner-surface);
+  --radius-pill: var(--corner-pill);
+
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+  --shadow-e3: var(--elevation-3);
+  --shadow-e4: var(--elevation-4);
+
+  --ease-standard: var(--curve-standard);
+  --ease-exit: var(--curve-exit);
+  --ease-spring: var(--curve-spring);
   /* Font families — Operator-Broadsheet redesign 2026-05-05.
      Newsreader (variable serif) for display + body on Tier A/B marketing pages.
      JetBrains Mono for UI chrome: slugs, datelines, CTAs, marginalia. */
