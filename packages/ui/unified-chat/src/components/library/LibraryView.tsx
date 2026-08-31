@@ -588,6 +588,7 @@ export function LibraryView({
       {(!isAuthReady || (isSignedIn && (!hasResolvedPage || loading))) && cards.length === 0 ? (
         <div
           data-testid="library-loading"
+          role="status"
           className="flex items-center gap-2 py-16 text-sm text-[var(--chat-text-muted)]"
         >
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
