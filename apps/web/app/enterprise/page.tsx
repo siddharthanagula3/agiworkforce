@@ -62,7 +62,7 @@ export default function EnterprisePage() {
           eyebrow="AGI for enterprise"
           titleLines={['Your data can stay where it is', 'while the security review runs.']}
           em="stay where it is"
-          lede="Most AI tools ask you to accept their data boundary before you are allowed to evaluate them. Local and BYOK invert that: a reviewer runs the product on their own hardware or their own provider contract, and the evaluation finishes without a conversation reaching AGI infrastructure. When you do buy, identity, policy, audit, and retention are administered by your own owner in a workspace console — and the two ledgers below say which of those are built and which are still only commitments."
+          lede="Most AI tools ask you to accept their data boundary before you are allowed to evaluate them. Local and BYOK invert that: a reviewer runs the product on their own hardware or their own provider contract, and the evaluation finishes without a conversation reaching AGI infrastructure. When you do buy, identity, policy, audit, and retention are administered by your own owner in a workspace console, and the two ledgers below say which of those are built and which are still only commitments."
           ctas={[
             { href: '/contact-sales', label: 'Contact sales' },
             { href: '/trust', label: 'Read the dated trust ledger' },
@@ -101,7 +101,7 @@ export default function EnterprisePage() {
           `audit_export` capabilities; retention enforcement is opt-in per
           workspace and fails closed, so do not restore "you set them" phrasing
           that implied it is unconditional. The four-hour SLA is a PLANNED
-          target on /sla, not a binding promise — defer to /sla rather than
+          target on /sla, not a binding promise; defer to /sla rather than
           restating it.
 
           Two rows were wrong on 28 August 2026 and are now corrected:
@@ -122,11 +122,11 @@ export default function EnterprisePage() {
           rows={[
             {
               k: 'Status',
-              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan — your org's owner configures both directly once that entitlement is on the account. Org audit events are recorded to an append-only table, and your owner or admin can now read and filter them in the product and download the range as JSONL. Your owner can now set a retention window per workspace and switch enforcement on, which runs a nightly sweep that permanently deletes conversations past the window, withholds anything under legal hold, and records every run so the deletion is evidenceable. Legal holds are placed and released in the product. Your owner can also switch off public sharing for the whole workspace, which refuses new anonymous links on both the chat-share and artifact-publish paths. Dedicated capacity remains a contract-scoped commitment, not a self-serve toggle; we state dates for that in writing during procurement.`,
+              v: `Reviewed ${STATUS_AS_OF}. SSO and directory provisioning are implemented and live, gated on the enterprise_controls entitlement that ships with the Enterprise plan, your org's owner configures both directly once that entitlement is on the account. Org audit events are recorded to an append-only table, and your owner or admin can now read and filter them in the product and download the range as JSONL. Your owner can now set a retention window per workspace and switch enforcement on, which runs a nightly sweep that permanently deletes conversations past the window, withholds anything under legal hold, and records every run so the deletion is evidenceable. Legal holds are placed and released in the product. Your owner can also switch off public sharing for the whole workspace, which refuses new anonymous links on both the chat-share and artifact-publish paths. Dedicated capacity remains a contract-scoped commitment, not a self-serve toggle; we state dates for that in writing during procurement.`,
             },
             {
               k: 'SSO',
-              v: 'Implemented. SAML 2.0 and OIDC single sign-on, configured by your org owner at /workspace/identity once the account carries the enterprise_controls entitlement — domain verification and connection activation happen there, not through a separate rollout project. The limit the console states to your admin, and we will state to your reviewer: an active connection adds an authentication route without removing the others, so a member who already has a password can still sign in with it.',
+              v: 'Implemented. SAML 2.0 and OIDC single sign-on, configured by your org owner at /workspace/identity once the account carries the enterprise_controls entitlement: domain verification and connection activation happen there, not through a separate rollout project. The limit the console states to your admin, and we will state to your reviewer: an active connection adds an authentication route without removing the others, so a member who already has a password can still sign in with it.',
             },
             {
               k: 'Directory provisioning',
@@ -138,15 +138,15 @@ export default function EnterprisePage() {
             },
             {
               k: 'Retention',
-              v: 'Your workspace owner sets a retention window between 1 and 3650 days and decides whether it is enforced. Until enforcement is on, the window is a recorded position and nothing is deleted — the product labels it that way rather than implying deletion. With it on, a nightly sweep permanently deletes workspace conversations with no activity for the window, skips any subject under legal hold, and refuses to delete at all if it cannot read the hold set. Each run is recorded with what it removed and what it withheld.',
+              v: 'Your workspace owner sets a retention window between 1 and 3650 days and decides whether it is enforced. Until enforcement is on, the window is a recorded position and nothing is deleted, the product labels it that way rather than implying deletion. With it on, a nightly sweep permanently deletes workspace conversations with no activity for the window, skips any subject under legal hold, and refuses to delete at all if it cannot read the hold set. Each run is recorded with what it removed and what it withheld.',
             },
             {
               k: 'BYOK posture',
-              v: 'The strongest control available today, and it needs no feature work from us: every seat can run fully local, or on your own provider keys on Desktop, CLI, and VS Code, and no conversation content reaches AGI infrastructure at all. It is architecture rather than administration — there is no org-wide BYOK enforcement, so we cannot stop a member choosing managed cloud. Requiring it org-wide is a contract-scoped commitment.',
+              v: 'The strongest control available today, and it needs no feature work from us: every seat can run fully local, or on your own provider keys on Desktop, CLI, and VS Code, and no conversation content reaches AGI infrastructure at all. It is architecture rather than administration. There is no org-wide BYOK enforcement, so we cannot stop a member choosing managed cloud. Requiring it org-wide is a contract-scoped commitment.',
             },
             {
               k: 'Service levels',
-              v: 'Managed cloud is a public alpha. Response and uptime numbers are planned targets rather than binding commitments — see the SLA page for exactly which is which.',
+              v: 'Managed cloud is a public alpha. Response and uptime numbers are planned targets rather than binding commitments. See the SLA page for exactly which is which.',
             },
             {
               k: 'MSA',
@@ -181,15 +181,15 @@ export default function EnterprisePage() {
           rows={[
             {
               k: 'SOC 2 Type II',
-              v: 'Not held. No report exists, no auditor is engaged, and no audit is in progress. We are not going to describe internal work as an audit programme — /trust carries the dated status.',
+              v: 'Not held. No report exists, no auditor is engaged, and no audit is in progress. We are not going to describe internal work as an audit programme, /trust carries the dated status.',
             },
             {
-              k: 'GDPR — data subject rights',
+              k: 'GDPR: data subject rights',
               v: 'Implemented. Self-service export returns your account data as a download, and account deletion runs an enumerated erasure on a scheduled job. Our standard DPA is published at /dpa; we also negotiate against yours.',
             },
             {
               k: 'CCPA / CPRA',
-              v: 'Implemented, through the same export and erasure paths. We do not sell personal information — the privacy policy carries that disclosure.',
+              v: 'Implemented, through the same export and erasure paths. We do not sell personal information; the privacy policy carries that disclosure.',
             },
             { k: 'HIPAA', v: 'Not available. AGI does not offer HIPAA-covered workflows today.' },
             {
@@ -210,8 +210,8 @@ export default function EnterprisePage() {
           </h2>
           <p className="agi-fl-section-lede">
             These two rows are the shape your admin downloads. Read them together: an owner switched
-            export off that morning, and the afternoon attempt to download the trail was refused —
-            so the denial is in the trail, next to the change that caused it.
+            export off that morning, and the afternoon attempt to download the trail was refused, so
+            the denial is in the trail, next to the change that caused it.
           </p>
           <div className="agi-terminal">
             <div className="agi-terminal-bar">{AUDIT_EXPORT_FILENAME}</div>

@@ -89,8 +89,8 @@ export default function PressPage() {
           </h1>
           <p className="agi-fl-lede">
             Everything on this page is verified against the product source, and anything that can
-            change is dated. Where we have nothing to show — customers, certifications, usage
-            numbers — this page says so plainly instead of leaving a gap.
+            change is dated. Where we have nothing to show (customers, certifications, usage
+            numbers), this page says so plainly instead of leaving a gap.
           </p>
           <p className="agi-fl-stamp-line">Product facts as of {CATALOG_AS_OF}.</p>
           <div style={{ paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
@@ -128,8 +128,8 @@ export default function PressPage() {
             <p className="agi-press-boiler-tag">Long</p>
             <blockquote className="agi-press-boiler-text">
               AGI is an AI assistant and agent platform built by {LEGAL_ENTITY},{' '}
-              {LEGAL_ENTITY_DESCRIPTOR}. It spans six surfaces — web, desktop, mobile, command line,
-              VS Code, and Chrome — of which the web app, desktop app, and CLI have shipped. Its
+              {LEGAL_ENTITY_DESCRIPTOR}. It spans six surfaces (web, desktop, mobile, command line,
+              VS Code, and Chrome), of which the web app, desktop app, and CLI have shipped. Its
               distinguishing design choice is that the user selects where inference happens: locally
               on their own hardware, through their own provider API key, or on AGI&rsquo;s managed
               cloud, which is in public alpha. Those three routes are separate trust boundaries, and
@@ -203,24 +203,24 @@ export default function PressPage() {
             Logo files.
           </h2>
           <p className="agi-fl-section-lede">
-            The AGI mark, served directly from this site. Please use it unmodified — do not recolor,
+            The AGI mark, served directly from this site. Please use it unmodified: do not recolor,
             rotate, add effects, or place it on a busy background. The name is written
             &ldquo;AGI&rdquo;, and the company is {LEGAL_ENTITY}.
           </p>
           <ul className="agi-press-assets">
             <li>
               <a href="/logo-512.png" download>
-                AGI mark — PNG, 512&times;512
+                AGI mark: PNG, 512&times;512
               </a>
             </li>
             <li>
               <a href="/logo-192.png" download>
-                AGI mark — PNG, 192&times;192
+                AGI mark: PNG, 192&times;192
               </a>
             </li>
             <li>
               <a href="/og-image.svg" download>
-                Social card — SVG
+                Social card: SVG
               </a>
             </li>
           </ul>

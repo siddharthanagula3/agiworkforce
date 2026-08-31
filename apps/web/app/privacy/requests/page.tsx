@@ -126,7 +126,7 @@ export default function DataRightsPage() {
           </div>
           <div className="agi-cta-row" style={{ marginTop: 28 }}>
             <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-cta-ghost">
-              India &mdash; DPDP notice &rarr;
+              India: DPDP notice &rarr;
             </Link>
             <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-cta-ghost">
               Privacy policy &rarr;

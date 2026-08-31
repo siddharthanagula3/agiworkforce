@@ -13,7 +13,7 @@ import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants
 export const metadata = buildMetadata({
   title: 'Security',
   description:
-    'Where your data lives, what is encrypted, who can access it, what is logged, and what happens on deletion — per trust boundary, with the gaps named.',
+    'Where your data lives, what is encrypted, who can access it, what is logged, and what happens on deletion, per trust boundary, with the gaps named.',
   path: '/security',
 });
 
@@ -35,7 +35,7 @@ const BOUNDARIES: {
     mark: '◇',
     mode: 'BYOK',
     title: 'Your key, your provider, direct.',
-    body: `On ${BYOK_SURFACES.label}, requests made with your own provider key travel from the local runtime to that provider. The key stays in that runtime, never on our servers. We are not in the request path, so we hold neither the prompt nor the completion — but the provider you chose does, under their terms.`,
+    body: `On ${BYOK_SURFACES.label}, requests made with your own provider key travel from the local runtime to that provider. The key stays in that runtime, never on our servers. We are not in the request path, so we hold neither the prompt nor the completion, but the provider you chose does, under their terms.`,
   },
   {
     mark: '●',
@@ -75,11 +75,11 @@ const DATA_ROWS: { category: string; local: string; byok: string; cloud: string 
     category: 'Provider API keys',
     local: 'Not applicable',
     byok: 'Encrypted on your device, in the OS credential store or under a device-derived key',
-    cloud: 'Not applicable — Managed Cloud uses our provider accounts, not yours',
+    cloud: 'Not applicable: Managed Cloud uses our provider accounts, not yours',
   },
   {
     category: 'Account identity and sessions',
-    local: 'Not held by us — no AGI identity is in the request path',
+    local: 'Not held by us: no AGI identity is in the request path',
     byok: 'Account required to sync; identity at Clerk',
     cloud: 'Clerk (United States)',
   },
@@ -93,7 +93,7 @@ const DATA_ROWS: { category: string; local: string; byok: string; cloud: string 
     category: 'Code execution',
     local: 'Your machine, behind the execution gate',
     byok: 'Your machine, behind the execution gate',
-    cloud: 'E2B — off unless an operator explicitly enables it',
+    cloud: 'E2B: off unless an operator explicitly enables it',
   },
 ];
 
@@ -119,7 +119,7 @@ const TRANSIT: { k: string; v: string }[] = [
 const AT_REST: { k: string; v: string }[] = [
   {
     k: 'Desktop database',
-    v: 'SQLCipher is compiled into the desktop build unconditionally — it is not an option you switch on. The local database is encrypted at rest on every install.',
+    v: 'SQLCipher is compiled into the desktop build unconditionally. It is not an option you switch on. The local database is encrypted at rest on every install.',
   },
   {
     k: 'Desktop database key',
@@ -150,7 +150,7 @@ const AT_REST: { k: string; v: string }[] = [
 const ACCESS: { title: string; body: string }[] = [
   {
     title: 'Sessions and protected routes',
-    body: 'Authentication is handled by Clerk. Six route groups — chat, library, schedules, settings, billing, and admin — are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
+    body: 'Authentication is handled by Clerk. Six route groups (chat, library, schedules, settings, billing, and admin) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
   },
   {
     title: 'Administrative access',
@@ -158,22 +158,22 @@ const ACCESS: { title: string; body: string }[] = [
   },
   {
     title: 'Cross-site request forgery',
-    body: 'State-changing requests carry an HMAC-SHA256 token compared in constant time. The signing secret must be at least 32 bytes or the process refuses it. A previous secret can be honoured during a rotation window and then removed. If no secret is configured, a random one is generated so every token fails — the system fails closed, not open.',
+    body: 'State-changing requests carry an HMAC-SHA256 token compared in constant time. The signing secret must be at least 32 bytes or the process refuses it. A previous secret can be honoured during a rotation window and then removed. If no secret is configured, a random one is generated so every token fails, the system fails closed, not open.',
   },
   {
     title: 'Rate limiting and abuse',
-    body: 'Limits are enforced per endpoint through Upstash Redis, which is required at production runtime — the module throws on start if it is not configured. Security-sensitive endpoints are marked fail-closed and reject requests when the limiter is unreachable; a few business-critical paths such as checkout are deliberately fail-open, and are marked as such in the code.',
+    body: 'Limits are enforced per endpoint through Upstash Redis, which is required at production runtime. The module throws on start if it is not configured. Security-sensitive endpoints are marked fail-closed and reject requests when the limiter is unreachable; a few business-critical paths such as checkout are deliberately fail-open, and are marked as such in the code.',
   },
 ];
 
 const ISOLATION: { title: string; body: string }[] = [
   {
     title: 'Script injection',
-    body: "Every response carries a Content-Security-Policy built per request with a fresh random nonce. script-src contains no 'unsafe-inline': an injected inline script has no nonce and does not execute. object-src is 'none', base-uri and form-action are 'self', and frame-ancestors is 'none' everywhere except one documented case — owner-scoped PDF preview, which is restricted to PDF responses on an authenticated file route.",
+    body: "Every response carries a Content-Security-Policy built per request with a fresh random nonce. script-src contains no 'unsafe-inline': an injected inline script has no nonce and does not execute. object-src is 'none', base-uri and form-action are 'self', and frame-ancestors is 'none' everywhere except one documented case, owner-scoped PDF preview, which is restricted to PDF responses on an authenticated file route.",
   },
   {
     title: 'Allowlist integrity',
-    body: 'The third-party origins the policy admits are derived, not pasted. The authentication origin is decoded from the publishable key and rejected unless it is shaped like a hostname; the upload origin is admitted only if the account identifier is exactly 32 hex characters and the bucket name matches a valid bucket shape. A typo in an environment variable therefore cannot widen script-src or connect-src to an arbitrary host — it just drops the origin.',
+    body: 'The third-party origins the policy admits are derived, not pasted. The authentication origin is decoded from the publishable key and rejected unless it is shaped like a hostname; the upload origin is admitted only if the account identifier is exactly 32 hex characters and the bucket name matches a valid bucket shape. A typo in an environment variable therefore cannot widen script-src or connect-src to an arbitrary host, it just drops the origin.',
   },
   {
     title: 'Model-generated artifacts',
@@ -185,7 +185,7 @@ const ISOLATION: { title: string; body: string }[] = [
   },
   {
     title: 'Hosted code execution',
-    body: 'Managed code execution through E2B is off unless an operator sets an explicit execution flag. Holding an E2B API key does not by itself open the loop — that was a deliberate design decision, so a credential appearing in the environment cannot quietly enable remote execution.',
+    body: 'Managed code execution through E2B is off unless an operator sets an explicit execution flag. Holding an E2B API key does not by itself open the loop. That was a deliberate design decision, so a credential appearing in the environment cannot quietly enable remote execution.',
   },
   {
     title: 'Desktop command execution',
@@ -196,7 +196,7 @@ const ISOLATION: { title: string; body: string }[] = [
 const DB_ROWS: { k: string; v: string }[] = [
   {
     k: 'What the policies do',
-    v: 'Row-level security policies on user-scoped tables carry both a read condition and an explicit write condition, so a cross-tenant read and a cross-tenant insert or update are both rejected by the database. The user identity comes from a session variable that returns NULL when unset, and NULL denies — an unset context sees nothing rather than everything.',
+    v: 'Row-level security policies on user-scoped tables carry both a read condition and an explicit write condition, so a cross-tenant read and a cross-tenant insert or update are both rejected by the database. The user identity comes from a session variable that returns NULL when unset, and NULL denies, an unset context sees nothing rather than everything.',
   },
   {
     k: 'How a request binds to them',
@@ -219,7 +219,7 @@ const DB_ROWS: { k: string; v: string }[] = [
 const LOGGING: { k: string; v: string }[] = [
   {
     k: 'What the hosted platform records',
-    v: 'A single module owns writes into the security event table. It records seven failure and abuse event types — failed authentication, rate-limit exceeded, failed authorization, suspicious activity, administrative action, failed CSRF validation, and invalid signature — plus a separate taxonomy for successful business events. Authentication, account-lifecycle, billing, connector, team and organisation, API-key, and session routes call that module.',
+    v: 'A single module owns writes into the security event table. It records seven failure and abuse event types: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, administrative action, failed CSRF validation, and invalid signature, plus a separate taxonomy for successful business events. Authentication, account-lifecycle, billing, connector, team and organisation, API-key, and session routes call that module.',
   },
   {
     k: 'What it does not record',
@@ -231,7 +231,7 @@ const LOGGING: { k: string; v: string }[] = [
   },
   {
     k: 'Secret leakage',
-    v: 'A detector scans values for secret-shaped strings — provider key prefixes, live payment keys, JSON web tokens, bearer headers, database connection strings — and throws before the value can be logged or returned.',
+    v: 'A detector scans values for secret-shaped strings (provider key prefixes, live payment keys, JSON web tokens, bearer headers, database connection strings) and throws before the value can be logged or returned.',
   },
   {
     k: 'Error monitoring',
@@ -239,7 +239,7 @@ const LOGGING: { k: string; v: string }[] = [
   },
   {
     k: 'Who can read it',
-    v: 'Security event records are readable by the account they belong to, through user-scoped settings routes; org-wide admin views are not built yet. The table is append-only — update and delete are revoked from the application role. A database routine can delete records older than 90 days, but no scheduled route invokes it today, so automatic expiry is not promised.',
+    v: 'Security event records are readable by the account they belong to, through user-scoped settings routes; org-wide admin views are not built yet. The table is append-only: update and delete are revoked from the application role. A database routine can delete records older than 90 days, but no scheduled route invokes it today, so automatic expiry is not promised.',
   },
 ];
 
@@ -250,7 +250,7 @@ const DELETION: { title: string; body: string }[] = [
   },
   {
     title: 'Bytes before rows',
-    body: 'Stored media objects are deleted from object storage first, and only then are their catalogue rows removed. If an object delete fails, its row is kept so a later run can retry — deleting the row first would destroy the only pointer to a live object and leave it orphaned forever.',
+    body: 'Stored media objects are deleted from object storage first, and only then are their catalogue rows removed. If an object delete fails, its row is kept so a later run can retry, deleting the row first would destroy the only pointer to a live object and leave it orphaned forever.',
   },
   {
     title: 'It refuses to claim success it did not achieve',
@@ -277,7 +277,7 @@ const DELETION: { title: string; body: string }[] = [
 const RELEASE: { k: string; v: string }[] = [
   {
     k: 'Dependency and code scanning',
-    v: 'What blocks a merge: dependency audits at critical and high severity, cargo-deny checks for banned crates, sources, licences and advisories, and a check that every third-party GitHub Action is pinned to a full commit SHA (first-party `actions/*` are exempt from that check). What runs without blocking: a Semgrep security-audit pass, whose remaining findings are package-manager supply-chain hardening we have triaged and not yet done — it will block once they reach zero. A weekly Monday job runs a Rust advisory audit and clippy. We do not run CodeQL; if you saw that claim here before 14 August 2026, it was wrong.',
+    v: 'What blocks a merge: dependency audits at critical and high severity, cargo-deny checks for banned crates, sources, licences and advisories, and a check that every third-party GitHub Action is pinned to a full commit SHA (first-party `actions/*` are exempt from that check). What runs without blocking: a Semgrep security-audit pass, whose remaining findings are package-manager supply-chain hardening we have triaged and not yet done. It will block once they reach zero. A weekly Monday job runs a Rust advisory audit and clippy. We do not run CodeQL; if you saw that claim here before 14 August 2026, it was wrong.',
   },
   {
     k: 'macOS builds',
@@ -285,7 +285,7 @@ const RELEASE: { k: string; v: string }[] = [
   },
   {
     k: 'Windows builds',
-    v: 'The installer is signed through Azure Trusted Signing, and the workflow throws — before anything is published — if the signature does not verify as Valid.',
+    v: 'The installer is signed through Azure Trusted Signing, and the workflow throws (before anything is published) if the signature does not verify as Valid.',
   },
 ];
 
@@ -308,7 +308,7 @@ const NOT_DONE: { k: string; v: string }[] = [
   },
   {
     k: 'Bug bounty',
-    v: 'We do not run a paid bounty programme. Reports are still read and fixed — see below — but do not expect payment.',
+    v: 'We do not run a paid bounty programme. Reports are still read and fixed (see below), but do not expect payment.',
   },
   {
     k: 'Database policy coverage',
@@ -343,12 +343,12 @@ const NOT_DONE: { k: string; v: string }[] = [
     v: 'The live check on /status covers Postgres reachability, the payments API, and required environment configuration. Authentication, object storage, the gateway, the rate limiter, and model routes are not covered by it.',
   },
   {
-    k: 'India — DPDP Act, 2023',
+    k: 'India: DPDP Act, 2023',
     v: 'Our position is published in full at /privacy/india, including the parts that are gaps rather than controls: no verifiable parental consent (the Act treats anyone under 18 as a child), no notice translations into Eighth Schedule languages, no Indian data residency, and a grievance contact published as a role rather than a named officer. The consent and rights machinery is implemented; those four are not.',
   },
   {
     k: 'Automated-abuse verification',
-    v: 'There is no first-party CAPTCHA or bot-verification check anywhere in our own code, and no server-side verification call for one. Sign-up bot protection is a feature of our identity provider, configured in its dashboard rather than in this repository — which means we cannot demonstrate its state from source, and a reviewer should not assume it. Unauthenticated endpoints that accept personal data are protected by CSRF validation and per-IP rate limiting, which are real controls but are not bot verification.',
+    v: 'There is no first-party CAPTCHA or bot-verification check anywhere in our own code, and no server-side verification call for one. Sign-up bot protection is a feature of our identity provider, configured in its dashboard rather than in this repository, which means we cannot demonstrate its state from source, and a reviewer should not assume it. Unauthenticated endpoints that accept personal data are protected by CSRF validation and per-IP rate limiting, which are real controls but are not bot verification.',
   },
   {
     k: 'Log redaction',
@@ -356,7 +356,7 @@ const NOT_DONE: { k: string; v: string }[] = [
   },
   {
     k: 'Fail-closed coverage is not uniform',
-    v: 'Some controls fail closed by design and are described above — the analytics consent gate is one, and the web rate limiter refuses to start in production without its backing store. Others degrade rather than refuse when a dependency is unavailable, and a small number of operational switches can be set to admit traffic that would otherwise be blocked. Making the fail direction consistent, and making every security-relevant setting refuse a boot rather than warn, is tracked remediation work rather than something we have finished.',
+    v: 'Some controls fail closed by design and are described above: the analytics consent gate is one, and the web rate limiter refuses to start in production without its backing store. Others degrade rather than refuse when a dependency is unavailable, and a small number of operational switches can be set to admit traffic that would otherwise be blocked. Making the fail direction consistent, and making every security-relevant setting refuse a boot rather than warn, is tracked remediation work rather than something we have finished.',
   },
   {
     k: 'Legacy credential formats',
@@ -383,7 +383,7 @@ export default function SecurityPage() {
             Written for someone doing a security review, not for a buyer.{' '}
             <strong>
               Where the data sits, what encrypts it, who can reach it, what gets logged, and what
-              happens when you delete — answered per mode, in specifics you can check.
+              happens when you delete: answered per mode, in specifics you can check.
             </strong>{' '}
             We hold no SOC 2 report, no ISO 27001 certificate, and no third-party penetration test.
             The gaps are listed on this page rather than left for you to find.
@@ -692,7 +692,7 @@ export default function SecurityPage() {
                 <tr>
                   <td>Out of scope</td>
                   <td>
-                    Findings in third-party services we consume — report those to the vendor. Denial
+                    Findings in third-party services we consume, report those to the vendor. Denial
                     of service, volumetric or brute-force testing, social engineering of our staff
                     or users, physical attacks, spam or rate-limit exhaustion, and reports produced
                     by a scanner with no demonstrated impact.

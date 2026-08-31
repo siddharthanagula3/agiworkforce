@@ -30,7 +30,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'What does AGI Cloud cost?',
-    a: 'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Only Enterprise (custom governance, SSO, custom retention) is sales-assisted, with an early-access interest list.',
+    a: 'AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Only Enterprise (custom governance, SSO, custom retention) is sales-assisted, with an early-access interest list.',
   },
   {
     q: 'How do I upgrade, downgrade, cancel, or get an invoice?',
@@ -38,11 +38,11 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'Do you train on my data?',
-    a: 'AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in managed cloud we send your prompt and attachments to the provider serving the model you selected. MiniMax, Qwen and Zhipu route through OpenRouter, which is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies — our statement about AGI-owned models is not a promise on their behalf. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.',
+    a: 'AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in managed cloud we send your prompt and attachments to the provider serving the model you selected. MiniMax, Qwen and Zhipu route through OpenRouter, which is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies, our statement about AGI-owned models is not a promise on their behalf. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.',
   },
   {
     q: 'Who can read my conversations?',
-    a: 'In Local mode, nobody but you — they never reach us. In managed cloud we store them, so the honest answer is not "nobody": access is limited to people who need it to operate or support the service, and every request is scoped to the account that owns it by two layers of access control. The privacy policy states what those layers are and, more usefully, where each one stops.',
+    a: 'In Local mode, nobody but you. They never reach us. In managed cloud we store them, so the honest answer is not "nobody": access is limited to people who need it to operate or support the service, and every request is scoped to the account that owns it by two layers of access control. The privacy policy states what those layers are and, more usefully, where each one stops.',
   },
   {
     q: 'Do you sell my data, or use it for ads?',
@@ -53,12 +53,12 @@ const QA: { q: string; a: string }[] = [
     a: 'Both are self-serve in account settings. Export returns your data as a download. Deletion is scheduled 24 hours out and then performed by a daily job that also deletes your identity at our authentication provider. No confirmation email is sent, but cancellation is self-serve too: sign back in and cancel from Settings > Account any time before the 24 hours are up. A short list of things is kept on purpose, and the privacy policy has a table of exactly what and why.',
   },
   {
-    q: 'What if I never made an account — can you still delete what you hold?',
+    q: 'What if I never made an account: can you still delete what you hold?',
     a: 'Yes, but not automatically. An email address you gave a waitlist, or a consent you gave without signing in, is not reachable by account deletion because there is no account to delete, and nothing ages those out on a schedule. Use the request form on the data-rights page and we will remove them.',
   },
   {
     q: 'What happens to my data if I cancel?',
-    a: 'Cancelling a subscription does not delete your account or your content — the account continues on the free tier and your data stays until you delete it. If you want it gone, delete the account; if you want a copy first, export it.',
+    a: 'Cancelling a subscription does not delete your account or your content. The account continues on the free tier and your data stays until you delete it. If you want it gone, delete the account; if you want a copy first, export it.',
   },
   {
     q: 'Are you GDPR or DPDP compliant?',
@@ -70,11 +70,11 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'Is there an Enterprise plan?',
-    a: 'Enterprise is contract-scoped rather than self-serve — there is no checkout for it, so it starts with a conversation. On what actually exists rather than what is planned: single sign-on and SCIM directory provisioning are built and are provisioned by us for an organisation. A customer-facing audit-log export and per-organisation retention windows are NOT built, and we would rather say that here than let "Enterprise" imply the whole category. Contact sales to discuss requirements and timing.',
+    a: 'Enterprise is contract-scoped rather than self-serve. There is no checkout for it, so it starts with a conversation. On what actually exists rather than what is planned: single sign-on and SCIM directory provisioning are built and are provisioned by us for an organisation. A customer-facing audit-log export and per-organisation retention windows are NOT built, and we would rather say that here than let "Enterprise" imply the whole category. Contact sales to discuss requirements and timing.',
   },
   {
     q: 'Where do you host data?',
-    a: 'Hosted data lives in the United States. We do not offer data residency in the EU, the UK or India, and we are not publishing a date for one — if residency is a requirement for you, we do not meet it today. Local conversations never leave your device in the first place, and BYOK requests go from your client straight to your provider.',
+    a: 'Hosted data lives in the United States. We do not offer data residency in the EU, the UK or India, and we are not publishing a date for one: if residency is a requirement for you, we do not meet it today. Local conversations never leave your device in the first place, and BYOK requests go from your client straight to your provider.',
   },
 ];
 
@@ -110,7 +110,7 @@ export default function FaqPage() {
           <p className="agi-fl-eyebrow">Q &amp; A</p>
           {/*
             The count is derived, not typed. It read "Ten questions" while the
-            list held sixteen — a hardcoded number next to a list is a claim
+            list held sixteen: a hardcoded number next to a list is a claim
             that goes stale the first time someone adds an entry, which is
             exactly what happened.
           */}

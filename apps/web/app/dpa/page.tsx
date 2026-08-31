@@ -31,7 +31,7 @@ const ANNEX_I: { k: string; v: string }[] = [
   },
   {
     k: 'Duration',
-    v: 'For the term of the Customer’s subscription. On termination or an account deletion request, erasure is scheduled 24 hours out and then performed by a daily job — see section 09.',
+    v: 'For the term of the Customer’s subscription. On termination or an account deletion request, erasure is scheduled 24 hours out and then performed by a daily job, see section 09.',
   },
   {
     k: 'Nature and purpose',
@@ -134,7 +134,7 @@ const ANNEX_II: { k: string; v: string; limit: string }[] = [
   },
   {
     k: 'Financial-record retention',
-    v: 'A daily job enforces a written schedule over billing rows. Books of account — the credit ledger and the organisation usage ledger — are kept for the statutory record-keeping period and then deleted, with the request-shaped metadata beside them emptied earlier. Metering events, completed settlement jobs, double-charge protection keys and payment-webhook receipts each carry their own shorter maximum age. The windows are published in section 05 of the privacy policy.',
+    v: 'A daily job enforces a written schedule over billing rows. Books of account (the credit ledger and the organisation usage ledger) are kept for the statutory record-keeping period and then deleted, with the request-shaped metadata beside them emptied earlier. Metering events, completed settlement jobs, double-charge protection keys and payment-webhook receipts each carry their own shorter maximum age. The windows are published in section 05 of the privacy policy.',
     limit:
       'Two rows carry no maximum age by design: the current plan row and the current credit balance, because ageing them out would cancel a live subscription or delete purchased credits. Both are erased with the account. Invoices and payment records held by the payment processor are governed by its retention, not AGI’s.',
   },
@@ -176,7 +176,7 @@ const DPDP_DUTIES: { k: string; v: string }[] = [
   },
   {
     k: 'Notice and consent (ss. 5–6)',
-    v: 'Giving the itemised notice and obtaining consent by clear affirmative action, per purpose, is the Data Fiduciary’s duty — for enterprise use, the Customer’s duty toward its own users. AGI does not collect consent from the Customer’s users on the Customer’s behalf and is not registered as a Consent Manager under s. 6(7). AGI runs its own per-purpose consent record for the processing it is Data Fiduciary for.',
+    v: 'Giving the itemised notice and obtaining consent by clear affirmative action, per purpose, is the Data Fiduciary’s duty: for enterprise use, the Customer’s duty toward its own users. AGI does not collect consent from the Customer’s users on the Customer’s behalf and is not registered as a Consent Manager under s. 6(7). AGI runs its own per-purpose consent record for the processing it is Data Fiduciary for.',
   },
   {
     k: 'Erasure on withdrawal or purpose end (s. 8(7))',
@@ -211,13 +211,13 @@ const SECTIONS = [
   '04 · AGI’s obligations as processor',
   '05 · Sub-processors',
   '06 · International transfers',
-  '07 · Annex I — processing details',
-  '08 · Annex II — technical and organisational measures',
+  '07 · Annex I: processing details',
+  '08 · Annex II: technical and organisational measures',
   '09 · Deletion, return, and data-subject requests',
   '10 · Personal data breach',
   '11 · Audit',
   '12 · Alpha status, liability, and term',
-  '13 · Annex IV — India (DPDP Act, 2023)',
+  '13 · Annex IV: India (DPDP Act, 2023)',
   '14 · Signature',
 ] as const;
 
