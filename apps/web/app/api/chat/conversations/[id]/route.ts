@@ -153,7 +153,11 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   // Joined rather than looked up by id alone: an unscoped existence check on a
   // conversation the caller does not own answers "is this message id in that
   // thread" for someone else's thread.
-  if (hasActiveLeafUpdate) {
+  //
+  // A null names no message, so there is nothing to look up: it is the reset to
+  // linear, and running the check on it would answer "Message not found" for the
+  // one request that is allowed to leave the conversation without a leaf.
+  if (hasActiveLeafUpdate && updates['activeLeafMessageId'] !== null) {
     let leafMessage: { id: string } | undefined;
     try {
       [leafMessage] = await db.query<{ id: string }>(

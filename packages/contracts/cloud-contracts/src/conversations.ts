@@ -119,7 +119,11 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),
   isTemporary: z.boolean().optional(),
-  activeLeafMessageId: z.string().uuid().optional(),
+  // Three-way, matching resolveParentId in the messages route's thread lib:
+  // absent leaves the recorded leaf alone, a uuid names the variant being read,
+  // and an explicit null returns the conversation to its linear reading — the
+  // only honest answer once the path that leaf named has been deleted.
+  activeLeafMessageId: z.string().uuid().nullable().optional(),
 });
 export type ManagedCloudUpdateConversationRequest = z.infer<
   typeof ManagedCloudUpdateConversationRequestSchema
@@ -364,6 +368,25 @@ export function managedCloudConversationBranchesPath(conversationId: string): st
   return `${managedCloudConversationPath(conversationId)}/branches`;
 }
 
-export function managedCloudMessagePath(conversationId: string, messageId: string): string {
-  return `${managedCloudConversationMessagesPath(conversationId)}/${encodeURIComponent(messageId)}`;
+/**
+ * The delete route's subtree mode, named here because both sides read it: the
+ * route to decide which mode it is in, the caller to ask for it.
+ */
+export const MANAGED_CLOUD_MESSAGE_SUBTREE_PARAM = 'subtree';
+export const MANAGED_CLOUD_MESSAGE_SUBTREE_VALUE = 'true';
+
+/**
+ * `subtree` deletes the message with everything descended from it, which is what
+ * removing one answer among several means. Without it the route splices the
+ * message's children onto its own parent, so the turns around it close up.
+ */
+export function managedCloudMessagePath(
+  conversationId: string,
+  messageId: string,
+  options: { subtree?: boolean } = {},
+): string {
+  const path = `${managedCloudConversationMessagesPath(conversationId)}/${encodeURIComponent(messageId)}`;
+  return options.subtree
+    ? `${path}?${MANAGED_CLOUD_MESSAGE_SUBTREE_PARAM}=${MANAGED_CLOUD_MESSAGE_SUBTREE_VALUE}`
+    : path;
 }

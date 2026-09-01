@@ -8,7 +8,10 @@ import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigat
 import { ToolApprovalProvider } from '@/lib/hooks/useChatStream';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
-import { managedCloudConversationPath } from '@agiworkforce/cloud-contracts';
+import {
+  managedCloudConversationPath,
+  managedCloudMessagePath,
+} from '@agiworkforce/cloud-contracts';
 // GOV-19: remaining managed quota, shared with Settings > Usage.
 import {
   getWorstUsagePercent,
@@ -44,7 +47,9 @@ import {
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
+  resolveSurvivingLeaf,
   sameVariantInfoMap,
+  subtreeIds,
   variantInfoByMessage,
   type VariantInfoByMessageId,
 } from '../lib/messageThread';
@@ -539,17 +544,26 @@ async function readChatMutationError(response: Response, fallback: string): Prom
   return fallback;
 }
 
+/**
+ * Answers with the leaf the route settled on, which is the one thing this client
+ * cannot work out for itself: it may hold a single page of a long conversation,
+ * so the surviving sibling the server descends into can be a row it has never
+ * seen. Null means the conversation has gone back to its linear reading.
+ */
 async function deleteConversationMessage(params: {
   conversationId: string;
   messageId: string;
   authToken: string;
-}): Promise<void> {
+  subtree?: boolean;
+}): Promise<string | null> {
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
     Authorization: `Bearer ${params.authToken}`,
   });
   const response = await fetch(
-    `/api/chat/conversations/${params.conversationId}/messages/${params.messageId}`,
+    managedCloudMessagePath(params.conversationId, params.messageId, {
+      ...(params.subtree === undefined ? {} : { subtree: params.subtree }),
+    }),
     {
       method: 'DELETE',
       headers,
@@ -559,15 +573,21 @@ async function deleteConversationMessage(params: {
   if (!response.ok) {
     throw new Error(await readChatMutationError(response, 'Failed to delete message'));
   }
+
+  const body = (await response.json().catch(() => ({}))) as { activeLeafMessageId?: string | null };
+  return body.activeLeafMessageId ?? null;
 }
 
 /**
  * Records which variant the reader is on, so opening the chat again — here or on
  * another device — restores the answer they chose rather than the newest one.
+ * Null returns the conversation to its linear reading, which is the state a
+ * conversation is in before it has ever branched and the one it goes back to
+ * once the path a leaf named is deleted.
  */
 async function putActiveLeafMessageId(params: {
   conversationId: string;
-  activeLeafMessageId: string;
+  activeLeafMessageId: string | null;
   authToken: string;
 }): Promise<void> {
   const headers = await addCsrfHeaders({
@@ -1239,6 +1259,7 @@ export default function WebChatPage() {
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
+  const deleteMessageSubtree = useChatStore((s) => s.deleteMessageSubtree);
   const setActiveLeaf = useChatStore((s) => s.setActiveLeaf);
   const revealMessage = useChatStore((s) => s.revealMessage);
   const chatError = useChatStore((s) => s.error);
@@ -1354,7 +1375,7 @@ export default function WebChatPage() {
 
   const variantsEnabled = useMessageVariantsEnabled();
   const persistActiveLeaf = useCallback(
-    async (conversationId: string, activeLeafMessageId: string): Promise<void> => {
+    async (conversationId: string, activeLeafMessageId: string | null): Promise<void> => {
       const authToken = await getToken();
       if (!authToken) return;
       try {
@@ -3630,6 +3651,83 @@ export default function WebChatPage() {
     [deletePersistedMessages],
   );
 
+  /**
+   * How many rows go with a response if it is deleted — everything descended
+   * from it, which is what the subtree mode takes. The confirm names this
+   * number, so it is walked at click time rather than per render.
+   */
+  const countVariantFollowers = useCallback(
+    (messageId: string) => {
+      const conversationId = displayedConversationId;
+      if (!conversationId) return 0;
+      const rows = selectConversationAllRows(conversationId)(useChatStore.getState());
+      return Math.max(subtreeIds(rows, messageId).length - 1, 0);
+    },
+    [displayedConversationId],
+  );
+
+  /**
+   * Delete one answer among several, with the exchange that continued from it.
+   *
+   * The route's own leaf is applied rather than a locally resolved one: this
+   * client may hold a single page of the conversation, so the sibling the server
+   * descends into can be a row it has never loaded. Temporary conversations have
+   * no durable rows to delete, so they take the local removal alone — and with
+   * no server answer, the surviving sibling is resolved here.
+   *
+   * The whole branch is held against the image-transcript lock, not just the
+   * response the reader clicked: an image turn part-way through its save can sit
+   * anywhere under it, and deleting around it is the race that lock exists for.
+   */
+  const handleDeleteVariant = useCallback(
+    (messageId: string) => {
+      const conversationId = displayedConversationId;
+      if (!conversationId) return;
+      const rows = selectConversationAllRows(conversationId)(useChatStore.getState());
+      const doomedIds = subtreeIds(rows, messageId);
+      if (doomedIds.length === 0) return;
+      if (!tryAcquireImageTranscriptMutation(doomedIds)) {
+        toast.error('Wait for this image turn to finish saving before deleting it.');
+        return;
+      }
+      void (async () => {
+        try {
+          if (isTemporaryConversationById(useChatStore.getState().conversations, conversationId)) {
+            deleteMessageSubtree(messageId, resolveSurvivingLeaf(rows, messageId), conversationId);
+            removeImageTranscriptRecoveriesForMessages(doomedIds);
+            return;
+          }
+          const authToken = await getToken();
+          if (!authToken) {
+            setChatError('Not authenticated', conversationId);
+            return;
+          }
+          const activeLeafMessageId = await deleteConversationMessage({
+            conversationId,
+            messageId,
+            authToken,
+            subtree: true,
+          });
+          deleteMessageSubtree(messageId, activeLeafMessageId, conversationId);
+          removeImageTranscriptRecoveriesForMessages(doomedIds);
+        } catch (error) {
+          setChatError(toUserMessage(error, 'Failed to delete this response'), conversationId);
+        } finally {
+          releaseImageTranscriptMutation(doomedIds);
+        }
+      })();
+    },
+    [
+      deleteMessageSubtree,
+      displayedConversationId,
+      getToken,
+      releaseImageTranscriptMutation,
+      removeImageTranscriptRecoveriesForMessages,
+      setChatError,
+      tryAcquireImageTranscriptMutation,
+    ],
+  );
+
   // Media paywall rows are durable so recovery survives reload/cross-device.
   // Dismissal must delete the server row too, or the card would reappear on
   // the next hydration.
@@ -4917,6 +5015,8 @@ export default function WebChatPage() {
                       onContinue={handleContinueMessage}
                       onEdit={handleEditMessage}
                       onDelete={handleDeleteMessage}
+                      onDeleteVariant={handleDeleteVariant}
+                      countVariantFollowers={countVariantFollowers}
                       onReact={handleReactMessage}
                       onPin={handlePinMessage}
                       branchGroupsByMessageId={branchGroupsByMessageId}

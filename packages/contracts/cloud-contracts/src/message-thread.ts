@@ -101,12 +101,69 @@ export function deepestDescendant(rows: readonly ThreadedMessage[], id: string):
 }
 
 /**
+ * `id` and everything descended from it, which is what a subtree delete takes:
+ * the variant plus the exchange that continued from it.
+ *
+ * The client mirror of `collectSubtree` in the messages route's thread lib, and
+ * the same shape of answer — a set, so a row that somehow points back into its
+ * own ancestry terminates the walk instead of growing it. A caller holding one
+ * page of a long conversation gets the part of the subtree it can see, which is
+ * exactly the part it renders.
+ */
+export function subtreeIds(rows: readonly ThreadedMessage[], id: string): string[] {
+  if (!rows.some((row) => row.id === id)) return [];
+  const childrenByParent = new Map<string | null, ThreadedMessage[]>();
+  for (const row of rows) {
+    const key = parentOf(row);
+    const bucket = childrenByParent.get(key);
+    if (bucket) bucket.push(row);
+    else childrenByParent.set(key, [row]);
+  }
+  const doomed = new Set<string>([id]);
+  const pending = [id];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined) break;
+    for (const child of childrenByParent.get(current) ?? []) {
+      if (doomed.has(child.id)) continue;
+      doomed.add(child.id);
+      pending.push(child.id);
+    }
+  }
+  return [...doomed];
+}
+
+/**
  * The leaf to activate when the reader pages onto `siblingId`: the end of that
  * variant's own tail, so switching a user message shows the whole exchange it
  * produced rather than the message alone.
  */
 export function resolveLeafForSibling(rows: readonly ThreadedMessage[], siblingId: string): string {
   return deepestDescendant(rows, siblingId);
+}
+
+/**
+ * Where the reader lands once `messageId` and everything under it is gone: the
+ * end of the newest surviving sibling's own tail, or the branch point itself
+ * when the deleted variant was the last one.
+ *
+ * The client mirror of `resolveSurvivingLeaf` in the messages route's thread
+ * lib, for a surface deleting a variant with no server rows to ask — a temporary
+ * conversation, or a local-only transcript. A caller that did make the request
+ * applies the route's answer instead: it can see rows this one has not loaded.
+ */
+export function resolveSurvivingLeaf(
+  rows: readonly ThreadedMessage[],
+  messageId: string,
+): string | null {
+  const message = rows.find((row) => row.id === messageId);
+  if (!message) return null;
+  const parentId = parentOf(message);
+  const siblings = rows
+    .filter((row) => parentOf(row) === parentId && row.id !== messageId)
+    .sort(compareThreadOrder);
+  const newest = siblings[siblings.length - 1];
+  return newest ? deepestDescendant(rows, newest.id) : parentId;
 }
 
 /**

@@ -5,10 +5,12 @@ import {
   deepestDescendant,
   linearTail,
   resolveLeafForSibling,
+  resolveSurvivingLeaf,
   resolveVisibleThread,
   sameVariantInfoMap,
   siblingGroup,
   stampLinearParents,
+  subtreeIds,
   variantInfoByMessage,
   type ThreadedMessage,
 } from '../message-thread';
@@ -320,5 +322,84 @@ describe('sameVariantInfoMap', () => {
 
   it('is true for the same map compared with itself', () => {
     expect(sameVariantInfoMap(EMPTY_VARIANT_INFO, EMPTY_VARIANT_INFO)).toBe(true);
+  });
+});
+
+describe('subtreeIds', () => {
+  it('takes the variant and the exchange that continued from it', () => {
+    const rows = [
+      ...threadedRows(),
+      message('u3', { parentId: 'a2b', minute: 5 }),
+      message('a3', { parentId: 'u3', minute: 6, role: 'assistant' }),
+    ];
+
+    expect(subtreeIds(rows, 'a2b').sort()).toEqual(['a2b', 'a3', 'u3']);
+  });
+
+  it('leaves the siblings of the deleted variant alone', () => {
+    expect(subtreeIds(threadedRows(), 'a2')).toEqual(['a2']);
+  });
+
+  it('takes the whole conversation when the root goes', () => {
+    expect(subtreeIds(threadedRows(), 'u1').sort()).toEqual(['a1', 'a2', 'a2b', 'u1', 'u2']);
+  });
+
+  it('answers for nothing when the id is not a row in this conversation', () => {
+    expect(subtreeIds(threadedRows(), 'not-here')).toEqual([]);
+  });
+
+  it('answers the same for a legacy conversation with no parents at all', () => {
+    const rows = [message('m1'), message('m2', { minute: 1 })];
+
+    expect(subtreeIds(rows, 'm1')).toEqual(['m1']);
+  });
+
+  it('terminates on a row that points back into its own ancestry', () => {
+    const rows = [
+      message('a', { parentId: 'c', minute: 0 }),
+      message('b', { parentId: 'a', minute: 1 }),
+      message('c', { parentId: 'b', minute: 2 }),
+    ];
+
+    expect(subtreeIds(rows, 'a').sort()).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('resolveSurvivingLeaf', () => {
+  it('lands on the end of the newest surviving sibling own tail', () => {
+    const rows = [
+      ...threadedRows(),
+      message('u3', { parentId: 'a2', minute: 5 }),
+      message('a3', { parentId: 'u3', minute: 6, role: 'assistant' }),
+    ];
+
+    expect(resolveSurvivingLeaf(rows, 'a2b')).toBe('a3');
+  });
+
+  it('falls back to the branch point when the deleted variant was the last one', () => {
+    const rows = [
+      message('u1', { parentId: null, minute: 0 }),
+      message('a1', { parentId: 'u1', minute: 1, role: 'assistant' }),
+    ];
+
+    expect(resolveSurvivingLeaf(rows, 'a1')).toBe('u1');
+  });
+
+  it('goes back to linear when the deleted root was the whole conversation', () => {
+    expect(resolveSurvivingLeaf([message('u1', { parentId: null, minute: 0 })], 'u1')).toBeNull();
+  });
+
+  it('never lands inside the subtree that is about to go', () => {
+    const rows = [
+      ...threadedRows(),
+      message('u3', { parentId: 'a2b', minute: 5 }),
+      message('a3', { parentId: 'u3', minute: 6, role: 'assistant' }),
+    ];
+
+    expect(subtreeIds(rows, 'a2b')).not.toContain(resolveSurvivingLeaf(rows, 'a2b'));
+  });
+
+  it('answers for nothing when the id is not a row in this conversation', () => {
+    expect(resolveSurvivingLeaf(threadedRows(), 'not-here')).toBeNull();
   });
 });

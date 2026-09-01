@@ -30,7 +30,7 @@ import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
 import { TranscriptNotice } from './TranscriptNotice';
-import { ChevronDown, ArrowRight, AlertCircle, RefreshCw, ShieldAlert } from 'lucide-react';
+import { ArrowRight, ChevronDown, CircleAlert, RefreshCw, ShieldAlert } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { useTTS } from '@/lib/hooks/useTTS';
 import {
@@ -81,6 +81,8 @@ export interface ChatMessageListProps {
   onContinue?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string) => void;
+  onDeleteVariant?: (messageId: string) => void;
+  countVariantFollowers?: (messageId: string) => number;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (messageId: string) => void;
   branchGroupsByMessageId?: Readonly<Record<string, MessageBranchGroup>>;
@@ -247,6 +249,8 @@ interface MessageGroupRowProps {
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onDeleteVariant?: (id: string) => void;
+  countVariantFollowers?: (id: string) => number;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (id: string) => void;
   branchGroupsByMessageId?: Readonly<Record<string, MessageBranchGroup>>;
@@ -282,6 +286,8 @@ interface MessageRowProps {
   retryingResearchMessageId?: string | null;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onDeleteVariant?: (id: string) => void;
+  countVariantFollowers?: (id: string) => number;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPin?: (id: string) => void;
   branchGroup?: MessageBranchGroup;
@@ -478,6 +484,8 @@ const MessageRow = memo(function MessageRow({
   retryingResearchMessageId,
   onEdit,
   onDelete,
+  onDeleteVariant,
+  countVariantFollowers,
   onReact,
   onPin,
   branchGroup,
@@ -609,6 +617,8 @@ const MessageRow = memo(function MessageRow({
       isRetryingResearch={retryingResearchMessageId === message.id}
       onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
+      onDeleteVariant={onDeleteVariant}
+      countVariantFollowers={countVariantFollowers}
       onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
       onPin={onPin}
       onBranch={onBranch ? handleBranch : undefined}
@@ -638,6 +648,8 @@ const MessageGroupRow = memo(
     retryingResearchMessageId,
     onEdit,
     onDelete,
+    onDeleteVariant,
+    countVariantFollowers,
     onReact,
     onPin,
     branchGroupsByMessageId,
@@ -671,6 +683,8 @@ const MessageGroupRow = memo(
             retryingResearchMessageId={retryingResearchMessageId}
             onEdit={onEdit}
             onDelete={onDelete}
+            onDeleteVariant={onDeleteVariant}
+            countVariantFollowers={countVariantFollowers}
             onReact={onReact}
             onPin={onPin}
             branchGroup={branchGroupsByMessageId?.[message.id]}
@@ -710,6 +724,8 @@ const MessageGroupRow = memo(
       prev.retryingResearchMessageId === next.retryingResearchMessageId &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
+      prev.onDeleteVariant === next.onDeleteVariant &&
+      prev.countVariantFollowers === next.countVariantFollowers &&
       prev.onReact === next.onReact &&
       prev.onPin === next.onPin &&
       prev.branchGroupsByMessageId === next.branchGroupsByMessageId &&
@@ -853,6 +869,8 @@ const ChatMessageListComponent = ({
   onContinue,
   onEdit,
   onDelete,
+  onDeleteVariant,
+  countVariantFollowers,
   onReact,
   onPin,
   branchGroupsByMessageId,
@@ -1256,6 +1274,8 @@ const ChatMessageListComponent = ({
       retryingResearchMessageId,
       onEdit: handleEdit,
       onDelete: handleDelete,
+      onDeleteVariant,
+      countVariantFollowers,
       onReact: handleReact,
       onPin,
       branchGroupsByMessageId,
@@ -1277,6 +1297,7 @@ const ChatMessageListComponent = ({
     [
       branchGroupsByMessageId,
       branchingMessageId,
+      countVariantFollowers,
       handleDelete,
       handleEdit,
       handlePaywallDismiss,
@@ -1291,6 +1312,7 @@ const ChatMessageListComponent = ({
       isReadAloudSupported,
       isSpeaking,
       onBranch,
+      onDeleteVariant,
       onPin,
       onRegenerateImage,
       onResumeVideo,
@@ -1324,7 +1346,7 @@ const ChatMessageListComponent = ({
         <div className="px-4 pt-1 md:px-12 lg:px-20">
           <TranscriptNotice
             tone="danger"
-            icon={AlertCircle}
+            icon={CircleAlert}
             message={
               getStreamErrorMessage(lastMessage)
                 ? `Response may be incomplete: ${getStreamErrorMessage(lastMessage)}`
@@ -1377,7 +1399,7 @@ const ChatMessageListComponent = ({
         <div className="px-4 pt-1 md:px-12 lg:px-20">
           <TranscriptNotice
             tone="danger"
-            icon={AlertCircle}
+            icon={CircleAlert}
             message="This turn didn't complete. No response was received."
             action={{
               label: 'Retry',
@@ -1500,6 +1522,8 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.retryingResearchMessageId === next.retryingResearchMessageId &&
     prev.onContinue === next.onContinue &&
     prev.onDelete === next.onDelete &&
+    prev.onDeleteVariant === next.onDeleteVariant &&
+    prev.countVariantFollowers === next.countVariantFollowers &&
     prev.onReact === next.onReact &&
     prev.onRegenerateImage === next.onRegenerateImage &&
     prev.onResumeVideo === next.onResumeVideo &&

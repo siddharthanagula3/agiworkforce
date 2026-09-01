@@ -1,6 +1,10 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  MANAGED_CLOUD_MESSAGE_SUBTREE_PARAM,
+  MANAGED_CLOUD_MESSAGE_SUBTREE_VALUE,
+} from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 
 export type ThreadScope = {
@@ -210,11 +214,11 @@ export async function setActiveLeaf(
 // one wrong answer rather than a connection that never returns.
 const MAX_THREAD_WALK_DEPTH = 10_000;
 
-const SUBTREE_QUERY_PARAM = 'subtree';
-const SUBTREE_QUERY_VALUE = 'true';
-
 export function wantsSubtreeDelete(url: URL): boolean {
-  return url.searchParams.get(SUBTREE_QUERY_PARAM) === SUBTREE_QUERY_VALUE;
+  return (
+    url.searchParams.get(MANAGED_CLOUD_MESSAGE_SUBTREE_PARAM) ===
+    MANAGED_CLOUD_MESSAGE_SUBTREE_VALUE
+  );
 }
 
 /**

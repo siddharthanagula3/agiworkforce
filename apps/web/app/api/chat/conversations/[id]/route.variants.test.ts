@@ -218,4 +218,33 @@ describe('PUT /api/chat/conversations/[id] — active leaf', () => {
     expect(statementMatching(CONVERSATION_UPDATE)?.[1]?.[15]).toBe(false);
     expect(statementMatching(CONVERSATION_UPDATE)?.[1]?.[17]).toBe(false);
   });
+
+  it('returns a conversation to its linear reading when the leaf is explicitly null', async () => {
+    givenDatabase([{ match: CONVERSATION_UPDATE, rows: [legacyConversation] }]);
+
+    const response = await PUT(putLeaf({ activeLeafMessageId: null }), context);
+
+    expect(response.status).toBe(200);
+    const update = statementMatching(CONVERSATION_UPDATE);
+    expect(update?.[1]?.[15]).toBe(true);
+    expect(update?.[1]?.[16]).toBeNull();
+  });
+
+  it('looks up no message for a null leaf, so the reset cannot 404 on its own emptiness', async () => {
+    givenDatabase([{ match: CONVERSATION_UPDATE, rows: [legacyConversation] }]);
+
+    const response = await PUT(putLeaf({ activeLeafMessageId: null }), context);
+
+    expect(response.status).toBe(200);
+    expect(statementMatching(LEAF_CHECK)).toBeUndefined();
+  });
+
+  it('still refuses a leaf that is not a uuid at all', async () => {
+    givenDatabase([{ match: CONVERSATION_UPDATE, rows: [legacyConversation] }]);
+
+    const response = await PUT(putLeaf({ activeLeafMessageId: 'not-a-uuid' }), context);
+
+    expect(response.status).toBe(400);
+    expect(statementMatching(CONVERSATION_UPDATE)).toBeUndefined();
+  });
 });

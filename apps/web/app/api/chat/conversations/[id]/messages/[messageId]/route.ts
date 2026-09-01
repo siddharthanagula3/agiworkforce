@@ -148,8 +148,12 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
   // step would fail on the foreign key rather than orphan a turn quietly.
   const threadScope = { conversationId, userId, organizationId };
 
-  await db.transaction(async (tx) => {
-    const activeLeafMessageId = await lockConversationThread(tx, threadScope);
+  // The leaf this transaction settled on is returned rather than left for the
+  // caller to re-derive: a client holding one page of a long conversation cannot
+  // see the sibling the walk below lands on, so a locally computed answer would
+  // disagree with the durable one until the next full load.
+  const activeLeafMessageId = await db.transaction(async (tx) => {
+    const readerLeafId = await lockConversationThread(tx, threadScope);
 
     const [target] = await tx.query<{ id: string; parent_id: string | null }>(
       'select id, parent_id from web_messages where id = $1 and conversation_id = $2 limit 1',
@@ -162,25 +166,26 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
 
     if (removeSubtree) {
       const doomed = await collectSubtree(tx, conversationId, messageId);
-      if (activeLeafMessageId !== null && doomed.includes(activeLeafMessageId)) {
-        await setActiveLeaf(
-          tx,
-          threadScope,
-          await resolveSurvivingLeaf(tx, conversationId, messageId, target.parent_id),
-        );
+      let leafId = readerLeafId;
+      if (readerLeafId !== null && doomed.includes(readerLeafId)) {
+        leafId = await resolveSurvivingLeaf(tx, conversationId, messageId, target.parent_id);
+        await setActiveLeaf(tx, threadScope, leafId);
       }
       await deleteMessages(tx, conversationId, doomed);
-      return;
+      return leafId;
     }
 
     await spliceMessageChildren(tx, conversationId, messageId, target.parent_id);
-    if (activeLeafMessageId === messageId) {
-      await setActiveLeaf(tx, threadScope, target.parent_id);
+    let leafId = readerLeafId;
+    if (readerLeafId === messageId) {
+      leafId = target.parent_id;
+      await setActiveLeaf(tx, threadScope, leafId);
     }
     await deleteMessages(tx, conversationId, [messageId]);
+    return leafId;
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, activeLeafMessageId });
 }
 
 export const PATCH = withCorsRoute(withErrorHandler(handlePatchMessage));
