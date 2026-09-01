@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 /**
@@ -7,6 +7,10 @@ import userEvent from '@testing-library/user-event';
  * while the local adapter in the same screen applied changes synchronously. The
  * point of these is twofold: the list must change before the request settles,
  * and a failed write must put the list back with a reason attached.
+ *
+ * Deleting a memory is irreversible, so it asks first. The optimistic window
+ * these measure opens when the confirmation is accepted, not when the row's
+ * delete button is pressed.
  */
 
 const listCloudMemories = vi.fn();
@@ -55,6 +59,16 @@ async function renderCloudMemory(firstText = 'likes espresso') {
   await screen.findByText(firstText);
 }
 
+type User = ReturnType<typeof userEvent.setup>;
+
+const deleteConfirmation = () =>
+  screen.findByRole('alertdialog', { name: /delete this memory\?/i });
+
+async function acceptDeleteConfirmation(user: User) {
+  const dialog = await deleteConfirmation();
+  await user.click(within(dialog).getByRole('button', { name: /^delete memory$/i }));
+}
+
 describe('cloud memory add', () => {
   it('shows the new fact before the server responds', async () => {
     const pending = deferred<ReturnType<typeof fact>>();
@@ -97,6 +111,22 @@ describe('cloud memory add', () => {
 });
 
 describe('cloud memory delete', () => {
+  it('deletes nothing until the confirmation is accepted', async () => {
+    const user = userEvent.setup({ delay: null });
+    await renderCloudMemory();
+
+    await user.click(screen.getByRole('button', { name: /delete memory fact/i }));
+    expect(deleteCloudMemory).not.toHaveBeenCalled();
+
+    const dialog = await deleteConfirmation();
+    expect(dialog.textContent).toContain('cannot be restored');
+
+    await user.click(within(dialog).getByRole('button', { name: /^cancel$/i }));
+
+    expect(deleteCloudMemory).not.toHaveBeenCalled();
+    expect(screen.getByText('likes espresso')).toBeTruthy();
+  });
+
   it('removes the row before the server responds', async () => {
     const pending = deferred<void>();
     deleteCloudMemory.mockReturnValue(pending.promise);
@@ -104,6 +134,7 @@ describe('cloud memory delete', () => {
     await renderCloudMemory();
 
     await user.click(screen.getByRole('button', { name: /delete memory fact/i }));
+    await acceptDeleteConfirmation(user);
 
     expect(screen.queryByText('likes espresso')).toBeNull();
     pending.resolve();
@@ -123,6 +154,7 @@ describe('cloud memory delete', () => {
 
     const deletes = screen.getAllByRole('button', { name: /delete memory fact/i });
     await user.click(deletes[1]!);
+    await acceptDeleteConfirmation(user);
 
     await screen.findByRole('alert');
     const texts = screen
