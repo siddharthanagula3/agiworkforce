@@ -61,7 +61,14 @@ const DENIED_UPSTREAMS = [
   'auto-code-rover',
   'devon',
   'ultralytics',
+  'litellm/enterprise',
 ];
+
+const GIT_REF_PATH_SEGMENT = /\/(?:tree|blob)\/[^/]+\//g;
+
+function normalizeUpstream(rawUpstream) {
+  return rawUpstream.toLowerCase().replace(GIT_REF_PATH_SEGMENT, '/');
+}
 
 function classify(rawLicense) {
   const spdx = (rawLicense.replace(/[`*[\]]/g, '').match(/[A-Za-z0-9.+-]+/) || [''])[0];
@@ -79,10 +86,9 @@ function scanNotices(text) {
     const name = block.split('\n')[0].trim();
     const licenseMatch = block.match(/^\s*-\s*\*\*License\*\*:\s*([^\n]+)/im);
     if (!licenseMatch) continue;
-    const upstream = (block.match(/^\s*-\s*\*\*Upstream\*\*:\s*([^\n]+)/im) || [
-      '',
-      '',
-    ])[1].toLowerCase();
+    const upstream = normalizeUpstream(
+      (block.match(/^\s*-\s*\*\*Upstream\*\*:\s*([^\n]+)/im) || ['', ''])[1],
+    );
     const { spdx, verdict } = classify(licenseMatch[1]);
     if (verdict === 'denied') {
       violations.push(`"${name}": forbidden license ${spdx}`);
@@ -112,14 +118,24 @@ function selftest() {
     '## ProprietaryUpstream',
     '- **Upstream**: anthropics/claude-code',
     '- **License**: MIT',
+    '## SubtreeBehindGitRef',
+    '- **Upstream**: [BerriAI/litellm](https://github.com/BerriAI/litellm/tree/main/enterprise)',
+    '- **License**: MIT',
+    '## PermittedRootFile',
+    '- **Upstream**: [BerriAI/litellm](https://github.com/BerriAI/litellm)',
+    '- **License**: MIT',
     '## DocSection',
     'A table or note with no license line must be ignored.',
   ].join('\n');
   const { violations } = scanNotices(fixture);
   const caughtLicense = violations.some((m) => m.includes('AGPL-3.0'));
   const caughtUpstream = violations.some((m) => m.includes('claude-code'));
-  if (caughtLicense && caughtUpstream && violations.length === 2) {
-    console.log('✓ selftest passed: gate catches forbidden license + upstream');
+  const caughtSubtree = violations.some((m) => m.includes('litellm/enterprise'));
+  const allowedRoot = !violations.some((m) => m.includes('PermittedRootFile'));
+  if (caughtLicense && caughtUpstream && caughtSubtree && allowedRoot && violations.length === 3) {
+    console.log(
+      '✓ selftest passed: gate catches forbidden license + upstream + ref-masked subtree',
+    );
     process.exit(0);
   }
   console.error('✗ selftest FAILED:', JSON.stringify(violations));
