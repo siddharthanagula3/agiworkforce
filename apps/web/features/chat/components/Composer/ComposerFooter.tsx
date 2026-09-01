@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
-import { ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { useCallback, useEffect, useId, useState, useSyncExternalStore } from 'react';
+import { ChevronDown, ChevronRight, Check } from '@agiworkforce/icons';
 import { toast } from 'sonner';
 import { Popover, PopoverTrigger, PopoverContent, Slider } from '@agiworkforce/ui';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
@@ -47,6 +47,29 @@ import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { ProviderMark, hasProviderMark } from '@shared/components/ProviderMark';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import {
+  resolveFreeLaneUiBuildEnabled,
+  resolveFreeLaneUiEnabled,
+} from '@features/chat/lib/free-lane-ui-gate';
+
+const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';
+const TRIAL_SLOT_SUFFIX = 'is selected for the free web trial';
+
+/**
+ * The gate's two overrides are client-only, so a server render that honoured
+ * them would label this slot differently from the markup the browser hydrates
+ * against. `getServerSnapshot` pins the first client render to the build
+ * default, and React re-renders once hydration is done.
+ */
+const subscribeToFreeLaneUiMode = () => () => {};
+
+function useFreeLaneUiEnabled(): boolean {
+  return useSyncExternalStore(
+    subscribeToFreeLaneUiMode,
+    resolveFreeLaneUiEnabled,
+    resolveFreeLaneUiBuildEnabled,
+  );
+}
 
 /**
  * Map a model-store providerKey (from models.json) to a ProviderId
@@ -703,6 +726,12 @@ export function ComposerFooter({
   const lockedDisplayModel =
     AVAILABLE_MODELS.find((model) => model.id === getBestAutoModeForTier('free')) ?? selectedModel;
 
+  const freeLaneUiEnabled = useFreeLaneUiEnabled();
+  const lockedSlotText = freeLaneUiEnabled ? FREE_LANE_SLOT_TEXT : lockedDisplayModel.name;
+  const lockedSlotLabel = freeLaneUiEnabled
+    ? FREE_LANE_SLOT_TEXT
+    : `${lockedDisplayModel.name} ${TRIAL_SLOT_SUFFIX}`;
+
   // Partition into recommended / more, respecting current tier and search
   const { recommended, more, isSearching } = partitionModels(
     AVAILABLE_MODELS,
@@ -844,10 +873,10 @@ export function ComposerFooter({
               type="button"
               onClick={onUpgradeRequest}
               className="flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground"
-              aria-label="Auto Economy is selected for the free web trial"
+              aria-label={lockedSlotLabel}
             >
               <ProviderLogo providerKey={selectedProviderKey} size={12} />
-              <span className="max-w-[150px] truncate">{lockedDisplayModel.name}</span>
+              <span className="max-w-[150px] truncate">{lockedSlotText}</span>
             </button>
           )}
 
