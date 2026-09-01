@@ -20,6 +20,7 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
 import { scheduleArtifactIndexing } from '../lib/index-artifacts';
 import {
   assertParentInConversation,
+  conversationIsUnbranched,
   INSERT_MESSAGE_SQL,
   isHttpError,
   lockConversationThread,
@@ -109,8 +110,12 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
       }
     } else {
       await db.transaction(async (tx) => {
+        // Gated on the tree rather than the leaf: deleting a root the reader was
+        // sitting on puts the leaf back to null without undoing a single branch,
+        // and neither the conversion nor the tail it reads means anything on a
+        // conversation that has already branched.
         let leafMessageId = await lockConversationThread(tx, threadScope);
-        if (leafMessageId === null) {
+        if (leafMessageId === null && (await conversationIsUnbranched(tx, conversationId))) {
           await stampLinearParents(tx, conversationId);
           leafMessageId = await resolveLinearTail(tx, conversationId);
         }

@@ -25,6 +25,7 @@ import { scheduleConversationTitleGeneration } from './lib/generate-title';
 import { scheduleArtifactIndexing } from './lib/index-artifacts';
 import {
   assertParentInConversation,
+  conversationIsUnbranched,
   INSERT_MESSAGE_SQL,
   isHttpError,
   lockConversationThread,
@@ -125,8 +126,11 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
           await assertParentInConversation(tx, conversationId, parentId);
         }
         // Before the insert, so the rows that already exist are chained and the
-        // new one is left wherever the caller put it.
-        if (lockedLeafMessageId === null) {
+        // new one is left wherever the caller put it. Gated on the tree rather
+        // than the leaf: deleting a root the reader was sitting on puts the leaf
+        // back to null without undoing a single branch, and converting again
+        // there would fold the sibling roots into one line.
+        if (lockedLeafMessageId === null && (await conversationIsUnbranched(tx, conversationId))) {
           await stampLinearParents(tx, conversationId);
         }
 
