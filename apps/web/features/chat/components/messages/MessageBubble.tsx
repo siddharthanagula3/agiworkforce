@@ -11,10 +11,12 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
-import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar';
-import { Button } from '@/shared/components/ui/button';
-import { Badge } from '@/shared/components/ui/badge';
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Badge,
+  Button,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -66,6 +68,7 @@ import {
   type GeneratedFile,
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
+import { TranscriptNotice } from './TranscriptNotice';
 import {
   AgentActivityTimeline,
   BranchNavigator,
@@ -1533,11 +1536,12 @@ const MessageBubbleComponent = function MessageBubble({
                 <span className="text-sm">Thinking...</span>
               </div>
             ) : producedNoVisibleOutput ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-                <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                The model finished without returning a response. Use Regenerate below to run it
-                again.
-              </p>
+              <TranscriptNotice
+                surface="bare"
+                role="status"
+                icon={AlertCircle}
+                message="The model finished without returning a response. Use Regenerate below to run it again."
+              />
             ) : (
               (() => {
                 const markdown = (
@@ -1800,7 +1804,7 @@ const MessageBubbleComponent = function MessageBubble({
                     onClick={() => onResumeVideo(message.id)}
                     className="shrink-0"
                   >
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                     Resume checking
                   </Button>
                 )}
@@ -1832,7 +1836,7 @@ const MessageBubbleComponent = function MessageBubble({
                     onClick={() => onRetryVideo(message.id)}
                     className="shrink-0"
                   >
-                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                     Try video again
                   </Button>
                 )}

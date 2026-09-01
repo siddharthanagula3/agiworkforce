@@ -31,7 +31,15 @@ import {
   Timer,
   Gauge,
 } from 'lucide-react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@agiworkforce/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@agiworkforce/ui';
 import {
   getBillingPlanPricing,
   getPlanPriceUsd,
@@ -46,8 +54,6 @@ import {
 } from '@agiworkforce/types';
 
 export { normalizePaywallFeature };
-import { Button } from '@shared/components/ui/button';
-import { Badge } from '@shared/components/ui/badge';
 import { cn } from '@shared/lib/utils';
 import { formatCatalogPrice } from '@features/billing/lib/plan-display';
 
