@@ -30,6 +30,7 @@ import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMen
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
+import { ComposerInput } from './ComposerInput';
 import { ComposerFooter } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
@@ -162,6 +163,38 @@ const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
   chat: null,
   agiwork: 'Describe a multi-step task and what it should deliver',
 };
+
+const COMPOSER_FOOTER_KEYS = {
+  webSearch: 'web-search',
+  sendPreview: 'send-preview',
+  accuracy: 'accuracy',
+  privacy: 'privacy',
+  feedback: 'feedback',
+} as const;
+
+/**
+ * Entries the phone drops. Measured at 390px on 2026-08-31: chatgpt.com shows
+ * one line here and puts it above its composer, claude.ai shows nothing at all,
+ * and ours ran to three rows — 136px of composer against ChatGPT's 87px. The
+ * composer's own control row is already full at that width (312 of 324px), so
+ * nothing can move into it.
+ *
+ * Each of these has a second entry point on a phone: web search is derived from
+ * the resolved model whose picker sits directly above, Privacy is reachable from
+ * settings and several pages, Feedback has an entry in the transcript, and the
+ * send route moves into the "+" menu (see the SendPreview card there). What
+ * stays at every width is the accuracy caveat — see the Article 50(1) note at
+ * its render site.
+ */
+const DESK_ONLY_COMPOSER_FOOTER_KEYS: ReadonlySet<string> = new Set<string>([
+  COMPOSER_FOOTER_KEYS.webSearch,
+  COMPOSER_FOOTER_KEYS.sendPreview,
+  COMPOSER_FOOTER_KEYS.privacy,
+  COMPOSER_FOOTER_KEYS.feedback,
+]);
+
+const COMPOSER_FOOTER_ENTRY_TESTID_PREFIX = 'composer-footer-entry-';
+const COMPOSER_MENU_SEND_ROUTE_TESTID = 'composer-menu-send-route';
 
 export interface ComposerSendMeta {
   /** Active mode at send time. 'agiwork' = project-scoped work chat. */
@@ -2693,13 +2726,8 @@ const ChatComposerNewComponent = ({
         >
           {/* Textarea wrapper — row 1, full width */}
           <div className={cn('relative w-full', emptyState ? 'min-h-[40px]' : 'min-h-[52px]')}>
-            <textarea
-              ref={textareaRef}
-              data-composer-textarea
-              /* Paragraph direction follows the first strong character, so an
-                 Arabic or Hebrew draft aligns and edits right-to-left instead
-                 of being laid out as an LTR paragraph. */
-              dir="auto"
+            <ComposerInput
+              textareaRef={textareaRef}
               value={message}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -2724,16 +2752,9 @@ const ChatComposerNewComponent = ({
               // user can compose a follow-up (queued + auto-sent on completion).
               // Image mode has no streaming turn to type ahead of, so it stays gated.
               disabled={composerDisabled || ((imageMode || videoMode) && isTurnActive)}
-              className={cn(
-                'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
-                emptyState
-                  ? 'min-h-[40px] py-1.5 text-[18px] md:text-[18px]'
-                  : 'min-h-[52px] py-3 text-sm md:text-[15px]',
-              )}
-              rows={1}
+              emptyState={Boolean(emptyState)}
               maxLength={COMPOSER_MAX_CHARS}
-              aria-label="Message input"
-              aria-describedby={showCharCounter ? 'composer-char-counter' : undefined}
+              ariaDescribedBy={showCharCounter ? 'composer-char-counter' : undefined}
             />
             {/* AUDIT-FIX CMP-32: character budget. Silent before it matters,
                 explicit once the message approaches the contract ceiling. */}
@@ -3365,6 +3386,19 @@ const ChatComposerNewComponent = ({
                         }}
                         disabled={!canToggleIncognito}
                       />
+                    )}
+
+                    {/* 9. Send route — the one entry the collapsed mobile
+                        footer drops that has no other home. It is last so the
+                        menu's initial focus still lands on an action, and it is
+                        the card variant because the compact one opens an
+                        `absolute bottom-full` popover that this panel's own
+                        `overflow-y-auto` would clip. */}
+                    {sendPreviewPresentation && (
+                      <div className="md:hidden" data-testid={COMPOSER_MENU_SEND_ROUTE_TESTID}>
+                        <div className="my-1 border-t border-border/40" />
+                        <SendPreview presentation={sendPreviewPresentation} variant="card" />
+                      </div>
                     )}
                   </>
                 }
@@ -4068,7 +4102,7 @@ const ChatComposerNewComponent = ({
         {[
           billingPolicyReady ? (
             <span
-              key="web-search"
+              key={COMPOSER_FOOTER_KEYS.webSearch}
               data-testid="web-search-indicator"
               data-active={webSearchEnabled ? 'true' : 'false'}
               title={
@@ -4082,7 +4116,7 @@ const ChatComposerNewComponent = ({
           ) : null,
           sendPreviewPresentation ? (
             <SendPreview
-              key="send-preview"
+              key={COMPOSER_FOOTER_KEYS.sendPreview}
               presentation={sendPreviewPresentation}
               variant="compact"
             />
@@ -4093,11 +4127,11 @@ const ChatComposerNewComponent = ({
              obviousness carve-out, which counsel has NOT reviewed — see
              ARTICLE_50_1_WEB_CARVE_OUT in lib/compliance/ai-act.ts. This
              disclaimer is what deliberately stayed; do not trim it too. */
-          <span key="accuracy" data-testid="ai-accuracy-disclaimer">
+          <span key={COMPOSER_FOOTER_KEYS.accuracy} data-testid="ai-accuracy-disclaimer">
             {AI_ACCURACY_DISCLAIMER}
           </span>,
           <Link
-            key="privacy"
+            key={COMPOSER_FOOTER_KEYS.privacy}
             href="/privacy"
             target="_blank"
             rel="noopener noreferrer"
@@ -4106,38 +4140,29 @@ const ChatComposerNewComponent = ({
           >
             Privacy
           </Link>,
-          <ComposerFeedbackDialog key="feedback" conversationId={conversationId} />,
+          <ComposerFeedbackDialog
+            key={COMPOSER_FOOTER_KEYS.feedback}
+            conversationId={conversationId}
+          />,
         ]
           .filter(Boolean)
           .map((entry, index, entries) => {
             const key = (entry as { key: string }).key;
             const isDeskOnly = (candidate: unknown) =>
-              ['privacy', 'feedback', 'web-search'].includes((candidate as { key: string }).key);
-            // Measured on 2026-08-30: neither chatgpt.com nor claude.ai puts
-            // anything below its composer at 390px. This footer ran to three
-            // rows and made the composer 136px against ChatGPT's 87px. Privacy
-            // is a route reachable from settings and several pages, and
-            // Feedback has a second entry point in the transcript, so a phone
-            // loses no reach by dropping them here. The accuracy disclaimer
-            // stays on every width - see the Article 50(1) note above.
-            // Measured at 390px on 2026-08-31: chatgpt.com shows one line here
-            // and puts it above its composer; claude.ai shows nothing at all.
-            // Ours ran to two rows. The composer's own control row is full at
-            // that width (312 of 324px), so nothing can move into it.
-            //
-            // Web search joins the desk-only set because it is the one entry
-            // that says nothing new on a phone: it is derived from the resolved
-            // model, whose picker sits directly above it. The route disclosure
-            // stays at every width - it is the only thing on screen saying
-            // where the message is about to go - and so does the accuracy
-            // caveat.
-            const deskOnly = key === 'privacy' || key === 'feedback' || key === 'web-search';
+              DESK_ONLY_COMPOSER_FOOTER_KEYS.has((candidate as { key: string }).key);
+            // `md` is the breakpoint both shells gate their narrow-viewport
+            // layout on (`matchMedia('(max-width: 768px)')`), so the row
+            // collapses on exactly the widths that render the mobile shell.
+            // See DESK_ONLY_COMPOSER_FOOTER_KEYS for what a phone loses and
+            // where each dropped entry is still reachable.
+            const deskOnly = isDeskOnly(entry);
             return (
               <span
                 key={key}
+                data-testid={`${COMPOSER_FOOTER_ENTRY_TESTID_PREFIX}${key}`}
                 className={cn(
                   'items-center gap-x-1 whitespace-nowrap',
-                  deskOnly ? 'hidden sm:inline-flex' : 'inline-flex',
+                  deskOnly ? 'hidden md:inline-flex' : 'inline-flex',
                 )}
               >
                 {/* The separator has to follow what is VISIBLE at this
@@ -4150,7 +4175,7 @@ const ChatComposerNewComponent = ({
                     className={cn(
                       entries.slice(0, index).some((prior) => !isDeskOnly(prior))
                         ? 'inline'
-                        : 'hidden sm:inline',
+                        : 'hidden md:inline',
                     )}
                   >
                     ·
