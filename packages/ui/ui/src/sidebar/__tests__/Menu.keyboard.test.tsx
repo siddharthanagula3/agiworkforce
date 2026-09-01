@@ -8,9 +8,15 @@ function renderMenu() {
     <Menu trigger={({ toggle }) => <button onClick={toggle}>Open menu</button>}>
       {({ close }) => (
         <>
-          <MenuItem onSelect={close}>First</MenuItem>
-          <MenuItem onSelect={close}>Second</MenuItem>
-          <MenuItem onSelect={close}>Third</MenuItem>
+          <MenuItem onSelect={close} close={close}>
+            First
+          </MenuItem>
+          <MenuItem onSelect={close} close={close}>
+            Second
+          </MenuItem>
+          <MenuItem onSelect={close} close={close}>
+            Third
+          </MenuItem>
         </>
       )}
     </Menu>,
