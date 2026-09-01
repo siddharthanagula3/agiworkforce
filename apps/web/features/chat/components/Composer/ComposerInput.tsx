@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
+import { useCallback, useRef, useSyncExternalStore } from 'react';
 import type {
   ChangeEventHandler,
   ClipboardEventHandler,
@@ -132,6 +132,7 @@ function ComposerTextarea({
 
 function ComposerRichEditor({
   editorRef,
+  value,
   onTextChange,
   onPasteDecision,
   onDropFiles,
@@ -147,9 +148,35 @@ function ComposerRichEditor({
   isSlashMenuActive,
   onSlashMenuKey,
 }: ComposerInputProps) {
+  const pendingRef = useRef(value);
+  pendingRef.current = value;
+
+  /**
+   * The editor arrives two commits after the arm is chosen — the gate resolves
+   * post-hydration, then `immediatelyRender: false` defers the view by another
+   * commit — so a handle write issued before that lands on a null ref and is
+   * lost. A draft restored on mount is the one that bites: the mirror holds it,
+   * the document does not, and nothing writes again.
+   *
+   * A callback ref is what makes this reachable. `useImperativeHandle` keys the
+   * handle on the editor, so React re-attaches here the moment the view exists,
+   * which is the first point a write can actually land. The mirror is the
+   * authority, so reconcile to it — and only when the document is genuinely
+   * empty, so this can never clobber what someone has typed.
+   */
+  const attachEditor = useCallback(
+    (handle: ComposerEditorHandle | null) => {
+      editorRef.current = handle;
+      if (!handle) return;
+      const pending = pendingRef.current;
+      if (pending.length > 0 && handle.isEmpty()) handle.setText(pending);
+    },
+    [editorRef],
+  );
+
   return (
     <ComposerEditor
-      ref={editorRef}
+      ref={attachEditor}
       ariaLabel={MESSAGE_INPUT_LABEL}
       ariaDescribedBy={ariaDescribedBy}
       placeholder={placeholder}
