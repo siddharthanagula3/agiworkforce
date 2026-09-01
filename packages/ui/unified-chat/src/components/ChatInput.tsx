@@ -925,7 +925,7 @@ export function ChatInput({
           <div
             role="status"
             aria-live="polite"
-            className="px-3 pt-2 text-[12px] text-[var(--chat-destructive)]"
+            className="px-3 pt-2 text-[12px] text-[var(--chat-destructive-text)]"
           >
             {attachmentError}
           </div>

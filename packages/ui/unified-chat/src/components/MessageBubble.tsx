@@ -916,7 +916,7 @@ export function MessageBubble({
             size={14}
             aria-hidden="true"
             className="mt-px shrink-0"
-            style={{ color: 'var(--chat-destructive)' }}
+            style={{ color: 'var(--chat-destructive-text)' }}
           />
           <span className="min-w-0 flex-1 break-words">{failureMessage}</span>
           {onRetry && (
@@ -925,7 +925,7 @@ export function MessageBubble({
               onClick={() => onRetry(message.id)}
               aria-label={t('bubble.retryResponse', 'Retry this response')}
               className="shrink-0 rounded-md px-2 py-1 font-medium transition-colors hover:bg-[var(--chat-surface-hover)]"
-              style={{ color: 'var(--chat-destructive)' }}
+              style={{ color: 'var(--chat-destructive-text)' }}
             >
               Retry
             </button>

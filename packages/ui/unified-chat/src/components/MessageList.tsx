@@ -258,7 +258,7 @@ export function MessageList({
                   onClick={() => onRegenerateMessage(lastMessage.id)}
                   aria-label={t('list.regenerateAria', 'Regenerate this response')}
                   className="ml-auto shrink-0 rounded-md px-2 py-1 font-medium transition hover:bg-[var(--chat-surface-hover)]"
-                  style={{ color: 'var(--chat-destructive)' }}
+                  style={{ color: 'var(--chat-destructive-text)' }}
                 >
                   {t('retry', 'Retry')}
                 </button>

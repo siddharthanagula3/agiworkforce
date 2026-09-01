@@ -571,7 +571,7 @@ export function LibraryView({
         <div
           data-testid="library-error"
           role="alert"
-          className="flex items-center gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-sm text-[var(--chat-destructive)]"
+          className="flex items-center gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-sm text-[var(--chat-destructive-text)]"
         >
           <span>{error}</span>
           <Button
@@ -659,7 +659,7 @@ export function LibraryView({
               ) : null}
               <div className="flex flex-col gap-2 border-t border-[var(--chat-border)] px-3 py-2">
                 {isUnavailable ? (
-                  <p className="text-xs text-[var(--chat-destructive)]" role="status">
+                  <p className="text-xs text-[var(--chat-destructive-text)]" role="status">
                     Stored file bytes are no longer available. You can remove this stale Library
                     entry.
                   </p>
@@ -687,7 +687,7 @@ export function LibraryView({
                           type="button"
                           onClick={() => void handlePermanentDelete(item.id)}
                           disabled={permanentlyDeletingId === item.id}
-                          className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2 disabled:opacity-50"
+                          className="text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2 disabled:opacity-50"
                         >
                           {permanentlyDeletingId === item.id ? 'Deleting…' : 'Delete permanently'}
                         </button>
@@ -706,7 +706,7 @@ export function LibraryView({
                       <button
                         type="button"
                         onClick={() => setConfirmingPermanentDeleteId(item.id)}
-                        className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
+                        className="text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2"
                       >
                         Delete permanently
                       </button>
@@ -734,7 +734,7 @@ export function LibraryView({
                         type="button"
                         onClick={() => void handleDelete(item.id)}
                         disabled={deletingId === item.id}
-                        className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2 disabled:opacity-50"
+                        className="text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2 disabled:opacity-50"
                       >
                         {deletingId === item.id ? 'Deleting…' : 'Move to Recently deleted'}
                       </button>
@@ -744,7 +744,7 @@ export function LibraryView({
                   <button
                     type="button"
                     onClick={() => setConfirmingDeleteId(item.id)}
-                    className="flex min-h-6 self-start items-center gap-1 py-1 text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
+                    className="flex min-h-6 self-start items-center gap-1 py-1 text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2"
                     aria-label={`Delete ${item.file_name}`}
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -752,7 +752,7 @@ export function LibraryView({
                   </button>
                 )}
                 {mutationErrors[item.id] ? (
-                  <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
+                  <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive-text)]">
                     <span>
                       {viewDeleted && confirmingPermanentDeleteId === item.id
                         ? 'Permanent delete'
@@ -777,7 +777,7 @@ export function LibraryView({
                   </div>
                 ) : null}
                 {downloadErrors[item.id] ? (
-                  <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
+                  <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive-text)]">
                     <span>Download failed ({downloadErrors[item.id]}).</span>
                     <button
                       type="button"
@@ -843,7 +843,7 @@ function ArtifactSection({
     return (
       <div
         data-testid={`library-artifact-error-${item.id}`}
-        className="flex items-center gap-2 border-t border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-destructive)]"
+        className="flex items-center gap-2 border-t border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-destructive-text)]"
       >
         <span>Couldn&apos;t open this artifact ({source.message}).</span>
         <button
