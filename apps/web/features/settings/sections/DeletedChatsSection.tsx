@@ -109,7 +109,14 @@ export function DeletedChatsSection() {
       <div>
         <SettingsSectionLink
           section="privacy"
-          style={{ color: 'var(--text-3)', fontSize: 12, textDecoration: 'none' }}
+          style={{
+            color: 'var(--text-3)',
+            fontSize: 12,
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            minHeight: 24,
+          }}
         >
           ← Privacy
         </SettingsSectionLink>

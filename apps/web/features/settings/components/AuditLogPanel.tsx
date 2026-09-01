@@ -110,7 +110,7 @@ export function AuditLogPanel() {
           <button
             type="button"
             onClick={() => void logsQuery.refetch()}
-            className="mt-3 text-xs font-medium text-primary hover:underline"
+            className="mt-3 inline-flex min-h-6 items-center text-xs font-medium text-primary hover:underline"
           >
             Try again
           </button>

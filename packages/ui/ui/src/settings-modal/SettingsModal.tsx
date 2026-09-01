@@ -836,7 +836,7 @@ function DirectoryBrowse({
               <button
                 type="button"
                 className={cn(
-                  'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                  'mt-3 inline-flex min-h-6 items-center text-xs font-medium text-foreground underline underline-offset-2',
                   FOCUS_RING,
                 )}
                 onClick={() => void adapter.retryConnectors?.()}
@@ -903,7 +903,7 @@ function DirectoryBrowse({
               <button
                 type="button"
                 className={cn(
-                  'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                  'mt-3 inline-flex min-h-6 items-center text-xs font-medium text-foreground underline underline-offset-2',
                   FOCUS_RING,
                 )}
                 onClick={() => void adapter.retrySkills?.()}
@@ -963,7 +963,7 @@ function DirectoryBrowse({
               <button
                 type="button"
                 className={cn(
-                  'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                  'mt-3 inline-flex min-h-6 items-center text-xs font-medium text-foreground underline underline-offset-2',
                   FOCUS_RING,
                 )}
                 onClick={() => void adapter.retryPlugins?.()}
@@ -1722,7 +1722,7 @@ function ConnectorsPanel({
             <button
               type="button"
               className={cn(
-                'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                'mt-3 inline-flex min-h-6 items-center text-xs font-medium text-foreground underline underline-offset-2',
                 FOCUS_RING,
               )}
               onClick={() => void adapter.retryConnectors?.()}
@@ -2075,7 +2075,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
             <button
               type="button"
               className={cn(
-                'mt-3 text-xs font-medium text-foreground underline underline-offset-2',
+                'mt-3 inline-flex min-h-6 items-center text-xs font-medium text-foreground underline underline-offset-2',
                 FOCUS_RING,
               )}
               onClick={() => void adapter.retrySkills?.()}
