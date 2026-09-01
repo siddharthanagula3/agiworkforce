@@ -396,12 +396,14 @@ export const useChatMessageStore = create<MessageState>()(
           const normalizedMessages: ChatMessage[] = [];
           let messageOffset = 0;
           let hasMoreMessages = true;
+          let loadedActiveLeafMessageId: string | null | undefined;
           while (hasMoreMessages) {
             const page = await managedCloudChat.getConversation(conversationId, {
               limit: CLOUD_MESSAGE_PAGE_SIZE,
               offset: messageOffset,
             });
             normalizedMessages.push(...(page.messages as ChatMessage[]));
+            loadedActiveLeafMessageId = page.conversation.activeLeafMessageId;
             hasMoreMessages = page.hasMore;
             const nextOffset = messageOffset + page.messages.length;
             if (hasMoreMessages && nextOffset <= messageOffset) {
@@ -413,6 +415,11 @@ export const useChatMessageStore = create<MessageState>()(
             const cloudState = cloudStore.getState();
             if (!cloudState.conversations.some((candidate) => candidate.id === conversationId)) {
               return;
+            }
+            if (loadedActiveLeafMessageId !== undefined) {
+              cloudState.patchCloudConversation(conversationId, {
+                activeLeafMessageId: loadedActiveLeafMessageId,
+              });
             }
             const currentMessages = cloudState.messages[conversationId] ?? [];
             const dirtyMessageIds = new Set(
@@ -1342,6 +1349,9 @@ function normalizeManagedCloudConversationForMobile(
     pinned: conversation.pinned,
     ...(conversation.model ? { model: conversation.model } : {}),
     ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+    ...(conversation.activeLeafMessageId !== undefined
+      ? { activeLeafMessageId: conversation.activeLeafMessageId }
+      : {}),
     provider: providerForExecutionMode('cloud'),
     executionMode: 'cloud',
     temporary: conversation.isTemporary,

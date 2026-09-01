@@ -74,6 +74,7 @@ import {
   executionModeForConversation,
   executionModeForSelection,
 } from '@/src/features/chat/utils/conversationMode';
+import { visibleThreadFor } from '@/src/features/chat/utils/conversationThread';
 import {
   imageAssetsToChatAttachments,
   pickImageAssetsFromLibrary,
@@ -149,7 +150,7 @@ export default function ChatScreen() {
   const paywallSheetRef = useRef<import('@gorhom/bottom-sheet').default>(null);
   const { isOnline, queueSize } = useNetworkStatus();
 
-  const conversationMessages = useChatStore((s) =>
+  const conversationRows = useChatStore((s) =>
     id ? (s.messages[id] ?? EMPTY_CHAT_MESSAGES) : EMPTY_CHAT_MESSAGES,
   );
   const isStreaming = useChatStore((s) => (id ? s.streamingConversationIds.includes(id) : false));
@@ -204,6 +205,13 @@ export default function ChatScreen() {
   const rejectRequest = useAgentStore((s) => s.rejectRequest);
 
   const conversation = conversations.find((c) => c.id === id);
+  // Branches are resolved here rather than in the store so the abandoned turns
+  // stay in memory for the pager, and so a conversation that has never branched
+  // keeps the very array the store holds.
+  const conversationMessages = useMemo(
+    () => visibleThreadFor(conversationRows, conversation),
+    [conversationRows, conversation],
+  );
   const title = conversation?.title ?? 'Chat';
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)

@@ -58,11 +58,19 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
           const normalized = cloudConversations.map((c) => {
             const local = localById.get(c.id);
             const serverVersion = c.serverVersion ?? local?.serverVersion;
+            // The list payload omits the active leaf; only the conversation
+            // detail carries it. Dropping a leaf already learned there would
+            // silently collapse a branched transcript on the next refresh.
+            const activeLeafMessageId =
+              c.activeLeafMessageId !== undefined
+                ? c.activeLeafMessageId
+                : local?.activeLeafMessageId;
             const base: ConversationSummary = {
               ...c,
               provider: c.provider ?? providerForExecutionMode('cloud'),
               executionMode: c.executionMode ?? ('cloud' as const),
               ...(serverVersion !== undefined ? { serverVersion } : {}),
+              ...(activeLeafMessageId !== undefined ? { activeLeafMessageId } : {}),
             };
             if (dirtyIds.includes(c.id)) {
               if (local) return { ...base, ...local, serverVersion };
