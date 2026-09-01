@@ -5,3 +5,8 @@ export * from './glyphs/navigation';
 export * from './glyphs/actions';
 export * from './glyphs/row-actions';
 export * from './glyphs/indicators';
+export * from './glyphs/composer';
+export * from './glyphs/media';
+export * from './glyphs/files';
+export * from './glyphs/account';
+export * from './glyphs/knowledge';
