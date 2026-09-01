@@ -64,6 +64,11 @@ function SheetContent({ side = 'right', className, children, ref, ...props }: Sh
       <SheetOverlay />
       <SheetPrimitive.Content
         ref={ref}
+        // Radix renders role="dialog" and hides the rest of the tree with
+        // aria-hidden, but never emits aria-modal — the same reason Dialog and
+        // AlertDialog set it here. Before the spread, so a non-modal sheet can
+        // still drop it.
+        aria-modal="true"
         className={cn(sheetVariants({ side }), className)}
         {...props}
       >

@@ -152,7 +152,13 @@ describe('ChatComposerNew', () => {
     originalBillingError = useBillingStore.getState().error;
     originalRefreshUser = useBillingStore.getState().refreshUser;
     useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
-    useChatStore.setState({ composerTogglesByConversation: {} });
+    // Toggles and drafts live in the chat store, so an unmounted composer's
+    // parked text outlives the render and would restore into the next case.
+    useChatStore.setState({
+      composerTogglesByConversation: {},
+      draftsByConversation: {},
+      draftContent: '',
+    });
   });
 
   afterEach(() => {
@@ -165,7 +171,11 @@ describe('ChatComposerNew', () => {
       error: originalBillingError,
       refreshUser: originalRefreshUser,
     });
-    useChatStore.setState({ composerTogglesByConversation: {} });
+    useChatStore.setState({
+      composerTogglesByConversation: {},
+      draftsByConversation: {},
+      draftContent: '',
+    });
     vi.unstubAllGlobals();
   });
 
