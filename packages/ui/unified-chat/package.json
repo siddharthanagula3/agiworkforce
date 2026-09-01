@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/ --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "test": "vitest run",
+    "test:bench": "vitest run --config vitest.bench.config.ts",
     "test:ui": "vitest --ui"
   },
   "dependencies": {
