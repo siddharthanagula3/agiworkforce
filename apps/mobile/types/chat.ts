@@ -80,6 +80,12 @@ export interface StatusStep {
 
 export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   serverVersion?: string;
+  /**
+   * Absent on a message from a pre-threading server; `null` names a root of the
+   * conversation's sibling tree. Satisfies `ThreadedMessage` so the shared
+   * resolver in `@agiworkforce/cloud-contracts` reads mobile rows directly.
+   */
+  parentId?: string | null;
   attachments?: MessageAttachment[];
   artifacts?: Artifact[];
   toolCalls?: ToolCall[];
@@ -132,6 +138,12 @@ export interface ConversationSummary {
   serverVersion?: string;
   parentConversationId?: string;
   forkPointMessageId?: string;
+  /**
+   * Absent means the server never sent the field and cannot thread; present —
+   * including `null` — means it can. The distinction decides whether an edit or
+   * a regenerate branches or replaces, so it must survive every merge.
+   */
+  activeLeafMessageId?: string | null;
 }
 
 export type AutoApproveMode = 'ask' | 'smart' | 'full';
