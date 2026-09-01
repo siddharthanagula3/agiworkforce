@@ -188,7 +188,7 @@ const markdownComponents: Components = {
   },
 };
 
-const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks] satisfies React.ComponentProps<
+export const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks] satisfies React.ComponentProps<
   typeof ReactMarkdown
 >['remarkPlugins'];
 
