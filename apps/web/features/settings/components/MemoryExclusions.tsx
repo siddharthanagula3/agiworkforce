@@ -288,6 +288,7 @@ export function MemoryExclusions() {
                 gap: 8,
                 fontSize: 13,
                 color: 'var(--text-1)',
+                minHeight: 24,
               }}
             >
               <input
