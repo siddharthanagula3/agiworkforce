@@ -225,7 +225,6 @@ export {
   CarouselPrevious,
   CarouselNext,
 } from './Carousel';
-export { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './Resizable';
 export { SonnerToaster, sonnerToast, type SonnerToasterProps } from './SonnerToaster';
 export { DataTable, createSortableHeader } from './DataTable';
 export { ThemeToggle } from './ThemeToggle';
