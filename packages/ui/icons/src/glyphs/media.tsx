@@ -1,5 +1,5 @@
 import { createIcon } from '../createIcon';
-import { SCREEN_FRAME, SCREEN_STAND, SQUARE_FRAME } from './shapes';
+import { SCREEN_FRAME, SCREEN_STAND, SLASH, SQUARE_FRAME } from './shapes';
 
 const PHOTO_SUN = { cx: '8.5', cy: '8.5', r: '1.5' } as const;
 const PHOTO_RIDGE = 'm3 17 5-5 4 4 3-3 6 6';
@@ -63,5 +63,23 @@ export const Palette = createIcon(
     <circle cx="8" cy="10" r="1" />
     <circle cx="12" cy="8" r="1" />
     <circle cx="16" cy="10" r="1" />
+  </>,
+);
+
+export const ImageOff = createIcon(
+  'ImageOff',
+  <>
+    <path d={SQUARE_FRAME} />
+    <path d={PHOTO_RIDGE} />
+    <path d={SLASH} />
+  </>,
+);
+
+export const Volume2 = createIcon(
+  'Volume2',
+  <>
+    <path d="M4 9.5h3.5L12 5v14l-4.5-4.5H4z" />
+    <path d="m15 8.5 2 3.5-2 3.5" />
+    <path d="m18.5 6 2.5 6-2.5 6" />
   </>,
 );

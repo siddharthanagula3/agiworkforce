@@ -54,3 +54,60 @@ export const Download = createIcon(
     <path d="m6.5 10.5 5.5 5.5 5.5-5.5" />
   </>,
 );
+
+export const FilePlus2 = createIcon(
+  'FilePlus2',
+  <>
+    <path d={DOC_BODY} />
+    <path d={DOC_FOLD} />
+    <path d="M12 12v6M9 15h6" />
+  </>,
+);
+
+export const FileTerminal = createIcon(
+  'FileTerminal',
+  <>
+    <path d={DOC_BODY} />
+    <path d={DOC_FOLD} />
+    <path d="m8 13 2.5 2.5L8 18" />
+    <path d="M12.5 18h4" />
+  </>,
+);
+
+export const FileImage = createIcon(
+  'FileImage',
+  <>
+    <path d={DOC_BODY} />
+    <path d={DOC_FOLD} />
+    <path d="m7 19 4-4 3 3 4-4" />
+  </>,
+);
+
+export const FileArchive = createIcon(
+  'FileArchive',
+  <>
+    <path d={DOC_BODY} />
+    <path d={DOC_FOLD} />
+    <path d="M10 5.5h2M10 9.5h2" />
+    <path d="M9.5 13.5h3v5h-3z" />
+  </>,
+);
+
+export const FileJson = createIcon(
+  'FileJson',
+  <>
+    <path d={DOC_BODY} />
+    <path d={DOC_FOLD} />
+    <path d="M10 13H8v6h2" />
+    <path d="M14 13h2v6h-2" />
+  </>,
+);
+
+export const FilePen = createIcon(
+  'FilePen',
+  <>
+    <path d="M13.5 3H6.5L5 4.5v15L6.5 21h4" />
+    <path d={DOC_FOLD} />
+    <path d="M18.5 11 21 13.5 15 19.5l-3 .5.5-3z" />
+  </>,
+);

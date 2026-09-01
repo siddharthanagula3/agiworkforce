@@ -27,3 +27,47 @@ export const Sparkles = createIcon(
     <path d="M18.5 3.5l.7 1.3 1.3.7-1.3.7-.7 1.3-.7-1.3-1.3-.7 1.3-.7z" />
   </>,
 );
+
+const RING = { cx: '12', cy: '12', r: '9' } as const;
+
+export const CircleCheck = createIcon(
+  'CircleCheck',
+  <>
+    <circle {...RING} />
+    <path d="m7.5 12 3 3 6-6" />
+  </>,
+);
+
+export const CircleX = createIcon(
+  'CircleX',
+  <>
+    <circle {...RING} />
+    <path d="m8.5 8.5 7 7M15.5 8.5l-7 7" />
+  </>,
+);
+
+export const CircleAlert = createIcon(
+  'CircleAlert',
+  <>
+    <circle {...RING} />
+    <path d="M12 7v6" />
+    <circle cx="12" cy="16.5" r="1" />
+  </>,
+);
+
+export const TriangleAlert = createIcon(
+  'TriangleAlert',
+  <>
+    <path d="M12 3.5 21 19.5H3z" />
+    <path d="M12 9v4.5" />
+    <circle cx="12" cy="17" r="1" />
+  </>,
+);
+
+export const Ban = createIcon(
+  'Ban',
+  <>
+    <circle {...RING} />
+    <path d="m5.6 5.6 12.8 12.8" />
+  </>,
+);
