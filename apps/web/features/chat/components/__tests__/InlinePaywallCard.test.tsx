@@ -104,7 +104,7 @@ describe('InlinePaywallCard', () => {
     it('shows the per-seat rate for the per-seat Team tier', () => {
       render(<InlinePaywallCard {...makeProps({ requiredTier: 'team' })} />);
       expect(
-        screen.getByRole('button', { name: 'Upgrade to Team — $25/seat/mo' }),
+        screen.getByRole('button', { name: 'Upgrade to Team, $25/seat/mo' }),
       ).toBeInTheDocument();
     });
 

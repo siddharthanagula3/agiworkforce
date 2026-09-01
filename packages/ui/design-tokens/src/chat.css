@@ -69,6 +69,11 @@
     --chat-badge-result: #16a34a;
     --chat-badge-neutral: #8b8680;
     --chat-destructive: #dc2626;
+    /* The fill above measures 4.49:1 as a word on --chat-bg, just under the
+       4.5 AA needs, and its dark counterpart #ef4444 measures 4.28:1 on the
+       panels it lands on. Text is the dominant use by 25 call sites to 3, so
+       it gets the role rather than the fill being bent to serve both. */
+    --chat-destructive-text: #b91c1c;
     --chat-info: #2563eb;
     --chat-success: #16a34a;
     --chat-warning: #d97706;
@@ -119,6 +124,7 @@
     --chat-badge-result: #22c55e;
     --chat-badge-neutral: hsl(var(--neutral-fg-3));
     --chat-destructive: #ef4444;
+    --chat-destructive-text: #f87171;
     --chat-info: #3b82f6;
     --chat-success: #22c55e;
     --chat-warning: #f59e0b;

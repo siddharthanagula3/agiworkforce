@@ -588,7 +588,7 @@ function EditPanel({
             />
           )}
           {genError && (
-            <p className="mt-2 text-xs text-[var(--chat-destructive)]" role="alert">
+            <p className="mt-2 text-xs text-[var(--chat-destructive-text)]" role="alert">
               {genError}
             </p>
           )}
