@@ -1,9 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import remarkBreaks from 'remark-breaks';
-import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
@@ -12,18 +8,20 @@ import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
 import { MermaidDiagram } from './MermaidDiagram';
+import { HighlightedCode } from './HighlightedCode';
+import { REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
 import type { Components } from 'react-markdown';
 import { Button } from '@agiworkforce/ui';
 import { Copy, Check, ImageOff } from 'lucide-react';
 import 'katex/dist/katex.min.css';
-import 'highlight.js/styles/github-dark.css';
+import './codeBlock.css';
 
 const CodeBlock = ({ className, children }: { className?: string; children: React.ReactNode }) => {
   const [copied, setCopied] = useState(false);
   const isStreamTail = useIsStreamTail();
   const match = /language-(\w+)/.exec(className || '');
-  const language = match ? match[1] : '';
+  const language = match?.[1] ?? '';
   const codeString = reactNodeText(children).replace(/\n$/, '');
 
   const [copyFailed, setCopyFailed] = useState(false);
@@ -78,7 +76,12 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
       </div>
       <div className="code-block-body">
         <pre>
-          <code className={className}>{children}</code>
+          <HighlightedCode
+            code={codeString}
+            language={language}
+            enabled={!isStreamTail}
+            className={className}
+          />
         </pre>
       </div>
     </div>
@@ -196,15 +199,10 @@ const markdownComponents: Components = {
   },
 };
 
-export const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks] satisfies React.ComponentProps<
-  typeof ReactMarkdown
->['remarkPlugins'];
-
 const REHYPE_PLUGINS = [
   rehypeRaw,
   [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
   rehypeKatex,
-  rehypeHighlight,
 ] satisfies React.ComponentProps<typeof ReactMarkdown>['rehypePlugins'];
 
 export interface MarkdownContentProps {
@@ -218,9 +216,11 @@ export interface MarkdownContentProps {
  *
  * Source of truth ported from apps/web/features/chat/components/messages/
  * MarkdownContent.tsx (round-consolidated into unified-chat). Plugin order
- * (raw HTML -> sanitize -> KaTeX -> syntax highlight) and the KaTeX CSS
- * import are both load-bearing — see inline comments below and
- * markdownSanitizeSchema.ts.
+ * (raw HTML -> sanitize -> KaTeX) and the KaTeX CSS import are both
+ * load-bearing — see inline comments below and markdownSanitizeSchema.ts.
+ * Syntax highlighting is deliberately NOT a rehype plugin: Shiki is async and
+ * react-markdown runs its pipeline synchronously, so CodeBlock highlights
+ * after paint and only for blocks that are not the streaming tail.
  *
  * Exported memoized (see below). Scoped to what the two live call paths
  * actually do, because the saving is not uniform across them:

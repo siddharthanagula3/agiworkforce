@@ -1,0 +1,17 @@
+@layer base {
+  :where(.code-block-body) {
+    color-scheme: dark;
+    background-color: #111827;
+    color: #e5e7eb;
+  }
+
+  :where(.dark) :where(.code-block-body) {
+    background-color: #030712;
+  }
+
+  :where(.code-block-body) :where(pre) {
+    margin: 0;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+}
