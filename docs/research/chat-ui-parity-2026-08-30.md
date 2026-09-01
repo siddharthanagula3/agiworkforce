@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-08-30
+Last updated: 2026-09-01
 
 Measured directly in the browser on 2026-08-30 against the signed-in products,
 not recalled from training data. Every number below came from
@@ -126,3 +126,83 @@ signed-in browser tab. There is no fixture and no stored HTML: both products
 change without notice, and a cached copy would go stale silently and be worse
 than no record at all. Re-measure rather than trusting this file after any
 significant redesign on either side.
+
+## Re-measured 2026-09-01, after the frontend transition
+
+AGI Workforce only. The competitor columns below are the 2026-08-30 readings
+carried forward — chatgpt.com and claude.ai were **not** re-measured on this
+pass, so treat those two columns as dated and re-measure before citing them.
+
+Taken on `feat/frontend-parity-wave-1` against a local `next dev` build, signed
+in as the QA account, dark appearance, new-chat screen, same
+`getBoundingClientRect` / `getComputedStyle` method as above. The cookie consent
+banner was dismissed first so it could not displace the composer. `#chat-composer`
+is the measured element, which is the same box the 2026-08-30 phone row used
+(x=16, w=358 reproduces exactly).
+
+### Phone, 390x844
+
+|                           | 2026-08-30     | 2026-09-01        | chatgpt.com       | claude.ai         |
+| ------------------------- | -------------- | ----------------- | ----------------- | ----------------- |
+| Composer height (resting) | **136px**      | **101px**         | 87px              | 114px             |
+| Composer x / width        | 16 / 358       | 16 / 358          | 16 / 358          | 20 / 350          |
+| Composer radius           | 26px           | 26px              | 26px              | 14px              |
+| Composer fill             | not taken      | `rgb(33, 33, 33)` | `rgb(33, 33, 33)` | `rgb(32, 32, 31)` |
+| Page background           | `rgb(0, 0, 0)` | `rgb(0, 0, 0)`    | `rgb(0, 0, 0)`    | `rgb(21, 21, 21)` |
+| Footer row height         | not taken      | 20px              | —                 | —                 |
+| Footer items              | 6              | **1**             | —                 | —                 |
+| Visible buttons           | 8              | 6                 | 13                | 34                |
+| Horizontal overflow       | none           | none              | none              | none              |
+
+**M11 is substantially closed but not fully.** The composer dropped 35px, from
+136px to 101px, and the six-item disclosure row collapsed to a single line. The
+whole trailing text at 390px is now:
+
+> AGI can make mistakes. Check important info.
+
+Against the 2026-08-30 reading, "Auto · Web search on · Managed cloud · Privacy ·
+Feedback" no longer render at phone width. What remains is the accuracy caveat
+`lib/compliance/ai-act.ts` deliberately keeps, at 12px in a 20px row.
+
+The remaining 14px over ChatGPT's 87px is not the footer — a 20px footer row plus
+its 8px margin accounts for 28px of the 145px container, and the input box itself
+is the 101px. Closing the rest means the input row, not the disclosure beneath it.
+
+### Desktop, 1470x835
+
+The 2026-08-30 desktop table had no AGI Workforce column. This is the first
+reading for it.
+
+|                           | agiworkforce (2026-09-01) | chatgpt.com       | claude.ai         |
+| ------------------------- | ------------------------- | ----------------- | ----------------- |
+| Composer width            | **736px**                 | 768px             | 640px             |
+| Composer height (resting) | **127px**                 | 52px              | 114px             |
+| Composer radius           | 26px                      | 28px              | 14px              |
+| Composer fill             | `rgb(33, 33, 33)`         | `rgb(33, 33, 33)` | `rgb(32, 32, 31)` |
+| Page background           | `rgb(0, 0, 0)`            | `rgb(0, 0, 0)`    | `rgb(21, 21, 21)` |
+| Buttons on page           | 46                        | 86                | 41                |
+| Horizontal overflow       | none                      | none              | none              |
+
+Desktop keeps the full disclosure row, 24px tall:
+
+> Web search on · Managed cloud · AGI can make mistakes. Check important info. ·
+> Privacy · Feedback
+
+Two observations, both measured rather than preferred. The composer width sits
+between the two references and nearer ChatGPT's reading column than Claude's.
+The resting height does not: at 127px it is 75px taller than ChatGPT's 52px and
+13px taller than Claude's, so desktop is now the taller surface of the two this
+product ships — the opposite of the phone result, where the work landed. Control
+density (46 against ChatGPT's 86 and Claude's 41) is unchanged in posture.
+
+### What limits this reading
+
+A local `next dev` build is not a production build, and dev-only overlays or
+unminified layout can move a box by a pixel or two; the 35px phone change is far
+outside that margin, the 26px-vs-28px radius comparisons are not.
+
+The database behind this run is one migration behind the branch
+(`0156_message_thread_variants`), so sending a message 500s. That does not touch
+these numbers — every reading here is the resting new-chat screen with no turn in
+flight — but it does mean no conversation-in-progress state was measured, which
+was already outside the 2026-08-30 scope.
