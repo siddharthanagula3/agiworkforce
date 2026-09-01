@@ -415,6 +415,54 @@ describe('the two emitters of the --chat-* contract agree', () => {
       expect(fromTs.toLowerCase()).toBe(token(chatCssLight, name).toLowerCase());
     });
   }
+
+  // chat.css reaches its faces through var(--font-*, 'Family') because next/font
+  // attaches those variables to <body>, one level below the :root that declares
+  // the token; index.ts emits the same contract for hosts with no next/font at
+  // all, so it carries the family names bare. Compare the stacks, not the text.
+  const familyStack = (value: string): string =>
+    value
+      .replace(/var\(--font-[a-z-]+,\s*([^)]+)\)/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const sharedFontTokens = {
+    '--chat-font-sans': agiChatCssVars.light['--chat-font-sans'],
+    '--chat-font-serif': agiChatCssVars.light['--chat-font-serif'],
+    '--chat-font-display': agiChatCssVars.light['--chat-font-display'],
+    '--chat-font-mono': agiChatCssVars.light['--chat-font-mono'],
+  };
+
+  for (const [name, fromTs] of Object.entries(sharedFontTokens)) {
+    it(`${name} names the same family stack in chat.css and design-tokens/src/index.ts`, () => {
+      expect(familyStack(fromTs)).toBe(familyStack(token(chatCssLight, name)));
+    });
+
+    it(`${name} is identical in the light and dark halves of index.ts`, () => {
+      expect(agiChatCssVars.dark[name as keyof typeof agiChatCssVars.dark]).toBe(fromTs);
+    });
+  }
+
+  it('every font family chat.css indirects through is one layout.tsx registers', () => {
+    const registered = new Set(
+      [
+        ...readFileSync(resolve(repoRoot, 'apps/web/app/layout.tsx'), 'utf8').matchAll(
+          /variable:\s*['"`](--font-[a-zA-Z0-9-]+)/g,
+        ),
+      ].map((m) => m[1]),
+    );
+    expect(registered.size).toBeGreaterThan(0);
+
+    for (const name of Object.keys(sharedFontTokens)) {
+      for (const [, referenced] of token(chatCssLight, name).matchAll(
+        /var\((--font-[a-zA-Z0-9-]+)/g,
+      )) {
+        expect(registered, `${name} indirects through unregistered ${referenced}`).toContain(
+          referenced,
+        );
+      }
+    }
+  });
 });
 
 const MODE_INVARIANT = /(^--(z|neutral)-)|(radius|shadow|font|dur|ease|spacing|blur|width|height)/;
