@@ -32,6 +32,11 @@ import type { InteractiveCard, ResearchStep } from '@agiworkforce/types';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
 import type { AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
+import {
+  resolveLeafForSibling,
+  resolveVisibleThread,
+  stampLinearParents,
+} from '@/features/chat/lib/messageThread';
 
 /**
  * AUDIT-FIX CMP-1/CMP-2/CMP-5: the composer's send options, isolated PER
@@ -399,6 +404,12 @@ export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   createdAt: string;
+  /**
+   * The message this one replies to, from `web_messages.parent_id`. Null or
+   * absent on a conversation that has never branched, which is every
+   * conversation until its first regenerate or edit.
+   */
+  parentId?: string | null;
   model?: string;
   provider?: string;
   /**
@@ -498,15 +509,28 @@ interface ChatState {
    */
   messagesByConversation: Record<string, Message[]>;
   /**
-   * Derived mirror of `messagesByConversation[activeConversationId]`. Kept as a
-   * real state field (rather than a computed selector) so every existing
-   * consumer of `state.messages` / `useChatStore((s) => s.messages)` keeps
-   * working and keeps re-rendering on identity change. Never assign it
-   * directly: write through the message actions below, which target an explicit
-   * conversation and refresh this mirror when that conversation is the active
-   * one.
+   * Derived mirror of `messagesByConversation[activeConversationId]`, resolved
+   * to the ACTIVE PATH once that conversation has variants. Kept as a real state
+   * field (rather than a computed selector) so every existing consumer of
+   * `state.messages` / `useChatStore((s) => s.messages)` keeps working and keeps
+   * re-rendering on identity change. Never assign it directly: write through the
+   * message actions below, which target an explicit conversation and refresh
+   * this mirror when that conversation is the active one.
+   *
+   * The bucket above holds every row; this holds the ones the reader is looking
+   * at. That split is what keeps an abandoned variant out of the LLM prompt, the
+   * share payload and the export — all of which read the mirror — while reaction
+   * writes, artifact indexing and the pager's own counts still see the tree.
+   * A conversation with no leaf resolves to the bucket BY IDENTITY, so nothing
+   * downstream can tell the difference.
    */
   messages: Message[];
+  /**
+   * The row each conversation's visible path ends at, from
+   * `web_conversations.active_leaf_message_id`. Null (or absent) means the
+   * conversation has never branched and its transcript is every row in order.
+   */
+  activeLeafByConversation: Record<string, string | null>;
 
   // UI State
   isStreaming: boolean;
@@ -568,7 +592,30 @@ interface ChatState {
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   deleteConversation: (id: string) => void;
   setActiveConversation: (id: string | null) => void;
-  setActiveConversationWithMessages: (id: string, messages: Message[]) => void;
+  setActiveConversationWithMessages: (
+    id: string,
+    messages: Message[],
+    activeLeafMessageId?: string | null,
+  ) => void;
+
+  // Actions - Message thread (in-thread response variants)
+  /**
+   * Move one conversation's visible path to end at `leafId`, recomputing the
+   * derived mirror. Null returns the conversation to its linear reading.
+   */
+  setActiveLeaf: (conversationId: string | null | undefined, leafId: string | null) => void;
+  /**
+   * Give a conversation that has only ever been linear the parent pointers its
+   * history implies, ahead of the first write that branches it. The client
+   * mirror of the server's conversion; server rows win on the next load.
+   */
+  ensureLocalThreadParents: (conversationId?: string) => void;
+  /**
+   * Put `messageId` back on the visible path, moving the leaf to the end of its
+   * own tail when it sits on an abandoned variant. A no-op for a message that is
+   * already visible, so a search jump into a linear conversation costs nothing.
+   */
+  revealMessage: (messageId: string, conversationId?: string) => void;
 
   // Actions - Messages
   /**
@@ -687,6 +734,7 @@ const initialState = {
   activeConversationId: null,
   messagesByConversation: {} as Record<string, Message[]>,
   messages: [],
+  activeLeafByConversation: {} as Record<string, string | null>,
   isStreaming: false,
   streamingConversationIds: [] as string[],
   loadingConversationIds: [] as string[],
@@ -715,7 +763,7 @@ function conversationKey(conversationId: string | null | undefined): string {
 
 type MessageStateSlice = Pick<
   ChatState,
-  'messages' | 'messagesByConversation' | 'activeConversationId'
+  'messages' | 'messagesByConversation' | 'activeConversationId' | 'activeLeafByConversation'
 >;
 
 /**
@@ -732,7 +780,13 @@ function readConversationMessages(state: MessageStateSlice, key: string): Messag
   return key === conversationKey(state.activeConversationId) ? state.messages : [];
 }
 
-/** Write `next` into `key`'s bucket, refreshing the derived mirror when visible. */
+/**
+ * Write `next` into `key`'s bucket, refreshing the derived mirror when visible.
+ *
+ * The single place the active path is recomputed. Every writer already funnels
+ * through here, so a variant added by any of them lands in the bucket and shows
+ * up in the mirror only if it is on the path the reader has selected.
+ */
 function writeConversationMessages(
   state: MessageStateSlice,
   key: string,
@@ -740,7 +794,9 @@ function writeConversationMessages(
 ): Pick<ChatState, 'messagesByConversation'> & Partial<Pick<ChatState, 'messages'>> {
   return {
     messagesByConversation: { ...state.messagesByConversation, [key]: next },
-    ...(key === conversationKey(state.activeConversationId) ? { messages: next } : {}),
+    ...(key === conversationKey(state.activeConversationId)
+      ? { messages: resolveVisibleThread(next, state.activeLeafByConversation[key] ?? null) }
+      : {}),
   };
 }
 
@@ -862,21 +918,27 @@ export const useChatStore = create<ChatState>()(
               // recreated id must never resurrect a dead conversation's tools.
               const { [id]: _removedToggles, ...composerTogglesByConversation } =
                 state.composerTogglesByConversation;
+              // A deleted conversation's leaf dies with its transcript, or a
+              // recreated id would resolve its path against a dead pointer.
+              const { [id]: _removedLeaf, ...activeLeafByConversation } =
+                state.activeLeafByConversation;
               const activeConversationId =
                 state.activeConversationId === id ? null : state.activeConversationId;
+              const nextKey = conversationKey(activeConversationId);
               return {
                 conversations: state.conversations.filter((c) => c.id !== id),
                 draftsByConversation,
                 composerTogglesByConversation,
-                draftContent: draftsByConversation[conversationKey(activeConversationId)] ?? '',
+                activeLeafByConversation,
+                draftContent: draftsByConversation[nextKey] ?? '',
                 activeConversationId,
                 messagesByConversation,
                 messages:
                   state.activeConversationId === id
                     ? []
-                    : readConversationMessages(
-                        { ...state, messagesByConversation },
-                        conversationKey(activeConversationId),
+                    : resolveVisibleThread(
+                        readConversationMessages({ ...state, messagesByConversation }, nextKey),
+                        activeLeafByConversation[nextKey] ?? null,
                       ),
                 isLoading: deriveIsLoading({ ...state, activeConversationId }),
               };
@@ -907,7 +969,13 @@ export const useChatStore = create<ChatState>()(
                 // Returning to the new-chat surface still starts from an empty
                 // composer transcript (previous behaviour), so the pending
                 // bucket is discarded rather than resurrected.
-                messages: id === null ? [] : readConversationMessages(state, conversationKey(id)),
+                messages:
+                  id === null
+                    ? []
+                    : resolveVisibleThread(
+                        readConversationMessages(state, conversationKey(id)),
+                        state.activeLeafByConversation[conversationKey(id)] ?? null,
+                      ),
                 // AUDIT-FIX STR-23: the visible draft follows the conversation.
                 draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
                 error: null,
@@ -918,17 +986,27 @@ export const useChatStore = create<ChatState>()(
             'chat/setActiveConversation',
           ),
 
-        setActiveConversationWithMessages: (id, messages) =>
+        setActiveConversationWithMessages: (id, messages, activeLeafMessageId) =>
           set(
-            (state) => ({
-              activeConversationId: id,
-              messagesByConversation: { ...state.messagesByConversation, [id]: messages },
-              messages,
-              // AUDIT-FIX STR-23: the visible draft follows the conversation.
-              draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
-              error: null,
-              isLoading: deriveIsLoading({ ...state, activeConversationId: id }),
-            }),
+            (state) => {
+              // The loader hands the server's leaf in with the rows it belongs
+              // to. Taking them in one write is what stops the transcript
+              // rendering its whole tree for the frame between them.
+              const leafId =
+                activeLeafMessageId === undefined
+                  ? (state.activeLeafByConversation[id] ?? null)
+                  : activeLeafMessageId;
+              return {
+                activeConversationId: id,
+                messagesByConversation: { ...state.messagesByConversation, [id]: messages },
+                activeLeafByConversation: { ...state.activeLeafByConversation, [id]: leafId },
+                messages: resolveVisibleThread(messages, leafId),
+                // AUDIT-FIX STR-23: the visible draft follows the conversation.
+                draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
+                error: null,
+                isLoading: deriveIsLoading({ ...state, activeConversationId: id }),
+              };
+            },
             undefined,
             'chat/setActiveConversationWithMessages',
           ),
@@ -1087,6 +1165,64 @@ export const useChatStore = create<ChatState>()(
             (state) => updateConversationMessages(state, conversationId, () => []),
             undefined,
             'chat/clearMessages',
+          ),
+
+        // Message thread (in-thread response variants)
+        setActiveLeaf: (conversationId, leafId) =>
+          set(
+            (state) => {
+              const key = conversationKey(conversationId ?? state.activeConversationId);
+              if ((state.activeLeafByConversation[key] ?? null) === leafId) return {};
+              const activeLeafByConversation = { ...state.activeLeafByConversation, [key]: leafId };
+              return {
+                activeLeafByConversation,
+                ...(key === conversationKey(state.activeConversationId)
+                  ? {
+                      messages: resolveVisibleThread(readConversationMessages(state, key), leafId),
+                    }
+                  : {}),
+              };
+            },
+            undefined,
+            'chat/setActiveLeaf',
+          ),
+
+        ensureLocalThreadParents: (conversationId) =>
+          set(
+            (state) => {
+              const key = conversationKey(conversationId ?? state.activeConversationId);
+              const current = readConversationMessages(state, key);
+              const stamped = stampLinearParents(current);
+              if (stamped === current) return {};
+              return writeConversationMessages(state, key, stamped);
+            },
+            undefined,
+            'chat/ensureLocalThreadParents',
+          ),
+
+        revealMessage: (messageId, conversationId) =>
+          set(
+            (state) => {
+              const key = conversationKey(conversationId ?? state.activeConversationId);
+              const rows = readConversationMessages(state, key);
+              const leafId = state.activeLeafByConversation[key] ?? null;
+              if (!leafId) return {};
+              if (resolveVisibleThread(rows, leafId).some((m) => m.id === messageId)) return {};
+              if (!rows.some((m) => m.id === messageId)) return {};
+              const nextLeaf = resolveLeafForSibling(rows, messageId);
+              const activeLeafByConversation = {
+                ...state.activeLeafByConversation,
+                [key]: nextLeaf,
+              };
+              return {
+                activeLeafByConversation,
+                ...(key === conversationKey(state.activeConversationId)
+                  ? { messages: resolveVisibleThread(rows, nextLeaf) }
+                  : {}),
+              };
+            },
+            undefined,
+            'chat/revealMessage',
           ),
 
         // Streaming
@@ -1371,11 +1507,47 @@ export const selectIsConversationLoading = (conversationId: string | null) => (s
 export const selectIsConversationStreaming =
   (conversationId: string | null) => (state: ChatState) =>
     conversationId !== null && state.streamingConversationIds.includes(conversationId);
-/** AUDIT-FIX ROOT-CAUSE: one named conversation's transcript. */
+/**
+ * One shared array for every "this conversation has no rows" answer. A selector
+ * that returned a fresh `[]` would hand a subscriber a new snapshot on every
+ * unrelated store write, which is a re-render per keystroke elsewhere in the app
+ * and, through useSyncExternalStore, a loop.
+ */
+const EMPTY_MESSAGES: Message[] = [];
+
+/**
+ * AUDIT-FIX ROOT-CAUSE: one named conversation's transcript, resolved to its
+ * ACTIVE PATH. This is the set an abandoned variant must never appear in — LLM
+ * context, share, export, snapshots and the retry-banner scan all read it.
+ * Anything that has to reason about the tree wants `selectConversationAllRows`.
+ *
+ * Resolving a branched conversation allocates, so read this imperatively
+ * (`selectConversationMessages(id)(useChatStore.getState())`) rather than
+ * subscribing with it; components already have the resolved path in `messages`.
+ */
 export const selectConversationMessages =
   (conversationId: string | null) =>
   (state: ChatState): Message[] =>
-    conversationId === null ? [] : (state.messagesByConversation[conversationId] ?? []);
+    conversationId === null
+      ? EMPTY_MESSAGES
+      : resolveVisibleThread(
+          state.messagesByConversation[conversationId] ?? EMPTY_MESSAGES,
+          state.activeLeafByConversation[conversationId] ?? null,
+        );
+/**
+ * Every row one conversation has loaded, on the visible path or not. What the
+ * pager counts siblings over; not what a prompt or an export is built from.
+ * Safe to subscribe with: it returns the bucket itself, or the shared empty.
+ */
+export const selectConversationAllRows =
+  (conversationId: string | null) =>
+  (state: ChatState): Message[] =>
+    conversationId === null
+      ? EMPTY_MESSAGES
+      : (state.messagesByConversation[conversationId] ?? EMPTY_MESSAGES);
+/** The row one conversation's visible path ends at, or null when it is linear. */
+export const selectActiveLeafId = (conversationId: string | null) => (state: ChatState) =>
+  conversationId === null ? null : (state.activeLeafByConversation[conversationId] ?? null);
 /** Whether the ACTIVE conversation specifically has a live stream -- what
  *  per-conversation UI (composer, Stop button) should key off instead of
  *  the global `isStreaming`, which stays true while any background

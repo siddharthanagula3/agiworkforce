@@ -354,6 +354,7 @@ export function useConversations(): UseConversationsReturn {
             role: m.role,
             content: m.content,
             createdAt: m.created_at,
+            parentId: m.parent_id ?? null,
             model: m.model ?? undefined,
             provider: m.provider ?? undefined,
             isStreaming: resumesVideo,
@@ -365,12 +366,19 @@ export function useConversations(): UseConversationsReturn {
         const state = useChatStore.getState();
         const isStreamingHere = state.streamingConversationIds.includes(id);
         const cachedMessages = state.messagesByConversation[id] ?? [];
+        // A cached transcript keeps its own leaf: the local one reflects a
+        // variant the reader picked since this response was issued, and the
+        // server's is only authoritative for a transcript loaded fresh.
         if (isStreamingHere || cachedMessages.length > 0) {
           setActiveConversation(id);
           return true;
         }
 
-        setActiveConversationWithMessages(id, messages);
+        setActiveConversationWithMessages(
+          id,
+          messages,
+          loadedConversationWire.active_leaf_message_id ?? null,
+        );
         return true;
       } catch (err) {
         if (cancelled()) return true;
