@@ -60,6 +60,7 @@
   "placeholderEmpty": "오늘은 무엇을 도와드릴까요?",
   "shareConversation": "대화 공유",
   "openNavigation": "내비게이션 열기",
+  "openPanels": "패널",
   "artifactPublish": {
     "untitled": "게시된 아티팩트",
     "publishedOn": "{{date}}에 게시됨",

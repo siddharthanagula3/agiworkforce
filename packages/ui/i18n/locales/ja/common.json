@@ -93,7 +93,6 @@
   "navLogOut": "ログアウト",
   "allOf": "すべての{{label}}",
   "closeDialog": "ダイアログを閉じる",
-  "dismissNotification": "通知を閉じる",
   "goToNextPage": "次のページへ移動",
   "goToPreviousPage": "前のページへ移動",
   "loadingCard": "カードを読み込み中",

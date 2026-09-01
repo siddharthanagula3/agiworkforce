@@ -60,6 +60,7 @@
   "placeholderEmpty": "आज मैं आपकी क्या मदद कर सकता हूँ?",
   "shareConversation": "बातचीत साझा करें",
   "openNavigation": "नेविगेशन खोलें",
+  "openPanels": "पैनल",
   "artifactPublish": {
     "untitled": "प्रकाशित आर्टिफ़ैक्ट",
     "publishedOn": "{{date}} को प्रकाशित",

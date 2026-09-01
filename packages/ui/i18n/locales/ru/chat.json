@@ -60,6 +60,7 @@
   "placeholderEmpty": "Чем я могу помочь сегодня?",
   "shareConversation": "Поделиться беседой",
   "openNavigation": "Открыть навигацию",
+  "openPanels": "Панели",
   "artifactPublish": {
     "untitled": "Опубликованный артефакт",
     "publishedOn": "Опубликовано {{date}}",

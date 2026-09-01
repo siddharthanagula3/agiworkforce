@@ -60,6 +60,7 @@
   "placeholderEmpty": "今日は何をお手伝いしましょうか？",
   "shareConversation": "会話を共有",
   "openNavigation": "ナビゲーションを開く",
+  "openPanels": "パネル",
   "artifactPublish": {
     "untitled": "公開されたアーティファクト",
     "publishedOn": "{{date}} に公開",
