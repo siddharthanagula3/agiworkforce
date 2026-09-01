@@ -327,12 +327,17 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
     ]);
   });
 
-  it('does not re-chain the sibling roots when a deleted root leaves the leaf null', async () => {
+  it('does not re-chain the sibling roots when a branched conversation has no leaf', async () => {
     // The reader edited the opening question twice, then deleted the newest
     // root without its subtree. That delete sets the leaf to the deleted row's
     // parent, which is null for a root, so the conversation is branched and
     // leafless at once. Converting here would run lag() across the roots and
     // chain each deliberate sibling onto whichever one happens to precede it.
+    //
+    // The conversation PATCH reaches the same state directly, since it accepts
+    // activeLeafMessageId: null as the reset to linear. Which of the two wrote
+    // the null is not knowable from here, and must not be: the gate reads the
+    // tree precisely so that the answer does not depend on provenance.
     givenDatabase([
       {
         match: CONVERSATION_SELECT,
@@ -370,5 +375,36 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
       USER_ID,
       ORGANIZATION_ID,
     ]);
+  });
+
+  it('starts a root rather than a conversion when a plain send follows a null leaf', async () => {
+    // The sequence a client performs right after resetting a branched
+    // conversation to linear: no parent named, no leaf to continue from. This
+    // one never reaches the gate at all — it takes the single statement, which
+    // is the reason a client-reachable null leaf cannot re-parent anything.
+    givenDatabase([
+      {
+        match: CONVERSATION_SELECT,
+        rows: [{ id: CONVERSATION_ID, model: null, active_leaf_message_id: null }],
+      },
+      { match: INSERT, rows: [savedRow(SIBLING_ID, null, 'user')] },
+      { match: MESSAGE_COUNT, rows: [{ count: '6' }] },
+    ]);
+
+    const response = await POST(
+      request({ id: SIBLING_ID, role: 'user', content: 'carrying on', skipLlm: true }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+
+    const queries = mocks.query.mock.calls as [string, unknown[]?][];
+    const executes = mocks.execute.mock.calls as [string, unknown[]?][];
+
+    expect(ran(queries, LOCK)).toBe(false);
+    expect(ran(queries, BRANCH_PROBE)).toBe(false);
+    expect(ran(executes, CONVERSION)).toBe(false);
+    expect(ran(executes, LEAF_MOVE)).toBe(false);
+    expect(paramsOf(queries, INSERT)[6]).toBeNull();
   });
 });
