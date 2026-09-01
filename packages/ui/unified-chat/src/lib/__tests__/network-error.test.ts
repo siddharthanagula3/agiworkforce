@@ -154,3 +154,37 @@ describe('toUserMessageWithStatus', () => {
     );
   });
 });
+
+describe('operator detail never reaches a reader', () => {
+  // Swept all 47 signed-in routes with the API forced to 500 and this message.
+  // It reached the screen on about twenty of them, four separate elements on
+  // /settings/account alone.
+  const internal = [
+    'upstream exploded: trace 0xdeadbeef',
+    'TypeError: Cannot read properties of undefined',
+    'at Object.handler (/usr/src/app/server.js:44:12)',
+    'connect ECONNREFUSED 127.0.0.1:5432',
+    'SELECT id FROM users WHERE email = $1',
+    'request 9f2c1a7b4e8d0c6f5a3b2e1d0c9b8a77 failed',
+  ];
+  for (const message of internal) {
+    it(`falls back to the status sentence for: ${message.slice(0, 34)}`, () => {
+      const err = Object.assign(new Error(message), { status: 500 });
+      const shown = toUserMessage(err, 'fallback');
+      expect(shown).toMatch(/on our side/i);
+      expect(shown).not.toContain(message);
+    });
+  }
+
+  // The rule is narrowed, not reversed: a sentence a person wrote still wins.
+  for (const message of [
+    'Provider down',
+    'Model is overloaded',
+    'The workspace is over its seat limit',
+  ]) {
+    it(`still shows a human sentence: ${message}`, () => {
+      const err = Object.assign(new Error(message), { status: 500 });
+      expect(toUserMessage(err, 'fallback')).toBe(message);
+    });
+  }
+});

@@ -35,6 +35,7 @@ import {
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
+import { toUserMessage } from '@/lib/user-error-message';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -876,7 +877,10 @@ async function readApiError(response: Response): Promise<string> {
   const fallback = `HTTP ${response.status}`;
   const body = (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
   if (typeof body?.error === 'string' && body.error.trim()) {
-    return body.error;
+    return toUserMessage(
+      Object.assign(new Error(body.error), { status: response.status }),
+      fallback,
+    );
   }
   if (
     body?.error &&
@@ -884,7 +888,10 @@ async function readApiError(response: Response): Promise<string> {
     typeof body.error.message === 'string' &&
     body.error.message.trim()
   ) {
-    return body.error.message;
+    return toUserMessage(
+      Object.assign(new Error(body.error.message), { status: response.status }),
+      fallback,
+    );
   }
   return fallback;
 }

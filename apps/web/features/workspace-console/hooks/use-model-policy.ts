@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 
 export interface CatalogModel {
   id: string;
@@ -32,12 +33,17 @@ export const MODEL_POLICY_QUERY_KEY = ['workspace', 'model-policy'] as const;
 const ENDPOINT = '/api/settings/organization/model-policy';
 
 async function readApiError(res: Response): Promise<string> {
+  const fallback = `Request failed (${res.status}).`;
   try {
     const body = (await res.json()) as { error?: { message?: string } | string };
-    if (typeof body.error === 'string') return body.error;
-    return body.error?.message ?? `Request failed (${res.status})`;
+    const raw = typeof body.error === 'string' ? body.error : (body.error?.message ?? '');
+    if (!raw.trim()) return fallback;
+    // The server's words reach the screen, so they pass the same filter the
+    // rest of the product uses: a sentence somebody wrote survives, a trace id
+    // or a stack frame does not.
+    return toUserMessage(Object.assign(new Error(raw), { status: res.status }), fallback);
   } catch {
-    return `Request failed (${res.status})`;
+    return fallback;
   }
 }
 

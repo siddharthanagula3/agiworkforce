@@ -124,6 +124,9 @@ describe('settingsService 2FA security', () => {
 
     expect(result.backupCodes).toBeUndefined();
     expect(result.status).toBe(429);
-    expect(result.error).toBe('Too many requests');
+    // 'Too many requests' is the bare HTTP reason phrase, which restates the
+    // status and tells a reader nothing to act on, so the ladder answers
+    // instead. The point of this test is that a 429 reaches the user at all.
+    expect(result.error).toMatch(/going a little fast|wait a moment/i);
   });
 });
