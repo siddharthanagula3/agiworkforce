@@ -450,7 +450,7 @@ export function LibraryView({
             ...prev,
             [item.id]: {
               status: 'error',
-              message: 'This file is too large to preview here — download it instead.',
+              message: 'This file is too large to preview here. Download it instead.',
             },
           }));
           return;
@@ -918,8 +918,8 @@ function EmptyState({
     : viewDeleted
       ? 'Files you delete stay here for 30 days so you can restore them before they are permanently removed.'
       : origin === 'uploaded'
-        ? 'Uploaded files aren’t cataloged in the Library yet — files you upload stay with their conversation. Generated files appear under Generated.'
-        : 'Files created in your conversations — images, documents, spreadsheets — will appear here.';
+        ? 'Uploaded files aren’t cataloged in the Library yet: files you upload stay with their conversation. Generated files appear under Generated.'
+        : 'Files created in your conversations (images, documents, spreadsheets) will appear here.';
   const EmptyIcon = viewDeleted ? Trash2 : FolderOpen;
   return (
     <div

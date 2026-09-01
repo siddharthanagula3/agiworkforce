@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   Badge,
@@ -7,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  Switch,
 } from '@agiworkforce/ui';
 import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
@@ -97,19 +97,19 @@ export function KeyboardShortcutsDialog({
 
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1">
-                      {formatShortcut(shortcut).map((key, keyIndex) => (
-                        <React.Fragment key={keyIndex}>
-                          <Badge
-                            variant="outline"
-                            className="min-w-[32px] justify-center font-mono text-xs"
-                          >
-                            {key}
-                          </Badge>
-                          {keyIndex < formatShortcut(shortcut).length - 1 && (
-                            <span className="text-xs text-muted-foreground">+</span>
-                          )}
-                        </React.Fragment>
-                      ))}
+                        {formatShortcut(shortcut).map((key, keyIndex) => (
+                          <React.Fragment key={keyIndex}>
+                            <Badge
+                              variant="outline"
+                              className="min-w-[32px] justify-center font-mono text-xs"
+                            >
+                              {key}
+                            </Badge>
+                            {keyIndex < formatShortcut(shortcut).length - 1 && (
+                              <span className="text-xs text-muted-foreground">+</span>
+                            )}
+                          </React.Fragment>
+                        ))}
                       </div>
                       {/*
                         A shortcut the user switched off must stop firing, not
@@ -118,27 +118,11 @@ export function KeyboardShortcutsDialog({
                         driven by KEYBOARD_SHORTCUT_DOCS, so the two cannot
                         disagree.
                       */}
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={!disabledIds.includes(shortcut.id)}
+                      <Switch
                         aria-label={shortcut.description}
-                        onClick={() =>
-                          setShortcutEnabled(shortcut.id, disabledIds.includes(shortcut.id))
-                        }
-                        className={`h-5 w-9 shrink-0 rounded-full transition-colors ${
-                          disabledIds.includes(shortcut.id) ? 'bg-muted' : 'bg-primary'
-                        }`}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={`block h-4 w-4 rounded-full bg-background transition-transform ${
-                            disabledIds.includes(shortcut.id)
-                              ? 'translate-x-0.5'
-                              : 'translate-x-[18px]'
-                          }`}
-                        />
-                      </button>
+                        checked={!disabledIds.includes(shortcut.id)}
+                        onCheckedChange={(next) => setShortcutEnabled(shortcut.id, next)}
+                      />
                     </div>
                   </div>
                 ))}

@@ -133,7 +133,7 @@ function tierPriceSuffix(tier: RequiredTier): string {
   const monthlyUsd = getPlanPriceUsd(tier, 'monthly');
   if (monthlyUsd === null) return '';
   const amount = formatCatalogPrice(monthlyUsd);
-  return getBillingPlanPricing(tier).perSeat === true ? ` — ${amount}/seat/mo` : ` — ${amount}/mo`;
+  return getBillingPlanPricing(tier).perSeat === true ? `, ${amount}/seat/mo` : ` — ${amount}/mo`;
 }
 
 // ---------------------------------------------------------------------------

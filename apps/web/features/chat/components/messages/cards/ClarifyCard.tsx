@@ -117,10 +117,10 @@ export function ClarifyCard({ card, body, ctx }: ClarifyCardProps) {
         <p className="mt-1 text-xs text-muted-foreground">
           These questions are no longer answerable
           {body.state.reason === 'checkpoint_gone'
-            ? ' — the turn that asked them has ended.'
+            ? ': the turn that asked them has ended.'
             : body.state.reason === 'turn_failed'
-              ? ' — that turn failed.'
-              : ' — they were superseded by a newer message.'}
+              ? ': that turn failed.'
+              : ': they were superseded by a newer message.'}
         </p>
       )}
 
