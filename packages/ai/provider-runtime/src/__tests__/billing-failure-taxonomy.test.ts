@@ -76,6 +76,56 @@ describe('billing exhaustion is not a credential failure', () => {
   });
 });
 
+describe('a tier entitlement refusal is not a credential failure', () => {
+  function vercelGatewayRestriction(): Error & { status?: number } {
+    return Object.assign(new Error('No providers available for the requested model'), {
+      status: 403,
+      name: 'RestrictedModelsError',
+      error: { type: 'no_providers_available' },
+    });
+  }
+
+  it('classifies a free-tier premium-model refusal as invalid_model, never auth', () => {
+    const classified = classifyError(vercelGatewayRestriction());
+
+    expect(classified.category).toBe('invalid_model');
+    expect(classified.category).not.toBe('auth');
+    expect(classified.code).toBe('model_tier_restricted');
+  });
+
+  it('does not take the whole provider out of service over one unreachable model', () => {
+    const classified = classifyError(vercelGatewayRestriction());
+
+    expect(isCredentialFailureCategory(classified.category)).toBe(false);
+
+    const state = new CredentialFailoverState();
+    expect(state.recordFailure('vercel_gateway', classified.category)).toBe(false);
+    expect(state.blocksRoute('vercel_gateway')).toBe(false);
+  });
+
+  it('routes around the model instead of retrying it', () => {
+    const classified = classifyError(vercelGatewayRestriction());
+    // The tier will not change on a retry, but another model is a real answer.
+    expect(classified.retryable).toBe(false);
+    expect(classified.fallbackable).toBe(true);
+  });
+
+  it('recognises the restriction from error.type alone', () => {
+    const error = Object.assign(new Error('no providers available'), {
+      status: 403,
+      error: { type: 'no_providers_available' },
+    });
+    expect(classifyError(error).code).toBe('model_tier_restricted');
+  });
+
+  it('leaves an ordinary 403 classified as auth', () => {
+    const classified = classifyError(anthropicError('Forbidden', 403));
+    expect(classified.category).toBe('auth');
+    expect(classified.code).toBe('auth_403');
+    expect(isCredentialFailureCategory(classified.category)).toBe(true);
+  });
+});
+
 describe('quota exhaustion is distinct from a short rate limit', () => {
   it('classifies OpenAI insufficient_quota as quota_exhausted, not rate_limit', () => {
     const error = Object.assign(new Error('You exceeded your current quota'), {
