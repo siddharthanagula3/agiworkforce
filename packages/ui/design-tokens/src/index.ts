@@ -135,6 +135,12 @@ export const agiCoolPalette = {
   },
 } as const;
 
+/**
+ * Concrete rungs of the --corner-* ladder foundation.css owns, in the same
+ * size-named shape chat.css exposes. Emitted literally for hosts that cannot
+ * import the stylesheet, so these must equal the rungs they mirror; asserted in
+ * apps/web/shared/components/__tests__/theme-contrast.test.ts.
+ */
 export const agiRadii = {
   sm: '6px',
   md: '8px',

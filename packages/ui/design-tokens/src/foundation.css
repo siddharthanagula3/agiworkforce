@@ -108,8 +108,15 @@
     --info-on-fill: var(--n-0);
 
     /* ---- layer 2: mode-invariant ---------------------------------------- */
+    /* One radius ladder for every surface. The size-named --chat-radius-* and
+     * --radius-* families are indirections into these rungs, so a rung moves in
+     * one place. */
     --corner-control: 6px;
-    --corner-surface: 10px;
+    --corner-field: 8px;
+    --corner-surface: 12px;
+    --corner-panel: 16px;
+    --corner-overlay: 24px;
+    --corner-hero: 32px;
     --corner-pill: 9999px;
 
     --space-1: 4px;

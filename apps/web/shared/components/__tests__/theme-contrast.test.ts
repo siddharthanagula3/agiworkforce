@@ -78,6 +78,21 @@ const foundationBlock = (selector: string): string => {
 const foundationLight = foundationBlock(':root');
 const foundationDark = foundationBlock('.dark');
 
+const CORNERS: Record<string, string> = Object.fromEntries(
+  [...foundationLight.matchAll(/^\s*(--corner-[a-z]+):\s*([^;]+);/gm)].map((m) => [
+    m[1]!,
+    m[2]!.trim(),
+  ]),
+);
+
+const throughLadder = (value: string): string => {
+  const via = value.match(/^var\((--corner-[a-z]+)\)$/);
+  if (!via) return value;
+  const rung = CORNERS[via[1]!];
+  if (!rung) throw new Error(`Unknown foundation rung ${via[1]}`);
+  return rung;
+};
+
 function baseThemeBlocks(css: string): { light: string; dark: string } {
   const match = css.match(
     /@layer base\s*{\s*:root\s*{([\s\S]*?)\n\s*}\s*\n\s*\.dark\s*{([\s\S]*?)\n\s*}/,
@@ -443,6 +458,28 @@ describe('the two emitters of the --chat-* contract agree', () => {
     });
   }
 
+  const sharedRadiusTokens = {
+    '--chat-radius-sm': agiChatCssVars.light['--chat-radius-sm'],
+    '--chat-radius-md': agiChatCssVars.light['--chat-radius-md'],
+    '--chat-radius-lg': agiChatCssVars.light['--chat-radius-lg'],
+    '--chat-radius-xl': agiChatCssVars.light['--chat-radius-xl'],
+    '--chat-radius-2xl': agiChatCssVars.light['--chat-radius-2xl'],
+  };
+
+  for (const [name, fromTs] of Object.entries(sharedRadiusTokens)) {
+    it(`${name} resolves to the same rung in chat.css and design-tokens/src/index.ts`, () => {
+      expect(fromTs).toBe(throughLadder(token(chatCssLight, name)));
+    });
+  }
+
+  it('every chat radius indirects through the foundation ladder', () => {
+    for (const name of Object.keys(sharedRadiusTokens)) {
+      expect(token(chatCssLight, name), `${name} restates a literal radius`).toMatch(
+        /^var\(--corner-[a-z]+\)$/,
+      );
+    }
+  });
+
   it('every font family chat.css indirects through is one layout.tsx registers', () => {
     const registered = new Set(
       [
@@ -613,6 +650,27 @@ describe('foundation layer', () => {
       if (!css.includes('design-tokens/chat.css')) continue;
       expect(css, `${sheet} imports chat.css without foundation.css`).toContain(
         'design-tokens/foundation.css',
+      );
+    }
+  });
+
+  it('owns one radius ladder, ascending, with no duplicate rung', () => {
+    const rungs = Object.entries(CORNERS).filter(([name]) => name !== '--corner-pill');
+    expect(rungs.length).toBeGreaterThan(1);
+
+    const px = rungs.map(([, value]) => Number.parseFloat(value));
+    expect(px, 'a rung is declared out of order').toEqual([...px].sort((a, b) => a - b));
+    expect(new Set(px).size, 'two rungs hold the same value').toBe(px.length);
+  });
+
+  it('is the only place a radius literal is written', () => {
+    // globals.css re-exposes the ladder to Tailwind as --radius-*; a literal
+    // there forks the scale, which is what the consolidation removed.
+    const themed = [...webBase.light.matchAll(/^\s*(--radius[a-z0-9-]*):\s*([^;]+);/gm)];
+    const bridged = [...globalsCss.matchAll(/^\s*(--radius-[a-z0-9]+):\s*([^;]+);/gm)];
+    for (const [, name, value] of [...themed, ...bridged]) {
+      expect(value!.trim(), `${name} writes a literal instead of a ladder rung`).toMatch(
+        /^var\(--corner-[a-z]+\)$/,
       );
     }
   });
