@@ -14,6 +14,29 @@ const COMPOSER_REGION = '#chat-composer';
 const COMPOSER_TIMEOUT = 20000;
 const REPLY_TIMEOUT = 30000;
 
+const COMPOSER_EDITOR_STORAGE_KEY = 'agi.composer-editor';
+const COMPOSER_EDITOR_MODE = 'editor';
+
+/**
+ * The query override is read per render off `window.location.search`, so any
+ * in-app navigation that drops it — a new chat, a back — silently returns the
+ * slot to the build default and the rest of a test measures the textarea. The
+ * stored override is the one that survives a whole run, and the query string
+ * still wins wherever a test asks for the other arm by name.
+ */
+async function pinEditorArm(page: Page): Promise<void> {
+  await page.addInitScript(
+    (input: { key: string; value: string }) => {
+      try {
+        window.localStorage.setItem(input.key, input.value);
+      } catch {
+        void 0;
+      }
+    },
+    { key: COMPOSER_EDITOR_STORAGE_KEY, value: COMPOSER_EDITOR_MODE },
+  );
+}
+
 async function openComposer(page: Page) {
   await page.goto(CHAT_EDITOR_URL);
   const composer = page.locator(COMPOSER);
@@ -22,13 +45,23 @@ async function openComposer(page: Page) {
   return composer;
 }
 
-/** What the editor would serialize and send, without sending it. */
+/**
+ * What the editor would serialize and send, without sending it. An empty
+ * ProseMirror document is one empty paragraph, whose `innerText` is a newline
+ * rather than the empty string the textarea arm returns — so the two arms are
+ * only comparable once that artifact is trimmed off.
+ */
 async function composerText(page: Page): Promise<string> {
-  return page.locator(COMPOSER).innerText();
+  return (await page.locator(COMPOSER).innerText()).trim();
 }
 
 test.describe('composer editor · parity', () => {
+  // The long-paste case writes to the system clipboard before pressing paste,
+  // which Chromium refuses unless the context holds the permission.
+  test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+
   test.beforeEach(async ({ page }) => {
+    await pinEditorArm(page);
     await signIn(page);
   });
 
@@ -81,8 +114,12 @@ test.describe('composer editor · parity', () => {
     await composer.pressSequentially('scope this @');
     await expect(mentionMenu).toBeVisible();
 
-    // Arrows wrap rather than dead-ending at either edge.
+    // Arrows wrap rather than dead-ending at either edge. The menu opens on the
+    // keystroke but its rows arrive with the skills fetch, and the composer only
+    // hands arrows to a menu that has rows — so the wait is part of the setup,
+    // not part of the claim.
     const options = page.getByRole('option');
+    await expect(options.first()).toBeVisible({ timeout: COMPOSER_TIMEOUT });
     await composer.press('ArrowUp');
     await expect(options.last()).toHaveAttribute('aria-selected', 'true');
     await composer.press('ArrowDown');
