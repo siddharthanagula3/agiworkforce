@@ -341,6 +341,22 @@ describe('editor arm · mention menu', () => {
     expect(screen.getByText('/Doc Writer')).toBeVisible();
   });
 
+  /**
+   * The suggestion range knows where the query sat and restores focus there.
+   * The handle's focus() takes the caret to the end of the document, which on a
+   * mention picked mid-message is a visible jump.
+   */
+  it('leaves the caret where the removal collapsed', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    const commit = openMention('doc');
+    editorHandle.focus.mockClear();
+
+    expect(pressInMentionMenu('Enter')).toBe(true);
+
+    expect(commit.removeQuery).toHaveBeenCalledOnce();
+    expect(editorHandle.focus).not.toHaveBeenCalled();
+  });
+
   it('commits on Tab as well as Enter', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     const commit = openMention('doc');
