@@ -1069,7 +1069,7 @@ function DirectoryBrowse({
                         disabled={plugin.mutating}
                         onClick={() => void adapter.setPluginEnabled?.(plugin.id, !plugin.enabled)}
                         className={cn(
-                          'font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50',
+                          'inline-flex min-h-6 items-center font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50',
                           FOCUS_RING,
                         )}
                       >
@@ -1086,7 +1086,7 @@ function DirectoryBrowse({
                           })
                         }
                         className={cn(
-                          'font-medium text-danger underline-offset-4 hover:underline disabled:opacity-50',
+                          'inline-flex min-h-6 items-center font-medium text-danger underline-offset-4 hover:underline disabled:opacity-50',
                           FOCUS_RING,
                         )}
                       >
@@ -2411,7 +2411,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                               void adapter.setPluginEnabled?.(plugin.id, !plugin.enabled)
                             }
                             className={cn(
-                              'font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50',
+                              'inline-flex min-h-6 items-center font-medium text-foreground underline-offset-4 hover:underline disabled:opacity-50',
                               FOCUS_RING,
                             )}
                           >
@@ -2428,7 +2428,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                               })
                             }
                             className={cn(
-                              'font-medium text-danger underline-offset-4 hover:underline disabled:opacity-50',
+                              'inline-flex min-h-6 items-center font-medium text-danger underline-offset-4 hover:underline disabled:opacity-50',
                               FOCUS_RING,
                             )}
                           >
