@@ -123,6 +123,43 @@ describe('applyConversationDeltas', () => {
     expect(port.get('c1')?.model).toBeUndefined();
     expect(port.get('c1')?.projectId).toBeUndefined();
   });
+
+  it('threads the active leaf onto a conversation the server has branched', () => {
+    const port = createInMemoryConversationPort();
+    applyConversationDeltas(port, [delta({ active_leaf_message_id: 'm2' })], []);
+    expect(port.get('c1')?.activeLeafMessageId).toBe('m2');
+  });
+
+  it('records a null leaf, which says the server can branch but this chat is linear', () => {
+    const port = createInMemoryConversationPort();
+    applyConversationDeltas(port, [delta({ active_leaf_message_id: null })], []);
+    expect(port.get('c1')).toHaveProperty('activeLeafMessageId', null);
+  });
+
+  it('leaves the key off entirely for a delta from a server that cannot branch', () => {
+    const port = createInMemoryConversationPort();
+    applyConversationDeltas(port, [delta()], []);
+    expect(port.get('c1')).not.toHaveProperty('activeLeafMessageId');
+  });
+
+  it('takes the server leaf even on a dirty conversation, which never pushes one', () => {
+    const port = createInMemoryConversationPort([
+      {
+        id: 'c1',
+        title: 'New (dirty)',
+        createdAt: T,
+        updatedAt: T,
+        messageCount: 0,
+        pinned: false,
+        activeLeafMessageId: 'm-stale',
+      },
+    ]);
+    applyConversationDeltas(port, [delta({ active_leaf_message_id: 'm-current' })], ['c1']);
+    expect(port.get('c1')).toMatchObject({
+      title: 'New (dirty)',
+      activeLeafMessageId: 'm-current',
+    });
+  });
 });
 
 describe('toConversationPushItem', () => {

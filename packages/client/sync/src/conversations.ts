@@ -9,6 +9,7 @@ export interface SyncConversationRecord {
   pinned: boolean;
   model?: string;
   projectId?: string;
+  activeLeafMessageId?: string | null;
   serverVersion?: string;
 }
 
@@ -30,6 +31,10 @@ export function applyConversationDeltas(
       continue;
     }
     const existing = port.get(d.id);
+    const branchPointer =
+      d.active_leaf_message_id !== undefined
+        ? { activeLeafMessageId: d.active_leaf_message_id }
+        : {};
     const record: SyncConversationRecord = {
       id: d.id,
       title: d.title,
@@ -39,11 +44,16 @@ export function applyConversationDeltas(
       pinned: d.pinned,
       model: d.model ?? undefined,
       projectId: d.project_id ?? undefined,
+      ...branchPointer,
       serverVersion: d.server_version,
     };
     if (dirtyConversationIds.includes(d.id)) {
       if (existing) {
-        Object.assign(record, existing, { serverVersion: d.server_version });
+        // Dirty preservation covers local edits awaiting a push. The branch
+        // pointer is never one: no push item carries it, so the server is its
+        // only writer and re-asserting it keeps a local copy from outliving the
+        // branch it names.
+        Object.assign(record, existing, branchPointer, { serverVersion: d.server_version });
       }
     }
     if (existing) {

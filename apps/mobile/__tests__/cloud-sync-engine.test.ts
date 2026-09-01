@@ -252,6 +252,59 @@ describe('syncNow — pull', () => {
     expect(mockGet).toHaveBeenCalledWith('/api/chat/sync?since=0');
   });
 
+  it('threads the branch pointers from a pull into the cloud stores', async () => {
+    mockGet.mockResolvedValueOnce({
+      conversations: [{ ...convDelta('c1', '5'), active_leaf_message_id: 'm1' }],
+      messages: [msgDelta('m1', 'c1', '6', { parent_id: 'm0' })],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    const cloud = useChatCloudMessageStore.getState();
+    expect(cloud.conversations.find((c) => c.id === 'c1')?.activeLeafMessageId).toBe('m1');
+    expect(cloud.messages.c1?.[0]?.parentId).toBe('m0');
+  });
+
+  it('applies a null pointer, which a linear conversation on a threading server sends', async () => {
+    mockGet.mockResolvedValueOnce({
+      conversations: [{ ...convDelta('c1', '5'), active_leaf_message_id: null }],
+      messages: [msgDelta('m1', 'c1', '6', { parent_id: null })],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    const cloud = useChatCloudMessageStore.getState();
+    expect(cloud.conversations.find((c) => c.id === 'c1')).toHaveProperty(
+      'activeLeafMessageId',
+      null,
+    );
+    expect(cloud.messages.c1?.[0]).toHaveProperty('parentId', null);
+  });
+
+  it('keeps a lineage the transcript fetch learned when the delta carries no parent', async () => {
+    seedConversation('c1', { activeLeafMessageId: 'm1' });
+    seedMessage('c1', { id: 'm1', parentId: 'm0' });
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [msgDelta('m1', 'c1', '6')],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    const cloud = useChatCloudMessageStore.getState();
+    expect(cloud.conversations.find((c) => c.id === 'c1')?.activeLeafMessageId).toBe('m1');
+    expect(cloud.messages.c1?.[0]?.parentId).toBe('m0');
+  });
+
   it('hydrates a pending approval projection from synced metadata after a cold device pull', async () => {
     const runId = '018f6f2a-0000-7000-8000-000000000099';
     mockGet.mockResolvedValueOnce({
