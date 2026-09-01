@@ -207,3 +207,45 @@ describe('ComposerInput mobile density', () => {
     expect(root).toHaveClass('sm:[&_.ProseMirror]:min-h-[52px]');
   });
 });
+
+/**
+ * The editor arrives two commits after the arm is chosen, so a handle write
+ * issued before that is dropped on a null ref. The draft restored on mount is
+ * the write that bites: the mirror keeps it, the document never receives it,
+ * and the composer comes back visibly empty with the text still in state.
+ */
+describe('ComposerInput editor seeding', () => {
+  it('takes the mirror into the document when the editor mounts after the write', async () => {
+    setQuery(COMPOSER_EDITOR_MODES.editor);
+    const editorRef = createRef<ComposerEditorHandle>();
+
+    const view = render(<ComposerInput {...props({ editorRef, value: 'restored draft' })} />);
+
+    await waitFor(() => expect(view.container.querySelector(EDITOR_SELECTOR)).not.toBeNull());
+    await waitFor(() => expect(editorRef.current?.getText()).toBe('restored draft'));
+    expect(view.container.querySelector(EDITOR_SELECTOR)).toHaveTextContent('restored draft');
+  });
+
+  it('leaves an empty mirror alone', async () => {
+    setQuery(COMPOSER_EDITOR_MODES.editor);
+    const editorRef = createRef<ComposerEditorHandle>();
+
+    const view = render(<ComposerInput {...props({ editorRef })} />);
+
+    await waitFor(() => expect(view.container.querySelector(EDITOR_SELECTOR)).not.toBeNull());
+    expect(editorRef.current?.isEmpty()).toBe(true);
+  });
+
+  it('never clobbers a document the viewer has already typed into', async () => {
+    setQuery(COMPOSER_EDITOR_MODES.editor);
+    const editorRef = createRef<ComposerEditorHandle>();
+    const view = render(<ComposerInput {...props({ editorRef, value: 'seed' })} />);
+    await waitFor(() => expect(editorRef.current?.getText()).toBe('seed'));
+
+    // A later render carrying a different mirror must not rewrite the document;
+    // the editor is uncontrolled and the host writes through the handle.
+    view.rerender(<ComposerInput {...props({ editorRef, value: 'something else' })} />);
+
+    expect(editorRef.current?.getText()).toBe('seed');
+  });
+});
