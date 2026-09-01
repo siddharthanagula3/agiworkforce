@@ -4,7 +4,21 @@ import { Wrench } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 import { lucideToolIcon, TOOL_ICON_NAMES } from '../toolIcon';
 
-const MIGRATED = ['Clock', 'FolderOpen', 'MessageSquare', 'Search', 'Settings'] as const;
+const MIGRATED = [
+  'Clock',
+  'Code',
+  'Database',
+  'FileText',
+  'FolderOpen',
+  'Globe',
+  'HelpCircle',
+  'Image',
+  'MessageSquare',
+  'Search',
+  'Settings',
+  'Terminal',
+  'Video',
+] as const;
 
 function renderIconByName(iconName: string): SVGSVGElement {
   const Component = lucideToolIcon(iconName);
