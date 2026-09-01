@@ -19,7 +19,7 @@ import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
 const TOP_UP_HREF = '/settings/billing';
-const UPGRADE_HREF = '/pricing';
+export const UPGRADE_HREF = '/pricing';
 const USAGE_HREF = '/settings/usage';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;

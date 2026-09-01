@@ -40,6 +40,18 @@ const redis = hasRedisEnv
   ? new Redis({ url: redisRestUrl!, token: redisRestToken!, retry: { retries: REDIS_RETRIES } })
   : null;
 
+/**
+ * The one Upstash connection this process owns.
+ *
+ * Exported so other Redis-backed accounting (free-lane quota pools, route
+ * health) rides the same client rather than constructing a second one: the
+ * retry budget above and the credential resolution below it are the properties
+ * that must not be re-derived per consumer.
+ */
+export function getSharedRedisClient(): Redis | null {
+  return redis;
+}
+
 export const REDIS_OUTAGE_POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
 
 export type RedisOutagePolicy = 'fail-closed' | 'fail-open';

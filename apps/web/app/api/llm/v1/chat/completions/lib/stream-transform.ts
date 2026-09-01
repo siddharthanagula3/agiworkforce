@@ -7,6 +7,8 @@ import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
+import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
+import { observeFreeLaneSettlement } from '@/lib/services/free-lane/runtime-state-service';
 import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
@@ -79,9 +81,20 @@ async function settleStreamBilling(input: {
   usage: StreamBillingUsage;
   outcome?: 'completed' | 'failed';
   cancelled?: boolean;
+  latencyMs?: number;
 }): Promise<void> {
   const { processed, userId, provider, model, usage } = input;
   const totalTokens = usage.inputTokens + usage.outputTokens;
+  // Ahead of the free-trial early return below: a free-lane turn is normally
+  // also a trial turn, and its pool allowance is spent either way.
+  if (processed.freeLane) {
+    observeFreeLaneSettlement({
+      routeId: processed.freeLane.dispatchedRouteId,
+      usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+      succeeded: (input.outcome ?? 'completed') === 'completed',
+      ...(input.latencyMs !== undefined ? { latencyMs: input.latencyMs } : {}),
+    });
+  }
   if (processed.freeTrial) {
     await settleFreeTrialRequest({
       reservation: processed.freeTrial,
@@ -865,6 +878,7 @@ export async function buildAdapterStreamResponse(
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
           },
           outcome: assembler.lastError === null ? 'completed' : 'failed',
+          ...(firstTokenTimestampMs !== null ? { latencyMs: firstTokenTimestampMs } : {}),
         });
       } catch (reconciliationError) {
         logger.error(
@@ -960,5 +974,6 @@ export async function buildAdapterStreamResponse(
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
   addFallbackReasonHeader(streamHeaders, processed);
+  addRouteLaneHeader(streamHeaders, processed);
   return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
 }

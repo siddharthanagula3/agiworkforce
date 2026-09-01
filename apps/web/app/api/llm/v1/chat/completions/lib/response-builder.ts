@@ -11,6 +11,8 @@ import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { extractJsonObject, wantsJsonObject } from './json-object-mode';
 import { compactionUsageFields } from './context-window';
+import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
+import { observeFreeLaneSettlement } from '@/lib/services/free-lane/runtime-state-service';
 import { canPersistAssistantTurn, persistAssistantTurn } from './assistant-turn-persistence';
 import type { ProcessedRequest } from './request-processor';
 import {
@@ -68,6 +70,17 @@ export async function buildNonStreamResponse(
       });
 
   const cpstUsage = buildCpstUsageFields(processed, { billingOutcome: 'completed' });
+
+  if (processed.freeLane) {
+    observeFreeLaneSettlement({
+      routeId: processed.freeLane.dispatchedRouteId,
+      usage: {
+        inputTokens: llmResponse.promptTokens,
+        outputTokens: llmResponse.completionTokens,
+      },
+      succeeded: true,
+    });
+  }
 
   if (processed.managedUsage) {
     await finalizeManagedUsageRequest({
@@ -220,6 +233,7 @@ export async function buildNonStreamResponse(
     ...getCorsHeaders(request),
     ...getSecurityHeaders(),
   };
+  addRouteLaneHeader(responseHeaders, processed);
   if (quotaWarningHeader) {
     responseHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
