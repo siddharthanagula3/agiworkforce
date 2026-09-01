@@ -58,20 +58,29 @@ function DialogContent({
   disableAnimation = false,
   overlayProps,
   onCloseAutoFocus,
+  onOpenAutoFocus,
   ...props
 }: DialogContentProps) {
   // Radix restores focus to its own DialogTrigger. A controlled dialog - opened
   // from a button somewhere else, which is most of them here - has no trigger to
   // restore to, so Escape dropped focus onto <body> and a keyboard user
   // restarted from the top of the page. Remember what was focused when the
-  // dialog mounted and put it back.
-  // Captured during the first render, not in an effect: by the time an effect
-  // runs the content has mounted and Radix has already moved focus inside, so
-  // an effect records the dialog's own field instead of what opened it.
-  const openerRef = React.useRef<HTMLElement | null>(
-    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null,
+  // dialog opened and put it back.
+  // Captured in onOpenAutoFocus, which Radix fires before it moves focus into
+  // the content, rather than during the first render. The render-time read is a
+  // beat too late for a dialog opened from inside another dialog: measured on
+  // the shortcuts dialog inside Settings, Escape produced a single focus event
+  // straight to the chat composer's textarea behind the still-open modal.
+  // AlertDialog was corrected the same way for the same reason.
+  const openerRef = React.useRef<HTMLElement | null>(null);
+
+  const captureOpener = React.useCallback(
+    (event: Event) => {
+      const active = document.activeElement;
+      openerRef.current = active instanceof HTMLElement ? active : null;
+      onOpenAutoFocus?.(event as never);
+    },
+    [onOpenAutoFocus],
   );
 
   const restoreFocus = React.useCallback(
@@ -104,6 +113,7 @@ function DialogContent({
           className,
         )}
         aria-modal="true"
+        onOpenAutoFocus={captureOpener}
         onCloseAutoFocus={restoreFocus}
         {...props}
       >

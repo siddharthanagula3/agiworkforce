@@ -108,7 +108,7 @@ function transcriptionErrorMessage(error: unknown): string {
       return 'Too many recordings just now. Wait a moment, then try again.';
     }
     if (error.status >= 500) {
-      return 'Transcription is unavailable right now. Your recording was not saved — try again shortly.';
+      return 'Transcription is unavailable right now. Your recording was not saved. Try again shortly.';
     }
     return 'That recording could not be transcribed. Try again, or type instead.';
   }

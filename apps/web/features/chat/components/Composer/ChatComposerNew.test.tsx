@@ -807,7 +807,7 @@ describe('ChatComposerNew', () => {
     expect(chatButton.closest('.chat-composer-container')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute(
       'title',
-      'Chat — quick questions and conversation',
+      'Chat: quick questions and conversation',
     );
     expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
       'aria-pressed',
@@ -815,7 +815,7 @@ describe('ChatComposerNew', () => {
     );
     expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
       'title',
-      'AGI Work — multi-step tasks with tools, files, and reviewable deliverables',
+      'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
     );
 
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));

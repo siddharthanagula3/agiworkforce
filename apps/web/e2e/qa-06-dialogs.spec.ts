@@ -17,6 +17,7 @@ interface DialogReport {
   backgroundInert: boolean;
   escapeCloses: boolean;
   focusRestored: boolean;
+  undersizedTargets: string[];
   notes: string[];
 }
 
@@ -37,6 +38,7 @@ async function probeDialog(
     backgroundInert: false,
     escapeCloses: false,
     focusRestored: false,
+    undersizedTargets: [],
     notes,
   };
 
@@ -73,6 +75,27 @@ async function probeDialog(
         el.getAttribute('data-aria-hidden') === 'true' ||
         (el as HTMLElement).offsetParent === null,
     );
+    // WCAG 2.2 SC 2.5.8 wants 24x24 for anything you point at. The inline
+    // exception is for a link inside a sentence, which a dialog control is
+    // not: the switches in the shortcuts dialog were 36x20 and were caught
+    // here, not by reading the markup.
+    const undersized: string[] = [];
+    for (const el of dialog.querySelectorAll(
+      'button,a,[role="switch"],[role="radio"],[role="tab"],[role="checkbox"],input,select',
+    )) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 && r.height < 1) continue;
+      // A visually hidden input with a visible proxy on top of it is not the
+      // target the user aims at - the proxy is. Hit-test the centre rather
+      // than trusting the box, or every sr-only file input and every select
+      // behind a custom control reads as a 1x1 violation.
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (hit !== el && !el.contains(hit)) continue;
+      if (r.width < 24 || r.height < 24) {
+        const label = (el.getAttribute('aria-label') ?? el.textContent ?? el.tagName).trim();
+        undersized.push(`${label.slice(0, 28)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+      }
+    }
     return {
       role: dialog.getAttribute('role'),
       ariaModal: dialog.getAttribute('aria-modal'),
@@ -80,6 +103,7 @@ async function probeDialog(
       focusCount: focusables.length,
       focusInside: dialog.contains(document.activeElement),
       inert,
+      undersized,
     };
   });
 
@@ -96,6 +120,7 @@ async function probeDialog(
   report.role = shape.role;
   report.ariaModal = shape.ariaModal;
   report.hasAccessibleName = shape.labelled;
+  report.undersizedTargets = shape.undersized;
   report.focusMovedIn = shape.focusInside;
   report.backgroundInert = shape.inert;
 
@@ -208,6 +233,21 @@ test.describe('QA dialogs — focus, escape, inertness', () => {
       }),
     );
 
+    // Reached through Settings > General rather than a keyboard gesture, which
+    // is where the product puts it. Its enable/disable toggles were hand-rolled
+    // at 36x20; they are the shared Switch primitive now, which is 44x24.
+    reports.push(
+      await probeDialog(page, 'keyboard-shortcuts', async () => {
+        await page.goto('/settings/general', { waitUntil: 'networkidle' }).catch(() => undefined);
+        await page.waitForTimeout(3000);
+        await page
+          .getByRole('button', { name: /View shortcuts/i })
+          .first()
+          .click({ timeout: 8000 })
+          .catch(() => undefined);
+      }),
+    );
+
     mkdirSync(OUT_DIR, { recursive: true });
     writeFileSync(path.join(OUT_DIR, 'dialogs.json'), JSON.stringify(reports, null, 2));
 
@@ -221,5 +261,19 @@ test.describe('QA dialogs — focus, escape, inertness', () => {
       reports.some((r) => r.opened),
       'no dialog could be opened at all',
     ).toBe(true);
+
+    // Every dialog here is opened from a control the user can get back to, and
+    // three of them sit inside another dialog. Losing that place drops a
+    // keyboard reader onto the page behind an open modal: measured on the
+    // shortcuts dialog, focus landed in the chat composer's textarea.
+    const lostFocus = reports
+      .filter((r) => r.opened && r.escapeCloses && !r.focusRestored)
+      .map((r) => r.name);
+    expect(lostFocus, 'closing a dialog must put focus back where it came from').toEqual([]);
+
+    const undersized = reports
+      .filter((r) => r.opened && r.undersizedTargets.length > 0)
+      .map((r) => `${r.name}: ${r.undersizedTargets.join(', ')}`);
+    expect(undersized, 'every control in a dialog needs a 24px target').toEqual([]);
   });
 });

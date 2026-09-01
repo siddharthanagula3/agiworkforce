@@ -543,7 +543,7 @@ export function GeneralSection() {
                         ? trait.high
                         : 'Balanced'
                   }
-                  className="w-full"
+                  className="h-6 w-full"
                 />
                 <span className="w-16 shrink-0 text-[12px] text-muted-foreground">
                   {trait.high}
