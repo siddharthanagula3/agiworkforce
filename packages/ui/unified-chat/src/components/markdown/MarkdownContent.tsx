@@ -163,6 +163,9 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
   );
 };
 
+const PROTOCOL_RELATIVE_PREFIX = '//';
+const FRAGMENT_PREFIX = '#';
+
 const markdownComponents: Components = {
   code: CodeBlock as Components['code'],
   img: MarkdownImage as Components['img'],
@@ -183,10 +186,16 @@ const markdownComponents: Components = {
   ),
   td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
   a: ({ href, children }) => {
+    // The sanitizer strips an href it refuses (javascript:, data:) but leaves
+    // the anchor behind, and a protocol-relative href passes it untouched while
+    // resolving to another origin. Neither may reach the reader as a link.
+    if (typeof href !== 'string' || href.startsWith(PROTOCOL_RELATIVE_PREFIX)) {
+      return <>{children}</>;
+    }
     // A fragment points inside this same document - a citation marker reaching
     // its source, a heading link. Opening it in a new tab lands the reader on a
     // blank page instead of the thing they asked to see.
-    const samePage = typeof href === 'string' && href.startsWith('#');
+    const samePage = href.startsWith(FRAGMENT_PREFIX);
     return (
       <a
         href={href}
