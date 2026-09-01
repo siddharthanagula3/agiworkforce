@@ -444,6 +444,52 @@
         "caching": false
       },
       "speed": "medium"
+    },
+    "gpt-oss-120b": {
+      "contextWindow": 131072,
+      "inputCost": 0.15,
+      "outputCost": 0.6,
+      "cached_input": 0.075,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "very-fast",
+      "released": "August 2025"
+    },
+    "gpt-oss-20b": {
+      "contextWindow": 131072,
+      "inputCost": 0.075,
+      "outputCost": 0.3,
+      "cached_input": 0.0375,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": true
+      },
+      "speed": "very-fast",
+      "released": "August 2025"
     }
   }
 }

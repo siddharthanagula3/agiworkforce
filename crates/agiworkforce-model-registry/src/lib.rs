@@ -501,6 +501,48 @@ fn clamp_profile(
     }
 }
 
+/// Mirrors the TypeScript resolver's `tierAdmissionRejection`: a model reachable
+/// only through slots no tier grants stays reachable, but a model whose slots are
+/// all withheld from this tier is refused even when named explicitly.
+fn tier_admission_rejection(policy: &AutoPolicy, model_key: &str, tier: &str) -> Option<String> {
+    let tier_gated_slots = policy
+        .tier_allowed_slots
+        .values()
+        .flatten()
+        .map(String::as_str)
+        .collect::<HashSet<_>>();
+    let mut gated_slots = policy
+        .slots
+        .iter()
+        .filter(|(slot_id, slot)| {
+            tier_gated_slots.contains(slot_id.as_str()) && slot.model_key == model_key
+        })
+        .map(|(slot_id, _)| slot_id.as_str())
+        .collect::<Vec<_>>();
+    if gated_slots.is_empty() {
+        return None;
+    }
+    gated_slots.sort_unstable();
+
+    let fallback_slot = [policy.fallback_slot.clone()];
+    let allowed_slots = policy
+        .tier_allowed_slots
+        .get(tier)
+        .map(Vec::as_slice)
+        .unwrap_or(&fallback_slot);
+    if gated_slots
+        .iter()
+        .any(|slot_id| allowed_slots.iter().any(|allowed| allowed == slot_id))
+    {
+        return None;
+    }
+
+    Some(format!(
+        "routing slot {} for model {model_key} is not allowed for tier {tier}",
+        gated_slots.join(", ")
+    ))
+}
+
 fn evaluate_eligibility<'a>(
     registry: &'a Registry,
     model_key: &str,
@@ -528,6 +570,9 @@ fn evaluate_eligibility<'a>(
     }
 
     let tier = normalize_tier(request.subscription_tier);
+    if let Some(rejection) = tier_admission_rejection(&registry.policies.auto, model_key, tier) {
+        reasons.push(rejection);
+    }
     let us_only = &registry.policies.auto.provider_policies.us_only;
     if request.us_only
         && us_only.allowed_tiers.iter().any(|allowed| allowed == tier)

@@ -20,7 +20,13 @@
       "byok": "premium"
     },
     "tierAllowedSlots": {
-      "free": ["workhorse_general", "reasoning_economy", "coding_fast"],
+      "free": [
+        "free_workhorse",
+        "free_workhorse_fast",
+        "workhorse_general",
+        "reasoning_economy",
+        "coding_fast"
+      ],
       "pro": [
         "workhorse_general",
         "general_balanced",
@@ -358,6 +364,12 @@
       }
     },
     "slots": {
+      "free_workhorse": {
+        "modelKey": "gpt-oss-120b"
+      },
+      "free_workhorse_fast": {
+        "modelKey": "gpt-oss-20b"
+      },
       "general_fast": {
         "modelKey": "family:google/gemini-flash-lite"
       },
