@@ -1242,11 +1242,11 @@ the repo answers honestly about itself.
 scheduled job that re-reads provider pages. The only `cron:` in the repository is
 `0 4 * * 1` in `.github/workflows/codeql.yml` — a static security scan of the
 JavaScript. The maintenance workflows were **deliberately deleted on 2026-08-13/14
-to save Actions minutes**, and `.github/workflows/verify.yml` says so in its own
+to save Actions minutes**, and its verify workflow (.github/workflows/verify.yml upstream) says so in its own
 header: "There is no regeneration bot for changes you author — the author
 regenerates locally. There is no scheduled workflow at all." Its CI is rigorous
 but enforces **internal consistency**, never external truth: nothing in it ever
-fetches a provider's page. The live-probe axis (`scripts/probe.mjs`,
+fetches a provider's page. The live-probe axis (upstream scripts/probe.mjs,
 `last_probed`, `probe_status`) exists in the schema and **has never run with
 keys** — all 64 entries in `data/probe-report.json` read `"status":
 "skipped-no-key"`.
@@ -1273,7 +1273,7 @@ Concrete recommendation if we wire it in:
    field is therefore a hard validation break shipped under a minor bump with no
    signal. Diff on tag change and re-validate before ingesting.
 2. **Read raw GitHub, not the site API**, if `env_key` matters —
-   `scripts/build.mjs` strips that field from the published payload.
+   the upstream scripts/build.mjs strips that field from the published payload.
 3. **Ingest only the machine-comparable fields.** `rate_limits` and `free_tier`
    are prose strings (Groq's is one sentence containing four models' RPM/RPD/TPM/
    TPD, prefixed "e.g."). They are human-review context, never a quota gate.

@@ -1,19 +1,25 @@
-import { Clock, FolderOpen, MessageSquare, Search, Settings } from '@agiworkforce/icons';
 import {
-  Box,
-  CheckCircle2,
+  Clock,
   Code,
   Database,
-  Edit3,
   FileText,
-  GitBranch,
+  FolderOpen,
   Globe,
   HelpCircle,
   Image,
-  ListTodo,
-  MousePointerClick,
+  MessageSquare,
+  Search,
+  Settings,
   Terminal,
   Video,
+} from '@agiworkforce/icons';
+import {
+  Box,
+  CheckCircle2,
+  Edit3,
+  GitBranch,
+  ListTodo,
+  MousePointerClick,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
