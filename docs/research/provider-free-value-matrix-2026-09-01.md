@@ -77,33 +77,45 @@ five-column pass, per the brief.
 
 ## Verdict summary
 
-Nineteen providers. Two new company-pool candidates, both of which must still go
-through the workbook process before anyone touches `free-pools.json`.
+Twenty-five providers. Two new company-pool candidates, both of which must still
+go through the workbook process before anyone touches `free-pools.json`.
 
-| #   | Provider                    | Free allowance (recurring)              | Signup credit              | Live discount                         | OpenAI-compat | Anthropic-compat | Lane verdict                            | Deciding fact                                                                                              |
-| --- | --------------------------- | --------------------------------------- | -------------------------- | ------------------------------------- | ------------- | ---------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 1   | **Zhipu GLM / z.ai**        | **yes** — 3 `$0` Flash models           | none (intl)                | GLM-5.3-Flash −50% to **09-09**       | yes           | yes              | **COMPANY-POOL CANDIDATE** + paid-cheap | Free models are permanent SKUs, and the API ToS excludes prompts from training by default                  |
-| 2   | **Novita**                  | **yes** — 5 `$0` models                 | unstated; $10 referral     | glm-5.3-flash −50%, no end date       | yes           | yes (49 models)  | **COMPANY-POOL CANDIDATE** + BYOK       | Zero-data-retention default, hard-stops with 403, and no clause bars serving third parties                 |
-| 3   | Alibaba Qwen / Model Studio | 1M tokens per model, 90-day expiry      | UNCLEAR                    | qwen3.7-max −50%, plus −20% (undated) | yes           | yes              | NEEDS-HUMAN-REVIEW → then BYOK          | ToS §III.5 may make free-quota output non-commercial; the document cuts both ways                          |
-| 4   | Scaleway Generative APIs    | 1M tokens, all models                   | none found                 | batch −50% (structural)               | yes           | **no**           | **EXCLUDED (pool)** / BYOK              | `hardStopsBeforePaid` — its own FAQ says you cannot configure a blocking threshold                         |
-| 5   | SambaNova Cloud             | 20 RPM / **20 RPD** / 200K TPD, no card | UNCLEAR (sources clash)    | none                                  | yes           | yes              | **EXCLUDED (pool)** / BYOK marginal     | ToS §1.5(c) bars a "service bureau or outsourced offering"; 20 requests/day is not capacity                |
-| 6   | Hyperbolic                  | Basic tier, 60 RPM, no payment          | $1 `[SECONDARY]`           | none                                  | yes           | **no**           | **EXCLUDED (pool)** / BYOK              | ToS §2.1 licenses "personal or internal business purposes" — fails third-party serving                     |
-| 7   | Cerebras                    | **none** — free tier retired            | $5 / 30 days, card req'd   | none                                  | yes           | **no**           | BYOK-recommend / paid-fast              | Docs verbatim: "Is there a permanently free tier? No."                                                     |
-| 8   | OVHcloud AI Endpoints       | guard/TTS/image only; 2 RPM anonymous   | $200 / 1 month, card req'd | none                                  | yes           | **no**           | paid-cheap + free moderation infra      | Nothing free on the chat path, but the friendliest contract of all nineteen                                |
-| 9   | DeepSeek                    | none                                    | UNCLEAR `[SECONDARY]`      | off-peak is base; peak is **+100%**   | yes           | yes              | BYOK-recommend + paid-cheap             | No free row on the pricing page; cache-hit input is ~30× cheaper than cache-miss                           |
-| 10  | Xiaomi MiMo                 | none (grants are application-gated)     | none automatic             | off-peak ×0.8 (hour-of-day)           | yes           | yes              | BYOK-recommend + paid-cheap             | A first-party hosted API exists — the open-weights-only premise was wrong                                  |
-| 11  | MiniMax                     | none                                    | UNCLEAR (no primary)       | **M3 "permanent" −50%**               | yes           | yes              | BYOK lane only + paid-cheap             | Training not excluded and no opt-out — could never clear fact 4                                            |
-| 12  | Moonshot Kimi               | none; **$1 before first call**          | $5 voucher after $5 spend  | none                                  | yes           | yes              | BYOK lane only (high friction)          | Top-up is WeChat Pay / Alipay only, and Tier0 is 3 RPM                                                     |
-| 13  | Fireworks AI                | none (10 RPM until card)                | $1, no card                | batch/cache −50% (structural)         | yes           | yes              | BYOK-recommend                          | Explicit no-training in ToS §3.6; $1 is a smoke test, not capacity                                         |
-| 14  | Mistral                     | "Free mode", limits unpublished         | **$10/mo API credits**     | none dated                            | yes           | **no**           | workbook governs; gap-fill only         | Free plan now carries a recurring $10/mo credit line — new since the workbook                              |
-| 15  | DeepInfra                   | none — card required to start           | none confirmed             | none                                  | yes           | yes              | BYOK lane only                          | Pricing page verbatim: "You have to add a card or pre-pay"                                                 |
-| 16  | Tencent Hunyuan             | TokenHub 1M tokens/model, 90 days       | promo runs to 2026-12-31   | none                                  | yes           | **no**           | BYOK-recommend (pool pass not done)     | Foreign passport/driver's licence accepted for KYC — a real international path                             |
-| 17  | Baidu ERNIE                 | exists, shape UNCLEAR                   | UNCLEAR                    | none                                  | yes (`/v2`)   | **no**           | **SKIP direct** → open weights          | Qianfan is absent from Baidu's own international portal; reach ERNIE via Novita/OpenRouter                 |
-| 18  | SiliconFlow (intl)          | **none** (the free lists are `.cn`)     | $1                         | none                                  | yes           | yes              | **SKIP**                                | ToS 3.4(p) bars "any commercial purposes"; 3.4(e) bars use "for the benefit of anyone other than yourself" |
-| 19  | GitHub Models               | **retired**                             | n/a                        | n/a                                   | **410 Gone**  | never            | **SKIP — does not exist**               | Fully retired 2026-07-30; the inference API returns HTTP 410 and the legacy host NXDOMAINs                 |
+The **Lists** column counts how many of the seven community catalogues surveyed in
+Part 4 corroborate an entry, out of `M` (mnfst), `O` (open-free-llm-api), `A`
+(amardeeplakshkar), `H` (free-llm-api-hub) and `C1`–`C3` (the CN repos). It
+measures attention, not truth — see Part 4 for why a 3/7 can be three copies of
+the same stale mistake.
 
-Two candidates out of nineteen. Both need the workbook's five-column pass before
-they are anything more than candidates.
+| #   | Provider                    | Free allowance (recurring)                  | Signup credit              | Live discount                         | OpenAI-compat        | Anthropic-compat | Lists                          | Lane verdict                            | Deciding fact                                                                                              |
+| --- | --------------------------- | ------------------------------------------- | -------------------------- | ------------------------------------- | -------------------- | ---------------- | ------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 1   | **Zhipu GLM / z.ai**        | **yes** — 3 `$0` Flash models               | none (intl)                | GLM-5.3-Flash −50% to **09-09**       | yes                  | yes              | **7/7**                        | **COMPANY-POOL CANDIDATE** + paid-cheap | Free models are permanent SKUs, and the API ToS excludes prompts from training by default                  |
+| 2   | **Novita**                  | **yes** — 5 `$0` models                     | unstated; $10 referral     | glm-5.3-flash −50%, no end date       | yes                  | yes (49 models)  | 1 (H)                          | **COMPANY-POOL CANDIDATE** + BYOK       | Zero-data-retention default, hard-stops with 403, and no clause bars serving third parties                 |
+| 3   | Alibaba Qwen / Model Studio | 1M tokens per model, 90-day expiry          | UNCLEAR                    | qwen3.7-max −50%, plus −20% (undated) | yes                  | yes              | 3 (O,H,C2)                     | NEEDS-HUMAN-REVIEW → then BYOK          | ToS §III.5 may make free-quota output non-commercial; the document cuts both ways                          |
+| 4   | Scaleway Generative APIs    | 1M tokens, all models                       | none found                 | batch −50% (structural)               | yes                  | **no**           | 2 (H,C3)                       | **EXCLUDED (pool)** / BYOK              | `hardStopsBeforePaid` — its own FAQ says you cannot configure a blocking threshold                         |
+| 5   | SambaNova Cloud             | 20 RPM / **20 RPD** / 200K TPD, no card     | UNCLEAR (sources clash)    | none                                  | yes                  | yes              | 3 (O,H,C3)                     | **EXCLUDED (pool)** / BYOK marginal     | ToS §1.5(c) bars a "service bureau or outsourced offering"; 20 requests/day is not capacity                |
+| 6   | Hyperbolic                  | Basic tier, 60 RPM, no payment              | $1 `[SECONDARY]`           | none                                  | yes                  | **no**           | **0**                          | **EXCLUDED (pool)** / BYOK              | ToS §2.1 licenses "personal or internal business purposes" — fails third-party serving                     |
+| 7   | Cerebras                    | **none** — free tier retired                | $5 / 30 days, card req'd   | none                                  | yes                  | **no**           | 6 — C3 agrees it's dead        | BYOK-recommend / paid-fast              | Docs verbatim: "Is there a permanently free tier? No."                                                     |
+| 8   | OVHcloud AI Endpoints       | guard/TTS/image only; 2 RPM anonymous       | $200 / 1 month, card req'd | none                                  | yes                  | **no**           | 3 (M,O,H)                      | paid-cheap + free moderation infra      | Nothing free on the chat path, but the friendliest contract in this document                               |
+| 9   | DeepSeek                    | none                                        | UNCLEAR `[SECONDARY]`      | off-peak is base; peak is **+100%**   | yes                  | yes              | 2 (O,C2)                       | BYOK-recommend + paid-cheap             | No free row on the pricing page; cache-hit input is ~30× cheaper than cache-miss                           |
+| 10  | Xiaomi MiMo                 | none (grants are application-gated)         | none automatic             | off-peak ×0.8 (hour-of-day)           | yes                  | yes              | **0**                          | BYOK-recommend + paid-cheap             | A first-party hosted API exists — the open-weights-only premise was wrong                                  |
+| 11  | MiniMax                     | none                                        | UNCLEAR (no primary)       | **M3 "permanent" −50%**               | yes                  | yes              | 1 (C2)                         | BYOK lane only + paid-cheap             | Training not excluded and no opt-out — could never clear fact 4                                            |
+| 12  | Moonshot Kimi               | none; **$1 before first call**              | $5 voucher after $5 spend  | none                                  | yes                  | yes              | 1 (C2)                         | BYOK lane only (high friction)          | Top-up is WeChat Pay / Alipay only, and Tier0 is 3 RPM                                                     |
+| 13  | Fireworks AI                | none (10 RPM until card)                    | $1, no card                | batch/cache −50% (structural)         | yes                  | yes              | 1 (H)                          | BYOK-recommend                          | Explicit no-training in ToS §3.6; $1 is a smoke test, not capacity                                         |
+| 14  | Mistral                     | "Free mode", limits unpublished             | **$10/mo API credits**     | none dated                            | yes                  | **no**           | 6                              | workbook governs; gap-fill only         | Free plan now carries a recurring $10/mo credit line — new since the workbook                              |
+| 15  | DeepInfra                   | none — card required to start               | none confirmed             | none                                  | yes                  | yes              | **0**                          | BYOK lane only                          | Pricing page verbatim: "You have to add a card or pre-pay"                                                 |
+| 16  | Tencent Hunyuan             | TokenHub 1M tokens/model, 90 days           | promo runs to 2026-12-31   | none                                  | yes                  | **no**           | 3 (H,C2,C3)                    | BYOK-recommend (pool pass not done)     | Foreign passport/driver's licence accepted for KYC — a real international path                             |
+| 17  | Baidu ERNIE                 | exists, shape UNCLEAR                       | UNCLEAR                    | none                                  | yes (`/v2`)          | **no**           | 1 (C2)                         | **SKIP direct** → open weights          | Qianfan is absent from Baidu's own international portal; reach ERNIE via Novita/OpenRouter                 |
+| 18  | SiliconFlow (intl)          | **none** (the free lists are `.cn`)         | $1                         | none                                  | yes                  | yes              | 6 — all describe `.cn`         | **SKIP**                                | ToS 3.4(p) bars "any commercial purposes"; 3.4(e) bars use "for the benefit of anyone other than yourself" |
+| 19  | GitHub Models               | **retired**                                 | n/a                        | n/a                                   | **410 Gone**         | never            | 3 — **all still list it live** | **SKIP — does not exist**               | Fully retired 2026-07-30; the inference API returns HTTP 410 and the legacy host NXDOMAINs                 |
+| 20  | **Cohere**                  | 1,000 calls/month, 20 RPM, no card          | none                       | none                                  | yes (partial)        | **no**           | **7/7**                        | **SKIP**                                | Pricing FAQ verbatim: trial keys "are not permitted to be used for production or commercial purposes"      |
+| 21  | Ollama Cloud                | free tier, 1 concurrent, limits unpublished | starter credits            | none                                  | **local proxy only** | local proxy only | 3 (M,O,C3)                     | BYOK-watch                              | Hosts the CN open-weight frontier with no Chinese signup — but there is no hosted compat endpoint          |
+| 22  | Hugging Face router         | **$0.10/month**, auto-replenishing          | n/a (recurring)            | none                                  | yes                  | **no**           | 4 (M,O,A,H)                    | BYOK-recommend (thin)                   | $0.10/month is a demo allowance, and upstream provider terms govern traffic HF is silent about             |
+| 23  | Aion Labs                   | 15 RPM / **20K tokens/day**, no card        | none                       | none                                  | yes                  | **no**           | 3 (M,O,C3)                     | BYOK-watch                              | Numbers confirmed on vendor docs, but 20K tokens/day is a demo and the models are third-party rebrands     |
+| 24  | **Inception Labs**          | none recurring                              | **100M tokens, no card**   | none                                  | yes                  | **no**           | 2 (C1,C2)                      | BYOK-recommend — best new grant         | 100M free tokens with no card, on genuinely differentiated diffusion LLMs (mercury-2)                      |
+| 25  | AI21 Labs                   | none                                        | $10 / 3 months, no card    | none                                  | UNCLEAR              | **no**           | 2 (O,H)                        | BYOK-recommend (thin)                   | Docs verbatim "$10 credit… good for three months" — a trial, not the free tier the lists claim             |
+
+Two candidates out of twenty-five. Both need the workbook's five-column pass
+before they are anything more than candidates.
 
 ## Top-line findings
 
@@ -133,10 +145,19 @@ excluded on this; Alibaba is survivable only because the hard stop is a setting
 we control.
 
 **5. Anthropic-compatible endpoints are far more common than assumed.** Eleven of
-nineteen ship one first-party: DeepSeek, Moonshot, Zhipu, Alibaba, MiniMax,
+twenty-five ship one first-party: DeepSeek, Moonshot, Zhipu, Alibaba, MiniMax,
 Xiaomi, Novita, Fireworks, DeepInfra, SambaNova, SiliconFlow. Mistral, Cerebras,
-Scaleway, OVHcloud and Hyperbolic do not. This materially changes what a
-harness-level Anthropic client can reach.
+Scaleway, OVHcloud, Hyperbolic, Cohere, Hugging Face, Aion, Inception and AI21 do
+not. This materially changes what a harness-level Anthropic client can reach.
+
+**6. The community lists are worth mining and worthless as authority**, and one
+fact proves it in a line: **three of the seven still list GitHub Models as a live
+free tier**, 33 days after GitHub retired it and its API began returning HTTP 410.
+The most-corroborated provider in the entire corpus — Cohere, present in all seven
+— turns out to be a **SKIP**, because its own pricing FAQ says trial keys "are not
+permitted to be used for production or commercial purposes." Corroboration count
+measures how much attention a provider gets, not whether the claim is true or
+current. Part 4 has the full evaluation.
 
 ---
 
@@ -1154,6 +1175,201 @@ applicable" below Copilot Pro.
 
 ---
 
+# Part 4 — Community catalogues: corroboration, new leads, and the cron question
+
+Seven GitHub catalogues of free LLM APIs were mined as lead sources. **None is an
+authority and none is cited as one.** Every provider that entered the matrix from
+here was re-verified against the vendor's own pages first, and the verification
+changed the answer more often than it confirmed it.
+
+## Why the corroboration column is not a confidence score
+
+Three demonstrations, all from this pass:
+
+- **Three lists still carry GitHub Models as a live free tier** — with rate-limit
+  tables — 33 days after retirement. One of them still publishes the
+  `models.inference.ai.azure.com` base URL, which no longer resolves in DNS.
+- **Cohere appears in all seven**, more than any other provider, and is a SKIP.
+  Its free trial key is real and generous-looking (1,000 calls/month, 20 RPM, no
+  card), but <https://cohere.com/pricing> (accessed 2026-09-01) answers its own
+  FAQ "What's the difference between a Trial API key and Production API key?"
+  with: **"API calls made from a Trial API key are free. However, trial keys are
+  rate limited and are not permitted to be used for production or commercial
+  purposes."** Not one of the seven lists carries that sentence; one mentions
+  "non-commercial" in passing. Worth noting for the re-check: this sentence used
+  to live on the rate-limits doc and **is no longer there** — today it exists only
+  on the pricing FAQ.
+- **Six lists show SiliconFlow with free models.** All six are describing the
+  mainland `.cn` site. The international `.com` entity prices the same
+  "permanently free" Qwen3-8B at $0.06/M. Our §18 finding stands, and the lists'
+  agreement with each other is agreement about a different company.
+
+The column is still useful in one direction: **a 0/7 on a provider we rate highly
+is a signal we found something the ecosystem has not.** Novita (1/7), Hyperbolic,
+DeepInfra and Xiaomi MiMo (0/7 each) are all in that position.
+
+## The seven catalogues
+
+| Repo                                     | Stars | Last commit       | What it counts as free                               | Usable as a lead source?                                                                                                            |
+| ---------------------------------------- | ----- | ----------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `mnfst/awesome-free-llm-apis`            | 7,253 | 2026-08-21        | Permanent tiers only; no cards, no trial credits     | **Best of the seven** — CI-generated from `data.json`, and it is the only one with a `.verify/` directory of live probe reports     |
+| `open-free-llm-api/awesome-freellm-apis` | 2,625 | 2026-09-01        | Free tiers **plus** labelled credits ≥$1             | Freshest clock, weakest verification — daily commits are a scrape of the maintainers' own site, and the facts inside are months old |
+| `amardeeplakshkar/awesome-free-llm-apis` | 156   | 2026-08-16        | Permanent-free only, trial credits excluded          | **Stale** — self-dated "verified as of March 2026". Note this is 156 stars, not 7.2k; the brief conflated it with mnfst             |
+| `pacocartones/free-llm-api-hub`          | —     | 2026-08-14 (data) | Four-way `free_type` taxonomy, 69 providers          | **The machine-readable one** — evaluated separately below                                                                           |
+| `for-the-zero/Free-LLM-Collection`       | 515   | 2026-08-30        | Long-term availability over token caps               | **Contaminated** — its table is self-described as LLM-generated, and it mixes four scraper/proxy entries in unmarked                |
+| `guihuashaoxiang/FreeLLM-API-KeyHub`     | 218   | 2026-07-19        | Broadest: tiers, grants, vouchers, referral stacking | Citable but weak — agent-maintained, six weeks stale, and carries undisclosed referral links                                        |
+| `CYBIRD-D/FREE-LLM-API-Provider`         | 100   | 2026-08-28        | Permanent tiers sourced to vendor rate-limit pages   | **Most disciplined of the CN three** — per-provider "Last Check" dates, and it strikes through dead tiers                           |
+
+One naming worry can be closed: **`FreeLLM-API-KeyHub` is not a key pool.** Its
+second line reads "⚠️ 本仓库不提供任何 API Key，仅汇总官方公开的免费资源信息 ⚠️" — this
+repository provides no API keys, it only aggregates officially published free-tier
+information. The name is misleading; the content is legitimate.
+
+`omnilabs-ai/OmniRouter` was also read as instructed and yielded **nothing**. Its
+`serverRouter/providers/` wires five providers (OpenAI, Anthropic, Gemini,
+Together, Stability; DeepSeek is commented out with `# NOT Fast Enough, using
+together instead`), has **no free-tier concept at any layer**, and no retry,
+backoff, fallback or 429 handling to learn from — its "smart" router optimises
+hardcoded cost/latency constants over paid models. Last commit 2025-04-14, no
+LICENSE, and `firebase-credentials.json` is committed at the repo root. Discard.
+
+## `free-llm-api-hub` as a re-verification cron input — recommended, with limits
+
+This is the one worth wiring up, and the evaluation turned on a single question
+the repo answers honestly about itself.
+
+**"Continuously verified" means a human on a 90-day SLA, not a bot.** There is no
+scheduled job that re-reads provider pages. The only `cron:` in the repository is
+`0 4 * * 1` in `.github/workflows/codeql.yml` — a static security scan of the
+JavaScript. The maintenance workflows were **deliberately deleted on 2026-08-13/14
+to save Actions minutes**, and `.github/workflows/verify.yml` says so in its own
+header: "There is no regeneration bot for changes you author — the author
+regenerates locally. There is no scheduled workflow at all." Its CI is rigorous
+but enforces **internal consistency**, never external truth: nothing in it ever
+fetches a provider's page. The live-probe axis (`scripts/probe.mjs`,
+`last_probed`, `probe_status`) exists in the schema and **has never run with
+keys** — all 64 entries in `data/probe-report.json` read `"status":
+"skipped-no-key"`.
+
+So it carries **zero liveness signal**. Our own probe remains the only eligibility
+authority, which was already the design.
+
+What it does carry is worth having:
+
+- **`docs_url` + `last_verified` on 69/69 entries**, both validator-enforced —
+  a human read this provider's own page on this date, and here is the page. That
+  is a real freshness signal and the single field pair worth consuming.
+- **35 confirmed `openai_base_url` values** and a stable `slug` per provider —
+  good input for coverage diffing.
+- **MIT licensed**, so programmatic consumption and redistribution are fine.
+- A per-provider change history at `/api/v1/history.json`, purpose-built for
+  exactly the "did this tier change?" diff a cron wants.
+
+Concrete recommendation if we wire it in:
+
+1. **Pin a tag** (`v2.9.0`), never `main`. The `version` field tracks the data
+   snapshot, **not the schema** — the CHANGELOG says so outright — while
+   `data/schema.json` sets `additionalProperties: false` at both levels. A new
+   field is therefore a hard validation break shipped under a minor bump with no
+   signal. Diff on tag change and re-validate before ingesting.
+2. **Read raw GitHub, not the site API**, if `env_key` matters —
+   `scripts/build.mjs` strips that field from the published payload.
+3. **Ingest only the machine-comparable fields.** `rate_limits` and `free_tier`
+   are prose strings (Groq's is one sentence containing four models' RPM/RPD/TPM/
+   TPD, prefixed "e.g."). They are human-review context, never a quota gate.
+4. **Never let `commercial_ok: null` imply permission** — it is null on 35 of 69,
+   and the maintainer's own open issues are campaigns to fill exactly that gap.
+5. **Treat anything past 60 days old as no signal**, matching the hub's own
+   "due soon" threshold. Its committed freshness badge currently understates
+   staleness by 14 days, so compute age from `last_verified`, not from the badge.
+6. **Plan for it going dark.** Bus factor is 1 (94% of commits), the repo is seven
+   weeks old, and the maintainer has already deleted his own automation once for
+   cost.
+
+Net: a **useful tripwire and coverage-diff input, wired as advisory only** — it
+can tell us "someone read Groq's page 12 days ago and the tier still looked like
+this", which is worth a re-check trigger. It can never set `verifiedAtMs`.
+
+## New leads: what survived verification
+
+Twenty-two providers appeared across these lists that were not in our set. After
+verifying against vendor pages, **six entered the matrix** (rows 20–25) and the
+rest dropped. The verification changed the claim in almost every case:
+
+| Lead              | List claim                          | What the vendor's own pages say                                                                                                                                                                | Outcome                    |
+| ----------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| Cohere            | 1,000 calls/mo free, forever        | True — **and trial keys "are not permitted to be used for production or commercial purposes"**                                                                                                 | **SKIP** (row 20)          |
+| Ollama Cloud      | Free tier, hourly+daily limits      | Free tier real; limits genuinely unpublished, and Ollama never describes them as hourly+daily. **Compat is local-proxy only**                                                                  | BYOK-watch (row 21)        |
+| Hugging Face      | $0.10/mo auto-replenishing          | Confirmed exactly, $2/mo on PRO. But **Hyperbolic and Nebius are no longer routed partners** — that part is stale                                                                              | BYOK-thin (row 22)         |
+| Aion Labs         | 15 RPM / 20K tokens/day, no card    | Confirmed exactly. Models are third-party rebrands (Aion 2.0 = DeepSeek V3.2, Aion 3.0 = GLM-family)                                                                                           | BYOK-watch (row 23)        |
+| Inception Labs    | "1000 RPM" or "10M free tokens"     | Both wrong — docs say **100 million free tokens**, no card until they run low                                                                                                                  | **KEEP** (row 24)          |
+| AI21 Labs         | 2 free models, 200 RPM              | It is a **$10 credit good for three months**, not a free tier                                                                                                                                  | BYOK-thin (row 25)         |
+| OpenCode Zen      | 6–13 free models, no billing needed | Card **is** required before any key issues ($20 initial balance), and free models train on your data — one grants "permission to use your prompts and completions to train future Meta models" | **DROP**                   |
+| Nebius AI Studio  | Free Qwen3-235B model               | `studio.nebius.com` **301s to `tokenfactory.nebius.com`** — renamed. Now a $1/30-day trial with a mandatory card                                                                               | **DROP**                   |
+| Nscale            | 2 free models, fair-use             | No standing free tier; **$5 minimum credit** to start, and its pricing doc is login-gated                                                                                                      | **DROP**                   |
+| ModelScope        | 2,000 RPD free                      | Requires binding an Alibaba Cloud account that has passed 实名认证 — mainland only                                                                                                             | **DROP**                   |
+| BytePlus ModelArk | _(in no list)_                      | The international sibling of Volcengine Ark. Product is real and documented, but every pricing/model/API page returns a JS shell to static fetch                                               | **UNRESOLVED** — see below |
+
+**BytePlus ModelArk is the one open lead worth chasing.** It appeared in none of
+the seven catalogues, yet it is the plausible international door to ByteDance's
+Doubao/Seed models — whose mainland sibling (Volcengine Ark) reportedly grants
+500,000 free tokens per model _permanently_, locked behind 实名认证. Whether
+BytePlus offers anything comparable to a non-Chinese company could not be
+established: `docs.byteplus.com` serves client-rendered pages with no server-side
+fallback, so Pricing, Model list and API reference all returned empty to a static
+fetch. The existence of a dedicated "Region availability" doc page is itself a
+signal that geo-gating is a live concern there. **This needs a Playwright pass or
+a signed-in console walkthrough**, not another fetch attempt.
+
+Two smaller finds worth recording even though they are not chat providers:
+**Jina AI** (10M free tokens, no signup, no card — but embeddings/reranker/reader
+only) and **Morph Labs** / **Relace** (free forever, but code-edit "fast apply"
+models). File under retrieval and codegen infrastructure, not the chat lanes.
+
+## Excluded genre — projects we will not cite or use
+
+The brief bans free access obtained by scraping, reverse-proxying consumer apps,
+or pooling rotated accounts. That genre is not a fringe of these lists; it is
+mixed in unmarked, and `for-the-zero/Free-LLM-Collection` carries four such
+entries with no distinguishing label. Named here so nobody re-discovers them as
+leads: **G4F** (`g4f.dev` — the canonical `xtekky/gpt4free`), **ChatAnywhere**
+(free GPT/DeepSeek quota plus paid access "at 10–20% of official list price", a
+price unreachable through authorised channels), **肖恩AI / Shawn AI** (Claude and
+GPT models free via daily check-in, front-end domain not matching its endpoint),
+**AIStudioToAPI** (a wrapper exposing Google AI Studio's consumer UI as
+OpenAI/Gemini/Anthropic APIs — and the only contamination in the otherwise careful
+`CYBIRD-D` repo), **DXNT**, **DMXAPI** and **AiHubMix** (中转 relay resellers),
+**LLM7.io** (serves `claude-*` and `gpt-*` unauthenticated with no disclosed
+upstream; appears in three lists, the most widespread entry to refuse),
+**UnoRouter** (self-describes as wiring "18 free providers" into one pooled
+endpoint), **Api.Airforce** and **AnyAPI** (gateways offering GPT-4o-mini free
+with no disclosed upstream), **Kilo Code** (keyless 200 req/hr pool routed onto
+NVIDIA's free endpoints, whose own terms say "Trial use only"), and **Agnes AI**
+(unattributable — the platform page renders only a loading shell). **Chutes.ai** is
+a separate case: Bittensor-based decentralised compute, so the nodes serving a
+prompt are unidentified third parties — not fraud, but incompatible with our terms
+invariant for the same reason. **Pollinations AI** is a genuine open-source
+organisation that nonetheless re-serves GPT/Claude/Gemini under alias model IDs,
+so it fails on reselling even though its sourcing is not in question.
+
+Two structural patterns in the CN lists are worth naming as well, because they are
+presented as features rather than as violations: uncapped **referral stacking**
+("奖励可无限叠加，上不封顶") and **daily check-in** (每日签到) quota farming. Both are
+multi-account behaviour against per-account limits, which is out by definition
+under the workbook's `proxyingAllowed` reading.
+
+One technique from this corpus is worth stealing, though. An open issue on the
+`amardeeplakshkar` repo proposes two cheap probes for detecting exactly these
+resellers, both claimed to be measured against live endpoints: send
+`max_tokens: 8` and check `completion_tokens` rather than `finish_reason` (many
+resellers ignore the cap), and send one deterministic prompt at `temperature: 0`
+to `claude-*`, `gpt-*` and `gemini-*` on the same gateway and hash the replies —
+**byte-identical output across different model names means one engine is behind
+all of them.** If we ever evaluate an unfamiliar gateway, that second probe
+settles it in minutes and belongs in our own verification kit.
+
+---
+
 # Founder signup queue
 
 Ordered by value per unit of effort. Nothing here is authorized — this is the
@@ -1177,19 +1393,24 @@ recommended order if the founder wants to harvest it.
    KYC accepts a passport or driver's licence from your own jurisdiction. This is
    the only credible Chinese-hyperscaler path for a non-Chinese company.
 
+4. **Inception Labs** — **100 million free tokens, no card** until they run low.
+   The largest no-card grant found anywhere in this research, on diffusion LLMs
+   (`mercury-2`, `mercury-edit-2`) that are architecturally unlike everything else
+   in the catalogue. RPM cap is unpublished — measure it. Two minutes to claim.
+
 **Tier 2 — worth doing, with a specific precaution each**
 
-4. **Alibaba Cloud Model Studio (Singapore region)** — 1M tokens per model, 90
+5. **Alibaba Cloud Model Studio (Singapore region)** — 1M tokens per model, 90
    days. **Card + billing address required**; no ID document needed for Singapore
    resources. **Precaution: enable "Free Quota Only" immediately**, or a verified
    account silently bills overage. Do not register from India (blocked) and do not
    use a virtual card (rejected).
-5. **Cerebras** — $5 / 30 days. **Card required before anything works.** Not a
+6. **Cerebras** — $5 / 30 days. **Card required before anything works.** Not a
    pool, but the fastest inference in the set and worth having for latency
    benchmarking against our routing assumptions.
-6. **Fireworks** — $1, **no card**. Two minutes of effort; enough to validate the
+7. **Fireworks** — $1, **no card**. Two minutes of effort; enough to validate the
    Anthropic-compat endpoint and the adapter.
-7. **Hyperbolic** — free Basic tier, 60 RPM, **no payment at all**. Excluded from
+8. **Hyperbolic** — free Basic tier, 60 RPM, **no payment at all**. Excluded from
    the pool on terms, but it is the best "try it without a card" surface in the
    document and useful for adapter smoke tests.
 
