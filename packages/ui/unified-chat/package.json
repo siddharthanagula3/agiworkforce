@@ -6,7 +6,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./network-error": "./src/lib/network-error.ts"
+    "./network-error": "./src/lib/network-error.ts",
+    "./composer-editor": "./src/composer-editor/index.ts",
+    "./composer-editor.css": "./src/composer-editor/composer-editor.css"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
