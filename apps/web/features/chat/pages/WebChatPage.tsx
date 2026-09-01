@@ -82,6 +82,9 @@ import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
 import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
   Sidebar,
   useConfirm,
   type SidebarSession,
@@ -661,14 +664,8 @@ async function persistDefiniteVideoStartFailure(params: {
   return readVideoStartFailureProjection(await response.json());
 }
 
-const MOBILE_NAV_FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-function mobileNavigationFocusable(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(MOBILE_NAV_FOCUSABLE)).filter(
-    (element) => element.offsetParent !== null || element === document.activeElement,
-  );
-}
+const MOBILE_NAV_DRAWER_ID = 'chat-mobile-navigation';
+const MOBILE_NAV_DRAWER_WIDTH = 280;
 
 // `highlightMessage` arrives verbatim from the URL, so matching on the dataset
 // value keeps a crafted id (quotes, brackets) out of a selector string it could
@@ -713,11 +710,10 @@ export default function WebChatPage() {
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
-  // Auto-collapse the sidebar below the mobile breakpoint so the composer
-  // never gets squeezed into a few px of width on a phone-sized viewport.
-  // Tracked separately from the user's manual collapse toggle so widening
-  // the window back out restores whatever the user had chosen, and the
-  // manual toggle below the breakpoint doesn't fight the media query.
+  // Below the mobile breakpoint the rail leaves the flow entirely, so the
+  // composer never gets squeezed into a few px of width on a phone-sized
+  // viewport. Tracked separately from the user's manual collapse toggle so
+  // widening the window back out restores whatever the user had chosen.
   const [isNarrowViewport, setIsNarrowViewport] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -727,59 +723,14 @@ export default function WebChatPage() {
     mql.addEventListener('change', update);
     return () => mql.removeEventListener('change', update);
   }, []);
-  const effectiveSidebarCollapsed = sidebarCollapsed || isNarrowViewport;
-  // Compact viewports render the sidebar as an off-canvas drawer instead of an
-  // in-flow rail; this tracks whether that drawer is open.
+  // Compact viewports render the sidebar in the shared Sheet drawer instead of
+  // an in-flow rail; this tracks whether that drawer is open. The Radix dialog
+  // behind Sheet owns the modal contract — focus trap, Escape, scroll lock —
+  // so this page holds nothing but the open flag and the trigger it restores
+  // focus to.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
-  const mobileNavDrawerRef = useRef<HTMLDivElement>(null);
   const [workSessionPanelOpen, setWorkSessionPanelOpen] = useState(false);
-
-  useEffect(() => {
-    if (!mobileNavOpen) return;
-    const trigger = mobileNavTriggerRef.current;
-    const drawer = mobileNavDrawerRef.current;
-    const focusFrame = requestAnimationFrame(() => {
-      const first = drawer ? mobileNavigationFocusable(drawer)[0] : undefined;
-      (first ?? drawer)?.focus();
-    });
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // A portalled menu inside the drawer owns its first Escape press. Respect
-      // that dismissal instead of also tearing down the surrounding drawer.
-      if (event.defaultPrevented) return;
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setMobileNavOpen(false);
-        return;
-      }
-      if (event.key !== 'Tab' || !drawer) return;
-
-      const focusable = mobileNavigationFocusable(drawer);
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!first || !last) {
-        event.preventDefault();
-        drawer.focus();
-        return;
-      }
-
-      const activeInsideDrawer = drawer.contains(document.activeElement);
-      if (event.shiftKey && (!activeInsideDrawer || document.activeElement === first)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (!activeInsideDrawer || document.activeElement === last)) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      cancelAnimationFrame(focusFrame);
-      document.removeEventListener('keydown', handleKeyDown);
-      trigger?.focus();
-    };
-  }, [mobileNavOpen]);
 
   // Hydrate server-persisted connector per-tool permission verdicts once when
   // signed in, so a "block/allow this tool" choice follows the user across
@@ -4408,6 +4359,56 @@ export default function WebChatPage() {
     </div>
   );
 
+  // ONE Sidebar wiring, rendered either as the desktop rail or inside the
+  // narrow-viewport Sheet. The handlers that close the drawer stay handlers:
+  // the drawer's dismissal is a consequence of the action, not a listener.
+  const sharedSidebarProps = {
+    sessions: sidebarSessions,
+    projects: sidebarProjects,
+    activeSessionId: displayedConversationId ?? undefined,
+    isLoading: isConversationSidebarPending,
+    error: conversationListError,
+    mode: 'cloud' as const,
+    headerSlot: <SidebarWordmark />,
+    onNewChat: () => {
+      setMobileNavOpen(false);
+      handleNewChat();
+    },
+    onToggleCollapse: handleToggleSidebar,
+    onOpenSearch: () => {
+      setMobileNavOpen(false);
+      handleOpenSearch();
+    },
+    navItems: sidebarNavItems,
+    footerSlot: sidebarFooterSlot,
+    // GOV-19: the two props the shared Sidebar's usage widget needs.
+    showUsageWidget: managedUsageSummary !== null,
+    budgetPercent: managedBudgetPercent,
+    onOpenUsage: () => {
+      setMobileNavOpen(false);
+      // CRIT-008: open in place — /settings/usage only bounces to /chat.
+      openSettings('usage');
+    },
+    onSelect: (id: string) => {
+      setMobileNavOpen(false);
+      handleSelectSession(id);
+    },
+    onDelete: (id: string) => void handleDeleteSession(id),
+    onRename: handleRenameSession,
+    onTogglePin: handlePinSession,
+    onStar: handleStarSession,
+    onArchive: handleArchiveSession,
+    onShare: handleShareSession,
+    onMoveToProject: handleMoveToProjectSession,
+    onProjectOpen: handleProjectOpen,
+    onProjectNewChat: handleProjectNewChat,
+    onProjectRename: handleProjectRename,
+    onProjectSettings: handleProjectSettings,
+    onProjectPin: handleProjectPin,
+    onProjectDelete: handleProjectDelete,
+    onProjectCreate: handleProjectCreate,
+  };
+
   // The shell ends where the consent banner begins rather than running under
   // it. The banner is fixed at z-50 and its card takes pointer events, so
   // anything in that strip was unreachable until it was answered: measured at
@@ -4428,82 +4429,30 @@ export default function WebChatPage() {
         shortcuts={KEYBOARD_SHORTCUT_DOCS}
       />
 
-      {/* Sidebar — @agiworkforce/ui shared component. Compact viewports render
-          it as an off-canvas drawer (fixed overlay + backdrop) instead of an
-          in-flow rail so the conversation column gets the full width. */}
-      {isNarrowViewport && mobileNavOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/40"
-          onClick={() => setMobileNavOpen(false)}
-          aria-hidden="true"
-        />
+      {/* Sidebar — @agiworkforce/ui shared component. Compact viewports move it
+          into the shared Sheet drawer (same primitive WebAppShell uses) instead
+          of an in-flow rail, so the conversation column gets the full width. */}
+      {!isNarrowViewport && <Sidebar {...sharedSidebarProps} collapsed={sidebarCollapsed} />}
+
+      {isNarrowViewport && (
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetContent
+            id={MOBILE_NAV_DRAWER_ID}
+            side="left"
+            className="w-[280px] max-w-[85vw] gap-0 overflow-y-auto p-0"
+            data-testid="chat-mobile-nav-drawer"
+            onCloseAutoFocus={(event) => {
+              // The sheet opens from a button outside it, so Radix has no
+              // trigger to hand focus back to and would drop it on the body.
+              event.preventDefault();
+              mobileNavTriggerRef.current?.focus();
+            }}
+          >
+            <SheetTitle className="sr-only">{t('chat:openNavigation')}</SheetTitle>
+            <Sidebar {...sharedSidebarProps} collapsed={false} width={MOBILE_NAV_DRAWER_WIDTH} />
+          </SheetContent>
+        </Sheet>
       )}
-      <div
-        id="chat-mobile-navigation"
-        ref={mobileNavDrawerRef}
-        role={isNarrowViewport && mobileNavOpen ? 'dialog' : undefined}
-        aria-modal={isNarrowViewport && mobileNavOpen ? true : undefined}
-        aria-label={isNarrowViewport && mobileNavOpen ? t('chat:openNavigation') : undefined}
-        aria-hidden={isNarrowViewport && !mobileNavOpen ? true : undefined}
-        inert={isNarrowViewport && !mobileNavOpen ? true : undefined}
-        tabIndex={isNarrowViewport && mobileNavOpen ? -1 : undefined}
-        className={
-          isNarrowViewport
-            ? cn(
-                'chat-mobile-drawer fixed inset-y-0 left-0 z-50 flex w-[280px] max-w-[85vw] shadow-xl transition-transform duration-200 ease-out',
-                mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
-              )
-            : 'contents'
-        }
-      >
-        <Sidebar
-          sessions={sidebarSessions}
-          projects={sidebarProjects}
-          activeSessionId={displayedConversationId ?? undefined}
-          collapsed={isNarrowViewport ? false : effectiveSidebarCollapsed}
-          isLoading={isConversationSidebarPending}
-          error={conversationListError}
-          mode="cloud"
-          headerSlot={<SidebarWordmark />}
-          onNewChat={() => {
-            setMobileNavOpen(false);
-            handleNewChat();
-          }}
-          onToggleCollapse={handleToggleSidebar}
-          onOpenSearch={() => {
-            setMobileNavOpen(false);
-            handleOpenSearch();
-          }}
-          navItems={sidebarNavItems}
-          footerSlot={sidebarFooterSlot}
-          // GOV-19: the two props the shared Sidebar's usage widget needs.
-          showUsageWidget={managedUsageSummary !== null}
-          budgetPercent={managedBudgetPercent}
-          onOpenUsage={() => {
-            setMobileNavOpen(false);
-            // CRIT-008: open in place — /settings/usage only bounces to /chat.
-            openSettings('usage');
-          }}
-          onSelect={(id) => {
-            setMobileNavOpen(false);
-            handleSelectSession(id);
-          }}
-          onDelete={(id) => void handleDeleteSession(id)}
-          onRename={handleRenameSession}
-          onTogglePin={handlePinSession}
-          onStar={handleStarSession}
-          onArchive={handleArchiveSession}
-          onShare={handleShareSession}
-          onMoveToProject={handleMoveToProjectSession}
-          onProjectOpen={handleProjectOpen}
-          onProjectNewChat={handleProjectNewChat}
-          onProjectRename={handleProjectRename}
-          onProjectSettings={handleProjectSettings}
-          onProjectPin={handleProjectPin}
-          onProjectDelete={handleProjectDelete}
-          onProjectCreate={handleProjectCreate}
-        />
-      </div>
 
       {/* Main area + artifact workbench */}
       <div
@@ -4537,7 +4486,7 @@ export default function WebChatPage() {
                   onClick={() => setMobileNavOpen(true)}
                   aria-label={t('chat:openNavigation')}
                   aria-expanded={mobileNavOpen}
-                  aria-controls="chat-mobile-navigation"
+                  aria-controls={MOBILE_NAV_DRAWER_ID}
                   className="-ml-1 h-8 w-8 p-0"
                 >
                   <Menu className="h-5 w-5" aria-hidden="true" />

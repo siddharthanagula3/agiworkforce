@@ -35,11 +35,21 @@ describe('WebChatPage header copy', () => {
     expect(SOURCE).not.toContain('aria-label="Open navigation"');
   });
 
-  it('keeps the closed mobile drawer inert and exposes the open drawer as a modal', () => {
-    expect(SOURCE).toContain("role={isNarrowViewport && mobileNavOpen ? 'dialog' : undefined}");
-    expect(SOURCE).toContain('inert={isNarrowViewport && !mobileNavOpen ? true : undefined}');
+  /**
+   * The drawer is the shared Sheet (Radix dialog), not a hand-rolled overlay —
+   * the same primitive WebAppShell uses. Radix owns role/aria-modal, the focus
+   * trap, Escape and the scroll lock, so what this page still has to get right
+   * is the trigger's relationship to the panel and the focus hand-back that
+   * Radix cannot do on its own (the trigger lives outside the sheet).
+   */
+  it('renders the mobile drawer through the shared Sheet rather than a hand-rolled overlay', () => {
+    expect(SOURCE).toContain('<Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>');
+    expect(SOURCE).toContain('id={MOBILE_NAV_DRAWER_ID}');
+    expect(SOURCE).toContain('mobileNavTriggerRef.current?.focus()');
     expect(SOURCE).toContain('aria-expanded={mobileNavOpen}');
-    expect(SOURCE).toContain('aria-controls="chat-mobile-navigation"');
+    expect(SOURCE).toContain('aria-controls={MOBILE_NAV_DRAWER_ID}');
+    expect(SOURCE).not.toContain('chat-mobile-drawer');
+    expect(SOURCE).not.toContain("document.addEventListener('keydown', handleKeyDown)");
   });
 
   it('asks only for chat and common keys the English corpus actually defines', () => {
