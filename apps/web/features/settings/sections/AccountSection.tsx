@@ -708,7 +708,13 @@ export function AccountSection() {
                           padding: '6px 10px',
                           fontSize: 12,
                           fontWeight: 500,
-                          color: row.isCurrent ? 'var(--text-2)' : 'var(--settings-destructive)',
+                          // The fill value, not the text one: in dark it is
+                          // 0 62.8% 30.6%, which measured 1.77:1 on the panel
+                          // behind it. --settings-destructive-text is the role
+                          // for a word on the page, and line 324 already uses it.
+                          color: row.isCurrent
+                            ? 'var(--text-2)'
+                            : 'var(--settings-destructive-text)',
                           background: 'transparent',
                           border: '1px solid var(--settings-border)',
                           borderRadius: 'var(--radius-md)',
