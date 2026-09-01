@@ -77,19 +77,55 @@ export function resolveParentId(
   return requested === undefined ? activeLeafMessageId : requested;
 }
 
+export async function messageExists(
+  tx: DatabaseAdapter,
+  conversationId: string,
+  messageId: string,
+): Promise<boolean> {
+  const [row] = await tx.query<{ id: string }>(
+    'select id from web_messages where id = $1 and conversation_id = $2 limit 1',
+    [messageId, conversationId],
+  );
+  return Boolean(row);
+}
+
 export async function assertParentInConversation(
   tx: DatabaseAdapter,
   conversationId: string,
   parentId: string,
 ): Promise<void> {
-  const [parent] = await tx.query<{ id: string }>(
-    'select id from web_messages where id = $1 and conversation_id = $2 limit 1',
-    [parentId, conversationId],
-  );
-
-  if (!parent) {
+  if (!(await messageExists(tx, conversationId, parentId))) {
     throw createError.notFound('Parent message not found');
   }
+}
+
+/**
+ * Which row a generated answer hangs off, for a writer that carries no parent
+ * of its own — the server-side persistence net, which knows only the
+ * conversation and the id it was told to write.
+ *
+ * Every flow that saves its question first leaves that question as the leaf, so
+ * the leaf is the parent. Regeneration is the one that does not: it posts
+ * nothing before the stream, so the leaf is still the answer being replaced,
+ * and hanging the new answer off it would append a turn where the reader asked
+ * for a sibling. The question that answer already answers is its own parent.
+ *
+ * This is also what makes a replay idempotent: a second persist of the same
+ * turn reads its own row as the leaf and resolves to the same parent instead of
+ * to itself.
+ */
+export async function resolveAnsweredParentId(
+  tx: DatabaseAdapter,
+  conversationId: string,
+  activeLeafMessageId: string,
+): Promise<string | null> {
+  const [leaf] = await tx.query<{ role: string; parent_id: string | null }>(
+    'select role, parent_id from web_messages where id = $1 and conversation_id = $2 limit 1',
+    [activeLeafMessageId, conversationId],
+  );
+
+  if (!leaf) return null;
+  return leaf.role === 'assistant' ? leaf.parent_id : activeLeafMessageId;
 }
 
 /**

@@ -4,9 +4,11 @@ vi.mock('server-only', () => ({}));
 
 const persistenceMocks = vi.hoisted(() => ({
   execute: vi.fn(async (..._args: unknown[]) => undefined),
+  // A conversation that has never branched: the single-statement write.
+  query: vi.fn(async (..._args: unknown[]) => [{ active_leaf_message_id: null }]),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ execute: persistenceMocks.execute }),
+  getNeonDb: () => ({ execute: persistenceMocks.execute, query: persistenceMocks.query }),
 }));
 
 const events: string[] = [];

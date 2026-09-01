@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ execute: vi.fn() }));
+const mocks = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn(async () => [] as unknown[]) }));
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ execute: mocks.execute }),
+  getNeonDb: () => ({ execute: mocks.execute, query: mocks.query }),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -15,7 +15,11 @@ import type { ProcessedRequest } from './request-processor';
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 describe('assistant turn workspace persistence', () => {
-  beforeEach(() => mocks.execute.mockResolvedValue(1));
+  beforeEach(() => {
+    mocks.execute.mockResolvedValue(1);
+    // A conversation that has never branched: the single-statement path.
+    mocks.query.mockResolvedValue([{ active_leaf_message_id: null }]);
+  });
 
   it.each([null, ORGANIZATION_ID])(
     'binds the workspace captured at admission (%s)',
