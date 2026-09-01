@@ -3,7 +3,13 @@ import { resolve } from 'node:path';
 
 import { describe, it, expect } from 'vitest';
 
-import { agiPalette, agiCoolPalette, agiChatCssVars } from '@agiworkforce/design-tokens';
+import {
+  agiPalette,
+  agiCoolPalette,
+  agiChatCssVars,
+  agiElevation,
+  agiShadows,
+} from '@agiworkforce/design-tokens';
 
 function hexToSRGB(hex: string): [number, number, number] {
   const clean = hex.replace('#', '');
@@ -471,6 +477,35 @@ describe('the two emitters of the --chat-* contract agree', () => {
       expect(fromTs).toBe(throughLadder(token(chatCssLight, name)));
     });
   }
+
+  const RUNGS = [1, 2, 3, 4] as const;
+
+  for (const [theme, block] of [
+    ['light', foundationLight],
+    ['dark', foundationDark],
+  ] as const) {
+    for (const rung of RUNGS) {
+      it(`${theme} elevation ${rung} is identical in foundation.css and design-tokens/src/index.ts`, () => {
+        expect(agiElevation[theme][rung]).toBe(token(block, `--elevation-${rung}`));
+      });
+    }
+  }
+
+  it('the shadow export derives from the elevation table rather than its own literals', () => {
+    expect(agiShadows.sm).toBe(agiElevation.light[1]);
+    expect(agiShadows.md).toBe(agiElevation.light[2]);
+    expect(agiShadows.lg).toBe(agiElevation.light[3]);
+    expect(agiChatCssVars.dark['--chat-shadow-lg']).toBe(agiElevation.dark[3]);
+  });
+
+  it('the chat elevation indirects through the foundation rung in one theme only', () => {
+    // Resolving instead of restating is what makes the dark counterpart
+    // unnecessary; a re-added .dark literal would silently pin one theme.
+    expect(token(chatCssLight, '--chat-shadow-lg')).toBe('var(--elevation-3)');
+    expect(chat.dark, 'chat.css .dark restates --chat-shadow-lg').not.toMatch(
+      /^\s*--chat-shadow-lg\s*:/m,
+    );
+  });
 
   it('every chat radius indirects through the foundation ladder', () => {
     for (const name of Object.keys(sharedRadiusTokens)) {

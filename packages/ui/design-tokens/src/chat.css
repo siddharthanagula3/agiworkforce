@@ -30,8 +30,10 @@
     --chat-fg: #1a1915;
     --chat-surface-base: #faf9f7;
     --chat-surface-elevated: #ffffff;
-    /* Elevation for popovers, menus and modals that float above the surface. */
-    --chat-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+    /* Popovers, menus and modals float above the surface, which is the third
+       elevation rung. Resolved rather than restated, so it follows the theme
+       and .dark needs no counterpart. */
+    --chat-shadow-lg: var(--elevation-3);
     --chat-surface-overlay: #ffffff;
     --chat-surface-hover: #f0eeeb;
     --chat-sidebar-bg: #f5f4f1;
@@ -98,7 +100,6 @@
     --chat-fg: hsl(var(--neutral-fg-1));
     --chat-surface-base: hsl(var(--neutral-0));
     --chat-surface-elevated: hsl(var(--neutral-3));
-    --chat-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
     --chat-surface-overlay: hsl(var(--neutral-3));
     --chat-surface-hover: hsl(var(--neutral-4));
     --chat-sidebar-bg: hsl(var(--neutral-0));
@@ -162,8 +163,6 @@
     --chat-fg: #0d0d0d;
     --chat-surface-base: #ffffff;
     --chat-surface-elevated: #ffffff;
-    /* Elevation for popovers, menus and modals that float above the surface. */
-    --chat-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
     --chat-surface-overlay: #ffffff;
     --chat-surface-hover: #f0f0f0;
     --chat-sidebar-bg: #f9f9f9;
