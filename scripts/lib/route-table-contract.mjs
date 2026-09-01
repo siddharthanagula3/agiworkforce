@@ -39,7 +39,7 @@ function literalText(node) {
 function sqlRelationReferences(sql) {
   const cteNames = new Set();
   for (const match of sql.matchAll(
-    /(?:\bwith\b|,)\s*"?([a-z_][a-z0-9_]*)"?(?:\s*\([^)]*\))?\s+as\s+(?:materialized\s+)?\(/gi,
+    /(?:\bwith\b(?:\s+recursive\b)?|,)\s*"?([a-z_][a-z0-9_]*)"?(?:\s*\([^)]*\))?\s+as\s+(?:materialized\s+)?\(/gi,
   )) {
     cteNames.add(match[1].toLowerCase());
   }
