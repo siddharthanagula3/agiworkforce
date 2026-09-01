@@ -21,6 +21,11 @@ import { signIn } from './qa-capability-harness';
 const MOBILE_VIEWPORT = { width: 390, height: 844 } as const;
 const DRAWER_TEST_ID = 'chat-mobile-nav-drawer';
 const TRIGGER_NAME = 'Open navigation';
+// An open drawer puts the trigger inside an aria-hidden, inert subtree — the
+// modal contract working as intended — so it leaves the accessibility tree and
+// no role query resolves it. State asserted while the drawer is open has to
+// address the element itself.
+const TRIGGER_SELECTOR = `[aria-label="${TRIGGER_NAME}"]`;
 const SETTLE_MS = 700;
 const LOAD_TIMEOUT_MS = 20_000;
 
@@ -63,7 +68,7 @@ test.describe('chat sidebar drawer', () => {
     const drawer = page.getByTestId(DRAWER_TEST_ID);
     await expect(drawer).toBeVisible();
     await expect(drawer).toHaveAttribute('aria-modal', 'true');
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator(TRIGGER_SELECTOR)).toHaveAttribute('aria-expanded', 'true');
     // The sidebar itself, not just the panel that frames it. Exact, so the
     // project rows' "New chat in {name}" cannot stand in for it.
     await expect(drawer.getByRole('button', { name: 'New chat', exact: true })).toBeVisible();
