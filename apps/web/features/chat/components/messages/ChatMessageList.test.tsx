@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { ChatMessageList, groupMessages } from './ChatMessageList';
@@ -672,6 +671,59 @@ describe('ChatMessageList auto-scroll', () => {
 
     await waitFor(() => {
       expect(screen.queryByLabelText('Scroll to bottom')).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps tracking the bottom when the content grows under the returning scroll', async () => {
+    const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
+    const messages = [
+      makeMessage({ id: '1', role: 'user', content: 'msg 1' }),
+      makeMessage({ id: '2', role: 'assistant', content: 'msg 2' }),
+    ];
+    render(<ChatMessageList messages={messages} />);
+
+    const scrollContainer = screen.getByRole('log');
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scrollContainer, 'clientHeight', { value: 300, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
+
+    act(() => {
+      fireEvent.scroll(scrollContainer);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
+    });
+
+    const callsBefore = scrollTo.mock.calls.length;
+    act(() => {
+      fireEvent.click(screen.getByLabelText('Scroll to bottom'));
+    });
+    await waitFor(() => {
+      expect(scrollTo.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+
+    // The rows that were unmounted while the reader was away mount and measure
+    // taller, so the scroll that just ran lands short of the real bottom.
+    Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1600, configurable: true });
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 700, configurable: true });
+    act(() => {
+      fireEvent.scroll(scrollContainer);
+    });
+
+    expect(screen.queryByLabelText('Scroll to bottom')).not.toBeInTheDocument();
+
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 1300, configurable: true });
+    act(() => {
+      fireEvent.scroll(scrollContainer);
+    });
+    expect(screen.queryByLabelText('Scroll to bottom')).not.toBeInTheDocument();
+
+    Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
+    act(() => {
+      fireEvent.scroll(scrollContainer);
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
     });
   });
 });
