@@ -60,6 +60,7 @@
   "placeholderEmpty": "كيف يمكنني مساعدتك اليوم؟",
   "shareConversation": "مشاركة المحادثة",
   "openNavigation": "فتح التنقل",
+  "openPanels": "اللوحات",
   "artifactPublish": {
     "untitled": "عنصر منشور",
     "publishedOn": "نُشر في {{date}}",

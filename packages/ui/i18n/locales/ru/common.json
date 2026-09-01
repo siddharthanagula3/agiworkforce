@@ -93,7 +93,6 @@
   "navLogOut": "Выйти",
   "allOf": "Все {{label}}",
   "closeDialog": "Закрыть диалоговое окно",
-  "dismissNotification": "Закрыть уведомление",
   "goToNextPage": "На следующую страницу",
   "goToPreviousPage": "На предыдущую страницу",
   "loadingCard": "Загрузка карточки",
