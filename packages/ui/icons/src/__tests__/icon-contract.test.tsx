@@ -1,18 +1,30 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import * as account from '../glyphs/account';
 import * as actions from '../glyphs/actions';
+import * as composer from '../glyphs/composer';
+import * as files from '../glyphs/files';
 import * as indicators from '../glyphs/indicators';
+import * as knowledge from '../glyphs/knowledge';
+import * as media from '../glyphs/media';
 import * as navigation from '../glyphs/navigation';
 import * as rowActions from '../glyphs/row-actions';
 import { ICON_GEOMETRY, ICON_GRID } from '../grid';
 import type { Icon, IconProps } from '../types';
 
-const ICONS: Record<string, Icon> = {
-  ...navigation,
-  ...actions,
-  ...rowActions,
-  ...indicators,
+const GLYPH_MODULES: Record<string, Record<string, Icon>> = {
+  navigation,
+  actions,
+  'row-actions': rowActions,
+  indicators,
+  composer,
+  media,
+  files,
+  account,
+  knowledge,
 };
+
+const ICONS: Record<string, Icon> = Object.assign({}, ...Object.values(GLYPH_MODULES));
 
 const ICON_ENTRIES = Object.entries(ICONS);
 
@@ -189,5 +201,39 @@ describe('icon family', () => {
 
   it('exports every glyph under a unique name', () => {
     expect(new Set(ICON_ENTRIES.map(([name]) => name)).size).toBe(ICON_ENTRIES.length);
+  });
+
+  /**
+   * The merged map would silently keep the last writer, and `export *` from the
+   * barrel would resolve the same clash to `undefined` at the call site rather
+   * than to either glyph. Compare the summed export counts against the merge.
+   */
+  it('claims each name in exactly one glyph module', () => {
+    const claims = new Map<string, string[]>();
+    for (const [module, glyphs] of Object.entries(GLYPH_MODULES)) {
+      for (const name of Object.keys(glyphs)) {
+        claims.set(name, [...(claims.get(name) ?? []), module]);
+      }
+    }
+
+    expect([...claims].filter(([, modules]) => modules.length > 1)).toEqual([]);
+  });
+
+  it('covers the composer and app-shell tranche', () => {
+    for (const name of [
+      'ArrowUp',
+      'Bell',
+      'Brain',
+      'Camera',
+      'ChevronDown',
+      'CreditCard',
+      'Menu',
+      'Mic',
+      'Paperclip',
+      'Share2',
+      'X',
+    ]) {
+      expect(ICONS[name]?.displayName).toBe(name);
+    }
   });
 });

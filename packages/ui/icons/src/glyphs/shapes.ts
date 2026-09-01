@@ -1,0 +1,10 @@
+export const SQUARE_FRAME = 'M4.5 3h15L21 4.5v15L19.5 21h-15L3 19.5V4.5z';
+export const SCREEN_FRAME = 'M4.5 4h15L21 5.5v9L19.5 16h-15L3 14.5v-9z';
+export const SCREEN_STAND = 'M12 16v3M8 19h8';
+export const DOC_BODY = 'M13.5 3H6.5L5 4.5v15L6.5 21h11l1.5-1.5V8.5z';
+export const DOC_FOLD = 'M13.5 3v5.5H19';
+export const TRAY = 'M3 15v4.5L4.5 21h15l1.5-1.5V15';
+export const MIC_CAPSULE = 'M9.5 6.5 11 5h2l1.5 1.5v6L13 14h-2l-1.5-1.5z';
+export const MIC_CRADLE = 'M6.5 11.5V13L10 17h4l3.5-4v-1.5';
+export const MIC_STAND = 'M12 17v4M9 21h6';
+export const SLASH = 'm4 4 16 16';
