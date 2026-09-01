@@ -42,6 +42,17 @@ const confirmStub = vi.hoisted(() => ({
   dialog: null as React.ReactNode,
 }));
 
+/**
+ * The drawer has to be able to decline an Escape: a row-action menu open over
+ * it takes that key for itself, and tearing the drawer down loses the user's
+ * place. Which panels count as open is the Menu package's own test; what
+ * belongs here is whether the shell wires the decision up and honours it.
+ */
+const menuEscape = vi.hoisted(() => ({
+  keepOpenForMenuEscape: vi.fn<(event: { preventDefault: () => void }) => void>(),
+  handler: null as ((event: { preventDefault: () => void }) => void) | null,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerState.push }),
   usePathname: () => routerState.pathname,
@@ -93,7 +104,14 @@ vi.mock('@agiworkforce/ui', async () => {
       React.useEffect(() => {
         if (!open) return;
         const onKeyDown = (event: KeyboardEvent) => {
-          if (event.key === 'Escape') onOpenChange?.(false);
+          if (event.key !== 'Escape') return;
+          let declined = false;
+          menuEscape.handler?.({
+            preventDefault: () => {
+              declined = true;
+            },
+          });
+          if (!declined) onOpenChange?.(false);
         };
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
@@ -109,12 +127,15 @@ vi.mock('@agiworkforce/ui', async () => {
     SheetContent: ({
       children,
       onCloseAutoFocus,
+      onEscapeKeyDown,
       ...rest
     }: {
       children?: React.ReactNode;
       onCloseAutoFocus?: (event: { preventDefault: () => void }) => void;
+      onEscapeKeyDown?: (event: { preventDefault: () => void }) => void;
       [key: string]: unknown;
     }) => {
+      menuEscape.handler = onEscapeKeyDown ?? null;
       const ref = React.useRef<HTMLDivElement>(null);
       React.useEffect(() => {
         ref.current?.focus();
@@ -153,6 +174,7 @@ vi.mock('@agiworkforce/ui', async () => {
     // window.confirm. Stable identity so the shell's useCallback deps do not
     // churn on every render, matching the real hook.
     useConfirm: () => confirmStub,
+    keepOpenForMenuEscape: menuEscape.keepOpenForMenuEscape,
   };
 });
 
@@ -231,6 +253,8 @@ beforeEach(() => {
   shellState.billing.unauthenticated = false;
   shellState.conversationsLoading = false;
   settingsModalState.openSettings = vi.fn();
+  menuEscape.keepOpenForMenuEscape.mockReset();
+  menuEscape.handler = null;
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     get matches() {
       return mediaState.matches;
@@ -313,6 +337,43 @@ describe('WebAppShell responsive navigation', () => {
     expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('narrow: keeps the drawer open when a row-action menu claims the Escape', () => {
+    mediaState.matches = true;
+    menuEscape.keepOpenForMenuEscape.mockImplementation((event) => event.preventDefault());
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Open navigation' });
+    fireEvent.click(trigger);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(menuEscape.keepOpenForMenuEscape).toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Navigation' })).toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('narrow: the next Escape closes the drawer once no menu claims it', () => {
+    mediaState.matches = true;
+    menuEscape.keepOpenForMenuEscape.mockImplementation((event) => event.preventDefault());
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Open navigation' });
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    menuEscape.keepOpenForMenuEscape.mockImplementation(() => {});
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('narrow: takes the page behind the open drawer out of the tab order', () => {

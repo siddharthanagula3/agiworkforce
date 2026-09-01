@@ -44,6 +44,7 @@ import {
   useChatStore,
   DEFAULT_COMPOSER_TOGGLES,
   PENDING_CONVERSATION_KEY,
+  selectDraftContent,
   type ComposerToggleState,
 } from '@shared/stores/web-chat-store';
 import { useModelStore } from '@shared/stores/model-store';
@@ -539,6 +540,7 @@ const ChatComposerNewComponent = ({
   messageRef.current = message;
   const setDraftContent = useChatStore((state) => state.setDraftContent);
   const clearDraftContent = useChatStore((state) => state.clearDraftContent);
+  const parkedDraft = useChatStore(selectDraftContent(conversationId));
   // Follow-up queue (claude.ai / ChatGPT parity): a message composed while the
   // current turn is still streaming is captured here and auto-sent when the turn
   // finishes, so the user never has to wait or manually re-send. Snapshotting the
@@ -2309,6 +2311,18 @@ const ChatComposerNewComponent = ({
       }
     };
   }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
+
+  /**
+   * A draft can also be parked while this composer is on screen — a send that
+   * never reached a model hands the text back that way. Reading it only on
+   * mount was why a failed send looked like the message had simply vanished:
+   * the same instance stays mounted for an existing chat, and a brand-new chat
+   * mounts its replacement BEFORE the save fails. Never overwrite live typing.
+   */
+  useEffect(() => {
+    if (!parkedDraft || messageRef.current.trim()) return;
+    writeComposerMessage(parkedDraft);
+  }, [parkedDraft, writeComposerMessage]);
 
   // Flush a queued follow-up when the active turn finishes (true→false).
   //

@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import {
   useChatStore,
   selectIsActiveConversationStreaming,
+  parkUnsentDraft,
   type Message,
   type Attachment,
   type MessageMetadata,
@@ -2191,16 +2192,9 @@ export function useChatStream(): UseChatStreamReturn {
         // CAP-040: a turn interrupted by an expired session was unrecoverable.
         // The composer clears on send, so by the time the 401 came back the
         // user's text survived only as a failed turn in the transcript — sign
-        // back in and you retype it. Parking it as this conversation's draft
-        // repopulates the composer with exactly what they wrote. An existing
-        // draft wins: whatever they have typed since is newer than this.
-        if (isSessionExpiredError(error) && content.trim()) {
-          const store = useChatStore.getState();
-          // The store keys drafts by conversation id (web-chat-store.ts
-          // conversationKey), so a non-null id indexes directly.
-          if (!store.draftsByConversation?.[conversationId]) {
-            store.setDraftContent(content, conversationId);
-          }
+        // back in and you retype it.
+        if (isSessionExpiredError(error)) {
+          parkUnsentDraft(conversationId, content);
         }
         await handleStreamError(error, {
           assistantMessageId,

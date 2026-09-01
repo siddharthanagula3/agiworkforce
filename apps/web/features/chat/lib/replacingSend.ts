@@ -1,4 +1,3 @@
-
 export interface ReplacingSendPorts<M> {
   snapshot: () => M[];
   removeLocal: (id: string) => void;
@@ -10,7 +9,7 @@ export async function runReplacingSend<M>(
   ports: ReplacingSendPorts<M>,
   rollbackIds: string[],
   send: () => Promise<boolean>,
-): Promise<void> {
+): Promise<boolean> {
   const snapshot = ports.snapshot();
   for (const id of rollbackIds) ports.removeLocal(id);
   let committed = false;
@@ -23,4 +22,5 @@ export async function runReplacingSend<M>(
       ports.restore(snapshot);
     }
   }
+  return committed;
 }

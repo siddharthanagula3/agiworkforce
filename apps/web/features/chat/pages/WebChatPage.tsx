@@ -39,6 +39,7 @@ import {
   selectIsConversationStreaming,
   PENDING_CONVERSATION_KEY,
   DEFAULT_COMPOSER_TOGGLES,
+  parkUnsentDraft,
 } from '@shared/stores/web-chat-store';
 import {
   EMPTY_VARIANT_INFO,
@@ -99,6 +100,7 @@ import {
   SheetContent,
   SheetTitle,
   Sidebar,
+  keepOpenForMenuEscape,
   useConfirm,
   type SidebarSession,
   type SidebarNavItem,
@@ -841,7 +843,7 @@ export default function WebChatPage() {
         // invoke once the replacement turn is durable, so the replaced turn's
         // server rows are dropped then -- not at stream end.
         send: (onTurnCommitted: () => void) => Promise<boolean>,
-      ) => Promise<void>)
+      ) => Promise<boolean>)
     | null
   >(null);
 
@@ -1572,7 +1574,7 @@ export default function WebChatPage() {
         /** Fires before provider egress once the exact user turn is durable. */
         onTurnCommitted?: () => void;
       } = {},
-    ) => {
+    ): Promise<boolean> => {
       // Double-submit guard (Finding 7): bails out synchronously if a send is
       // already in flight FOR THIS CONVERSATION -- see sendingConversationsRef's
       // doc comment above for why this check, positioned before any `await`, is
@@ -1586,7 +1588,9 @@ export default function WebChatPage() {
       // rapid submits on the empty surface must not create two conversations.
       const sendGuardKey =
         options.conversationId || urlConversationId || bareChatSessionId || NEW_CHAT_SEND_GUARD_KEY;
-      if (sendingConversationsRef.current.has(sendGuardKey)) return;
+      // The in-flight call owns this content, so the composer must not take it
+      // back — this is a suppressed duplicate, not a lost message.
+      if (sendingConversationsRef.current.has(sendGuardKey)) return true;
       sendingConversationsRef.current.add(sendGuardKey);
 
       // Hold the send window for the entire flow (claimed BEFORE
@@ -1597,6 +1601,13 @@ export default function WebChatPage() {
       const releaseSendWindow = claimSendWindow();
       let targetConversationId =
         options.conversationId || urlConversationId || bareChatSessionId || null;
+      // Nothing reached a model, so the text is the user's again. Parking it on
+      // the conversation it was written for is what survives the create →
+      // navigate remount that puts a different composer instance on screen.
+      const abandonSend = (): false => {
+        parkUnsentDraft(targetConversationId, content);
+        return false;
+      };
       try {
         // Project scope for a NEW conversation: the composer's send meta is the
         // value the user saw at submit time; fall back to the shared store for
@@ -1622,7 +1633,7 @@ export default function WebChatPage() {
             return null;
           }));
 
-        if (!convId) return;
+        if (!convId) return abandonSend();
         targetConversationId = convId;
         if (!urlConversationId) setBareChatSessionId(convId);
 
@@ -1683,14 +1694,17 @@ export default function WebChatPage() {
         const replace = sendReplacingMessagesRef.current;
         if (pendingEdit && replace) {
           pendingEditRollbackRef.current = null;
-          await replace(pendingEdit.rollbackIds, doSend);
-        } else {
-          await doSend();
+          const committed = await replace(pendingEdit.rollbackIds, doSend);
+          if (!committed) return abandonSend();
+          return true;
         }
+        if (!(await doSend())) return abandonSend();
+        return true;
       } catch (error) {
         const message = toUserMessage(error, 'Could not attach the selected files.');
         setChatError(message, targetConversationId ?? undefined);
         toast.error(message);
+        return abandonSend();
       } finally {
         // Release the guard once the send has fully settled (or bailed). By now
         // `bareChatSessionId`/`urlConversationId` reflect the real conversation,
@@ -3554,16 +3568,15 @@ export default function WebChatPage() {
     async (
       rollbackIds: string[],
       send: (onTurnCommitted: () => void) => Promise<boolean>,
-    ): Promise<void> => {
+    ): Promise<boolean> => {
       const conversationId = displayedConversationId;
       if (!conversationId || rollbackIds.length === 0) {
-        await send(() => {});
-        return;
+        return send(() => {});
       }
       const mutationIds = [...new Set(rollbackIds)];
       if (!tryAcquireImageTranscriptMutation(mutationIds)) {
         toast.error('Wait for this image turn to finish saving before replacing it.');
-        return;
+        return false;
       }
       // AUDIT-FIX STR-22: fire the durable delete at COMMIT, not at stream end.
       // Deferring it until `send()` resolved meant the whole regeneration window
@@ -3578,7 +3591,7 @@ export default function WebChatPage() {
         serverDeletePromise = deleteServerMessages(conversationId, mutationIds);
       };
       try {
-        await runReplacingSend(
+        const committed = await runReplacingSend(
           {
             // AUDIT-FIX STR-22: snapshot/restore THIS conversation's transcript.
             // Snapshotting the global array meant a restore-on-failure could write
@@ -3593,6 +3606,7 @@ export default function WebChatPage() {
         );
         await serverDeletePromise;
         if (serverRowsDeleted) removeImageTranscriptRecoveriesForMessages(mutationIds);
+        return committed;
       } finally {
         releaseImageTranscriptMutation(mutationIds);
       }
@@ -4612,6 +4626,7 @@ export default function WebChatPage() {
             side="left"
             className="w-[280px] max-w-[85vw] gap-0 overflow-y-auto p-0"
             data-testid="chat-mobile-nav-drawer"
+            onEscapeKeyDown={keepOpenForMenuEscape}
             onCloseAutoFocus={(event) => {
               // The sheet opens from a button outside it, so Radix has no
               // trigger to hand focus back to and would drop it on the body.

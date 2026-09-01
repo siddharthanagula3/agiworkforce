@@ -63,6 +63,16 @@ describe('runReplacingSend', () => {
     expect(ports.deleteServer).not.toHaveBeenCalled();
   });
 
+  // The caller has to be able to tell a bailed send from a delivered one: it is
+  // what decides whether the user gets their typed text handed back.
+  it('reports whether the send committed', async () => {
+    const committed = makePorts(SNAPSHOT);
+    await expect(runReplacingSend(committed.ports, ['u'], async () => true)).resolves.toBe(true);
+
+    const bailed = makePorts(SNAPSHOT);
+    await expect(runReplacingSend(bailed.ports, ['u'], async () => false)).resolves.toBe(false);
+  });
+
   it('removes every rolled-back id locally before the send runs', async () => {
     const { ports, current } = makePorts(SNAPSHOT);
     let idsAtSendTime: string[] = [];

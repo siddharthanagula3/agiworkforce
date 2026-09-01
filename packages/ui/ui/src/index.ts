@@ -279,6 +279,8 @@ export {
   Menu,
   MenuItem,
   MenuSeparator,
+  isMenuPanelOpen,
+  keepOpenForMenuEscape,
   type MenuProps,
   type MenuItemProps,
   getTemporalGroup,
