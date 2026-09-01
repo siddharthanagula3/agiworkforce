@@ -283,12 +283,12 @@
   --color-chat-sidebar-dark: hsl(var(--neutral-0));
 
   /* Border radius */
-  --radius-lg: 12px;
-  --radius-md: 8px;
-  --radius-sm: 6px;
-  --radius-xl: 16px;
-  --radius-2xl: 24px;
-  --radius-3xl: 32px;
+  --radius-sm: var(--corner-control);
+  --radius-md: var(--corner-field);
+  --radius-lg: var(--corner-surface);
+  --radius-xl: var(--corner-panel);
+  --radius-2xl: var(--corner-overlay);
+  --radius-3xl: var(--corner-hero);
 
   /* Box shadows */
   --shadow-floating-input: 0 8px 32px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
@@ -779,7 +779,7 @@
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
        @agiworkforce/design-tokens/chat.css (imported above) */
 
-    --radius: 0.5rem;
+    --radius: var(--corner-field);
   }
 
   .dark {

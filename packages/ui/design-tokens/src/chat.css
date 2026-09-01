@@ -86,11 +86,11 @@
     --chat-warning-bg: rgba(217, 119, 6, 0.14);
     --chat-warning-border: rgba(217, 119, 6, 0.38);
     --chat-warning-fg: #7a3f00;
-    --chat-radius-sm: 6px;
-    --chat-radius-md: 8px;
-    --chat-radius-lg: 12px;
-    --chat-radius-xl: 16px;
-    --chat-radius-2xl: 24px;
+    --chat-radius-sm: var(--corner-control);
+    --chat-radius-md: var(--corner-field);
+    --chat-radius-lg: var(--corner-surface);
+    --chat-radius-xl: var(--corner-panel);
+    --chat-radius-2xl: var(--corner-overlay);
   }
 
   .dark {
