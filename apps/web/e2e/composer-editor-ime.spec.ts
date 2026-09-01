@@ -9,6 +9,12 @@ import { signIn } from './qa-capability-harness';
  */
 const CHAT_EDITOR_URL = '/chat?composer=editor';
 const COMPOSER = '[data-composer-textarea]';
+/**
+ * Both arms carry the attribute, so waiting on it alone can return the
+ * server-rendered textarea while the gate is still resolving. A composition
+ * driven at that element would never reach ProseMirror.
+ */
+const EDITOR_CONTENT = `${COMPOSER}[contenteditable="true"]`;
 const COMPOSER_TIMEOUT = 20000;
 const REPLY_TIMEOUT = 30000;
 
@@ -17,7 +23,7 @@ const KANJI_COMMIT = '日本語';
 
 async function openComposer(page: Page) {
   await page.goto(CHAT_EDITOR_URL);
-  const composer = page.locator(COMPOSER);
+  const composer = page.locator(EDITOR_CONTENT);
   await expect(composer).toBeVisible({ timeout: COMPOSER_TIMEOUT });
   await composer.click();
   return composer;
