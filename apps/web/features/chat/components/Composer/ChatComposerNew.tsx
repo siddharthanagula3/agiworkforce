@@ -22,7 +22,7 @@ import {
   Telescope,
   ListChecks,
   Monitor,
-} from 'lucide-react';
+} from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';

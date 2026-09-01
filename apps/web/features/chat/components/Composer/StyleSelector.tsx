@@ -12,7 +12,7 @@ import {
   Trash2,
   Check,
   X,
-} from 'lucide-react';
+} from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import {

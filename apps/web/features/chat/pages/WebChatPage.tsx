@@ -85,7 +85,7 @@ import {
   HelpCircle,
   Keyboard,
   LogOut,
-} from 'lucide-react';
+} from '@agiworkforce/icons';
 import { Button } from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';

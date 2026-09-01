@@ -1,7 +1,8 @@
 'use client';
 
 import { memo } from 'react';
-import { X, Check, Loader2 } from 'lucide-react';
+import { X, Check } from '@agiworkforce/icons';
+import { Spinner } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface VoiceRecordingOverlayProps {
@@ -97,7 +98,7 @@ function VoiceRecordingOverlayComponent({
             <p className="max-w-[240px] text-center text-sm text-foreground">{error}</p>
           ) : isTranscribing ? (
             <>
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <Spinner className="h-5 w-5 text-primary" />
               <span className="text-sm font-medium text-foreground">Processing...</span>
             </>
           ) : (
