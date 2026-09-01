@@ -3,6 +3,7 @@ import {
   managedCloudPreferencesNamespacePath,
 } from '@agiworkforce/cloud-contracts';
 
+import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
@@ -160,11 +161,19 @@ async function readTwoFactorError(res: Response): Promise<string> {
     error?: string | { message?: string };
   } | null;
   const raw = body?.error;
-  if (typeof raw === 'string' && raw.trim()) return raw;
-  if (raw && typeof raw === 'object' && typeof raw.message === 'string' && raw.message.trim()) {
-    return raw.message;
-  }
-  return `HTTP ${res.status}`;
+  // The server's own words reach the screen here, so they go through the same
+  // filter the rest of the product uses: a sentence a person wrote survives, a
+  // trace id or a stack frame does not. Measured with a 500 carrying
+  // "upstream exploded: trace 0xdeadbeef", this rendered it verbatim.
+  const fallback = `Could not reach the server (HTTP ${res.status}).`;
+  const message =
+    typeof raw === 'string' && raw.trim()
+      ? raw
+      : raw && typeof raw === 'object' && typeof raw.message === 'string' && raw.message.trim()
+        ? raw.message
+        : '';
+  if (!message) return fallback;
+  return toUserMessage(Object.assign(new Error(message), { status: res.status }), fallback);
 }
 
 export interface UserProfile {
@@ -532,7 +541,7 @@ class SettingsService {
     } catch (error) {
       return {
         data: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -563,7 +572,12 @@ class SettingsService {
 
         if (!res.ok) {
           const err = (await res.json().catch(() => ({}))) as { error?: string };
-          return { error: err.error ?? `HTTP ${res.status}` };
+          return {
+            error: toUserMessage(
+              new Error(String(err.error ?? '')),
+              `Could not reach the server (HTTP ${res.status}).`,
+            ),
+          };
         }
       }
 
@@ -586,14 +600,19 @@ class SettingsService {
 
         if (!prefRes.ok) {
           const err = (await prefRes.json().catch(() => ({}))) as { error?: string };
-          return { error: err.error ?? `HTTP ${prefRes.status}` };
+          return {
+            error: toUserMessage(
+              new Error(String(err.error ?? '')),
+              `Could not reach the server (HTTP ${prefRes.status}).`,
+            ),
+          };
         }
       }
 
       return {};
     } catch (error) {
       return {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -647,7 +666,7 @@ class SettingsService {
     } catch (error) {
       return {
         data: hardcodedDefaults,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -673,13 +692,18 @@ class SettingsService {
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
-        return { error: err.error ?? `HTTP ${res.status}` };
+        return {
+          error: toUserMessage(
+            new Error(String(err.error ?? '')),
+            `Could not reach the server (HTTP ${res.status}).`,
+          ),
+        };
       }
 
       return {};
     } catch (error) {
       return {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -734,7 +758,7 @@ class SettingsService {
     } catch (error) {
       return {
         data: '',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -753,7 +777,7 @@ class SettingsService {
       return {};
     } catch (error) {
       return {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -781,7 +805,7 @@ class SettingsService {
     } catch (error) {
       return {
         data: [],
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -810,7 +834,13 @@ class SettingsService {
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
-        return { data: null, error: err.error ?? `HTTP ${res.status}` };
+        return {
+          data: null,
+          error: toUserMessage(
+            new Error(String(err.error ?? '')),
+            `Could not reach the server (HTTP ${res.status}).`,
+          ),
+        };
       }
 
       const json = (await res.json()) as { api_key: APIKey; full_key: string };
@@ -818,7 +848,7 @@ class SettingsService {
     } catch (error) {
       return {
         data: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -842,13 +872,18 @@ class SettingsService {
 
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
-        return { error: err.error ?? `HTTP ${res.status}` };
+        return {
+          error: toUserMessage(
+            new Error(String(err.error ?? '')),
+            `Could not reach the server (HTTP ${res.status}).`,
+          ),
+        };
       }
 
       return {};
     } catch (error) {
       return {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -878,7 +913,7 @@ class SettingsService {
     } catch (error) {
       return {
         data: { enabled: false },
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
@@ -915,7 +950,7 @@ class SettingsService {
         },
       };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Unknown error' };
+      return { error: toUserMessage(error, 'Something went wrong. Try again.') };
     }
   }
 
@@ -939,7 +974,7 @@ class SettingsService {
       }
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      return { success: false, error: toUserMessage(error, 'Something went wrong. Try again.') };
     }
   }
 
@@ -973,7 +1008,7 @@ class SettingsService {
       };
       return { valid: json.valid ?? false, usedBackupCode: json.used_backup_code };
     } catch (error) {
-      return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      return { valid: false, error: toUserMessage(error, 'Something went wrong. Try again.') };
     }
   }
 
@@ -997,7 +1032,7 @@ class SettingsService {
       }
       return { success: true };
     } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      return { success: false, error: toUserMessage(error, 'Something went wrong. Try again.') };
     }
   }
 
@@ -1026,7 +1061,7 @@ class SettingsService {
       const json = (await res.json()) as { backup_codes: string[] };
       return { backupCodes: json.backup_codes };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Unknown error' };
+      return { error: toUserMessage(error, 'Something went wrong. Try again.') };
     }
   }
 

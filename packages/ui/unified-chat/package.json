@@ -4,7 +4,10 @@
   "description": "Surface-neutral chat UI, stores and hooks shared by desktop, web, Chrome and VS Code.",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./network-error": "./src/lib/network-error.ts"
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
