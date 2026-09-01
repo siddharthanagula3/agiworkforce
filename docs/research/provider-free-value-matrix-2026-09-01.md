@@ -1367,3 +1367,35 @@ first, and `verifiedAtMs` stays `null` until a human sets it.
 
 - Founder: \***\*\*\*\*\***\_\_\***\*\*\*\*\*** Date: \***\*\_\_\*\***
 - Counsel (candidates only): \***\*\*\*\*\***\_\_\***\*\*\*\*\*** Date: \***\*\_\_\*\***
+
+---
+
+## Addendum: live QwenCloud account observation (2026-09-01)
+
+Status: OBSERVED — founder-supplied console screenshot, not doc research.
+Evidence: `docs/research/evidence/provider-accounts/qwencloud-benefits-2026-09-01.png`
+
+The founder already holds a QwenCloud (Alibaba international) account, so the
+signup-queue Tier 2 item is DONE. Observed on the Benefits page at capture:
+
+- **266 eligible models with free quota**; 0 expiring within 7 days; 2
+  unavailable in the last 180 days. Most text models carry **1M free tokens
+  each**, expirations clustering around 2026-10-21 (~50 days remaining);
+  media models are quotaed in seconds/images/chars.
+- **QwenCloud hosts third-party frontier models with their own free quotas**:
+  deepseek-v4-pro/-0813/-flash, deepseek-v3.2, kimi-k2.7-code, glm-5.2 and
+  glm-5.1 each show 1M free tokens — one account and one key reach four
+  vendors' models. This consolidates the BYOK story materially.
+- **The "Auto-stop when free quota runs out" control exists exactly as this
+  matrix hoped** ("survivable only because that switch is ours" — confirmed
+  real). At capture it was NOT enabled for all models: only a minority of
+  rows show "Free quota only" on. Recorded action for the founder: click
+  **Enable all models** before any key from this account is used anywhere.
+- Consumption is essentially zero (one qwen3.5-flash row shows 1.3K tokens
+  used), so the full allowance is intact.
+
+Lane implications unchanged: the §III.5 output-commerciality ambiguity keeps
+Alibaba/QwenCloud at NEEDS-HUMAN-REVIEW for the company pool. With auto-stop
+enabled account-wide this becomes the largest single observed free pool in
+the survey (~266 models × up to 1M tokens each per window) pending that one
+terms answer.
