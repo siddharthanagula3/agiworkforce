@@ -877,8 +877,8 @@ describe('resolveMaxOutputTokens', () => {
   });
 
   it('resolves an alias the same way as its canonical model', () => {
-    const sampleModel = listCanonicalModels()[0];
-    expect(sampleModel).toBeDefined();
+    const [sampleModel] = listCanonicalModels();
+    if (!sampleModel) throw new Error('the canonical catalogue is empty');
     expect(resolveMaxOutputTokens(sampleModel.id)).toBe(
       resolveMaxOutputTokens(normalizeModelId(sampleModel.id)),
     );
