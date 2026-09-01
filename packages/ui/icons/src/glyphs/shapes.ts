@@ -8,3 +8,4 @@ export const MIC_CAPSULE = 'M9.5 6.5 11 5h2l1.5 1.5v6L13 14h-2l-1.5-1.5z';
 export const MIC_CRADLE = 'M6.5 11.5V13L10 17h4l3.5-4v-1.5';
 export const MIC_STAND = 'M12 17v4M9 21h6';
 export const SLASH = 'm4 4 16 16';
+export const SHIELD_BODY = 'M12 3 4 6v6l8 9 8-9V6z';

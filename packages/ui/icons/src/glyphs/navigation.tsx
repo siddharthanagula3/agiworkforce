@@ -1,4 +1,5 @@
 import { createIcon } from '../createIcon';
+import { SHIELD_BODY } from './shapes';
 
 export const MessageSquare = createIcon(
   'MessageSquare',
@@ -67,7 +68,59 @@ export const CalendarClock = createIcon(
 export const ShieldCheck = createIcon(
   'ShieldCheck',
   <>
-    <path d="M12 3 4 6v6l8 9 8-9V6z" />
+    <path d={SHIELD_BODY} />
     <path d="m8.5 11.5 2.5 2.5 4.5-4.5" />
+  </>,
+);
+
+export const ShieldAlert = createIcon(
+  'ShieldAlert',
+  <>
+    <path d={SHIELD_BODY} />
+    <path d="M12 8v3.5" />
+    <circle cx="12" cy="14.5" r="1" />
+  </>,
+);
+
+export const ChevronLeft = createIcon('ChevronLeft', <path d="m15 5-7 7 7 7" />);
+
+export const ArrowRight = createIcon(
+  'ArrowRight',
+  <>
+    <path d="M3 12h18" />
+    <path d="m12 5 7 7-7 7" />
+  </>,
+);
+
+export const GitBranch = createIcon(
+  'GitBranch',
+  <>
+    <circle cx="6.5" cy="5.5" r="2.5" />
+    <circle cx="6.5" cy="18.5" r="2.5" />
+    <circle cx="17.5" cy="5.5" r="2.5" />
+    <path d="M6.5 8v8" />
+    <path d="M15 5.5h-4l-4.5 4.5" />
+  </>,
+);
+
+export const GitFork = createIcon(
+  'GitFork',
+  <>
+    <circle cx="6.5" cy="5.5" r="2.5" />
+    <circle cx="17.5" cy="5.5" r="2.5" />
+    <circle cx="12" cy="18.5" r="2.5" />
+    <path d="M6.5 8v3l5.5 3 5.5-3V8" />
+    <path d="M12 14v2" />
+  </>,
+);
+
+export const Navigation = createIcon('Navigation', <path d="M4 11 20 4l-7 16-2.5-6.5z" />);
+
+export const MapPinned = createIcon(
+  'MapPinned',
+  <>
+    <path d="M12 3 6 7.5V12l6 5 6-5V7.5z" />
+    <circle cx="12" cy="10" r="1.75" />
+    <path d="M7 20h10" />
   </>,
 );
