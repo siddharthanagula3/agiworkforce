@@ -12,6 +12,9 @@ export const BYOK_PROVIDER_IDS = [
   'zhipu',
   'open_router',
   'nvidia_nim',
+  'groq',
+  'workers_ai',
+  'vercel_gateway',
 ] as const;
 
 const catalogProviders = modelsCatalogJson.providers as Record<string, { label?: string }>;

@@ -29,14 +29,18 @@
       "@agiworkforce/providers-deepseek",
       "@agiworkforce/providers-factory",
       "@agiworkforce/providers-google",
+      "@agiworkforce/providers-groq",
       "@agiworkforce/providers-lmstudio",
       "@agiworkforce/providers-minimax",
       "@agiworkforce/providers-moonshot",
+      "@agiworkforce/providers-nvidia",
       "@agiworkforce/providers-ollama",
       "@agiworkforce/providers-openai",
       "@agiworkforce/providers-openrouter",
       "@agiworkforce/providers-perplexity",
       "@agiworkforce/providers-qwen",
+      "@agiworkforce/providers-vercel-gateway",
+      "@agiworkforce/providers-workers-ai",
       "@agiworkforce/providers-xai",
       "@agiworkforce/providers-zhipu",
       "@agiworkforce/routing",
@@ -304,6 +308,10 @@
       },
       {
         "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-groq"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
         "to": "@agiworkforce/providers-lmstudio"
       },
       {
@@ -313,6 +321,10 @@
       {
         "from": "@agiworkforce/providers-factory",
         "to": "@agiworkforce/providers-moonshot"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-nvidia"
       },
       {
         "from": "@agiworkforce/providers-factory",
@@ -333,6 +345,14 @@
       {
         "from": "@agiworkforce/providers-factory",
         "to": "@agiworkforce/providers-qwen"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-vercel-gateway"
+      },
+      {
+        "from": "@agiworkforce/providers-factory",
+        "to": "@agiworkforce/providers-workers-ai"
       },
       {
         "from": "@agiworkforce/providers-factory",
@@ -359,6 +379,14 @@
         "to": "@agiworkforce/types"
       },
       {
+        "from": "@agiworkforce/providers-groq",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-groq",
+        "to": "@agiworkforce/types"
+      },
+      {
         "from": "@agiworkforce/providers-lmstudio",
         "to": "@agiworkforce/provider-protocol"
       },
@@ -404,6 +432,14 @@
       },
       {
         "from": "@agiworkforce/providers-moonshot",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-nvidia",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-nvidia",
         "to": "@agiworkforce/types"
       },
       {
@@ -476,6 +512,22 @@
       },
       {
         "from": "@agiworkforce/providers-qwen",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-vercel-gateway",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-vercel-gateway",
+        "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/providers-workers-ai",
+        "to": "@agiworkforce/providers-openai"
+      },
+      {
+        "from": "@agiworkforce/providers-workers-ai",
         "to": "@agiworkforce/types"
       },
       {

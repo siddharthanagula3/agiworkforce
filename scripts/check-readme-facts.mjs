@@ -55,8 +55,11 @@ const PROVIDER_LABELS = {
   perplexity: 'Perplexity',
   zhipu: 'ZhipuAI',
   bedrock: 'AWS Bedrock',
+  groq: 'Groq',
   nvidia_nim: 'NVIDIA NIM',
   open_router: 'OpenRouter',
+  workers_ai: 'Cloudflare Workers AI',
+  vercel_gateway: 'Vercel AI Gateway',
   ollama: 'Ollama',
   lmstudio: 'LM Studio',
   llamacpp: 'llama.cpp',
@@ -170,9 +173,7 @@ export function collectReadmeFactErrors(readme, facts) {
       continue;
     }
     if (match[1] !== expected) {
-      errors.push(
-        `README.md says ${label} ${match[1]}, but the manifest declares ${expected}.`,
-      );
+      errors.push(`README.md says ${label} ${match[1]}, but the manifest declares ${expected}.`);
     }
   }
 

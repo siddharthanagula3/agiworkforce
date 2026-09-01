@@ -19,6 +19,8 @@ export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
   'open.bigmodel.cn',
   'api.minimax.io',
   'openrouter.ai',
+  'api.groq.com',
+  'integrate.api.nvidia.com',
   'gateway.ai.cloudflare.com',
   'ai-gateway.vercel.sh',
   'localhost',

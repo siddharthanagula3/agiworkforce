@@ -1,4 +1,3 @@
-
 import {
   createAnthropicAdapter,
   type AnthropicAdapterConfig,
@@ -8,6 +7,7 @@ import {
   type DeepSeekAdapterConfig,
 } from '@agiworkforce/providers-deepseek';
 import { createGoogleAdapter, type GoogleAdapterConfig } from '@agiworkforce/providers-google';
+import { createGroqAdapter, type GroqAdapterConfig } from '@agiworkforce/providers-groq';
 import {
   createLMStudioAdapter,
   type LMStudioAdapterConfig,
@@ -17,6 +17,7 @@ import {
   createMoonshotAdapter,
   type MoonshotAdapterConfig,
 } from '@agiworkforce/providers-moonshot';
+import { createNvidiaAdapter, type NvidiaAdapterConfig } from '@agiworkforce/providers-nvidia';
 import { createOllamaAdapter, type OllamaAdapterConfig } from '@agiworkforce/providers-ollama';
 import { createOpenAIAdapter, type OpenAIAdapterConfig } from '@agiworkforce/providers-openai';
 import {
@@ -28,6 +29,14 @@ import {
   type PerplexityAdapterConfig,
 } from '@agiworkforce/providers-perplexity';
 import { createQwenAdapter, type QwenAdapterConfig } from '@agiworkforce/providers-qwen';
+import {
+  createVercelGatewayAdapter,
+  type VercelGatewayAdapterConfig,
+} from '@agiworkforce/providers-vercel-gateway';
+import {
+  createWorkersAiAdapter,
+  type WorkersAiAdapterConfig,
+} from '@agiworkforce/providers-workers-ai';
 import { createXAIAdapter, type XAIAdapterConfig } from '@agiworkforce/providers-xai';
 import { createZhipuAdapter, type ZhipuAdapterConfig } from '@agiworkforce/providers-zhipu';
 import type { ProviderAdapter } from '@agiworkforce/types';
@@ -36,14 +45,18 @@ export interface ProviderAdapterConfigMap {
   anthropic: AnthropicAdapterConfig;
   deepseek: DeepSeekAdapterConfig;
   google: GoogleAdapterConfig;
+  groq: GroqAdapterConfig;
   lmstudio: LMStudioAdapterConfig;
   minimax: MinimaxAdapterConfig;
   moonshot: MoonshotAdapterConfig;
+  nvidia_nim: NvidiaAdapterConfig;
   ollama: OllamaAdapterConfig;
   openai: OpenAIAdapterConfig;
   open_router: OpenRouterAdapterConfig;
   perplexity: PerplexityAdapterConfig;
   qwen: QwenAdapterConfig;
+  vercel_gateway: VercelGatewayAdapterConfig;
+  workers_ai: WorkersAiAdapterConfig;
   xai: XAIAdapterConfig;
   zhipu: ZhipuAdapterConfig;
 }
@@ -54,14 +67,18 @@ export const PROVIDER_ADAPTER_IDS = [
   'anthropic',
   'deepseek',
   'google',
+  'groq',
   'lmstudio',
   'minimax',
   'moonshot',
+  'nvidia_nim',
   'ollama',
   'openai',
   'open_router',
   'perplexity',
   'qwen',
+  'vercel_gateway',
+  'workers_ai',
   'xai',
   'zhipu',
 ] as const satisfies readonly ProviderAdapterId[];
@@ -76,14 +93,18 @@ const PROVIDER_ADAPTER_FACTORIES: ProviderAdapterFactories = {
   anthropic: createAnthropicAdapter,
   deepseek: createDeepSeekAdapter,
   google: createGoogleAdapter,
+  groq: createGroqAdapter,
   lmstudio: createLMStudioAdapter,
   minimax: createMinimaxAdapter,
   moonshot: createMoonshotAdapter,
+  nvidia_nim: createNvidiaAdapter,
   ollama: createOllamaAdapter,
   openai: createOpenAIAdapter,
   open_router: createOpenRouterAdapter,
   perplexity: createPerplexityAdapter,
   qwen: createQwenAdapter,
+  vercel_gateway: createVercelGatewayAdapter,
+  workers_ai: createWorkersAiAdapter,
   xai: createXAIAdapter,
   zhipu: createZhipuAdapter,
 };

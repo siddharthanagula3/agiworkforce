@@ -27,11 +27,18 @@ const SERVER_PROVIDER_CONFIG: Readonly<
   deepseek: { envPrefix: 'DEEPSEEK', adapterId: 'deepseek' },
   xai: { envPrefix: 'XAI', adapterId: 'xai' },
   perplexity: { envPrefix: 'PERPLEXITY', adapterId: 'perplexity' },
+  groq: { envPrefix: 'GROQ', adapterId: 'groq' },
+  nvidia_nim: { envPrefix: 'NVIDIA_NIM', adapterId: 'nvidia_nim' },
+  workers_ai: { envPrefix: 'WORKERS_AI', adapterId: 'workers_ai' },
+  vercel_gateway: { envPrefix: 'VERCEL_GATEWAY', adapterId: 'vercel_gateway' },
 };
 
 const PROVIDER_API_KEY_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
   google: ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'],
   qwen: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
+  nvidia_nim: ['NVIDIA_NIM_API_KEY', 'NVIDIA_API_KEY'],
+  workers_ai: ['WORKERS_AI_API_KEY', 'CLOUDFLARE_API_TOKEN'],
+  vercel_gateway: ['VERCEL_GATEWAY_API_KEY', 'VERCEL_AI_GATEWAY_API_KEY', 'AI_GATEWAY_API_KEY'],
 };
 
 export interface ServerProviderAdapterOptions {

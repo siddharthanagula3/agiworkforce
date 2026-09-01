@@ -1,4 +1,3 @@
-
 export interface ByokProvider {
   id: string;
   label: string;
@@ -18,4 +17,18 @@ export const BYOK_PROVIDERS: ReadonlyArray<ByokProvider> = [
   { id: 'moonshot', label: 'Moonshot', envVar: 'MOONSHOT_API_KEY', iconText: 'MS' },
   { id: 'zhipu', label: 'Zhipu', envVar: 'ZHIPU_API_KEY', iconText: 'ZH' },
   { id: 'openrouter', label: 'OpenRouter', envVar: 'OPENROUTER_API_KEY', iconText: 'OR' },
+  { id: 'groq', label: 'Groq', envVar: 'GROQ_API_KEY', iconText: 'GQ' },
+  { id: 'nvidia_nim', label: 'NVIDIA NIM', envVar: 'NVIDIA_NIM_API_KEY', iconText: 'NV' },
+  {
+    id: 'workers_ai',
+    label: 'Cloudflare Workers AI',
+    envVar: 'WORKERS_AI_API_KEY',
+    iconText: 'CF',
+  },
+  {
+    id: 'vercel_gateway',
+    label: 'Vercel AI Gateway',
+    envVar: 'VERCEL_GATEWAY_API_KEY',
+    iconText: 'VC',
+  },
 ];
