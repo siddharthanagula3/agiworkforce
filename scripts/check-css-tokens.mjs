@@ -9,7 +9,11 @@ const SURFACES = [
   {
     name: 'desktop',
     source: ['apps/desktop/src', 'packages/ui'],
-    stylesheets: ['apps/desktop/src/styles/globals.css', 'packages/ui/design-tokens/src/chat.css'],
+    stylesheets: [
+      'apps/desktop/src/styles/globals.css',
+      'packages/ui/design-tokens/src/chat.css',
+      'packages/ui/design-tokens/src/foundation.css',
+    ],
   },
   {
     name: 'web',
