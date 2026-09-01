@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useRef,
   useEffect,
   useCallback,
@@ -44,6 +46,8 @@ import { useAgentControlStore } from '../stores/agentControlStore';
 import { selectMediaMode, supportedMediaKinds, useMediaModeStore } from '../stores/mediaModeStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
 import { decideComposerPaste } from '../lib/largePaste';
+import type { ComposerAttachmentPasteDecision, ComposerEditorHandle } from '../composer-editor';
+import '../composer-editor/composer-editor.css';
 import { loadWritingStyle, saveWritingStyle, type WritingStyle } from '../lib/writingStyle';
 import type { ChatAttachmentPolicy, LocalToolScope } from '../lib/runtime';
 import {
@@ -106,6 +110,41 @@ export interface ComposerSkillSuggestion {
 const SKILL_SUGGESTION_DEBOUNCE_MS = 300;
 const SKILL_SUGGESTION_MIN_CHARS = 8;
 
+/**
+ * Lazy so the default arm carries none of the editor's weight: the textarea is
+ * what every consumer renders until a host opts in, and TipTap is the largest
+ * dependency in this package.
+ */
+const ComposerEditor = lazy(() =>
+  import('../composer-editor').then((module) => ({ default: module.ComposerEditor })),
+);
+
+/** `KeyboardEvent.key` names both arms dispatch the slash menu on. */
+const COMPOSER_MENU_KEYS = {
+  arrowUp: 'ArrowUp',
+  arrowDown: 'ArrowDown',
+  enter: 'Enter',
+  tab: 'Tab',
+  escape: 'Escape',
+} as const;
+
+export const CHAT_COMPOSER_EDITOR_MODES = {
+  textarea: 'textarea',
+  editor: 'editor',
+} as const;
+
+export type ChatComposerEditorMode =
+  (typeof CHAT_COMPOSER_EDITOR_MODES)[keyof typeof CHAT_COMPOSER_EDITOR_MODES];
+
+/**
+ * `composer-editor.css` sizes the editor for web's composer box. These reproduce
+ * the textarea arm's own geometry — `min-h-[28px]` and the `px-4 pt-3 pb-1`
+ * padding — on the content node and on the placeholder, so the two arms rest at
+ * the same height and their first line starts on the same pixel.
+ */
+const COMPOSER_EDITOR_ARM_CLASS =
+  'w-full [&_.ProseMirror]:min-h-[28px] [&_.ProseMirror]:px-4 [&_.ProseMirror]:pt-3 [&_.ProseMirror]:pb-1 [&_.composer-editor\\_\\_placeholder]:px-4 [&_.composer-editor\\_\\_placeholder]:pt-3';
+
 export interface ChatInputProps {
   onSend: (
     content: string,
@@ -151,6 +190,7 @@ export interface ChatInputProps {
   slashCommandHost?: ChatInputSlashCommandHost;
   skills?: MentionSkill[];
   suggestSkills?: (content: string) => Promise<ComposerSkillSuggestion[]>;
+  composerEditorMode?: ChatComposerEditorMode;
 }
 
 export function ChatInput({
@@ -188,9 +228,20 @@ export function ChatInput({
   slashCommandHost,
   skills = [],
   suggestSkills,
+  composerEditorMode = CHAT_COMPOSER_EDITOR_MODES.textarea,
 }: ChatInputProps) {
   const { t } = useUiTranslation('chat');
+  const isEditorArm = composerEditorMode === CHAT_COMPOSER_EDITOR_MODES.editor;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerEditorRef = useRef<ComposerEditorHandle | null>(null);
+  const focusComposer = useCallback(() => {
+    const handle = composerEditorRef.current;
+    if (handle) {
+      handle.focus();
+      return;
+    }
+    textareaRef.current?.focus();
+  }, []);
   const attachmentDestinationKey = `${attachmentContextKey ?? 'default'}:${
     conversationId ?? 'no-conversation'
   }`;
@@ -369,7 +420,7 @@ export function ChatInput({
         isCommand ? cleanedText : current ? `${current} ${cleanedText}` : cleanedText,
         conversationId,
       );
-      textareaRef.current?.focus();
+      focusComposer();
     },
   });
   const voiceState = voiceInputController?.state ?? browserVoiceState;
@@ -400,8 +451,8 @@ export function ChatInput({
                   : (voiceInputController?.idleLabel ?? t('composer.voiceIdle', 'Voice input'));
 
   useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
+    focusComposer();
+  }, [focusComposer]);
 
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -434,9 +485,9 @@ export function ChatInput({
         setDraftContent(draftContent.slice(0, trigger.startIndex).trimEnd(), conversationId);
       }
       setSelectedSkill(skill);
-      textareaRef.current?.focus();
+      focusComposer();
     },
-    [conversationId, draftContent, setDraftContent],
+    [conversationId, draftContent, focusComposer, setDraftContent],
   );
 
   useEffect(() => {
@@ -476,11 +527,14 @@ export function ChatInput({
     [dismissedSkillNames, suggestedSkills],
   );
 
-  const handleSuggestedSkillApply = useCallback((suggestion: ComposerSkillSuggestion) => {
-    setSelectedSkill({ id: suggestion.name, name: suggestion.name, category: 'suggested' });
-    setSuggestedSkills([]);
-    textareaRef.current?.focus();
-  }, []);
+  const handleSuggestedSkillApply = useCallback(
+    (suggestion: ComposerSkillSuggestion) => {
+      setSelectedSkill({ id: suggestion.name, name: suggestion.name, category: 'suggested' });
+      setSuggestedSkills([]);
+      focusComposer();
+    },
+    [focusComposer],
+  );
 
   const handleSuggestedSkillDismiss = useCallback((name: string) => {
     setDismissedSkillNames((names) => (names.includes(name) ? names : [...names, name]));
@@ -555,9 +609,9 @@ export function ChatInput({
       void command.handler('', context);
       clearDraftContent(conversationId);
       setSlashSelectedIndex(0);
-      textareaRef.current?.focus();
+      focusComposer();
     },
-    [clearDraftContent, conversationId, slashCommandHost, toggleMediaMode],
+    [clearDraftContent, conversationId, focusComposer, slashCommandHost, toggleMediaMode],
   );
 
   const appendFiles = useCallback(
@@ -651,6 +705,13 @@ export function ChatInput({
     [disabled, isStreaming, appendFiles],
   );
 
+  const appendPasteDecisionFiles = useCallback(
+    (decision: ComposerAttachmentPasteDecision) => {
+      appendFiles(decision.kind === 'files' ? decision.files : [decision.file]);
+    },
+    [appendFiles],
+  );
+
   const handlePaste = useCallback(
     (e: ClipboardEvent<HTMLTextAreaElement>) => {
       if (disabled || isStreaming) return;
@@ -659,10 +720,25 @@ export function ChatInput({
       });
       if (decision.kind === 'text') return;
       e.preventDefault();
-      appendFiles(decision.kind === 'files' ? decision.files : [decision.file]);
+      appendPasteDecisionFiles(decision);
     },
-    [disabled, isStreaming, appendFiles],
+    [disabled, isStreaming, appendPasteDecisionFiles],
   );
+
+  /**
+   * The editor runs `decideComposerPaste` itself and hands back only the
+   * non-text outcomes, so this arm re-applies the streaming guard the textarea's
+   * own paste handler applies before the decision is made.
+   */
+  const handleEditorPasteDecision = useCallback(
+    (decision: ComposerAttachmentPasteDecision) => {
+      if (disabled || isStreaming) return;
+      appendPasteDecisionFiles(decision);
+    },
+    [disabled, isStreaming, appendPasteDecisionFiles],
+  );
+
+  const attachedFileNames = useMemo(() => attachedFiles.map((file) => file.name), [attachedFiles]);
 
   const thumbnailUrls = useMemo(() => {
     const urls: Array<{ key: string; url: string | null }> = [];
@@ -686,8 +762,6 @@ export function ChatInput({
 
   const handleSend = useCallback(() => {
     if (disabled || noModelSelected) return;
-    const el = textareaRef.current;
-    if (!el) return;
     const typedContent = draftContent.trim();
     const destinationAttachedFiles =
       attachedFilesDestinationRef.current === attachmentDestinationKey ? attachedFiles : [];
@@ -754,7 +828,7 @@ export function ChatInput({
       onSend(content, agentMode, effort, attachments, research);
     }
     clearDraftContent(conversationId);
-    el.style.height = 'auto';
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setAttachedFiles([]);
     attachedFilesRef.current = [];
     attachedFilesDestinationRef.current = null;
@@ -789,33 +863,51 @@ export function ChatInput({
     t,
   ]);
 
+  /**
+   * Shared by both arms: the textarea calls it from its own `keydown`, and the
+   * editor's submit keymap delegates the same five keys through `onSlashMenuKey`.
+   * A `true` return means the menu consumed the key.
+   */
+  const handleSlashMenuKey = useCallback(
+    (key: string) => {
+      if (!slashMenuOpen) return false;
+      if (key === COMPOSER_MENU_KEYS.arrowUp) {
+        setSlashSelectedIndex(
+          (index) => (index - 1 + slashSuggestions.length) % slashSuggestions.length,
+        );
+        return true;
+      }
+      if (key === COMPOSER_MENU_KEYS.arrowDown) {
+        setSlashSelectedIndex((index) => (index + 1) % slashSuggestions.length);
+        return true;
+      }
+      if (key === COMPOSER_MENU_KEYS.enter || key === COMPOSER_MENU_KEYS.tab) {
+        const suggestion = slashSuggestions[slashSelectedIndex];
+        if (suggestion) handleSlashSelect(suggestion);
+        return true;
+      }
+      if (key === COMPOSER_MENU_KEYS.escape) {
+        clearDraftContent(conversationId);
+        return true;
+      }
+      return false;
+    },
+    [
+      clearDraftContent,
+      conversationId,
+      handleSlashSelect,
+      slashMenuOpen,
+      slashSelectedIndex,
+      slashSuggestions,
+    ],
+  );
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.defaultPrevented) return;
-      if (slashMenuOpen) {
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setSlashSelectedIndex(
-            (index) => (index - 1 + slashSuggestions.length) % slashSuggestions.length,
-          );
-          return;
-        }
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setSlashSelectedIndex((index) => (index + 1) % slashSuggestions.length);
-          return;
-        }
-        if (e.key === 'Enter' || e.key === 'Tab') {
-          e.preventDefault();
-          const suggestion = slashSuggestions[slashSelectedIndex];
-          if (suggestion) handleSlashSelect(suggestion);
-          return;
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          clearDraftContent(conversationId);
-          return;
-        }
+      if (handleSlashMenuKey(e.key)) {
+        e.preventDefault();
+        return;
       }
 
       const shortcutMatches =
@@ -825,17 +917,42 @@ export function ChatInput({
         handleSend();
       }
     },
-    [
-      clearDraftContent,
-      conversationId,
-      handleSend,
-      handleSlashSelect,
-      slashMenuOpen,
-      slashSelectedIndex,
-      slashSuggestions,
-      sendShortcut,
-    ],
+    [handleSend, handleSlashMenuKey, sendShortcut],
   );
+
+  const handleEditorTextChange = useCallback(
+    (value: string) => {
+      setDraftContent(value, conversationId);
+      setSlashSelectedIndex(0);
+    },
+    [conversationId, setDraftContent],
+  );
+
+  /**
+   * A callback ref, not an object ref: TipTap builds its view in an effect, so
+   * the handle only becomes usable on a later render than the one that mounted
+   * the arm. This runs at exactly that moment, which is the only point at which
+   * a parked draft can be seeded and the composer focused.
+   */
+  const attachComposerEditor = useCallback((handle: ComposerEditorHandle | null) => {
+    composerEditorRef.current = handle;
+    if (!handle) return;
+    const parkedDraft = useChatStore.getState().draftContent;
+    if (parkedDraft) handle.setText(parkedDraft);
+    handle.focus();
+  }, []);
+
+  /**
+   * The editor owns its own text, so every store write that did not come from a
+   * keystroke — a conversation switch, a voice transcript, a consumed skill
+   * mention, the clear on send — has to be pushed back into it. Comparing the
+   * text first is what keeps typing out of this path.
+   */
+  useEffect(() => {
+    const handle = composerEditorRef.current;
+    if (!handle || handle.getText() === draftContent) return;
+    handle.setText(draftContent);
+  }, [draftContent]);
 
   const [focused, setFocused] = useState(false);
 
@@ -981,28 +1098,47 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Textarea */}
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={draftContent}
-          placeholder={placeholder}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          disabled={disabled}
-          className={cn(
-            'w-full resize-none border-0 bg-transparent px-4 pt-3 pb-1',
-            'text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)]',
-            'focus:outline-none',
-            'min-h-[28px]',
-            disabled && 'cursor-not-allowed opacity-50',
-          )}
-          style={{ maxHeight: 240, overflowY: 'auto' }}
-          aria-label={t('composer.messageInput', 'Chat message input')}
-        />
+        {isEditorArm ? (
+          <Suspense fallback={null}>
+            <ComposerEditor
+              ref={attachComposerEditor}
+              ariaLabel={t('composer.messageInput', 'Chat message input')}
+              placeholder={placeholder}
+              disabled={disabled}
+              sendShortcut={sendShortcut}
+              className={COMPOSER_EDITOR_ARM_CLASS}
+              existingFileNames={attachedFileNames}
+              onTextChange={handleEditorTextChange}
+              onSubmit={handleSend}
+              onFocusChange={setFocused}
+              onPasteDecision={handleEditorPasteDecision}
+              isSlashMenuActive={() => slashMenuOpen}
+              onSlashMenuKey={handleSlashMenuKey}
+            />
+          </Suspense>
+        ) : (
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={draftContent}
+            placeholder={placeholder}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            disabled={disabled}
+            className={cn(
+              'w-full resize-none border-0 bg-transparent px-4 pt-3 pb-1',
+              'text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)]',
+              'focus:outline-none',
+              'min-h-[28px]',
+              disabled && 'cursor-not-allowed opacity-50',
+            )}
+            style={{ maxHeight: 240, overflowY: 'auto' }}
+            aria-label={t('composer.messageInput', 'Chat message input')}
+          />
+        )}
 
         {/* Bottom toolbar.
             SINGLE non-wrapping control row (flex-nowrap) — mirrors web's
