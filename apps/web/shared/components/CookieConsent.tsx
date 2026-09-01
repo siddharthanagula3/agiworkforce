@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { X, Cookie, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -55,11 +55,39 @@ export const CookieConsent = () => {
     writeCookiePreferences(prefs);
   }, []);
 
+  // Published so surfaces pinned to the bottom can clear the banner instead of
+  // sitting under it. The composer was the case that mattered: its stop button
+  // landed inside the banner's card and every click hit "Necessary only".
+  const bannerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!showBanner) {
+      root.style.removeProperty('--agi-consent-inset');
+      return;
+    }
+    const publish = () => {
+      const height = bannerRef.current?.getBoundingClientRect().height ?? 0;
+      root.style.setProperty('--agi-consent-inset', `${Math.round(height)}px`);
+    };
+    publish();
+    const node = bannerRef.current;
+    const observer = node ? new ResizeObserver(publish) : null;
+    if (node && observer) observer.observe(node);
+    window.addEventListener('resize', publish);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', publish);
+      root.style.removeProperty('--agi-consent-inset');
+    };
+  }, [showBanner]);
+
   return (
     <>
       <AnimatePresence>
         {showBanner && (
           <motion.div
+            ref={bannerRef}
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
