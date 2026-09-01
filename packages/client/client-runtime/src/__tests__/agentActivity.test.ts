@@ -423,7 +423,7 @@ describe('run outcome versus stop reason', () => {
           type: 'tool-execution-start',
           toolCallId,
           name: 'code_execution',
-          category: 'code',
+          category: 'code-execution',
           summary: index === 0 ? 'Create Folder' : 'Listing files',
           input: {},
         }),
