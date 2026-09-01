@@ -25,6 +25,7 @@ import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
 import {
   ChatInput,
+  type ChatComposerEditorMode,
   type ChatInputProjectPicker,
   type ChatWorkScope,
   type ComposerSkillSuggestion,
@@ -261,6 +262,7 @@ export interface ChatInterfaceProps {
   onUpgradeUsage?: () => void;
   onDismissUsageWarning?: () => void;
   composerSendShortcut?: 'enter' | 'mod-enter';
+  composerEditorMode?: ChatComposerEditorMode;
   skills?: MentionSkill[];
   suggestSkills?: (content: string) => Promise<ComposerSkillSuggestion[]>;
   onNavigateView?: (view: string) => void;
@@ -326,6 +328,7 @@ export function ChatInterface({
   onUpgradeUsage,
   onDismissUsageWarning,
   composerSendShortcut,
+  composerEditorMode,
   skills = [],
   suggestSkills,
   onNavigateView,
@@ -810,6 +813,7 @@ export function ChatInterface({
                 }
                 hostControls={composerHostControls}
                 sendShortcut={composerSendShortcut}
+                composerEditorMode={composerEditorMode}
                 skills={skills}
                 suggestSkills={suggestSkills}
                 onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}
