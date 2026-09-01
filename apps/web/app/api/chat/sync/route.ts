@@ -314,17 +314,23 @@ async function pushMessages(
     [[...new Set(messages.map((item) => item.conversationId))], userId],
   );
 
-  const threadScopes = new Map<string, ThreadScope>();
-  for (const row of leafRows) {
-    if (!row.active_leaf_message_id) continue;
-    threadScopes.set(row.id, {
-      conversationId: row.id,
-      userId,
-      organizationId: row.organization_id ?? null,
+  // Locked in a stable order so two pushes carrying the same pair of
+  // conversations queue behind each other rather than deadlock. Compared by
+  // code unit, not collation: the guarantee holds only while every writer
+  // agrees on the order, and localeCompare would hand a server with different
+  // locale data its own idea of where a hyphen sorts.
+  const threadScopes: ThreadScope[] = leafRows
+    .flatMap((row) =>
+      row.active_leaf_message_id
+        ? [{ conversationId: row.id, userId, organizationId: row.organization_id ?? null }]
+        : [],
+    )
+    .sort((left, right) => {
+      if (left.conversationId === right.conversationId) return 0;
+      return left.conversationId < right.conversationId ? -1 : 1;
     });
-  }
 
-  if (threadScopes.size === 0) {
+  if (threadScopes.length === 0) {
     return db.query<BatchRow<MessageDelta>>(PUSH_MESSAGES_SQL, [
       userId,
       JSON.stringify(messages),
@@ -334,12 +340,9 @@ async function pushMessages(
 
   return db.transaction(async (tx) => {
     const threadParents: ThreadParent[] = [];
-    const advanceTo = new Map<string, string>();
+    const advanceTo = new Map<ThreadScope, string>();
 
-    // Locked in a stable order so two pushes carrying the same pair of
-    // conversations queue behind each other rather than deadlock.
-    for (const conversationId of [...threadScopes.keys()].sort()) {
-      const scope = threadScopes.get(conversationId) as ThreadScope;
+    for (const scope of threadScopes) {
       let leafMessageId: string | null = await lockConversationThread(tx, scope);
       // The branch this push read was undone before it owned the lock, so the
       // conversation is linear again and its rows go in the way they always did.
@@ -349,11 +352,11 @@ async function pushMessages(
       // carries a base version, which means the row it names already has a
       // lineage, and re-deciding it here would move a turn the reader has kept.
       for (const item of messages) {
-        if (item.conversationId !== conversationId) continue;
+        if (item.conversationId !== scope.conversationId) continue;
         if (Number(item.baseVersion) !== 0) continue;
         threadParents.push({ id: item.id, parentId: leafMessageId });
         leafMessageId = item.id;
-        advanceTo.set(conversationId, item.id);
+        advanceTo.set(scope, item.id);
       }
     }
 
@@ -368,9 +371,9 @@ async function pushMessages(
     // on-conflict and reported as a conflict, and pointing the visible path at
     // it would land the reader on a message that is not in the thread.
     const appliedIds = new Set(rows.flatMap((row) => (row.kind === 'applied' ? [row.id] : [])));
-    for (const [conversationId, leafMessageId] of advanceTo) {
+    for (const [scope, leafMessageId] of advanceTo) {
       if (!appliedIds.has(leafMessageId)) continue;
-      await setActiveLeaf(tx, threadScopes.get(conversationId) as ThreadScope, leafMessageId);
+      await setActiveLeaf(tx, scope, leafMessageId);
     }
     return rows;
   });
