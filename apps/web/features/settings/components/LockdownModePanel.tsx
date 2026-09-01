@@ -92,12 +92,12 @@ export function LockdownModePanel() {
       </div>
 
       {loadError ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-xs text-danger">
           {loadError}
         </p>
       ) : null}
       {saveError ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-xs text-danger">
           {saveError}
         </p>
       ) : null}
