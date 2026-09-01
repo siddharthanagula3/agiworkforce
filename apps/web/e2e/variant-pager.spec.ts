@@ -55,6 +55,10 @@ const FOLLOW_UP_ANSWER = 'Roughly 2.1 million people live in the city proper.';
 const EDITED_PROMPT = 'What is the capital of Japan';
 const EDITED_ANSWER = 'Tokyo is the capital of Japan.';
 
+// The pager renders the visible counter beside an sr-only live region reading
+// "Response N of M", so its subtree text is the counter plus that sentence.
+// These are matched as substrings, the same discipline VariantPager.test.tsx
+// uses; an exact match here asserts the live region does not exist.
 const PAGER_FIRST_OF_TWO = '1/2';
 const PAGER_SECOND_OF_TWO = '2/2';
 const PAGER_THIRD_OF_THREE = '3/3';
@@ -186,11 +190,11 @@ test.describe('in-thread response variants', () => {
     await expect(lastAssistantProse(page)).toContainText(SECOND_ANSWER);
     await expect(assistantBubbles(page)).toHaveCount(1);
     const pager = pagerOn(assistantBubbles(page).last());
-    await expect(pager).toHaveText(PAGER_SECOND_OF_TWO);
+    await expect(pager).toContainText(PAGER_SECOND_OF_TWO);
 
     await pager.getByRole('button', { name: PREVIOUS_VARIANT_LABEL }).click();
     await expect(lastAssistantProse(page)).toContainText(FIRST_ANSWER);
-    await expect(pagerOn(assistantBubbles(page).last())).toHaveText(PAGER_FIRST_OF_TWO);
+    await expect(pagerOn(assistantBubbles(page).last())).toContainText(PAGER_FIRST_OF_TWO);
     await expect(
       pagerOn(assistantBubbles(page).last()).getByRole('button', { name: PREVIOUS_VARIANT_LABEL }),
     ).toBeDisabled();
@@ -210,7 +214,7 @@ test.describe('in-thread response variants', () => {
     await regenerateLast(page, mock, SECOND_ANSWER);
     await regenerateLast(page, mock, THIRD_ANSWER);
 
-    await expect(pagerOn(assistantBubbles(page).last())).toHaveText(PAGER_THIRD_OF_THREE);
+    await expect(pagerOn(assistantBubbles(page).last())).toContainText(PAGER_THIRD_OF_THREE);
     await expect(assistantBubbles(page)).toHaveCount(1);
   });
 
@@ -246,7 +250,7 @@ test.describe('in-thread response variants', () => {
 
     // The original question and the reply it produced come back together.
     const userPager = pagerOn(page.locator(USER_BUBBLE).last());
-    await expect(userPager).toHaveText(PAGER_SECOND_OF_TWO);
+    await expect(userPager).toContainText(PAGER_SECOND_OF_TWO);
     await userPager.getByRole('button', { name: PREVIOUS_VARIANT_LABEL }).click();
 
     const afterSwitch = (await readTranscript(page)).join('\n');
@@ -290,7 +294,7 @@ test.describe('in-thread response variants', () => {
     expect(branched).toContain(EDITED_ANSWER);
     expect(branched, 'the original branch stayed on the visible path').not.toContain(FIRST_ANSWER);
     expect(branched).not.toContain(FOLLOW_UP_ANSWER);
-    await expect(pagerOn(page.locator(USER_BUBBLE).first())).toHaveText(PAGER_SECOND_OF_TWO);
+    await expect(pagerOn(page.locator(USER_BUBBLE).first())).toContainText(PAGER_SECOND_OF_TWO);
 
     // A revision the server appended instead of branching would come back as a
     // fifth turn at the bottom, with no pager on the opening message.
@@ -304,7 +308,7 @@ test.describe('in-thread response variants', () => {
     const reloaded = (await readTranscript(page)).join('\n');
     expect(reloaded).toContain(EDITED_ANSWER);
     expect(reloaded, 'the abandoned branch came back as visible turns').not.toContain(FIRST_ANSWER);
-    await expect(pagerOn(page.locator(USER_BUBBLE).first())).toHaveText(PAGER_SECOND_OF_TWO);
+    await expect(pagerOn(page.locator(USER_BUBBLE).first())).toContainText(PAGER_SECOND_OF_TWO);
 
     // And the original opening turn, with its whole tail, is still reachable.
     await pagerOn(page.locator(USER_BUBBLE).first())
@@ -337,7 +341,7 @@ test.describe('in-thread response variants', () => {
     expect(reloaded, 'the abandoned variant came back as a visible turn').not.toContain(
       SECOND_ANSWER,
     );
-    await expect(pagerOn(assistantBubbles(page).last())).toHaveText(PAGER_FIRST_OF_TWO);
+    await expect(pagerOn(assistantBubbles(page).last())).toContainText(PAGER_FIRST_OF_TWO);
   });
 
   /**
