@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "workbook": "docs/research/free-inference-tos-workbook-2026-09-01.md",
+  "entries": [
+    {
+      "routeId": "groq/gpt-oss-120b",
+      "poolId": "groq-free-gpt-oss-120b",
+      "terms": {
+        "commercialUseAllowed": true,
+        "thirdPartyServingAllowed": true,
+        "proxyingAllowed": true,
+        "promptsExcludedFromTraining": true
+      },
+      "evidenceUrl": "https://console.groq.com/docs/legal/services-agreement",
+      "reviewedBy": null,
+      "verifiedAtMs": null,
+      "expiresAtMs": null,
+      "window": "day",
+      "limit": 1000,
+      "unit": "requests",
+      "hardStopsBeforePaid": true
+    },
+    {
+      "routeId": "groq/gpt-oss-20b",
+      "poolId": "groq-free-gpt-oss-20b",
+      "terms": {
+        "commercialUseAllowed": true,
+        "thirdPartyServingAllowed": true,
+        "proxyingAllowed": true,
+        "promptsExcludedFromTraining": true
+      },
+      "evidenceUrl": "https://console.groq.com/docs/legal/services-agreement",
+      "reviewedBy": null,
+      "verifiedAtMs": null,
+      "expiresAtMs": null,
+      "window": "day",
+      "limit": 1000,
+      "unit": "requests",
+      "hardStopsBeforePaid": true
+    }
+  ]
+}
