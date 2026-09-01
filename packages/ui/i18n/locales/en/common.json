@@ -93,7 +93,6 @@
   "navLogOut": "Log out",
   "allOf": "All {{label}}",
   "closeDialog": "Close dialog",
-  "dismissNotification": "Dismiss notification",
   "goToNextPage": "Go to next page",
   "goToPreviousPage": "Go to previous page",
   "loadingCard": "Loading card",

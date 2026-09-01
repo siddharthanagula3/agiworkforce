@@ -93,7 +93,6 @@
   "navLogOut": "Abmelden",
   "allOf": "Alle {{label}}",
   "closeDialog": "Dialog schließen",
-  "dismissNotification": "Benachrichtigung schließen",
   "goToNextPage": "Zur nächsten Seite",
   "goToPreviousPage": "Zur vorherigen Seite",
   "loadingCard": "Karte wird geladen",

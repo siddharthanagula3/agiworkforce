@@ -60,6 +60,7 @@
   "placeholderEmpty": "Wie kann ich dir heute helfen?",
   "shareConversation": "Unterhaltung teilen",
   "openNavigation": "Navigation öffnen",
+  "openPanels": "Panels",
   "artifactPublish": {
     "untitled": "Veröffentlichtes Artefakt",
     "publishedOn": "Veröffentlicht am {{date}}",

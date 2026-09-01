@@ -93,7 +93,6 @@
   "navLogOut": "تسجيل الخروج",
   "allOf": "جميع {{label}}",
   "closeDialog": "إغلاق مربع الحوار",
-  "dismissNotification": "تجاهل الإشعار",
   "goToNextPage": "الانتقال إلى الصفحة التالية",
   "goToPreviousPage": "الانتقال إلى الصفحة السابقة",
   "loadingCard": "جارٍ تحميل البطاقة",

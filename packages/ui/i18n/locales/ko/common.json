@@ -93,7 +93,6 @@
   "navLogOut": "로그아웃",
   "allOf": "모든 {{label}}",
   "closeDialog": "대화 상자 닫기",
-  "dismissNotification": "알림 닫기",
   "goToNextPage": "다음 페이지로 이동",
   "goToPreviousPage": "이전 페이지로 이동",
   "loadingCard": "카드 로딩 중",

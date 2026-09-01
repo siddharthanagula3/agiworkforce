@@ -93,7 +93,6 @@
   "navLogOut": "退出登录",
   "allOf": "所有{{label}}",
   "closeDialog": "关闭对话框",
-  "dismissNotification": "关闭通知",
   "goToNextPage": "转到下一页",
   "goToPreviousPage": "转到上一页",
   "loadingCard": "正在加载卡片",

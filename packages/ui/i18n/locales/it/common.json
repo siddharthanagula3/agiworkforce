@@ -93,7 +93,6 @@
   "navLogOut": "Esci",
   "allOf": "Tutti {{label}}",
   "closeDialog": "Chiudi finestra di dialogo",
-  "dismissNotification": "Ignora notifica",
   "goToNextPage": "Vai alla pagina successiva",
   "goToPreviousPage": "Vai alla pagina precedente",
   "loadingCard": "Caricamento scheda",
