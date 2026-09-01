@@ -60,6 +60,12 @@ describe('findRecoveryHref', () => {
     ).toBeUndefined();
   });
 
+  it('refuses the parser tricks that dress an off-origin hop as a path', () => {
+    expect(findRecoveryHref([{ action: 'byok', href: '/\\evil.test' }], 'byok')).toBeUndefined();
+    expect(findRecoveryHref([{ action: 'byok', href: '/\t/evil.test' }], 'byok')).toBeUndefined();
+    expect(findRecoveryHref([{ action: 'byok', href: '/\n/evil.test' }], 'byok')).toBeUndefined();
+  });
+
   it('reports nothing for an action the server did not offer', () => {
     expect(findRecoveryHref(SERVER_RECOVERY, 'top_up')).toBeUndefined();
     expect(findRecoveryHref(undefined, 'byok')).toBeUndefined();

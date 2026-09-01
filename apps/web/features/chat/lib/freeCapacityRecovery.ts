@@ -19,6 +19,9 @@ const FREE_CAPACITY_FALLBACK_REASON =
   'No free capacity right now. Try again shortly, upgrade your plan, or use your own provider key.';
 const DEFAULT_REQUIRED_TIER = 'basic';
 
+const SAME_ORIGIN_PROBE = 'https://same-origin.probe';
+const SAME_ORIGIN_PROBE_ORIGIN = new URL(SAME_ORIGIN_PROBE).origin;
+
 const MS_PER_SECOND = 1_000;
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_MAX_COUNTDOWN = 10;
@@ -42,7 +45,13 @@ export function isFreeCapacityUnavailableCode(code: string | null | undefined): 
  */
 function samePathOriginHref(href: string | undefined): string | undefined {
   if (!href) return undefined;
-  return href.startsWith('/') && !href.startsWith('//') ? href : undefined;
+  try {
+    const url = new URL(href, SAME_ORIGIN_PROBE);
+    if (url.origin !== SAME_ORIGIN_PROBE_ORIGIN) return undefined;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return undefined;
+  }
 }
 
 export function findRecoveryHref(
