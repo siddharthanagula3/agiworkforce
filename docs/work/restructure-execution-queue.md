@@ -60,7 +60,7 @@ Verified against the running product on 2026-08-30:
   ordinary chat path. The research loop never ran, so there was never a report,
   and the panel was telling the truth.
   Why it never ran: `researchModeAllowed` needs the routed model to declare the
-  `research` capability, and neither `gemini-3.5-flash-lite` nor `gpt-5.6-luna`
+  `research` capability, and neither candidate model in that tier
   does. The composer correctly disables Deep Research for those - but
   `modelSupportsResearch` short-circuits on `isAutoSelected`, and the disabled
   control's own tooltip says "Choose Auto". Under Auto the router can land on a
