@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowUp, Clock, Loader2, Square } from 'lucide-react';
+import { ArrowUp, Clock, Square } from '@agiworkforce/icons';
+import { Spinner } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 export type SendButtonMode = 'send' | 'stop' | 'queue';
@@ -77,11 +78,7 @@ export function SendButton({
       title={isSending ? 'Sending…' : 'Send message'}
       aria-label={isSending ? 'Sending message…' : 'Send message'}
     >
-      {isSending ? (
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-      ) : (
-        <ArrowUp className="h-4 w-4" aria-hidden="true" />
-      )}
+      {isSending ? <Spinner size="sm" /> : <ArrowUp className="h-4 w-4" aria-hidden="true" />}
     </button>
   );
 }

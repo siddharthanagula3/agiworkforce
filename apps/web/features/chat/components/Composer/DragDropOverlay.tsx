@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload } from 'lucide-react';
+import { Upload } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 
 interface DragDropOverlayProps {

@@ -24,7 +24,7 @@ import {
   Sparkles,
   Terminal,
   Undo2,
-} from 'lucide-react';
+} from '@agiworkforce/icons';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { isCapabilityEnabled } from '@agiworkforce/types';
 import {

@@ -1,7 +1,14 @@
 'use client';
 
 import { memo } from 'react';
-import { X, FileText, FileSpreadsheet, FileCode, File as FileIcon, Lock } from 'lucide-react';
+import {
+  X,
+  FileText,
+  FileSpreadsheet,
+  FileCode,
+  File as FileIcon,
+  Lock,
+} from '@agiworkforce/icons';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@shared/lib/utils';
 import type { AttachmentPreview as AttachmentPreviewData } from '@features/chat/hooks/use-attachments';
