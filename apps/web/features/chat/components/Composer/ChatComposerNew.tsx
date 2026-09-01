@@ -75,6 +75,12 @@ import {
   SendPreview,
   useCapability,
 } from '@agiworkforce/unified-chat';
+import type {
+  ComposerAttachmentPasteDecision,
+  ComposerEditorHandle,
+  ComposerMentionCommit,
+  ComposerMentionConfig,
+} from '@agiworkforce/unified-chat/composer-editor';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -374,6 +380,67 @@ function splitSlashCommand(value: string): { token: string; argument: string } |
 /** The text a command should leave behind once its token is consumed. */
 function stripSlashCommandToken(value: string): string {
   return splitSlashCommand(value)?.argument ?? value;
+}
+
+const SLASH_COMMAND_PREFIX = '/';
+const SLASH_COMMAND_ARGUMENT_SEPARATOR = ' ';
+
+/**
+ * The command menu opens for a bare, unspaced `/token` measured against the
+ * WHOLE message, so deleting back into shape reopens it. Both input arms read
+ * this one predicate — a second copy is how the two would drift.
+ */
+function isSlashCommandDraft(value: string): boolean {
+  return (
+    value.startsWith(SLASH_COMMAND_PREFIX) && !value.includes(SLASH_COMMAND_ARGUMENT_SEPARATOR)
+  );
+}
+
+function slashCommandQuery(value: string): string {
+  return value.slice(SLASH_COMMAND_PREFIX.length);
+}
+
+const VOICE_TRANSCRIPT_SEPARATOR = ' ';
+const MENTION_INDEX_FIRST = 0;
+const KEY_ARROW_DOWN = 'ArrowDown';
+const KEY_ARROW_UP = 'ArrowUp';
+const KEY_ENTER = 'Enter';
+const KEY_TAB = 'Tab';
+/** Focus after the commit that caused it has been painted, not during it. */
+const FOCUS_AFTER_COMMIT_MS = 0;
+/** Dictation settles its own transcript before the caret is moved. */
+const FOCUS_AFTER_TRANSCRIPT_MS = 50;
+
+const COMPOSER_AUTO_HEIGHT = 'auto';
+const COMPOSER_MAX_HEIGHT_PX = 240;
+const COMPOSER_RESTING_HEIGHT_PX = 52;
+/** M11: the mobile step of the same box the `sm:` utilities carry. */
+const COMPOSER_RESTING_HEIGHT_COMPACT_PX = 36;
+const COMPOSER_COMPACT_MEDIA_QUERY = '(max-width: 639px)';
+
+/**
+ * The legacy textarea's resting height is pinned in JS, so the `sm:` step its
+ * classes carry can never reach it — this is the one density value that cannot
+ * be a responsive class. jsdom has no `matchMedia`, which resolves to the
+ * desktop number the existing first-paint test measures.
+ */
+function composerRestingHeightPx(): number {
+  const compact = window.matchMedia?.(COMPOSER_COMPACT_MEDIA_QUERY).matches === true;
+  return compact ? COMPOSER_RESTING_HEIGHT_COMPACT_PX : COMPOSER_RESTING_HEIGHT_PX;
+}
+
+/**
+ * `Blob.text()` is not universally present — jsdom is the case that matters
+ * here — and the undo copy is only worth what the read returns, so a failed
+ * read degrades to an empty banner rather than throwing inside a paste.
+ */
+function readPastedText(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => resolve('');
+    reader.readAsText(file);
+  });
 }
 
 /** Outcome of resolving a slash command against the current capability set. */
@@ -1036,6 +1103,20 @@ const ChatComposerNewComponent = ({
   }, [composerSelectedModelId, modelSupportsThinkingCap, setThinkingEnabled, thinkingEnabled]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  /**
+   * Null unless the editor arm is mounted, which is what makes every write
+   * below a single path: `setMessage` keeps the mirror (counter, hasContent,
+   * secrets audit, drafts) authoritative on both arms, and the handle call is
+   * a no-op on the legacy one.
+   */
+  const composerEditorRef = useRef<ComposerEditorHandle | null>(null);
+  const mentionCommitRef = useRef<ComposerMentionCommit | null>(null);
+  /**
+   * The mention popover anchors to the input row rather than to the textarea,
+   * because the editor arm has no textarea to measure. Same box either way —
+   * the input is `w-full` inside it.
+   */
+  const composerRowRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   // The "+" trigger and its portaled menu. The menu is no longer a DOM
@@ -1098,8 +1179,36 @@ const ChatComposerNewComponent = ({
     };
   }, []);
 
+  /**
+   * Every external write to the message goes through one of these three. The
+   * mirror stays authoritative on both arms — the counter, `hasContent`, the
+   * secrets audit and the draft store all read it — and the handle call
+   * replays the same text into the uncontrolled editor when that arm is
+   * mounted. `setText` and `clear` also purge undo history, so Cmd+Z cannot
+   * resurrect a sent message or another conversation's draft.
+   */
+  const writeComposerMessage = useCallback((next: string) => {
+    setMessage(next);
+    composerEditorRef.current?.setText(next);
+  }, []);
+
+  const appendComposerMessage = useCallback((suffix: string) => {
+    setMessage((current) => current + suffix);
+    composerEditorRef.current?.appendText(suffix);
+  }, []);
+
+  const focusComposer = useCallback(() => {
+    const editor = composerEditorRef.current;
+    if (editor) {
+      editor.focus();
+      return;
+    }
+    textareaRef.current?.focus();
+  }, []);
+
   const clearComposerState = useCallback(() => {
     setMessage('');
+    composerEditorRef.current?.clear();
     // AUDIT-FIX STR-23: a sent/cleared composer must not leave a stale parked
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
@@ -1136,7 +1245,7 @@ const ChatComposerNewComponent = ({
     setShowCompatibleModels(false);
 
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = COMPOSER_AUTO_HEIGHT;
     }
     // `availableImageModels`/`availableVideoModels` are gone from these deps
     // because the clear no longer reads them — the media model now survives a
@@ -1163,10 +1272,10 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (prefillText && prefillText.length > 0 && prefillText !== prevPrefill) {
       setPrevPrefill(prefillText);
-      setMessage(prefillText);
+      writeComposerMessage(prefillText);
       onPrefillConsumed?.();
     }
-  }, [prefillText, prevPrefill, onPrefillConsumed]);
+  }, [prefillText, prevPrefill, onPrefillConsumed, writeComposerMessage]);
 
   /**
    * AUDIT-FIX MEDIA-VIDEO-01: every attachment entry point on this surface
@@ -1263,6 +1372,32 @@ const ChatComposerNewComponent = ({
     }
   }, [addChatAttachments]);
 
+  const attachmentNames = useMemo(() => attachments.map((file) => file.name), [attachments]);
+
+  /**
+   * A long paste turning into a file is a reasonable default and a surprising
+   * one: the composer emptied and a chip appeared, with Remove as the only
+   * affordance and nothing saying what had happened. Say it, and keep the text
+   * so the choice is reversible.
+   *
+   * The editor arm cannot hand over the clipboard — ProseMirror owns the event
+   * and reports only the decision — but the attachment IS the pasted text, so
+   * the undo copy is recovered from the file itself.
+   */
+  const applyComposerPasteDecision = useCallback(
+    (decision: ComposerAttachmentPasteDecision, plainText?: string) => {
+      addChatAttachments(decision.kind === 'files' ? decision.files : [decision.file]);
+      if (decision.kind !== 'attachment') return;
+      const { file } = decision;
+      if (plainText !== undefined) {
+        setPastedTextUndo({ fileName: file.name, text: plainText });
+        return;
+      }
+      void readPastedText(file).then((text) => setPastedTextUndo({ fileName: file.name, text }));
+    },
+    [addChatAttachments],
+  );
+
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       if (disabled || trialExhausted) return;
@@ -1271,23 +1406,28 @@ const ChatComposerNewComponent = ({
       // the extension. `text` leaves the event alone so ordinary text still
       // inserts as text.
       const decision = decideComposerPaste(e.clipboardData, {
-        existingFileNames: attachments.map((file) => file.name),
+        existingFileNames: attachmentNames,
       });
       if (decision.kind === 'text') return;
       e.preventDefault();
-      addChatAttachments(decision.kind === 'files' ? decision.files : [decision.file]);
-      // A long paste turning into a file is a reasonable default and a
-      // surprising one: the composer emptied and a chip appeared, with Remove
-      // as the only affordance and nothing saying what had happened. Say it,
-      // and keep the text so the choice is reversible.
-      if (decision.kind === 'attachment') {
-        setPastedTextUndo({
-          fileName: decision.file.name,
-          text: e.clipboardData.getData('text/plain'),
-        });
-      }
+      applyComposerPasteDecision(decision, e.clipboardData.getData('text/plain'));
     },
-    [addChatAttachments, attachments, disabled, trialExhausted],
+    [applyComposerPasteDecision, attachmentNames, disabled, trialExhausted],
+  );
+
+  const handleEditorPasteDecision = useCallback(
+    (decision: ComposerAttachmentPasteDecision) => {
+      if (disabled || trialExhausted) return;
+      applyComposerPasteDecision(decision);
+    },
+    [applyComposerPasteDecision, disabled, trialExhausted],
+  );
+
+  const handleEditorDropFiles = useCallback(
+    (files: readonly File[]) => {
+      handleFileDrop([...files]);
+    },
+    [handleFileDrop],
   );
 
   // Handle droppedFiles prop · same derived-state-from-props pattern as prefillText.
@@ -1319,12 +1459,13 @@ const ChatComposerNewComponent = ({
     // but the initial mobile composer has already consumed most of the screen.
     // Empty content never needs measurement, so keep its stable one-line height
     // and reserve scrollHeight reads for real text.
+    const resting = composerRestingHeightPx();
     if (message.length === 0) {
-      textarea.style.height = '52px';
+      textarea.style.height = `${resting}px`;
       return;
     }
-    textarea.style.height = 'auto';
-    const newHeight = Math.min(Math.max(textarea.scrollHeight, 52), 240);
+    textarea.style.height = COMPOSER_AUTO_HEIGHT;
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, resting), COMPOSER_MAX_HEIGHT_PX);
     textarea.style.height = `${newHeight}px`;
   }, [message]);
 
@@ -1446,31 +1587,53 @@ const ChatComposerNewComponent = ({
     [setWorkMode, projectPicker, clearFolder, closeProjectPicker],
   );
 
-  // Handle input change: detect @mention and /command.
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    const cursorPos = e.target.selectionStart || 0;
-    setMessage(value);
-
-    // Slash command detection: only when message starts with /
-    if (value.startsWith('/') && !value.includes(' ')) {
+  const syncSlashMenu = useCallback((value: string) => {
+    if (isSlashCommandDraft(value)) {
       setShowSlashMenu(true);
-      setSlashQuery(value.slice(1));
-      setShowMentions(false);
-      return;
+      setSlashQuery(slashCommandQuery(value));
+      return true;
     }
     setShowSlashMenu(false);
-
-    const mention = matchMentionQuery(value, cursorPos);
-    if (mention) {
-      setShowMentions(true);
-      setMentionQuery(mention.query);
-      setMentionStartIndex(mention.startIndex);
-      setMentionIndex(0);
-      return;
-    }
-    setShowMentions(false);
+    return false;
   }, []);
+
+  // Handle input change: detect @mention and /command.
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = e.target.value;
+      const cursorPos = e.target.selectionStart || 0;
+      setMessage(value);
+
+      if (syncSlashMenu(value)) {
+        setShowMentions(false);
+        return;
+      }
+
+      const mention = matchMentionQuery(value, cursorPos);
+      if (mention) {
+        setShowMentions(true);
+        setMentionQuery(mention.query);
+        setMentionStartIndex(mention.startIndex);
+        setMentionIndex(MENTION_INDEX_FIRST);
+        return;
+      }
+      setShowMentions(false);
+    },
+    [syncSlashMenu],
+  );
+
+  /**
+   * The editor arm's mirror. Mentions are owned by the suggestion plugin on
+   * this arm — it is the only thing that knows where the caret is — so the
+   * slash predicate is all that crosses here.
+   */
+  const handleComposerTextChange = useCallback(
+    (value: string) => {
+      setMessage(value);
+      syncSlashMenu(value);
+    },
+    [syncSlashMenu],
+  );
 
   const mentionMatches = useCallback(
     (haystack: string) => {
@@ -1514,6 +1677,17 @@ const ChatComposerNewComponent = ({
     mentionItems.length === 0 ? -1 : Math.min(mentionIndex, mentionItems.length - 1);
 
   const replaceMentionToken = useCallback(() => {
+    // On the editor arm the suggestion plugin owns the range: it is the only
+    // thing that knows where the query sits once paragraph breaks are in play,
+    // and deleting it leaves the caret exactly where the token was.
+    const commit = mentionCommitRef.current;
+    if (commit) {
+      commit.removeQuery();
+      mentionCommitRef.current = null;
+      setShowMentions(false);
+      focusComposer();
+      return;
+    }
     if (mentionStartIndex === -1) return;
     const before = message.substring(0, mentionStartIndex);
     const cursorPos = textareaRef.current?.selectionStart || message.length;
@@ -1531,7 +1705,7 @@ const ChatComposerNewComponent = ({
       textareaRef.current?.focus();
       textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
     }, 0);
-  }, [message, mentionStartIndex]);
+  }, [message, mentionStartIndex, focusComposer]);
 
   const handleMentionSelect = useCallback(
     (skill: SkillItem) => {
@@ -1556,6 +1730,59 @@ const ChatComposerNewComponent = ({
     if (item.kind === 'skill') handleMentionSelect(item.skill);
     else handleMentionProjectSelect(item.project.id);
   }, [mentionItems, activeMentionIndex, handleMentionSelect, handleMentionProjectSelect]);
+
+  /**
+   * The editor arm's mention menu. The suggestion plugin owns the trigger and
+   * the range; this only mirrors its query into the AnchoredComposerMenu state
+   * the textarea arm already drives, and answers whether the menu took a key.
+   *
+   * That answer is load-bearing. The plugin consumes a key from the keymap only
+   * when this returns true, so an open-but-empty menu can never swallow the
+   * Enter that was meant to send. Escape deliberately falls through to the
+   * document-level closers, exactly as it does on the textarea arm.
+   *
+   * Rebuilt every render rather than memoized: the editor reads it live at
+   * keystroke time, and a missed dependency here would be a stale commit.
+   */
+  const composerMention: ComposerMentionConfig = {
+    menu: {
+      onOpen: (state) => {
+        mentionCommitRef.current = state.commit;
+        setMentionQuery(state.query);
+        setMentionIndex(MENTION_INDEX_FIRST);
+        setShowMentions(true);
+      },
+      onUpdate: (state) => {
+        mentionCommitRef.current = state.commit;
+        setMentionQuery(state.query);
+        setShowMentions(true);
+      },
+      onClose: () => {
+        mentionCommitRef.current = null;
+        setShowMentions(false);
+      },
+      onKeyDown: (event) => {
+        if (!showMentions || mentionItems.length === 0) return false;
+        if (event.key === KEY_ARROW_DOWN) {
+          setMentionIndex((prev) =>
+            prev >= mentionItems.length - 1 ? MENTION_INDEX_FIRST : prev + 1,
+          );
+          return true;
+        }
+        if (event.key === KEY_ARROW_UP) {
+          setMentionIndex((prev) =>
+            prev <= MENTION_INDEX_FIRST ? mentionItems.length - 1 : prev - 1,
+          );
+          return true;
+        }
+        if ((event.key === KEY_ENTER && !event.shiftKey) || event.key === KEY_TAB) {
+          commitActiveMention();
+          return true;
+        }
+        return false;
+      },
+    },
+  };
 
   /**
    * AUDIT-FIX CMP-8/CMP-9: resolve a slash command against what the selected
@@ -1682,10 +1909,10 @@ const ChatComposerNewComponent = ({
         return;
       }
       setLocalNotice(null);
-      setMessage(commitSlashCommand(outcome));
-      setTimeout(() => textareaRef.current?.focus(), 0);
+      writeComposerMessage(commitSlashCommand(outcome));
+      setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
     },
-    [resolveSlashCommand, commitSlashCommand],
+    [resolveSlashCommand, commitSlashCommand, writeComposerMessage, focusComposer],
   );
 
   const handleSkillSelect = useCallback(
@@ -1695,11 +1922,11 @@ const ChatComposerNewComponent = ({
       setSelectedSkillName(skill.name);
       // AUDIT-FIX CMP-8: keep whatever the user already typed after the
       // command token instead of wiping the input (see handleSlashSelect).
-      setMessage((prev) => stripSlashCommandToken(prev));
+      writeComposerMessage(stripSlashCommandToken(messageRef.current));
       setShowSlashMenu(false);
-      setTimeout(() => textareaRef.current?.focus(), 0);
+      setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
     },
-    [availableSkills, setSelectedSkillName],
+    [availableSkills, setSelectedSkillName, writeComposerMessage, focusComposer],
   );
 
   /**
@@ -1812,7 +2039,7 @@ const ChatComposerNewComponent = ({
       if (!outgoingContent.trim() && attachments.length === 0) {
         // The command was applied (its toggle is now on and visible in the "+"
         // badge); there is simply nothing to send yet.
-        setMessage(outgoingContent);
+        writeComposerMessage(outgoingContent);
         return;
       }
     }
@@ -2045,6 +2272,7 @@ const ChatComposerNewComponent = ({
     agiWorkDeliverable,
     onSend,
     clearComposerState,
+    writeComposerMessage,
     activeToolLabels,
   ]);
 
@@ -2066,8 +2294,8 @@ const ChatComposerNewComponent = ({
     } else {
       clearDraftContent(previousConversationId);
     }
-    setMessage(useChatStore.getState().getDraftContent(conversationId));
-  }, [conversationId, setDraftContent, clearDraftContent]);
+    writeComposerMessage(useChatStore.getState().getDraftContent(conversationId));
+  }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
 
   // Flush a queued follow-up when the active turn finishes (true→false).
   //
@@ -2142,14 +2370,14 @@ const ChatComposerNewComponent = ({
       const target = queuedFollowUpsRef.current.find((item) => item.id === id);
       if (!target) return;
       editingQueuedIdRef.current = id;
-      setMessage(target.args[0]);
+      writeComposerMessage(target.args[0]);
       const attachmentsToRestore = target.args[1];
       if (attachmentsToRestore && attachmentsToRestore.length > 0) {
         addChatAttachments([...attachmentsToRestore]);
       }
-      textareaRef.current?.focus();
+      focusComposer();
     },
-    [addChatAttachments],
+    [addChatAttachments, writeComposerMessage, focusComposer],
   );
 
   /**
@@ -2334,9 +2562,9 @@ const ChatComposerNewComponent = ({
             onClick={() => {
               const index = attachments.findIndex((file) => file.name === pastedTextUndo.fileName);
               if (index >= 0) removeFile(index);
-              setMessage((current) => current + pastedTextUndo.text);
+              appendComposerMessage(pastedTextUndo.text);
               setPastedTextUndo(null);
-              textareaRef.current?.focus();
+              focusComposer();
             }}
           >
             Put it back in the message
@@ -2627,10 +2855,16 @@ const ChatComposerNewComponent = ({
 
         {/* @Mention Dropdown */}
         <AnchoredComposerMenu
-          anchorRef={textareaRef}
+          anchorRef={composerRowRef}
           open={showMentions}
           label="Mention suggestions"
-          onRequestClose={() => setShowMentions(false)}
+          // The menu returns focus to its anchor, which is the input ROW, not a
+          // focusable node — so say where focus actually belongs. Both arms
+          // resolve to their own input.
+          onRequestClose={() => {
+            setShowMentions(false);
+            focusComposer();
+          }}
           contentRef={mentionsRef}
           className="w-72"
         >
@@ -2720,20 +2954,37 @@ const ChatComposerNewComponent = ({
             // lines on each item's CONTENT size, so min-w-0 alone can't stop it — only
             // flex-nowrap forces one line, while the min-w-0 chain lets the model
             // pill/hint shrink to fit within it.
-            'flex flex-col gap-2 p-2 sm:p-3',
-            emptyState && 'px-4 py-3 sm:px-5',
+            // M11: every vertical value below `sm` is its own step — the
+            // resting box ran to ~130px at 390px against ChatGPT's ~87px. The
+            // `sm:` halves reproduce today's desktop numbers exactly.
+            'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-3',
+            emptyState && 'px-3 py-1.5 sm:px-5 sm:py-3',
           )}
         >
           {/* Textarea wrapper — row 1, full width */}
-          <div className={cn('relative w-full', emptyState ? 'min-h-[40px]' : 'min-h-[52px]')}>
+          <div
+            ref={composerRowRef}
+            className={cn(
+              'relative w-full min-h-[36px]',
+              emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[52px]',
+            )}
+          >
             <ComposerInput
               textareaRef={textareaRef}
+              editorRef={composerEditorRef}
               value={message}
               onChange={handleInputChange}
+              onTextChange={handleComposerTextChange}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
+              onPasteDecision={handleEditorPasteDecision}
+              onDropFiles={handleEditorDropFiles}
+              onSubmit={handleSubmit}
+              onFocusChange={setIsFocused}
+              existingFileNames={attachmentNames}
+              mention={composerMention}
+              isSlashMenuActive={() => showSlashMenu}
+              onSlashMenuKey={(key) => slashMenuRef.current?.handleKey(key) ?? false}
               placeholder={
                 isTurnActive && !imageMode && !videoMode
                   ? 'Reply: sends when the current response finishes'
@@ -2807,7 +3058,7 @@ const ChatComposerNewComponent = ({
                 // menu keep their own capability gates.
                 disabled={composerDisabled}
                 className={cn(
-                  'relative flex h-9 w-9 items-center justify-center rounded-full transition-colors',
+                  'relative flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full transition-colors',
                   hasOverflowActive
                     ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -2963,7 +3214,7 @@ const ChatComposerNewComponent = ({
                               return;
                             }
                             setImageMode(true);
-                            setTimeout(() => textareaRef.current?.focus(), 0);
+                            setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
                           }}
                           title={
                             !billingPolicyReady
@@ -3054,7 +3305,7 @@ const ChatComposerNewComponent = ({
                               return;
                             }
                             setVideoMode(true);
-                            setTimeout(() => textareaRef.current?.focus(), 0);
+                            setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
                           }}
                           title={
                             !billingPolicyReady
@@ -3835,11 +4086,9 @@ const ChatComposerNewComponent = ({
                   meant a queued follow-up could be typed but never dictated. */}
               <VoiceInputButton
                 onTranscript={(text) => {
-                  setMessage((prev) => {
-                    const separator = prev.trim() ? ' ' : '';
-                    return prev + separator + text;
-                  });
-                  setTimeout(() => textareaRef.current?.focus(), 50);
+                  const separator = messageRef.current.trim() ? VOICE_TRANSCRIPT_SEPARATOR : '';
+                  appendComposerMessage(separator + text);
+                  setTimeout(focusComposer, FOCUS_AFTER_TRANSCRIPT_MS);
                 }}
                 disabled={composerDisabled}
               />
