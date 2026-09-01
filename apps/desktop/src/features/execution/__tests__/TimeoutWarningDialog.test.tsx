@@ -7,10 +7,6 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-vi.mock('../../../hooks/useToast', () => ({
-  toast: vi.fn(),
-}));
-
 describe('TimeoutWarningDialog', () => {
   const mockWarningData: TimeoutWarningData = {
     taskId: 'task-123',
