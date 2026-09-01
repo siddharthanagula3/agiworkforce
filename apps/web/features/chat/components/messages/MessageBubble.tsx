@@ -57,6 +57,9 @@ import {
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import type { VariantInfo } from '@/features/chat/lib/messageThread';
+import { ACTION_BUTTON_SIZE } from './messageActionRow';
+import { VariantPager } from './VariantPager';
 import { toast } from 'sonner';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
@@ -211,15 +214,6 @@ interface Attachment {
 }
 
 const MAX_INLINE_GENERATED_TEXT_BYTES = 2 * 1024 * 1024;
-
-/**
- * AUDIT-FIX GOV-38: message action buttons were `h-7 w-7` — a 28px target,
- * below the 44px minimum, across every site in the action row. Touch viewports
- * now get a true 44px control; pointer viewports (sm and up, where the row is
- * hover-revealed anyway) keep a compact 32px button. `touch-manipulation`
- * removes the 300ms tap delay that made the small targets feel unresponsive.
- */
-const ACTION_BUTTON_SIZE = 'h-11 w-11 touch-manipulation sm:h-8 sm:w-8';
 
 function generatedFileLanguage(file: GeneratedFileMetadataEntry): string {
   const extension = file.fileName.toLowerCase().split('.').pop() ?? '';
@@ -504,6 +498,19 @@ interface MessageBubbleProps {
   /** Keeps an unavailable browser capability out of the action row. */
   isReadAloudSupported?: boolean;
   hasBranches?: boolean;
+  /**
+   * This message's place among its siblings — the other answers to the same
+   * question, or the other revisions of the same message. Absent, or with a
+   * total of one, nothing is rendered.
+   */
+  variantInfo?: VariantInfo;
+  /**
+   * Page to another sibling. The page owns which leaf that implies, so this only
+   * has to name the sibling the reader asked for.
+   */
+  onSelectVariant?: (messageId: string) => void;
+  /** True while the conversation streams: paging mid-turn is not offered. */
+  isConversationStreaming?: boolean;
   /** Re-generates an image result in-place (edit/aspect-ratio change). */
   onRegenerateImage?: (opts: {
     prompt: string;
@@ -540,6 +547,9 @@ const MessageBubbleComponent = function MessageBubble({
   isReadingAloud = false,
   isReadAloudSupported = false,
   hasBranches,
+  variantInfo,
+  onSelectVariant,
+  isConversationStreaming = false,
   animationIndex = 0,
   onRegenerateImage,
   onResumeVideo,
@@ -659,6 +669,22 @@ const MessageBubbleComponent = function MessageBubble({
   const handleResendTool = useCallback(() => {
     onRegenerate?.(message.id);
   }, [onRegenerate, message.id]);
+  const handleSelectPreviousVariant = useCallback(() => {
+    if (variantInfo?.previousId) onSelectVariant?.(variantInfo.previousId);
+  }, [onSelectVariant, variantInfo?.previousId]);
+  const handleSelectNextVariant = useCallback(() => {
+    if (variantInfo?.nextId) onSelectVariant?.(variantInfo.nextId);
+  }, [onSelectVariant, variantInfo?.nextId]);
+  const variantPager =
+    variantInfo && onSelectVariant ? (
+      <VariantPager
+        index={variantInfo.index}
+        total={variantInfo.total}
+        onPrevious={handleSelectPreviousVariant}
+        onNext={handleSelectNextVariant}
+        disabled={isConversationStreaming}
+      />
+    ) : null;
   // `pendingTurns` (the registry resolveToolApproval consults) is process-
   // memory-only and doesn't survive a reload, even though a persisted
   // awaiting_approval card does. Without this, the Approve/Reject buttons
@@ -1721,8 +1747,8 @@ const MessageBubbleComponent = function MessageBubble({
           )}
 
           {/* Code blocks are rendered exactly once by <MarkdownContent> above
-              (syntax-highlighted via rehype-highlight, with a copy button + lang
-              label). A previous <ArtifactBlock content={cleanedContent}> here
+              (syntax-highlighted by Shiki, with a copy button + lang label).
+              A previous <ArtifactBlock content={cleanedContent}> here
               RE-rendered every fenced block a second time, so non-renderable
               blocks (python/csv/json/generic — the ones NOT stripped from
               cleanedContent by removeArtifactBlocks) appeared twice (the visible
@@ -2220,6 +2246,11 @@ const MessageBubbleComponent = function MessageBubble({
                   </>
                 )}
 
+                {/* Variants — immediately before Regenerate, which is the
+                    control that produces them, and in the same slot on a user
+                    message's hover row for the revisions Edit produces. */}
+                {variantPager}
+
                 {/* Regenerate — primary action for assistant messages */}
                 {!isUser &&
                   onRegenerate &&
@@ -2563,10 +2594,16 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onRegenerateImage !== next.onRegenerateImage) return false;
   if (prev.onResumeVideo !== next.onResumeVideo) return false;
   if (prev.onRetryVideo !== next.onRetryVideo) return false;
+  if (prev.onSelectVariant !== next.onSelectVariant) return false;
 
   // Check flags
   if (prev.isBranching !== next.isBranching) return false;
   if (prev.branchNavigation !== next.branchNavigation) return false;
+  // BUG-27/BUG-28 class: a comparator that does not name a prop swallows every
+  // update to it. Regenerating turns a 1/1 into a 2/2 without touching the
+  // message, so the pager would keep reporting the count it first rendered.
+  if (prev.variantInfo !== next.variantInfo) return false;
+  if (prev.isConversationStreaming !== next.isConversationStreaming) return false;
   if (prev.isReadingAloud !== next.isReadingAloud) return false;
   if (prev.isReadAloudSupported !== next.isReadAloudSupported) return false;
   if (prev.hasBranches !== next.hasBranches) return false;
