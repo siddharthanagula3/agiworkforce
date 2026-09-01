@@ -71,13 +71,14 @@ describe('composer suggestion adapter', () => {
     expect(nodeNames).toContain(COMPOSER_MENTION_NODE_NAME);
   });
 
-  it('removes the query without inserting anything when the host asks it to', () => {
+  it('removes the query and the space it sat behind when the host asks it to', () => {
     const { menu, states } = recordingMenu();
     editor = createTestEditor({ resolveMention: () => ({ menu }) });
     type(editor, 'ping @ad');
     lastState(states).commit.removeQuery();
 
-    expect(composerText(editor)).toBe('ping ');
+    expect(composerText(editor)).toBe('ping');
+    expect(editor.state.selection.from).toBe(editor.state.doc.content.size - 1);
   });
 
   it('hands keys to the host menu only while it is open', () => {

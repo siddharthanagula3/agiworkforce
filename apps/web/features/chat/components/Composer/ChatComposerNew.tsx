@@ -1678,14 +1678,14 @@ const ChatComposerNewComponent = ({
 
   const replaceMentionToken = useCallback(() => {
     // On the editor arm the suggestion plugin owns the range: it is the only
-    // thing that knows where the query sits once paragraph breaks are in play,
-    // and deleting it leaves the caret exactly where the token was.
+    // thing that knows where the query sits once paragraph breaks are in play.
+    // It restores focus itself, at the caret the removal collapsed to;
+    // focusComposer would drag the caret to the end of the document.
     const commit = mentionCommitRef.current;
     if (commit) {
       commit.removeQuery();
       mentionCommitRef.current = null;
       setShowMentions(false);
-      focusComposer();
       return;
     }
     if (mentionStartIndex === -1) return;
@@ -1705,7 +1705,7 @@ const ChatComposerNewComponent = ({
       textareaRef.current?.focus();
       textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
     }, 0);
-  }, [message, mentionStartIndex, focusComposer]);
+  }, [message, mentionStartIndex]);
 
   const handleMentionSelect = useCallback(
     (skill: SkillItem) => {
@@ -2858,6 +2858,10 @@ const ChatComposerNewComponent = ({
           anchorRef={composerRowRef}
           open={showMentions}
           label="Mention suggestions"
+          // Typing opens this one, and the user is still typing: the query keeps
+          // narrowing after it appears. Arrows and Enter reach the menu through
+          // the input's own key handler, so focus never has to live here.
+          autoFocusFirstItem={false}
           // The menu returns focus to its anchor, which is the input ROW, not a
           // focusable node — so say where focus actually belongs. Both arms
           // resolve to their own input.
