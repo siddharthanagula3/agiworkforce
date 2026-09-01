@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(async (_sql: string, _params?: unknown[]): Promise<number> => 0),
+  query: vi.fn(async (_sql: string, _params?: unknown[]): Promise<unknown[]> => []),
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ execute: mocks.execute }),
+  getNeonDb: () => ({ execute: mocks.execute, query: mocks.query }),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -61,6 +62,8 @@ describe('persistAssistantTurn -> artifact indexing', () => {
       if (sql.includes('insert into web_messages')) return 1;
       return 0;
     });
+    // A conversation that has never branched: the single-statement path.
+    mocks.query.mockResolvedValue([{ active_leaf_message_id: null }]);
   });
 
   it('indexes a renderable fence under the same id the client would derive', async () => {

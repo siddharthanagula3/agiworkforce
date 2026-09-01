@@ -206,13 +206,15 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('push ack parses against ChatSyncPushResponseSchema', async () => {
-    mockQuery
-      .mockResolvedValueOnce([
-        { kind: 'applied', id: CONV_ID, server_version: '45', current: null },
-      ])
-      .mockResolvedValueOnce([
-        { kind: 'applied', id: MSG_ID, server_version: '46', current: null },
-      ]);
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('insert into web_conversations')) {
+        return [{ kind: 'applied', id: CONV_ID, server_version: '45', current: null }];
+      }
+      if (String(sql).includes('insert into web_messages')) {
+        return [{ kind: 'applied', id: MSG_ID, server_version: '46', current: null }];
+      }
+      return [];
+    });
 
     const res = await POST(
       makePost({
@@ -280,9 +282,11 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
   });
 
   it('uses the server revision as the compare-and-swap guard for message updates', async () => {
-    mockQuery.mockResolvedValueOnce([
-      { kind: 'applied', id: MSG_ID, server_version: '47', current: null },
-    ]);
+    mockQuery.mockImplementation(async (sql: string) =>
+      String(sql).includes('insert into web_messages')
+        ? [{ kind: 'applied', id: MSG_ID, server_version: '47', current: null }]
+        : [],
+    );
 
     const res = await POST(
       makePost({
@@ -301,7 +305,11 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
     );
 
     expect(res.status).toBe(200);
-    const sql = String(mockQuery.mock.calls[0]?.[0]);
+    const sql = String(
+      mockQuery.mock.calls.find((call) =>
+        String(call[0]).includes('insert into web_messages'),
+      )?.[0],
+    );
     expect(sql).toContain('existing.server_version = incoming.base_version');
     expect(sql).toContain('content = incoming.content');
     expect(sql).toContain("item ? 'metadata' as has_metadata");
@@ -315,14 +323,11 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
   });
 
   it('strips private provider cost from message conflict rows', async () => {
-    mockQuery.mockResolvedValueOnce([
-      {
-        kind: 'conflict',
-        id: MSG_ID,
-        server_version: null,
-        current: messageRow,
-      },
-    ]);
+    mockQuery.mockImplementation(async (sql: string) =>
+      String(sql).includes('insert into web_messages')
+        ? [{ kind: 'conflict', id: MSG_ID, server_version: null, current: messageRow }]
+        : [],
+    );
 
     const res = await POST(
       makePost({

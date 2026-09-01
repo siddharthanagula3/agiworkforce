@@ -112,6 +112,8 @@ function persistedTurn() {
 describe('durable cloud agent workflow settlement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // A conversation that has never branched: the single-statement write.
+    mocks.query.mockResolvedValue([{ active_leaf_message_id: null }]);
     mocks.usage.mockResolvedValue({
       providerCalls: 2,
       inputTokens: 1_200,
