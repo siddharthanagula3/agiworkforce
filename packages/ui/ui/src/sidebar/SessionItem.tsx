@@ -13,7 +13,7 @@ import {
   Sparkles,
   Star,
   Trash2,
-} from 'lucide-react';
+} from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, MenuSeparator } from './Menu';

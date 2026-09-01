@@ -1,6 +1,6 @@
 'use client';
 
-import { Search } from 'lucide-react';
+import { Search } from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../primitives/Dialog';

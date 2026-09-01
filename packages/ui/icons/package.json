@@ -1,0 +1,25 @@
+{
+  "name": "@agiworkforce/icons",
+  "version": "0.0.1",
+  "description": "Hand-authored icon family with a lucide-compatible component API.",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "29.0.1",
+    "vitest": "^4.1.8"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
