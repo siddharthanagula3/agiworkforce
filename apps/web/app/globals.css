@@ -8741,6 +8741,15 @@ html[data-contrast='more'] *:focus-visible {
  */
 .chat-composer-container {
   container-type: inline-size;
+  /* The consent banner is fixed to the bottom at z-50 and its card takes
+     pointer events, so once a conversation starts and the composer moves to
+     the bottom the banner sits on top of it. Measured: the stop button at
+     (1173, 789) inside a card spanning y=737-900, and every click on it landed
+     on "Necessary only" instead. A user who has not answered the banner - which
+     is every first-time visitor - could not stop a running response. The banner
+     publishes its height while it is up; this reserves that space so the
+     composer clears it. */
+  padding-bottom: calc(1rem + var(--agi-consent-inset, 0px));
 }
 
 @container (max-width: 560px) {
