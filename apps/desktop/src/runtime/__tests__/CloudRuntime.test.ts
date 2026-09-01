@@ -1439,6 +1439,134 @@ describe('CloudRuntime', () => {
     });
   });
 
+  describe('active path resolution', () => {
+    const BRANCHED_ID = 'conv_branched';
+
+    function branchedConversation(leaf?: string | null) {
+      return {
+        id: BRANCHED_ID,
+        title: 'Branched chat',
+        projectId: null,
+        pinned: false,
+        starred: false,
+        archived: false,
+        isTemporary: false,
+        ...(leaf !== undefined ? { activeLeafMessageId: leaf } : {}),
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+    }
+
+    function row(
+      id: string,
+      role: 'user' | 'assistant',
+      parentId: string | null | undefined,
+      createdAt: string,
+    ) {
+      return {
+        id,
+        conversationId: BRANCHED_ID,
+        ...(parentId !== undefined ? { parentId } : {}),
+        role,
+        content: id,
+        inputTokens: 0,
+        outputTokens: 0,
+        createdAt,
+      };
+    }
+
+    const ROOT = row('m1', 'user', null, '2026-01-01T00:00:00.000Z');
+    const OLDER_VARIANT = row('a1', 'assistant', 'm1', '2026-01-01T00:00:01.000Z');
+    const NEWER_VARIANT = row('a2', 'assistant', 'm1', '2026-01-01T00:00:02.000Z');
+    const FOLLOW_UP = row('m2', 'user', 'a2', '2026-01-01T00:00:03.000Z');
+    const BRANCHED_ROWS = [ROOT, OLDER_VARIANT, NEWER_VARIANT, FOLLOW_UP];
+
+    it('returns every row when the payload predates threading', async () => {
+      getConversation.mockResolvedValue({
+        conversation: branchedConversation(),
+        messages: [
+          row('m1', 'user', undefined, '2026-01-01T00:00:00.000Z'),
+          row('a1', 'assistant', undefined, '2026-01-01T00:00:01.000Z'),
+          row('a2', 'assistant', undefined, '2026-01-01T00:00:02.000Z'),
+        ],
+      });
+
+      const messages = await new CloudRuntime().getMessages(BRANCHED_ID);
+
+      expect(messages.map((m) => m.id)).toEqual(['m1', 'a1', 'a2']);
+      expect(messages.some((m) => 'parentId' in m)).toBe(false);
+    });
+
+    it('returns every row when a threading-capable conversation has never branched', async () => {
+      getConversation.mockResolvedValue({
+        conversation: branchedConversation(null),
+        messages: [ROOT, OLDER_VARIANT],
+      });
+
+      const messages = await new CloudRuntime().getMessages(BRANCHED_ID);
+
+      expect(messages.map((m) => m.id)).toEqual(['m1', 'a1']);
+    });
+
+    it('renders only the recorded active path, not every sibling', async () => {
+      getConversation.mockResolvedValue({
+        conversation: branchedConversation('a1'),
+        messages: BRANCHED_ROWS,
+      });
+
+      const messages = await new CloudRuntime().getMessages(BRANCHED_ID);
+
+      expect(messages.map((m) => m.id)).toEqual(['m1', 'a1']);
+    });
+
+    it('carries the parent pointer onto every mapped message', async () => {
+      getConversation.mockResolvedValue({
+        conversation: branchedConversation('m2'),
+        messages: BRANCHED_ROWS,
+      });
+
+      const messages = await new CloudRuntime().getMessages(BRANCHED_ID);
+
+      expect(messages.map((m) => [m.id, m.parentId])).toEqual([
+        ['m1', null],
+        ['a2', 'm1'],
+        ['m2', 'a2'],
+      ]);
+    });
+
+    it('falls back to the newest chain when the recorded leaf is not in the transcript', async () => {
+      getConversation.mockResolvedValue({
+        conversation: branchedConversation('m_deleted_elsewhere'),
+        messages: BRANCHED_ROWS,
+      });
+
+      const messages = await new CloudRuntime().getMessages(BRANCHED_ID);
+
+      expect(messages.map((m) => m.id)).toEqual(['m1', 'a2', 'm2']);
+    });
+
+    it('resolves the path across every page rather than page by page', async () => {
+      getConversation.mockImplementation(async (_id: string, query: { offset?: number }) =>
+        (query.offset ?? 0) === 0
+          ? {
+              conversation: branchedConversation('m2'),
+              messages: [ROOT, OLDER_VARIANT],
+              hasMore: true,
+            }
+          : {
+              conversation: branchedConversation('m2'),
+              messages: [NEWER_VARIANT, FOLLOW_UP],
+              hasMore: false,
+            },
+      );
+
+      const messages = await new CloudRuntime().getMessages(BRANCHED_ID);
+
+      expect(getConversation).toHaveBeenCalledTimes(2);
+      expect(messages.map((m) => m.id)).toEqual(['m1', 'a2', 'm2']);
+    });
+  });
+
   describe('deleteMessages (DES-C04 regenerate rollback)', () => {
     it('drops every superseded durable row, oldest first', async () => {
       deleteMessage.mockResolvedValue(undefined);
