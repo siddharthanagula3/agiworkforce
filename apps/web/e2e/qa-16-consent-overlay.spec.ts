@@ -72,3 +72,37 @@ for (const [label, width, height] of [
       });
   });
 }
+
+/**
+ * The composer above is on /chat, which has its own layout. Everything else
+ * authenticated goes through WebAppShell, and the banner covered those too:
+ * measured at 390x844, "Create Your First Schedule" sat at y=699 and the
+ * library's Preview, Download and Delete at y=582-643, all inside a banner
+ * spanning y=577-844. Two different layouts, so two guards - passing one said
+ * nothing about the other.
+ */
+for (const [route, control] of [
+  ['/chat/schedules', /Create Your First Schedule/i],
+  ['/chat/library', /^\s*Preview/i],
+] as const) {
+  test(`${route} keeps its primary control usable under the banner`, async ({ page }) => {
+    test.setTimeout(180_000);
+    await signIn(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(route, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(4000);
+
+    await expect(
+      page.locator('[aria-label="Cookie consent"]'),
+      'the banner must be up for this to mean anything',
+    ).toBeVisible();
+
+    const target = page.locator('button', { hasText: control }).first();
+    await expect(target, 'the surface must offer its primary control').toBeVisible();
+
+    // Clicking is the assertion. The control may legitimately need scrolling
+    // into view; what must not happen is the click landing on the banner.
+    await target.scrollIntoViewIfNeeded();
+    await target.click({ timeout: 10_000 });
+  });
+}

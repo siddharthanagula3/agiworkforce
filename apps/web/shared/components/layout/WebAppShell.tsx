@@ -418,8 +418,18 @@ export function WebAppShell({ children }: WebAppShellProps) {
     onProjectCreate: handleProjectCreate,
   };
 
+  // The shell ends where the consent banner begins rather than running under
+  // it. The banner is fixed at z-50 and its card takes pointer events, so
+  // anything the app painted in that strip was unreachable until it was
+  // answered: measured at 390x844, where the banner is 267px tall, the
+  // "Create Your First Schedule" button on /chat/schedules and Preview,
+  // Download and Delete on /chat/library all sat underneath it. Padding the
+  // scroll container was tried first and does nothing here - it lets the page
+  // scroll further, but a fixed overlay still covers whatever ends up in that
+  // strip at any scroll position. Shrinking the shell is what actually keeps
+  // content out from under it.
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
+    <div className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
       {/* Destructive-action confirm (delete conversation / delete project). */}
       {destructiveConfirmDialog}
       {/* Desktop: persistent/collapsible sidebar. Narrow: replaced by the
