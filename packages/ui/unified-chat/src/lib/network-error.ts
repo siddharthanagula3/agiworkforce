@@ -98,23 +98,26 @@ const INTERNAL_MARKERS = [
   /\bat\s+\S+\s+\(/,
   /(^|\s)\/(usr|var|home|opt|tmp|Users)\//,
   /\b[A-Za-z]:\\/,
-  /\b(SELECT|INSERT|UPDATE|DELETE)\s+.*\s+(FROM|INTO|SET)\b/i,
   /\b\w*(Error|Exception)\b\s*:/,
   /\bstack\s*trace\b/i,
   /\b(ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPIPE)\b/,
 ];
 
+const SQL_VERB = /\b(SELECT|INSERT|UPDATE|DELETE)\s/i;
+const SQL_TAIL = /\s(FROM|INTO|SET)\b/i;
+
 function looksInternal(message: string): boolean {
+  const verb = SQL_VERB.exec(message);
+  if (verb && SQL_TAIL.test(message.slice(verb.index + verb[0].length))) return true;
   return INTERNAL_MARKERS.some((marker) => marker.test(message));
 }
 
 function isMachineShaped(message: string): boolean {
   if (/^\s*HTTP\s+\d{3}\b/.test(message)) return true;
-  const normalised = message
-    .trim()
-    .replace(/[.!]+$/, '')
-    .toLowerCase();
-  return REASON_PHRASES.includes(normalised);
+  const trimmed = message.trim();
+  let end = trimmed.length;
+  while (end > 0 && (trimmed[end - 1] === '.' || trimmed[end - 1] === '!')) end -= 1;
+  return REASON_PHRASES.includes(trimmed.slice(0, end).toLowerCase());
 }
 
 /**

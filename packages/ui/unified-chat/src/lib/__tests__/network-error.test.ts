@@ -188,3 +188,33 @@ describe('operator detail never reaches a reader', () => {
     });
   }
 });
+
+describe('marker matching stays linear on hostile input', () => {
+  it('still strips trailing punctuation before the phrase check', () => {
+    expect(toUserMessage(new Error('Not Found...!!'), 'fallback')).toBe('fallback');
+  });
+
+  it('still treats a sql fragment as operator text', () => {
+    const err = new Error('SELECT secret FROM vault_keys WHERE id = 1');
+    expect(toUserMessage(err, 'fallback')).toBe('fallback');
+  });
+
+  it('does not mistake prose for sql', () => {
+    const message = 'Selected from the dropdown, then set to default';
+    expect(toUserMessage(new Error(message), 'fallback')).toBe(message);
+  });
+
+  it('handles a long run of trailing dots without backtracking', () => {
+    const hostile = `${'.'.repeat(50_000)}x`;
+    const started = performance.now();
+    expect(toUserMessage(new Error(hostile), 'fallback')).toBe(hostile);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it('handles a long whitespace run between sql words without backtracking', () => {
+    const hostile = `SELECT ${' '.repeat(50_000)}nothing here`;
+    const started = performance.now();
+    expect(toUserMessage(new Error(hostile), 'fallback')).toBe(hostile);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});
