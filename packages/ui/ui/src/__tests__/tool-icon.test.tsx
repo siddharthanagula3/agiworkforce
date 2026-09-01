@@ -10,6 +10,7 @@ const MIGRATED = [
   'Database',
   'FileText',
   'FolderOpen',
+  'GitBranch',
   'Globe',
   'HelpCircle',
   'Image',
