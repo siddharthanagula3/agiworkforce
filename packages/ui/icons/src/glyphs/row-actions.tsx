@@ -74,3 +74,35 @@ export const Link2 = createIcon(
     <path d="M8 12h8" />
   </>,
 );
+
+export const Copy = createIcon(
+  'Copy',
+  <>
+    <path d="M9 8V4.5L10.5 3h8L20 4.5v8L18.5 14H15" />
+    <path d="M4.5 8h9L15 9.5v10L13.5 21h-9L3 19.5v-10z" />
+  </>,
+);
+
+export const ThumbsUp = createIcon(
+  'ThumbsUp',
+  <>
+    <path d="M3 11h4.5v9H3z" />
+    <path d="M7.5 11 11.5 3h1L14 4.5V10h5l1.5 1.5-1.5 7-1.5 1.5h-10z" />
+  </>,
+);
+
+export const ThumbsDown = createIcon(
+  'ThumbsDown',
+  <>
+    <path d="M3 13h4.5V4H3z" />
+    <path d="M7.5 13 11.5 21h1L14 19.5V14h5l1.5-1.5-1.5-7L17.5 4h-10z" />
+  </>,
+);
+
+export const Flag = createIcon(
+  'Flag',
+  <>
+    <path d="M5 21V3" />
+    <path d="M5 4h13l-2.5 4 2.5 4H5z" />
+  </>,
+);

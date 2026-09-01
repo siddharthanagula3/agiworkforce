@@ -1,5 +1,8 @@
 import { createIcon } from '../createIcon';
 
+const LENS = { cx: '10.5', cy: '10.5', r: '7.5' } as const;
+const LENS_HANDLE = 'm16 16 5 5';
+
 export const Plus = createIcon('Plus', <path d="M12 4v16M4 12h16" />);
 
 export const SquarePen = createIcon(
@@ -13,8 +16,8 @@ export const SquarePen = createIcon(
 export const Search = createIcon(
   'Search',
   <>
-    <circle cx="10.5" cy="10.5" r="7.5" />
-    <path d="m16 16 5 5" />
+    <circle {...LENS} />
+    <path d={LENS_HANDLE} />
   </>,
 );
 
@@ -50,5 +53,41 @@ export const MoreHorizontal = createIcon(
     <circle cx="5" cy="12" r="1" />
     <circle cx="12" cy="12" r="1" />
     <circle cx="19" cy="12" r="1" />
+  </>,
+);
+
+export const ZoomIn = createIcon(
+  'ZoomIn',
+  <>
+    <circle {...LENS} />
+    <path d={LENS_HANDLE} />
+    <path d="M10.5 7.5v6M7.5 10.5h6" />
+  </>,
+);
+
+export const ExternalLink = createIcon(
+  'ExternalLink',
+  <>
+    <path d="M13 4H5.5L4 5.5v13L5.5 20H18l1.5-1.5V11" />
+    <path d="M14 3h7v7" />
+    <path d="m21 3-8 8" />
+  </>,
+);
+
+export const RefreshCw = createIcon(
+  'RefreshCw',
+  <>
+    <path d="M5 10.5 7.5 6.5 12 5l4.5 1.5" />
+    <path d="M13.5 3.5 17 6.5l-3.5 3" />
+    <path d="M19 13.5 16.5 17.5 12 19l-4.5-1.5" />
+    <path d="M10.5 20.5 7 17.5l3.5-3" />
+  </>,
+);
+
+export const RotateCcw = createIcon(
+  'RotateCcw',
+  <>
+    <path d="M4.5 12V8.5L8 5h8l3.5 3.5v7L16 19H9" />
+    <path d="M12 16 9 19l3 2" />
   </>,
 );

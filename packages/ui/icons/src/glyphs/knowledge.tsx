@@ -96,3 +96,12 @@ export const Undo2 = createIcon(
     <path d="M4 9h11l4 4v3" />
   </>,
 );
+
+export const Plug = createIcon(
+  'Plug',
+  <>
+    <path d="M9 3v5M15 3v5" />
+    <path d="M6.5 8h11v3.5L14 15h-4l-3.5-3.5z" />
+    <path d="M12 15v6" />
+  </>,
+);
