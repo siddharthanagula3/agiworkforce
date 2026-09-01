@@ -101,6 +101,24 @@ SOFTWARE.
 - **Used by**: `apps/web/public/fonts/opendyslexic/` — self-hosted binaries backing the "Dyslexic friendly" chat font option, wired via `@font-face` in `apps/web/app/globals.css`
 - **Adoption**: Runtime font asset only; no source code was ported. Regular, Bold, Italic, and Bold-Italic styles (`.woff2` + `.woff`) are taken unmodified from the upstream GitHub release. Full OFL license text is preserved verbatim at `apps/web/public/fonts/opendyslexic/OFL.txt`.
 
+## models.dev
+
+- **Upstream**: [anomalyco/models.dev](https://github.com/anomalyco/models.dev) (https://models.dev) — the `sst/models.dev` URL now redirects here; the default branch is `dev`, not `main`
+- **License**: MIT
+- **Copyright**: © 2025 models.dev, maintained by the SST maintainers
+- **Used by**: `packages/ai/model-registry/scripts/compile.mjs` — `MODELS_DEV_URL` (https://models.dev/api.json) is fetched at runtime by `pnpm sync:models:refresh` and its values are recorded in `packages/ai/model-registry/catalog/models.synced.json`, whose `source` field names this feed
+- **Adoption**: Recurring data sync, not a code port. No upstream source file is copied or adapted, and the feed is never vendored — each refresh re-fetches it and holds any field that moves more than the delta threshold for human review.
+- **Notice**: The repository carries a single root MIT `LICENSE` with no directory carve-out, so it covers the `models/` and `providers/` TOML files that generate `api.json`. Neither the site nor the README nor the `api.json` response states any data-specific licence or attribution requirement distinct from that MIT grant, so the position that MIT reaches the data is an inference from the absence of a carve-out rather than a stated term. Do not confuse the dataset licence with the per-model `license` field inside the feed, which records the licence of the AI model being described.
+
+## litellm (model price cross-check)
+
+- **Upstream**: [BerriAI/litellm](https://github.com/BerriAI/litellm) — specifically `model_prices_and_context_window.json` at the repository root
+- **License**: MIT
+- **Copyright**: © 2023 Berri AI
+- **Used by**: `packages/ai/model-registry/scripts/pricing-drift.mjs` — `LITELLM_URL` fetches the file at runtime for `pnpm check:pricing-drift`
+- **Adoption**: Advisory cross-check data only. The file is fetched at runtime and never vendored, no upstream source code is ported, and nothing it reports is written to the catalog — a drift row is an instruction to open the provider's own pricing page and decide there.
+- **Notice**: litellm is split-licensed. Its root `LICENSE` reads "All content that resides under the `enterprise/` directory of this repository, if that directory exists, is licensed under the license defined in `enterprise/LICENSE`" and "Content outside of the above mentioned directories or restrictions above is available under the MIT license". `enterprise/` is a separate commercial licence (© 2024–present Berrie AI Inc.) that forbids distribution and sublicensing, and nothing from it is used here: `model_prices_and_context_window.json` sits at the repository root, outside that subtree, under the MIT grant. Because of the split, GitHub's licence detector reports the repository as `NOASSERTION`; the MIT classification above applies to the specific file consumed, not to the repository as a whole.
+
 ## Porting policy
 
 `scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:
@@ -124,13 +142,25 @@ denylist. Add a port block here before merging any adapted third-party code.
 | VoxCPM       | Apache-2.0        | Text-to-speech                                      |
 | supervision  | MIT               | Vision utilities (pair with a permissive VLM)       |
 
+### Runtime-fetched data sources (never ported, never vendored)
+
+These are data feeds, not donor code. Nothing is copied into the tree: each is
+fetched over the network at run time by the script named below, so the porting
+allowlist above does not apply to them and no source file is derived from them.
+
+| Source                                           | License | Fetched by                                             | Use                                            |
+| ------------------------------------------------ | ------- | ------------------------------------------------------ | ---------------------------------------------- |
+| models.dev (`api.json`)                          | MIT     | `packages/ai/model-registry/scripts/compile.mjs`       | Recurring pricing/limits sync into the catalog |
+| litellm (`model_prices_and_context_window.json`) | MIT     | `packages/ai/model-registry/scripts/pricing-drift.mjs` | Advisory pricing cross-check; writes nothing   |
+
 ### Study-only / forbidden (never ported)
 
-| Source              | Reason                                 |
-| ------------------- | -------------------------------------- |
-| claude-code         | Anthropic proprietary — no license     |
-| crush               | FSL-1.1 — competing-use ban            |
-| auto-code-rover     | SONAR source-available — competing-use |
-| Devon               | AGPL-3.0 — copyleft                    |
-| Ultralytics YOLO    | AGPL-3.0 — use a permissive detector   |
-| init, chat-template | No license — all rights reserved       |
+| Source                | Reason                                                       |
+| --------------------- | ------------------------------------------------------------ |
+| claude-code           | Anthropic proprietary — no license                           |
+| crush                 | FSL-1.1 — competing-use ban                                  |
+| auto-code-rover       | SONAR source-available — competing-use                       |
+| Devon                 | AGPL-3.0 — copyleft                                          |
+| Ultralytics YOLO      | AGPL-3.0 — use a permissive detector                         |
+| init, chat-template   | No license — all rights reserved                             |
+| litellm `enterprise/` | Commercial licence — distribution and sublicensing forbidden |
