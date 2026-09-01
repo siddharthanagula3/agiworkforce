@@ -275,6 +275,20 @@ test('route-table extraction reads query builders and SQL while excluding CTE al
   assert.deepEqual([...references.keys()].sort(), ['direct_table', 'source_table', 'target_table']);
 });
 
+test('route-table extraction reads the first CTE of a WITH RECURSIVE as an alias too', () => {
+  const references = extractRouteReferencesFromSource(`
+    db.query(\`with recursive walked as (
+       select id from source_table where id = $1
+       union
+       select child.id from source_table child join walked on child.parent_id = walked.id
+     ), newest as (
+       select distinct on (parent_id) parent_id, id from source_table
+     )
+     select id from walked join newest on newest.parent_id = walked.id\`);
+  `);
+  assert.deepEqual([...references.keys()].sort(), ['source_table']);
+});
+
 test('every literal route relation is owned by the canonical migration chain', () => {
   assert.deepEqual(missingRouteTableMigrations(process.cwd()), []);
 });
