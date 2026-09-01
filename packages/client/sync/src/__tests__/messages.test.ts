@@ -81,6 +81,32 @@ describe('applyMessageDeltas', () => {
     expect(msg && 'provider' in msg).toBe(false);
   });
 
+  it('threads a parent onto a message the server delivered inside a tree', () => {
+    const port = createInMemoryMessagePort();
+    applyMessageDeltas(port, [delta({ parent_id: 'm0' })]);
+    expect(port.getMessages('c1')[0]?.parentId).toBe('m0');
+  });
+
+  it('records a null parent, which names a root of the sibling tree', () => {
+    const port = createInMemoryMessagePort();
+    applyMessageDeltas(port, [delta({ parent_id: null })]);
+    expect(port.getMessages('c1')[0]).toHaveProperty('parentId', null);
+  });
+
+  it('leaves the key off entirely for a delta from a server that cannot thread', () => {
+    const port = createInMemoryMessagePort();
+    applyMessageDeltas(port, [delta()]);
+    expect(port.getMessages('c1')[0]).not.toHaveProperty('parentId');
+  });
+
+  it('keeps a lineage the store already learned when the delta names no parent', () => {
+    const port = createInMemoryMessagePort({
+      c1: [{ id: 'm1', role: 'user', content: 'hi', createdAt: T, parentId: 'm0' }],
+    });
+    applyMessageDeltas(port, [delta({ content: 'edited' })]);
+    expect(port.getMessages('c1')[0]).toMatchObject({ content: 'edited', parentId: 'm0' });
+  });
+
   it('applies server revision and metadata needed for cross-device approval recovery', () => {
     const port = createInMemoryMessagePort();
     const metadata = {

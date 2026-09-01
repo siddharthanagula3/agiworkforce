@@ -173,6 +173,38 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
     expect(mockQuery).not.toHaveBeenCalled();
   });
 
+  it('selects both branch pointers and delivers them on the pull page', async () => {
+    const PARENT_ID = '018f6f2a-0000-7000-8000-00000000000a';
+    const LEAF_ID = '018f6f2a-0000-7000-8000-00000000000b';
+    mockQuery
+      .mockResolvedValueOnce([{ ...conversationRow, active_leaf_message_id: LEAF_ID }])
+      .mockResolvedValueOnce([{ ...messageRow, parent_id: PARENT_ID }])
+      .mockResolvedValueOnce([]);
+
+    const res = await GET(makeGet());
+    const body = await res.json();
+
+    const [conversationSql] = mockQuery.mock.calls[0] as [string];
+    const [messageSql] = mockQuery.mock.calls[1] as [string];
+    expect(conversationSql).toContain('active_leaf_message_id::text as active_leaf_message_id');
+    expect(messageSql).toContain('m.parent_id::text as parent_id');
+    expect(body.conversations[0].active_leaf_message_id).toBe(LEAF_ID);
+    expect(body.messages[0].parent_id).toBe(PARENT_ID);
+    expect(ChatSyncPullResponseSchema.safeParse(body).success).toBe(true);
+  });
+
+  it('sends a null pointer rather than dropping it, so a linear chat is not read as legacy', async () => {
+    mockQuery
+      .mockResolvedValueOnce([{ ...conversationRow, active_leaf_message_id: null }])
+      .mockResolvedValueOnce([{ ...messageRow, parent_id: null }])
+      .mockResolvedValueOnce([]);
+
+    const body = await (await GET(makeGet())).json();
+
+    expect(body.conversations[0]).toHaveProperty('active_leaf_message_id', null);
+    expect(body.messages[0]).toHaveProperty('parent_id', null);
+  });
+
   it('issues the three delta pulls concurrently, not one round trip after another', async () => {
     let inFlight = 0;
     let peakInFlight = 0;
@@ -347,6 +379,102 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
 
     expect(res.status).toBe(200);
     expect(body.conflicts.messages[0].current).not.toHaveProperty('cost_cents');
+  });
+
+  it('builds the message thread argument from the server leaf, never from the pushed item', async () => {
+    mockQuery.mockImplementation(async (sql: string) =>
+      String(sql).includes('insert into web_messages')
+        ? [{ kind: 'applied', id: MSG_ID, server_version: '46', current: null }]
+        : [],
+    );
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: MSG_ID,
+            conversationId: CONV_ID,
+            role: 'user',
+            content: 'hello',
+            baseVersion: '0',
+            parentId: '018f6f2a-0000-7000-8000-00000000000a',
+          },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const [leafSql] = mockQuery.mock.calls[0] as [string];
+    expect(leafSql).toContain('active_leaf_message_id');
+    const mutation = mockQuery.mock.calls.find((call) =>
+      String(call[0]).includes('insert into web_messages'),
+    ) as [string, unknown[]];
+    expect(mutation[1][1]).not.toContain('parentId');
+    expect(mutation[1][2]).toBe('[]');
+  });
+
+  it('carries both branch pointers on the conflict rows a client resolves against', async () => {
+    const PARENT_ID = '018f6f2a-0000-7000-8000-00000000000a';
+    const LEAF_ID = '018f6f2a-0000-7000-8000-00000000000b';
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('insert into web_conversations')) {
+        return [
+          {
+            kind: 'conflict',
+            id: CONV_ID,
+            server_version: null,
+            current: { ...conversationRow, active_leaf_message_id: LEAF_ID },
+          },
+        ];
+      }
+      if (String(sql).includes('insert into web_messages')) {
+        return [
+          {
+            kind: 'conflict',
+            id: MSG_ID,
+            server_version: null,
+            current: { ...messageRow, parent_id: PARENT_ID },
+          },
+        ];
+      }
+      return [];
+    });
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [{ id: CONV_ID, title: 'stale', baseVersion: '41' }],
+        messages: [
+          {
+            id: MSG_ID,
+            conversationId: CONV_ID,
+            role: 'assistant',
+            content: 'stale content',
+            baseVersion: '42',
+          },
+        ],
+      }),
+    );
+    const body = await res.json();
+
+    const conversationSql = String(
+      mockQuery.mock.calls.find((call) =>
+        String(call[0]).includes('insert into web_conversations'),
+      )?.[0],
+    );
+    const messageSql = String(
+      mockQuery.mock.calls.find((call) =>
+        String(call[0]).includes('insert into web_messages'),
+      )?.[0],
+    );
+    expect(conversationSql).toContain(
+      "'active_leaf_message_id', current.active_leaf_message_id::text",
+    );
+    expect(messageSql).toContain("'parent_id', current.parent_id::text");
+    expect(body.conflicts.conversations[0].current.active_leaf_message_id).toBe(LEAF_ID);
+    expect(body.conflicts.messages[0].current.parent_id).toBe(PARENT_ID);
+    expect(ChatSyncPushResponseSchema.safeParse(body).success).toBe(true);
   });
 
   it('explicitly rejects a legacy mutable push instead of comparing client clocks', async () => {
