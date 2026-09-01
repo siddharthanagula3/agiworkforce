@@ -418,7 +418,16 @@ function paywallResetLabel(paywall: { showResetTime?: boolean; resetAt?: string 
   return formatUsageResetIn(paywall.resetAt) ?? '';
 }
 
-const MessageRow = ({
+const MESSAGE_ROW_MESSAGE_KEY = 'message';
+
+function messageRowPropsEqual(prev: MessageRowProps, next: MessageRowProps): boolean {
+  if (!messageRenderEqual(prev.message, next.message)) return false;
+  const keys = Object.keys(next) as Array<keyof MessageRowProps>;
+  if (keys.length !== Object.keys(prev).length) return false;
+  return keys.every((key) => key === MESSAGE_ROW_MESSAGE_KEY || prev[key] === next[key]);
+}
+
+const MessageRow = memo(function MessageRow({
   message,
   currentTier,
   onRegenerate,
@@ -441,7 +450,7 @@ const MessageRow = ({
   speakingMessageId,
   isReadAloudSupported,
   onReadAloud,
-}: MessageRowProps) => {
+}: MessageRowProps) {
   const meta = getMeta(message);
   const paywall = meta?.paywall;
   const requiredTier = normalizeRequiredTier(paywall?.requiredTier ?? 'basic');
@@ -555,7 +564,7 @@ const MessageRow = ({
       isReadAloudSupported={isReadAloudSupported}
     />
   );
-};
+}, messageRowPropsEqual);
 
 const MessageGroupRow = memo(
   ({

@@ -57,6 +57,7 @@ export interface SettledMarkdownBlock {
 export interface MarkdownBlockSplit {
   readonly settled: readonly SettledMarkdownBlock[];
   readonly tail: string;
+  readonly hasReferenceDefinition: boolean;
 }
 
 export interface MarkdownBlockSplitter {
@@ -67,7 +68,11 @@ export interface MarkdownBlockSplitter {
 const parseOnlyProcessor = unified().use(remarkParse).use(REMARK_PLUGINS).freeze();
 
 const NO_SETTLED_BLOCKS: readonly SettledMarkdownBlock[] = Object.freeze([]);
-const EMPTY_SPLIT: MarkdownBlockSplit = Object.freeze({ settled: NO_SETTLED_BLOCKS, tail: '' });
+const EMPTY_SPLIT: MarkdownBlockSplit = Object.freeze({
+  settled: NO_SETTLED_BLOCKS,
+  tail: '',
+  hasReferenceDefinition: false,
+});
 
 function hashSource(source: string): string {
   let hash = HASH_OFFSET_BASIS;
@@ -107,12 +112,23 @@ function lineStartBefore(source: string, offset: number): number {
   return source.lastIndexOf(LINE_FEED, offset - 1) + 1;
 }
 
-function settleFromTail(tail: string): { readonly blocks: readonly string[]; consumed: number } {
+interface TailSettlement {
+  readonly blocks: readonly string[];
+  readonly consumed: number;
+  readonly hasReferenceDefinition: boolean;
+}
+
+function settleFromTail(tail: string): TailSettlement {
   const root = parseOnlyProcessor.parse(tail) as unknown as {
     readonly children?: readonly ParsedNode[];
   };
   const nodes = root.children ?? [];
-  if (nodes.length < MIN_NODES_TO_SETTLE) return { blocks: [], consumed: 0 };
+  const hasReferenceDefinition = nodes.some((node) =>
+    REFERENCE_DEFINITION_NODE_TYPES.has(node.type),
+  );
+  if (nodes.length < MIN_NODES_TO_SETTLE) {
+    return { blocks: [], consumed: 0, hasReferenceDefinition };
+  }
 
   const blocks: string[] = [];
   let consumed = 0;
@@ -137,7 +153,7 @@ function settleFromTail(tail: string): { readonly blocks: readonly string[]; con
     consumed = boundary;
   }
 
-  return { blocks, consumed };
+  return { blocks, consumed, hasReferenceDefinition };
 }
 
 export function createMarkdownBlockSplitter(): MarkdownBlockSplitter {
@@ -157,7 +173,9 @@ export function createMarkdownBlockSplitter(): MarkdownBlockSplitter {
     if (content === lastContent) return lastSplit;
     if (!content.startsWith(settledSource)) reset();
 
-    const { blocks, consumed } = settleFromTail(content.slice(settledSource.length));
+    const { blocks, consumed, hasReferenceDefinition } = settleFromTail(
+      content.slice(settledSource.length),
+    );
     if (blocks.length > 0) {
       const grown = settled.slice();
       for (const source of blocks) {
@@ -168,7 +186,11 @@ export function createMarkdownBlockSplitter(): MarkdownBlockSplitter {
     }
 
     lastContent = content;
-    lastSplit = Object.freeze({ settled, tail: content.slice(settledSource.length) });
+    lastSplit = Object.freeze({
+      settled,
+      tail: content.slice(settledSource.length),
+      hasReferenceDefinition,
+    });
     return lastSplit;
   }
 

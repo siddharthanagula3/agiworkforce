@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { MermaidConfig } from 'mermaid';
 
 import { sanitizeSvg } from '../ArtifactRenderer';
 
@@ -8,10 +9,44 @@ type RenderState =
   | { phase: 'ready'; svg: string }
   | { phase: 'failed'; reason: string };
 
+// htmlLabels would emit node text inside a foreignObject, which the SVG
+// sanitizer strips - the diagram then draws as unlabelled boxes. Plain SVG
+// <text> survives sanitisation and keeps HTML out of the markup entirely.
+const MERMAID_CONFIG: MermaidConfig = {
+  startOnLoad: false,
+  securityLevel: 'strict',
+  theme: 'base',
+  fontFamily: 'inherit',
+  htmlLabels: false,
+  themeVariables: { fontSize: '14px' },
+  flowchart: { htmlLabels: false, useMaxWidth: true },
+  class: { htmlLabels: false },
+};
+
+const SVG_CACHE_LIMIT = 32;
+const svgCache = new Map<string, string>();
+
+function rememberSvg(source: string, svg: string): void {
+  svgCache.delete(source);
+  svgCache.set(source, svg);
+  while (svgCache.size > SVG_CACHE_LIMIT) {
+    const oldest = svgCache.keys().next().value;
+    if (oldest === undefined) break;
+    svgCache.delete(oldest);
+  }
+}
+
+export function clearMermaidSvgCache(): void {
+  svgCache.clear();
+}
+
 let mermaidModule: Promise<typeof import('mermaid')> | null = null;
 
 function loadMermaid(): Promise<typeof import('mermaid')> {
-  mermaidModule ??= import('mermaid');
+  mermaidModule ??= import('mermaid').then((module) => {
+    module.default.initialize(MERMAID_CONFIG);
+    return module;
+  });
   return mermaidModule;
 }
 
@@ -41,7 +76,10 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   isStreaming = false,
   className,
 }) => {
-  const [state, setState] = useState<RenderState>({ phase: 'idle' });
+  const [state, setState] = useState<RenderState>(() => {
+    const cached = svgCache.get(source);
+    return cached ? { phase: 'ready', svg: cached } : { phase: 'idle' };
+  });
   const [showSource, setShowSource] = useState(false);
   const reactId = useId();
   const diagramId = useMemo(() => `mermaid-${reactId.replace(/[:]/g, '')}`, [reactId]);
@@ -55,26 +93,18 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
 
   useEffect(() => {
     if (!ready) return;
+    const cached = svgCache.get(source);
+    if (cached) {
+      setState({ phase: 'ready', svg: cached });
+      return;
+    }
+
     let cancelled = false;
     setState({ phase: 'rendering' });
 
     void (async () => {
       try {
         const { default: mermaid } = await loadMermaid();
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'strict',
-          theme: 'base',
-          fontFamily: 'inherit',
-          htmlLabels: false,
-          themeVariables: { fontSize: '14px' },
-          // htmlLabels would emit node text inside a foreignObject, which the
-          // SVG sanitizer strips - the diagram then draws as unlabelled boxes.
-          // Plain SVG <text> survives sanitisation and keeps HTML out of the
-          // markup entirely.
-          flowchart: { htmlLabels: false, useMaxWidth: true },
-          class: { htmlLabels: false },
-        });
         const { svg } = await mermaid.render(diagramId, source);
         if (cancelled) return;
         const sanitized = sanitizeSvg(svg);
@@ -86,6 +116,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
           setState({ phase: 'failed', reason: 'The rendered diagram had no displayable content' });
           return;
         }
+        rememberSvg(source, sanitized);
         setState({ phase: 'ready', svg: sanitized });
       } catch (error) {
         if (cancelled) return;

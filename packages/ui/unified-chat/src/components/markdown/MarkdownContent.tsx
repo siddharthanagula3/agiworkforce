@@ -12,6 +12,7 @@ import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
 import { MermaidDiagram } from './MermaidDiagram';
+import { StreamTailContext, useIsStreamTail } from './streamTailContext';
 import type { Components } from 'react-markdown';
 import { Button } from '@agiworkforce/ui';
 import { Copy, Check, ImageOff } from 'lucide-react';
@@ -20,6 +21,7 @@ import 'highlight.js/styles/github-dark.css';
 
 const CodeBlock = ({ className, children }: { className?: string; children: React.ReactNode }) => {
   const [copied, setCopied] = useState(false);
+  const isStreamTail = useIsStreamTail();
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
   const codeString = reactNodeText(children).replace(/\n$/, '');
@@ -38,7 +40,13 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
   };
 
   if (language === 'mermaid') {
-    return <MermaidDiagram source={codeString} className="mermaid-block my-4" />;
+    return (
+      <MermaidDiagram
+        source={codeString}
+        isStreaming={isStreamTail}
+        className="mermaid-block my-4"
+      />
+    );
   }
 
   if (!match) {
@@ -202,6 +210,7 @@ const REHYPE_PLUGINS = [
 export interface MarkdownContentProps {
   content: string;
   isStreaming?: boolean;
+  skipPreprocess?: boolean;
 }
 
 /**
@@ -229,10 +238,13 @@ export interface MarkdownContentProps {
  * It does NOT make the message that is actively streaming cheaper: its content
  * genuinely changes on every token, so it re-parses either way.
  */
-function MarkdownContentImpl({ content, isStreaming }: MarkdownContentProps) {
-  const processedContent = useMemo(() => preprocessMath(content), [content]);
+function MarkdownContentImpl({ content, isStreaming, skipPreprocess }: MarkdownContentProps) {
+  const processedContent = useMemo(
+    () => (skipPreprocess ? content : preprocessMath(content)),
+    [content, skipPreprocess],
+  );
   return (
-    <>
+    <StreamTailContext.Provider value={Boolean(isStreaming)}>
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={REHYPE_PLUGINS}
@@ -243,7 +255,7 @@ function MarkdownContentImpl({ content, isStreaming }: MarkdownContentProps) {
       {isStreaming && content.trim() && (
         <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
       )}
-    </>
+    </StreamTailContext.Provider>
   );
 }
 

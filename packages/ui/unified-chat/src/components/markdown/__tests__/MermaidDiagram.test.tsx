@@ -11,7 +11,7 @@ vi.mock('mermaid', () => ({
   },
 }));
 
-import { MermaidDiagram } from '../MermaidDiagram';
+import { clearMermaidSvgCache, MermaidDiagram } from '../MermaidDiagram';
 
 const FLOWCHART = 'flowchart TD\n  A[Start] --> B[End]';
 
@@ -19,6 +19,7 @@ describe('MermaidDiagram', () => {
   beforeEach(() => {
     renderMock.mockReset();
     initializeMock.mockReset();
+    clearMermaidSvgCache();
   });
 
   it('draws a diagram when the source parses', async () => {
