@@ -4408,8 +4408,15 @@ export default function WebChatPage() {
     </div>
   );
 
+  // The shell ends where the consent banner begins rather than running under
+  // it. The banner is fixed at z-50 and its card takes pointer events, so
+  // anything in that strip was unreachable until it was answered: measured at
+  // 1440x900, the account menu sat at y=826 and the token-budget row at y=792,
+  // both inside a card spanning y=737-900, and the account menu is how you
+  // reach settings, billing and sign-out. WebAppShell carries the same
+  // treatment; /chat has its own shell and needed it separately.
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
+    <div className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
       {/* Dialogs lifted from ChatSidebar to the page level */}
       {/* Destructive-action confirm (delete conversation / delete project). One
           instance for the page; `confirmDestructive` fills in the copy. */}

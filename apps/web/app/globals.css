@@ -8749,11 +8749,7 @@ html[data-contrast='more'] *:focus-visible {
      is every first-time visitor - could not stop a running response. The banner
      publishes its height while it is up; this reserves that space so the
      composer clears it. */
-  /* /chat has its own layout rather than WebAppShell, so the shell's consent
-     inset does not reach it. Without this the composer runs under the banner:
-     measured at 1440x900, the stop button sat at y=789 inside a card spanning
-     y=737-900 and every click on it landed on "Necessary only". */
-  padding-bottom: calc(1rem + var(--agi-consent-inset, 0px));
+  padding-bottom: 1rem;
 }
 
 @container (max-width: 560px) {
