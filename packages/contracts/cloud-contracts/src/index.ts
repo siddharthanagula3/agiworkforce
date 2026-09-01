@@ -17,6 +17,7 @@ export * from './managed-cloud-settings-client';
 export * from './projects';
 export * from './managed-cloud-projects-client';
 export * from './conversations';
+export * from './message-thread';
 export * from './interactive-cards';
 export * from './managed-cloud-chat-client';
 export * from './chat-attachments';
