@@ -1,5 +1,3 @@
-
-
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(),
   getAuthHeaders: jest.fn(),
@@ -51,11 +49,16 @@ jest.mock('expo-file-system/legacy', () => ({
   createUploadTask: (...args: unknown[]) => mockCreateUploadTask(...args),
 }));
 
-import { api, ApiPaywallError, resetApiAccountState } from '../services/api';
+import { api, ApiFreeCapacityError, ApiPaywallError, resetApiAccountState } from '../services/api';
 import {
   paywallActivityErrorFromApiError,
   paywallErrorStateFromApiError,
 } from '../src/features/chat/utils/paywallRecovery';
+import {
+  freeCapacityCountdownMessage,
+  freeCapacityErrorStateFromApiError,
+  freeCapacityRetrySeconds,
+} from '../src/features/chat/utils/freeCapacityRecovery';
 import { waitFor } from '@testing-library/react-native';
 import {
   clearAuthSession,
@@ -262,6 +265,92 @@ describe('429 with paywall payload', () => {
   });
 });
 
+describe('429 free-capacity payload', () => {
+  const RETRY_AT = '2026-09-01T12:01:30.000Z';
+
+  function freeCapacityBody(retryAt?: string) {
+    return {
+      error: {
+        message:
+          'No free capacity right now. Try again shortly, upgrade your plan, or use your own provider key.',
+        type: 'insufficient_quota',
+        code: 'free_capacity_unavailable',
+        ...(retryAt ? { retry_at: retryAt } : {}),
+        recovery: [
+          { action: 'upgrade', href: '/pricing' },
+          { action: 'byok', href: '/byok' },
+        ],
+      },
+    };
+  }
+
+  it('parses retry_at into a typed free-capacity error', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(429, freeCapacityBody(RETRY_AT)));
+
+    const error = await api
+      .post('/api/llm/v1/chat/completions', { model: 'test', messages: [] })
+      .catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ApiFreeCapacityError);
+    expect(error).not.toBeInstanceOf(ApiPaywallError);
+    expect((error as ApiFreeCapacityError).retryAtMs).toBe(Date.parse(RETRY_AT));
+    expect((error as ApiFreeCapacityError).code).toBe('free_capacity_unavailable');
+  });
+
+  it('leaves retryAtMs null when the server omits retry_at', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(429, freeCapacityBody()));
+
+    const error = await api.post('/api/llm/v1/chat/completions', {}).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ApiFreeCapacityError);
+    expect((error as ApiFreeCapacityError).retryAtMs).toBeNull();
+  });
+
+  it('ignores an unparseable retry_at rather than counting down from NaN', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(429, freeCapacityBody('soon')));
+
+    const error = await api.post('/api/llm/v1/chat/completions', {}).catch((caught) => caught);
+
+    expect((error as ApiFreeCapacityError).retryAtMs).toBeNull();
+  });
+
+  it('turns the typed error into countdown copy that names no wire code', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(429, freeCapacityBody(RETRY_AT)));
+
+    const error = (await api
+      .post('/api/llm/v1/chat/completions', {})
+      .catch((caught) => caught)) as ApiFreeCapacityError;
+    const state = freeCapacityErrorStateFromApiError(error);
+    const retryAtMs = Date.parse(RETRY_AT);
+
+    expect(state).toEqual({ retryAtMs, code: 'free_capacity_unavailable' });
+    expect(freeCapacityRetrySeconds(state.retryAtMs, retryAtMs - 12_000)).toBe(12);
+    expect(freeCapacityCountdownMessage(12)).toBe('Free capacity is busy. You can retry in 12s.');
+    expect(freeCapacityCountdownMessage(12)).not.toContain('free_capacity');
+    expect(freeCapacityRetrySeconds(state.retryAtMs, retryAtMs)).toBe(0);
+  });
+
+  it('shows no countdown for a deadline as far out as a daily quota reset', async () => {
+    const quotaResetAt = new Date(Date.parse(RETRY_AT) + 12 * 60 * 60 * 1_000).toISOString();
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(429, freeCapacityBody(quotaResetAt)));
+
+    const error = (await api
+      .post('/api/llm/v1/chat/completions', {})
+      .catch((caught) => caught)) as ApiFreeCapacityError;
+
+    expect(error.retryAtMs).toBe(Date.parse(quotaResetAt));
+    expect(freeCapacityRetrySeconds(error.retryAtMs, Date.parse(RETRY_AT))).toBe(0);
+  });
+});
+
 describe('429 without paywall payload', () => {
   it('throws generic Error when body is rate-limit plain text', async () => {
     jest
@@ -282,6 +371,22 @@ describe('429 without paywall payload', () => {
 
     expect(caught).toBeInstanceOf(Error);
     expect(caught).not.toBeInstanceOf(ApiPaywallError);
+  });
+
+  it('keeps the generic wait copy for a rate-limit code it does not recognise', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(429, {
+        error: { code: 'rate_limit_exceeded', type: 'insufficient_quota' },
+      }),
+    );
+
+    const caught = await api.get('/api/test').catch((e) => e);
+
+    expect(caught).not.toBeInstanceOf(ApiPaywallError);
+    expect(caught).not.toBeInstanceOf(ApiFreeCapacityError);
+    expect((caught as Error).message).toBe(
+      'Too many requests right now. Please wait a moment and try again.',
+    );
   });
 });
 

@@ -172,6 +172,7 @@ export default function ChatScreen() {
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const sendError = useChatStore((s) => s.error);
   const providerConsentError = useChatStore((s) => s.providerConsentError);
+  const freeCapacityError = useChatStore((s) => s.freeCapacityError);
   const clearProviderConsentError = useChatStore((s) => s.clearProviderConsentError);
   const clearError = useChatStore((s) => s.clearError);
   const setSendError = useChatStore((s) => s.setSendError);
@@ -1267,6 +1268,7 @@ export default function ChatScreen() {
         {/* Send/stream failure banner with retry — surfaces store.error (was silent) */}
         <SendErrorBanner
           error={providerConsentError ? null : sendError}
+          freeCapacity={providerConsentError ? null : freeCapacityError}
           onRetry={
             conversationMessages.some((m) => m.role === 'user')
               ? () => {

@@ -23,43 +23,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
 
-export type ApiPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing';
+import { ApiHttpError, ApiPaywallError, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 
-function recoveryActionForPaywallCode(code: string | null): ApiPaywallRecoveryAction {
-  if (code === 'subscription_required') return 'subscribe';
-  if (code === 'subscription_inactive') return 'manage_billing';
-  return 'upgrade';
-}
-
-export class ApiPaywallError extends Error {
-  readonly feature: string;
-  readonly requiredTier: string;
-  readonly reason: string;
-  readonly code: string | null;
-  readonly recoveryAction: ApiPaywallRecoveryAction;
-
-  constructor(feature: string, requiredTier: string, reason: string, code: string | null = null) {
-    super(`Paywall: ${feature} requires ${requiredTier} tier. ${reason}`);
-    this.name = 'ApiPaywallError';
-    this.feature = feature;
-    this.requiredTier = requiredTier;
-    this.reason = reason;
-    this.code = code;
-    this.recoveryAction = recoveryActionForPaywallCode(code);
-  }
-}
-
-export class ApiHttpError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-
-  constructor(message: string, status: number, code: string | null = null) {
-    super(message);
-    this.name = 'ApiHttpError';
-    this.status = status;
-    this.code = code;
-  }
-}
+export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
+export type { ApiPaywallRecoveryAction } from './apiErrors';
 
 let _refreshing: Promise<boolean> | null = null;
 let _refreshFailures = 0;
@@ -294,20 +261,10 @@ async function request<T>(
     if (response.status === 429) {
       const bodyText = await response.text();
       assertApiAccountGeneration(accountGeneration);
-      let parsed: Record<string, unknown> | null = null;
-      try {
-        parsed = JSON.parse(bodyText) as Record<string, unknown>;
-      } catch {
-        // Non-JSON body (HTML error page, proxy output) — never show it raw.
-      }
+      const parsed = parseJsonBody(bodyText);
 
-      if (parsed && parsed.kind === 'paywall') {
-        throw new ApiPaywallError(
-          typeof parsed.feature === 'string' ? parsed.feature : 'token_cap',
-          typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'basic',
-          typeof parsed.reason === 'string' ? parsed.reason : '',
-        );
-      }
+      const rateLimitError = rateLimitErrorFrom(parsed);
+      if (rateLimitError) throw rateLimitError;
 
       const candidate = parsed?.error ?? parsed?.message;
       throw new Error(
