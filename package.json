@@ -156,6 +156,7 @@
     "sync:models": "pnpm --filter @agiworkforce/model-registry generate",
     "sync:models:check": "pnpm --filter @agiworkforce/model-registry check",
     "sync:models:refresh": "pnpm --filter @agiworkforce/model-registry refresh",
+    "check:pricing-drift": "pnpm --filter @agiworkforce/model-registry check:pricing-drift",
     "models:families": "pnpm --filter @agiworkforce/model-registry families",
     "models:families:promote": "pnpm --filter @agiworkforce/model-registry families:promote",
     "models:families:rollback": "pnpm --filter @agiworkforce/model-registry families:rollback",

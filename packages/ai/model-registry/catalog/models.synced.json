@@ -32,7 +32,7 @@
       "released": "February 2026"
     },
     "gemini-3.1-pro-preview": {
-      "contextWindow": 2000000,
+      "contextWindow": 1048576,
       "inputCost": 2,
       "outputCost": 12,
       "cached_input": 0.2,
