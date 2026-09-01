@@ -21,7 +21,7 @@ import {
   SquarePen,
   Trash2,
   Upload,
-} from 'lucide-react';
+} from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
 import { Menu, MenuItem, MenuSeparator } from './Menu';

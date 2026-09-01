@@ -27,7 +27,7 @@ import {
   MessageSquare,
   ShieldCheck,
   TerminalSquare,
-} from 'lucide-react';
+} from '@agiworkforce/icons';
 import type { SidebarIconComponent, SidebarNavItem } from '@agiworkforce/ui';
 
 /**
