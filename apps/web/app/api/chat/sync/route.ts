@@ -82,6 +82,7 @@ async function handlePull(request: NextRequest) {
       db.query<ConversationDelta>(
         `
         select id, title, model, project_id, pinned,
+               active_leaf_message_id::text as active_leaf_message_id,
                created_at, updated_at, deleted_at, server_version
         from web_conversations
         where user_id = $1 and server_version > $2
@@ -92,7 +93,8 @@ async function handlePull(request: NextRequest) {
       ),
       db.query<MessageDelta>(
         `
-        select m.id, m.conversation_id, m.role, m.content, m.model, m.provider,
+        select m.id, m.conversation_id, m.parent_id::text as parent_id,
+               m.role, m.content, m.model, m.provider,
                m.input_tokens, m.output_tokens, m.metadata,
                m.created_at, m.updated_at, m.deleted_at, m.server_version
         from web_messages m
@@ -258,6 +260,7 @@ const PUSH_MESSAGES_SQL = `
             select incoming.id,
                    case when current.id is null or owner.id is null then null else jsonb_build_object(
                      'id', current.id::text, 'conversation_id', current.conversation_id::text,
+                     'parent_id', current.parent_id::text,
                      'role', current.role, 'content', current.content, 'model', current.model,
                      'provider', current.provider, 'input_tokens', current.input_tokens,
                      'output_tokens', current.output_tokens,
@@ -492,6 +495,7 @@ async function handlePush(request: NextRequest) {
                    case when current.id is null then null else jsonb_build_object(
                      'id', current.id::text, 'title', current.title, 'model', current.model,
                      'project_id', current.project_id, 'pinned', current.pinned,
+                     'active_leaf_message_id', current.active_leaf_message_id::text,
                      'created_at', current.created_at, 'updated_at', current.updated_at,
                      'deleted_at', current.deleted_at,
                      'server_version', current.server_version::text

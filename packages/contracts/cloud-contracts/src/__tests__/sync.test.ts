@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import projectsCasGolden from '../__fixtures__/projects-sync-cas.golden.json';
 import chatMemoryCasGolden from '../__fixtures__/chat-memory-sync-cas.golden.json';
@@ -6,6 +5,8 @@ import {
   ChatSyncPullResponseSchema,
   ChatSyncPushRequestSchema,
   ChatSyncPushResponseSchema,
+  ConversationWireDeltaSchema,
+  MessageWireDeltaSchema,
   MemorySyncPullResponseSchema,
   MemorySyncPushRequestSchema,
   MemorySyncPushResponseSchema,
@@ -111,6 +112,77 @@ describe('ChatSyncPullResponseSchema', () => {
         cursor: '45',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('chat delta branch pointers', () => {
+  const PARENT_ID = '018f6f2a-0000-7000-8000-00000000000a';
+  const LEAF_ID = '018f6f2a-0000-7000-8000-00000000000b';
+
+  it('parses a delta from an emitter that predates threading, leaving the fields off', () => {
+    expect(MessageWireDeltaSchema.parse(messageDelta)).not.toHaveProperty('parent_id');
+    expect(ConversationWireDeltaSchema.parse(conversationDelta)).not.toHaveProperty(
+      'active_leaf_message_id',
+    );
+  });
+
+  it('keeps a null pointer distinct from an absent one', () => {
+    expect(MessageWireDeltaSchema.parse({ ...messageDelta, parent_id: null })).toHaveProperty(
+      'parent_id',
+      null,
+    );
+    expect(
+      ConversationWireDeltaSchema.parse({ ...conversationDelta, active_leaf_message_id: null }),
+    ).toHaveProperty('active_leaf_message_id', null);
+  });
+
+  it('carries both pointers through a full pull page', () => {
+    const page = ChatSyncPullResponseSchema.parse({
+      conversations: [{ ...conversationDelta, active_leaf_message_id: LEAF_ID }],
+      messages: [{ ...messageDelta, parent_id: PARENT_ID }],
+      artifacts: [],
+      cursor: '44',
+      hasMore: false,
+    });
+    expect(page.messages[0]?.parent_id).toBe(PARENT_ID);
+    expect(page.conversations[0]?.active_leaf_message_id).toBe(LEAF_ID);
+  });
+
+  it('carries both pointers on the current row of a push conflict', () => {
+    const response = ChatSyncPushResponseSchema.parse({
+      protocolVersion: 2,
+      applied: { conversations: [], messages: [], artifacts: [] },
+      conflicts: {
+        conversations: [
+          {
+            id: conversationDelta.id,
+            current: { ...conversationDelta, active_leaf_message_id: LEAF_ID },
+          },
+        ],
+        messages: [{ id: messageDelta.id, current: { ...messageDelta, parent_id: PARENT_ID } }],
+        artifacts: [],
+      },
+      cursor: '45',
+    });
+    expect(response.conflicts.messages[0]?.current?.parent_id).toBe(PARENT_ID);
+    expect(response.conflicts.conversations[0]?.current?.active_leaf_message_id).toBe(LEAF_ID);
+  });
+
+  it('drops a parent a client tries to push, because the server decides lineage', () => {
+    const parsed = ChatSyncPushRequestSchema.parse({
+      protocolVersion: 2,
+      messages: [
+        {
+          id: messageDelta.id,
+          conversationId: conversationDelta.id,
+          role: 'user',
+          content: 'hi',
+          baseVersion: '0',
+          parentId: PARENT_ID,
+        },
+      ],
+    });
+    expect(parsed.messages[0]).not.toHaveProperty('parentId');
   });
 });
 

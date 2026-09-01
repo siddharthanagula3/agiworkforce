@@ -8,6 +8,7 @@ export interface SyncMessageRecord {
   content: string;
   model?: string;
   provider?: string;
+  parentId?: string | null;
   createdAt?: string;
   metadata?: Record<string, unknown> | null;
   serverVersion?: string;
@@ -49,6 +50,9 @@ export function applyMessageDeltas(
         content: d.content,
         ...(d.model ? { model: d.model } : {}),
         ...(d.provider ? { provider: d.provider } : {}),
+        // Omitted rather than nulled when the delta carries no parent, so an
+        // emitter that cannot thread leaves a lineage learned elsewhere intact.
+        ...(d.parent_id !== undefined ? { parentId: d.parent_id } : {}),
         createdAt: d.created_at,
         metadata: d.metadata,
         serverVersion: d.server_version,

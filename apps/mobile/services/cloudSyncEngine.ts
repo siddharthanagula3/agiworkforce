@@ -107,6 +107,9 @@ const conversationPort: ConversationStorePort = {
       pinned: record.pinned,
       model: record.model,
       projectId: record.projectId,
+      ...(record.activeLeafMessageId !== undefined
+        ? { activeLeafMessageId: record.activeLeafMessageId }
+        : {}),
       serverVersion: record.serverVersion,
     });
   },
@@ -314,6 +317,9 @@ const messagePort: MessageStorePort = {
       content: m.content,
       model: (m as { model?: string }).model,
       provider: (m as { provider?: string }).provider,
+      // Read back, not just written: the delta apply merges onto this record, so
+      // dropping it here would erase a lineage the transcript fetch learned.
+      ...(m.parentId !== undefined ? { parentId: m.parentId } : {}),
       createdAt: (m as { createdAt?: string }).createdAt,
       metadata: messageMetadataForSync(m),
       serverVersion: m.serverVersion,
@@ -334,6 +340,7 @@ const messagePort: MessageStorePort = {
         content: record.content,
         ...(record.model ? { model: record.model } : {}),
         ...(record.provider ? { provider: record.provider } : {}),
+        ...(record.parentId !== undefined ? { parentId: record.parentId } : {}),
         createdAt: record.createdAt,
         metadata: record.metadata ?? undefined,
         serverVersion: record.serverVersion,

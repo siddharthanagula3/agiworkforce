@@ -34,12 +34,23 @@ function rejectDuplicateIds(
   }
 }
 
+// The two branch pointers below are optional rather than nullable-only, and the
+// difference carries meaning a client acts on: absent is an emitter that predates
+// threading and cannot hold siblings, while null is a threading emitter reporting
+// a conversation that is still linear. Collapsing them would make every delta
+// from an old server look like a deliberate root.
+//
+// They are plain strings, like every other id in these delta schemas, even though
+// both columns are uuid. A `parent_id` constrained tighter than the `id` it names
+// would reject a delta whose parent is a message this same schema accepts.
+
 export const ConversationWireDeltaSchema = z.object({
   id: z.string(),
   title: z.string(),
   model: z.string().nullable(),
   project_id: z.string().nullable(),
   pinned: z.boolean(),
+  active_leaf_message_id: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
   deleted_at: z.string().nullable(),
@@ -50,6 +61,7 @@ export type ConversationWireDelta = z.infer<typeof ConversationWireDeltaSchema>;
 export const MessageWireDeltaSchema = z.object({
   id: z.string(),
   conversation_id: z.string(),
+  parent_id: z.string().nullable().optional(),
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
   model: z.string().nullable(),
