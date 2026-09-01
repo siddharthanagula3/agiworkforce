@@ -144,8 +144,8 @@ interface QueuedFollowUp {
 }
 
 const WORK_MODE_TITLES: Record<ComposerWorkMode, string> = {
-  chat: 'Chat — quick questions and conversation',
-  agiwork: 'AGI Work — multi-step tasks with tools, files, and reviewable deliverables',
+  chat: 'Chat: quick questions and conversation',
+  agiwork: 'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
 };
 
 /**
@@ -1149,7 +1149,7 @@ const ChatComposerNewComponent = ({
       if (imageMode || videoMode) {
         const noun = imageMode ? 'Image' : 'Video';
         setLocalNotice(
-          `${noun} generation works from your prompt only — attached files are not sent to the ${noun.toLowerCase()} model. Leave ${noun.toLowerCase()} mode first if you want to send ${files.length === 1 ? 'this file' : 'these files'} to the chat model.`,
+          `${noun} generation works from your prompt only. Attached files are not sent to the ${noun.toLowerCase()} model. Leave ${noun.toLowerCase()} mode first if you want to send ${files.length === 1 ? 'this file' : 'these files'} to the chat model.`,
         );
         return;
       }
@@ -2076,12 +2076,12 @@ const ChatComposerNewComponent = ({
           // be parked in a draft, so claiming "saved" for them would be a lie.
           setLocalNotice(
             [
-              'Your queued message was not sent — you switched chats before the reply finished.',
+              'Your queued message was not sent: you switched chats before the reply finished.',
               savedAsDraft
                 ? 'It was saved as a draft in the original chat.'
                 : 'Nothing was sent anywhere.',
               queuedAttachments && queuedAttachments.length > 0
-                ? 'Its attachments were not kept — re-attach them to send it.'
+                ? 'Its attachments were not kept. Re-attach them to send it.'
                 : null,
             ]
               .filter(Boolean)
@@ -2708,7 +2708,7 @@ const ChatComposerNewComponent = ({
               onBlur={() => setIsFocused(false)}
               placeholder={
                 isTurnActive && !imageMode && !videoMode
-                  ? 'Reply — sends when the current response finishes'
+                  ? 'Reply: sends when the current response finishes'
                   : imageMode
                     ? 'Describe or edit an image'
                     : videoMode
@@ -2793,9 +2793,7 @@ const ChatComposerNewComponent = ({
                   composerDisabled && 'cursor-not-allowed opacity-50',
                 )}
                 aria-label={
-                  hasOverflowActive
-                    ? `More options — ${overflowActiveCount} active`
-                    : 'More options'
+                  hasOverflowActive ? `More options: ${overflowActiveCount} active` : 'More options'
                 }
                 aria-pressed={hasOverflowActive}
                 aria-expanded={showOverflowMenu}

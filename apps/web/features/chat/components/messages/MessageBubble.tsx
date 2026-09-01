@@ -714,7 +714,7 @@ const MessageBubbleComponent = function MessageBubble({
       });
       if (!response.ok) throw new Error(`Report failed: ${response.status}`);
       setReportState('sent');
-      toast.success('Reported. Thank you — our trust and safety team will review it.');
+      toast.success('Reported. Thank you: our trust and safety team will review it.');
     } catch {
       setReportState('idle');
       toast.error('Could not send the report. Please try again.');
@@ -2256,7 +2256,7 @@ const MessageBubbleComponent = function MessageBubble({
                     <TooltipContent>
                       {isBranching
                         ? 'Creating branch…'
-                        : 'Branch conversation — this chat stays unchanged'}
+                        : 'Branch conversation: this chat stays unchanged'}
                     </TooltipContent>
                   </Tooltip>
                 )}

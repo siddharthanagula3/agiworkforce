@@ -595,7 +595,7 @@ function EditPanel({
         </div>
 
         {/* Toolbar: honest disclosure + describe-a-change composer.
-            A disabled "Select region to edit — Coming soon" strip used to sit
+            A disabled "Select region to edit: coming soon" strip used to sit
             here. Region/mask editing is not scheduled and nothing in this
             client sends `mask_image`, so the strip advertised a capability no
             code backs; it is gone rather than left as a permanent promise. */}

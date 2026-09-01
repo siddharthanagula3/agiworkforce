@@ -1013,7 +1013,7 @@ function DirectoryBrowse({
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   ) : plugin.installed && plugin.installable === false ? (
                     <span
-                      title="No longer available on this surface — installed, but the server does not run it."
+                      title="No longer available on this surface: installed, but the server does not run it."
                       className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-muted-foreground"
                     >
                       {plugin.statusLabel ?? 'Unavailable'}
@@ -1263,7 +1263,7 @@ function AddCustomConnectorForm({
     setJsonImportError(null);
     setJsonImportNote(
       result.value.droppedHeaderNames.length > 0
-        ? `Only a single bearer token is stored for custom connectors — ${result.value.droppedHeaderNames.join(', ')} from this config will not be saved.`
+        ? `Only a single bearer token is stored for custom connectors. Dropped: ${result.value.droppedHeaderNames.join(', ')} from this config will not be saved.`
         : null,
     );
     setName(result.value.name ?? '');
@@ -2362,7 +2362,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         </p>
                         {plugin.installable === false ? (
                           <span
-                            title="No longer available on this surface — installed, but the server does not run it."
+                            title="No longer available on this surface: installed, but the server does not run it."
                             className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-muted-foreground"
                           >
                             {plugin.statusLabel ?? 'Unavailable'}

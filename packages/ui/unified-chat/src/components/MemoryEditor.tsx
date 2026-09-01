@@ -361,7 +361,7 @@ function syncStatusLabel(status: MemoryEditorSyncStatus, isAccountScoped: boolea
       case 'syncing':
         return 'Loading memory from your Managed Cloud account…';
       case 'synced':
-        return 'Saved to your Managed Cloud account — available on every signed-in device.';
+        return 'Saved to your Managed Cloud account, available on every signed-in device.';
       case 'error':
         return 'Couldn’t reach your Managed Cloud memory. Device-local memory was not used.';
       case 'unavailable':
@@ -376,9 +376,9 @@ function syncStatusLabel(status: MemoryEditorSyncStatus, isAccountScoped: boolea
     case 'syncing':
       return 'Syncing with your account…';
     case 'synced':
-      return 'Synced to your account — available on every device you sign into.';
+      return 'Synced to your account, available on every device you sign into.';
     case 'error':
-      return 'Saved on this device. Couldn’t reach your account to sync — will retry.';
+      return 'Saved on this device. Couldn’t reach your account to sync. Will retry.';
     case 'unavailable':
       return 'Saved on this device only.';
     case 'idle':

@@ -140,8 +140,8 @@ export function ComposerFeedbackDialog({
             <div className="space-y-4 py-2">
               <p role="status" className="text-sm text-foreground">
                 {isSafetyAppeal
-                  ? 'Thanks — your report was recorded.'
-                  : 'Thanks — your feedback was sent.'}
+                  ? 'Thanks, your report was recorded.'
+                  : 'Thanks, your feedback was sent.'}
               </p>
               <div className="flex justify-end">
                 <Button type="button" onClick={() => setOpen(false)}>
