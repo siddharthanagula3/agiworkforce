@@ -12,6 +12,8 @@ const MATCH_ROUTE = 'route';
 const MATCH_PROVIDER = 'provider';
 const MATCH_NONE = 'none';
 
+const FREE_ROUTE_ID_PATTERN = /free/i;
+
 const args = process.argv.slice(2);
 
 function flagValue(name) {
@@ -120,6 +122,19 @@ for (const routeId of degraded) {
   console.warn(
     `${CHECK_LABEL} provider-only match: \`${routeId}\` resolves at provider granularity. ` +
       'Tighten to an exact route id once the registry slot exists.',
+  );
+}
+
+const unpooledFreeRoutes = [...routeIds].filter(
+  (routeId) => FREE_ROUTE_ID_PATTERN.test(routeId) && !seen.has(routeId),
+);
+
+for (const routeId of unpooledFreeRoutes) {
+  console.warn(
+    `${CHECK_LABEL} terms trap: \`${routeId}\` is a selectable registry route that reads as free ` +
+      'but is absent from the free pool. A $0 price is not eligibility — the provider terms decide, ' +
+      'and these exclude it from the company free lane. Absence is the deliberate state: ' +
+      'add an entry only if a terms review says the lane may carry it.',
   );
 }
 
