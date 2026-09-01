@@ -11,6 +11,7 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError } from './api';
+import { parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -238,19 +239,8 @@ async function attemptStream(
     const text = await response.text();
 
     if (response.status === 429) {
-      try {
-        const parsed = JSON.parse(text) as Record<string, unknown>;
-        if (parsed && parsed.kind === 'paywall') {
-          throw new ApiPaywallError(
-            typeof parsed.feature === 'string' ? parsed.feature : 'token_cap',
-            typeof parsed.requiredTier === 'string' ? parsed.requiredTier : 'basic',
-            typeof parsed.reason === 'string' ? parsed.reason : '',
-          );
-        }
-      } catch (jsonErr) {
-        if (jsonErr instanceof ApiPaywallError) throw jsonErr;
-        // Otherwise fall through to generic error below
-      }
+      const rateLimitError = rateLimitErrorFrom(parseJsonBody(text));
+      if (rateLimitError) throw rateLimitError;
     }
 
     if (response.status === 403) {
