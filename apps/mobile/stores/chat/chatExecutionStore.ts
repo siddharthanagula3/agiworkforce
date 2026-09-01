@@ -11,8 +11,14 @@ import {
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
+import { ApiFreeCapacityError } from '@/services/apiErrors';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
+import {
+  freeCapacityErrorStateFromApiError,
+  FREE_CAPACITY_BUSY_MESSAGE,
+  type FreeCapacityErrorState,
+} from '@/src/features/chat/utils/freeCapacityRecovery';
 import {
   paywallActivityErrorFromApiError,
   paywallErrorStateFromApiError,
@@ -149,6 +155,7 @@ interface ExecutionState {
   error: string | null;
   paywallError: PaywallErrorState | null;
   providerConsentError: ProviderConsentErrorState | null;
+  freeCapacityError: FreeCapacityErrorState | null;
   retryAttempts: Record<string, number>;
   isEditing: boolean;
 
@@ -700,11 +707,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   error: null,
   paywallError: null,
   providerConsentError: null,
+  freeCapacityError: null,
   retryAttempts: {},
   isEditing: false,
 
-  clearError: () => set({ error: null }),
-  setSendError: (message: string) => set({ error: message }),
+  clearError: () => set({ error: null, freeCapacityError: null }),
+  setSendError: (message: string) => set({ error: message, freeCapacityError: null }),
   clearPaywallError: () => set({ paywallError: null }),
   setPaywallError: (paywallError) => set({ paywallError }),
   clearProviderConsentError: () => set({ providerConsentError: null }),
@@ -738,7 +746,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       throw err;
     }
     queue.dequeue();
-    set({ providerConsentError: null });
+    set({ providerConsentError: null, freeCapacityError: null });
 
     if (abortControllers.has(conversationId)) {
       const waiting = deferredSends.get(conversationId) ?? [];
@@ -1827,6 +1835,39 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 error: consentMessage,
                 paywallError: null,
                 providerConsentError,
+              });
+              return;
+            }
+
+            if (error instanceof ApiFreeCapacityError) {
+              const freeCapacityError = freeCapacityErrorStateFromApiError(error);
+              const capacityMsgs = msgs.map((m) =>
+                m.id === assistantMessageId
+                  ? settleMessageAgentActivity(
+                      {
+                        ...m,
+                        content: currentContent || FREE_CAPACITY_BUSY_MESSAGE,
+                        isStreaming: false,
+                      },
+                      'failed',
+                      Date.now(),
+                      FREE_CAPACITY_BUSY_MESSAGE,
+                    )
+                  : m,
+              );
+              currentMsgStore.setState((s) => ({
+                messages: { ...s.messages, [conversationId]: capacityMsgs },
+              }));
+              if (executionMode === 'cloud') {
+                pushCloudAssistantUpdate(conversationId, capacityMsgs, assistantMessageId);
+              }
+              set({
+                ...streamingFlags(),
+                streamingContent: '',
+                streamingReasoning: '',
+                error: FREE_CAPACITY_BUSY_MESSAGE,
+                paywallError: null,
+                freeCapacityError,
               });
               return;
             }

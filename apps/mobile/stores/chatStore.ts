@@ -7,6 +7,7 @@ export {
   paywallErrorStateFromApiError,
 } from '@/src/features/chat/utils/paywallRecovery';
 export type { ProviderConsentErrorState } from '@/src/features/chat/utils/providerConsentRecovery';
+export type { FreeCapacityErrorState } from '@/src/features/chat/utils/freeCapacityRecovery';
 
 export { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
 export { useChatExecutionStore } from './chat/chatExecutionStore';
@@ -21,6 +22,7 @@ import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatV
 import type { SendMessageOptions } from './chat/chatExecutionStore';
 import type { PaywallErrorState } from '@/src/features/chat/utils/paywallRecovery';
 import type { ProviderConsentErrorState } from '@/src/features/chat/utils/providerConsentRecovery';
+import type { FreeCapacityErrorState } from '@/src/features/chat/utils/freeCapacityRecovery';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { CloudWorkMode } from '@agiworkforce/types';
 
@@ -37,6 +39,7 @@ export interface CombinedChatState {
   error: string | null;
   paywallError: PaywallErrorState | null;
   providerConsentError: ProviderConsentErrorState | null;
+  freeCapacityError: FreeCapacityErrorState | null;
   retryAttempts: Record<string, number>;
   isEditing: boolean;
   searchQuery: string;
@@ -203,6 +206,7 @@ function buildCombinedState(
     error: exec.error,
     paywallError: exec.paywallError,
     providerConsentError: exec.providerConsentError,
+    freeCapacityError: exec.freeCapacityError,
     retryAttempts: exec.retryAttempts,
     isEditing: exec.isEditing,
     sendMessage: exec.sendMessage,
