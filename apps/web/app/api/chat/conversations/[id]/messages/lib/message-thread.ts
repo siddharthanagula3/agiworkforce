@@ -133,6 +133,32 @@ export async function resolveAnsweredParentId(
 }
 
 /**
+ * Whether this conversation has never been given a tree, which is the question
+ * {@link stampLinearParents} and {@link resolveLinearTail} both need answered
+ * before they are allowed to run.
+ *
+ * A null leaf is not that answer. The leaf goes back to null whenever the row
+ * it pointed at is deleted and that row was a thread root, so a conversation
+ * full of branches can sit at a null leaf and still be nothing like linear.
+ * Only the absence of a single parent pointer proves it.
+ */
+export async function conversationIsUnbranched(
+  tx: DatabaseAdapter,
+  conversationId: string,
+): Promise<boolean> {
+  const [row] = await tx.query<{ unbranched: boolean }>(
+    `select not exists (
+       select 1
+         from web_messages
+        where conversation_id = $1
+          and parent_id is not null
+     ) as unbranched`,
+    [conversationId],
+  );
+  return row?.unbranched ?? false;
+}
+
+/**
  * Gives a conversation that has only ever been linear the parent pointers its
  * history implies, so the row about to be inserted has something to branch
  * from. Must run before that insert: the new row would otherwise fall inside
@@ -140,7 +166,11 @@ export async function resolveAnsweredParentId(
  * it.
  *
  * `parent_id is null` makes it safe to run twice — a conversion that already
- * happened matches no rows.
+ * happened matches no rows. It is NOT safe to run on a conversation that has
+ * branched: every root of a sibling group is deliberately null-parented, and
+ * the window below would chain each one onto whichever row happens to precede
+ * it in time, folding separate branches into a single line. Callers gate on
+ * {@link conversationIsUnbranched}, never on the leaf being null.
  */
 export async function stampLinearParents(
   tx: DatabaseAdapter,
@@ -167,6 +197,11 @@ export async function stampLinearParents(
  * chains by, which is the leaf a just-converted conversation has but has never
  * had to record. A write that names no parent of its own continues from here
  * rather than starting a second root.
+ *
+ * Carries the same precondition as the conversion it follows: on a conversation
+ * that has already branched this returns the newest row across every branch,
+ * which is the end of no particular thread. Only call it behind
+ * {@link conversationIsUnbranched}.
  */
 export async function resolveLinearTail(
   tx: DatabaseAdapter,

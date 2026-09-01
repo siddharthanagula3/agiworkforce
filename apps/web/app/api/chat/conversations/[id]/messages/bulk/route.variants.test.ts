@@ -48,6 +48,7 @@ const { POST } = await import('./route');
 const CONVERSATION_SELECT = /select id, active_leaf_message_id/;
 const LOCK = /for update/;
 const CONVERSION = /lag\(id\) over/;
+const BRANCH_PROBE = /select not exists/;
 const TAIL = /order by created_at desc, id desc/;
 const PARENT_CHECK = /select id from web_messages where id = \$1 and conversation_id = \$2/;
 const INSERT = /insert into web_messages/;
@@ -124,6 +125,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — sibling writes', (
         rows: [{ id: CONVERSATION_ID, active_leaf_message_id: null }],
       },
       { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: true }] },
       { match: TAIL, rows: [{ id: TAIL_ID }] },
       { match: PARENT_CHECK, rows: [{ id: PARENT_ID }] },
       insertEchoesTheRow,
@@ -153,6 +155,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — sibling writes', (
         rows: [{ id: CONVERSATION_ID, active_leaf_message_id: null }],
       },
       { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: true }] },
       { match: TAIL, rows: [{ id: TAIL_ID }] },
       { match: PARENT_CHECK, rows: [{ id: PARENT_ID }] },
       insertEchoesTheRow,
@@ -205,6 +208,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — sibling writes', (
         rows: [{ id: CONVERSATION_ID, active_leaf_message_id: null }],
       },
       { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: true }] },
       { match: TAIL, rows: [{ id: TAIL_ID }] },
       insertEchoesTheRow,
     ]);
@@ -237,6 +241,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — sibling writes', (
         rows: [{ id: CONVERSATION_ID, active_leaf_message_id: null }],
       },
       { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: true }] },
       { match: TAIL, rows: [{ id: TAIL_ID }] },
       { match: PARENT_CHECK, rows: [] },
       insertEchoesTheRow,
@@ -273,5 +278,38 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — sibling writes', (
     expect(entry(CONVERSION)).toBeUndefined();
     expect(entry(LEAF_SET)).toBeUndefined();
     for (const insert of entries(INSERT)) expect(insert.params[6]).toBeNull();
+  });
+
+  it('does not re-chain the sibling roots when a deleted root leaves the leaf null', async () => {
+    // Branched and leafless at once: deleting a root the reader was sitting on
+    // sets the leaf to that row's parent, which is null for a root. Converting
+    // here would chain the surviving roots into a single line, and the tail read
+    // that follows would answer with the newest row across every branch.
+    givenDatabase([
+      {
+        match: CONVERSATION_SELECT,
+        rows: [{ id: CONVERSATION_ID, active_leaf_message_id: null }],
+      },
+      { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: false }] },
+      { match: TAIL, rows: [{ id: TAIL_ID }] },
+      { match: PARENT_CHECK, rows: [{ id: PARENT_ID }] },
+      insertEchoesTheRow,
+    ]);
+
+    const response = await POST(
+      request({
+        messages: [
+          { id: ASSISTANT_TURN_ID, role: 'assistant', content: 'hi', parentId: PARENT_ID },
+        ],
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(entry(BRANCH_PROBE)).toBeDefined();
+    expect(entry(CONVERSION)).toBeUndefined();
+    expect(entry(TAIL)).toBeUndefined();
+    expect(entries(INSERT)[0]?.params[6]).toBe(PARENT_ID);
   });
 });
