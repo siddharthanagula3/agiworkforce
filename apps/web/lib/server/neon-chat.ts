@@ -25,6 +25,7 @@ export type ChatConversationRow = {
   starred: boolean;
   archived: boolean;
   is_temporary: boolean;
+  active_leaf_message_id?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
@@ -32,6 +33,7 @@ export type ChatConversationRow = {
 
 export type ChatMessageRow = {
   id: string;
+  parent_id?: string | null;
   role: 'user' | 'assistant' | 'system';
   content: string;
   model: string | null;

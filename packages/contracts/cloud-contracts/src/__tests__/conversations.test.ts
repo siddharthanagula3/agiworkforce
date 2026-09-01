@@ -9,6 +9,7 @@ import {
   ManagedCloudConversationListResponseSchema,
   ManagedCloudConversationBranchesResponseSchema,
   ManagedCloudConversationResponseSchema,
+  ManagedCloudConversationWireSchema,
   ManagedCloudCreateConversationBranchRequestSchema,
   ManagedCloudCreateConversationBranchResponseSchema,
   ManagedCloudCreateConversationRequestSchema,
@@ -230,6 +231,66 @@ describe('managed-cloud conversation wire contract', () => {
     expect(ManagedCloudDeleteConversationResponseSchema.parse({ success: true })).toEqual({
       success: true,
     });
+  });
+
+  it('carries the message tree without making an old client send it', () => {
+    const parentId = '0190a000-0000-7000-8000-0000000000ee';
+
+    expect(ManagedCloudMessageWireSchema.parse({ ...message, parent_id: parentId })).toMatchObject({
+      parent_id: parentId,
+    });
+    expect(
+      ManagedCloudConversationWireSchema.parse({
+        ...conversation,
+        active_leaf_message_id: message.id,
+      }),
+    ).toMatchObject({ active_leaf_message_id: message.id });
+
+    expect(ManagedCloudMessageWireSchema.parse(message)).toEqual(message);
+    expect(ManagedCloudConversationWireSchema.parse(conversation)).toEqual(conversation);
+
+    expect(
+      ManagedCloudMessageWireSchema.parse({ ...message, parent_id: null }).parent_id,
+    ).toBeNull();
+    expect(
+      ManagedCloudConversationWireSchema.parse({ ...conversation, active_leaf_message_id: null })
+        .active_leaf_message_id,
+    ).toBeNull();
+
+    expect(ManagedCloudMessageWireSchema.safeParse({ ...message, parent_id: 'root' }).success).toBe(
+      false,
+    );
+    expect(
+      ManagedCloudConversationWireSchema.safeParse({
+        ...conversation,
+        active_leaf_message_id: 'latest',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a sibling write and a leaf move without requiring either', () => {
+    const parentId = '0190a000-0000-7000-8000-0000000000ee';
+
+    expect(
+      ManagedCloudCreateMessageRequestSchema.parse({ content: 'Hello', parentId }).parentId,
+    ).toBe(parentId);
+    expect(
+      ManagedCloudCreateMessageRequestSchema.parse({ content: 'Hello' }).parentId,
+    ).toBeUndefined();
+    expect(
+      ManagedCloudCreateMessageRequestSchema.safeParse({ content: 'Hello', parentId: 'previous' })
+        .success,
+    ).toBe(false);
+
+    expect(
+      ManagedCloudUpdateConversationRequestSchema.parse({ activeLeafMessageId: message.id }),
+    ).toEqual({ activeLeafMessageId: message.id });
+    expect(ManagedCloudUpdateConversationRequestSchema.parse({ pinned: true })).toEqual({
+      pinned: true,
+    });
+    expect(
+      ManagedCloudUpdateConversationRequestSchema.safeParse({ activeLeafMessageId: null }).success,
+    ).toBe(false);
   });
 
   it('encodes conversation and message ids in canonical endpoint builders', () => {
