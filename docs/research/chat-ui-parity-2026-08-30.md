@@ -206,3 +206,21 @@ The database behind this run is one migration behind the branch
 these numbers — every reading here is the resting new-chat screen with no turn in
 flight — but it does mean no conversation-in-progress state was measured, which
 was already outside the 2026-08-30 scope.
+
+### Desktop, 1470x835 — first agiworkforce reading (2026-09-01)
+
+|                     | agiworkforce      | chatgpt.com (08-30) | claude.ai (08-30) |
+| ------------------- | ----------------- | ------------------- | ----------------- |
+| Composer box        | w=736, **h=127**  | w=768, h=52         | w=640, h=114      |
+| Composer radius     | 26px              | 28px                | 14px              |
+| Composer fill       | `rgb(33, 33, 33)` | `rgb(33, 33, 33)`   | `rgb(32, 32, 31)` |
+| Footer row          | h=24              | —                   | —                 |
+| Visible buttons     | 46                | 86                  | 41                |
+| Horizontal overflow | none              | none                | none              |
+
+The 2026-08-30 desktop table carried no agiworkforce column, so this is the
+baseline. The phone result inverted: at 390px this product now sits under both
+competitors, while on desktop the resting composer is **127px against
+ChatGPT's 52px** — their single collapsed pill against our permanently visible
+second control row. Whether desktop should collapse to one resting row is a
+design decision, not a defect; it is queued as one.
