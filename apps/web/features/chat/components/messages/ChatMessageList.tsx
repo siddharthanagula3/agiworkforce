@@ -12,6 +12,7 @@ import {
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { formatUsageResetIn } from '@agiworkforce/types';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
+import type { VariantInfo, VariantInfoByMessageId } from '@/features/chat/lib/messageThread';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 import { MessageBubble } from './MessageBubble';
@@ -86,6 +87,23 @@ export interface ChatMessageListProps {
   branchingMessageId?: string | null;
   onBranch?: (messageId: string) => void;
   onSwitchBranch?: (conversationId: string) => void;
+  /** Pager state per visible message; empty for a conversation with no variants. */
+  variantInfoByMessageId?: VariantInfoByMessageId;
+  onSelectVariant?: (messageId: string) => void;
+  /**
+   * The row the visible path ends at. Folded into the virtualization key because
+   * react-window v2 caches measured heights BY INDEX with no partial
+   * invalidation: after a switch, index 4 is a different message of a different
+   * height, and the cached value would place every row below it wrong.
+   */
+  activeLeafId?: string | null;
+  /**
+   * The sibling the reader just paged to. Its group is scrolled into view on a
+   * leaf change instead of the transcript jumping to the bottom — the reader is
+   * comparing answers at the branch point, not following a new one.
+   */
+  variantAnchorMessageId?: string | null;
+  isConversationStreaming?: boolean;
   onRegenerateImage?: (
     messageId: string,
     opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
@@ -116,6 +134,24 @@ interface MessageGroup {
 }
 
 // Pure helpers (exported for tests)
+
+/**
+ * Whether an index in the transcript now holds a different message than it did.
+ *
+ * react-window v2 caches measured row heights BY INDEX and offers no partial
+ * invalidation, so the only lever is the key that throws the whole cache away —
+ * and it has to be pulled exactly when an index changes meaning. Paging to
+ * another variant does that; appending the next turn does not, and keying on the
+ * active leaf alone would re-measure the entire transcript on every send once a
+ * conversation had branched even once.
+ */
+export function isPathReRooted(previous: ChatMessage[], next: ChatMessage[]): boolean {
+  if (previous.length > next.length) return true;
+  for (let index = 0; index < previous.length; index += 1) {
+    if (previous[index]?.id !== next[index]?.id) return true;
+  }
+  return false;
+}
 
 export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
   if (messages.length === 0) return [];
@@ -217,6 +253,9 @@ interface MessageGroupRowProps {
   branchingMessageId?: string | null;
   onBranch?: (messageId: string) => void;
   onSwitchBranch?: (conversationId: string) => void;
+  variantInfoByMessageId?: VariantInfoByMessageId;
+  onSelectVariant?: (messageId: string) => void;
+  isConversationStreaming: boolean;
   onPaywallUpgrade?: (
     messageId: string,
     requiredTier: RequiredTier,
@@ -249,6 +288,9 @@ interface MessageRowProps {
   isBranching: boolean;
   onBranch?: (messageId: string) => void;
   onSwitchBranch?: (conversationId: string) => void;
+  variantInfo?: VariantInfo;
+  onSelectVariant?: (messageId: string) => void;
+  isConversationStreaming: boolean;
   onPaywallUpgrade?: (
     messageId: string,
     requiredTier: RequiredTier,
@@ -442,6 +484,9 @@ const MessageRow = memo(function MessageRow({
   isBranching,
   onBranch,
   onSwitchBranch,
+  variantInfo,
+  onSelectVariant,
+  isConversationStreaming,
   onPaywallUpgrade,
   onPaywallDismiss,
   onRegenerateImage,
@@ -556,6 +601,9 @@ const MessageRow = memo(function MessageRow({
       onBranch={onBranch ? handleBranch : undefined}
       isBranching={isBranching}
       branchNavigation={branchNavigation}
+      variantInfo={variantInfo}
+      onSelectVariant={onSelectVariant}
+      isConversationStreaming={isConversationStreaming}
       onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
       onResumeVideo={onResumeVideo}
       onRetryVideo={onRetryVideo}
@@ -583,6 +631,9 @@ const MessageGroupRow = memo(
     branchingMessageId,
     onBranch,
     onSwitchBranch,
+    variantInfoByMessageId,
+    onSelectVariant,
+    isConversationStreaming,
     onPaywallUpgrade,
     onPaywallDismiss,
     onRegenerateImage,
@@ -613,6 +664,9 @@ const MessageGroupRow = memo(
             isBranching={branchingMessageId === message.id}
             onBranch={onBranch}
             onSwitchBranch={onSwitchBranch}
+            variantInfo={variantInfoByMessageId?.[message.id]}
+            onSelectVariant={onSelectVariant}
+            isConversationStreaming={isConversationStreaming}
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
             onRegenerateImage={onRegenerateImage}
@@ -649,6 +703,13 @@ const MessageGroupRow = memo(
       prev.branchingMessageId === next.branchingMessageId &&
       prev.onBranch === next.onBranch &&
       prev.onSwitchBranch === next.onSwitchBranch &&
+      // BUG-27/BUG-28 class: an omitted prop is an update this comparator
+      // silently swallows. The page holds the map's identity stable while only
+      // its content is unchanged, so comparing by reference is enough here and
+      // still catches the regenerate that turns 1/1 into 2/2.
+      prev.variantInfoByMessageId === next.variantInfoByMessageId &&
+      prev.onSelectVariant === next.onSelectVariant &&
+      prev.isConversationStreaming === next.isConversationStreaming &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
       prev.onPaywallDismiss === next.onPaywallDismiss &&
       prev.onRegenerateImage === next.onRegenerateImage &&
@@ -785,6 +846,11 @@ const ChatMessageListComponent = ({
   branchingMessageId = null,
   onBranch,
   onSwitchBranch,
+  variantInfoByMessageId,
+  onSelectVariant,
+  activeLeafId = null,
+  variantAnchorMessageId = null,
+  isConversationStreaming = false,
   onRegenerateImage,
   onResumeVideo,
   onRetryVideo,
@@ -801,11 +867,16 @@ const ChatMessageListComponent = ({
   const [userScrolledUp, setUserScrolledUp] = useState(false);
 
   const scrolledConversationRef = useRef<string | null>(conversationId);
+  const scrolledLeafRef = useRef<string | null>(activeLeafId);
   useEffect(() => {
     if (scrolledConversationRef.current === conversationId) return;
     scrolledConversationRef.current = conversationId;
+    // Opening a chat lands at the bottom, so the leaf it arrives with is not a
+    // switch. Adopting it here — before the scroll effect below runs, which
+    // effect order guarantees — is what keeps the two apart.
+    scrolledLeafRef.current = activeLeafId;
     setUserScrolledUp(false);
-  }, [conversationId]);
+  }, [activeLeafId, conversationId]);
 
   const [hasMounted, setHasMounted] = useState(false);
   useEffect(() => setHasMounted(true), []);
@@ -813,7 +884,14 @@ const ChatMessageListComponent = ({
   const prefersReducedMotion = useReducedMotion();
 
   const groups = useMemo(() => groupMessages(messages), [messages]);
-  const virtualizationKey = conversationId ?? groups[0]?.firstId ?? 'empty-transcript';
+
+  const renderedPathRef = useRef<ChatMessage[]>(messages);
+  const pathEpochRef = useRef(0);
+  if (renderedPathRef.current !== messages) {
+    if (isPathReRooted(renderedPathRef.current, messages)) pathEpochRef.current += 1;
+    renderedPathRef.current = messages;
+  }
+  const virtualizationKey = `${conversationId ?? groups[0]?.firstId ?? 'empty-transcript'}:${pathEpochRef.current}`;
   const dynamicRowHeight = useDynamicRowHeight({
     defaultRowHeight: DEFAULT_TRANSCRIPT_ROW_HEIGHT,
     key: virtualizationKey,
@@ -1037,11 +1115,34 @@ const ChatMessageListComponent = ({
 
   const isStreamingNow = Boolean(lastMessage?.isStreaming);
   useEffect(() => {
+    // Paging to another variant is not a new turn arriving, so it must not send
+    // the reader to the bottom: they are comparing two answers to the same
+    // question, and the place to be is the point where the two differ. A leaf
+    // moved by the turn that is streaming stays on the normal path below.
+    const leafChanged = scrolledLeafRef.current !== activeLeafId;
+    scrolledLeafRef.current = activeLeafId;
+    if (leafChanged && !isStreamingNow && variantAnchorMessageId) {
+      const anchorGroupIndex = groups.findIndex((group) =>
+        group.messages.some((message) => message.id === variantAnchorMessageId),
+      );
+      if (anchorGroupIndex >= 0) {
+        listApiRef.current?.scrollToRow({
+          align: 'start',
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+          // Row 0 is the top spacer, so a group at index n renders at row n + 1.
+          index: anchorGroupIndex + 1,
+        });
+        return;
+      }
+    }
     if (userScrolledUp) return;
     const behavior: ScrollBehavior =
       messages.length === 1 || isStreamingNow || prefersReducedMotion ? 'auto' : 'smooth';
     requestScrollToBottom(behavior);
   }, [
+    activeLeafId,
+    groups,
+    variantAnchorMessageId,
     messages.length,
     lastMessageFingerprint,
     isLoading,
@@ -1148,6 +1249,9 @@ const ChatMessageListComponent = ({
       branchingMessageId,
       onBranch,
       onSwitchBranch,
+      variantInfoByMessageId,
+      onSelectVariant,
+      isConversationStreaming,
       onPaywallUpgrade: handlePaywallUpgrade,
       onPaywallDismiss: handlePaywallDismiss,
       onRegenerateImage: onRegenerateImage ? handleRegenerateImage : undefined,
@@ -1179,6 +1283,9 @@ const ChatMessageListComponent = ({
       onResumeVideo,
       onRetryVideo,
       onSwitchBranch,
+      variantInfoByMessageId,
+      onSelectVariant,
+      isConversationStreaming,
       speakingMessageId,
       currentTier,
     ],
@@ -1394,6 +1501,11 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.branchingMessageId === next.branchingMessageId &&
     prev.onBranch === next.onBranch &&
     prev.onSwitchBranch === next.onSwitchBranch &&
+    prev.variantInfoByMessageId === next.variantInfoByMessageId &&
+    prev.onSelectVariant === next.onSelectVariant &&
+    prev.activeLeafId === next.activeLeafId &&
+    prev.variantAnchorMessageId === next.variantAnchorMessageId &&
+    prev.isConversationStreaming === next.isConversationStreaming &&
     prev.messages.every((prevMessage, index) => {
       const nextMessage = next.messages[index];
       if (!nextMessage) return false;

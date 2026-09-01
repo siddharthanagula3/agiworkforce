@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { useTranslation } from 'react-i18next';
 import { useAuth, useClerk, useUser } from '@clerk/nextjs';
@@ -32,12 +32,25 @@ import { runDurableImageGenerationTurn } from '../lib/durableImageGenerationTurn
 import { startVideoAfterTranscriptCommit } from '../lib/durableVideoGenerationTurn';
 import {
   useChatStore,
+  selectActiveLeafId,
+  selectConversationAllRows,
   selectConversationMessages,
   selectIsConversationLoading,
   selectIsConversationStreaming,
   PENDING_CONVERSATION_KEY,
   DEFAULT_COMPOSER_TOGGLES,
 } from '@shared/stores/web-chat-store';
+import {
+  EMPTY_VARIANT_INFO,
+  resolveLeafForSibling,
+  sameVariantInfoMap,
+  variantInfoByMessage,
+  type VariantInfoByMessageId,
+} from '../lib/messageThread';
+import {
+  resolveMessageVariantsBuildEnabled,
+  resolveMessageVariantsEnabled,
+} from '../lib/message-variants-gate';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { resolveSelectableModelId, useModelStore } from '@shared/stores/model-store';
@@ -543,6 +556,47 @@ async function deleteConversationMessage(params: {
   if (!response.ok) {
     throw new Error(await readChatMutationError(response, 'Failed to delete message'));
   }
+}
+
+/**
+ * Records which variant the reader is on, so opening the chat again — here or on
+ * another device — restores the answer they chose rather than the newest one.
+ */
+async function putActiveLeafMessageId(params: {
+  conversationId: string;
+  activeLeafMessageId: string;
+  authToken: string;
+}): Promise<void> {
+  const headers = await addCsrfHeaders({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${params.authToken}`,
+  });
+  const response = await fetch(managedCloudConversationPath(params.conversationId), {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ activeLeafMessageId: params.activeLeafMessageId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readChatMutationError(response, 'Failed to select this response'));
+  }
+}
+
+/**
+ * The two overrides the variants gate reads are client-only, so a server render
+ * that honoured them would hand the browser an action row with a different
+ * number of controls in it. `getServerSnapshot` pins the first client render to
+ * the build default and React re-renders once hydration is done — the same
+ * idiom ComposerInput uses for the composer editor gate.
+ */
+const subscribeToMessageVariantsMode = () => () => {};
+
+function useMessageVariantsEnabled(): boolean {
+  return useSyncExternalStore(
+    subscribeToMessageVariantsMode,
+    resolveMessageVariantsEnabled,
+    resolveMessageVariantsBuildEnabled,
+  );
 }
 
 // Generic message-metadata patch (the route merges the body into
@@ -1182,6 +1236,8 @@ export default function WebChatPage() {
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
+  const setActiveLeaf = useChatStore((s) => s.setActiveLeaf);
+  const revealMessage = useChatStore((s) => s.revealMessage);
   const chatError = useChatStore((s) => s.error);
   const setChatError = useChatStore((s) => s.setError);
   const setResearchState = useChatStore((s) => s.setResearchState);
@@ -1291,6 +1347,68 @@ export default function WebChatPage() {
         ? (conversations.find((c) => c.id === displayedConversationId) ?? null)
         : null,
     [conversations, displayedConversationId],
+  );
+
+  const variantsEnabled = useMessageVariantsEnabled();
+  const persistActiveLeaf = useCallback(
+    async (conversationId: string, activeLeafMessageId: string): Promise<void> => {
+      const authToken = await getToken();
+      if (!authToken) return;
+      try {
+        await putActiveLeafMessageId({ conversationId, activeLeafMessageId, authToken });
+      } catch {
+        // The selection is local and already correct; only its durability is
+        // lost, and the next selection or a fresh answer writes it again.
+      }
+    },
+    [getToken],
+  );
+  const activeLeafId = useChatStore(selectActiveLeafId(displayedConversationId));
+  const allConversationRows = useChatStore(selectConversationAllRows(displayedConversationId));
+  /**
+   * Pager state for the transcript, held at a stable identity for as long as its
+   * content is unchanged.
+   *
+   * `allConversationRows` gets a new array on every streamed frame while saying
+   * nothing new about the tree. Recomputing is cheap; handing every MessageRow a
+   * new object 60 times a second is not — their comparators check this by
+   * reference, and a fresh identity per frame would re-render the whole
+   * transcript for the duration of every answer.
+   */
+  const variantInfoRef = useRef<VariantInfoByMessageId>(EMPTY_VARIANT_INFO);
+  const variantInfoByMessageId = useMemo(() => {
+    const next = variantsEnabled
+      ? variantInfoByMessage(allConversationRows, activeLeafId)
+      : EMPTY_VARIANT_INFO;
+    if (sameVariantInfoMap(variantInfoRef.current, next)) return variantInfoRef.current;
+    variantInfoRef.current = next;
+    return next;
+  }, [allConversationRows, activeLeafId, variantsEnabled]);
+
+  /**
+   * The sibling the reader last paged to, so the list can anchor on it rather
+   * than jumping to the bottom. Cleared when the conversation changes, or a
+   * stale id would anchor the next transcript on a message from this one.
+   */
+  const [variantAnchorMessageId, setVariantAnchorMessageId] = useState<string | null>(null);
+  useEffect(() => setVariantAnchorMessageId(null), [displayedConversationId]);
+
+  const handleSelectVariant = useCallback(
+    (messageId: string) => {
+      const conversationId = displayedConversationId;
+      if (!conversationId || isStreaming) return;
+      const rows = selectConversationAllRows(conversationId)(useChatStore.getState());
+      if (!rows.some((row) => row.id === messageId)) return;
+      // Selecting a sibling selects the whole tail it produced, so an earlier
+      // question's other answer brings back the exchange that followed it.
+      const leafId = resolveLeafForSibling(rows, messageId);
+      setActiveLeaf(conversationId, leafId);
+      setVariantAnchorMessageId(messageId);
+      // Fire-and-forget: the selection is already on screen, and the durable
+      // write only decides which variant the next device to open this chat sees.
+      void persistActiveLeaf(conversationId, leafId);
+    },
+    [displayedConversationId, isStreaming, persistActiveLeaf, setActiveLeaf],
   );
   const displayedConversationIdRef = useRef(displayedConversationId);
   displayedConversationIdRef.current = displayedConversationId;
@@ -3308,6 +3426,11 @@ export default function WebChatPage() {
   // We wait for messages to load before scrolling, then clear the param from the URL.
   useEffect(() => {
     if (!highlightMessageId || displayedMessages.length === 0) return;
+    // Search indexes every persisted row, so a hit can land on a variant the
+    // reader is not looking at and have no element to scroll to. Moving the
+    // path onto it changes the leaf, which re-runs this effect with the message
+    // mounted; for a message that is already visible this does nothing at all.
+    revealMessage(highlightMessageId, displayedConversationId ?? undefined);
     const el = findHighlightableMessageElement(highlightMessageId);
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3328,7 +3451,14 @@ export default function WebChatPage() {
       return () => clearTimeout(removeParams);
     }, 1800);
     return () => clearTimeout(clear);
-  }, [highlightMessageId, displayedMessages.length, router]);
+  }, [
+    highlightMessageId,
+    displayedMessages.length,
+    activeLeafId,
+    displayedConversationId,
+    revealMessage,
+    router,
+  ]);
 
   const deletePersistedMessages = useCallback(
     async (ids: string[]): Promise<boolean> => {
@@ -3652,6 +3782,31 @@ export default function WebChatPage() {
         return;
       }
       const replayOptions = replayToSendOptions(replayDecision.replay);
+
+      // The revision becomes a sibling of the message it revises, and the
+      // original keeps the exchange it produced — reachable through the pager on
+      // either message. Local parents have to be stamped BEFORE the edited row's
+      // own parent is read: on a conversation that has never branched there is
+      // no parent to read yet, and the value decides whether this write branches
+      // or continues.
+      if (variantsEnabled) {
+        const store = useChatStore.getState();
+        store.ensureLocalThreadParents(conversationId);
+        const editedParentId =
+          selectConversationAllRows(conversationId)(useChatStore.getState()).find(
+            (row) => row.id === id,
+          )?.parentId ?? null;
+        setVariantAnchorMessageId(null);
+        void sendMessage(next, {
+          model: activeModelId,
+          conversationId,
+          attachments: planned.message.attachments,
+          ...replayOptions,
+          userMessageParentId: editedParentId,
+        });
+        return;
+      }
+
       void sendReplacingMessages(planned.plan.rollbackIds, (onTurnCommitted) =>
         sendMessage(next, {
           model: activeModelId,
@@ -3670,6 +3825,7 @@ export default function WebChatPage() {
       sendReplacingMessages,
       sendMessage,
       setChatError,
+      variantsEnabled,
     ],
   );
 
@@ -3677,11 +3833,12 @@ export default function WebChatPage() {
    * CLR-05: inline edit, wired to the bubble instead of the composer.
    *
    * `beginEdit` runs the guards and answers whether the editor may open.
-   * `submitEdit` resubmits the revised text in place of the original — the same
-   * data-loss-safe replacement Regenerate uses (`sendReplacingMessages` deletes
-   * the replaced server rows only once the new turn is durable), and the same
-   * two refusals: a Local → BYOK boundary crossing, and a turn whose recorded
-   * send options cannot be replayed.
+   * `submitEdit` resubmits the revised text as a SIBLING of the original, so
+   * both versions and both replies stay reachable through the pager. With
+   * variants off it falls back to the data-loss-safe replacement Regenerate used
+   * (`sendReplacingMessages` deletes the replaced server rows only once the new
+   * turn is durable). Both keep the same two refusals: a Local → BYOK boundary
+   * crossing, and a turn whose recorded send options cannot be replayed.
    */
   const messageInlineEditHandlers = useMemo<MessageInlineEditController>(
     () => ({
@@ -3693,11 +3850,10 @@ export default function WebChatPage() {
         if (!planned) return;
         const conversationId = displayedConversationId;
         if (!conversationId) return;
-        // Resubmitting deletes every message from this turn onward, on the
-        // server as well as on screen, and there is no branch to go back to.
-        // The repository requires a confirmation for anything a user cannot
-        // undo, and the count is what makes the consequence legible.
-        const discarded = planned.plan.rollbackIds.length - 1;
+        // Nothing is destroyed once an edit branches — the original message and
+        // its reply stay behind the pager — so there is nothing to confirm. The
+        // dialog below belongs to the replacing path, which still deletes.
+        const discarded = variantsEnabled ? 0 : planned.plan.rollbackIds.length - 1;
         if (discarded > 0) {
           void (async () => {
             const proceed = await confirmDestructive({
@@ -3716,16 +3872,10 @@ export default function WebChatPage() {
         runSubmitEdit(id, next, planned, conversationId);
       },
     }),
-    [
-      activeModelId,
-      displayedConversation,
-      displayedConversationId,
-      displayedMessages,
-      planMessageEdit,
-      sendMessage,
-      sendReplacingMessages,
-      setChatError,
-    ],
+    // `runSubmitEdit` is the one that closes over the model, the transcript and
+    // the two send paths, so naming those here as well only re-created this
+    // controller for changes it does not read.
+    [confirmDestructive, displayedConversationId, planMessageEdit, runSubmitEdit, variantsEnabled],
   );
 
   /**
@@ -3805,6 +3955,24 @@ export default function WebChatPage() {
       }
 
       const replayOptions = replayToSendOptions(replayDecision.replay);
+
+      // The answer that is already here stays: the new one becomes a sibling
+      // under the same question, and the pager is how the reader gets back to
+      // it. Nothing is deleted, so nothing needs confirming and there is no
+      // rollback to plan. A failed stream restores the leaf instead (see
+      // handleStreamError's variantRestore).
+      if (variantsEnabled) {
+        setVariantAnchorMessageId(null);
+        await sendMessage(userMsg.content, {
+          model: activeModelId,
+          conversationId: displayedConversationId,
+          attachments: userMsg.attachments,
+          ...replayOptions,
+          regenerateParentMessageId: userMsg.id,
+        });
+        return;
+      }
+
       // Replace the regenerated turn data-loss-safely: the old rows are deleted only
       // AFTER the resend commits, and the transcript is restored if it bails pre-commit
       // (shared with the edit path — see sendReplacingMessages).
@@ -3833,6 +4001,7 @@ export default function WebChatPage() {
       isTrialExhausted,
       handleOpenUpgradeDialog,
       setChatError,
+      variantsEnabled,
     ],
   );
 
@@ -4736,6 +4905,11 @@ export default function WebChatPage() {
                       branchingMessageId={branchingMessageId}
                       onBranch={createBranch}
                       onSwitchBranch={switchBranch}
+                      variantInfoByMessageId={variantInfoByMessageId}
+                      onSelectVariant={handleSelectVariant}
+                      activeLeafId={activeLeafId}
+                      variantAnchorMessageId={variantAnchorMessageId}
+                      isConversationStreaming={isStreaming}
                       onRegenerateImage={handleRegenerateImageInPlace}
                       onResumeVideo={handleResumeVideo}
                       onRetryVideo={handleRetryVideo}
