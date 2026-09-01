@@ -3,6 +3,7 @@ import {
   COMPOSER_EDITOR_MODES,
   COMPOSER_EDITOR_QUERY_PARAM,
   COMPOSER_EDITOR_STORAGE_KEY,
+  resolveComposerEditorBuildMode,
   resolveComposerEditorEnabled,
   resolveComposerEditorMode,
 } from './composer-editor-gate';
@@ -54,6 +55,23 @@ describe('composer editor gate', () => {
     process.env[ENV_KEY] = COMPOSER_EDITOR_MODES.editor;
 
     expect(resolveComposerEditorEnabled()).toBe(true);
+  });
+
+  /**
+   * The two arms render different elements, so a server render that honoured a
+   * client-only override would hand the browser markup it never produced.
+   */
+  it('gives a server render the build default no matter what the overrides say', () => {
+    process.env[ENV_KEY] = COMPOSER_EDITOR_MODES.textarea;
+    window.localStorage.setItem(COMPOSER_EDITOR_STORAGE_KEY, COMPOSER_EDITOR_MODES.editor);
+    setQuery(COMPOSER_EDITOR_MODES.editor);
+
+    expect(resolveComposerEditorBuildMode()).toBe(COMPOSER_EDITOR_MODES.textarea);
+    expect(resolveComposerEditorMode()).toBe(COMPOSER_EDITOR_MODES.editor);
+  });
+
+  it('lands on the textarea when the build-time default names nothing', () => {
+    expect(resolveComposerEditorBuildMode()).toBe(COMPOSER_EDITOR_MODES.textarea);
   });
 
   it('falls through to the build-time default when storage is blocked', () => {
