@@ -67,6 +67,7 @@ import {
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
+import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import type { ResearchStep } from '@agiworkforce/types';
 import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
@@ -646,6 +647,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   }
   const appendToMessage = store.appendToMessage;
   const appendToThinking = store.appendToThinking;
+  const coalescedAppends = createFrameCoalescedAppender({
+    onFlush: (kind, messageId, text) => {
+      if (kind === 'thinking') {
+        appendToThinking(messageId, text, conversationId);
+        return;
+      }
+      appendToMessage(messageId, text, conversationId);
+    },
+  });
   const setSearching = store.setSearching;
   const setExecutingCode = store.setExecutingCode;
   const setSearchResults = store.setSearchResults;
@@ -750,6 +760,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   };
 
   const openThinkingSegment = () => {
+    coalescedAppends.flush();
     const startedAt = new Date().toISOString();
     thinkingStartedAt = startedAt;
     thinkingSegments.push({
@@ -765,7 +776,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const appendThinkingText = (text: string) => {
     thinkingContent += text;
-    appendToThinking(assistantMessageId, text, conversationId);
+    coalescedAppends.append('thinking', assistantMessageId, text);
     const seg = thinkingSegments[thinkingSegments.length - 1];
     if (seg) {
       seg.content += text;
@@ -774,6 +785,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   };
 
   const closeThinkingSegment = () => {
+    coalescedAppends.flush();
     const completedAt = new Date().toISOString();
     thinkingCompletedAt = completedAt;
     const seg = thinkingSegments[thinkingSegments.length - 1];
@@ -1038,14 +1050,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (!repaired) return;
       fullAssistantContent += repaired;
       unacknowledgedPublicText += repaired;
-      appendToMessage(assistantMessageId, repaired, conversationId);
+      coalescedAppends.append('content', assistantMessageId, repaired);
       return;
     }
 
     if (!text) return;
     fullAssistantContent += text;
     unacknowledgedPublicText += text;
-    appendToMessage(assistantMessageId, text, conversationId);
+    coalescedAppends.append('content', assistantMessageId, text);
   };
 
   const flushContentBuffer = (isFinal = false) => {
@@ -1094,6 +1106,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (isFinal && seamPending && seamBuffer) emitPublicText('', true);
       break;
     }
+    if (isFinal) coalescedAppends.flush();
   };
 
   if (toolTimeline.length > 0) publishToolTimeline();
@@ -1126,7 +1139,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           unacknowledgedPublicText = reconciled.pending;
           if (reconciled.unmatchedIncoming) {
             fullAssistantContent += reconciled.unmatchedIncoming;
-            appendToMessage(assistantMessageId, reconciled.unmatchedIncoming, conversationId);
+            coalescedAppends.append('content', assistantMessageId, reconciled.unmatchedIncoming);
           }
         }
         if (envelope.event.type === 'stop') {
@@ -1152,6 +1165,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       },
     });
 
+    coalescedAppends.flush();
     publishCloudRunReference({
       lastSequence: followed.lastSequence,
       state: followed.run.state,
@@ -1580,6 +1594,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             if (typeof reason === 'string' && reason) {
               finishReason = reason;
             }
+            coalescedAppends.flush();
             updateMessage(assistantMessageId, { isStreaming: false }, conversationId);
           }
         } catch {
@@ -1678,6 +1693,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     throw terminalError;
   } finally {
+    coalescedAppends.flush();
     await reader.cancel().catch(() => undefined);
   }
 }
