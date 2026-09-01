@@ -33,7 +33,10 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  color: var(--chat-accent-secondary);
+  /* The eyebrow is text on the page, not a label on a fill: the accent's fill
+     value measures 2.95:1 here. --chat-accent-primary-text is the de-emphasised
+     value tuned for this ground. */
+  color: var(--chat-accent-primary-text);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -87,7 +90,9 @@
 .primaryButton {
   border: 1px solid var(--chat-accent-primary);
   background: var(--chat-accent-primary);
-  color: white;
+  /* White on the primary fill measures 2.97:1. --chat-accent-on-primary is the
+     token that names the label colour drawn on that fill. */
+  color: var(--chat-accent-on-primary);
 }
 
 .secondaryButton,

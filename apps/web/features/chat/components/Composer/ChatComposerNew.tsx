@@ -2788,7 +2788,7 @@ const ChatComposerNewComponent = ({
                 className={cn(
                   'relative flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                   hasOverflowActive
-                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
+                    ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                   composerDisabled && 'cursor-not-allowed opacity-50',
                 )}

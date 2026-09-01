@@ -132,7 +132,7 @@ export function StyleSelector() {
         className={cn(
           'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
           isActive
-            ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)] ring-1 ring-[var(--chat-accent-primary)]/30'
+            ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)] ring-1 ring-[var(--chat-accent-primary)]/30'
             : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
         )}
         aria-label="Response style"
