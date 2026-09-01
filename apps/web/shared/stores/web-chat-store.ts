@@ -1559,3 +1559,21 @@ export const selectSelectedModel = (state: ChatState) => state.selectedModel;
 export const selectSelectedModelTier = (state: ChatState) => state.selectedModelTier;
 export const selectError = (state: ChatState) => state.error;
 export const selectSidebarCollapsed = (state: ChatState) => state.sidebarCollapsed;
+/** Subscribable form of `getDraftContent`, with the same key resolution. */
+export const selectDraftContent =
+  (conversationId?: string | null) =>
+  (state: ChatState): string =>
+    state.draftsByConversation[
+      conversationKey(conversationId === undefined ? state.activeConversationId : conversationId)
+    ] ?? '';
+
+/**
+ * Hand text back to the user after a send that never reached a model. An
+ * existing draft wins: whatever they have typed since is newer than this.
+ */
+export function parkUnsentDraft(conversationId: string | null, content: string): void {
+  if (!content.trim()) return;
+  const state = useChatStore.getState();
+  if (state.draftsByConversation[conversationKey(conversationId)]) return;
+  state.setDraftContent(content, conversationId);
+}
