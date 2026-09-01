@@ -100,6 +100,7 @@ for (const file of listFilesRecursive('tasks/team-status')) {
 
 const allowedLiveNonMarkdownPrefixes = [
   'docs/agent-context/',
+  'docs/research/evidence/',
   'apps/desktop/docs/qa/',
   'apps/extension-vscode/docs/preview/',
   'docs/remediation/',
