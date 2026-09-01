@@ -119,18 +119,6 @@ export {
   AlertDialogCancel,
 } from './AlertDialog';
 export { Popover, PopoverTrigger, PopoverContent } from './Popover';
-export {
-  type ToastProps,
-  type ToastActionElement,
-  ToastProvider,
-  ToastViewport,
-  Toast,
-  ToastTitle,
-  ToastDescription,
-  ToastClose,
-  ToastAction,
-  ToastIcon,
-} from './Toast';
 export { Label } from './Label';
 export { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from './Accordion';
 export { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';

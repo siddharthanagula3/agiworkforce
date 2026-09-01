@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { isElectronHost, isTauri } from '../../lib/tauri-mock';
-import { useToast } from '../../hooks/useToast';
 import { useUpdater } from './useUpdater';
 import { useUpdaterStore, waitForUpdaterHydration } from '../../stores/updaterStore';
-import { ToastAction } from '@/ui/Toast';
 import { UpdateDialog } from './UpdateDialog';
+
+const PERSIST_UNTIL_DISMISSED_MS = Number.POSITIVE_INFINITY;
 
 interface UpdateCheckerProps {
   startupDelay?: number;
@@ -12,7 +13,6 @@ interface UpdateCheckerProps {
 }
 
 export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateCheckerProps) {
-  const { toast } = useToast();
   const { checkForUpdates, updateInfo, status } = useUpdater();
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -26,38 +26,28 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
 
   const showUpdateToast = useCallback(
     (version: string) => {
-      toast({
-        title: 'Update Available',
+      toast('Update Available', {
         description: `Version ${version} is ready to download.`,
-        duration: Infinity, // Keep open until user interacts
-        action: (
-          <div className="flex gap-2">
-            <ToastAction
-              altText="Later"
-              onClick={() => {
-                dismissUpdate(version);
-              }}
-            >
-              Later
-            </ToastAction>
-            <ToastAction
-              altText={isElectronHost ? 'Download Installer' : 'Update Now'}
-              onClick={() => {
-                if (onUpdateNow) {
-                  onUpdateNow();
-                } else {
-                  setDialogOpen(true);
-                }
-              }}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {isElectronHost ? 'Download Installer' : 'Update Now'}
-            </ToastAction>
-          </div>
-        ),
+        duration: PERSIST_UNTIL_DISMISSED_MS,
+        cancel: {
+          label: 'Later',
+          onClick: () => {
+            dismissUpdate(version);
+          },
+        },
+        action: {
+          label: isElectronHost ? 'Download Installer' : 'Update Now',
+          onClick: () => {
+            if (onUpdateNow) {
+              onUpdateNow();
+            } else {
+              setDialogOpen(true);
+            }
+          },
+        },
       });
     },
-    [toast, dismissUpdate, onUpdateNow],
+    [dismissUpdate, onUpdateNow],
   );
 
   useEffect(() => {

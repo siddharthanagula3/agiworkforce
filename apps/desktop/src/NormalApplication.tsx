@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import App from './App';
-import { Toaster } from './ui/Toaster';
 import { TooltipProvider } from './ui/Tooltip';
 import { I18nProvider } from './providers/I18nProvider';
 import { ThemeProvider, useThemeContext } from './providers/ThemeProvider';
@@ -14,18 +13,9 @@ function useSonnerTheme(): 'light' | 'dark' | 'system' {
   return getThemeById(theme)?.variant ?? 'dark';
 }
 
-function AppToasters() {
+function AppToaster() {
   const sonnerTheme = useSonnerTheme();
-  return (
-    <>
-      <Toaster />
-      {/*
-        Several modules call sonner's toast API directly. Its own Toaster is
-        intentionally mounted beside the app's custom Toaster.
-      */}
-      <SonnerToaster richColors position="bottom-right" theme={sonnerTheme} />
-    </>
-  );
+  return <SonnerToaster richColors position="bottom-right" theme={sonnerTheme} />;
 }
 
 export default function NormalApplication() {
@@ -40,7 +30,7 @@ export default function NormalApplication() {
       <ThemeProvider defaultTheme="dark" storageKey="agiworkforce-theme">
         <TooltipProvider>
           <App />
-          <AppToasters />
+          <AppToaster />
           <div
             role="status"
             aria-live="polite"
