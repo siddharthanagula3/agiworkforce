@@ -818,6 +818,7 @@ const VirtualizedTranscriptRow = ({
 };
 
 const SCROLL_THRESHOLD_PX = 120;
+const ANCHOR_SETTLE_TIMEOUT_MS = 1000;
 const DEFAULT_TRANSCRIPT_ROW_HEIGHT = 160;
 const DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT = 640;
 
@@ -1110,6 +1111,8 @@ const ChatMessageListComponent = ({
 
   const scrollFrameRef = useRef<number | null>(null);
   const pendingScrollBehaviorRef = useRef<ScrollBehavior>('smooth');
+  const anchoringRef = useRef(false);
+  const anchorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const requestScrollToBottom = useCallback(
     (behavior: ScrollBehavior) => {
@@ -1127,22 +1130,54 @@ const ChatMessageListComponent = ({
     [scrollToBottom],
   );
 
+  const stopAnchoring = useCallback(() => {
+    anchoringRef.current = false;
+    if (anchorTimerRef.current === null) return;
+    clearTimeout(anchorTimerRef.current);
+    anchorTimerRef.current = null;
+  }, []);
+
+  /**
+   * Returning to the live answer is an intent, not a single jump. The rows the
+   * reader scrolled past are unmounted, so the list scrolls to where it
+   * *estimates* the bottom is; they then mount, measure taller, and the bottom
+   * moves further down. The corrective pass that follows every measurement is
+   * the layout effect below, and it is gated on `userScrolledUp` — so the
+   * control has to clear that flag, and the scroll events its own scrolling
+   * raises must not set it again before the content has stopped growing.
+   */
+  const followBottom = useCallback(
+    (behavior: ScrollBehavior) => {
+      anchoringRef.current = true;
+      if (anchorTimerRef.current !== null) clearTimeout(anchorTimerRef.current);
+      anchorTimerRef.current = setTimeout(stopAnchoring, ANCHOR_SETTLE_TIMEOUT_MS);
+      setUserScrolledUp(false);
+      requestScrollToBottom(behavior);
+    },
+    [requestScrollToBottom, stopAnchoring],
+  );
+
   useEffect(
     () => () => {
       if (scrollFrameRef.current !== null && typeof window !== 'undefined') {
         window.cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = null;
       }
+      stopAnchoring();
     },
-    [],
+    [stopAnchoring],
   );
 
   const handleScroll = useCallback(() => {
     const el = listApiRef.current?.element;
     if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setUserScrolledUp(distanceFromBottom > SCROLL_THRESHOLD_PX);
-  }, []);
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= SCROLL_THRESHOLD_PX;
+    if (anchoringRef.current) {
+      if (!atBottom) return;
+      stopAnchoring();
+    }
+    setUserScrolledUp(!atBottom);
+  }, [stopAnchoring]);
 
   const isStreamingNow = Boolean(lastMessage?.isStreaming);
   useEffect(() => {
@@ -1499,7 +1534,7 @@ const ChatMessageListComponent = ({
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
             <div className="pointer-events-auto">
               <ScrollToBottomButton
-                onClick={() => requestScrollToBottom(prefersReducedMotion ? 'auto' : 'smooth')}
+                onClick={() => followBottom(prefersReducedMotion ? 'auto' : 'smooth')}
               />
             </div>
           </div>
