@@ -80,6 +80,34 @@ const REASON_PHRASES = [
   'unknown error',
 ];
 
+/**
+ * Markers that say a string was written for an operator, not a reader: a hex
+ * trace or object id, a stack frame, a file path, a SQL fragment, or a bare
+ * exception class. Swept all 47 signed-in routes with the API forced to 500 and
+ * a message of "upstream exploded: trace 0xdeadbeef": it reached the screen on
+ * about twenty of them, four separate elements on /settings/account alone.
+ *
+ * The own-words rule is still right - "Model is overloaded" and "Provider down"
+ * beat any status sentence - so this narrows it rather than reversing it. A
+ * message keeps its words unless it is carrying something only an operator
+ * could use.
+ */
+const INTERNAL_MARKERS = [
+  /0x[0-9a-f]{4,}/i,
+  /\b[0-9a-f]{16,}\b/i,
+  /\bat\s+\S+\s+\(/,
+  /(^|\s)\/(usr|var|home|opt|tmp|Users)\//,
+  /\b[A-Za-z]:\\/,
+  /\b(SELECT|INSERT|UPDATE|DELETE)\s+.*\s+(FROM|INTO|SET)\b/i,
+  /\b\w*(Error|Exception)\b\s*:/,
+  /\bstack\s*trace\b/i,
+  /\b(ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EPIPE)\b/,
+];
+
+function looksInternal(message: string): boolean {
+  return INTERNAL_MARKERS.some((marker) => marker.test(message));
+}
+
 function isMachineShaped(message: string): boolean {
   if (/^\s*HTTP\s+\d{3}\b/.test(message)) return true;
   const normalised = message
@@ -104,7 +132,7 @@ export function toUserMessage(error: unknown, fallback: string): string {
   if (network) return network;
 
   const own = error instanceof Error ? error.message.trim() : '';
-  if (own && !isMachineShaped(own)) return own;
+  if (own && !isMachineShaped(own) && !looksInternal(own)) return own;
 
   return httpStatusMessage(statusOf(error)) ?? fallback;
 }

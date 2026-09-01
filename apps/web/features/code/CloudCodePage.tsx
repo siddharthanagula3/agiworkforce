@@ -33,9 +33,9 @@ import {
   cloudCodeApi,
   type CloudCodeAgentTurn,
   type CloudCodeApi,
-  CloudCodeApiError,
 } from './services/cloud-code-api';
 import styles from './CloudCodePage.module.css';
+import { toUserMessage } from '@/lib/user-error-message';
 
 const AGENT_MODEL_ID = getRoutingSlotModel('coding_balanced');
 
@@ -89,10 +89,11 @@ function describeRuntime(runtime: CloudCodeRuntime): string {
   return detail ? `${runtime.name} — ${detail}` : runtime.name;
 }
 
+// Named friendly but returning error.message verbatim: with a 500 carrying
+// "upstream exploded: trace 0xdeadbeef" that string rendered on the page.
+// toUserMessage keeps a sentence somebody wrote and drops operator detail.
 function friendlyError(error: unknown): string {
-  if (error instanceof CloudCodeApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return 'Something went wrong. Please retry.';
+  return toUserMessage(error, 'Something went wrong. Please retry.');
 }
 
 function agentOutcomeLabel(turn: CloudCodeAgentTurn): string {

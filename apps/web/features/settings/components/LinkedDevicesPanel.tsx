@@ -47,12 +47,20 @@ function describe(device: LinkedDevice): string {
 function readApiError(data: unknown, fallback: string): string {
   if (data === null || typeof data !== 'object' || !('error' in data)) return fallback;
   const error = (data as { error?: unknown }).error;
-  if (typeof error === 'string' && error.trim()) return error;
-  if (error !== null && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return fallback;
+  // The server's words reach the screen, so they pass the same filter the rest
+  // of the product uses: a sentence a person wrote survives, a trace id does
+  // not. Measured with a 500 carrying "upstream exploded: trace 0xdeadbeef".
+  const raw =
+    typeof error === 'string' && error.trim()
+      ? error
+      : error !== null &&
+          typeof error === 'object' &&
+          'message' in error &&
+          typeof (error as { message?: unknown }).message === 'string'
+        ? ((error as { message: string }).message ?? '')
+        : '';
+  if (!raw.trim()) return fallback;
+  return toUserMessage(new Error(raw), fallback);
 }
 
 const cell = { padding: '12px 16px', color: 'var(--text-3)', whiteSpace: 'nowrap' } as const;
