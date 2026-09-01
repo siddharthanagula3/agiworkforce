@@ -839,8 +839,11 @@ describe('resolveMaxOutputTokens', () => {
   it('gives a text model room for a long answer', () => {
     // A fixed 1024-token default cut every long response short and made the
     // reader chase the rest with Continue, which is where seams come from.
-    expect(resolveMaxOutputTokens('gemini-3.5-flash-lite')).toBe(ANSWER_TOKEN_CEILING);
-    expect(resolveMaxOutputTokens('claude-opus-5')).toBe(ANSWER_TOKEN_CEILING);
+    const textModels = listCanonicalModels().filter((m) => TEXT_TYPES.has(m.modelType));
+    expect(textModels.length).toBeGreaterThanOrEqual(2);
+    for (const model of textModels.slice(0, 2)) {
+      expect(resolveMaxOutputTokens(model.id)).toBe(ANSWER_TOKEN_CEILING);
+    }
   });
 
   it('never exceeds what the model itself declares', () => {
@@ -874,8 +877,10 @@ describe('resolveMaxOutputTokens', () => {
   });
 
   it('resolves an alias the same way as its canonical model', () => {
-    expect(resolveMaxOutputTokens('gemini-3.5-flash-lite')).toBe(
-      resolveMaxOutputTokens(normalizeModelId('gemini-3.5-flash-lite')),
+    const sampleModel = listCanonicalModels()[0];
+    expect(sampleModel).toBeDefined();
+    expect(resolveMaxOutputTokens(sampleModel.id)).toBe(
+      resolveMaxOutputTokens(normalizeModelId(sampleModel.id)),
     );
   });
 

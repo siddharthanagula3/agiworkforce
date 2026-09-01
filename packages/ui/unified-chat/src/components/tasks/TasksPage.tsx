@@ -405,8 +405,8 @@ export function TasksPage({ transport }: { transport: TasksTransport }) {
                   {/*
                     The action group is shrink-0, so on a phone it held its
                     width and left the details button 146px: the task title got
-                    31px of "AGI Work" and the model label 9px of "Gemini 3.5
-                    Flash-Lite". The actions drop to their own line instead.
+                    31px of "AGI Work" and the model label 9px of its display
+                    name. The actions drop to their own line instead.
                   */}
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <button
