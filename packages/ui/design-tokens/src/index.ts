@@ -163,10 +163,33 @@ export const agiTypography = {
   mono: "'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace",
 } as const;
 
+/**
+ * The four elevation rungs foundation.css owns, per theme. Three separate sets
+ * of shadow literals used to describe the same rungs and disagreed with each
+ * other and with the stylesheet; everything shadow-shaped now derives from here.
+ * Emitted literally for hosts that cannot import the stylesheet, so these must
+ * equal the rungs they mirror; asserted in
+ * apps/web/shared/components/__tests__/theme-contrast.test.ts.
+ */
+export const agiElevation = {
+  light: {
+    1: '0 1px 2px rgb(8 10 12 / 0.06)',
+    2: '0 2px 4px rgb(8 10 12 / 0.06), 0 4px 12px -4px rgb(8 10 12 / 0.1)',
+    3: '0 4px 8px rgb(8 10 12 / 0.06), 0 12px 32px -8px rgb(8 10 12 / 0.14)',
+    4: '0 8px 16px rgb(8 10 12 / 0.08), 0 24px 64px -12px rgb(8 10 12 / 0.2)',
+  },
+  dark: {
+    1: '0 1px 2px rgb(0 0 0 / 0.5)',
+    2: '0 2px 4px rgb(0 0 0 / 0.4), 0 4px 12px -4px rgb(0 0 0 / 0.6)',
+    3: '0 4px 8px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.7)',
+    4: '0 8px 16px rgb(0 0 0 / 0.45), 0 24px 64px -12px rgb(0 0 0 / 0.8)',
+  },
+} as const satisfies Record<AgiThemeMode, Record<1 | 2 | 3 | 4, string>>;
+
 export const agiShadows = {
-  sm: '0 1px 2px rgba(0, 0, 0, 0.04)',
-  md: '0 4px 16px rgba(0, 0, 0, 0.12)',
-  lg: '0 12px 32px rgba(0, 0, 0, 0.18)',
+  sm: agiElevation.light[1],
+  md: agiElevation.light[2],
+  lg: agiElevation.light[3],
 } as const;
 
 export const agiChatCssVars = {
@@ -248,9 +271,9 @@ export const agiChatCssVars = {
     '--chat-font-serif': agiTypography.serif,
     '--chat-font-display': agiTypography.display,
     '--chat-font-mono': agiTypography.mono,
-    '--chat-shadow-sm': '0 1px 2px rgba(0, 0, 0, 0.32)',
-    '--chat-shadow-md': '0 4px 16px rgba(0, 0, 0, 0.48)',
-    '--chat-shadow-lg': '0 12px 32px rgba(0, 0, 0, 0.56)',
+    '--chat-shadow-sm': agiElevation.dark[1],
+    '--chat-shadow-md': agiElevation.dark[2],
+    '--chat-shadow-lg': agiElevation.dark[3],
   },
 } as const satisfies Record<AgiThemeMode, CssVariableMap>;
 
