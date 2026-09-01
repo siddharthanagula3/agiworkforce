@@ -240,7 +240,14 @@ export function Menu({
       style={menuStyle}
       className={cn(
         portalled
-          ? 'fixed z-[9999]'
+          ? // pointer-events-auto is load-bearing inside a modal Radix dialog.
+            // The sidebar renders in a Sheet at narrow viewports, and Radix's
+            // dismissable layer sets `pointer-events: none` on <body> while it
+            // is open. This panel is portalled straight to <body>, outside that
+            // layer, so without saying so it inherits `none` and every row
+            // action — rename, delete, pin, move to project — renders and
+            // ignores the tap.
+            'pointer-events-auto fixed z-[9999]'
           : cn(
               'absolute z-50 mt-1 max-h-[min(24rem,60vh)]',
               side === 'top' ? 'bottom-full mb-1 mt-0' : 'top-full',
