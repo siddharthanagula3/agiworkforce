@@ -1,4 +1,5 @@
 import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
+import { removeComposerMentionQuery } from './mention-range';
 import type {
   ComposerMentionAttributes,
   ComposerMentionCommit,
@@ -18,7 +19,7 @@ export function createComposerMentionCommit(props: ComposerSuggestionProps): Com
   return {
     insertMention: (attributes) => props.command(attributes),
     removeQuery: () => {
-      props.editor.chain().deleteRange(props.range).run();
+      removeComposerMentionQuery(props.editor, props.range);
     },
   };
 }

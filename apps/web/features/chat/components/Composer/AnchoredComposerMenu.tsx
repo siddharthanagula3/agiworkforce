@@ -51,6 +51,12 @@ export interface AnchoredComposerMenuProps {
   className?: string;
   /** Announced name for the popup. Without it the panel is an unlabelled region. */
   label: string;
+  /**
+   * Moves focus to the first focusable row on open. Right for a menu opened by
+   * a click; wrong for one opened by typing, where taking focus off the input
+   * sends the rest of the user's keystrokes nowhere.
+   */
+  autoFocusFirstItem?: boolean;
   /** Escape and Tab-out close the popup through this. */
   onRequestClose?: () => void;
   children: React.ReactNode;
@@ -70,6 +76,7 @@ export function AnchoredComposerMenu({
   contentRef,
   className,
   label,
+  autoFocusFirstItem = true,
   onRequestClose,
   children,
 }: AnchoredComposerMenuProps) {
@@ -153,7 +160,7 @@ export function AnchoredComposerMenu({
   // The panel opened with no focus inside it and no Escape handling, so a
   // keyboard user could open it and neither reach its contents nor dismiss it.
   useEffect(() => {
-    if (!open || !mounted) return;
+    if (!open || !mounted || !autoFocusFirstItem) return;
     const node = contentRef?.current ?? internalRef.current;
     const id = window.setTimeout(() => {
       node
@@ -163,7 +170,7 @@ export function AnchoredComposerMenu({
         ?.focus();
     }, 0);
     return () => window.clearTimeout(id);
-  }, [open, mounted, contentRef]);
+  }, [open, mounted, contentRef, autoFocusFirstItem]);
 
   useEffect(() => {
     if (!open || !mounted || !onRequestClose) return;

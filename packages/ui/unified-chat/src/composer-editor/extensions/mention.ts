@@ -2,6 +2,7 @@ import Mention from '@tiptap/extension-mention';
 import { PluginKey } from '@tiptap/pm/state';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 import { matchMentionQuery } from '../../lib/mentionQuery';
+import { MENTION_LEAF_PLACEHOLDER } from '../mention-range';
 import { createComposerSuggestionRenderer } from '../suggestion-adapter';
 import type { ResolveComposerMentionMenu } from '../suggestion-adapter';
 import type { ComposerMentionAttributes, ComposerMentionConfig } from '../types';
@@ -11,7 +12,6 @@ export const COMPOSER_MENTION_TRIGGER_CHAR = '@';
 export const COMPOSER_MENTION_CLASS_NAME = 'composer-editor__mention';
 export const COMPOSER_MENTION_PLUGIN_KEY = new PluginKey('composerMention');
 
-const MENTION_LEAF_PLACEHOLDER = '\uFFFC';
 const DELETE_TRIGGER_WITH_BACKSPACE = true;
 const MENTION_TAG_NAME = 'span';
 const MENTION_TRAILING_SPACE = ' ';
