@@ -1,0 +1,44 @@
+.composer-editor {
+  position: relative;
+  width: 100%;
+}
+
+.composer-editor__placeholder {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  pointer-events: none;
+  user-select: none;
+  color: var(--chat-text-placeholder);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+
+.composer-editor .ProseMirror {
+  min-height: 52px;
+  max-height: 240px;
+  overflow-y: auto;
+  outline: none;
+  color: var(--chat-text-primary);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer-editor .ProseMirror p {
+  margin: 0;
+}
+
+.composer-editor--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.composer-editor__mention {
+  border: 1px solid var(--chat-border-strong);
+  border-radius: 0.25rem;
+  padding-inline: 0.125rem;
+  color: var(--chat-accent-primary-text);
+  white-space: nowrap;
+}
