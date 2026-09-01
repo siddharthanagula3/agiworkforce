@@ -217,6 +217,18 @@
       "verifiedBy": "live-openrouter-completion-through-both-router-routes",
       "status": "PASS",
       "notes": "Both router routes were exercised end to end against the live API after the account key was rotated. openrouter/auto returned HTTP 200 in 752ms and reported routing to deepseek/deepseek-v4-flash-0731, confirming the earlier note that the router itself publishes no rate and that metering must price the resolved model. openrouter/free returned HTTP 200 and routed to free members (nvidia/nemotron-3-super-120b-a12b:free, minimax/minimax-m2.7:free) with usage.cost 0, confirming the zero rating. Both free members are reasoning models whose reasoning tokens count against max_tokens: a 16-token cap returned empty content while a 200-token cap returned the expected text with finish_reason \"stop\" and 31 reasoning tokens. The product default is DEFAULT_MAX_OUTPUT_TOKENS 8192, so this is not reachable in normal use, but any caller that lowers the cap for a free-router turn must leave room for reasoning tokens."
+    },
+    {
+      "date": "2026-09-01",
+      "verifiedBy": "official-google-gemini-model-cards-and-pricing-table",
+      "status": "CORRECTION",
+      "notes": "Adjudicated three input-budget rows a litellm cross-check flagged, reading Google's own pages rather than either snapshot. gemini-3.1-pro-preview: the model card publishes an input token limit of 1,048,576 and an output token limit of 65,536, so the recorded 2,000,000 was wrong and the snapshot's 1,048,576 was right; corrected in models.synced.json, where models.dev already carried 1,048,576. Google markets this model at 1M scale and no 2,000,000 or 2,097,152 figure appears on the card or in its context-caching section. gemini-3.1-flash-image: the card publishes an input token limit of 131,072 and an output token limit of 32,768, so BOTH sides were wrong — the recorded 1,000,000 and litellm's 65,536. gemini-omni-flash-preview: no model card exists at that id (it 404s) and the models overview table lists only gemini-omni-1.1-flash; the pricing page carries the preview id as a billing SKU whose model-card link resolves to the shared Gemini Omni Flash card, which publishes a combined context window of 1,048,576 tokens. The recorded 4,000 was a video-model placeholder shared with the veo-3.1 rows and litellm's 131,072 matches nothing Google publishes. Prices on all three rows were re-read at the same time and are unchanged: gemini-3.1-pro-preview $2.00/$12.00 with $0.20 caching under 200k tokens and $4.00/$18.00/$0.40 above it; gemini-3.1-flash-image $0.50 input, $3.00 text output, $60.00 image output; gemini-omni-flash-preview $1.50 input, $9.00 text output, $17.50 video output. Sources retrieved 2026-09-01: https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/pricing, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image, https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash."
+    },
+    {
+      "date": "2026-09-01",
+      "verifiedBy": "official-deepseek-and-openai-pricing-pages",
+      "status": "CORRECTION",
+      "notes": "DeepSeek publishes a peak/off-peak rate card, and both V4 rows carried figures that match neither half of it. Peak is $0.44/$1.32 per 1M with a $0.014 cache hit for deepseek-v4-flash and $1.32/$3.96 with a $0.044 cache hit for deepseek-v4-pro; off-peak is exactly half of each, and peak hours are 01:00-04:00 and 06:00-10:00 UTC Monday through Friday. Both rows now carry the peak rate as a curation costOverride, because peak is the only figure never undercut on any date and the schema has no field for a time-of-day split; the same reasoning moved providers.deepseek.defaultPricing, the cost-calculator fallback for unrecognised deepseek ids, from $0.14/$0.28 to $0.44/$1.32. The prior values ($0.14/$0.28/$0.0028 for flash, $0.435/$0.87/$0.003625 for pro) came from models.dev, which still publishes them for the first-party deepseek provider; litellm's first-party deepseek entry independently agrees with the peak rate. The pro row additionally asserted that DeepSeek made a 75% launch discount permanent on 2026-05-22 — no discount, promotion or expiry language appears anywhere on DeepSeek's pricing page, so that claim is withdrawn. The override lives in curation rather than the synced snapshot so a later models.dev refresh cannot silently restore the undercharge. gpt-image-2 was checked in the same pass and is correct as recorded: OpenAI publishes an image row at $8.00 input, $2.00 cached input, $30.00 output and a separate text row at $5.00 input, $1.25 cached input, and this entry carries the image row throughout, so the $2.00 cache read stands and the $1.25 a snapshot reports is the text row. Sources retrieved 2026-09-01: https://api-docs.deepseek.com/quick_start/pricing and https://developers.openai.com/api/docs/pricing."
     }
   ],
   "providers": {
@@ -327,7 +339,7 @@
       "label": "DeepSeek",
       "sseDelimiter": "\n\n",
       "tokenMultiplier": { "prompt": 1.05, "completion": 1.05 },
-      "defaultPricing": { "inputPerMillion": 0.14, "outputPerMillion": 0.28 },
+      "defaultPricing": { "inputPerMillion": 0.44, "outputPerMillion": 1.32 },
       "modelPrefixes": ["deepseek"],
       "aliases": [],
       "defaultModel": "deepseek-v4-flash",
@@ -1045,7 +1057,7 @@
       "provider": "google",
       "modelType": "reasoning",
       "variantPartner": "gemini-3.5-flash-lite",
-      "contextWindow": 2000000,
+      "contextWindow": 1048576,
       "inputCost": 2,
       "outputCost": 12,
       "cached_input": 0.2,
@@ -1146,7 +1158,7 @@
       "name": "Gemini 3.1 Flash Image",
       "provider": "google",
       "modelType": "image",
-      "contextWindow": 1000000,
+      "contextWindow": 131072,
       "inputCost": 0.5,
       "outputCost": 60,
       "capabilities": {
@@ -1173,7 +1185,7 @@
       "imagePerImageCost": 0.067,
       "imageApi": "gemini",
       "imageOutputMimeType": "image/jpeg",
-      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0 — 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table.",
+      "pricingNote": "Input $0.50/1M (text/image). Output $3.00/1M for text and thinking, $60.00/1M for images. Image output bills by resolution: 0.5K = 747 tokens ($0.045), 1K = 1120 tokens ($0.067), 2K = 1680 tokens ($0.101), 4K = 2520 tokens ($0.151). `imagePerImageCost` carries the 1K rate. Prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 1,000,000 to 131,072: Google's model card publishes an input token limit of 131,072 and an output token limit of 32,768. litellm reports 65,536 and so will keep flagging this row — Google's card is the authority, not the snapshot. CORRECTED 2026-08-06: this entry previously read inputCost 0.039 / outputCost 0 — 0.039 is the RETIRED gemini-2.5-flash-image per-image rate sitting in a per-1M-token field, so every generation was metered at roughly a thousandth of cost and image output was billed as free. Sourced from the published Gemini API pricing table.",
       "openWeight": false,
       "license": "proprietary",
       "reasoning": { "capable": false, "control": "none" }
@@ -1187,9 +1199,9 @@
       "modelType": "code",
       "variantPartner": "deepseek-v4-pro",
       "contextWindow": 1000000,
-      "inputCost": 0.14,
-      "outputCost": 0.28,
-      "cached_input": 0.0028,
+      "inputCost": 0.44,
+      "outputCost": 1.32,
+      "cached_input": 0.014,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -1212,6 +1224,7 @@
       "bestFor": ["Cost-Effective", "Coding", "Long Context", "Multimodal", "High Volume"],
       "released": "April 2026",
       "deprecation_date": null,
+      "pricingNote": "DeepSeek bills V4 Flash on a peak/off-peak clock, not a flat rate: peak $0.44/1M input on a cache miss, $1.32/1M output, $0.014/1M cache hit, with off-peak exactly half at $0.22/$0.66/$0.007. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut on any date, and the schema has no field for a time-of-day split. CORRECTED 2026-09-01: this row previously read $0.14/$0.28 with cache read $0.0028, which matches no row on DeepSeek's table and is roughly a third of the peak rate. Those figures came from models.dev, which still publishes them for the first-party deepseek provider. Verified against https://api-docs.deepseek.com/quick_start/pricing, retrieved 2026-09-01; the page carries no discount, promotion or expiry language of any kind.",
       "openWeight": true,
       "license": "MIT",
       "reasoning": {
@@ -1239,9 +1252,9 @@
       "modelType": "reasoning",
       "variantPartner": "deepseek-v4-flash",
       "contextWindow": 1000000,
-      "inputCost": 0.435,
-      "outputCost": 0.87,
-      "cached_input": 0.003625,
+      "inputCost": 1.32,
+      "outputCost": 3.96,
+      "cached_input": 0.044,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -1270,7 +1283,7 @@
       ],
       "released": "April 2026",
       "deprecation_date": null,
-      "pricingNote": "DeepSeek made its 75% V4-Pro launch discount permanent on 2026-05-22: flat $0.435/$0.87 per 1M tokens, cache-read $0.003625. No post-promo reversion.",
+      "pricingNote": "DeepSeek bills V4 Pro on a peak/off-peak clock, not a flat rate: peak $1.32/1M input on a cache miss, $3.96/1M output, $0.044/1M cache hit, with off-peak exactly half at $0.66/$1.98/$0.022. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut on any date, and the schema has no field for a time-of-day split. CORRECTED 2026-09-01: this row previously read $0.435/$0.87 with cache read $0.003625 and asserted that DeepSeek made a 75% launch discount permanent on 2026-05-22. DeepSeek's own pricing page carries no discount, promotion or expiry language, and none of those three figures matches any published row; they came from models.dev, which still publishes them for the first-party deepseek provider. Verified against https://api-docs.deepseek.com/quick_start/pricing, retrieved 2026-09-01.",
       "openWeight": true,
       "license": "MIT",
       "reasoning": {
@@ -1657,7 +1670,7 @@
       "released": "April 2026",
       "deprecation_date": null,
       "imageApi": "openai",
-      "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high.",
+      "pricingNote": "OpenAI image generation guide uses a calculator for gpt-image-2 output-token/cost estimation; common 1024x1024 estimates are $0.006 low, $0.053 medium, and $0.211 high. OpenAI publishes two separate per-1M-token rows for this model: an image row at $8.00 input, $2.00 cached input, $30.00 output, and a text row at $5.00 input, $1.25 cached input, no output price. This entry carries the image row throughout, so a cache read of $2.00 is correct and a third-party snapshot reporting $1.25 is quoting the text row rather than contradicting it — litellm exposes only the text cache-read field, so it will keep reporting this row as drift. Verified against https://developers.openai.com/api/docs/pricing, retrieved 2026-09-01.",
       "reasoning": { "capable": false, "control": "none" }
     },
     "gpt-4o-mini-tts": {
@@ -2279,7 +2292,7 @@
       "name": "Gemini Omni Flash",
       "provider": "google",
       "modelType": "video",
-      "contextWindow": 4000,
+      "contextWindow": 1048576,
       "inputCost": 1.5,
       "outputCost": 17.5,
       "capabilities": {
@@ -2304,7 +2317,7 @@
       "released": "June 2026",
       "deprecation_date": null,
       "videoPerSecondCost": 0.1,
-      "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06.",
+      "pricingNote": "Paid tier only (no free tier). Input $1.50/1M (text/image/video/audio); output $9.00/1M text and $17.50/1M video. Video output bills at 5,792 tokens per second of 720p, an effective ~$0.10 per second. Sourced from the published Gemini API pricing table, 2026-08-06; prices re-read 2026-09-01 and unchanged. Input budget CORRECTED 2026-09-01 from 4,000 to 1,048,576, the context window Google publishes on the shared Gemini Omni Flash model card that this preview SKU's pricing entry links to — no model card exists at the preview id itself, and 4,000 was a placeholder shared with the veo-3.1 rows. litellm holds two entries for this model that disagree with each other: its gemini/ entry says 131,072 and its vertex_ai-language-models entry says 1,048,576, so the drift check will keep flagging the first one.",
       "availability": "preview",
       "reasoning": { "capable": false, "control": "none" }
     },

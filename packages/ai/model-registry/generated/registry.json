@@ -2231,16 +2231,16 @@
     "deepseek-v4-flash": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.14,
-      "outputPerMillion": 0.28,
-      "cacheReadPerMillion": 0.0028
+      "inputPerMillion": 0.44,
+      "outputPerMillion": 1.32,
+      "cacheReadPerMillion": 0.014
     },
     "deepseek-v4-pro": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.435,
-      "outputPerMillion": 0.87,
-      "cacheReadPerMillion": 0.003625
+      "inputPerMillion": 1.32,
+      "outputPerMillion": 3.96,
+      "cacheReadPerMillion": 0.044
     },
     "qwen-3.5-flash": {
       "currency": "USD",
@@ -2485,9 +2485,9 @@
       "knowledgeCutoff": "2026-01"
     },
     "gemini-embedding-2": { "contextTokens": 8192, "maxInputTokens": 8192 },
-    "gemini-3.1-pro-preview": { "contextTokens": 2000000 },
+    "gemini-3.1-pro-preview": { "contextTokens": 1048576 },
     "gemini-3.5-flash-lite": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
-    "gemini-3.1-flash-image": { "contextTokens": 1000000 },
+    "gemini-3.1-flash-image": { "contextTokens": 131072 },
     "deepseek-v4-flash": { "contextTokens": 1000000 },
     "deepseek-v4-pro": { "contextTokens": 1000000 },
     "qwen-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
@@ -2636,7 +2636,7 @@
         "supportsSeed": true
       }
     },
-    "gemini-omni-flash-preview": { "contextTokens": 4000 },
+    "gemini-omni-flash-preview": { "contextTokens": 1048576 },
     "gemini-3.5-live-translate-preview": { "contextTokens": 32000 },
     "openrouter-auto": { "contextTokens": 2000000 },
     "openrouter-free": { "contextTokens": 200000 },
@@ -2941,6 +2941,20 @@
       "verifiedBy": "live-openrouter-completion-through-both-router-routes",
       "status": "PASS",
       "notes": "Both router routes were exercised end to end against the live API after the account key was rotated. openrouter/auto returned HTTP 200 in 752ms and reported routing to deepseek/deepseek-v4-flash-0731, confirming the earlier note that the router itself publishes no rate and that metering must price the resolved model. openrouter/free returned HTTP 200 and routed to free members (nvidia/nemotron-3-super-120b-a12b:free, minimax/minimax-m2.7:free) with usage.cost 0, confirming the zero rating. Both free members are reasoning models whose reasoning tokens count against max_tokens: a 16-token cap returned empty content while a 200-token cap returned the expected text with finish_reason \"stop\" and 31 reasoning tokens. The product default is DEFAULT_MAX_OUTPUT_TOKENS 8192, so this is not reachable in normal use, but any caller that lowers the cap for a free-router turn must leave room for reasoning tokens."
+    },
+    {
+      "id": "verification/2026-09-01/37",
+      "date": "2026-09-01",
+      "verifiedBy": "official-google-gemini-model-cards-and-pricing-table",
+      "status": "CORRECTION",
+      "notes": "Adjudicated three input-budget rows a litellm cross-check flagged, reading Google's own pages rather than either snapshot. gemini-3.1-pro-preview: the model card publishes an input token limit of 1,048,576 and an output token limit of 65,536, so the recorded 2,000,000 was wrong and the snapshot's 1,048,576 was right; corrected in models.synced.json, where models.dev already carried 1,048,576. Google markets this model at 1M scale and no 2,000,000 or 2,097,152 figure appears on the card or in its context-caching section. gemini-3.1-flash-image: the card publishes an input token limit of 131,072 and an output token limit of 32,768, so BOTH sides were wrong — the recorded 1,000,000 and litellm's 65,536. gemini-omni-flash-preview: no model card exists at that id (it 404s) and the models overview table lists only gemini-omni-1.1-flash; the pricing page carries the preview id as a billing SKU whose model-card link resolves to the shared Gemini Omni Flash card, which publishes a combined context window of 1,048,576 tokens. The recorded 4,000 was a video-model placeholder shared with the veo-3.1 rows and litellm's 131,072 matches nothing Google publishes. Prices on all three rows were re-read at the same time and are unchanged: gemini-3.1-pro-preview $2.00/$12.00 with $0.20 caching under 200k tokens and $4.00/$18.00/$0.40 above it; gemini-3.1-flash-image $0.50 input, $3.00 text output, $60.00 image output; gemini-omni-flash-preview $1.50 input, $9.00 text output, $17.50 video output. Sources retrieved 2026-09-01: https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/pricing, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image, https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash."
+    },
+    {
+      "id": "verification/2026-09-01/38",
+      "date": "2026-09-01",
+      "verifiedBy": "official-deepseek-and-openai-pricing-pages",
+      "status": "CORRECTION",
+      "notes": "DeepSeek publishes a peak/off-peak rate card, and both V4 rows carried figures that match neither half of it. Peak is $0.44/$1.32 per 1M with a $0.014 cache hit for deepseek-v4-flash and $1.32/$3.96 with a $0.044 cache hit for deepseek-v4-pro; off-peak is exactly half of each, and peak hours are 01:00-04:00 and 06:00-10:00 UTC Monday through Friday. Both rows now carry the peak rate as a curation costOverride, because peak is the only figure never undercut on any date and the schema has no field for a time-of-day split; the same reasoning moved providers.deepseek.defaultPricing, the cost-calculator fallback for unrecognised deepseek ids, from $0.14/$0.28 to $0.44/$1.32. The prior values ($0.14/$0.28/$0.0028 for flash, $0.435/$0.87/$0.003625 for pro) came from models.dev, which still publishes them for the first-party deepseek provider; litellm's first-party deepseek entry independently agrees with the peak rate. The pro row additionally asserted that DeepSeek made a 75% launch discount permanent on 2026-05-22 — no discount, promotion or expiry language appears anywhere on DeepSeek's pricing page, so that claim is withdrawn. The override lives in curation rather than the synced snapshot so a later models.dev refresh cannot silently restore the undercharge. gpt-image-2 was checked in the same pass and is correct as recorded: OpenAI publishes an image row at $8.00 input, $2.00 cached input, $30.00 output and a separate text row at $5.00 input, $1.25 cached input, and this entry carries the image row throughout, so the $2.00 cache read stands and the $1.25 a snapshot reports is the text row. Sources retrieved 2026-09-01: https://api-docs.deepseek.com/quick_start/pricing and https://developers.openai.com/api/docs/pricing."
     }
   ],
   "families": {
