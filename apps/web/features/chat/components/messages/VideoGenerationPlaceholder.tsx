@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Video, X } from 'lucide-react';
+import { Video, X } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 

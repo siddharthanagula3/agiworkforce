@@ -3,23 +3,23 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
+  Ban,
+  BookOpen,
+  Check,
   ChevronRight,
   CircleCheck,
-  GitBranch,
-  FileText,
-  FilePlus2,
-  FilePen,
-  SquareTerminal,
-  FolderOpen,
-  Globe,
-  BookOpen,
-  Search,
   ExternalLink,
-  Plug,
-  Check,
-  Ban,
+  FilePen,
+  FilePlus2,
+  FileText,
+  FolderOpen,
+  GitBranch,
+  Globe,
   HelpCircle,
-} from 'lucide-react';
+  Plug,
+  Search,
+  TerminalSquare,
+} from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
 import { FileTypeIcon } from './FileTypeIcon';
@@ -73,7 +73,7 @@ function getToolIcon(toolName: string, filename?: string | null): IconComponent 
     n.includes('terminal') ||
     n.includes('script')
   ) {
-    return SquareTerminal;
+    return TerminalSquare;
   }
   if (n.includes('list') || n.includes('ls') || n.includes('dir')) {
     return FolderOpen;

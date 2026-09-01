@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Code2, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, CircleCheck, CircleX, Code2 } from '@agiworkforce/icons';
+import { Spinner } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface CodeExecutionResult {
@@ -55,11 +56,11 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
         <Code2 className="h-4 w-4 shrink-0 text-violet-400" />
         <span className="font-medium text-foreground/80 flex-1">Code Execution</span>
         {isExecuting ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" />
+          <Spinner className="h-3.5 w-3.5 text-violet-400" />
         ) : success ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+          <CircleCheck className="h-3.5 w-3.5 text-green-500" />
         ) : result ? (
-          <XCircle className="h-3.5 w-3.5 text-red-500" />
+          <CircleX className="h-3.5 w-3.5 text-red-500" />
         ) : null}
         {hasOutput ? (
           expanded ? (

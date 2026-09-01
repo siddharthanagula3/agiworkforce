@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, X } from '@agiworkforce/icons';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 

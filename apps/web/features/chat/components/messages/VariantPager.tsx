@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from '@agiworkforce/icons';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { ACTION_BUTTON_SIZE } from './messageActionRow';

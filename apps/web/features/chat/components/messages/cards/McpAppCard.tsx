@@ -11,7 +11,8 @@ import {
   type McpUiResourceCsp,
   type McpUiResourcePermissions,
 } from '@modelcontextprotocol/ext-apps/app-bridge';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { TriangleAlert } from '@agiworkforce/icons';
+import { Spinner } from '@agiworkforce/ui';
 
 import type { McpAppCardBody } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
@@ -286,12 +287,12 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
     <section className="my-2 overflow-hidden rounded-xl border border-border bg-card">
       {status === 'loading' ? (
         <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading MCP App…
+          <Spinner size="sm" aria-hidden="true" /> Loading MCP App…
         </div>
       ) : null}
       {status === 'error' ? (
         <div className="flex gap-2 px-4 py-3 text-sm text-muted-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{error ?? 'MCP App failed to load'}</span>
         </div>
       ) : null}

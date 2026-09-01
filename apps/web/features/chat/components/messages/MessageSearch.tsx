@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, X } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 
 export interface MessageSearchProps {

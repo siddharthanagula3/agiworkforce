@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { LucideIcon } from 'lucide-react';
+import type { Icon } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 
 export type TranscriptNoticeTone = 'danger' | 'neutral';
@@ -10,12 +10,12 @@ export type TranscriptNoticeSurface = 'framed' | 'bare';
 export interface TranscriptNoticeAction {
   label: string;
   ariaLabel: string;
-  icon?: LucideIcon;
+  icon?: Icon;
   onClick: () => void;
 }
 
 export interface TranscriptNoticeProps {
-  icon: LucideIcon;
+  icon: Icon;
   message: React.ReactNode;
   tone?: TranscriptNoticeTone;
   surface?: TranscriptNoticeSurface;
