@@ -333,8 +333,15 @@ describe('managed-cloud conversation wire contract', () => {
     expect(ManagedCloudUpdateConversationRequestSchema.parse({ pinned: true })).toEqual({
       pinned: true,
     });
+    // The same three-way as parentId above: absent leaves the recorded leaf
+    // alone, null returns the conversation to its linear reading, and the two
+    // cannot collapse.
     expect(
-      ManagedCloudUpdateConversationRequestSchema.safeParse({ activeLeafMessageId: null }).success,
+      ManagedCloudUpdateConversationRequestSchema.parse({ activeLeafMessageId: null }),
+    ).toEqual({ activeLeafMessageId: null });
+    expect(
+      ManagedCloudUpdateConversationRequestSchema.safeParse({ activeLeafMessageId: 'not-a-uuid' })
+        .success,
     ).toBe(false);
   });
 
@@ -348,6 +355,14 @@ describe('managed-cloud conversation wire contract', () => {
     expect(managedCloudConversationBranchesPath('conversation/id')).toBe(
       '/api/chat/conversations/conversation%2Fid/branches',
     );
+  });
+
+  it('asks for the subtree mode in the form the delete route reads', () => {
+    const spliced = managedCloudMessagePath('c1', 'm1');
+
+    expect(managedCloudMessagePath('c1', 'm1', { subtree: true })).toBe(`${spliced}?subtree=true`);
+    expect(managedCloudMessagePath('c1', 'm1', { subtree: false })).toBe(spliced);
+    expect(managedCloudMessagePath('c1', 'm1', {})).toBe(spliced);
   });
 
   it('validates the owner-scoped conversation branch envelopes', () => {

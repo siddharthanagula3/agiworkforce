@@ -25,30 +25,30 @@ import {
 } from '@agiworkforce/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import {
-  Copy,
+  Brain,
   Check,
   ChevronDown,
   ChevronRight,
-  Sparkles,
-  Brain,
-  MoreHorizontal,
-  Pin,
-  Pencil,
-  RefreshCw,
-  Trash2,
-  ThumbsUp,
-  ThumbsDown,
-  GitFork,
-  FileText,
-  File,
-  ImageOff,
-  ZoomIn,
-  Volume2,
-  Square,
+  CircleAlert,
+  Copy,
   Download,
+  File,
+  FileText,
   Flag,
-  AlertCircle,
-} from 'lucide-react';
+  GitFork,
+  ImageOff,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  RefreshCw,
+  Sparkles,
+  Square,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
+  Volume2,
+  ZoomIn,
+} from '@agiworkforce/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +59,7 @@ import {
 import { cn } from '@shared/lib/utils';
 import type { VariantInfo } from '@/features/chat/lib/messageThread';
 import { ACTION_BUTTON_SIZE } from './messageActionRow';
+import { variantDeleteConfirm } from './variantDeleteConfirm';
 import { VariantPager } from './VariantPager';
 import { toast } from 'sonner';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -485,6 +486,18 @@ interface MessageBubbleProps {
   /** True while a research retry or approved start for THIS message is in flight. */
   isRetryingResearch?: boolean;
   onDelete?: (messageId: string) => void;
+  /**
+   * Delete this response and everything that continued from it, leaving its
+   * siblings in place. Only offered on a message that has siblings; absent when
+   * the surface cannot delete variants.
+   */
+  onDeleteVariant?: (messageId: string) => void;
+  /**
+   * How many rows continue from this one, for the confirm copy. Read at confirm
+   * time rather than passed as a value, so the walk costs one click rather than
+   * one render of every message on the path.
+   */
+  countVariantFollowers?: (messageId: string) => number;
   onPin?: (messageId: string) => void;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onBranch?: (messageId: string) => void;
@@ -541,6 +554,8 @@ const MessageBubbleComponent = function MessageBubble({
   onResearchPlanDecision,
   isRetryingResearch = false,
   onDelete,
+  onDeleteVariant,
+  countVariantFollowers,
   onPin,
   onBranch,
   isBranching = false,
@@ -616,6 +631,30 @@ const MessageBubbleComponent = function MessageBubble({
       if (confirmed) onDelete(message.id);
     })();
   }, [confirmDestructive, isUser, message.id, onDelete]);
+
+  /**
+   * Deleting one answer among several, which the plain delete above cannot
+   * express: that one splices, leaving the exchange this answer produced hanging
+   * off the question as if it had answered it. This takes the whole branch.
+   *
+   * Offered only where both halves of the contract are present — a surface that
+   * cannot count what goes with the response would confirm a promise it has not
+   * checked.
+   */
+  const canDeleteVariant =
+    Boolean(onDeleteVariant && countVariantFollowers) && !isUser && (variantInfo?.total ?? 0) > 1;
+  const handleDeleteVariantWithConfirm = useCallback(() => {
+    if (!onDeleteVariant || !countVariantFollowers || !variantInfo) return;
+    void (async () => {
+      const confirmed = await confirmDestructive(
+        variantDeleteConfirm({
+          followerCount: countVariantFollowers(message.id),
+          siblingCount: variantInfo.total - 1,
+        }),
+      );
+      if (confirmed) onDeleteVariant(message.id);
+    })();
+  }, [confirmDestructive, countVariantFollowers, message.id, onDeleteVariant, variantInfo]);
 
   // ---- Inline edit (CLR-05) -------------------------------------------------
   // `beginEdit` runs the surface's guards and answers whether the editor may
@@ -1575,7 +1614,7 @@ const MessageBubbleComponent = function MessageBubble({
               <TranscriptNotice
                 surface="bare"
                 role="status"
-                icon={AlertCircle}
+                icon={CircleAlert}
                 message="The model finished without returning a response. Use Regenerate below to run it again."
               />
             ) : (
@@ -2070,7 +2109,7 @@ const MessageBubbleComponent = function MessageBubble({
               data-testid="fallback-reason-notice"
               className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
             >
-              <AlertCircle className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
+              <CircleAlert className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
               <span className="flex-1">{fallbackNotice}</span>
               <button
                 type="button"
@@ -2386,17 +2425,24 @@ const MessageBubbleComponent = function MessageBubble({
                         </div>
                       </>
                     ) : null}
+                    {(onDelete || canDeleteVariant) && <DropdownMenuSeparator />}
+                    {canDeleteVariant && (
+                      <DropdownMenuItem
+                        onClick={handleDeleteVariantWithConfirm}
+                        className="text-danger focus:text-danger"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Delete this response and what follows
+                      </DropdownMenuItem>
+                    )}
                     {onDelete && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={handleDeleteWithConfirm}
-                          className="text-danger focus:text-danger"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                          Delete
-                        </DropdownMenuItem>
-                      </>
+                      <DropdownMenuItem
+                        onClick={handleDeleteWithConfirm}
+                        className="text-danger focus:text-danger"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                        Delete
+                      </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -2592,6 +2638,8 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onEdit !== next.onEdit) return false;
   if (prev.onRegenerate !== next.onRegenerate) return false;
   if (prev.onDelete !== next.onDelete) return false;
+  if (prev.onDeleteVariant !== next.onDeleteVariant) return false;
+  if (prev.countVariantFollowers !== next.countVariantFollowers) return false;
   if (prev.onPin !== next.onPin) return false;
   if (prev.onReact !== next.onReact) return false;
   if (prev.onBranch !== next.onBranch) return false;

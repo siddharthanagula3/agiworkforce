@@ -280,3 +280,148 @@ describe('web chat store — message thread', () => {
     expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['u1', 'a1']);
   });
 });
+
+describe('web chat store — deleting a message from the tree', () => {
+  const branched = () => [
+    message('u1', { parentId: null, minute: 0 }),
+    message('a1', { parentId: 'u1', minute: 1, role: 'assistant' }),
+    message('a1b', { parentId: 'u1', minute: 2, role: 'assistant' }),
+    message('u2', { parentId: 'a1b', minute: 3 }),
+    message('a2', { parentId: 'u2', minute: 4, role: 'assistant' }),
+  ];
+
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  describe('deleteMessage (splice)', () => {
+    it('hands the deleted row children to its own parent, so the turns close up', () => {
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, branched(), 'a2');
+
+      useChatStore.getState().deleteMessage('u2', CONVERSATION_ID);
+
+      expect(
+        selectConversationAllRows(CONVERSATION_ID)(useChatStore.getState()).map((m) => [
+          m.id,
+          m.parentId ?? null,
+        ]),
+      ).toEqual([
+        ['u1', null],
+        ['a1', 'u1'],
+        ['a1b', 'u1'],
+        ['a2', 'a1b'],
+      ]);
+      expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['u1', 'a1b', 'a2']);
+    });
+
+    it('moves a reader standing on the deleted row up to its parent', () => {
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, branched(), 'a2');
+
+      useChatStore.getState().deleteMessage('a2', CONVERSATION_ID);
+
+      expect(selectActiveLeafId(CONVERSATION_ID)(useChatStore.getState())).toBe('u2');
+      expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['u1', 'a1b', 'u2']);
+    });
+
+    it('leaves a reader standing anywhere else where they are', () => {
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, branched(), 'a2');
+
+      useChatStore.getState().deleteMessage('a1', CONVERSATION_ID);
+
+      expect(selectActiveLeafId(CONVERSATION_ID)(useChatStore.getState())).toBe('a2');
+      expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['u1', 'a1b', 'u2', 'a2']);
+    });
+
+    it('costs a linear conversation nothing but the row', () => {
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, linearRows());
+
+      useChatStore.getState().deleteMessage('u2', CONVERSATION_ID);
+
+      expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['u1', 'a1', 'a2']);
+      expect(selectActiveLeafId(CONVERSATION_ID)(useChatStore.getState())).toBeNull();
+    });
+
+    it('leaves the bucket identity alone for an id this conversation never had', () => {
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, branched(), 'a2');
+      const before = selectConversationAllRows(CONVERSATION_ID)(useChatStore.getState());
+
+      useChatStore.getState().deleteMessage('never-loaded', CONVERSATION_ID);
+
+      expect(selectConversationAllRows(CONVERSATION_ID)(useChatStore.getState())).toBe(before);
+    });
+
+    it('deletes out of the conversation named, not the one on screen', () => {
+      const store = useChatStore.getState();
+      store.setMessages(branched(), OTHER_CONVERSATION_ID);
+      store.setActiveLeaf(OTHER_CONVERSATION_ID, 'a2');
+      store.setActiveConversationWithMessages(CONVERSATION_ID, linearRows());
+      const visible = useChatStore.getState().messages;
+
+      useChatStore.getState().deleteMessage('a2', OTHER_CONVERSATION_ID);
+
+      expect(useChatStore.getState().messages).toBe(visible);
+      expect(selectActiveLeafId(OTHER_CONVERSATION_ID)(useChatStore.getState())).toBe('u2');
+    });
+  });
+
+  describe('deleteMessageSubtree', () => {
+    it('takes the variant with everything that continued from it', () => {
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, branched(), 'a2');
+
+      useChatStore.getState().deleteMessageSubtree('a1b', 'a1', CONVERSATION_ID);
+
+      expect(
+        selectConversationAllRows(CONVERSATION_ID)(useChatStore.getState()).map((m) => m.id),
+      ).toEqual(['u1', 'a1']);
+      expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['u1', 'a1']);
+    });
+
+    it('lands the reader on the leaf the route settled on, not on a local guess', () => {
+      const rows = [
+        message('u1', { parentId: null, minute: 0 }),
+        message('a1', { parentId: 'u1', minute: 1, role: 'assistant' }),
+        message('a1b', { parentId: 'u1', minute: 2, role: 'assistant' }),
+        message('a1c', { parentId: 'u1', minute: 3, role: 'assistant' }),
+      ];
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, rows, 'a1c');
+
+      useChatStore.getState().deleteMessageSubtree('a1c', 'a1', CONVERSATION_ID);
+
+      expect(selectActiveLeafId(CONVERSATION_ID)(useChatStore.getState())).toBe('a1');
+      expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['u1', 'a1']);
+    });
+
+    it('returns the conversation to its linear reading when the route answers null', () => {
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, branched(), 'a2');
+
+      useChatStore.getState().deleteMessageSubtree('u1', null, CONVERSATION_ID);
+
+      expect(selectActiveLeafId(CONVERSATION_ID)(useChatStore.getState())).toBeNull();
+      expect(useChatStore.getState().messages).toEqual([]);
+    });
+
+    it('leaves the bucket identity alone for an id this conversation never had', () => {
+      useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, branched(), 'a2');
+      const before = selectConversationAllRows(CONVERSATION_ID)(useChatStore.getState());
+
+      useChatStore.getState().deleteMessageSubtree('never-loaded', 'a2', CONVERSATION_ID);
+
+      expect(selectConversationAllRows(CONVERSATION_ID)(useChatStore.getState())).toBe(before);
+    });
+
+    it('does not touch the visible transcript when a background conversation loses a variant', () => {
+      const store = useChatStore.getState();
+      store.setMessages(branched(), OTHER_CONVERSATION_ID);
+      store.setActiveLeaf(OTHER_CONVERSATION_ID, 'a2');
+      store.setActiveConversationWithMessages(CONVERSATION_ID, linearRows());
+      const visible = useChatStore.getState().messages;
+
+      useChatStore.getState().deleteMessageSubtree('a1b', 'a1', OTHER_CONVERSATION_ID);
+
+      expect(useChatStore.getState().messages).toBe(visible);
+      expect(
+        selectConversationAllRows(OTHER_CONVERSATION_ID)(useChatStore.getState()).map((m) => m.id),
+      ).toEqual(['u1', 'a1']);
+    });
+  });
+});

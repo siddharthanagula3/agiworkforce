@@ -40,6 +40,7 @@ import {
   resolveLeafForSibling,
   resolveVisibleThread,
   stampLinearParents,
+  subtreeIds,
 } from '@/features/chat/lib/messageThread';
 
 /**
@@ -654,7 +655,23 @@ interface ChatState {
     result: NonNullable<MessageMetadata['codeExecutionResult']>,
     conversationId?: string,
   ) => void;
+  /**
+   * Mirror of the delete route's default mode: the message's children are handed
+   * to its own parent so the turns around it close up, and a reader standing on
+   * it moves up to that parent. A linear conversation has neither, so it sees
+   * only the row leave, exactly as it always has.
+   */
   deleteMessage: (id: string, conversationId?: string) => void;
+  /**
+   * Mirror of the delete route's `?subtree=true` mode: the message goes with
+   * everything that continued from it, and the reader moves to `leafId`.
+   *
+   * That leaf is the route's own answer rather than a locally derived one. A
+   * client holding one page of a long conversation cannot see the sibling the
+   * server landed on, and guessing would leave the reader somewhere the next
+   * load moves them away from.
+   */
+  deleteMessageSubtree: (id: string, leafId: string | null, conversationId?: string) => void;
   clearMessages: (conversationId?: string) => void;
 
   // Actions - Streaming
@@ -794,6 +811,30 @@ function writeConversationMessages(
     messagesByConversation: { ...state.messagesByConversation, [key]: next },
     ...(key === conversationKey(state.activeConversationId)
       ? { messages: resolveVisibleThread(next, state.activeLeafByConversation[key] ?? null) }
+      : {}),
+  };
+}
+
+/**
+ * Write one conversation's rows and the leaf they are read through in a single
+ * store write. `writeConversationMessages` reads the leaf from state, which is
+ * exactly what a delete cannot do — its rows and its reader position change
+ * together, and taking them in two writes renders the frame between them.
+ */
+function writeThread(
+  state: MessageStateSlice,
+  key: string,
+  next: Message[],
+  leafId: string | null,
+): Pick<ChatState, 'messagesByConversation'> &
+  Partial<Pick<ChatState, 'messages' | 'activeLeafByConversation'>> {
+  return {
+    messagesByConversation: { ...state.messagesByConversation, [key]: next },
+    ...((state.activeLeafByConversation[key] ?? null) === leafId
+      ? {}
+      : { activeLeafByConversation: { ...state.activeLeafByConversation, [key]: leafId } }),
+    ...(key === conversationKey(state.activeConversationId)
+      ? { messages: resolveVisibleThread(next, leafId) }
       : {}),
   };
 }
@@ -1150,12 +1191,38 @@ export const useChatStore = create<ChatState>()(
 
         deleteMessage: (id, conversationId) =>
           set(
-            (state) =>
-              updateConversationMessages(state, conversationId, (messages) =>
-                messages.filter((m) => m.id !== id),
-              ),
+            (state) => {
+              const key = conversationKey(conversationId ?? state.activeConversationId);
+              const rows = readConversationMessages(state, key);
+              const target = rows.find((m) => m.id === id);
+              if (!target) return {};
+              const parentId = target.parentId ?? null;
+              const next = rows
+                .filter((m) => m.id !== id)
+                .map((m) => ((m.parentId ?? null) === id ? { ...m, parentId } : m));
+              const leafId = state.activeLeafByConversation[key] ?? null;
+              return writeThread(state, key, next, leafId === id ? parentId : leafId);
+            },
             undefined,
             'chat/deleteMessage',
+          ),
+
+        deleteMessageSubtree: (id, leafId, conversationId) =>
+          set(
+            (state) => {
+              const key = conversationKey(conversationId ?? state.activeConversationId);
+              const rows = readConversationMessages(state, key);
+              const doomed = new Set(subtreeIds(rows, id));
+              if (doomed.size === 0) return {};
+              return writeThread(
+                state,
+                key,
+                rows.filter((m) => !doomed.has(m.id)),
+                leafId,
+              );
+            },
+            undefined,
+            'chat/deleteMessageSubtree',
           ),
 
         clearMessages: (conversationId) =>
