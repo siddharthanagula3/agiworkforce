@@ -1,7 +1,9 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { AlertCircle, Check, Copy, Play, X as XIcon } from 'lucide-react';
 import { InlineToolCall, type InlineToolCallStatus, type InlineToolKind } from './InlineToolCall';
+import { HighlightedCode } from './markdown/HighlightedCode';
 import { cn } from '../lib/utils';
+import './markdown/codeBlock.css';
 
 export type ToolCallStatus =
   | 'pending'
@@ -240,7 +242,12 @@ function HighlightedCodeBlock({ language, code }: { language: string; code: stri
       </div>
       <div className="code-block-body">
         <pre className="overflow-auto max-h-48">
-          <code className={`language-${language}`}>{code}</code>
+          <HighlightedCode
+            code={code}
+            language={language}
+            enabled
+            className={`language-${language}`}
+          />
         </pre>
       </div>
     </div>
