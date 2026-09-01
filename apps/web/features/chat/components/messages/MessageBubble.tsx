@@ -85,6 +85,13 @@ const MarkdownContent = dynamic(
   },
 );
 
+const StreamingMarkdownContent = dynamic(
+  () => import('@agiworkforce/unified-chat').then((mod) => mod.StreamingMarkdownContent),
+  {
+    loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" />,
+  },
+);
+
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
@@ -1544,8 +1551,10 @@ const MessageBubbleComponent = function MessageBubble({
               />
             ) : (
               (() => {
-                const markdown = (
-                  <MarkdownContent content={cleanedContent} isStreaming={message.isStreaming} />
+                const markdown = message.isStreaming ? (
+                  <StreamingMarkdownContent content={cleanedContent} isStreaming />
+                ) : (
+                  <MarkdownContent content={cleanedContent} />
                 );
                 return formatCardType ? (
                   <MessageFormatCard
