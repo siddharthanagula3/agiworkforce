@@ -3790,12 +3790,14 @@ export default function WebChatPage() {
       // no parent to read yet, and the value decides whether this write branches
       // or continues.
       if (variantsEnabled) {
-        const store = useChatStore.getState();
-        store.ensureLocalThreadParents(conversationId);
-        const editedParentId =
-          selectConversationAllRows(conversationId)(useChatStore.getState()).find(
-            (row) => row.id === id,
-          )?.parentId ?? null;
+        useChatStore.getState().ensureLocalThreadParents(conversationId);
+        const editedRow = selectConversationAllRows(conversationId)(useChatStore.getState()).find(
+          (row) => row.id === id,
+        );
+        // A row that vanished between opening the editor and saving has no
+        // lineage to copy, and null here would silently mean "root sibling".
+        if (!editedRow) return;
+        const editedParentId = editedRow.parentId ?? null;
         setVariantAnchorMessageId(null);
         void sendMessage(next, {
           model: activeModelId,

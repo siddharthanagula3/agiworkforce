@@ -255,6 +255,67 @@ test.describe('in-thread response variants', () => {
     expect(afterSwitch).not.toContain(EDITED_ANSWER);
   });
 
+  /**
+   * The opening turn is the only message whose sibling group is the root one,
+   * and the only branch a client has to ask for with `parentId: null` rather
+   * than a uuid. It is also the case that survives a reload only if the server
+   * converted the conversation instead of appending the revision to the end.
+   */
+  test('editing the opening message branches at the root and survives a reload', async ({
+    page,
+  }) => {
+    const mock = await openChat(page);
+    await runTurn(page, mock, FIRST_PROMPT, FIRST_ANSWER);
+    await runTurn(page, mock, FOLLOW_UP_PROMPT, FOLLOW_UP_ANSWER);
+
+    const openingBubble = page.locator(USER_BUBBLE).first();
+    await openingBubble.hover();
+    await openingBubble.getByRole('button', { name: MORE_ACTIONS_LABEL }).click();
+    await page.getByRole('menuitem', { name: EDIT_ITEM_LABEL }).click();
+
+    const editor = page.getByPlaceholder(EDIT_PLACEHOLDER);
+    await expect(editor).toBeEditable({ timeout: LOAD_TIMEOUT_MS });
+    await editor.fill(EDITED_PROMPT);
+
+    const before = await mock.requestCount();
+    await page.getByRole('button', { name: EDIT_SAVE_LABEL }).click();
+    await mock.waitForRequest(before);
+    await mock.push(EDITED_ANSWER);
+    await settleStream(page, mock);
+
+    // The revision replaced the whole conversation, not just the first turn:
+    // everything under the original opening is on the other branch now.
+    const branched = (await readTranscript(page)).join('\n');
+    expect(branched).toContain(EDITED_PROMPT);
+    expect(branched).toContain(EDITED_ANSWER);
+    expect(branched, 'the original branch stayed on the visible path').not.toContain(FIRST_ANSWER);
+    expect(branched).not.toContain(FOLLOW_UP_ANSWER);
+    await expect(pagerOn(page.locator(USER_BUBBLE).first())).toHaveText(PAGER_SECOND_OF_TWO);
+
+    // A revision the server appended instead of branching would come back as a
+    // fifth turn at the bottom, with no pager on the opening message.
+    const conversationUrl = page.url();
+    await page.goto(conversationUrl, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle', { timeout: LOAD_TIMEOUT_MS }).catch(() => undefined);
+    await expect(page.locator(USER_BUBBLE).first()).toContainText(EDITED_PROMPT, {
+      timeout: LOAD_TIMEOUT_MS,
+    });
+
+    const reloaded = (await readTranscript(page)).join('\n');
+    expect(reloaded).toContain(EDITED_ANSWER);
+    expect(reloaded, 'the abandoned branch came back as visible turns').not.toContain(FIRST_ANSWER);
+    await expect(pagerOn(page.locator(USER_BUBBLE).first())).toHaveText(PAGER_SECOND_OF_TWO);
+
+    // And the original opening turn, with its whole tail, is still reachable.
+    await pagerOn(page.locator(USER_BUBBLE).first())
+      .getByRole('button', { name: PREVIOUS_VARIANT_LABEL })
+      .click();
+    const original = (await readTranscript(page)).join('\n');
+    expect(original).toContain(FIRST_ANSWER);
+    expect(original).toContain(FOLLOW_UP_ANSWER);
+    expect(original).not.toContain(EDITED_ANSWER);
+  });
+
   test('the selected variant survives a reload', async ({ page }) => {
     const mock = await openChat(page);
     await runTurn(page, mock, FIRST_PROMPT, FIRST_ANSWER);

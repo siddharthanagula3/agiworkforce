@@ -352,6 +352,121 @@ describe('useChatStream — variant-aware context assembly', () => {
         'and its area',
       ]);
     });
+
+    describe('editing the opening message', () => {
+      function seedLinearConversation() {
+        useChatStore.setState({
+          conversations: [CONVERSATION],
+          activeConversationId: CONVERSATION.id,
+        });
+        useChatStore
+          .getState()
+          .setActiveConversationWithMessages(CONVERSATION.id, [
+            message(USER_ONE, 'what is the capital of france', { minute: 0 }),
+            message(ANSWER_ONE, 'Paris.', { minute: 1, role: 'assistant' }),
+            message(USER_TWO, 'and its population', { minute: 2 }),
+            message(ANSWER_TWO, 'Around 2.1 million.', { minute: 3, role: 'assistant' }),
+          ]);
+      }
+
+      /**
+       * Null is the only way to say "root sibling"; omitting the field asks the
+       * server to continue from the leaf, which would append the revision to the
+       * end of the transcript instead of branching at the top.
+       */
+      it('asks for the root sibling group explicitly', async () => {
+        seedLinearConversation();
+        const captured = captureRequests();
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('what is the capital of japan', {
+            conversationId: CONVERSATION.id,
+            userMessageParentId: null,
+            userMessageId: NEW_ASSISTANT,
+          });
+        });
+
+        const userWrite = messageWrites(captured).find((body) => body['role'] === 'user');
+        expect(userWrite).toHaveProperty('parentId', null);
+      });
+
+      it('converts the conversation on the client the way the server does', async () => {
+        seedLinearConversation();
+        captureRequests();
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('what is the capital of japan', {
+            conversationId: CONVERSATION.id,
+            userMessageParentId: null,
+            userMessageId: NEW_ASSISTANT,
+          });
+        });
+
+        const rows = useChatStore.getState().messagesByConversation[CONVERSATION.id] ?? [];
+        const parents = Object.fromEntries(rows.map((row) => [row.id, row.parentId ?? null]));
+        expect(parents[USER_ONE]).toBeNull();
+        expect(parents[ANSWER_ONE]).toBe(USER_ONE);
+        expect(parents[USER_TWO]).toBe(ANSWER_ONE);
+        expect(parents[ANSWER_TWO]).toBe(USER_TWO);
+        expect(parents[NEW_ASSISTANT]).toBeNull();
+      });
+
+      it('shows the revision and its own reply, and nothing from the original branch', async () => {
+        seedLinearConversation();
+        captureRequests();
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('what is the capital of japan', {
+            conversationId: CONVERSATION.id,
+            userMessageParentId: null,
+            userMessageId: NEW_ASSISTANT,
+          });
+        });
+
+        expect(useChatStore.getState().messages.map((row) => row.content)).toEqual([
+          'what is the capital of japan',
+          'Around 2.1 million.',
+        ]);
+      });
+
+      it('leaves the original opening turn and its whole tail in the tree', async () => {
+        seedLinearConversation();
+        captureRequests();
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('what is the capital of japan', {
+            conversationId: CONVERSATION.id,
+            userMessageParentId: null,
+            userMessageId: NEW_ASSISTANT,
+          });
+        });
+
+        const rows = useChatStore.getState().messagesByConversation[CONVERSATION.id] ?? [];
+        expect(rows.map((row) => row.id)).toEqual(
+          expect.arrayContaining([USER_ONE, ANSWER_ONE, USER_TWO, ANSWER_TWO, NEW_ASSISTANT]),
+        );
+      });
+
+      it('starts the prompt from the revision, not from the message it replaces', async () => {
+        seedLinearConversation();
+        const captured = captureRequests();
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('what is the capital of japan', {
+            conversationId: CONVERSATION.id,
+            userMessageParentId: null,
+            userMessageId: NEW_ASSISTANT,
+          });
+        });
+
+        expect(promptContents(captured)).toEqual(['what is the capital of japan']);
+      });
+    });
   });
 
   describe('the continue path', () => {
