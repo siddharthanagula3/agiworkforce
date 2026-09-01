@@ -11,7 +11,7 @@ const source = readFileSync(join(process.cwd(), 'lib/hooks/useChatStream.ts'), '
 describe('a turn interrupted by an expired session is recoverable', () => {
   it('parks the typed content as the conversation draft on 401', () => {
     const guard = source.slice(source.indexOf('isSessionExpiredError(error)'));
-    expect(guard).toContain('setDraftContent(content, conversationId)');
+    expect(guard).toContain('parkUnsentDraft(conversationId, content)');
   });
 
   it('treats only 401 as recoverable, not 403 or 429', () => {
@@ -23,16 +23,54 @@ describe('a turn interrupted by an expired session is recoverable', () => {
     expect(fn).not.toContain('403');
     expect(fn).not.toContain('429');
   });
+});
 
-  it('does not overwrite something the user has typed since', () => {
-    const guard = source.slice(source.indexOf('isSessionExpiredError(error)'));
-    expect(guard).toMatch(/if \(!store\.draftsByConversation\?\.\[conversationId\]\)/);
+/**
+ * The two conditions the recovery turns on used to be asserted as source greps,
+ * which pass on the shape of the code rather than on what it does. They are one
+ * shared function now — the same one a failed message save hands text back
+ * through — so they can be exercised directly.
+ */
+describe('handing unsent text back to the user', () => {
+  it('parks what was typed under the conversation it was written for', async () => {
+    const { useChatStore, parkUnsentDraft } = await import('@shared/stores/web-chat-store');
+    useChatStore.setState({ draftsByConversation: {}, draftContent: '' });
+
+    parkUnsentDraft('conv-1', 'half-written question');
+
+    expect(useChatStore.getState().getDraftContent('conv-1')).toBe('half-written question');
   });
 
-  it('does not park an empty draft', () => {
-    expect(source).toContain('isSessionExpiredError(error) && content.trim()');
+  it('does not overwrite something the user has typed since', async () => {
+    const { useChatStore, parkUnsentDraft } = await import('@shared/stores/web-chat-store');
+    useChatStore.setState({ draftsByConversation: {}, draftContent: '' });
+    useChatStore.getState().setDraftContent('newer thought', 'conv-1');
+
+    parkUnsentDraft('conv-1', 'half-written question');
+
+    expect(useChatStore.getState().getDraftContent('conv-1')).toBe('newer thought');
   });
 
+  it('does not park an empty draft', async () => {
+    const { useChatStore, parkUnsentDraft } = await import('@shared/stores/web-chat-store');
+    useChatStore.setState({ draftsByConversation: {}, draftContent: '' });
+
+    parkUnsentDraft('conv-1', '   ');
+
+    expect(useChatStore.getState().getDraftContent('conv-1')).toBe('');
+  });
+
+  it('parks a new chat under the pending key, which has no id yet', async () => {
+    const { useChatStore, parkUnsentDraft, PENDING_CONVERSATION_KEY } =
+      await import('@shared/stores/web-chat-store');
+    useChatStore.setState({ draftsByConversation: {}, draftContent: '' });
+
+    parkUnsentDraft(null, 'first message that never saved');
+
+    expect(useChatStore.getState().draftsByConversation[PENDING_CONVERSATION_KEY]).toBe(
+      'first message that never saved',
+    );
+  });
 });
 
 // The fix reads store.draftsByConversation[conversationId] and calls

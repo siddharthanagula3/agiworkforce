@@ -5,7 +5,7 @@ import type {
   ComposerEditorHandle,
   ComposerEditorProps,
 } from '@agiworkforce/unified-chat/composer-editor';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { useChatStore, parkUnsentDraft } from '@shared/stores/web-chat-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import {
   COMPOSER_EDITOR_MODES,
@@ -203,8 +203,69 @@ describe('draft survives a composer remount · textarea arm', () => {
   });
 });
 
+/**
+ * A send that 500s on the message save never reaches a model, and the composer
+ * had already cleared. Reading the draft only on mount lost that text twice
+ * over: an existing chat keeps the same composer instance mounted, and a brand
+ * new chat mounts its replacement during the navigate that precedes the failure.
+ */
+describe('a send that never reached a model hands the text back', () => {
+  it('writes a draft parked while the composer is mounted into an empty composer', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+    expect(textarea().value).toBe('');
+
+    act(() => parkUnsentDraft('conv-1', DRAFT));
+
+    expect(textarea().value).toBe(DRAFT);
+  });
+
+  it('leaves text typed since the failed send alone', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+    typeInTextarea('something newer');
+
+    act(() => parkUnsentDraft('conv-1', DRAFT));
+
+    expect(textarea().value).toBe('something newer');
+  });
+
+  it('ignores a handback aimed at another conversation', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+
+    act(() => parkUnsentDraft('conv-2', DRAFT));
+
+    expect(textarea().value).toBe('');
+  });
+
+  it('reaches the new-chat composer, whose send failed before it had an id', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />);
+
+    act(() => parkUnsentDraft(null, DRAFT));
+
+    expect(textarea().value).toBe(DRAFT);
+  });
+
+  it('reaches the replacement composer a first-message navigate mounted', () => {
+    const view = render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />);
+    view.unmount();
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-fresh" />);
+
+    act(() => parkUnsentDraft('conv-fresh', DRAFT));
+
+    expect(textarea().value).toBe(DRAFT);
+  });
+});
+
 describe('draft survives a composer remount · editor arm', () => {
   beforeEach(pinEditorArm);
+
+  it('routes a handback through the editor handle', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+    editorHandle.setText.mockClear();
+
+    act(() => parkUnsentDraft('conv-1', DRAFT));
+
+    expect(editorHandle.setText).toHaveBeenCalledWith(DRAFT);
+  });
 
   it('parks what was typed when the composer unmounts', () => {
     const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);

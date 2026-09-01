@@ -30,6 +30,7 @@ import {
   SheetContent,
   SheetTitle,
   Sidebar,
+  keepOpenForMenuEscape,
   useConfirm,
   type SidebarSession,
   type SidebarProject,
@@ -475,6 +476,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
             side="left"
             className="w-[280px] max-w-[85vw] gap-0 overflow-y-auto p-0"
             data-testid="mobile-nav-drawer"
+            onEscapeKeyDown={keepOpenForMenuEscape}
             onCloseAutoFocus={(event) => {
               // The sheet is opened from a button outside it, so Radix has no
               // trigger to hand focus back to and would drop it on the body.
