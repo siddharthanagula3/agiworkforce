@@ -38,7 +38,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conversation] = await db.query<ChatConversationRow>(
     `
-      select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+      select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at
       from web_conversations
       where id = $1
         and user_id = $2
@@ -57,7 +57,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
     const [messages, countRows] = await Promise.all([
       db.query<ChatMessageRow>(
         `
-          select id, role, content, model, provider, input_tokens, output_tokens, created_at, metadata
+          select id, parent_id, role, content, model, provider, input_tokens, output_tokens, created_at, metadata
           from web_messages
           where conversation_id = $1
           order by created_at asc
@@ -127,6 +127,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (hasArchivedUpdate) updates['archived'] = body['archived'];
   const hasIsTemporaryUpdate = Object.prototype.hasOwnProperty.call(body, 'isTemporary');
   if (hasIsTemporaryUpdate) updates['isTemporary'] = body['isTemporary'];
+  const hasActiveLeafUpdate = Object.prototype.hasOwnProperty.call(body, 'activeLeafMessageId');
+  if (hasActiveLeafUpdate) updates['activeLeafMessageId'] = body['activeLeafMessageId'];
 
   const targetProjectId = updates['projectId'];
   if (hasProjectIdUpdate && typeof targetProjectId === 'string' && targetProjectId.length > 0) {
@@ -148,6 +150,33 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     }
   }
 
+  // Joined rather than looked up by id alone: an unscoped existence check on a
+  // conversation the caller does not own answers "is this message id in that
+  // thread" for someone else's thread.
+  if (hasActiveLeafUpdate) {
+    let leafMessage: { id: string } | undefined;
+    try {
+      [leafMessage] = await db.query<{ id: string }>(
+        `select message.id
+           from web_messages message
+           join web_conversations conversation on conversation.id = message.conversation_id
+          where message.id = $1
+            and message.conversation_id = $2
+            and conversation.user_id = $3
+            and conversation.organization_id is not distinct from $4
+            and conversation.deleted_at is null
+          limit 1`,
+        [updates['activeLeafMessageId'], id, userId, organizationId],
+      );
+    } catch (error) {
+      logger.error({ error, conversationId: id }, 'Failed to validate conversation active leaf');
+      throw createError.internal('Failed to validate active leaf');
+    }
+    if (!leafMessage) {
+      throw createError.notFound('Message not found');
+    }
+  }
+
   const [conversation] = await db.query<ChatConversationRow>(
     `
       update web_conversations
@@ -159,12 +188,13 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         starred = case when $9::boolean then $10::boolean else starred end,
         archived = case when $11::boolean then $12::boolean else archived end,
         is_temporary = case when $13::boolean then $14::boolean else is_temporary end,
-        updated_at = now()
+        active_leaf_message_id = case when $16::boolean then $17::uuid else active_leaf_message_id end,
+        updated_at = case when $18::boolean then updated_at else now() end
       where id = $1
         and user_id = $2
         and organization_id is not distinct from $15
         and deleted_at is null
-      returning id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+      returning id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at
     `,
     [
       id,
@@ -182,6 +212,12 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       hasIsTemporaryUpdate,
       updates['isTemporary'] ?? false,
       organizationId,
+      hasActiveLeafUpdate,
+      updates['activeLeafMessageId'] ?? null,
+      // Paging between variants is a choice about what to read, not a change to
+      // the conversation. Bumping the timestamp for it would reorder the
+      // sidebar every time someone looked at the other answer.
+      hasActiveLeafUpdate && Object.keys(updates).length === 1,
     ],
   );
 

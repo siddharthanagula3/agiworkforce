@@ -23,6 +23,14 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { scheduleConversationTitleGeneration } from './lib/generate-title';
 import { scheduleArtifactIndexing } from './lib/index-artifacts';
+import {
+  assertParentInConversation,
+  INSERT_MESSAGE_SQL,
+  isHttpError,
+  lockConversationThread,
+  setActiveLeaf,
+  stampLinearParents,
+} from './lib/message-thread';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,13 +59,25 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     throw createError.validation('Invalid request body', validationResult.error);
   }
 
-  const { id: clientMessageId, content, metadata, model, role, skipLlm } = validationResult.data;
+  const {
+    id: clientMessageId,
+    content,
+    metadata,
+    model,
+    role,
+    skipLlm,
+    parentId,
+  } = validationResult.data;
 
   const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
-  const [conversation] = await db.query<{ id: string; model: string | null }>(
+  const [conversation] = await db.query<{
+    id: string;
+    model: string | null;
+    active_leaf_message_id: string | null;
+  }>(
     `
-      select id, model
+      select id, model, active_leaf_message_id
       from web_conversations
       where id = $1
         and user_id = $2
@@ -78,38 +98,52 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     logger.warn({ conversationId }, 'skipLlm=false is no longer supported; treating as true');
   }
 
+  const activeLeafMessageId = conversation.active_leaf_message_id ?? null;
+  const threadScope = { conversationId, userId, organizationId };
+  const insertParams = (parent: string | null): unknown[] => [
+    clientMessageId ?? null,
+    conversationId,
+    role,
+    content.trim(),
+    role === 'assistant' ? (model ?? null) : null,
+    JSON.stringify(normalizeMessageMetadata(metadata) ?? {}),
+    parent,
+  ];
+
   let message: ChatMessageRow | undefined;
   try {
-    // Idempotent on the client-supplied id so a retry of an already-committed
-    // message (e.g. after a transient network blip on the response path) does
-    // NOT throw a unique-violation or create a duplicate. The ON CONFLICT
-    // update is scoped to the SAME conversation: a cross-conversation id
-    // collision (an attacker POSTing a victim's message id into their own
-    // conversation) matches the WHERE on neither side and updates/returns
-    // nothing, so this cannot be used to overwrite or read another user's
-    // message (IDOR-safe). content/metadata/model are re-asserted from the
-    // retry payload, which in the normal flow are identical to the original.
-    [message] = await db.query<ChatMessageRow>(
-      `
-        insert into web_messages (id, conversation_id, role, content, model, metadata)
-        values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb)
-        on conflict (id) do update
-          set content = excluded.content,
-              metadata = excluded.metadata,
-              model = excluded.model
-          where web_messages.conversation_id = excluded.conversation_id
-        returning id, role, content, model, provider, input_tokens, output_tokens, created_at, metadata
-      `,
-      [
-        clientMessageId ?? null,
-        conversationId,
-        role,
-        content.trim(),
-        role === 'assistant' ? (model ?? null) : null,
-        JSON.stringify(normalizeMessageMetadata(metadata) ?? {}),
-      ],
-    );
+    // A conversation nobody has branched, written to by a client that names no
+    // parent, takes the same single statement it always has. Only a write that
+    // is part of a tree pays for the row lock.
+    if (parentId === undefined && activeLeafMessageId === null) {
+      [message] = await db.query<ChatMessageRow>(INSERT_MESSAGE_SQL, insertParams(null));
+    } else {
+      message = await db.transaction(async (tx) => {
+        const lockedLeafMessageId = await lockConversationThread(tx, threadScope);
+        if (parentId !== undefined) {
+          await assertParentInConversation(tx, conversationId, parentId);
+        }
+        if (lockedLeafMessageId === null) {
+          await stampLinearParents(tx, conversationId);
+        }
+
+        // Falling back to the leaf keeps a client that has not learned about
+        // parents from dropping its message at the root, where it would read as
+        // an edit of the opening turn and vanish from the visible path.
+        const [inserted] = await tx.query<ChatMessageRow>(
+          INSERT_MESSAGE_SQL,
+          insertParams(parentId ?? lockedLeafMessageId),
+        );
+        if (!inserted) {
+          throw createError.validation('Message id belongs to another conversation');
+        }
+
+        await setActiveLeaf(tx, threadScope, inserted.id);
+        return inserted;
+      });
+    }
   } catch (error) {
+    if (isHttpError(error)) throw error;
     logger.error({ error }, 'Failed to save message');
     throw createError.internal('Failed to save message');
   }

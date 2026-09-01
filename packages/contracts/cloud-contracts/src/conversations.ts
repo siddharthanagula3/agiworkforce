@@ -66,6 +66,7 @@ export const ManagedCloudConversationWireSchema = z.object({
   starred: z.boolean(),
   archived: z.boolean(),
   is_temporary: z.boolean(),
+  active_leaf_message_id: z.string().uuid().nullable().optional(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),
 });
@@ -76,6 +77,7 @@ export type ManagedCloudMessageRole = z.infer<typeof ManagedCloudMessageRoleSche
 
 export const ManagedCloudMessageWireSchema = z.object({
   id: z.string().min(1),
+  parent_id: z.string().uuid().nullable().optional(),
   role: ManagedCloudMessageRoleSchema,
   content: z.string().max(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH),
   model: z.string().nullable(),
@@ -117,6 +119,7 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),
   isTemporary: z.boolean().optional(),
+  activeLeafMessageId: z.string().uuid().optional(),
 });
 export type ManagedCloudUpdateConversationRequest = z.infer<
   typeof ManagedCloudUpdateConversationRequestSchema
@@ -133,6 +136,7 @@ export const ManagedCloudCreateMessageRequestSchema = z.object({
   role: ManagedCloudMessageRoleSchema.optional().default('user'),
   metadata: ManagedCloudMessageMetadataSchema.optional().default({}),
   skipLlm: z.boolean().optional().default(false),
+  parentId: z.string().uuid().optional(),
 });
 export type ManagedCloudCreateMessageRequest = z.input<
   typeof ManagedCloudCreateMessageRequestSchema
