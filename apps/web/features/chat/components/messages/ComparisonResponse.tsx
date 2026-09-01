@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type KeyboardEvent } from 'react';
-import { Check } from 'lucide-react';
+import { Check } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 

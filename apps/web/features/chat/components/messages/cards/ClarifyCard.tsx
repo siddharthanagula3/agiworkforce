@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check } from '@agiworkforce/icons';
 import type {
   ClarifyAnswer,
   ClarifyCardBody,

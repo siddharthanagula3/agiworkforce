@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ExternalLink, MapPinned, Minus, Navigation, Plus, RotateCcw } from 'lucide-react';
+import { ExternalLink, MapPinned, Minus, Navigation, Plus, RotateCcw } from '@agiworkforce/icons';
 import {
   MAP_SEARCH_MAX_ZOOM,
   MAP_SEARCH_MIN_ZOOM,
