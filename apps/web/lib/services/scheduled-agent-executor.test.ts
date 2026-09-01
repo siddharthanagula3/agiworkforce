@@ -16,6 +16,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn() },
 }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  UPGRADE_HREF: '/pricing',
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
   markManagedUsageProviderStarted: vi.fn(),
