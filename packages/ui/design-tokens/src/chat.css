@@ -1,15 +1,8 @@
 @layer base {
   :root {
-    --neutral-0: 0 0% 0%;
-    --neutral-1: 0 0% 5.1%;
-    --neutral-2: 0 0% 9.4%;
-    --neutral-3: 0 0% 12.9%;
-    --neutral-4: 0 0% 18.4%;
-    --neutral-5: 0 0% 18.8%;
-    --neutral-6: 0 0% 24.7%;
-    --neutral-fg-1: 0 0% 100%;
-    --neutral-fg-2: 0 0% 68.6%;
-    --neutral-fg-3: 0 0% 60.8%;
+    /* The --neutral-* ramp this file's .dark block resolves through is declared
+       by foundation.css, which every surface loading this stylesheet must also
+       load. */
 
     /* Font families. Fonts do not vary by theme, so they are declared once here
        rather than per palette. Each names only a face the surfaces actually
