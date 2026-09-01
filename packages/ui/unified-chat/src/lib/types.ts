@@ -34,6 +34,11 @@ export type { Provider };
 export interface ChatMessage {
   id: string;
   conversationId?: string;
+  /**
+   * The message this one replies to. Null or absent until the conversation's
+   * first regenerate or edit turns it into a tree.
+   */
+  parentId?: string | null;
   role: 'user' | 'assistant' | 'system';
   content: string;
   createdAt?: string;
@@ -110,6 +115,8 @@ export interface Conversation {
   title: string;
   createdAt: string;
   updatedAt: string;
+  /** Leaf of the branch the reader last had selected; absent means unbranched. */
+  activeLeafMessageId?: string | null;
   model?: string;
   provider?: Provider | string;
   pinned?: boolean;

@@ -196,6 +196,45 @@ describe('managed-cloud conversation wire contract', () => {
     });
   });
 
+  it('carries the branch pointers through to the app-level shapes', () => {
+    const leafId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const parentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+    expect(
+      normalizeManagedCloudConversation({
+        ...conversation,
+        active_leaf_message_id: leafId,
+      }).activeLeafMessageId,
+    ).toBe(leafId);
+    expect(
+      normalizeManagedCloudMessage(
+        ManagedCloudMessageWireSchema.parse({ ...message, parent_id: parentId }),
+        conversation.id,
+      ).parentId,
+    ).toBe(parentId);
+  });
+
+  it('leaves the branch pointers off a conversation the server never branched', () => {
+    expect(normalizeManagedCloudConversation(conversation)).not.toHaveProperty(
+      'activeLeafMessageId',
+    );
+    expect(
+      normalizeManagedCloudMessage(ManagedCloudMessageWireSchema.parse(message), conversation.id),
+    ).not.toHaveProperty('parentId');
+  });
+
+  it('keeps a null branch pointer distinct from an absent one', () => {
+    expect(
+      normalizeManagedCloudConversation({ ...conversation, active_leaf_message_id: null }),
+    ).toHaveProperty('activeLeafMessageId', null);
+    expect(
+      normalizeManagedCloudMessage(
+        ManagedCloudMessageWireSchema.parse({ ...message, parent_id: null }),
+        conversation.id,
+      ),
+    ).toHaveProperty('parentId', null);
+  });
+
   it('keeps create/update/message request shapes aligned with the routes', () => {
     expect(ManagedCloudCreateConversationRequestSchema.parse({}).model).toBe(
       MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,

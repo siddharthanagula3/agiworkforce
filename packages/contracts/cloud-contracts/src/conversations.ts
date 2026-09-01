@@ -293,6 +293,7 @@ export interface ManagedCloudConversation {
   starred: boolean;
   archived: boolean;
   isTemporary: boolean;
+  activeLeafMessageId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -300,6 +301,7 @@ export interface ManagedCloudConversation {
 export interface ManagedCloudMessage {
   id: string;
   conversationId: string;
+  parentId?: string | null;
   role: ManagedCloudMessageRole;
   content: string;
   model?: string;
@@ -323,6 +325,9 @@ export function normalizeManagedCloudConversation(
     starred: wire.starred,
     archived: wire.archived,
     isTemporary: wire.is_temporary,
+    ...(wire.active_leaf_message_id !== undefined
+      ? { activeLeafMessageId: wire.active_leaf_message_id }
+      : {}),
     createdAt: wire.created_at,
     updatedAt: wire.updated_at,
   };
@@ -335,6 +340,7 @@ export function normalizeManagedCloudMessage(
   return {
     id: wire.id,
     conversationId,
+    ...(wire.parent_id !== undefined ? { parentId: wire.parent_id } : {}),
     role: wire.role,
     content: wire.content,
     ...(wire.model ? { model: wire.model } : {}),
