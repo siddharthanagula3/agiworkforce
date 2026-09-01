@@ -144,6 +144,30 @@ describe('getManagedModelPresentationLabel', () => {
       'Unavailable model',
     );
   });
+
+  it('discloses that a shared free pool answered', () => {
+    expect(getManagedModelPresentationLabel(canonicalChatModel.id, { freePool: true })).toBe(
+      `${canonicalChatModel.name} · via free pool`,
+    );
+  });
+
+  it('reads exactly as before for anything the free pool did not serve', () => {
+    const unchanged = canonicalChatModel.name;
+    expect(getManagedModelPresentationLabel(canonicalChatModel.id)).toBe(unchanged);
+    expect(getManagedModelPresentationLabel(canonicalChatModel.id, {})).toBe(unchanged);
+    expect(getManagedModelPresentationLabel(canonicalChatModel.id, { freePool: false })).toBe(
+      unchanged,
+    );
+  });
+
+  it('still discloses the pool when it cannot name the model', () => {
+    expect(
+      getManagedModelPresentationLabel('fixture-retired-managed-model', { freePool: true }),
+    ).toBe('Unavailable model · via free pool');
+    expect(getManagedModelPresentationLabel('', { freePool: true })).toBe(
+      'Unavailable model · via free pool',
+    );
+  });
 });
 
 describe('parseDiscoveredChatModels', () => {

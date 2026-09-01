@@ -18,7 +18,7 @@
  *     requiredTier, feature, reason) · no currentUser object.
  */
 
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import {
   Video,
   Brain,
@@ -56,6 +56,10 @@ import {
 export { normalizePaywallFeature };
 import { cn } from '@shared/lib/utils';
 import { formatCatalogPrice } from '@features/billing/lib/plan-display';
+import {
+  formatFreeCapacityCountdown,
+  freeCapacityRetryRemainingMs,
+} from '@features/chat/lib/freeCapacityRecovery';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,6 +82,20 @@ export type PaywallRecoveryAction =
   | 'view_usage'
   | 'top_up';
 
+/**
+ * The free lane ran out of shared capacity, which is not a plan limit.
+ *
+ * Three ways out instead of the usual one, because none of them is the obvious
+ * answer: wait for the pool, pay to leave it, or bring a key and stop depending
+ * on it. `retryAt` absent means the server could not name an instant, and the
+ * card must not invent one — it offers the retry immediately instead.
+ */
+export interface FreeCapacityRecovery {
+  retryAt?: string;
+  byokHref?: string;
+  onRetry: () => void;
+}
+
 export interface InlinePaywallCardProps {
   feature: PaywallFeature;
   currentTier: UserTier;
@@ -99,6 +117,8 @@ export interface InlinePaywallCardProps {
   resetLabel?: string;
   /** Server refusal recovery: upgrade, subscribe, repair billing, or inspect usage/reset. */
   recoveryAction?: PaywallRecoveryAction;
+  /** Present only for the free lane's capacity refusal; selects that variant. */
+  freeCapacity?: FreeCapacityRecovery;
   onUpgrade: () => void;
   onDismiss: () => void;
 }
@@ -241,6 +261,93 @@ const CtaButtons = memo(function CtaButtons({
 });
 CtaButtons.displayName = 'CtaButtons';
 
+const COUNTDOWN_TICK_MS = 1_000;
+const FREE_CAPACITY_HEADLINE = 'No free capacity right now';
+const FREE_CAPACITY_BYOK_LABEL = 'Use your own key';
+const FREE_CAPACITY_RETRY_LABEL = 'Try again';
+
+/**
+ * Milliseconds left on the pool's own clock, re-read once a second.
+ *
+ * Driven off the wall clock rather than a decrementing counter so a backgrounded
+ * tab, a throttled timer or a machine that slept all resolve to the truth on the
+ * next tick instead of accumulating drift. Stops ticking the moment it reaches
+ * zero, so a card left on screen is not a permanent interval.
+ */
+function useFreeCapacityCountdown(retryAt: string | undefined): number | null {
+  const [remainingMs, setRemainingMs] = useState(() =>
+    freeCapacityRetryRemainingMs(retryAt, Date.now()),
+  );
+
+  useEffect(() => {
+    const read = () => freeCapacityRetryRemainingMs(retryAt, Date.now());
+    const initial = read();
+    setRemainingMs(initial);
+    if (initial === null || initial <= 0) return;
+
+    const timer = setInterval(() => {
+      const next = read();
+      setRemainingMs(next);
+      if (next === null || next <= 0) clearInterval(timer);
+    }, COUNTDOWN_TICK_MS);
+    return () => clearInterval(timer);
+  }, [retryAt]);
+
+  return remainingMs;
+}
+
+interface FreeCapacityActionsProps {
+  freeCapacity: FreeCapacityRecovery;
+  showUpgradeCta: boolean;
+  requiredTier: RequiredTier;
+  onUpgrade: () => void;
+  onDismiss: () => void;
+}
+
+const FreeCapacityActions = memo(function FreeCapacityActions({
+  freeCapacity,
+  showUpgradeCta,
+  requiredTier,
+  onUpgrade,
+  onDismiss,
+}: FreeCapacityActionsProps) {
+  const remainingMs = useFreeCapacityCountdown(freeCapacity.retryAt);
+  const waiting = remainingMs !== null && remainingMs > 0;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="button"
+        size="sm"
+        className="font-semibold"
+        disabled={waiting}
+        onClick={freeCapacity.onRetry}
+      >
+        {waiting
+          ? `${FREE_CAPACITY_RETRY_LABEL} in ${formatFreeCapacityCountdown(remainingMs)}`
+          : FREE_CAPACITY_RETRY_LABEL}
+      </Button>
+
+      {showUpgradeCta ? (
+        <Button type="button" variant="outline" size="sm" onClick={onUpgrade}>
+          {`Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)}`}
+        </Button>
+      ) : null}
+
+      {freeCapacity.byokHref ? (
+        <Button asChild variant="outline" size="sm">
+          <a href={freeCapacity.byokHref}>{FREE_CAPACITY_BYOK_LABEL}</a>
+        </Button>
+      ) : null}
+
+      <Button variant="ghost" size="sm" onClick={onDismiss}>
+        Try later
+      </Button>
+    </div>
+  );
+});
+FreeCapacityActions.displayName = 'FreeCapacityActions';
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -254,6 +361,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   suggestStandardModel = false,
   resetLabel = EMPTY_REASON,
   recoveryAction = 'upgrade',
+  freeCapacity,
   onUpgrade,
   onDismiss,
 }: InlinePaywallCardProps) {
@@ -267,15 +375,22 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       : recoveryAction;
 
   // GOV-20: a refusal upgrading cannot fix must not be headlined "Upgrade to…".
-  const headline = !showUpgradeCta
-    ? paywallLimitHeadline(feature)
-    : effectiveAction === 'manage_billing'
-      ? `Update billing to continue ${paywallUpgradeLabel(feature)}`
-      : effectiveAction === 'view_usage'
-        ? paywallLimitHeadline(feature)
-        : effectiveAction === 'subscribe'
-          ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`
-          : `Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`;
+  //
+  // The free lane's refusal is not a limit the reader reached, so it borrows
+  // none of that copy: every `paywallLimitHeadline` says "you have reached
+  // your…", which would blame a user whose only mistake was arriving while a
+  // shared pool was busy.
+  const headline = freeCapacity
+    ? FREE_CAPACITY_HEADLINE
+    : !showUpgradeCta
+      ? paywallLimitHeadline(feature)
+      : effectiveAction === 'manage_billing'
+        ? `Update billing to continue ${paywallUpgradeLabel(feature)}`
+        : effectiveAction === 'view_usage'
+          ? paywallLimitHeadline(feature)
+          : effectiveAction === 'subscribe'
+            ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`
+            : `Upgrade to ${getBillingPlanPricing(requiredTier).label}${tierPriceSuffix(requiredTier)} for ${paywallUpgradeLabel(feature)}`;
 
   return (
     <Card
@@ -296,6 +411,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
             {headline}
             {/* Non-plan recovery must not advertise a tier badge. */}
             {showUpgradeCta &&
+            !freeCapacity &&
             recoveryAction !== 'manage_billing' &&
             recoveryAction !== 'view_usage' ? (
               <TierBadge tier={requiredTier} />
@@ -319,13 +435,23 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       </CardContent>
 
       <CardFooter className="pt-4">
-        <CtaButtons
-          requiredTier={requiredTier}
-          showUpgradeCta={showUpgradeCta}
-          recoveryAction={effectiveAction}
-          onUpgrade={onUpgrade}
-          onDismiss={onDismiss}
-        />
+        {freeCapacity ? (
+          <FreeCapacityActions
+            freeCapacity={freeCapacity}
+            showUpgradeCta={showUpgradeCta}
+            requiredTier={requiredTier}
+            onUpgrade={onUpgrade}
+            onDismiss={onDismiss}
+          />
+        ) : (
+          <CtaButtons
+            requiredTier={requiredTier}
+            showUpgradeCta={showUpgradeCta}
+            recoveryAction={effectiveAction}
+            onUpgrade={onUpgrade}
+            onDismiss={onDismiss}
+          />
+        )}
       </CardFooter>
     </Card>
   );
