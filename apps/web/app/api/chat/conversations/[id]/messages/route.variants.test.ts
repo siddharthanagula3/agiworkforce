@@ -54,11 +54,11 @@ const MESSAGE_COUNT = /select count\(\*\)::text/;
 
 type Responder = { match: RegExp; rows: unknown[] };
 
-function savedRow(id: string, parentId: string | null) {
+function savedRow(id: string, parentId: string | null, role = 'assistant') {
   return {
     id,
     parent_id: parentId,
-    role: 'assistant',
+    role,
     content: 'a second answer',
     model: null,
     provider: null,
@@ -199,6 +199,47 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
     expect(paramsOf(mocks.query.mock.calls as [string, unknown[]?][], INSERT)[6]).toBe(PARENT_ID);
   });
 
+  it('branches at the root when the edited turn is the first one', async () => {
+    givenDatabase([
+      {
+        match: CONVERSATION_SELECT,
+        rows: [{ id: CONVERSATION_ID, model: null, active_leaf_message_id: null }],
+      },
+      { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: INSERT, rows: [savedRow(SIBLING_ID, null, 'user')] },
+      { match: MESSAGE_COUNT, rows: [{ count: '4' }] },
+    ]);
+
+    const response = await POST(
+      request({
+        id: SIBLING_ID,
+        role: 'user',
+        content: 'the edited opening question',
+        parentId: null,
+        skipLlm: true,
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+
+    const queries = mocks.query.mock.calls as [string, unknown[]?][];
+    const executes = mocks.execute.mock.calls as [string, unknown[]?][];
+
+    // An explicit null still converts the conversation, still moves the leaf,
+    // and must not be read as "no parent given" and pushed onto the leaf.
+    expect(ran(queries, LOCK)).toBe(true);
+    expect(ran(executes, CONVERSION)).toBe(true);
+    expect(ran(queries, PARENT_CHECK)).toBe(false);
+    expect(paramsOf(queries, INSERT)[6]).toBeNull();
+    expect(paramsOf(executes, LEAF_MOVE)).toEqual([
+      SIBLING_ID,
+      CONVERSATION_ID,
+      USER_ID,
+      ORGANIZATION_ID,
+    ]);
+  });
+
   it('refuses a parent that lives in another conversation', async () => {
     givenDatabase([
       {
@@ -239,7 +280,7 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
         match: CONVERSATION_SELECT,
         rows: [{ id: CONVERSATION_ID, model: null, active_leaf_message_id: null }],
       },
-      { match: INSERT, rows: [savedRow(SIBLING_ID, null)] },
+      { match: INSERT, rows: [savedRow(SIBLING_ID, null, 'user')] },
       { match: MESSAGE_COUNT, rows: [{ count: '4' }] },
     ]);
 
@@ -263,7 +304,7 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
         rows: [{ id: CONVERSATION_ID, model: null, active_leaf_message_id: EXISTING_LEAF_ID }],
       },
       { match: LOCK, rows: [{ active_leaf_message_id: EXISTING_LEAF_ID }] },
-      { match: INSERT, rows: [savedRow(SIBLING_ID, EXISTING_LEAF_ID)] },
+      { match: INSERT, rows: [savedRow(SIBLING_ID, EXISTING_LEAF_ID, 'user')] },
       { match: MESSAGE_COUNT, rows: [{ count: '9' }] },
     ]);
 
