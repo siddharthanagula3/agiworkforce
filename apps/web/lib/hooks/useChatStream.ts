@@ -295,12 +295,12 @@ async function saveMessageToDb(
     model?: string;
     metadata?: MessageMetadata;
     /**
-     * Names the row this message branches from. Omitted, the server chains it
-     * onto whatever the conversation's active leaf is, which is the right answer
-     * for a normal turn and the wrong one for a variant — so every sibling write
-     * states its parent explicitly.
+     * Names the row this message branches from; null asks for the root sibling
+     * group. Omitted, the server chains it onto whatever the conversation's
+     * active leaf is, which is the right answer for a normal turn and the wrong
+     * one for a variant — so every sibling write states its parent explicitly.
      */
-    parentId?: string;
+    parentId?: string | null;
   },
   getAuthToken: AuthTokenProvider,
   options: SaveRetryOptions = {},
@@ -322,7 +322,9 @@ async function saveMessageToDb(
         content: message.content,
         model: message.model,
         metadata: message.metadata ? { ...message.metadata } : undefined,
-        ...(message.parentId ? { parentId: message.parentId } : {}),
+        // Null is a value the route reads, not an omission: it is the only way
+        // to say "root sibling" rather than "continue from the leaf".
+        ...(message.parentId === undefined ? {} : { parentId: message.parentId }),
       },
       options,
     );
@@ -1911,12 +1913,13 @@ export function useChatStream(): UseChatStreamReturn {
       // old one under the same question. The turn is committed the moment the
       // flow starts — there is nothing to persist first and nothing to undo.
       const regenerateParentId = options.regenerateParentMessageId;
-      // Stamping local parents is what lets the next write branch instead of
-      // chaining, so it must not run for an edit that has no branch to make —
-      // see resolveUserMessageParentId on why a root edit is a plain send.
+      // Stamping local parents is what gives the row about to be written
+      // something to branch FROM, so it has to run before that row exists and
+      // only when this write really does branch. An edit always does, the root
+      // included; a regenerate only when the question already has an answer.
       const branchesFromSibling = regenerateParentId
         ? regenerateCreatesSibling(conversationId, regenerateParentId)
-        : Boolean(options.userMessageParentId);
+        : options.userMessageParentId !== undefined;
       if (branchesFromSibling) {
         useChatStore.getState().ensureLocalThreadParents(conversationId);
       }
