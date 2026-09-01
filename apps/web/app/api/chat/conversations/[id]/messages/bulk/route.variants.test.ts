@@ -198,6 +198,38 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — sibling writes', (
     ]);
   });
 
+  it('keeps an explicit root parent at the root instead of reading it as absent', async () => {
+    givenDatabase([
+      {
+        match: CONVERSATION_SELECT,
+        rows: [{ id: CONVERSATION_ID, active_leaf_message_id: null }],
+      },
+      { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: TAIL, rows: [{ id: TAIL_ID }] },
+      insertEchoesTheRow,
+    ]);
+
+    await POST(
+      request({
+        messages: [
+          {
+            id: USER_TURN_ID,
+            role: 'user',
+            content: 'the edited opening question',
+            parentId: null,
+          },
+          { id: ASSISTANT_TURN_ID, role: 'assistant', content: 'the new answer' },
+        ],
+      }),
+      context,
+    );
+
+    expect(entry(CONVERSION)).toBeDefined();
+    expect(entry(PARENT_CHECK)).toBeUndefined();
+    expect(entries(INSERT)[0]?.params[6]).toBeNull();
+    expect(entries(INSERT)[1]?.params[6]).toBe(USER_TURN_ID);
+  });
+
   it('refuses a batch whose parent lives in another conversation', async () => {
     givenDatabase([
       {

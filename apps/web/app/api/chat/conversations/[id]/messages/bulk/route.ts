@@ -24,6 +24,7 @@ import {
   isHttpError,
   lockConversationThread,
   resolveLinearTail,
+  resolveParentId,
   setActiveLeaf,
   stampLinearParents,
 } from '../lib/message-thread';
@@ -36,7 +37,7 @@ const MessageItemSchema = z.object({
   content: z.string().min(1).max(100_000),
   model: z.string().max(200).optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
-  parentId: z.string().uuid().optional(),
+  parentId: z.string().uuid().nullable().optional(),
 });
 
 const BulkSaveSchema = z.object({
@@ -117,12 +118,12 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
         // The batch chains through itself, so a caller that stamps only the
         // message it is branching from still gets a connected tail.
         for (const msg of messages) {
-          if (msg.parentId !== undefined) {
+          if (msg.parentId !== undefined && msg.parentId !== null) {
             await assertParentInConversation(tx, conversationId, msg.parentId);
           }
           const [row] = await tx.query<ChatMessageRow>(
             INSERT_MESSAGE_SQL,
-            insertParams(msg, msg.parentId ?? leafMessageId),
+            insertParams(msg, resolveParentId(msg.parentId, leafMessageId)),
           );
           if (!row) throw createError.validation('Message id belongs to another conversation');
           saved.push(row);

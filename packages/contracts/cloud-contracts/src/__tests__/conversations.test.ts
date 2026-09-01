@@ -282,6 +282,12 @@ describe('managed-cloud conversation wire contract', () => {
         .success,
     ).toBe(false);
 
+    // Null is how a client says "branch at the root" when it edits the opening
+    // turn. Absent means something else entirely, so the two cannot collapse.
+    expect(
+      ManagedCloudCreateMessageRequestSchema.parse({ content: 'Hello', parentId: null }).parentId,
+    ).toBeNull();
+
     expect(
       ManagedCloudUpdateConversationRequestSchema.parse({ activeLeafMessageId: message.id }),
     ).toEqual({ activeLeafMessageId: message.id });
