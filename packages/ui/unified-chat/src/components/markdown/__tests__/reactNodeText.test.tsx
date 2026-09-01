@@ -9,7 +9,7 @@ describe('reactNodeText', () => {
   });
 
   it('recovers source from the token tree a highlighter produces', () => {
-    // The shape rehype-highlight emits: text nodes interleaved with <span>
+    // The shape a syntax highlighter emits: text nodes interleaved with <span>
     // token elements. String() on this yields "[object Object]" per element,
     // comma-joined, which is what reached the clipboard.
     const highlighted = [

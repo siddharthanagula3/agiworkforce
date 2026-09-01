@@ -4,6 +4,7 @@ import { act, type ReactElement } from 'react';
 
 const hoisted = vi.hoisted(() => ({
   mermaidRender: vi.fn<(id: string, source: string) => Promise<{ svg: string }>>(),
+  highlightToLines: vi.fn<(code: string, language: string) => Promise<null>>(),
 }));
 
 vi.mock('mermaid', () => ({
@@ -11,6 +12,14 @@ vi.mock('mermaid', () => ({
     initialize: () => undefined,
     render: (id: string, source: string) => hoisted.mermaidRender(id, source),
   },
+}));
+
+// Shiki resolves after paint, so a real highlighter would rewrite the DOM at a
+// moment no assertion here can pin down. Every call is recorded instead, which
+// is also what the streaming budget below is asserted against.
+vi.mock('../shikiHighlighter', () => ({
+  readHighlightCache: () => null,
+  highlightToLines: (code: string, language: string) => hoisted.highlightToLines(code, language),
 }));
 
 const { MarkdownContent } = await import('../MarkdownContent');
@@ -35,6 +44,7 @@ const MERMAID_COMPLETE = lines(
 const MERMAID_TRAILING_PROSE = lines('', 'A first follow-up paragraph.', '', 'A second one.');
 const MERMAID_SVG = '<svg><g><text>Start</text></g></svg>';
 const NEVER_SETTLES = () => new Promise<{ svg: string }>(() => undefined);
+const NEVER_HIGHLIGHTS = () => new Promise<null>(() => undefined);
 const ASYNC_SETTLE_MS = 20;
 
 const BRACKET_OPENERS = /[[({]/g;
@@ -105,6 +115,8 @@ function renderedOnce(source: string): string {
 beforeEach(() => {
   hoisted.mermaidRender.mockReset();
   hoisted.mermaidRender.mockImplementation(NEVER_SETTLES);
+  hoisted.highlightToLines.mockReset();
+  hoisted.highlightToLines.mockImplementation(NEVER_HIGHLIGHTS);
   clearMermaidSvgCache();
 });
 
@@ -288,6 +300,72 @@ describe('MarkdownContent — the streaming gate reaches the diagram', () => {
 
     expect(hoisted.mermaidRender).toHaveBeenCalledOnce();
     expect(view.container.querySelector('[data-mermaid="failed"]')).not.toBeNull();
+
+    view.unmount();
+  });
+});
+
+describe('MarkdownContent — the streaming gate reaches the highlighter', () => {
+  const FENCE = lines('```ts', 'const answer = 41 + 1;', '```');
+  const FENCE_BODY = 'const answer = 41 + 1;';
+
+  it('does not tokenise a fence the caller says is still streaming', async () => {
+    const view = mountClient(<MarkdownContent content={FENCE} isStreaming />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, ASYNC_SETTLE_MS));
+    });
+
+    expect(hoisted.highlightToLines).not.toHaveBeenCalled();
+    expect(view.container.querySelector('code')?.textContent).toBe(FENCE_BODY);
+
+    view.unmount();
+  });
+
+  it('tokenises the same fence once the caller is no longer streaming', async () => {
+    const view = mountClient(<MarkdownContent content={FENCE} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, ASYNC_SETTLE_MS));
+    });
+
+    expect(hoisted.highlightToLines).toHaveBeenCalledExactlyOnceWith(FENCE_BODY, 'ts');
+
+    view.unmount();
+  });
+});
+
+describe('StreamingMarkdownContent — per-token cost stays off the highlighter', () => {
+  const SETTLED_BODY = 'const first = 1;';
+  const OPEN_BODY = 'const second = 2;';
+  const TWO_FENCES = lines(
+    'First:',
+    '',
+    '```ts',
+    SETTLED_BODY,
+    '```',
+    '',
+    'Second:',
+    '',
+    '```ts',
+    OPEN_BODY,
+  );
+
+  it('tokenises only the fence that settled, never the one still open', () => {
+    for (const run of RENDER_STREAM_RUNS) {
+      hoisted.highlightToLines.mockClear();
+      const view = streamThrough(TWO_FENCES, streamChunks(TWO_FENCES, run));
+
+      const highlighted = hoisted.highlightToLines.mock.calls.map(([code]) => code);
+      expect(new Set(highlighted), `seed=${run.seed}`).toEqual(new Set([SETTLED_BODY]));
+
+      view.unmount();
+    }
+  });
+
+  it('does not tokenise once per flush while a fence is still arriving', () => {
+    const source = lines('```ts', SETTLED_BODY, '```', '', 'Trailing prose.', '', 'And more.');
+    const view = streamThrough(source, streamChunks(source, RENDER_STREAM_RUNS[0]!));
+
+    expect(hoisted.highlightToLines).toHaveBeenCalledExactlyOnceWith(SETTLED_BODY, 'ts');
 
     view.unmount();
   });

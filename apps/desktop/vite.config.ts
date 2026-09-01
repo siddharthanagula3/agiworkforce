@@ -196,11 +196,9 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
             if (
               id.includes('/react-markdown/') ||
               id.includes('/remark-gfm/') ||
-              id.includes('/rehype-highlight/') ||
               id.includes('/katex/') ||
               id.includes('/rehype-katex/') ||
               id.includes('/remark-math/') ||
-              id.includes('/highlight.js/') ||
               id.includes('/react-syntax-highlighter/')
             ) {
               return 'markdown-vendor';
@@ -310,7 +308,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         'framer-motion',
         'clsx',
         'date-fns',
-        'highlight.js',
         'react-syntax-highlighter',
       ],
       exclude: isBrowserBundle ? [] : ['@tauri-apps/cli'],

@@ -1,7 +1,7 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 
-import { REMARK_PLUGINS } from './MarkdownContent';
+import { REMARK_PLUGINS } from './remarkPlugins';
 
 export const TAIL_NODE_RESERVE = 2;
 const MIN_NODES_TO_SETTLE = TAIL_NODE_RESERVE + 1;

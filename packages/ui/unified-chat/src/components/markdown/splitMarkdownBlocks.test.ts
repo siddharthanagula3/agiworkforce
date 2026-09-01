@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 
-import { REMARK_PLUGINS } from './MarkdownContent';
+import { REMARK_PLUGINS } from './remarkPlugins';
 import {
   createMarkdownBlockSplitter,
   TAIL_NODE_RESERVE,
