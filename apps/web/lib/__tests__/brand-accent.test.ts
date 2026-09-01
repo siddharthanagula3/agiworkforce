@@ -28,6 +28,29 @@ function baseThemeBlocks(css: string): { light: string; dark: string } {
   return { light: match[1], dark: match[2] };
 }
 
+// foundation.css owns --background, --foreground, --border and
+// --destructive-text; globals.css owns the rest of the shadcn set.
+function foundationBlock(selector: string): string {
+  const css = read('packages/ui/design-tokens/src/foundation.css');
+  const start = css.indexOf(`${selector} {`);
+  if (start === -1) throw new Error(`foundation.css has no ${selector} block`);
+  const open = css.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < css.length; i++) {
+    if (css[i] === '{') depth++;
+    else if (css[i] === '}' && --depth === 0) return css.slice(open + 1, i);
+  }
+  throw new Error(`unbalanced ${selector} block`);
+}
+
+function webThemeBlocks(): { light: string; dark: string } {
+  const { light, dark } = baseThemeBlocks(read('apps/web/app/globals.css'));
+  return {
+    light: `${foundationBlock(':root')}\n${light}`,
+    dark: `${foundationBlock('.dark')}\n${dark}`,
+  };
+}
+
 function tokenValue(block: string, token: string): string {
   const match = block.match(new RegExp(`^\\s*--${token}:\\s*([^;]+);`, 'm'));
   if (!match?.[1]) throw new Error(`Missing --${token} in theme block`);
@@ -106,7 +129,7 @@ describe('brand accent', () => {
       BRAND_PRIMARY_FOREGROUND,
     ]);
 
-    const { light, dark } = baseThemeBlocks(web);
+    const { light, dark } = webThemeBlocks();
     for (const block of [light, dark]) {
       const primary = cssColorToRgb(tokenValue(block, 'primary'));
       const foreground = cssColorToRgb(tokenValue(block, 'primary-foreground'));
@@ -115,9 +138,8 @@ describe('brand accent', () => {
   });
 
   it('uses shades from the shared desktop terra-cotta ramp', () => {
-    const web = read('apps/web/app/globals.css');
     const desktop = read('apps/desktop/src/styles/globals.css');
-    const { light, dark } = baseThemeBlocks(web);
+    const { light, dark } = webThemeBlocks();
 
     expectRgbClose(
       cssColorToRgb(tokenValue(light, 'primary')),
@@ -130,8 +152,7 @@ describe('brand accent', () => {
   });
 
   it('keeps text-primary readable on every configured light surface and tint', () => {
-    const web = read('apps/web/app/globals.css');
-    const { light } = baseThemeBlocks(web);
+    const { light } = webThemeBlocks();
     const primary = cssColorToRgb(tokenValue(light, 'primary'));
     const surfaceTokens = [
       'background',
@@ -161,8 +182,7 @@ describe('brand accent', () => {
   });
 
   it('keeps filled primary controls readable at their shipped hover opacities', () => {
-    const web = read('apps/web/app/globals.css');
-    const { light } = baseThemeBlocks(web);
+    const { light } = webThemeBlocks();
     const primary = cssColorToRgb(tokenValue(light, 'primary'));
     const foreground = cssColorToRgb(tokenValue(light, 'primary-foreground'));
 

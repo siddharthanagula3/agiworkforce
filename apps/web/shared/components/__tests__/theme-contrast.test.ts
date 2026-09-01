@@ -58,6 +58,25 @@ const WCAG_AA_LARGE = 3.0;
 const repoRoot = resolve(import.meta.dirname, '../../../../..');
 const globalsCss = readFileSync(resolve(repoRoot, 'apps/web/app/globals.css'), 'utf8');
 const chatCss = readFileSync(resolve(repoRoot, 'packages/ui/design-tokens/src/chat.css'), 'utf8');
+const foundationCss = readFileSync(
+  resolve(repoRoot, 'packages/ui/design-tokens/src/foundation.css'),
+  'utf8',
+);
+
+const foundationBlock = (selector: string): string => {
+  const start = foundationCss.indexOf(`${selector} {`);
+  if (start === -1) throw new Error(`foundation.css has no ${selector} block`);
+  const open = foundationCss.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < foundationCss.length; i++) {
+    if (foundationCss[i] === '{') depth++;
+    else if (foundationCss[i] === '}' && --depth === 0) return foundationCss.slice(open + 1, i);
+  }
+  throw new Error(`unbalanced ${selector} block`);
+};
+
+const foundationLight = foundationBlock(':root');
+const foundationDark = foundationBlock('.dark');
 
 function baseThemeBlocks(css: string): { light: string; dark: string } {
   const match = css.match(
@@ -106,7 +125,15 @@ function colorToken(block: string, name: string): string {
   return tripleToHex(value);
 }
 
-const web = baseThemeBlocks(globalsCss);
+// foundation.css owns these four; globals.css owns the rest of the shadcn set.
+// The `foundation layer` suite asserts globals.css declares none of them, so the
+// two halves of each block below can never disagree about a name.
+const FOUNDATION_OWNED = ['--background', '--foreground', '--border', '--destructive-text'];
+const webBase = baseThemeBlocks(globalsCss);
+const web = {
+  light: `${foundationLight}\n${webBase.light}`,
+  dark: `${foundationDark}\n${webBase.dark}`,
+};
 const chat = baseThemeBlocks(chatCss);
 // Dark mode IS the neutral ChatGPT palette now - there is no separate opt-in
 // dark variant to check, so the shared package's own `.dark` block is the one
@@ -423,24 +450,6 @@ describe('theme completeness', () => {
 });
 
 describe('foundation layer', () => {
-  const foundationCss = readFileSync(
-    resolve(repoRoot, 'packages/ui/design-tokens/src/foundation.css'),
-    'utf8',
-  );
-  const foundationBlock = (selector: string): string => {
-    const start = foundationCss.indexOf(`${selector} {`);
-    if (start === -1) throw new Error(`foundation.css has no ${selector} block`);
-    let depth = 0;
-    for (let i = foundationCss.indexOf('{', start); i < foundationCss.length; i++) {
-      if (foundationCss[i] === '{') depth++;
-      else if (foundationCss[i] === '}' && --depth === 0)
-        return foundationCss.slice(foundationCss.indexOf('{', start) + 1, i);
-    }
-    throw new Error(`unbalanced ${selector} block`);
-  };
-  const foundationLight = foundationBlock(':root');
-  const foundationDark = foundationBlock('.dark');
-
   const primitives: Record<string, string> = Object.fromEntries(
     [...foundationLight.matchAll(/^\s*(--n-\d+)\s*:\s*(#[0-9a-fA-F]{6});/gm)].map((m) => [
       m[1] as string,
@@ -525,6 +534,20 @@ describe('foundation layer', () => {
     );
     expect(remSizes.length).toBeGreaterThan(0);
     for (const rem of remSizes) expect(rem * 16).toBeGreaterThanOrEqual(12);
+  });
+
+  it('is the only declaration site for the four shadcn base names', () => {
+    for (const name of FOUNDATION_OWNED) {
+      expect(token(foundationLight, name), `${name} missing in foundation light`).not.toBe('');
+      expect(token(foundationDark, name), `${name} missing in foundation dark`).not.toBe('');
+      const declaration = new RegExp(`^\\s*${name}:`, 'm');
+      expect(webBase.light, `${name} still declared in the globals.css light block`).not.toMatch(
+        declaration,
+      );
+      expect(webBase.dark, `${name} still declared in the globals.css dark block`).not.toMatch(
+        declaration,
+      );
+    }
   });
 
   it('defines every semantic role in both themes', () => {
