@@ -209,7 +209,7 @@ export function ReflectSection() {
               </div>
               <SettingsSectionLink
                 section="time-focus"
-                className="text-sm text-primary hover:underline"
+                className="inline-flex min-h-6 items-center text-sm text-primary hover:underline"
               >
                 Set quiet hours and breaks
               </SettingsSectionLink>

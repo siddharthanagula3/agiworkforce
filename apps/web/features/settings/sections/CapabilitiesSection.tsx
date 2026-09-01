@@ -175,7 +175,7 @@ export function CapabilitiesSection() {
         <div className="flex flex-col items-start gap-3">
           <SettingsSectionLink
             section="memory"
-            className="text-xs text-[var(--chat-accent-primary-text)] hover:underline"
+            className="inline-flex min-h-6 items-center text-xs text-[var(--chat-accent-primary-text)] hover:underline"
           >
             View and manage memory
           </SettingsSectionLink>
