@@ -38,7 +38,15 @@ const PROVIDER_API_KEY_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
   qwen: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
   nvidia_nim: ['NVIDIA_NIM_API_KEY', 'NVIDIA_API_KEY'],
   workers_ai: ['WORKERS_AI_API_KEY', 'CLOUDFLARE_API_TOKEN'],
-  vercel_gateway: ['VERCEL_GATEWAY_API_KEY', 'VERCEL_AI_GATEWAY_API_KEY', 'AI_GATEWAY_API_KEY'],
+  // A static key wins over the OIDC token, matching @ai-sdk/gateway's own
+  // precedence: VERCEL_OIDC_TOKEN is provisioned by `vercel link` and rotates,
+  // so it is the development fallback, not the server default.
+  vercel_gateway: [
+    'VERCEL_GATEWAY_API_KEY',
+    'VERCEL_AI_GATEWAY_API_KEY',
+    'AI_GATEWAY_API_KEY',
+    'VERCEL_OIDC_TOKEN',
+  ],
 };
 
 export interface ServerProviderAdapterOptions {

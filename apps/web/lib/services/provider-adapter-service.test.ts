@@ -130,3 +130,55 @@ describe('buildServerProviderAdapter', () => {
     );
   });
 });
+
+describe('free-lane gateway credentials', () => {
+  beforeEach(() => {
+    createProviderAdapter.mockClear();
+    getOptionalEnv.mockReset();
+  });
+
+  it('refuses to build the Workers AI adapter while no token is provisioned', () => {
+    getOptionalEnv.mockImplementation(() => undefined);
+
+    expect(() => buildServerProviderAdapter('workers_ai')).toThrow(/WORKERS_AI_API_KEY/);
+    expect(createProviderAdapter).not.toHaveBeenCalled();
+  });
+
+  it('accepts a Cloudflare API token in place of a Workers AI key', () => {
+    getOptionalEnv.mockImplementation((key) =>
+      key === 'CLOUDFLARE_API_TOKEN' ? 'managed-cloudflare-token' : undefined,
+    );
+
+    buildServerProviderAdapter('workers_ai');
+
+    expect(createProviderAdapter).toHaveBeenCalledWith('workers_ai', {
+      apiKey: 'managed-cloudflare-token',
+    });
+  });
+
+  it('prefers a static gateway key over the rotating OIDC token', () => {
+    getOptionalEnv.mockImplementation((key) => {
+      if (key === 'AI_GATEWAY_API_KEY') return 'static-gateway-key';
+      if (key === 'VERCEL_OIDC_TOKEN') return 'oidc-token';
+      return undefined;
+    });
+
+    buildServerProviderAdapter('vercel_gateway');
+
+    expect(createProviderAdapter).toHaveBeenCalledWith('vercel_gateway', {
+      apiKey: 'static-gateway-key',
+    });
+  });
+
+  it('falls back to the OIDC token when no static key is set', () => {
+    getOptionalEnv.mockImplementation((key) =>
+      key === 'VERCEL_OIDC_TOKEN' ? 'oidc-token' : undefined,
+    );
+
+    buildServerProviderAdapter('vercel_gateway');
+
+    expect(createProviderAdapter).toHaveBeenCalledWith('vercel_gateway', {
+      apiKey: 'oidc-token',
+    });
+  });
+});
