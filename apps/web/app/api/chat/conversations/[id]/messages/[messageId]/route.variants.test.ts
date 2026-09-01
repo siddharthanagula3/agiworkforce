@@ -228,3 +228,69 @@ describe('DELETE /api/chat/conversations/[id]/messages/[messageId] — subtree',
     expect(entry(LEAF_SET)?.params).toEqual([null, CONVERSATION_ID, USER_ID, ORGANIZATION_ID]);
   });
 });
+
+describe('DELETE /api/chat/conversations/[id]/messages/[messageId] — leaf in the response', () => {
+  const doomed: Responder = { match: SUBTREE, rows: [{ id: MESSAGE_ID }, { id: CHILD_ID }] };
+
+  async function leafOf(response: Response): Promise<unknown> {
+    return ((await response.json()) as { activeLeafMessageId: unknown }).activeLeafMessageId;
+  }
+
+  it('reports the surviving variant the reader has been moved to', async () => {
+    givenDatabase([
+      owned,
+      { match: LOCK, rows: [{ active_leaf_message_id: CHILD_ID }] },
+      parentedTarget,
+      doomed,
+      { match: SIBLING, rows: [{ id: SIBLING_ID }] },
+      { match: DEEPEST, rows: [{ id: DEEPEST_ID }] },
+    ]);
+
+    await expect(leafOf(await DELETE(request(true), context))).resolves.toBe(DEEPEST_ID);
+  });
+
+  it('reports null once the deleted subtree leaves the conversation with no path', async () => {
+    givenDatabase([
+      owned,
+      { match: LOCK, rows: [{ active_leaf_message_id: CHILD_ID }] },
+      { match: TARGET, rows: [{ id: MESSAGE_ID, parent_id: null }] },
+      doomed,
+      { match: SIBLING, rows: [] },
+    ]);
+
+    await expect(leafOf(await DELETE(request(true), context))).resolves.toBeNull();
+  });
+
+  it('reports the untouched leaf when the delete never moved the reader', async () => {
+    givenDatabase([
+      owned,
+      { match: LOCK, rows: [{ active_leaf_message_id: ELSEWHERE_ID }] },
+      parentedTarget,
+    ]);
+
+    await expect(leafOf(await DELETE(request(), context))).resolves.toBe(ELSEWHERE_ID);
+  });
+
+  it('reports the parent a spliced delete moved the reader up to', async () => {
+    givenDatabase([
+      owned,
+      { match: LOCK, rows: [{ active_leaf_message_id: MESSAGE_ID }] },
+      parentedTarget,
+    ]);
+
+    await expect(leafOf(await DELETE(request(), context))).resolves.toBe(PARENT_ID);
+  });
+
+  it('stays null for a conversation that never became a tree', async () => {
+    givenDatabase([
+      owned,
+      { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      parentedTarget,
+    ]);
+
+    const response = await DELETE(request(), context);
+
+    expect(entry(LEAF_SET)).toBeUndefined();
+    await expect(leafOf(response)).resolves.toBeNull();
+  });
+});
