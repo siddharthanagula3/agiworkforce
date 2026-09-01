@@ -60,6 +60,7 @@ import {
   MAX_CHAT_ATTACHMENT_COUNT,
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
+  resolveVisibleThread,
 } from '@agiworkforce/cloud-contracts';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -212,7 +213,7 @@ function mapConversation(cloud: ManagedCloudConversation): Conversation {
 }
 
 function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessage {
-  return mapPersistedCloudMessage(
+  const mapped = mapPersistedCloudMessage(
     {
       id: raw.id,
       conversationId,
@@ -225,6 +226,7 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
     },
     CLOUD_API_BASE_URL,
   );
+  return raw.parentId === undefined ? mapped : { ...mapped, parentId: raw.parentId };
 }
 
 async function readTemporaryChatPreference(): Promise<boolean> {
@@ -1590,6 +1592,7 @@ export class CloudRuntime implements ChatRuntime {
     const client = getDesktopCloudChatPersistenceClient();
     const messages: ManagedCloudMessage[] = [];
     const pagination = createManagedCloudPaginationGuard('messages');
+    let conversation: ManagedCloudConversation | undefined;
     let offset = 0;
     let hasMore = true;
 
@@ -1606,13 +1609,16 @@ export class CloudRuntime implements ChatRuntime {
         reportedTotal: page.total,
       });
       markCloudConversationReady(page.conversation.id, boundary);
+      conversation ??= page.conversation;
       messages.push(...page.messages);
       hasMore = page.hasMore;
       if (!hasMore) break;
       offset = nextOffset;
     }
 
-    return messages.map((m) => mapMessage(conversationId, m));
+    return resolveVisibleThread(messages, conversation?.activeLeafMessageId ?? null).map((m) =>
+      mapMessage(conversationId, m),
+    );
   }
 
   async loadMessages(conversationId: string): Promise<ChatMessage[]> {
