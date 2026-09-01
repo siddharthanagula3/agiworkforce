@@ -37,11 +37,25 @@ async function pinEditorArm(page: Page): Promise<void> {
   );
 }
 
+/**
+ * `[data-composer-textarea]` is carried by BOTH arms, so waiting on it alone
+ * returns as soon as the server-rendered textarea paints — while the gate
+ * resolves post-hydration and the editor is still two commits away. Anything
+ * typed in that window goes to the arm on its way out. Wait for the
+ * contenteditable specifically.
+ */
+const EDITOR_CONTENT = `${COMPOSER}[contenteditable="true"]`;
+
 async function openComposer(page: Page) {
   await page.goto(CHAT_EDITOR_URL);
-  const composer = page.locator(COMPOSER);
+  const composer = page.locator(EDITOR_CONTENT);
   await expect(composer).toBeVisible({ timeout: COMPOSER_TIMEOUT });
   await composer.click();
+  // Every claim below is about what typing does to an empty composer. A draft
+  // restored into this conversation would silently prepend itself and, for the
+  // slash case, take the token out of shape — so say so here rather than
+  // failing later on a symptom.
+  expect(await composerText(page)).toBe('');
   return composer;
 }
 
@@ -52,7 +66,7 @@ async function openComposer(page: Page) {
  * only comparable once that artifact is trimmed off.
  */
 async function composerText(page: Page): Promise<string> {
-  return (await page.locator(COMPOSER).innerText()).trim();
+  return (await page.locator(EDITOR_CONTENT).innerText()).trim();
 }
 
 test.describe('composer editor · parity', () => {
@@ -169,11 +183,11 @@ test.describe('composer editor · parity', () => {
       .getByRole('button', { name: /new chat/i })
       .first()
       .click();
-    await expect(page.locator(COMPOSER)).toBeVisible({ timeout: COMPOSER_TIMEOUT });
+    await expect(page.locator(EDITOR_CONTENT)).toBeVisible({ timeout: COMPOSER_TIMEOUT });
     expect(await composerText(page)).toBe('');
 
     await page.goBack();
-    await expect(page.locator(COMPOSER)).toContainText(draft, { timeout: COMPOSER_TIMEOUT });
+    await expect(page.locator(EDITOR_CONTENT)).toContainText(draft, { timeout: COMPOSER_TIMEOUT });
   });
 
   /**
