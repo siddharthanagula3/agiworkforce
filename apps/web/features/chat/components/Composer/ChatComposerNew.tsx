@@ -1186,13 +1186,21 @@ const ChatComposerNewComponent = ({
    * replays the same text into the uncontrolled editor when that arm is
    * mounted. `setText` and `clear` also purge undo history, so Cmd+Z cannot
    * resurrect a sent message or another conversation's draft.
+   *
+   * Each one moves `messageRef` too. The render-time assignment alone is a
+   * commit behind, and the composer is frequently unmounted by the same commit
+   * that clears it — sending the first message of a new chat swaps the
+   * empty-state instance for the in-conversation one — so the unmount would
+   * park text the user had already sent.
    */
   const writeComposerMessage = useCallback((next: string) => {
+    messageRef.current = next;
     setMessage(next);
     composerEditorRef.current?.setText(next);
   }, []);
 
   const appendComposerMessage = useCallback((suffix: string) => {
+    messageRef.current += suffix;
     setMessage((current) => current + suffix);
     composerEditorRef.current?.appendText(suffix);
   }, []);
@@ -1207,6 +1215,7 @@ const ChatComposerNewComponent = ({
   }, []);
 
   const clearComposerState = useCallback(() => {
+    messageRef.current = '';
     setMessage('');
     composerEditorRef.current?.clear();
     // AUDIT-FIX STR-23: a sent/cleared composer must not leave a stale parked
@@ -2280,28 +2289,33 @@ const ChatComposerNewComponent = ({
    * AUDIT-FIX STR-23: the composer input is per-conversation. Park the outgoing
    * conversation's half-typed text under its own id and restore the incoming
    * one's, so a private draft can never follow the user into another chat.
-   * Runs only on an actual conversation change (the ref guard), so it never
-   * fights normal typing.
+   *
+   * Parking is the cleanup rather than the next run's first act because the
+   * outgoing composer usually does not survive to see the change: the
+   * empty-state and in-conversation composers are separate positions in the
+   * page's tree, so opening a new chat unmounts one and mounts the other, and
+   * an effect body only ever runs on the instance that stays. The mount then
+   * reads the draft back. Session-only by design — the store does not persist
+   * `draftsByConversation`, so a reload still starts on an empty composer.
    */
-  const draftConversationRef = useRef<string | null>(conversationId);
   useEffect(() => {
-    if (draftConversationRef.current === conversationId) return;
-    const previousConversationId = draftConversationRef.current;
-    draftConversationRef.current = conversationId;
-    const outgoing = messageRef.current;
-    if (outgoing.trim()) {
-      setDraftContent(outgoing, previousConversationId);
-    } else {
-      clearDraftContent(previousConversationId);
-    }
     writeComposerMessage(useChatStore.getState().getDraftContent(conversationId));
+    return () => {
+      const outgoing = messageRef.current;
+      if (outgoing.trim()) {
+        setDraftContent(outgoing, conversationId);
+      } else {
+        clearDraftContent(conversationId);
+      }
+    };
   }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
 
   // Flush a queued follow-up when the active turn finishes (true→false).
   //
-  // Declared AFTER the draft-parking effect above on purpose: navigating away
-  // mid-turn fires both in the same commit, and the discard branch below must
-  // run against the draft the parking effect has already written, not before it.
+  // Navigating away mid-turn fires this and the draft effect above in the same
+  // commit, and the discard branch below must run against the draft that is
+  // already parked. It does: parking is that effect's cleanup, and React runs
+  // every cleanup in a commit before any effect body.
   useEffect(() => {
     if (wasLoadingRef.current && !isTurnActive) {
       const queue = queuedFollowUpsRef.current;
