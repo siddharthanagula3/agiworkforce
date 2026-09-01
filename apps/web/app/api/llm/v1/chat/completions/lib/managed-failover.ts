@@ -46,6 +46,7 @@ import { resolveProviderFromModel } from '@/lib/services/provider-adapter-servic
 import { canFailoverToOpenRouter } from '@/lib/services/aggregator-routing';
 import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { logger } from '@/lib/logger';
+import { nextFreeLaneRoute } from '@/lib/services/free-lane/plan';
 import { evaluateModelAccess, type ModelAccessPolicy } from '@/lib/services/model-policy-evaluator';
 import type { ProcessedRequest } from './request-processor';
 import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
@@ -169,13 +170,33 @@ export function createFailoverPlan(
      * take failover away from every workspace that has no policy at all.
      */
     modelPolicy?: ModelAccessPolicy | null;
+    /**
+     * Observes every attempt failure with the classification already computed
+     * here, before any rotation decision is taken.
+     *
+     * Handed in rather than imported so this module keeps no I/O dependency:
+     * the free lane needs route health written from exactly this classification,
+     * and classifying a second time at the call site would let the two answers
+     * drift.
+     */
+    onAttemptFailure?: (failure: {
+      provider: string;
+      model: string;
+      routeId: string | null;
+      category: string;
+      code: string;
+      retryAfterSeconds?: number;
+    }) => void;
   },
 ): { next: (error: unknown) => FailoverAttempt | null } {
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
   const mustStayOnProvider = requestCarriesTools(processed);
   const credentialFailover = new CredentialFailoverState();
+  const freeLane = processed.freeLane;
+  const freeLaneAttempted: string[] = freeLane ? [freeLane.dispatchedRouteId] : [];
   let latestView: ProcessedRequest = processed;
+  let latestRouteId: string | null = freeLane ? freeLane.dispatchedRouteId : null;
 
   const nextAdmissibleCandidate = (): FailoverAttempt | null => {
     while (remaining.length > 0) {
@@ -227,6 +248,69 @@ export function createFailoverPlan(
       };
     }
     return null;
+  };
+
+  /**
+   * Rotation for a free-lane request: re-enter the stage, never the paid plan.
+   *
+   * `free-auto.ts` documents `excludeRouteIds` as the mechanism for exactly this
+   * — pick the next eligible $0 route without handing back one that already
+   * failed — and re-running the stage rather than walking a precomputed list is
+   * what lets a route parked by THIS request's failures drop out of the running.
+   *
+   * When it returns null the request ends. It does not fall through to the paid
+   * candidate plan or the OpenRouter route-retry in either mode: `strict` may
+   * never spend, and in `prefer` the fall-through is the INITIAL decision, taken
+   * before dispatch. Rotating a half-served free request onto paid capacity
+   * would spend money on a turn the user was told was free, and the subsidized
+   * trial path it would be falling back to is itself rotation-free today.
+   */
+  const nextFreeLaneCandidate = (): FailoverAttempt | null => {
+    if (!freeLane) return null;
+    for (;;) {
+      const route = nextFreeLaneRoute(freeLane, freeLaneAttempted, Date.now());
+      if (!route) return null;
+      freeLaneAttempted.push(route.routeId);
+
+      if (credentialFailover.blocksRoute(route.provider)) {
+        logger.warn(
+          { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
+          'Free-lane failover candidate skipped: provider credentials already rejected',
+        );
+        continue;
+      }
+      if (mustStayOnProvider && route.provider !== processed.provider) {
+        logger.warn(
+          { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
+          'Free-lane failover candidate skipped: provider-native tools cannot transfer providers',
+        );
+        continue;
+      }
+      if (!options.isProviderDispatchable(route.provider)) {
+        logger.warn(
+          { requestId: processed.requestId, routeId: route.routeId, provider: route.provider },
+          'Free-lane failover candidate skipped: provider not dispatchable',
+        );
+        continue;
+      }
+      if (tier !== undefined && !canAccessModel(route.modelKey, tier)) {
+        logger.warn(
+          { requestId: processed.requestId, routeId: route.routeId, tier },
+          'Free-lane failover candidate skipped: admission re-check failed',
+        );
+        continue;
+      }
+
+      // The plan travels with the attempt so settlement and health writes name
+      // the route that actually served, not the one this request opened with.
+      const attemptView: ProcessedRequest = {
+        ...buildFailoverAttemptView(latestView, route.modelKey, route.provider),
+        freeLane: { ...freeLane, dispatchedRouteId: route.routeId },
+      };
+      latestView = attemptView;
+      latestRouteId = route.routeId;
+      return { model: route.modelKey, provider: route.provider, processed: attemptView };
+    }
   };
 
   let routeRetryUsed = false;
@@ -289,6 +373,18 @@ export function createFailoverPlan(
       if (options.signal.aborted) return null;
       const classified = classifyError(error);
       const category = classified.category;
+      // Reported before any rotation branch, so a class that must never rotate
+      // still records why the route stopped serving.
+      options.onAttemptFailure?.({
+        provider: latestView.provider,
+        model: latestView.chatRequest.model,
+        routeId: latestRouteId,
+        category,
+        code: classified.code,
+        ...(classified.retryAfterSeconds !== undefined
+          ? { retryAfterSeconds: classified.retryAfterSeconds }
+          : {}),
+      });
       // Checked FIRST and unconditionally: the credential-rotation path below
       // must not be able to re-open a class we have decided may never rotate.
       // This is the guard that stops an exhausted paid account from quietly
@@ -308,6 +404,26 @@ export function createFailoverPlan(
       }
       const credentialRotation = credentialFailover.recordFailure(latestView.provider, category);
       if (!credentialRotation && !isFailoverEligibleError(error, options.signal)) return null;
+
+      if (freeLane) {
+        const fromRouteId = latestRouteId;
+        const fromProvider = latestView.provider;
+        const viaFreeLane = nextFreeLaneCandidate();
+        logger.warn(
+          {
+            requestId: processed.requestId,
+            fromRouteId,
+            fromProvider,
+            toRouteId: viaFreeLane ? latestRouteId : null,
+            category,
+            mode: freeLane.mode,
+          },
+          viaFreeLane
+            ? 'Free-lane failover: re-entered the stage for the next zero-cost route'
+            : 'Free-lane failover: the stage has no further zero-cost route; refusing to rotate onto paid capacity',
+        );
+        return viaFreeLane;
+      }
 
       const viaRoute = routeRetryAttempt();
       if (viaRoute) {
