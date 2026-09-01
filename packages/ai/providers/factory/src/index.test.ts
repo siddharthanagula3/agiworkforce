@@ -4,7 +4,7 @@ import type { ProviderAdapter, ProviderAdapterConfig } from '@agiworkforce/types
 import { createProviderAdapter, PROVIDER_ADAPTER_IDS, type ProviderAdapterId } from './index';
 
 const WORKERS_AI_TEST_BASE_URL =
-  'https://gateway.ai.cloudflare.com/v1/test-account/test-gateway/workers-ai/v1';
+  'https://gateway.ai.cloudflare.com/v1/3c4f35af67459cbabbccb783f232fad9/agiworkforce/compat';
 
 /**
  * Gateways whose endpoint embeds account-scoped path segments have no

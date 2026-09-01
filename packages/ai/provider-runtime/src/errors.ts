@@ -235,6 +235,30 @@ function matchesQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
 }
 
 /**
+ * The credential is valid and funded, but the account's plan or tier is not
+ * entitled to the model that was asked for. Vercel AI Gateway returns a 403
+ * carrying `no_providers_available` / `RestrictedModelsError` when a free-tier
+ * key requests a premium model.
+ *
+ * Deliberately NOT `auth`, for the same reason `billing_exhausted` is not: the
+ * key works. Classifying an entitlement refusal as a credential failure would
+ * take the whole provider out of service over one model the tier cannot reach,
+ * when the correct response is to route around that model and keep the route.
+ */
+const TIER_RESTRICTED_CODES: ReadonlySet<string> = new Set([
+  'no_providers_available',
+  'restrictedmodelserror',
+]);
+
+function matchesTierRestricted(e: SDKErrorLike, status: number | undefined): boolean {
+  if (status !== 403) return false;
+  const codes = [e.name, e.code, e.type, e.error?.type, e.error?.code, e.error?.status];
+  return codes.some(
+    (raw) => typeof raw === 'string' && TIER_RESTRICTED_CODES.has(raw.trim().toLowerCase()),
+  );
+}
+
+/**
  * The upstream account is out of money.
  *
  * A 402 is unambiguous. The wording checks cover providers that return a 400/429
@@ -466,6 +490,17 @@ export function classifyError(err: unknown): ClassifiedError {
       code: 'invalid_model',
       retryable: false,
       fallbackable: true, // try next in chain
+      ...(typeof status === 'number' ? { status } : {}),
+      message,
+    };
+  }
+
+  if (matchesTierRestricted(e, status)) {
+    return {
+      category: 'invalid_model',
+      code: 'model_tier_restricted',
+      retryable: false,
+      fallbackable: true,
       ...(typeof status === 'number' ? { status } : {}),
       message,
     };

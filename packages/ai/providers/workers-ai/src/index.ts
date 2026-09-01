@@ -3,12 +3,12 @@
  *
  * Cloudflare Workers AI adapter, reached through the AI Gateway
  * OpenAI-compatible endpoint:
- * `https://gateway.ai.cloudflare.com/v1/{accountId}/{gateway}/workers-ai/v1`.
+ * `https://gateway.ai.cloudflare.com/v1/{accountId}/{gatewayId}/compat`.
  *
  * The account and gateway segments make the endpoint account-scoped, so this
- * adapter declares no default base URL: the operator must supply one. Workers
- * AI itself is the capacity source; the gateway in front of it only adds
- * analytics and caching.
+ * adapter declares no default base URL: the operator must supply one via
+ * WORKERS_AI_BASE_URL. Workers AI itself is the capacity source; the gateway in
+ * front of it only adds analytics and caching.
  *
  * @packageDocumentation
  */
