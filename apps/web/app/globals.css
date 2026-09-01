@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import '@agiworkforce/design-tokens/foundation.css';
 @import '@agiworkforce/design-tokens/chat.css';
+@import '@agiworkforce/unified-chat/composer-editor.css';
 @plugin "tailwindcss-animate";
 
 /* Shared workspace component packages consumed from source. Tailwind v4 does

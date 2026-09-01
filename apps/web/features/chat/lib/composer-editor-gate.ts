@@ -34,15 +34,20 @@ function readStoredOverride(): ComposerEditorMode | null {
   }
 }
 
+/**
+ * The mode a server render resolves to. Both overrides are client-only, so this
+ * is also the only mode a first client render may use: hydrating against the
+ * override would mean the server and the browser disagreed about which
+ * implementation occupies the composer slot.
+ */
+export function resolveComposerEditorBuildMode(): ComposerEditorMode {
+  // Must stay a literal bracket read: Next inlines NEXT_PUBLIC_* by matching
+  // the source text, and scripts/env-doctor.mjs scans for the same shape.
+  return parseMode(process.env['NEXT_PUBLIC_COMPOSER_EDITOR']) ?? COMPOSER_EDITOR_MODES.textarea;
+}
+
 export function resolveComposerEditorMode(): ComposerEditorMode {
-  return (
-    readQueryOverride() ??
-    readStoredOverride() ??
-    // Must stay a literal bracket read: Next inlines NEXT_PUBLIC_* by matching
-    // the source text, and scripts/env-doctor.mjs scans for the same shape.
-    parseMode(process.env['NEXT_PUBLIC_COMPOSER_EDITOR']) ??
-    COMPOSER_EDITOR_MODES.textarea
-  );
+  return readQueryOverride() ?? readStoredOverride() ?? resolveComposerEditorBuildMode();
 }
 
 export function resolveComposerEditorEnabled(): boolean {

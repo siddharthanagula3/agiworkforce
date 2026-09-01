@@ -146,7 +146,10 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         aria-label={label}
         aria-pressed={isListening}
         className={cn(
-          'relative flex h-11 w-11 touch-manipulation sm:h-9 sm:w-9 items-center justify-center rounded-full transition-all duration-150',
+          // M11: 44px here was the tallest thing in the control row and set the
+          // whole mobile composer's height on its own. 32px matches the "+"
+          // trigger beside it and clears the 24px target minimum.
+          'relative flex h-8 w-8 touch-manipulation sm:h-9 sm:w-9 items-center justify-center rounded-full transition-all duration-150',
           'text-muted-foreground hover:text-foreground hover:bg-muted/60',
           isListening && [
             'bg-red-500/20 text-red-500 hover:bg-red-500/30 hover:text-red-500',
