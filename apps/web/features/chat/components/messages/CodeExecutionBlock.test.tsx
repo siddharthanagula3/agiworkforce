@@ -17,7 +17,7 @@ describe('CodeExecutionBlock failure output', () => {
     const exitCode = screen.getByText('Exit code: 1');
 
     for (const node of [header, body, exitCode]) {
-      expect(node.className).toContain('text-[var(--chat-destructive)]');
+      expect(node.className).toContain('text-[var(--chat-destructive-text)]');
       expect(node.className).not.toMatch(/text-red-\d/);
     }
   });

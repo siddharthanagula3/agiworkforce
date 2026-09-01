@@ -137,8 +137,8 @@ export function VideoGenCard({
 
       {status === 'error' && (
         <div className="flex items-center gap-2">
-          <Film size={15} className="text-[var(--chat-destructive)] shrink-0" />
-          <p className="text-sm text-[var(--chat-destructive)]">
+          <Film size={15} className="text-[var(--chat-destructive-text)] shrink-0" />
+          <p className="text-sm text-[var(--chat-destructive-text)]">
             Video generation failed. Please try again.
           </p>
         </div>

@@ -404,14 +404,14 @@ function MenuButton({
         'flex w-full items-center gap-2 rounded-[var(--chat-radius-sm)] px-2 py-1.5 transition-colors',
         'text-sm text-left outline-none',
         destructive
-          ? 'text-[var(--chat-destructive)] hover:bg-[var(--chat-destructive)]/10'
+          ? 'text-[var(--chat-destructive-text)] hover:bg-[var(--chat-destructive)]/10'
           : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
       )}
     >
       <span
         className={cn(
           'shrink-0',
-          destructive ? 'text-[var(--chat-destructive)]' : 'text-[var(--chat-text-muted)]',
+          destructive ? 'text-[var(--chat-destructive-text)]' : 'text-[var(--chat-text-muted)]',
         )}
       >
         {icon}

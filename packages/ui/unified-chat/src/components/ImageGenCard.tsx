@@ -45,7 +45,7 @@ export function ImageGenCard({
           size={15}
           className={cn(
             status === 'error'
-              ? 'text-[var(--chat-destructive)]'
+              ? 'text-[var(--chat-destructive-text)]'
               : 'text-[var(--chat-accent-secondary)]',
           )}
         />
@@ -53,7 +53,7 @@ export function ImageGenCard({
           className={cn(
             'text-sm',
             status === 'error'
-              ? 'text-[var(--chat-destructive)]'
+              ? 'text-[var(--chat-destructive-text)]'
               : 'text-[var(--chat-text-secondary)]',
           )}
         >
@@ -105,7 +105,7 @@ export function ImageGenCard({
       )}
 
       {status === 'error' && (
-        <p className="text-sm text-[var(--chat-destructive)]">
+        <p className="text-sm text-[var(--chat-destructive-text)]">
           Image generation failed. Please try again.
         </p>
       )}

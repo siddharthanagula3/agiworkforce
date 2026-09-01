@@ -198,7 +198,7 @@ export function MemoryEditor({
         </div>
       </form>
       {mutationError ? (
-        <p role="alert" className="text-xs text-[var(--chat-destructive)]">
+        <p role="alert" className="text-xs text-[var(--chat-destructive-text)]">
           {mutationError}
         </p>
       ) : null}
@@ -320,7 +320,7 @@ export function MemoryEditor({
                             })
                           }
                           disabled={fact.pending}
-                          className="rounded p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive)]"
+                          className="rounded p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
                           aria-label={`Delete memory fact`}
                         >
                           <Trash2 size={13} strokeWidth={1.75} />
@@ -345,7 +345,7 @@ export function MemoryEditor({
             type="button"
             onClick={onClearAll}
             disabled={mutating}
-            className="rounded px-2 py-1 text-xs font-medium text-[var(--chat-destructive)] hover:bg-[var(--chat-surface-hover)]"
+            className="rounded px-2 py-1 text-xs font-medium text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)]"
           >
             Forget everything
           </button>
