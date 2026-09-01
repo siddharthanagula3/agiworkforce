@@ -60,7 +60,7 @@ export function ThinkingControl({ modelId, disabled, className }: ThinkingContro
         'text-[12px] font-medium transition-colors duration-150 select-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
         thinkingEnabled
-          ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
+          ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
           : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
         disabled && 'cursor-not-allowed opacity-50',
         className,

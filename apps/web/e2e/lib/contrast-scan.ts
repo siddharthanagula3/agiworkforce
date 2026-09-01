@@ -27,10 +27,16 @@ export function scanContrast(): ContrastFinding[] {
     b: t.b * t.a + b.b * (1 - t.a),
     a: 1,
   });
-  const ground = (el: Element): Rgb => {
+  const ground = (el: Element): Rgb | null => {
     const layers: Rgb[] = [];
     let n: Element | null = el;
     while (n) {
+      // A gradient is a background-image, so backgroundColor reads transparent
+      // and the walk would carry on to whatever is painted behind it. Measured
+      // on the profile avatar: white initials on a brown-to-teal gradient were
+      // reported as 1.06:1 against the near-white page. There is no single
+      // colour to measure against, so the element is left alone.
+      if (getComputedStyle(n).backgroundImage !== 'none') return null;
       const c = parse(getComputedStyle(n).backgroundColor);
       if (c.a > 0) layers.push(c);
       if (c.a >= 1) break;
@@ -75,7 +81,9 @@ export function scanContrast(): ContrastFinding[] {
     if (r.width < 2 || r.height < 2) continue;
     const size = parseFloat(cs.fontSize);
     const need = size >= 24 || (size >= 18.66 && Number(cs.fontWeight) >= 700) ? 3 : 4.5;
-    const got = ratio(parse(cs.color), ground(el));
+    const behind = ground(el);
+    if (!behind) continue;
+    const got = ratio(parse(cs.color), behind);
     if (got + 0.005 < need) {
       out.push({
         text: own.slice(0, 34),

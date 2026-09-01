@@ -1066,7 +1066,7 @@ export function ChatInput({
                       'transition-colors duration-150',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
                       attachedFiles.length > 0 || attachmentMenuOpen
-                        ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
+                        ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                         : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
                     )}
                   >

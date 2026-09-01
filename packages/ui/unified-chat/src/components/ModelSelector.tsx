@@ -201,7 +201,7 @@ function TierBadge({ tier, className }: TierBadgeProps) {
       <span
         className={cn(
           'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[12px] font-medium',
-          'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]',
+          'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]',
           className,
         )}
       >
@@ -261,7 +261,7 @@ function ThinkingToggle({ enabled, enabledEffort, onChange }: ThinkingToggleProp
         'text-[12px] font-medium transition-colors',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--chat-accent-secondary)]',
         enabled
-          ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary-text)]'
+          ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
           : 'text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-secondary)]',
       )}
     >
