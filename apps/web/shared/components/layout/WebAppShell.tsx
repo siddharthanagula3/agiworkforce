@@ -24,7 +24,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
-import { Settings, LogOut, ChevronUp, FileText, Menu, Scale, ShieldCheck } from 'lucide-react';
+import {
+  Settings,
+  LogOut,
+  ChevronUp,
+  FileText,
+  Menu,
+  Scale,
+  ShieldCheck,
+} from '@agiworkforce/icons';
 import {
   Sheet,
   SheetContent,

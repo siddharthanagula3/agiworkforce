@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Loader2 } from 'lucide-react';
+import { Mic, MicOff } from '@agiworkforce/icons';
+import { Spinner } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { VoiceRecordingOverlay } from './VoiceRecordingOverlay';
@@ -171,7 +172,7 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         )}
 
         {isTranscribing ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          <Spinner size="sm" />
         ) : isActive || !isSupported ? (
           <MicOff className="h-4 w-4" aria-hidden="true" />
         ) : (

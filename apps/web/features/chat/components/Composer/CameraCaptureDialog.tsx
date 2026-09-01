@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, X } from 'lucide-react';
+import { Camera, X } from '@agiworkforce/icons';
 
 import { cn } from '@shared/lib/utils';
 
