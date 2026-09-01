@@ -341,22 +341,57 @@ async function pushMessages(
     ]);
   }
 
+  // Only the rows this batch creates take a parent. An edit or a tombstone
+  // carries a base version, which means the row it names already has a lineage,
+  // and re-deciding it here would move a turn the reader has kept.
+  const branched = new Set(threadScopes.map((scope) => scope.conversationId));
+  const newRows = messages.filter(
+    (item) => Number(item.baseVersion) === 0 && branched.has(item.conversationId),
+  );
+
   return db.transaction(async (tx) => {
+    // An id the table already holds is skipped by the insert's on-conflict, so
+    // it never becomes a row of this conversation, and the row behind it in the
+    // batch must not be chained onto it: that parent would point out of the
+    // conversation, and because 0156's parent_id is NO ACTION while the delete
+    // route splices only same-conversation children, it would pin the row it
+    // names against deletion permanently.
+    //
+    // Deliberately unscoped. The conflict fires on the primary key, so
+    // ownership does not narrow which ids are already taken. The same-statement
+    // membership check that would make this structural is not available: a
+    // chained parent is itself inserted by this statement, so a join back to
+    // web_messages cannot see it and would null out every link but the first.
+    const takenRows = await tx.query<{ id: string }>(
+      'select id::text as id from web_messages where id = any($1::uuid[])',
+      [newRows.map((item) => item.id)],
+    );
+    const taken = new Set(takenRows.map((row) => row.id));
+
+    const chainable = new Map<string, MessageSyncPushItem[]>();
+    for (const item of newRows) {
+      if (taken.has(item.id)) continue;
+      const bucket = chainable.get(item.conversationId);
+      if (bucket) bucket.push(item);
+      else chainable.set(item.conversationId, [item]);
+    }
+
     const threadParents: ThreadParent[] = [];
     const advanceTo = new Map<ThreadScope, string>();
 
     for (const scope of threadScopes) {
+      const bucket = chainable.get(scope.conversationId);
+      // Nothing here needs a parent, so nothing here needs the lock. A batch
+      // carrying only edits must not queue behind every other writer of a
+      // conversation whose shape it is not touching.
+      if (!bucket) continue;
+
       let leafMessageId: string | null = await lockConversationThread(tx, scope);
       // The branch this push read was undone before it owned the lock, so the
       // conversation is linear again and its rows go in the way they always did.
       if (leafMessageId === null) continue;
 
-      // Only the rows this batch creates take a parent. An edit or a tombstone
-      // carries a base version, which means the row it names already has a
-      // lineage, and re-deciding it here would move a turn the reader has kept.
-      for (const item of messages) {
-        if (item.conversationId !== scope.conversationId) continue;
-        if (Number(item.baseVersion) !== 0) continue;
+      for (const item of bucket) {
         threadParents.push({ id: item.id, parentId: leafMessageId });
         leafMessageId = item.id;
         advanceTo.set(scope, item.id);
@@ -373,6 +408,11 @@ async function pushMessages(
     // its leaf. An id already taken elsewhere is skipped by the insert's
     // on-conflict and reported as a conflict, and pointing the visible path at
     // it would land the reader on a message that is not in the thread.
+    //
+    // Matching on the id alone is sound only because one id appears at most
+    // once in a push, which `rejectDuplicateIds` in the request schema
+    // enforces. Were an id allowed to repeat across two conversations, an
+    // applied row of one would answer for the other.
     const appliedIds = new Set(rows.flatMap((row) => (row.kind === 'applied' ? [row.id] : [])));
     for (const [scope, leafMessageId] of advanceTo) {
       if (!appliedIds.has(leafMessageId)) continue;
