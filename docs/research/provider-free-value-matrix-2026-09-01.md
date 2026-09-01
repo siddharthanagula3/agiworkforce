@@ -8,7 +8,7 @@ Last updated: 2026-09-01
 This is the breadth pass that sits beside
 `docs/research/free-inference-tos-workbook-2026-09-01.md`. The workbook asks one
 question of eight pools — _may this pool ever receive a `FreeEligibility`
-record_. This document asks four questions of nineteen providers:
+record_. This document asks four questions of twenty-five providers:
 
 1. What is free, and is it free _capacity_ or a one-time _grant_?
 2. What promotional pricing is live right now, and when does it end?
@@ -452,7 +452,7 @@ terms elsewhere rescues it.
 That is a shame, because the rest is strong. Article 4.4 of the **Specific
 Conditions Applicable to AI Services** (version 07/04/2026,
 <https://www-uploads.scaleway.com/Specific_Conditions_AI_Services_275907180f.pdf>)
-carries the strongest data guarantee of all nineteen:
+carries the strongest data guarantee in this document:
 
 > "**Scaleway does not retain any requests or generated Content after
 > processing.** Client data, including prompts, completions, and training data:
@@ -607,7 +607,7 @@ There is also a genuinely open anonymous path: **2 requests per minute, per IP
 and per model, with no account at all**; authenticated keys get 400 RPM per
 project per model. Useful for demos and smoke tests, not for serving.
 
-**The contract is the friendliest of all nineteen.** GTS §10.6 expressly
+**The contract is the friendliest of all twenty-five.** GTS §10.6 expressly
 contemplates third-party use:
 
 > "The Client assumes all risks… **including when the Services made available to
@@ -1400,11 +1400,14 @@ recommended order if the founder wants to harvest it.
 
 **Tier 2 — worth doing, with a specific precaution each**
 
-5. **Alibaba Cloud Model Studio (Singapore region)** — 1M tokens per model, 90
-   days. **Card + billing address required**; no ID document needed for Singapore
-   resources. **Precaution: enable "Free Quota Only" immediately**, or a verified
-   account silently bills overage. Do not register from India (blocked) and do not
-   use a virtual card (rejected).
+5. **Alibaba Cloud Model Studio (Singapore region)** — **ACCOUNT ALREADY EXISTS**;
+   see the QwenCloud addendum at the end of this document, which supersedes this
+   item. The one outstanding action there is a click, not a signup: **enable
+   "Auto-stop when free quota runs out" for all models** before any key from that
+   account is used anywhere, because at capture it was on for only a minority of
+   rows. For reference if a second account is ever created: 1M tokens per model,
+   90 days, card + billing address required, no ID document for Singapore
+   resources, India blocked, virtual cards rejected.
 6. **Cerebras** — $5 / 30 days. **Card required before anything works.** Not a
    pool, but the fastest inference in the set and worth having for latency
    benchmarking against our routing assumptions.
@@ -1416,14 +1419,20 @@ recommended order if the founder wants to harvest it.
 
 **Tier 3 — conditional**
 
-8. **OVHcloud** — $200 / 1 month trial, **card required**. Worth it only if we
+9. **OVHcloud** — $200 / 1 month trial, **card required**. Worth it only if we
    pursue OVHcloud as the cheap paid default route (it has the best contract and
    the cheapest `gpt-oss-120b`), and for the free `Qwen3Guard` moderation models,
    which are useful regardless of who serves the chat turn.
-9. **Scaleway** — 1M free tokens, but **KYC + card mandatory and no spend cap
-   exists**. Only create this account alongside an application-side token budget.
-   Otherwise the free tier is a billing incident waiting to happen.
-10. **SambaNova** — free tier reportedly needs no card, but the docs and the
+10. **Scaleway** — 1M free tokens, but **KYC + card mandatory and no spend cap
+    exists**. Only create this account alongside an application-side token budget.
+    Otherwise the free tier is a billing incident waiting to happen.
+11. **Ollama Cloud** — free tier with starter credits and 1 concurrent request.
+    Worth an account for one reason: it reaches Kimi K3, DeepSeek V4, GLM-5.x,
+    Qwen3.5 and MiniMax M3 **with no Chinese signup flow at all**. But its
+    OpenAI/Anthropic compatibility is documented only through a **local Ollama
+    process acting as a proxy** — there is no hosted compat endpoint — so treat
+    this as an experiment, not an integration.
+12. **SambaNova** — free tier reportedly needs no card, but the docs and the
     console contradict each other. Worth one signup attempt purely to resolve
     that contradiction; the 20-requests-per-day ceiling means nothing else
     depends on it.
@@ -1431,17 +1440,27 @@ recommended order if the founder wants to harvest it.
 **Tier 4 — BYOK reference keys only (no free value; create only when building the
 adapter)**
 
-11. **Xiaomi MiMo** — overseas payment via Apple Pay / Google Pay / card, personal
+13. **Xiaomi MiMo** — overseas payment via Apple Pay / Google Pay / card, personal
     Xiaomi account. Cheapest frontier-ish pricing in the set and the cleanest
     no-training guarantee.
-12. **DeepSeek** — self-serve, prepaid; payment rails likely PayPal-mediated
+14. **DeepSeek** — self-serve, prepaid; payment rails likely PayPal-mediated
     internationally (`[SECONDARY]`, unconfirmed).
-13. **MiniMax** — email-only signup, Stripe payment.
-14. **Moonshot Kimi** — **only if someone can pay via WeChat Pay or Alipay**, and
+15. **MiniMax** — email-only signup, Stripe payment.
+16. **Moonshot Kimi** — **only if someone can pay via WeChat Pay or Alipay**, and
     budget $10 cumulative rather than the $1 minimum to escape the 3 RPM Tier0.
 
 **Do not create:** GitHub Models (retired), SiliconFlow (ToS 3.4(e)/(p)), Baidu
-Qianfan (no international path; reach ERNIE via Novita instead).
+Qianfan (no international path; reach ERNIE via Novita instead), **Cohere** (trial
+keys are contractually non-commercial), **OpenCode Zen** (card required before any
+key issues, and free models train on your prompts), **Nebius / Token Factory**
+(renamed; now $1 for 30 days with a mandatory card), **Nscale** ($5 minimum
+credit, no free tier), and anything in Part 4's excluded-genre list.
+
+**One unresolved account worth chasing separately: BytePlus ModelArk.** It is the
+plausible international door to ByteDance's Doubao/Seed models, and its mainland
+sibling grants 500,000 free tokens per model permanently. Its own docs would not
+render to a static fetch, so someone needs a browser session to establish whether
+a non-Chinese company gets anything comparable.
 
 # Adapter gaps
 
@@ -1460,21 +1479,26 @@ identity, auth env var, default endpoint, curated catalog — and "deliberately
 exposes no hooks" for vendors needing extra headers, response rewriting or
 vendor-only request fields.
 
-| Provider        | Endpoint compat                                    | `createOpenAICompatAdapter` suffices?                                                                                                                                |
-| --------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Novita**      | `https://api.novita.ai/openai`                     | **Yes.** Priority — it is a pool candidate.                                                                                                                          |
-| **Xiaomi MiMo** | `https://api.xiaomimimo.com/v1`                    | **Yes, with `baseUrlEnvVar`** — see the note below.                                                                                                                  |
-| Fireworks       | `https://api.fireworks.ai/inference/v1`            | Yes.                                                                                                                                                                 |
-| DeepInfra       | `https://api.deepinfra.com/v1/openai`              | Yes.                                                                                                                                                                 |
-| Cerebras        | `https://api.cerebras.ai/v1`                       | Yes.                                                                                                                                                                 |
-| SambaNova       | `https://api.sambanova.ai/v1`                      | Yes.                                                                                                                                                                 |
-| Hyperbolic      | `https://api.hyperbolic.xyz/v1`                    | Yes. Note docs moved to `hyperbolic.ai`; the API host did not.                                                                                                       |
-| OVHcloud        | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` | Yes.                                                                                                                                                                 |
-| Scaleway        | `https://api.scaleway.ai/{project_id}/v1`          | Yes, but **omit `defaultBaseUrl`** — the path is account-scoped, exactly the case the spec's comment describes.                                                      |
-| Tencent Hunyuan | `https://api.hunyuan.cloud.tencent.com/v1`         | Yes. TokenHub gateway is an alternative base URL.                                                                                                                    |
-| Mistral         | `https://api.mistral.ai/v1`                        | Probably — OpenAI-shaped, though Mistral publishes no compatibility page and does not brand it as such. **Worth noting Mistral is a workbook pool with no adapter.** |
-| Baidu ERNIE     | `https://qianfan.baidubce.com/v2`                  | Endpoint yes, but `/v2` not `/v1` — verify path construction. Moot given the SKIP verdict.                                                                           |
-| SiliconFlow     | `https://api.siliconflow.com/v1`                   | Endpoint yes; moot on terms.                                                                                                                                         |
+| Provider        | Endpoint compat                                    | `createOpenAICompatAdapter` suffices?                                                                                                                                                                                                                                                                                   |
+| --------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Novita**      | `https://api.novita.ai/openai`                     | **Yes.** Priority — it is a pool candidate.                                                                                                                                                                                                                                                                             |
+| **Xiaomi MiMo** | `https://api.xiaomimimo.com/v1`                    | **Yes, with `baseUrlEnvVar`** — see the note below.                                                                                                                                                                                                                                                                     |
+| Fireworks       | `https://api.fireworks.ai/inference/v1`            | Yes.                                                                                                                                                                                                                                                                                                                    |
+| DeepInfra       | `https://api.deepinfra.com/v1/openai`              | Yes.                                                                                                                                                                                                                                                                                                                    |
+| Cerebras        | `https://api.cerebras.ai/v1`                       | Yes.                                                                                                                                                                                                                                                                                                                    |
+| SambaNova       | `https://api.sambanova.ai/v1`                      | Yes.                                                                                                                                                                                                                                                                                                                    |
+| Hyperbolic      | `https://api.hyperbolic.xyz/v1`                    | Yes. Note docs moved to `hyperbolic.ai`; the API host did not.                                                                                                                                                                                                                                                          |
+| OVHcloud        | `https://oai.endpoints.kepler.ai.cloud.ovh.net/v1` | Yes.                                                                                                                                                                                                                                                                                                                    |
+| Scaleway        | `https://api.scaleway.ai/{project_id}/v1`          | Yes, but **omit `defaultBaseUrl`** — the path is account-scoped, exactly the case the spec's comment describes.                                                                                                                                                                                                         |
+| Tencent Hunyuan | `https://api.hunyuan.cloud.tencent.com/v1`         | Yes. TokenHub gateway is an alternative base URL.                                                                                                                                                                                                                                                                       |
+| Mistral         | `https://api.mistral.ai/v1`                        | Probably — OpenAI-shaped, though Mistral publishes no compatibility page and does not brand it as such. **Worth noting Mistral is a workbook pool with no adapter.**                                                                                                                                                    |
+| Baidu ERNIE     | `https://qianfan.baidubce.com/v2`                  | Endpoint yes, but `/v2` not `/v1` — verify path construction. Moot given the SKIP verdict.                                                                                                                                                                                                                              |
+| SiliconFlow     | `https://api.siliconflow.com/v1`                   | Endpoint yes; moot on terms.                                                                                                                                                                                                                                                                                            |
+| Inception Labs  | `https://api.inceptionlabs.ai/v1`                  | Yes — docs describe it as drop-in. Worth doing for the 100M-token grant alone.                                                                                                                                                                                                                                          |
+| Hugging Face    | `https://router.huggingface.co/v1`                 | Yes, but chat-completions only, and each request is really an upstream provider's — the effective terms are theirs, not HF's.                                                                                                                                                                                           |
+| Aion Labs       | `https://api.aionlabs.ai/v1`                       | Yes. Low priority — 20K tokens/day.                                                                                                                                                                                                                                                                                     |
+| Cohere          | `https://api.cohere.ai/compatibility/v1`           | Endpoint yes but **explicitly partial** (no `n`, `logit_bias`, `top_logprobs`, `parallel_tool_calls`, `dimensions`, streaming on audio). Moot on terms.                                                                                                                                                                 |
+| Ollama Cloud    | **no hosted compat endpoint**                      | **No.** OpenAI (`/v1`) and Anthropic (`/v1/messages`) compatibility exist only on a **local** `localhost:11434` process proxying to the cloud. Direct HTTPS to `ollama.com/api/chat` is Ollama's native format. Reaching it server-side would mean running Ollama as a sidecar — a deployment decision, not an adapter. |
 
 **MiMo explicitly, per the brief:** yes, `createOpenAICompatAdapter` covers it.
 Xiaomi ships a first-party OpenAI-compatible endpoint at
@@ -1487,8 +1511,11 @@ account is located, which are not interoperable"). The spec should therefore set
 `baseUrlEnvVar` and treat `defaultBaseUrl` as the overseas pay-as-you-go host
 only, rather than assuming one endpoint serves every key.
 
-**Two adapters that would need hand-writing if we want them:** none identified.
-Every provider surveyed ships a plain OpenAI-shaped Chat Completions endpoint.
+**Providers the helper cannot serve: one.** Every vendor surveyed ships a plain
+OpenAI-shaped Chat Completions endpoint **except Ollama Cloud**, whose compat
+layer is a local process rather than a hosted URL. That is not an adapter gap so
+much as an infrastructure question, and it is the reason Ollama Cloud sits at
+BYOK-watch despite reaching models we would otherwise need Chinese accounts for.
 
 **Anthropic-shaped access is a separate question the helper does not address.**
 Eleven providers ship an Anthropic Messages endpoint, but `createOpenAICompatAdapter`
@@ -1564,17 +1591,22 @@ not a promo.
 
 # Re-verification
 
-| Provider                   | Review by      | Why that date                                                            |
-| -------------------------- | -------------- | ------------------------------------------------------------------------ |
-| **z.ai GLM-5.3-Flash**     | **2026-09-10** | The 50% discount expires 2026-09-09; the post-promo price is unpublished |
-| **Zhipu (pool facts)**     | 2026-10-01     | Pool candidate; needs authenticated rate limits and an Anthropic probe   |
-| **Novita (pool facts)**    | 2026-10-01     | Pool candidate; needs measured rate limits and a third-party answer      |
-| Alibaba Model Studio       | 2026-10-15     | The §III.5 commercial-use ambiguity needs a written answer               |
-| Scaleway                   | 2026-10-15     | Recheck whether a spend cap ships; the GTS PDF still needs a human       |
-| Tencent TokenHub           | 2026-11-30     | The free-token promo is dated to 2026-12-31                              |
-| MiniMax M3 "permanent" 50% | 2026-11-30     | Recheck whether "permanent" survived                                     |
-| DeepSeek / Xiaomi / Kimi   | 2026-11-30     | Pricing-only rows; no pool exposure                                      |
-| Everything else            | 2026-11-30     | Skipped or excluded; recheck in case a terms change reopens one          |
+| Provider                   | Review by      | Why that date                                                                             |
+| -------------------------- | -------------- | ----------------------------------------------------------------------------------------- |
+| **z.ai GLM-5.3-Flash**     | **2026-09-10** | The 50% discount expires 2026-09-09; the post-promo price is unpublished                  |
+| **Zhipu (pool facts)**     | 2026-10-01     | Pool candidate; needs authenticated rate limits and an Anthropic probe                    |
+| **Novita (pool facts)**    | 2026-10-01     | Pool candidate; needs measured rate limits and a third-party answer                       |
+| **QwenCloud free quotas**  | **2026-10-14** | Per the addendum, the observed 1M-token grants expire around 2026-10-21                   |
+| Alibaba Model Studio terms | 2026-10-15     | The §III.5 commercial-use ambiguity needs a written answer                                |
+| Scaleway                   | 2026-10-15     | Recheck whether a spend cap ships; the GTS PDF still needs a human                        |
+| BytePlus ModelArk          | 2026-10-15     | Unresolved lead — needs a browser session, not another static fetch                       |
+| Cohere                     | 2026-11-30     | The commercial-use bar moved from the rate-limits doc to the pricing FAQ once; check both |
+| Tencent TokenHub           | 2026-11-30     | The free-token promo is dated to 2026-12-31                                               |
+| MiniMax M3 "permanent" 50% | 2026-11-30     | Recheck whether "permanent" survived                                                      |
+| Inception Labs             | 2026-11-30     | A 100M-token grant with no published expiry is unlikely to stay that generous             |
+| DeepSeek / Xiaomi / Kimi   | 2026-11-30     | Pricing-only rows; no pool exposure                                                       |
+| `free-llm-api-hub` feed    | 2026-11-30     | Bus factor 1, seven weeks old, automation already deleted once — confirm it is alive      |
+| Everything else            | 2026-11-30     | Skipped or excluded; recheck in case a terms change reopens one                           |
 
 All dates are within 90 days of 2026-09-01, matching the workbook's convention. A
 row whose review date has passed is stale, not renewable.
