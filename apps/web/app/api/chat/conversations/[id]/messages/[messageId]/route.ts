@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -9,6 +8,15 @@ import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
 import { failUnboundVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import {
+  collectSubtree,
+  deleteMessages,
+  lockConversationThread,
+  resolveSurvivingLeaf,
+  setActiveLeaf,
+  spliceMessageChildren,
+  wantsSubtreeDelete,
+} from '../lib/message-thread';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -132,19 +140,45 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
     throw createError.notFound('Conversation not found');
   }
 
-  const [msg] = await db.query<{ id: string }>(
-    'select id from web_messages where id = $1 and conversation_id = $2 limit 1',
-    [messageId, conversationId],
-  );
+  const removeSubtree = wantsSubtreeDelete(new URL(request.url));
 
-  if (!msg) {
-    throw createError.notFound('Message not found');
-  }
+  // One transaction for both modes, because every branch of this route has to
+  // hand the children somewhere and move the reader off a row that is about to
+  // stop existing. `parent_id` is NO ACTION, so a delete that skipped either
+  // step would fail on the foreign key rather than orphan a turn quietly.
+  const threadScope = { conversationId, userId, organizationId };
 
-  await db.execute('delete from web_messages where id = $1 and conversation_id = $2', [
-    messageId,
-    conversationId,
-  ]);
+  await db.transaction(async (tx) => {
+    const activeLeafMessageId = await lockConversationThread(tx, threadScope);
+
+    const [target] = await tx.query<{ id: string; parent_id: string | null }>(
+      'select id, parent_id from web_messages where id = $1 and conversation_id = $2 limit 1',
+      [messageId, conversationId],
+    );
+
+    if (!target) {
+      throw createError.notFound('Message not found');
+    }
+
+    if (removeSubtree) {
+      const doomed = await collectSubtree(tx, conversationId, messageId);
+      if (activeLeafMessageId !== null && doomed.includes(activeLeafMessageId)) {
+        await setActiveLeaf(
+          tx,
+          threadScope,
+          await resolveSurvivingLeaf(tx, conversationId, messageId, target.parent_id),
+        );
+      }
+      await deleteMessages(tx, conversationId, doomed);
+      return;
+    }
+
+    await spliceMessageChildren(tx, conversationId, messageId, target.parent_id);
+    if (activeLeafMessageId === messageId) {
+      await setActiveLeaf(tx, threadScope, target.parent_id);
+    }
+    await deleteMessages(tx, conversationId, [messageId]);
+  });
 
   return NextResponse.json({ success: true });
 }

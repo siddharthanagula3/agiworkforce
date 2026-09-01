@@ -18,6 +18,15 @@ import {
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { scheduleArtifactIndexing } from '../lib/index-artifacts';
+import {
+  assertParentInConversation,
+  INSERT_MESSAGE_SQL,
+  isHttpError,
+  lockConversationThread,
+  resolveLinearTail,
+  setActiveLeaf,
+  stampLinearParents,
+} from '../lib/message-thread';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -27,6 +36,7 @@ const MessageItemSchema = z.object({
   content: z.string().min(1).max(100_000),
   model: z.string().max(200).optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  parentId: z.string().uuid().optional(),
 });
 
 const BulkSaveSchema = z.object({
@@ -59,8 +69,8 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
   const db = getNeonChatDb();
   const organizationId = await resolveActiveOrganizationId(db, userId);
 
-  const [conv] = await db.query<{ id: string }>(
-    `select id
+  const [conv] = await db.query<{ id: string; active_leaf_message_id: string | null }>(
+    `select id, active_leaf_message_id
        from web_conversations
       where id = $1
         and user_id = $2
@@ -73,67 +83,69 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
 
   const saved: ChatMessageRow[] = [];
 
-  try {
-    for (const msg of messages) {
-      let row: ChatMessageRow | undefined;
-      if (msg.id) {
-        [row] = await db.query<ChatMessageRow>(
-          `
-            insert into web_messages
-              (id, conversation_id, role, content, model, metadata)
-            values ($1, $2, $3, $4, $5, $6::jsonb)
-            on conflict (id) do update
-              set content = excluded.content,
-                  model = excluded.model,
-                  metadata = excluded.metadata
-              where web_messages.conversation_id = excluded.conversation_id
-            returning id, role, content, model, provider,
-                      input_tokens, output_tokens, created_at, metadata
-          `,
-          [
-            msg.id,
-            conversationId,
-            msg.role,
-            msg.content.trim(),
-            msg.role === 'assistant' ? (msg.model ?? null) : null,
-            JSON.stringify(normalizeMessageMetadata(msg.metadata) ?? {}),
-          ],
-        );
-        if (!row) {
-          throw createError.validation('Message id belongs to another conversation');
-        }
-        saved.push(row);
-      } else {
-        [row] = await db.query<ChatMessageRow>(
-          `
-            insert into web_messages
-              (conversation_id, role, content, model, metadata)
-            values ($1, $2, $3, $4, $5::jsonb)
-            returning id, role, content, model, provider,
-                      input_tokens, output_tokens, created_at, metadata
-          `,
-          [
-            conversationId,
-            msg.role,
-            msg.content.trim(),
-            msg.role === 'assistant' ? (msg.model ?? null) : null,
-            JSON.stringify(normalizeMessageMetadata(msg.metadata) ?? {}),
-          ],
-        );
-        if (row) saved.push(row);
-      }
+  type MessageItem = (typeof messages)[number];
+  const insertParams = (msg: MessageItem, parent: string | null): unknown[] => [
+    msg.id ?? null,
+    conversationId,
+    msg.role,
+    msg.content.trim(),
+    msg.role === 'assistant' ? (msg.model ?? null) : null,
+    JSON.stringify(normalizeMessageMetadata(msg.metadata) ?? {}),
+    parent,
+  ];
 
-      // Same fire-and-forget discovery aid as the single-message route: index
-      // any artifacts this bulk-saved assistant message produces.
-      if (msg.role === 'assistant' && row) {
-        scheduleArtifactIndexing({
-          db,
-          userId,
-          conversationId,
-          messageId: row.id,
-          content: msg.content.trim(),
-        });
+  const activeLeafMessageId = conv.active_leaf_message_id ?? null;
+  const threadScope = { conversationId, userId, organizationId };
+  const carriesThread =
+    activeLeafMessageId !== null || messages.some((msg) => msg.parentId !== undefined);
+
+  try {
+    if (!carriesThread) {
+      for (const msg of messages) {
+        const [row] = await db.query<ChatMessageRow>(INSERT_MESSAGE_SQL, insertParams(msg, null));
+        if (!row) throw createError.validation('Message id belongs to another conversation');
+        saved.push(row);
       }
+    } else {
+      await db.transaction(async (tx) => {
+        let leafMessageId = await lockConversationThread(tx, threadScope);
+        if (leafMessageId === null) {
+          await stampLinearParents(tx, conversationId);
+          leafMessageId = await resolveLinearTail(tx, conversationId);
+        }
+
+        // The batch chains through itself, so a caller that stamps only the
+        // message it is branching from still gets a connected tail.
+        for (const msg of messages) {
+          if (msg.parentId !== undefined) {
+            await assertParentInConversation(tx, conversationId, msg.parentId);
+          }
+          const [row] = await tx.query<ChatMessageRow>(
+            INSERT_MESSAGE_SQL,
+            insertParams(msg, msg.parentId ?? leafMessageId),
+          );
+          if (!row) throw createError.validation('Message id belongs to another conversation');
+          saved.push(row);
+          leafMessageId = row.id;
+        }
+
+        if (leafMessageId !== null) {
+          await setActiveLeaf(tx, threadScope, leafMessageId);
+        }
+      });
+    }
+
+    // Same fire-and-forget discovery aid as the single-message route: index
+    // any artifacts these bulk-saved assistant messages produce.
+    for (const row of saved) {
+      if (row.role !== 'assistant') continue;
+      scheduleArtifactIndexing({
+        db,
+        userId,
+        conversationId,
+        messageId: row.id,
+        content: row.content,
+      });
     }
 
     return NextResponse.json({
@@ -143,9 +155,7 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
       ),
     });
   } catch (error) {
-    if (error && typeof error === 'object' && ('status' in error || 'statusCode' in error)) {
-      throw error;
-    }
+    if (isHttpError(error)) throw error;
     logger.error({ error, conversationId }, 'Failed to bulk save messages');
     throw createError.internal('Failed to save messages');
   }
