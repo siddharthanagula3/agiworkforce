@@ -224,3 +224,77 @@ competitors, while on desktop the resting composer is **127px against
 ChatGPT's 52px** — their single collapsed pill against our permanently visible
 second control row. Whether desktop should collapse to one resting row is a
 design decision, not a defect; it is queued as one.
+
+## Streaming markdown parse cost, before and after the block splitter (2026-09-01)
+
+The streaming renderer used to hand the whole accumulated message to remark on
+every flush, so a long answer paid for its own length on every token. The block
+splitter in `packages/ui/unified-chat/src/components/markdown/splitMarkdownBlocks.ts`
+freezes every settled top-level block and reparses only the live tail. This is
+the measurement of that change, not an estimate of it.
+
+Both columns come from the same harness, the same document and the same flush
+boundaries, so they differ only in what is parsed. **After** is
+`createMarkdownBlockSplitter().update(content)`. **Before** is the identical
+parse-only remark processor run over the full accumulated string at the same
+flush — the pre-change behaviour, reconstructed rather than recalled.
+
+| accumulated chars | before: full reparse | after: tail split | tail parsed | samples |
+| ----------------- | -------------------- | ----------------- | ----------- | ------- |
+| 1,000             | 1.055ms              | **0.075ms**       | 48 chars    | 320     |
+| 10,000            | 8.259ms              | **0.078ms**       | 39 chars    | 320     |
+| 50,000            | 46.605ms             | **0.175ms**       | 225 chars   | 320     |
+| 100,000           | 97.637ms             | **0.149ms**       | 94 chars    | 320     |
+
+Median per-flush wall time, 5 measured iterations after a discarded warm-up,
+320 split samples and 25 reparse samples per size.
+
+**The exit criterion holds.** From 10k to 100k chars — a tenfold longer message —
+the full reparse grows **x11.82** and the tail split grows **x1.90**. The reparse
+slope is linear in message length, as an O(message) cost must be. The split's
+x1.90 is not a size effect at all: the tail it parsed grew from 39 to 94 chars
+over the same range, so cost tracked the tail by roughly the ratio the tail
+itself moved. Normalised, the split costs 2.01ms per tail kilochar at 10k and
+1.58ms at 100k — flat to slightly falling. At 100k the split is **656x cheaper
+per flush** than the reparse it replaced.
+
+### What this measurement excludes, and why
+
+Three limits worth stating before anyone treats a row as a budget:
+
+- **The streaming buffer's own cost is outside the timed region.** The harness
+  slices the finished document at each flush boundary instead of growing a
+  string with `+=`, because concatenating 100KB per flush costs more than either
+  parse and is unchanged by the splitter. Timing it would have hidden the thing
+  being compared. An earlier run that left it in reported the split growing
+  x4.60 rather than x1.90, all of it buffer flattening.
+- **Only documents the splitter can settle are measured.** The harness derives
+  that set at run time rather than hardcoding it: 23 of the 28 corpus documents
+  qualify. The five excluded ones — an unterminated fence, trailing open display
+  math, an unbalanced raw HTML container, and two carrying reference or footnote
+  definitions — are cases where the splitter deliberately refuses to settle and
+  `StreamingMarkdownContent` falls back to rendering the message as one unit.
+  Those keep the old O(message) cost by design, and this table does not describe
+  them.
+- **Absolute milliseconds are machine and load bound.** These were taken at load
+  average ~2. The same harness on the same commit at load average 35 reported
+  3252ms for the 100k reparse against 97.6ms here, a 33x inflation. The ratios
+  held: x10.17 against x2.07. Compare slopes across runs, never absolutes.
+
+### Reproducing it
+
+```
+pnpm --filter @agiworkforce/unified-chat test:bench
+```
+
+Roughly 15s on an idle machine, and it prints the table above. The harness is
+`packages/ui/unified-chat/src/components/markdown/__tests__/streamingParseCost.ts`,
+driven by the `streamingParseCost.bench.ts` beside it through
+`packages/ui/unified-chat/vitest.bench.config.ts`, which is kept out of the
+ordinary `test` run so CI time does not grow.
+
+The regression gate does run in CI. `streamingParseCost.test.ts` executes the
+same harness at a reduced 1k-to-8k profile in about 0.7s and fails if the split
+slope exceeds x4, or if the full reparse slope drops below x4 — the second
+assertion being what stops a harness that has quietly stopped measuring anything
+from reporting a flat line as a pass.
