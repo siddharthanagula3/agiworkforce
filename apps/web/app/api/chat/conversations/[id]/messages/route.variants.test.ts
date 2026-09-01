@@ -48,6 +48,7 @@ const CONVERSATION_SELECT = /select id, model, active_leaf_message_id/;
 const LOCK = /for update/;
 const PARENT_CHECK = /select id from web_messages where id = \$1 and conversation_id = \$2/;
 const CONVERSION = /lag\(id\) over \(order by created_at, id\)/;
+const BRANCH_PROBE = /select not exists/;
 const INSERT = /insert into web_messages/;
 const LEAF_MOVE = /update web_conversations\s+set active_leaf_message_id/;
 const MESSAGE_COUNT = /select count\(\*\)::text/;
@@ -110,6 +111,7 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
         rows: [{ id: CONVERSATION_ID, model: null, active_leaf_message_id: null }],
       },
       { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: true }] },
       { match: PARENT_CHECK, rows: [{ id: PARENT_ID }] },
       { match: INSERT, rows: [savedRow(SIBLING_ID, PARENT_ID)] },
     ]);
@@ -206,6 +208,7 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
         rows: [{ id: CONVERSATION_ID, model: null, active_leaf_message_id: null }],
       },
       { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: true }] },
       { match: INSERT, rows: [savedRow(SIBLING_ID, null, 'user')] },
       { match: MESSAGE_COUNT, rows: [{ count: '4' }] },
     ]);
@@ -317,6 +320,51 @@ describe('POST /api/chat/conversations/[id]/messages — sibling writes', () => 
     expect(ran(queries, PARENT_CHECK)).toBe(false);
     expect(paramsOf(queries, INSERT)[6]).toBe(EXISTING_LEAF_ID);
     expect(paramsOf(mocks.execute.mock.calls as [string, unknown[]?][], LEAF_MOVE)).toEqual([
+      SIBLING_ID,
+      CONVERSATION_ID,
+      USER_ID,
+      ORGANIZATION_ID,
+    ]);
+  });
+
+  it('does not re-chain the sibling roots when a deleted root leaves the leaf null', async () => {
+    // The reader edited the opening question twice, then deleted the newest
+    // root without its subtree. That delete sets the leaf to the deleted row's
+    // parent, which is null for a root, so the conversation is branched and
+    // leafless at once. Converting here would run lag() across the roots and
+    // chain each deliberate sibling onto whichever one happens to precede it.
+    givenDatabase([
+      {
+        match: CONVERSATION_SELECT,
+        rows: [{ id: CONVERSATION_ID, model: null, active_leaf_message_id: null }],
+      },
+      { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: false }] },
+      { match: PARENT_CHECK, rows: [{ id: PARENT_ID }] },
+      { match: INSERT, rows: [savedRow(SIBLING_ID, PARENT_ID)] },
+    ]);
+
+    const response = await POST(
+      request({
+        id: SIBLING_ID,
+        role: 'assistant',
+        content: 'the answer to the surviving question',
+        parentId: PARENT_ID,
+        skipLlm: true,
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+
+    const queries = mocks.query.mock.calls as [string, unknown[]?][];
+    const executes = mocks.execute.mock.calls as [string, unknown[]?][];
+
+    expect(ran(queries, BRANCH_PROBE)).toBe(true);
+    expect(ran(executes, CONVERSION)).toBe(false);
+    // The write still lands where it was told, and still restores a real leaf.
+    expect(paramsOf(queries, INSERT)[6]).toBe(PARENT_ID);
+    expect(paramsOf(executes, LEAF_MOVE)).toEqual([
       SIBLING_ID,
       CONVERSATION_ID,
       USER_ID,
