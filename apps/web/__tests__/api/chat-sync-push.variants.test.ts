@@ -41,6 +41,7 @@ import { NextRequest } from 'next/server';
 // first: every responder list below is searched in order.
 const LOCK = /for update/;
 const LEAF_SCAN = /organization_id::text as organization_id/;
+const TAKEN_SCAN = /from web_messages where id = any/;
 const BATCH = /insert into web_messages/;
 const LEAF_MOVE = /update web_conversations\s+set active_leaf_message_id/;
 
@@ -199,6 +200,85 @@ describe('POST /api/chat/sync — threaded pushes', () => {
     await push([pushed(FIRST_ID, CONVERSATION_ID, '7')]);
 
     expect(threadParentsOf()).toEqual([]);
+    expect(ran(executes(), LEAF_MOVE)).toBe(false);
+    // Nothing in the batch needs a parent, so the conversation is never locked.
+    expect(ran(queries(), LOCK)).toBe(false);
+  });
+
+  it('never chains the row behind an id the table already holds', async () => {
+    // FIRST_ID already exists — the user's own message in another conversation.
+    // The insert's on-conflict skips it, so it never becomes a row of this
+    // conversation, and chaining SECOND_ID onto it would point the tree out of
+    // the conversation and pin that row against deletion for good.
+    givenDatabase([
+      { match: LOCK, rows: [{ active_leaf_message_id: EXISTING_LEAF_ID }] },
+      {
+        match: LEAF_SCAN,
+        rows: [
+          {
+            id: CONVERSATION_ID,
+            organization_id: ORGANIZATION_ID,
+            active_leaf_message_id: EXISTING_LEAF_ID,
+          },
+        ],
+      },
+      { match: TAKEN_SCAN, rows: [{ id: FIRST_ID }] },
+      { match: BATCH, rows: appliedRows([SECOND_ID]) },
+    ]);
+
+    await push([pushed(FIRST_ID), pushed(SECOND_ID)]);
+
+    const parents = threadParentsOf();
+    expect(parents.some((parent) => parent.parentId === FIRST_ID)).toBe(false);
+    expect(parents.some((parent) => parent.id === FIRST_ID)).toBe(false);
+    expect(parents).toEqual([{ id: SECOND_ID, parentId: EXISTING_LEAF_ID }]);
+    expect(paramsOf(executes(), LEAF_MOVE)[0]).toBe(SECOND_ID);
+  });
+
+  it('asks about every id it is about to chain, and only those', async () => {
+    givenDatabase([
+      { match: LOCK, rows: [{ active_leaf_message_id: EXISTING_LEAF_ID }] },
+      {
+        match: LEAF_SCAN,
+        rows: [
+          {
+            id: CONVERSATION_ID,
+            organization_id: ORGANIZATION_ID,
+            active_leaf_message_id: EXISTING_LEAF_ID,
+          },
+        ],
+      },
+      { match: BATCH, rows: appliedRows([FIRST_ID]) },
+    ]);
+
+    await push([pushed(FIRST_ID), pushed(SECOND_ID, CONVERSATION_ID, '7')]);
+
+    // The edit carries a base version, so it is never a candidate parent and
+    // has no business widening the lookup.
+    expect(paramsOf(queries(), TAKEN_SCAN)[0]).toEqual([FIRST_ID]);
+  });
+
+  it('leaves a conversation untouched when every new row it carries is taken', async () => {
+    givenDatabase([
+      { match: LOCK, rows: [{ active_leaf_message_id: EXISTING_LEAF_ID }] },
+      {
+        match: LEAF_SCAN,
+        rows: [
+          {
+            id: CONVERSATION_ID,
+            organization_id: ORGANIZATION_ID,
+            active_leaf_message_id: EXISTING_LEAF_ID,
+          },
+        ],
+      },
+      { match: TAKEN_SCAN, rows: [{ id: FIRST_ID }] },
+      { match: BATCH, rows: appliedRows([FIRST_ID]) },
+    ]);
+
+    await push([pushed(FIRST_ID)]);
+
+    expect(threadParentsOf()).toEqual([]);
+    expect(ran(queries(), LOCK)).toBe(false);
     expect(ran(executes(), LEAF_MOVE)).toBe(false);
   });
 
