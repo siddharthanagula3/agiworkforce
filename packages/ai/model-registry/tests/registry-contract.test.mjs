@@ -174,10 +174,20 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.equal(registry.policies.auto.aliases.auto.profile, 'balanced');
   assert.equal(registry.policies.auto.aliases['auto-economy'].profile, 'economy');
   assert.deepEqual(registry.policies.auto.tierAllowedSlots.free, [
+    'free_workhorse',
+    'free_workhorse_fast',
     'workhorse_general',
     'reasoning_economy',
     'coding_fast',
   ]);
+  for (const tier of Object.keys(registry.policies.auto.tierAllowedSlots)) {
+    if (tier === 'free') continue;
+    assert.deepEqual(
+      registry.policies.auto.tierAllowedSlots[tier].filter((slotId) => slotId.startsWith('free_')),
+      [],
+      `${tier} must not admit a free-lane slot`,
+    );
+  }
   assert.ok(registry.policies.auto.providerPolicies.usOnly.excludedProviders.includes('moonshot'));
   assert.deepEqual(registry.policies.auto.providerPolicies.usOnly.allowedTiers, [
     'max',

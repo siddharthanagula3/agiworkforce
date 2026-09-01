@@ -691,6 +691,46 @@
         "deprecated": false
       },
       "evidenceRefs": []
+    },
+    "gpt-oss-120b": {
+      "identity": {
+        "key": "gpt-oss-120b",
+        "displayName": "GPT-OSS 120B",
+        "provider": "groq",
+        "providerModelId": "openai/gpt-oss-120b",
+        "openRouterSlug": "openai/gpt-oss-120b",
+        "kind": "reasoning",
+        "openWeight": true,
+        "license": "Apache-2.0"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "August 2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gpt-oss-20b": {
+      "identity": {
+        "key": "gpt-oss-20b",
+        "displayName": "GPT-OSS 20B",
+        "provider": "groq",
+        "providerModelId": "openai/gpt-oss-20b",
+        "openRouterSlug": "openai/gpt-oss-20b",
+        "kind": "reasoning",
+        "openWeight": true,
+        "license": "Apache-2.0"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "August 2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
     }
   },
   "providerModelKeys": {
@@ -724,7 +764,8 @@
     "zhipu": ["glm-5.2"],
     "moonshot": ["kimi-k3"],
     "xai": ["grok-4.5"],
-    "minimax": ["minimax-m3"]
+    "minimax": ["minimax-m3"],
+    "groq": ["gpt-oss-120b", "gpt-oss-20b"]
   },
   "routes": {
     "openai/gpt-5.6-sol": {
@@ -1048,6 +1089,24 @@
       "providerModelId": "openrouter/free",
       "harnessId": "open-router/chat-completions",
       "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "groq/gpt-oss-120b": {
+      "modelKey": "gpt-oss-120b",
+      "provider": "groq",
+      "providerModelId": "openai/gpt-oss-120b",
+      "harnessId": "groq/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "groq/gpt-oss-20b": {
+      "modelKey": "gpt-oss-20b",
+      "provider": "groq",
+      "providerModelId": "openai/gpt-oss-20b",
+      "harnessId": "groq/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true
     }
@@ -2033,6 +2092,34 @@
       "structuredOutput": true,
       "functionCalling": true,
       "reasoning": true
+    },
+    "gpt-oss-120b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gpt-oss-20b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
     }
   },
   "pricing": {
@@ -2347,6 +2434,20 @@
       "unit": "per_million_tokens",
       "inputPerMillion": 0,
       "outputPerMillion": 0
+    },
+    "gpt-oss-120b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.15,
+      "outputPerMillion": 0.6,
+      "cacheReadPerMillion": 0.075
+    },
+    "gpt-oss-20b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.075,
+      "outputPerMillion": 0.3,
+      "cacheReadPerMillion": 0.0375
     }
   },
   "limits": {
@@ -2538,7 +2639,9 @@
     "gemini-omni-flash-preview": { "contextTokens": 4000 },
     "gemini-3.5-live-translate-preview": { "contextTokens": 32000 },
     "openrouter-auto": { "contextTokens": 2000000 },
-    "openrouter-free": { "contextTokens": 200000 }
+    "openrouter-free": { "contextTokens": 200000 },
+    "gpt-oss-120b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
+    "gpt-oss-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 }
   },
   "benchmarks": {
     "gpt-5.6-sol": {},
@@ -2582,7 +2685,9 @@
     "gemini-omni-flash-preview": {},
     "gemini-3.5-live-translate-preview": {},
     "openrouter-auto": {},
-    "openrouter-free": {}
+    "openrouter-free": {},
+    "gpt-oss-120b": {},
+    "gpt-oss-20b": {}
   },
   "evidence": [
     {
@@ -3199,7 +3304,13 @@
         "byok": "premium"
       },
       "tierAllowedSlots": {
-        "free": ["workhorse_general", "reasoning_economy", "coding_fast"],
+        "free": [
+          "free_workhorse",
+          "free_workhorse_fast",
+          "workhorse_general",
+          "reasoning_economy",
+          "coding_fast"
+        ],
         "pro": [
           "workhorse_general",
           "general_balanced",
@@ -3509,6 +3620,16 @@
         }
       },
       "slots": {
+        "free_workhorse": {
+          "modelKey": "gpt-oss-120b",
+          "label": "Free Workhorse",
+          "description": "Shared free workhorse route. Model and provider are selected by the canonical registry."
+        },
+        "free_workhorse_fast": {
+          "modelKey": "gpt-oss-20b",
+          "label": "Free Workhorse Fast",
+          "description": "Shared free workhorse fast route. Model and provider are selected by the canonical registry."
+        },
         "general_fast": {
           "modelKey": "gemini-3.5-flash-lite",
           "label": "General Fast",
