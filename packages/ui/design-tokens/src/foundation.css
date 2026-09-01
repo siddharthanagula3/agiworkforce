@@ -38,12 +38,14 @@
     --n-1000: #080a0c;
 
     /* ---- layer 2: semantic roles, light --------------------------------- */
-    /* --background, --foreground, --border and --destructive-text are the four
-     * names still owned by apps/web/app/globals.css, where they hold bare HSL
-     * channel triplets consumed as hsl(var(--x)). That chain reaches through
-     * --neutral-* in chat.css and into the desktop surface, so it is migrated in
-     * its own verified pass rather than shadowed here. Until then this layer
-     * names the surface and text roles it does own. */
+    /* --background, --foreground, --border and --destructive-text hold bare HSL
+     * channel triplets, read as hsl(var(--x)); dark resolves them through the
+     * --neutral-* ramp in chat.css until that ramp rebases onto --n-*. */
+    --background: 40 23% 97%;
+    --foreground: 222.2 84% 4.9%;
+    --border: 214.3 31.8% 91.4%;
+    --destructive-text: 0 84.2% 45%;
+
     --surface-page: var(--n-25);
     --surface-subtle: var(--n-50);
     --surface-elevated: var(--n-0);
@@ -196,6 +198,11 @@
    * saturated than their light counterparts because the same value that reads
    * as a signal on white reads as a smear on near-black. */
   .dark {
+    --background: var(--neutral-0);
+    --foreground: var(--neutral-fg-1);
+    --border: var(--neutral-4);
+    --destructive-text: 0 84% 65%;
+
     --surface-page: var(--n-1000);
     --surface-subtle: var(--n-950);
     --surface-elevated: var(--n-900);

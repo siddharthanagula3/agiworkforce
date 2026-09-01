@@ -631,10 +631,6 @@
 
     color-scheme: light;
 
-    /* #faf9f7 ≈ hsl(40 23% 97%) - light background matches desktop */
-    --background: 40 23% 97%;
-    --foreground: 222.2 84% 4.9%;
-
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
 
@@ -661,9 +657,7 @@
        on a solid fill - 60.2% failed WCAG AA in both roles (3.55 and 3.76) */
     --destructive: 0 84.2% 48%;
     --destructive-foreground: 210 40% 98%;
-    --destructive-text: 0 84.2% 45%;
 
-    --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
 
@@ -790,9 +784,6 @@
   .dark {
     color-scheme: dark;
 
-    --background: var(--neutral-0);
-    --foreground: var(--neutral-fg-1);
-
     --card: var(--neutral-2);
     --card-foreground: var(--neutral-fg-1);
 
@@ -813,9 +804,7 @@
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --destructive-text: 0 84% 65%;
 
-    --border: var(--neutral-4);
     --input: var(--neutral-3);
     /* 52% lightness → 3.24:1 on dark bg - WCAG AA for focus indicators */
     --ring: 224.3 76.3% 52%;

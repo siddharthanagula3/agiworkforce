@@ -37,6 +37,17 @@ const cssContent = fs.readFileSync(cssPath, 'utf-8');
 const tokensPath = path.resolve(__dirname, '../../../../packages/ui/design-tokens/src/chat.css');
 const tokensContent = fs.readFileSync(tokensPath, 'utf-8');
 
+const foundationPath = path.resolve(
+  __dirname,
+  '../../../../packages/ui/design-tokens/src/foundation.css',
+);
+const foundationContent = fs.readFileSync(foundationPath, 'utf-8');
+
+// foundation.css owns --background, --foreground, --border and
+// --destructive-text; globals.css owns the rest of the dark shadcn set.
+const darkVar = (varName: string): string | null =>
+  parseDarkModeVar(cssContent, varName) ?? parseDarkModeVar(foundationContent, varName);
+
 const PRIMITIVES: Record<string, string> = Object.fromEntries(
   [...tokensContent.matchAll(/^\s*(--neutral-[a-z0-9-]+):\s*([^;]+);/gm)].map((m) => [
     m[1]!,
@@ -66,13 +77,13 @@ const NEUTRAL_HSL = /^0\s+0%\s+\d+(\.\d+)?%$/;
 describe('Dark mode color tokens', () => {
   describe('Background color (#000000)', () => {
     it('--background in dark mode is defined as an HSL triple', () => {
-      const value = parseDarkModeVar(cssContent, '--background');
+      const value = darkVar('--background');
       expect(value).not.toBeNull();
       expect(resolveToken(value as string)).toMatch(/^\d+(\.\d+)?\s+\d+(\.\d+)?%\s+\d+(\.\d+)?%$/);
     });
 
     it('--background in dark mode resolves exactly to #000000', () => {
-      const value = parseDarkModeVar(cssContent, '--background');
+      const value = darkVar('--background');
       expect(value).not.toBeNull();
 
       expect(resolveToHex(value as string)).toBe('#000000');
@@ -81,7 +92,7 @@ describe('Dark mode color tokens', () => {
 
   describe('Sidebar background color (#000000)', () => {
     it('--sidebar-background in dark mode resolves exactly to #000000', () => {
-      const value = parseDarkModeVar(cssContent, '--sidebar-background');
+      const value = darkVar('--sidebar-background');
       expect(value).not.toBeNull();
 
       expect(resolveToHex(value as string)).toBe('#000000');
@@ -105,7 +116,7 @@ describe('Dark mode color tokens', () => {
       ['--sidebar-accent', '#2f2f2f'],
       ['--sidebar-border', '#2f2f2f'],
     ])('%s resolves to %s', (token, hex) => {
-      const value = parseDarkModeVar(cssContent, token);
+      const value = darkVar(token);
       expect(value, `${token} should be defined in dark mode`).not.toBeNull();
       expect(resolveToHex(value as string)).toBe(hex);
     });
@@ -124,7 +135,7 @@ describe('Dark mode color tokens', () => {
       '--sidebar-background',
       '--sidebar-foreground',
     ])('%s carries no hue or saturation', (token) => {
-      expect(resolveToken(parseDarkModeVar(cssContent, token) as string)).toMatch(NEUTRAL_HSL);
+      expect(resolveToken(darkVar(token) as string)).toMatch(NEUTRAL_HSL);
     });
   });
 
@@ -145,19 +156,19 @@ describe('Dark mode color tokens', () => {
       ['--chat-text-placeholder', '#9b9b9b'],
       ['--chat-user-bubble-bg', '#212121'],
     ])('%s resolves to %s in dark mode', (token, hex) => {
-      const value = parseDarkModeVar(cssContent, token);
+      const value = darkVar(token);
       expect(value, `${token} should be defined in dark mode`).not.toBeNull();
       expect(resolveToHex(value as string)).toBe(hex);
     });
 
     it('--chat-border-subtle defines a subtle border color', () => {
-      const value = parseDarkModeVar(cssContent, '--chat-border-subtle');
+      const value = darkVar('--chat-border-subtle');
       expect(value).not.toBeNull();
       expect(value).toMatch(/^(?:#[0-9a-f]{6}|rgba\(|hsl\()/);
     });
 
     it('--chat-text-primary defines a readable text color in dark mode', () => {
-      const value = parseDarkModeVar(cssContent, '--chat-text-primary');
+      const value = darkVar('--chat-text-primary');
       expect(value).not.toBeNull();
       expect(resolveToHex(value as string)).toMatch(/^#[0-9a-f]{6}$/);
     });
@@ -181,7 +192,7 @@ describe('Dark mode color tokens', () => {
         '--chat-user-bubble-bg',
       ];
       for (const token of tokens) {
-        const value = parseDarkModeVar(cssContent, token);
+        const value = darkVar(token);
         expect(value, `${token} should be defined in dark mode`).not.toBeNull();
         expect(value, `${token} must reference a --neutral-* primitive, not a literal`).toMatch(
           /var\(--neutral-[a-z0-9-]+\)/,
@@ -211,7 +222,7 @@ describe('Dark mode color tokens', () => {
       expect(darkBlockMatch).not.toBeNull();
 
       for (const varName of required) {
-        const value = parseDarkModeVar(cssContent, varName);
+        const value = darkVar(varName);
         expect(value, `${varName} should be defined in dark mode`).not.toBeNull();
       }
     });
@@ -225,7 +236,7 @@ describe('Dark mode color tokens', () => {
       ];
 
       for (const varName of sidebarVars) {
-        const value = parseDarkModeVar(cssContent, varName);
+        const value = darkVar(varName);
         expect(value, `${varName} should be defined in dark mode`).not.toBeNull();
       }
     });
