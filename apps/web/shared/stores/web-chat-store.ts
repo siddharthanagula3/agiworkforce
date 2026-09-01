@@ -30,7 +30,11 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard, ResearchStep } from '@agiworkforce/types';
 import type { CloudWorkMode } from '@agiworkforce/types';
-import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
+import type {
+  PaywallSlot,
+  SendReplayMetadata,
+  WebSearchResults,
+} from '@/features/chat/types/message-metadata';
 import type { AgiWorkPlanStep } from '@/features/chat/utils/agiwork-plan';
 import {
   resolveLeafForSibling,
@@ -295,26 +299,13 @@ export interface MessageMetadata {
   documentData?: { title?: string; content?: string; [key: string]: unknown };
   /** Persisted user reaction (stored in cloud messages.metadata) */
   reaction?: 'thumbsUp' | 'thumbsDown' | null;
-  /** Inline paywall rendered in place of an assistant message when a gated feature is requested. */
-  paywall?: {
-    feature: string;
-    requiredTier: string;
-    reason?: string;
-    /** Recovery implied by the server code; legacy slots default to upgrade. */
-    recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage' | 'top_up';
-    /**
-     * GOV-20 — presentation flags from `classifyManagedQuotaErrorCode`, so a
-     * PAID ceiling (rolling window, billing period, rate limit) renders the
-     * same actionable card free-trial refusals always got. Optional: a slot
-     * persisted before GOV-20 has none, and missing `showUpgradeCta` is read
-     * as true, which is exactly the old behaviour.
-     */
-    showUpgradeCta?: boolean;
-    showResetTime?: boolean;
-    suggestStandardModel?: boolean;
-    /** ISO instant the exhausted window refills, when the server sent one. */
-    resetAt?: string;
-  };
+  /**
+   * Inline paywall rendered in place of an assistant message when a gated
+   * feature is requested. The shape is owned by `PaywallSlot`, which is what
+   * `resolveQuotaPaywallSlot` builds and what the card consumes; the store had
+   * an inline copy of it that silently dropped every field added since.
+   */
+  paywall?: PaywallSlot;
   /**
    * How the assistant turn ended, for the Continue Generation affordance.
    * Values: OpenAI-wire finish reasons ('stop' | 'length' | 'tool_calls' | ...),
@@ -418,6 +409,13 @@ export interface Message {
    * persisted: it explains this delivery, not the stored message.
    */
   fallbackReason?: string;
+  /**
+   * Which lane served this turn, from `X-AGI-Route-Lane`. Per-turn and not
+   * persisted, on the same terms as `fallbackReason`: the header is absent on
+   * every response that never consulted the free lane, so absent means "no claim
+   * to make" rather than "managed".
+   */
+  routeLane?: string;
   /**
    * Per-turn usage as PERSISTED on the messages row (`input_tokens` /
    * `output_tokens`), written by the server's assistant-turn persistence and

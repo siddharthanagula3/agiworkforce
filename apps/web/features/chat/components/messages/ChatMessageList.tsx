@@ -522,6 +522,18 @@ const MessageRow = memo(function MessageRow({
     () => onPaywallDismiss?.(message.id),
     [onPaywallDismiss, message.id],
   );
+  // Retry is the whole point of this variant, so it is offered only where the
+  // transcript can actually resend — `handleRegenerate` resolves the user turn
+  // behind this row and replays it, the same path the retry affordance uses.
+  // Without a resend the card falls back to the ordinary refusal rather than
+  // rendering a button that does nothing.
+  const freeCapacityRecovery = useMemo(
+    () =>
+      paywall?.freeCapacity && onRegenerate
+        ? { ...paywall.freeCapacity, onRetry: handleRegenerate }
+        : undefined,
+    [paywall?.freeCapacity, onRegenerate, handleRegenerate],
+  );
   const handleRegenerateImage = useCallback(
     (opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string }) =>
       onRegenerateImage!(message.id, opts),
@@ -560,6 +572,7 @@ const MessageRow = memo(function MessageRow({
               suggestStandardModel={paywall.suggestStandardModel ?? false}
               resetLabel={paywallResetLabel(paywall)}
               recoveryAction={paywall.recoveryAction ?? 'upgrade'}
+              {...(freeCapacityRecovery ? { freeCapacity: freeCapacityRecovery } : {})}
               onUpgrade={handlePaywallUpgrade}
               onDismiss={handlePaywallDismiss}
             />

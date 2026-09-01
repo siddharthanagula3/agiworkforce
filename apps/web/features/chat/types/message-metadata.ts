@@ -88,6 +88,20 @@ export function createSendReplayMetadata(params: {
   return Object.keys(replay).length > 0 ? replay : undefined;
 }
 
+/**
+ * What the free lane's refusal adds to the card, and nothing more.
+ *
+ * Its presence is what selects the free-capacity variant: this is a shared pool
+ * with a clock on it, not a plan limit, so the card owes the reader a countdown
+ * and a way out that is not buying anything. `retryAt` is absent when the server
+ * could not name an instant, and the card degrades to an enabled retry.
+ */
+export interface FreeCapacitySlot {
+  retryAt?: string;
+  /** The server's own BYOK destination; web never invents one. */
+  byokHref?: string;
+}
+
 export interface PaywallSlot {
   feature: string;
   requiredTier: string;
@@ -97,6 +111,7 @@ export interface PaywallSlot {
   showResetTime?: boolean;
   suggestStandardModel?: boolean;
   resetAt?: string;
+  freeCapacity?: FreeCapacitySlot;
 }
 
 export interface ComparisonOptions {

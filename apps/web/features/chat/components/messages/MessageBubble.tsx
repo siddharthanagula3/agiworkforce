@@ -71,6 +71,7 @@ import {
   type GeneratedFile,
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
+import { isFreeRouteLane } from '@/features/chat/lib/routeLane';
 import { TranscriptNotice } from './TranscriptNotice';
 import {
   AgentActivityTimeline,
@@ -348,6 +349,8 @@ interface Message {
     model?: string;
     /** `X-AGI-Fallback-Reason` code for a turn served on a substituted model. */
     fallbackReason?: string;
+    /** `X-AGI-Route-Lane` value naming the lane that served this turn. */
+    routeLane?: string;
     provider?: string;
     cost?: number;
     reasoningTokens?: number;
@@ -2085,7 +2088,9 @@ const MessageBubbleComponent = function MessageBubble({
               back to message.metadata.model (set on messages loaded from DB). */}
           {!isUser && !message.isStreaming && (message.model ?? message.metadata?.model) && (
             <div className="mt-1.5 text-[12px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-              {getManagedModelPresentationLabel(message.model ?? message.metadata?.model)}
+              {getManagedModelPresentationLabel(message.model ?? message.metadata?.model, {
+                freePool: isFreeRouteLane(message.metadata?.routeLane),
+              })}
             </div>
           )}
 

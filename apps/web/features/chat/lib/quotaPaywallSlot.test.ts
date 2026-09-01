@@ -18,7 +18,7 @@ describe('resolveQuotaPaywallSlot', () => {
       ...base,
       planTier: 'free',
       subscriptionSource: null,
-      recovery: { action: 'top_up', href: '/settings/billing' },
+      recovery: [{ action: 'top_up', href: '/settings/billing' }],
     });
 
     expect(slot?.recoveryAction).toBe('top_up');
@@ -29,7 +29,7 @@ describe('resolveQuotaPaywallSlot', () => {
     const slot = resolveQuotaPaywallSlot({
       ...base,
       subscriptionSource: null,
-      recovery: { action: 'view_usage', href: '/settings/usage' },
+      recovery: [{ action: 'view_usage', href: '/settings/usage' }],
     });
 
     expect(slot?.recoveryAction).toBe('view_usage');
@@ -40,7 +40,7 @@ describe('resolveQuotaPaywallSlot', () => {
       ...base,
       planTier: 'free',
       subscriptionSource: null,
-      recovery: { action: 'call_support', href: '/help' },
+      recovery: [{ action: 'call_support', href: '/help' }],
     });
 
     expect(slot?.recoveryAction).toBe('upgrade');

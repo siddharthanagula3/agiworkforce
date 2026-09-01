@@ -82,6 +82,8 @@ import {
   resolveQuotaPaywallSlot,
   type ServerQuotaRecovery,
 } from '@/features/chat/lib/quotaPaywallSlot';
+import { readRetryAt } from '@/features/chat/lib/freeCapacityRecovery';
+import { ROUTE_LANE_HEADER, readRouteLane } from '@/features/chat/lib/routeLane';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   createSendReplayMetadata,
@@ -171,11 +173,14 @@ export interface UseChatStreamReturn {
   isStreaming: boolean;
 }
 
+const NO_RECOVERY_OPTIONS: readonly ServerQuotaRecovery[] = Object.freeze([]);
+
 class ChatApiError extends Error {
   code: string | undefined;
   status: number | undefined;
   resetAt: string | undefined;
-  recovery: ServerQuotaRecovery | undefined;
+  retryAt: string | undefined;
+  recovery: readonly ServerQuotaRecovery[];
 
   constructor(
     message: string,
@@ -183,7 +188,8 @@ class ChatApiError extends Error {
       code?: string;
       status?: number;
       resetAt?: string;
-      recovery?: ServerQuotaRecovery;
+      retryAt?: string;
+      recovery?: readonly ServerQuotaRecovery[];
     } = {},
   ) {
     super(message);
@@ -191,7 +197,8 @@ class ChatApiError extends Error {
     this.code = options.code;
     this.status = options.status;
     this.resetAt = options.resetAt;
-    this.recovery = options.recovery;
+    this.retryAt = options.retryAt;
+    this.recovery = options.recovery ?? NO_RECOVERY_OPTIONS;
   }
 }
 
@@ -221,11 +228,28 @@ function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function readServerQuotaRecovery(value: unknown): ServerQuotaRecovery | undefined {
+function readServerQuotaRecoveryOption(value: unknown): ServerQuotaRecovery | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const action = readString((value as Record<string, unknown>)['action']);
   const href = readString((value as Record<string, unknown>)['href']);
   return action && href ? { action, href } : undefined;
+}
+
+/**
+ * Both shapes the wire uses. A managed quota refusal names one way out and sends
+ * an object; the free lane offers several and sends an array. Reading only the
+ * object left every free-lane recovery on the floor, so the client keeps one
+ * list and lets the resolvers decide which entries they can render.
+ */
+function readServerQuotaRecoveries(value: unknown): readonly ServerQuotaRecovery[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => {
+      const option = readServerQuotaRecoveryOption(entry);
+      return option ? [option] : [];
+    });
+  }
+  const option = readServerQuotaRecoveryOption(value);
+  return option ? [option] : NO_RECOVERY_OPTIONS;
 }
 
 /**
@@ -241,7 +265,12 @@ function isSessionExpiredError(error: unknown): boolean {
 function readChatApiErrorPayload(
   payload: unknown,
   fallbackMessage: string,
-): { message: string; code?: string; recovery?: ServerQuotaRecovery } {
+): {
+  message: string;
+  code?: string;
+  recovery?: readonly ServerQuotaRecovery[];
+  retryAt?: string;
+} {
   if (!payload || typeof payload !== 'object') {
     return { message: fallbackMessage };
   }
@@ -259,11 +288,13 @@ function readChatApiErrorPayload(
     const errorBody = error as Record<string, unknown>;
     const nestedMessage = readString(errorBody['message']);
     const nestedCode = readString(errorBody['code']);
-    const recovery = readServerQuotaRecovery(errorBody['recovery']);
+    const recovery = readServerQuotaRecoveries(errorBody['recovery']);
+    const retryAt = readRetryAt(errorBody['retry_at']);
     return {
       message: nestedMessage ?? topLevelMessage ?? fallbackMessage,
       code: nestedCode ?? topLevelCode,
-      ...(recovery ? { recovery } : {}),
+      ...(recovery.length > 0 ? { recovery } : {}),
+      ...(retryAt ? { retryAt } : {}),
     };
   }
 
@@ -755,6 +786,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     updateMessage(assistantMessageId, { fallbackReason: streamFallbackReason }, conversationId);
   } else if (!isTurnContinuation) {
     updateMessage(assistantMessageId, { fallbackReason: undefined }, conversationId);
+  }
+  // Read here rather than at each caller so a continuation and a resumed run
+  // disclose the lane on the same terms as a first attempt. Cleared on the same
+  // condition as the substitution code above: absent means the response never
+  // consulted the lane, which is an answer, not a gap to leave stale.
+  const streamRouteLane = readRouteLane(response.headers.get(ROUTE_LANE_HEADER));
+  if (streamRouteLane) {
+    updateMessage(assistantMessageId, { routeLane: streamRouteLane }, conversationId);
+  } else if (!isTurnContinuation) {
+    updateMessage(assistantMessageId, { routeLane: undefined }, conversationId);
   }
   const appendToMessage = store.appendToMessage;
   const appendToThinking = store.appendToThinking;
@@ -2135,7 +2176,7 @@ export function useChatStream(): UseChatStreamReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const { message, code, recovery } = readChatApiErrorPayload(
+          const { message, code, recovery, retryAt } = readChatApiErrorPayload(
             errorData,
             `Request failed: ${response.status}`,
           );
@@ -2144,6 +2185,7 @@ export function useChatStream(): UseChatStreamReturn {
             status: response.status,
             resetAt: readErrorResetAt(errorData, response),
             ...(recovery ? { recovery } : {}),
+            ...(retryAt ? { retryAt } : {}),
           });
         }
 
@@ -2326,12 +2368,14 @@ export function useChatStream(): UseChatStreamReturn {
               message: errMessage,
               code,
               recovery,
+              retryAt,
             } = readChatApiErrorPayload(errorData, `Request failed: ${response.status}`);
             throw new ChatApiError(errMessage, {
               code,
               status: response.status,
               resetAt: readErrorResetAt(errorData, response),
               ...(recovery ? { recovery } : {}),
+              ...(retryAt ? { retryAt } : {}),
             });
           }
 
@@ -2624,7 +2668,7 @@ export function useResolveToolApproval(
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const { message, code, recovery } = readChatApiErrorPayload(
+          const { message, code, recovery, retryAt } = readChatApiErrorPayload(
             errorData,
             `Resume failed: ${response.status}`,
           );
@@ -2633,6 +2677,7 @@ export function useResolveToolApproval(
             status: response.status,
             resetAt: readErrorResetAt(errorData, response),
             ...(recovery ? { recovery } : {}),
+            ...(retryAt ? { retryAt } : {}),
           });
         }
 
@@ -2825,8 +2870,11 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     message: errorMessage,
     planTier: subscription?.tier,
     subscriptionSource: subscription?.subscription_source,
-    ...(error instanceof ChatApiError && error.recovery ? { recovery: error.recovery } : {}),
+    ...(error instanceof ChatApiError && error.recovery.length > 0
+      ? { recovery: error.recovery }
+      : {}),
     ...(error instanceof ChatApiError && error.resetAt ? { resetAt: error.resetAt } : {}),
+    ...(error instanceof ChatApiError && error.retryAt ? { retryAt: error.retryAt } : {}),
   });
   if (paywall) {
     if (errorCode === 'free_trial_token_budget_reached') {
