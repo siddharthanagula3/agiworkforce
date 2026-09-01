@@ -21,6 +21,7 @@ import { AgiWorkScheduled } from './AgiWorkScheduled';
 import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 import { ArtifactDraftView } from '@/features/artifacts/ArtifactDraftView';
 import { getAgiTaskModelEligibility } from '@/lib/modelCapabilityGates';
+import { resolveComposerEditorMode } from '@/lib/composerEditorGate';
 const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
 const DesktopTasks = lazy(() => import('@/features/tasks/DesktopTasks'));
 const DesktopAgentTasks = lazy(() =>
@@ -217,6 +218,7 @@ export function DesktopShellV3({
   const composerSendShortcut = useSettingsStore(
     (state) => state.chatPreferences.sendShortcut ?? 'enter',
   );
+  const [composerEditorMode] = useState(resolveComposerEditorMode);
   const matchLocalSkillsForMessage = useSkillMarketplaceStore((state) => state.matchForMessage);
   const suggestLocalSkills = useCallback(
     async (content: string) => {
@@ -699,6 +701,7 @@ export function DesktopShellV3({
                 skills={managedSkills}
                 suggestSkills={isManagedCloud ? undefined : suggestLocalSkills}
                 composerSendShortcut={composerSendShortcut}
+                composerEditorMode={composerEditorMode}
                 onNavigateView={handleNavigateView}
                 sidebarSlot={null}
                 emptyStateSlot={
