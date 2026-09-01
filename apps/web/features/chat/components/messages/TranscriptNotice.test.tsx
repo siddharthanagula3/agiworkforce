@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { CircleAlert, RefreshCw } from '@agiworkforce/icons';
 import { TranscriptNotice } from './TranscriptNotice';
 
 function renderNotice(props: Partial<React.ComponentProps<typeof TranscriptNotice>> = {}) {
   const { container } = render(
-    <TranscriptNotice icon={AlertCircle} message="Something went wrong." {...props} />,
+    <TranscriptNotice icon={CircleAlert} message="Something went wrong." {...props} />,
   );
   return container.firstElementChild as HTMLElement;
 }
@@ -98,7 +98,7 @@ describe('TranscriptNotice action', () => {
   it('renders an actionSlot beside the action, and alone when there is no action', () => {
     const { unmount } = render(
       <TranscriptNotice
-        icon={AlertCircle}
+        icon={CircleAlert}
         message="Declined."
         actionSlot={<button type="button">Report issue</button>}
         action={{ label: 'Retry', ariaLabel: 'Regenerate this response', onClick: vi.fn() }}
@@ -110,7 +110,7 @@ describe('TranscriptNotice action', () => {
 
     render(
       <TranscriptNotice
-        icon={AlertCircle}
+        icon={CircleAlert}
         message="Declined."
         actionSlot={<button type="button">Report issue</button>}
       />,

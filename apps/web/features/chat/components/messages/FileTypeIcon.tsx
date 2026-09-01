@@ -3,17 +3,17 @@
 import { memo } from 'react';
 import {
   File,
-  FileText,
+  FileArchive,
+  FileImage,
   FileJson,
   FileSpreadsheet,
-  FileImage,
-  FileArchive,
   FileTerminal,
-  type LucideIcon,
-} from 'lucide-react';
+  FileText,
+  type Icon,
+} from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 
-type GlyphEntry = { kind: 'glyph'; Icon: LucideIcon; accent: string };
+type GlyphEntry = { kind: 'glyph'; Icon: Icon; accent: string };
 type CompositeEntry = { kind: 'composite'; label: string; accent: string };
 type Entry = GlyphEntry | CompositeEntry;
 
