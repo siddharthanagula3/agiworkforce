@@ -366,6 +366,8 @@ export const openaiAdapterFactory: ProviderAdapterFactory = (config) =>
   createOpenAIAdapter(config as OpenAIAdapterConfig);
 
 export { OPENAI_MODEL_CATALOG } from './catalog';
+export { createOpenAICompatAdapter } from './compat-adapter';
+export type { OpenAICompatAdapterConfig, OpenAICompatAdapterSpec } from './compat-adapter';
 export { translateChatRequest } from './translate';
 export { translateOpenAIStream } from './stream';
 export { translateChatRequestToResponses } from './translate-responses';

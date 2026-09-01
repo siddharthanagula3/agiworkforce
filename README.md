@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 
-AGI Workforce is a multi-surface AI workspace that unifies 19 catalog providers — including local runtimes — into a single application spanning **Mobile**, **Web**, **Desktop**, **CLI**, **Chrome Extension**, and **VS Code Extension**. Each surface enforces its own trust boundary: Local mode keeps data on-device, BYOK (Bring Your Own Key) lets users route to their own provider accounts, and a managed cloud mode (public alpha, open by default) adds hosted inference.
+AGI Workforce is a multi-surface AI workspace that unifies 22 catalog providers — including local runtimes — into a single application spanning **Mobile**, **Web**, **Desktop**, **CLI**, **Chrome Extension**, and **VS Code Extension**. Each surface enforces its own trust boundary: Local mode keeps data on-device, BYOK (Bring Your Own Key) lets users route to their own provider accounts, and a managed cloud mode (public alpha, open by default) adds hosted inference.
 
 ## What the Project Does
 
@@ -14,7 +14,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 
 ## Key Features
 
-- **Multi-provider model routing** — Catalog of 36 models across 19 providers: AGI managed cloud, OpenAI, Anthropic, Google, xAI, DeepSeek, Qwen, Moonshot, MiniMax, Perplexity, ZhipuAI, Runway, OpenRouter, NVIDIA NIM, AWS Bedrock, and the local runtimes Ollama, LM Studio, llama.cpp, and vLLM. Counts and provider names come from `packages/contracts/types/src/models.json`; `pnpm check:readme-facts` fails when this section drifts from it. Task-aware routing selects models by category (fast completion, code generation, complex reasoning, vision, long context, computer use).
+- **Multi-provider model routing** — Catalog of 36 models across 22 providers: AGI managed cloud, OpenAI, Anthropic, Google, xAI, DeepSeek, Qwen, Moonshot, MiniMax, Perplexity, ZhipuAI, Runway, OpenRouter, NVIDIA NIM, Groq, Cloudflare Workers AI, Vercel AI Gateway, AWS Bedrock, and the local runtimes Ollama, LM Studio, llama.cpp, and vLLM. Counts and provider names come from `packages/contracts/types/src/models.json`; `pnpm check:readme-facts` fails when this section drifts from it. Task-aware routing selects models by category (fast completion, code generation, complex reasoning, vision, long context, computer use).
 - **Local-first privacy** — Desktop and mobile surfaces run local models via Ollama, LM Studio, and on-device inference (llama.rn, ExecuTorch). No data leaves the device in Local mode.
 - **Bring Your Own Key (BYOK)** — Users provide their own API keys; AGI Workforce routes requests directly to the user's provider account.
 - **Agentic execution** — Swarm-based orchestration with task decomposition, parallel sub-agent spawning, dependency-graph execution, and result aggregation. The CLI provides an interactive TUI and one-shot execution mode.
@@ -75,19 +75,19 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 
 ### Monorepo Structure
 
-| Directory                   | Contents                                                                                                                                                        |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/mobile`               | Expo 57 / React Native iOS + Android app with on-device LLM support                                                                                             |
-| `apps/web`                  | Next.js 16 web application — product site, chat, billing, docs, admin                                                                                           |
-| `apps/desktop`              | Tauri 2 desktop app — React 19 frontend + Rust native backend                                                                                                   |
-| `apps/cli`                  | Rust CLI binary (`agi`) — interactive TUI, one-shot exec, daemon mode                                                                                           |
-| `apps/extension`            | Chrome Extension (Manifest V3) — browser automation, side panel, native messaging                                                                               |
-| `apps/extension-vscode`     | VS Code extension — IDE-native AI surface                                                                                                                       |
-| `packages/`                 | 28 shared TypeScript packages outside the provider adapters (types, routing, runtime, MCP, artifacts, UI, etc.)                                                 |
-| `packages/ai/providers/`    | 14 per-provider adapter packages (Anthropic, DeepSeek, Factory, Google, LM Studio, MiniMax, Moonshot, Ollama, OpenAI, OpenRouter, Perplexity, Qwen, xAI, Zhipu) |
-| `crates/`                   | 12 Rust crates (protocol, llm, agent-core, mcp, sandbox-policy, execpolicy, etc.)                                                                               |
-| `services/signaling-server` | Express 5 WebRTC/WebSocket signaling server for cross-device sync                                                                                               |
-| `tools/skill-vetting`       | Skill vetting scanner (NVIDIA SkillSpector fork) — developer/CI supply-chain vetting                                                                            |
+| Directory                   | Contents                                                                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/mobile`               | Expo 57 / React Native iOS + Android app with on-device LLM support                                                                                                                                          |
+| `apps/web`                  | Next.js 16 web application — product site, chat, billing, docs, admin                                                                                                                                        |
+| `apps/desktop`              | Tauri 2 desktop app — React 19 frontend + Rust native backend                                                                                                                                                |
+| `apps/cli`                  | Rust CLI binary (`agi`) — interactive TUI, one-shot exec, daemon mode                                                                                                                                        |
+| `apps/extension`            | Chrome Extension (Manifest V3) — browser automation, side panel, native messaging                                                                                                                            |
+| `apps/extension-vscode`     | VS Code extension — IDE-native AI surface                                                                                                                                                                    |
+| `packages/`                 | 28 shared TypeScript packages outside the provider adapters (types, routing, runtime, MCP, artifacts, UI, etc.)                                                                                              |
+| `packages/ai/providers/`    | 18 per-provider adapter packages (Anthropic, DeepSeek, Factory, Google, Groq, LM Studio, MiniMax, Moonshot, NVIDIA, Ollama, OpenAI, OpenRouter, Perplexity, Qwen, Vercel AI Gateway, Workers AI, xAI, Zhipu) |
+| `crates/`                   | 12 Rust crates (protocol, llm, agent-core, mcp, sandbox-policy, execpolicy, etc.)                                                                                                                            |
+| `services/signaling-server` | Express 5 WebRTC/WebSocket signaling server for cross-device sync                                                                                                                                            |
+| `tools/skill-vetting`       | Skill vetting scanner (NVIDIA SkillSpector fork) — developer/CI supply-chain vetting                                                                                                                         |
 
 ## Tech Stack
 

@@ -461,6 +461,20 @@
       ]
     },
     {
+      "path": "packages/ai/providers/groq",
+      "kind": "package",
+      "canonicalOwner": "Provider platform",
+      "consumers": ["packages/ai/providers/factory"],
+      "deployability": "provider-adapter-library",
+      "trustBoundary": "Groq API egress",
+      "status": "active-single-composition-consumer",
+      "action": "keep",
+      "evidence": [
+        "packages/ai/providers/groq/src/index.ts",
+        "packages/ai/providers/factory/src/index.ts"
+      ]
+    },
+    {
       "path": "packages/ai/providers/lmstudio",
       "kind": "package",
       "canonicalOwner": "Provider platform",
@@ -499,6 +513,20 @@
       "action": "keep",
       "evidence": [
         "packages/ai/providers/moonshot/src/index.ts",
+        "packages/ai/providers/factory/src/index.ts"
+      ]
+    },
+    {
+      "path": "packages/ai/providers/nvidia",
+      "kind": "package",
+      "canonicalOwner": "Provider platform",
+      "consumers": ["packages/ai/providers/factory"],
+      "deployability": "provider-adapter-library",
+      "trustBoundary": "NVIDIA NIM API egress",
+      "status": "active-single-composition-consumer",
+      "action": "keep",
+      "evidence": [
+        "packages/ai/providers/nvidia/src/index.ts",
         "packages/ai/providers/factory/src/index.ts"
       ]
     },
@@ -581,6 +609,34 @@
       "action": "keep",
       "evidence": [
         "packages/ai/providers/qwen/src/index.ts",
+        "packages/ai/providers/factory/src/index.ts"
+      ]
+    },
+    {
+      "path": "packages/ai/providers/vercel-gateway",
+      "kind": "package",
+      "canonicalOwner": "Provider platform",
+      "consumers": ["packages/ai/providers/factory"],
+      "deployability": "provider-adapter-library",
+      "trustBoundary": "Vercel AI Gateway egress",
+      "status": "active-single-composition-consumer",
+      "action": "keep",
+      "evidence": [
+        "packages/ai/providers/vercel-gateway/src/index.ts",
+        "packages/ai/providers/factory/src/index.ts"
+      ]
+    },
+    {
+      "path": "packages/ai/providers/workers-ai",
+      "kind": "package",
+      "canonicalOwner": "Provider platform",
+      "consumers": ["packages/ai/providers/factory"],
+      "deployability": "provider-adapter-library",
+      "trustBoundary": "Cloudflare AI Gateway egress to Workers AI",
+      "status": "active-single-composition-consumer",
+      "action": "keep",
+      "evidence": [
+        "packages/ai/providers/workers-ai/src/index.ts",
         "packages/ai/providers/factory/src/index.ts"
       ]
     },
