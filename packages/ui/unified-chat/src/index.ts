@@ -133,6 +133,10 @@ export { Tooltip } from './components/ui/Tooltip';
 export { ChatBadge } from './components/ui/ChatBadge';
 
 export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
+export {
+  StreamingMarkdownContent,
+  type StreamingMarkdownContentProps,
+} from './components/markdown/StreamingMarkdownContent';
 export { MARKDOWN_SANITIZE_SCHEMA } from './components/markdown/markdownSanitizeSchema';
 export { preprocessMath } from './components/markdown/preprocessMath';
 
