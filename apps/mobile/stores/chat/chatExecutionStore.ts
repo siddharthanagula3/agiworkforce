@@ -42,6 +42,7 @@ import {
   parseGeneratedFilesDelta,
   readPersistedInteractiveCards,
   reconcileManagedCloudPublicText,
+  stampLinearParents,
   ManagedCloudAgentRunReferenceSchema,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
@@ -100,6 +101,10 @@ import {
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
 import {
+  isThreadingCapableConversation,
+  visibleThreadFor,
+} from '@/src/features/chat/utils/conversationThread';
+import {
   labelMobileSession,
   mobileExecutionProfileFor,
 } from '@/src/features/chat/utils/sessionLabeling';
@@ -112,6 +117,7 @@ import {
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
+import { managedCloudChat } from '@/services/managedCloudChat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
@@ -138,6 +144,17 @@ export interface SendMessageOptions {
   taskInstruction?: string;
   skillName?: string;
   onAccepted?: () => void;
+  /**
+   * Regenerate: answer this existing question again. No second question is
+   * written, and the new answer becomes a sibling of the one already there.
+   */
+  regenerateParentMessageId?: string;
+  /**
+   * Edit: where the revised question hangs, copied from the question it
+   * revises. `null` names the root sibling group and is not the same as absent,
+   * which means this send is not branching at all.
+   */
+  branchParentId?: string | null;
 }
 
 interface DeferredSend {
@@ -590,13 +607,95 @@ function settleMessageAgentActivity(
   };
 }
 
+function conversationRowsInOrder(conversationId: string): ChatMessage[] {
+  const owned =
+    getConversationMessageStore(conversationId).getState().messages[conversationId] ?? [];
+  return [...owned].sort(compareCloudMessagesByCreatedAtThenId);
+}
+
+/**
+ * The conversation as the reader sees it, and the only thing a completion
+ * request is ever built from: mobile assembles its own prompt, so an abandoned
+ * variant that reached this array would reach the model.
+ */
 function historyMessagesForConversation(
   conversationId: string,
   executionMode: ConversationExecutionMode,
 ): ChatMessage[] {
-  const owned =
-    getConversationMessageStore(conversationId).getState().messages[conversationId] ?? [];
-  return executionMode === 'cloud' ? [...owned].sort(compareCloudMessagesByCreatedAtThenId) : owned;
+  const state = getConversationMessageStore(conversationId).getState();
+  const owned = state.messages[conversationId] ?? [];
+  if (executionMode !== 'cloud') return owned;
+  const conversation = state.conversations.find((candidate) => candidate.id === conversationId);
+  return visibleThreadFor(conversationRowsInOrder(conversationId), conversation);
+}
+
+/**
+ * The turns a branch continues from: the path down to the row it hangs off.
+ * A branch at the root has nothing before it, which `null` names here and the
+ * resolver would otherwise read as "never branched, take every row".
+ */
+function pathEndingAt(conversationId: string, leafMessageId: string | null): ChatMessage[] {
+  if (leafMessageId === null) return [];
+  return visibleThreadFor(conversationRowsInOrder(conversationId), {
+    activeLeafMessageId: leafMessageId,
+  });
+}
+
+/**
+ * Gives a conversation that has only ever been linear the parent pointers its
+ * history implies, so the turn about to be written has something to branch
+ * from. Must run before an edited row's own parent is read: on a conversation
+ * that has never branched there is no parent to read yet, and treating that
+ * absence as `null` would file the revision under the root instead of beside
+ * the question it revises.
+ */
+function ensureLocalThreadParents(conversationId: string): ChatMessage[] {
+  const store = getConversationMessageStore(conversationId);
+  const rows = store.getState().messages[conversationId] ?? [];
+  const stamped = stampLinearParents(rows);
+  if (stamped !== rows) {
+    store.setState((state) => ({
+      messages: { ...state.messages, [conversationId]: stamped },
+    }));
+  }
+  return stamped;
+}
+
+function setLocalActiveLeaf(conversationId: string, messageId: string): void {
+  getConversationMessageStore(conversationId).setState((state) => ({
+    conversations: state.conversations.map((candidate) =>
+      candidate.id === conversationId
+        ? { ...candidate, activeLeafMessageId: messageId }
+        : candidate,
+    ),
+  }));
+}
+
+/**
+ * Writes the row a branch hangs off through the messages route rather than the
+ * sync push, because only that route stamps a linear history into a tree and
+ * accepts an explicit parent. The push chains new rows from whatever leaf it
+ * finds, which is the right answer for a continuation and the wrong one for a
+ * sibling.
+ *
+ * Re-sending a row that already exists is how a regenerate moves the branch
+ * point: the insert is idempotent on the id and never rewrites a parent, so the
+ * call stamps the history and leaves the leaf on the question being answered
+ * again. Either way the row written is a question, never an answer.
+ */
+async function writeCloudBranchPoint(
+  conversationId: string,
+  message: Pick<ChatMessage, 'id' | 'content' | 'model' | 'metadata'>,
+  parentId: string | null,
+): Promise<void> {
+  await managedCloudChat.saveMessage(conversationId, {
+    id: message.id,
+    role: 'user',
+    content: message.content,
+    ...(message.model ? { model: message.model } : {}),
+    ...(message.metadata ? { metadata: message.metadata } : {}),
+    parentId,
+  });
 }
 
 const _artifactThemeColors = agiNativeColors.dark;
@@ -976,24 +1075,49 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const newMessageId = () => (executionMode === 'cloud' ? uuidv7() : generateId());
 
-    const userMessage: ChatMessage = {
-      id: newMessageId(),
-      conversationId,
-      role: 'user',
-      content,
-      createdAt: new Date().toISOString(),
-      model: requestedModel,
-      attachments: uploadedAttachments,
-      ...(executionMode === 'cloud'
-        ? {
-            metadata: {
-              requestedModel,
-              resolvedModel: executionModel,
-              ...(routingReason ? { routingReason } : {}),
-            },
-          }
-        : {}),
-    };
+    const isThreaded = executionMode === 'cloud' && isThreadingCapableConversation(conversation);
+    const regenerateAnchorId = isThreaded ? options?.regenerateParentMessageId : undefined;
+    const branchParentId = isThreaded ? options?.branchParentId : undefined;
+    const regenerateAnchor = regenerateAnchorId
+      ? conversationRowsInOrder(conversationId).find(
+          (row) => row.id === regenerateAnchorId && row.role === 'user',
+        )
+      : undefined;
+    if (regenerateAnchorId && !regenerateAnchor) return false;
+    const userMessageParentId = regenerateAnchor
+      ? undefined
+      : branchParentId !== undefined
+        ? branchParentId
+        : isThreaded
+          ? (conversation?.activeLeafMessageId ?? undefined)
+          : undefined;
+
+    const userMessage: ChatMessage | undefined = regenerateAnchor
+      ? undefined
+      : {
+          id: newMessageId(),
+          conversationId,
+          role: 'user',
+          content,
+          createdAt: new Date().toISOString(),
+          model: requestedModel,
+          attachments: uploadedAttachments,
+          ...(userMessageParentId !== undefined ? { parentId: userMessageParentId } : {}),
+          ...(executionMode === 'cloud'
+            ? {
+                metadata: {
+                  requestedModel,
+                  resolvedModel: executionModel,
+                  ...(routingReason ? { routingReason } : {}),
+                },
+              }
+            : {}),
+        };
+    const assistantParentId = regenerateAnchor
+      ? regenerateAnchor.id
+      : userMessage && userMessageParentId !== undefined
+        ? userMessage.id
+        : undefined;
 
     const assistantMessageId = newMessageId();
     const assistantMessage: ChatMessage = {
@@ -1004,6 +1128,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       createdAt: new Date().toISOString(),
       isStreaming: true,
       model: executionMode === 'cloud' ? executionModel : requestedModel,
+      ...(assistantParentId !== undefined ? { parentId: assistantParentId } : {}),
       ...(executionMode === 'cloud'
         ? {
             metadata: {
@@ -1015,7 +1140,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         : {}),
     };
 
-    const existingMessages = historyMessagesForConversation(conversationId, executionMode);
+    // A branch continues from the row it hangs off, not from wherever the
+    // reader happens to be: resolving from the conversation's own leaf would
+    // put the turns being branched away from into the prompt.
+    const branchFromId = regenerateAnchor ? regenerateAnchor.id : branchParentId;
+    const existingMessages =
+      branchFromId === undefined
+        ? historyMessagesForConversation(conversationId, executionMode)
+        : pathEndingAt(conversationId, branchFromId);
 
     const historyMessages: Array<{
       role: string;
@@ -1070,20 +1202,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       messageContent = [messageContent, ...imageContext].filter(Boolean).join('\n\n');
     }
 
-    if (remoteUploads.length > 0 || localImageUploads.length > 0) {
-      historyMessages.push({
-        role: 'user',
-        content: [
-          ...(messageContent ? [{ type: 'text', text: messageContent }] : []),
-          ...remoteUploads.map((assetId) => ({ type: 'file', file: { asset_id: assetId } })),
-          ...localImageUploads.map((a) => ({
-            type: 'image_url',
-            image_url: { url: a.url },
-          })),
-        ],
-      });
-    } else {
-      historyMessages.push({ role: 'user', content: messageContent });
+    // A regenerate's question already closes the resolved path above; appending
+    // it would put the same turn in the prompt twice.
+    if (!regenerateAnchor) {
+      if (remoteUploads.length > 0 || localImageUploads.length > 0) {
+        historyMessages.push({
+          role: 'user',
+          content: [
+            ...(messageContent ? [{ type: 'text', text: messageContent }] : []),
+            ...remoteUploads.map((assetId) => ({ type: 'file', file: { asset_id: assetId } })),
+            ...localImageUploads.map((a) => ({
+              type: 'image_url',
+              image_url: { url: a.url },
+            })),
+          ],
+        });
+      } else {
+        historyMessages.push({ role: 'user', content: messageContent });
+      }
     }
 
     const activeProjectId = conversation?.projectId ?? null;
@@ -1160,12 +1296,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       void consolidateFactsFromTurn({ message: content, conversationId });
     };
 
+    const turnMessageCount = userMessage ? 2 : 1;
+    const branchPoint =
+      regenerateAnchor ?? (branchParentId !== undefined ? userMessage : undefined);
+    if (branchPoint) {
+      try {
+        await writeCloudBranchPoint(
+          conversationId,
+          branchPoint,
+          regenerateAnchor ? (regenerateAnchor.parentId ?? null) : (branchParentId ?? null),
+        );
+      } catch {
+        set({
+          error: 'Could not start a new version of this message. Check your connection and retry.',
+          paywallError: null,
+          ...streamingFlags(),
+        });
+        return false;
+      }
+      if (!isTurnAccountCurrent()) return false;
+    }
+
     msgStore.setState((state) => {
       const existing = state.messages[conversationId] ?? [];
       return {
         messages: {
           ...state.messages,
-          [conversationId]: [...existing, userMessage, assistantMessage],
+          [conversationId]: [...existing, ...(userMessage ? [userMessage] : []), assistantMessage],
         },
       };
     });
@@ -1185,8 +1342,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       ),
     }));
 
+    if (assistantParentId !== undefined) {
+      setLocalActiveLeaf(conversationId, assistantMessageId);
+    }
+
     if (executionMode === 'cloud') {
-      queueCloudTurnForSync(conversationId, [userMessage]);
+      // A branch point is already on the server, written with the parent the
+      // sync push cannot express. Queueing it would make a second writer for a
+      // row that is done.
+      if (userMessage && !branchPoint) {
+        queueCloudTurnForSync(conversationId, [userMessage]);
+      } else {
+        markConversationForSync(conversationId);
+      }
     }
 
     options?.onAccepted?.();
@@ -1359,7 +1527,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ? {
                   ...c,
                   lastMessage: finalContent.slice(0, 100),
-                  messageCount: (c.messageCount ?? 0) + 2,
+                  messageCount: (c.messageCount ?? 0) + turnMessageCount,
                   updatedAt: new Date().toISOString(),
                   model: c.model ?? requestedModel,
                   provider: c.provider ?? provider,
@@ -1719,7 +1887,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   ? {
                       ...c,
                       lastMessage: preview,
-                      messageCount: (c.messageCount ?? 0) + 2,
+                      messageCount: (c.messageCount ?? 0) + turnMessageCount,
                       updatedAt: new Date().toISOString(),
                       model: c.model ?? requestedModel,
                       provider: c.provider ?? provider,
@@ -2636,8 +2804,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (streamingConversations.has(conversationId)) return;
 
     const msgStore = getConversationMessageStore(conversationId);
-    const msgs = msgStore.getState().messages[conversationId];
-    if (!msgs) return;
+    const conversation = msgStore
+      .getState()
+      .conversations.find((candidate) => candidate.id === conversationId);
+    const branches =
+      conversation !== undefined &&
+      executionModeForConversation(conversation) === 'cloud' &&
+      isThreadingCapableConversation(conversation);
+    // Stamped first so the answer already on screen has a question to hang off;
+    // the new answer becomes its sibling rather than replacing it.
+    const rows = branches
+      ? ensureLocalThreadParents(conversationId)
+      : msgStore.getState().messages[conversationId];
+    if (!rows) return;
+    const msgs = branches ? visibleThreadFor(rows, conversation) : rows;
 
     const msgIndex = msgs.findIndex((m) => m.id === messageId);
     if (msgIndex < 0) return;
@@ -2646,20 +2826,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!target) return;
     let userMsg: (typeof msgs)[number] | null = null;
     let assistantMsg: (typeof msgs)[number] | undefined;
-    let userIndex: number;
     if (target.role === 'assistant') {
       assistantMsg = target;
-      userIndex = msgIndex - 1;
-      userMsg = userIndex >= 0 ? msgs[userIndex] : null;
+      userMsg = msgIndex > 0 ? (msgs[msgIndex - 1] ?? null) : null;
     } else if (target.role === 'user') {
       userMsg = target;
-      userIndex = msgIndex;
       const next = msgs[msgIndex + 1];
       assistantMsg = next && next.role === 'assistant' ? next : undefined;
     } else {
       return;
     }
     if (!userMsg || userMsg.role !== 'user') return;
+    const userIndex = rows.findIndex((m) => m.id === userMsg.id);
+    if (userIndex < 0) return;
 
     const currentAttempts = state.retryAttempts[messageId] ?? 0;
     const nextAttempt = currentAttempts + 1;
@@ -2679,18 +2858,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
 
-    const removedCount = msgs.length - userIndex;
+    const anchorMessageId = userMsg.id;
+    const removedCount = rows.length - userIndex;
     const countedRemoved = target.role === 'assistant' ? removedCount : 0;
-    const trimmedMsgs = msgs.slice(0, userIndex);
-    const conversation = msgStore
-      .getState()
-      .conversations.find((candidate) => candidate.id === conversationId);
+    const trimmedMsgs = rows.slice(0, userIndex);
     const replaceAndRetry = async () => {
+      if (branches) {
+        await get().sendMessage(conversationId, userContent, userModel, undefined, {
+          regenerateParentMessageId: anchorMessageId,
+        });
+        return;
+      }
+
       if (conversation && executionModeForConversation(conversation) === 'cloud') {
         try {
           await deleteCloudMessagesRemote(
             conversationId,
-            msgs.slice(userIndex).map((message) => message.id),
+            rows.slice(userIndex).map((message) => message.id),
           );
         } catch {
           set({ error: 'Could not replace the Cloud response. Check your connection and retry.' });
@@ -2736,7 +2920,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (state.isEditing) return;
 
     const msgStore = getConversationMessageStore(conversationId);
-    const msgs = msgStore.getState().messages[conversationId];
+    const conversation = msgStore
+      .getState()
+      .conversations.find((candidate) => candidate.id === conversationId);
+    const branches =
+      conversation !== undefined &&
+      executionModeForConversation(conversation) === 'cloud' &&
+      isThreadingCapableConversation(conversation);
+    // Stamped before the edited row's own parent is read: on a conversation
+    // that has never branched there is no parent yet, and null there would
+    // silently mean "root sibling" instead of "beside this question".
+    const msgs = branches
+      ? ensureLocalThreadParents(conversationId)
+      : msgStore.getState().messages[conversationId];
     if (!msgs) return;
 
     const msgIndex = msgs.findIndex((m) => m.id === messageId);
@@ -2746,14 +2942,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!targetMsg || targetMsg.role !== 'user') return;
 
     const userModel = targetMsg.model ?? DEFAULT_AUTO_MODE_ID;
+    const editedParentId = targetMsg.parentId ?? null;
 
     set({ isEditing: true });
 
     const trimmedMsgs = msgs.slice(0, msgIndex);
-    const conversation = msgStore
-      .getState()
-      .conversations.find((candidate) => candidate.id === conversationId);
     void (async () => {
+      if (branches) {
+        await get().sendMessage(conversationId, newContent, userModel, undefined, {
+          branchParentId: editedParentId,
+        });
+        return;
+      }
+
       if (conversation && executionModeForConversation(conversation) === 'cloud') {
         await deleteCloudMessagesRemote(
           conversationId,
