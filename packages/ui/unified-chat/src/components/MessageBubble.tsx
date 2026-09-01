@@ -24,6 +24,8 @@ import {
   readCodeExecutionResult,
 } from './CodeExecutionOutput';
 import { ToolCallCard } from './ToolCallCard';
+import { MarkdownContent } from './markdown/MarkdownContent';
+import { StreamingMarkdownContent } from './markdown/StreamingMarkdownContent';
 import { AgentActivityTimeline, hasCanonicalToolActivity } from './AgentActivityTimeline';
 import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
 import { artifactDownloadFile } from '../lib/artifact-download';
@@ -790,16 +792,10 @@ export function MessageBubble({
       <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
         {isStreaming && !message.content.trim() && !canonicalActivity ? (
           <StreamingThinkingStatus />
+        ) : isStreaming ? (
+          <StreamingMarkdownContent content={bodyContent} isStreaming />
         ) : (
-          <>
-            {renderContent(bodyContent)}
-            {isStreaming && (
-              <span
-                aria-hidden
-                className="inline-block w-0.5 h-4 bg-[var(--chat-text-primary)] ml-0.5 align-middle animate-pulse"
-              />
-            )}
-          </>
+          <MarkdownContent content={bodyContent} />
         )}
       </div>
 
