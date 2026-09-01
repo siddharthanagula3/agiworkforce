@@ -30,6 +30,7 @@ const DEFAULT_ROUTES = [
   '/settings/general',
   '/settings/memory',
   '/settings/notifications',
+  '/settings/plugins',
   '/settings/privacy',
   '/settings/profile',
   '/settings/reflect',
