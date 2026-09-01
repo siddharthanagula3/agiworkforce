@@ -28,6 +28,7 @@ import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
+import { TranscriptNotice } from './TranscriptNotice';
 import { ChevronDown, ArrowRight, AlertCircle, RefreshCw, ShieldAlert } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useTTS } from '@/lib/hooks/useTTS';
@@ -1192,32 +1193,30 @@ const ChatMessageListComponent = ({
 
       {showStreamErrorNotice && lastMessage && (
         <div className="px-4 pt-1 md:px-12 lg:px-20">
-          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-muted-foreground">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-danger" aria-hidden="true" />
-            <span>
-              {getStreamErrorMessage(lastMessage)
+          <TranscriptNotice
+            tone="danger"
+            icon={AlertCircle}
+            message={
+              getStreamErrorMessage(lastMessage)
                 ? `Response may be incomplete: ${getStreamErrorMessage(lastMessage)}`
-                : 'This response may be incomplete — the connection to the model was interrupted.'}
-            </span>
-            <button
-              type="button"
-              onClick={() => onRegenerate?.(lastMessage.id)}
-              className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
-              aria-label="Regenerate this response"
-            >
-              <RefreshCw className="h-3 w-3" aria-hidden="true" />
-              Retry
-            </button>
-          </div>
+                : 'This response may be incomplete — the connection to the model was interrupted.'
+            }
+            action={{
+              label: 'Retry',
+              ariaLabel: 'Regenerate this response',
+              icon: RefreshCw,
+              onClick: () => onRegenerate?.(lastMessage.id),
+            }}
+          />
         </div>
       )}
 
       {showRefusalNotice && lastMessage && (
         <div className="px-4 pt-1 md:px-12 lg:px-20">
-          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
-            <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>The model declined to finish this response for safety reasons.</span>
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+          <TranscriptNotice
+            icon={ShieldAlert}
+            message="The model declined to finish this response for safety reasons."
+            actionSlot={
               <ComposerFeedbackDialog
                 variant="safety-appeal"
                 conversationId={conversationId}
@@ -1230,37 +1229,34 @@ const ChatMessageListComponent = ({
                   )?.finishReason
                 }
               />
-              {onRegenerate && (
-                <button
-                  type="button"
-                  onClick={() => onRegenerate(lastMessage.id)}
-                  className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
-                  aria-label="Regenerate this response"
-                >
-                  <RefreshCw className="h-3 w-3" aria-hidden="true" />
-                  Retry
-                </button>
-              )}
-            </div>
-          </div>
+            }
+            action={
+              onRegenerate
+                ? {
+                    label: 'Retry',
+                    ariaLabel: 'Regenerate this response',
+                    icon: RefreshCw,
+                    onClick: () => onRegenerate(lastMessage.id),
+                  }
+                : undefined
+            }
+          />
         </div>
       )}
 
       {showIncompleteTurnNotice && lastMessage && (
         <div className="px-4 pt-1 md:px-12 lg:px-20">
-          <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-muted-foreground">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-danger" aria-hidden="true" />
-            <span>This turn didn&apos;t complete. No response was received.</span>
-            <button
-              type="button"
-              onClick={() => onRegenerate?.(lastMessage.id)}
-              className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
-              aria-label="Retry this turn"
-            >
-              <RefreshCw className="h-3 w-3" aria-hidden="true" />
-              Retry
-            </button>
-          </div>
+          <TranscriptNotice
+            tone="danger"
+            icon={AlertCircle}
+            message="This turn didn't complete. No response was received."
+            action={{
+              label: 'Retry',
+              ariaLabel: 'Retry this turn',
+              icon: RefreshCw,
+              onClick: () => onRegenerate?.(lastMessage.id),
+            }}
+          />
         </div>
       )}
 
