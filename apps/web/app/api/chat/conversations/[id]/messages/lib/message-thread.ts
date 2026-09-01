@@ -62,6 +62,21 @@ export async function lockConversationThread(
   return row.active_leaf_message_id;
 }
 
+/**
+ * Which row a write hangs off, from the three things a caller can mean.
+ *
+ * A uuid names the branch point. An explicit null means the root sibling
+ * group — the edits of the opening turn — and must not be confused with the
+ * third case, an absent parent, which is a caller that does not know about the
+ * tree and continues from wherever the reader is.
+ */
+export function resolveParentId(
+  requested: string | null | undefined,
+  activeLeafMessageId: string | null,
+): string | null {
+  return requested === undefined ? activeLeafMessageId : requested;
+}
+
 export async function assertParentInConversation(
   tx: DatabaseAdapter,
   conversationId: string,

@@ -28,6 +28,7 @@ import {
   INSERT_MESSAGE_SQL,
   isHttpError,
   lockConversationThread,
+  resolveParentId,
   setActiveLeaf,
   stampLinearParents,
 } from './lib/message-thread';
@@ -120,19 +121,18 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     } else {
       message = await db.transaction(async (tx) => {
         const lockedLeafMessageId = await lockConversationThread(tx, threadScope);
-        if (parentId !== undefined) {
+        if (parentId !== undefined && parentId !== null) {
           await assertParentInConversation(tx, conversationId, parentId);
         }
+        // Before the insert, so the rows that already exist are chained and the
+        // new one is left wherever the caller put it.
         if (lockedLeafMessageId === null) {
           await stampLinearParents(tx, conversationId);
         }
 
-        // Falling back to the leaf keeps a client that has not learned about
-        // parents from dropping its message at the root, where it would read as
-        // an edit of the opening turn and vanish from the visible path.
         const [inserted] = await tx.query<ChatMessageRow>(
           INSERT_MESSAGE_SQL,
-          insertParams(parentId ?? lockedLeafMessageId),
+          insertParams(resolveParentId(parentId, lockedLeafMessageId)),
         );
         if (!inserted) {
           throw createError.validation('Message id belongs to another conversation');

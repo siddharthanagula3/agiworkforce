@@ -136,7 +136,7 @@ export const ManagedCloudCreateMessageRequestSchema = z.object({
   role: ManagedCloudMessageRoleSchema.optional().default('user'),
   metadata: ManagedCloudMessageMetadataSchema.optional().default({}),
   skipLlm: z.boolean().optional().default(false),
-  parentId: z.string().uuid().optional(),
+  parentId: z.string().uuid().nullable().optional(),
 });
 export type ManagedCloudCreateMessageRequest = z.input<
   typeof ManagedCloudCreateMessageRequestSchema
