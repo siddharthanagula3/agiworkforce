@@ -1,0 +1,471 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resolveFreeAutoRoute, type FreeAutoCandidate } from '@agiworkforce/routing';
+
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+let redisClient: FakeRedis | null = null;
+vi.mock('@/lib/rate-limit', () => ({
+  getSharedRedisClient: () => redisClient,
+}));
+
+import {
+  classifyFreeLaneFailure,
+  getFreeLaneRuntimeState,
+  recordFreeLaneRouteFailure,
+  recordFreeLaneRouteSuccess,
+  recordFreeLaneUsage,
+  resetFreeLaneRuntimeStateCache,
+} from './runtime-state-service';
+import type { FreePoolEntry, FreePoolsDocument } from '@/lib/server/free-pools';
+
+const ROUTE_ID = 'free-alpha/model-large';
+const POOL_ID = 'free-alpha-pool';
+const PROVIDER = 'free-alpha';
+const NOW_MS = Date.UTC(2026, 8, 1, 12, 30);
+const DAY_START_MS = Date.UTC(2026, 8, 1);
+const DAY_END_MS = Date.UTC(2026, 8, 2);
+const HOUR_MS = 60 * 60 * 1000;
+const POOL_LIMIT = 1000;
+
+type PipelineOp = { command: string; args: unknown[] };
+
+/**
+ * Enough Upstash surface to exercise the read and write paths, and no more.
+ *
+ * `results` is what `pipeline.exec()` hands back, positionally: the assembler's
+ * correctness depends on it reading the pipeline back in the order it queued it,
+ * which a map-shaped fake would hide.
+ */
+class FakeRedis {
+  ops: PipelineOp[] = [];
+  execResults: unknown[] = [];
+  hashes = new Map<string, Record<string, unknown>>();
+  failOnExec = false;
+  failOnHgetall = false;
+
+  pipeline() {
+    const queued: PipelineOp[] = [];
+    const record =
+      (command: string) =>
+      (...args: unknown[]) => {
+        queued.push({ command, args });
+        this.ops.push({ command, args });
+      };
+    return {
+      get: record('get'),
+      hgetall: record('hgetall'),
+      incrby: record('incrby'),
+      set: record('set'),
+      pexpireat: record('pexpireat'),
+      hset: record('hset'),
+      expire: record('expire'),
+      exec: async () => {
+        if (this.failOnExec) throw new Error('upstash unavailable');
+        return this.execResults;
+      },
+    };
+  }
+
+  async hgetall(key: string): Promise<Record<string, unknown> | null> {
+    if (this.failOnHgetall) throw new Error('upstash unavailable');
+    return this.hashes.get(key) ?? null;
+  }
+}
+
+function entry(overrides: Partial<FreePoolEntry> = {}): FreePoolEntry {
+  return {
+    routeId: ROUTE_ID,
+    poolId: POOL_ID,
+    terms: {
+      commercialUseAllowed: true,
+      thirdPartyServingAllowed: true,
+      proxyingAllowed: true,
+      promptsExcludedFromTraining: true,
+    },
+    evidenceUrl: 'https://example.invalid/terms',
+    reviewedBy: 'founder',
+    verifiedAtMs: NOW_MS - HOUR_MS,
+    expiresAtMs: NOW_MS + HOUR_MS,
+    window: 'day',
+    limit: POOL_LIMIT,
+    unit: 'requests',
+    hardStopsBeforePaid: true,
+    ...overrides,
+  };
+}
+
+function document(entries: FreePoolEntry[] = [entry()]): FreePoolsDocument {
+  return { schemaVersion: 1, workbook: 'docs/research/workbook.md', entries };
+}
+
+function candidate(routeId = ROUTE_ID): FreeAutoCandidate {
+  return { routeId, modelKey: 'model-large', provider: PROVIDER, harnessId: 'free-alpha/chat' };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  resetFreeLaneRuntimeStateCache();
+  redisClient = new FakeRedis();
+});
+
+describe('snapshot assembly', () => {
+  it('reads the whole free-route set in one pipeline', async () => {
+    redisClient!.execResults = [0, null, null];
+    await getFreeLaneRuntimeState(NOW_MS, document());
+    expect(redisClient!.ops.map((op) => op.command)).toEqual(['get', 'hgetall', 'hgetall']);
+  });
+
+  it('derives headroom from the pool counter and names the window reset', async () => {
+    redisClient!.execResults = [250, null, null];
+    const state = await getFreeLaneRuntimeState(NOW_MS, document());
+    expect(state.quotaPools[POOL_ID]).toMatchObject({
+      headroomFraction: 0.75,
+      resetsAtMs: DAY_END_MS,
+      hardStopsBeforePaid: true,
+      routeIds: [ROUTE_ID],
+    });
+  });
+
+  it('keys the counter on the window start, so a new day starts empty', async () => {
+    redisClient!.execResults = [0, null, null];
+    await getFreeLaneRuntimeState(NOW_MS, document());
+    const [get] = redisClient!.ops;
+    expect(get!.args[0]).toBe(`agi-fpool:${POOL_ID}:${DAY_START_MS}`);
+  });
+
+  it('clamps headroom at zero when the counter overshot the limit', async () => {
+    redisClient!.execResults = [POOL_LIMIT * 2, null, null];
+    const state = await getFreeLaneRuntimeState(NOW_MS, document());
+    expect(state.quotaPools[POOL_ID]!.headroomFraction).toBe(0);
+  });
+
+  it('condemns a shared pool when any route on it says the pool bills overage', async () => {
+    redisClient!.execResults = [0, null, null, null];
+    const state = await getFreeLaneRuntimeState(
+      NOW_MS,
+      document([entry(), entry({ routeId: 'free-alpha/model-small', hardStopsBeforePaid: false })]),
+    );
+    expect(state.quotaPools[POOL_ID]!.hardStopsBeforePaid).toBe(false);
+  });
+
+  it('omits a pool denominated in a unit it cannot meter', async () => {
+    redisClient!.execResults = [null, null];
+    const state = await getFreeLaneRuntimeState(NOW_MS, document([entry({ unit: 'neurons' })]));
+    expect(state.quotaPools).toEqual({});
+    expect(state.freeEligibility[ROUTE_ID]).toBeDefined();
+  });
+
+  it('caches the snapshot for the cache window and re-reads after it', async () => {
+    redisClient!.execResults = [0, null, null];
+    await getFreeLaneRuntimeState(NOW_MS, document());
+    const afterFirst = redisClient!.ops.length;
+    await getFreeLaneRuntimeState(NOW_MS + 1_000, document());
+    expect(redisClient!.ops.length).toBe(afterFirst);
+    await getFreeLaneRuntimeState(NOW_MS + 6_000, document());
+    expect(redisClient!.ops.length).toBeGreaterThan(afterFirst);
+  });
+});
+
+describe('health snapshot', () => {
+  it('parks a route whose recorded reason has not expired', async () => {
+    redisClient!.execResults = [
+      0,
+      { reason: 'rate_limited', availableAtMs: String(NOW_MS + 30_000) },
+      null,
+    ];
+    const state = await getFreeLaneRuntimeState(NOW_MS, document());
+    expect(state.routeHealth[ROUTE_ID]).toMatchObject({
+      available: false,
+      reason: 'rate_limited',
+      availableAtMs: NOW_MS + 30_000,
+    });
+  });
+
+  it('releases a route once its parking window has passed', async () => {
+    redisClient!.execResults = [
+      0,
+      { reason: 'rate_limited', availableAtMs: String(NOW_MS - 1), successRate: '0.5' },
+      null,
+    ];
+    const state = await getFreeLaneRuntimeState(NOW_MS, document());
+    expect(state.routeHealth[ROUTE_ID]).toMatchObject({ available: true, successRate: 0.5 });
+    expect(state.routeHealth[ROUTE_ID]!.reason).toBeUndefined();
+  });
+
+  it('applies provider-level unavailability to the whole provider', async () => {
+    redisClient!.execResults = [0, null, { reason: 'credential_invalid' }];
+    const state = await getFreeLaneRuntimeState(NOW_MS, document());
+    expect(state.providerHealth[PROVIDER]).toMatchObject({
+      available: false,
+      reason: 'credential_invalid',
+    });
+  });
+});
+
+/**
+ * The invariant this whole lane exists to protect: when the state store cannot
+ * answer, the answer is "no free capacity", never "serve it anyway".
+ */
+describe('fail-closed on an unusable state store', () => {
+  it('yields no pools when the pipeline throws, so routing strands', async () => {
+    redisClient!.failOnExec = true;
+    const state = await getFreeLaneRuntimeState(NOW_MS, document());
+
+    expect(state.quotaPools).toEqual({});
+    expect(state.freeEligibility[ROUTE_ID]).toBeDefined();
+
+    const decision = resolveFreeAutoRoute({
+      candidates: [candidate()],
+      state,
+      nowMs: NOW_MS,
+    });
+    expect(decision.status).toBe('free_capacity_unavailable');
+    expect(decision.rejected).toEqual([{ routeId: ROUTE_ID, reason: 'quota_pool_unknown' }]);
+  });
+
+  it('yields no pools when there is no client at all', async () => {
+    redisClient = null;
+    const state = await getFreeLaneRuntimeState(NOW_MS, document());
+    expect(state.quotaPools).toEqual({});
+
+    const decision = resolveFreeAutoRoute({ candidates: [candidate()], state, nowMs: NOW_MS });
+    expect(decision.status).toBe('free_capacity_unavailable');
+  });
+
+  it('never reports a route as usable on an outage', async () => {
+    redisClient!.failOnExec = true;
+    const state = await getFreeLaneRuntimeState(NOW_MS, document());
+    const decision = resolveFreeAutoRoute({ candidates: [candidate()], state, nowMs: NOW_MS });
+    expect(decision.status).not.toBe('selected');
+  });
+
+  it('strands an unverified route as not-verified rather than assuming free', async () => {
+    redisClient!.execResults = [];
+    const state = await getFreeLaneRuntimeState(
+      NOW_MS,
+      document([entry({ verifiedAtMs: null, reviewedBy: null })]),
+    );
+    const decision = resolveFreeAutoRoute({ candidates: [candidate()], state, nowMs: NOW_MS });
+    expect(decision.rejected).toEqual([{ routeId: ROUTE_ID, reason: 'not_verified_free' }]);
+  });
+});
+
+/** Three different pieces of work for an operator, so three different reasons. */
+describe('rejection attribution', () => {
+  it('names a lapsed review as expired, not as unverified', async () => {
+    redisClient!.execResults = [0, null, null];
+    const state = await getFreeLaneRuntimeState(
+      NOW_MS,
+      document([entry({ expiresAtMs: NOW_MS - 1 })]),
+    );
+    const decision = resolveFreeAutoRoute({ candidates: [candidate()], state, nowMs: NOW_MS });
+    expect(decision.rejected).toEqual([{ routeId: ROUTE_ID, reason: 'verification_expired' }]);
+  });
+
+  it('names a failed terms check as incompatible, not as unverified', async () => {
+    redisClient!.execResults = [0, null, null];
+    const state = await getFreeLaneRuntimeState(
+      NOW_MS,
+      document([
+        entry({
+          terms: {
+            commercialUseAllowed: true,
+            thirdPartyServingAllowed: true,
+            proxyingAllowed: true,
+            promptsExcludedFromTraining: false,
+          },
+        }),
+      ]),
+    );
+    const decision = resolveFreeAutoRoute({ candidates: [candidate()], state, nowMs: NOW_MS });
+    expect(decision.rejected).toEqual([{ routeId: ROUTE_ID, reason: 'terms_incompatible' }]);
+  });
+
+  it('never selects a route on a lapsed or terms-failing record', async () => {
+    redisClient!.execResults = [0, null, null];
+    for (const bad of [entry({ expiresAtMs: NOW_MS - 1 }), entry({ hardStopsBeforePaid: false })]) {
+      resetFreeLaneRuntimeStateCache();
+      const state = await getFreeLaneRuntimeState(NOW_MS, document([bad]));
+      expect(resolveFreeAutoRoute({ candidates: [candidate()], state, nowMs: NOW_MS }).status).toBe(
+        'free_capacity_unavailable',
+      );
+    }
+  });
+});
+
+describe('classifyFreeLaneFailure', () => {
+  it.each([
+    ['rate_limit', 'rate_limited', 'route'],
+    ['quota_exhausted', 'quota_exhausted', 'route'],
+    ['server_overload', 'provider_unhealthy', 'route'],
+    ['server_error', 'provider_unhealthy', 'route'],
+    ['connection', 'provider_unhealthy', 'route'],
+    ['api_timeout', 'provider_unhealthy', 'route'],
+    ['capacity_off_switch', 'provider_unhealthy', 'route'],
+    ['invalid_model', 'model_unavailable', 'route'],
+    ['auth', 'credential_invalid', 'provider'],
+    ['billing_exhausted', 'billing_exhausted', 'provider'],
+  ])('maps %s to %s at %s scope', (category, reason, scope) => {
+    expect(classifyFreeLaneFailure(category, 'some_code')).toEqual({
+      kind: 'health',
+      reason,
+      scope,
+    });
+  });
+
+  it('treats a tier rejection as a terms fact, never as health', () => {
+    expect(classifyFreeLaneFailure('invalid_model', 'model_tier_restricted')).toEqual({
+      kind: 'terms',
+    });
+  });
+
+  it.each(['aborted', 'safety', 'context_overflow', 'invalid_input', 'unknown', 'made_up'])(
+    'does not blame the route for %s',
+    (category) => {
+      expect(classifyFreeLaneFailure(category, 'code')).toEqual({ kind: 'ignored' });
+    },
+  );
+});
+
+describe('recording a settled turn', () => {
+  it('charges one unit per turn against a request-metered pool', async () => {
+    await recordFreeLaneUsage({
+      routeId: ROUTE_ID,
+      nowMs: NOW_MS,
+      usage: { inputTokens: 900, outputTokens: 100 },
+      document: document(),
+    });
+    const incr = redisClient!.ops.find((op) => op.command === 'incrby');
+    expect(incr!.args).toEqual([`agi-fpool:${POOL_ID}:${DAY_START_MS}`, 1]);
+  });
+
+  it('charges the token total against a token-metered pool', async () => {
+    await recordFreeLaneUsage({
+      routeId: ROUTE_ID,
+      nowMs: NOW_MS,
+      usage: { inputTokens: 900, outputTokens: 100 },
+      document: document([entry({ unit: 'tokens' })]),
+    });
+    const incr = redisClient!.ops.find((op) => op.command === 'incrby');
+    expect(incr!.args[1]).toBe(1000);
+  });
+
+  it('expires the counter at the end of its window', async () => {
+    await recordFreeLaneUsage({
+      routeId: ROUTE_ID,
+      nowMs: NOW_MS,
+      usage: { inputTokens: 1, outputTokens: 1 },
+      document: document(),
+    });
+    const expireAt = redisClient!.ops.find((op) => op.command === 'pexpireat');
+    expect(expireAt!.args[1]).toBe(DAY_END_MS);
+  });
+
+  it('charges nothing for a route with no pool record', async () => {
+    await recordFreeLaneUsage({
+      routeId: 'paid-beta/model-paid',
+      nowMs: NOW_MS,
+      usage: { inputTokens: 10, outputTokens: 10 },
+      document: document(),
+    });
+    expect(redisClient!.ops).toEqual([]);
+  });
+});
+
+describe('recording route health', () => {
+  it('clears the parking and the failure streak on a success', async () => {
+    redisClient!.hashes.set(`agi-fhealth:route:${ROUTE_ID}`, {
+      consecutiveFailures: '2',
+      successRate: '0.5',
+    });
+    await recordFreeLaneRouteSuccess({ routeId: ROUTE_ID, nowMs: NOW_MS, latencyMs: 400 });
+    const hset = redisClient!.ops.find((op) => op.command === 'hset');
+    expect(hset!.args[1]).toMatchObject({ consecutiveFailures: 0, reason: '', availableAtMs: '' });
+    expect((hset!.args[1] as Record<string, number>)['successRate']).toBeGreaterThan(0.5);
+  });
+
+  it('parks the route and honours an upstream retry-after', async () => {
+    await recordFreeLaneRouteFailure({
+      routeId: ROUTE_ID,
+      provider: PROVIDER,
+      nowMs: NOW_MS,
+      category: 'rate_limit',
+      code: 'rate_limit_429',
+      retryAfterSeconds: 45,
+      document: document(),
+    });
+    const hset = redisClient!.ops.find((op) => op.command === 'hset');
+    expect(hset!.args[0]).toBe(`agi-fhealth:route:${ROUTE_ID}`);
+    expect(hset!.args[1]).toMatchObject({
+      reason: 'rate_limited',
+      consecutiveFailures: 1,
+      availableAtMs: NOW_MS + 45_000,
+    });
+  });
+
+  it('opens the circuit once the failure streak reaches the threshold', async () => {
+    redisClient!.hashes.set(`agi-fhealth:route:${ROUTE_ID}`, { consecutiveFailures: '2' });
+    await recordFreeLaneRouteFailure({
+      routeId: ROUTE_ID,
+      provider: PROVIDER,
+      nowMs: NOW_MS,
+      category: 'server_error',
+      code: 'server_error_500',
+      document: document(),
+    });
+    const hset = redisClient!.ops.find((op) => op.command === 'hset');
+    expect(hset!.args[1]).toMatchObject({ reason: 'circuit_open', consecutiveFailures: 3 });
+  });
+
+  it('condemns the credential, not the route, on an auth rejection', async () => {
+    await recordFreeLaneRouteFailure({
+      routeId: ROUTE_ID,
+      provider: PROVIDER,
+      nowMs: NOW_MS,
+      category: 'auth',
+      code: 'auth_401',
+      document: document(),
+    });
+    const hset = redisClient!.ops.find((op) => op.command === 'hset');
+    expect(hset!.args[0]).toBe(`agi-fhealth:provider:${PROVIDER}`);
+  });
+
+  it('believes an upstream quota refusal over our own counter', async () => {
+    await recordFreeLaneRouteFailure({
+      routeId: ROUTE_ID,
+      provider: PROVIDER,
+      nowMs: NOW_MS,
+      category: 'quota_exhausted',
+      code: 'insufficient_quota',
+      document: document(),
+    });
+    const set = redisClient!.ops.find((op) => op.command === 'set');
+    expect(set!.args).toEqual([`agi-fpool:${POOL_ID}:${DAY_START_MS}`, POOL_LIMIT]);
+  });
+
+  it('writes no health at all for a tier rejection', async () => {
+    await recordFreeLaneRouteFailure({
+      routeId: ROUTE_ID,
+      provider: PROVIDER,
+      nowMs: NOW_MS,
+      category: 'invalid_model',
+      code: 'model_tier_restricted',
+      document: document(),
+    });
+    expect(redisClient!.ops).toEqual([]);
+  });
+
+  it('writes no health for a request-shaped failure', async () => {
+    await recordFreeLaneRouteFailure({
+      routeId: ROUTE_ID,
+      provider: PROVIDER,
+      nowMs: NOW_MS,
+      category: 'safety',
+      code: 'safety_refusal',
+      document: document(),
+    });
+    expect(redisClient!.ops).toEqual([]);
+  });
+});

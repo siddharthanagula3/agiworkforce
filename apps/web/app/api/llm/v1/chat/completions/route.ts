@@ -10,6 +10,8 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
+import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
+import { observeFreeLaneAttemptFailure } from '@/lib/services/free-lane/runtime-state-service';
 import {
   buildManagedComputeGateResponse,
   buildOrganizationPolicyGateResponse,
@@ -374,6 +376,7 @@ async function dispatchChatCompletions(
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
+        ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       const researchGen = runResearchLoop(
         processed,
@@ -460,6 +463,7 @@ async function dispatchChatCompletions(
         researchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }
       addFallbackReasonHeader(researchHeaders, processed);
+      addRouteLaneHeader(researchHeaders, processed);
 
       // AUDIT-FIX BUG-8: the idle heartbeat was applied inside
       // stream-transform.ts but NOT here -- the research loop goes silent for
@@ -558,6 +562,7 @@ async function dispatchChatCompletions(
           headers['X-Quota-Warning'] = processed.quotaWarningHeader;
         }
         addFallbackReasonHeader(headers, processed);
+        addRouteLaneHeader(headers, processed);
         // GOV-7: name the connectors whose tools did not fit under this plan's
         // ceiling so the client can surface it. Header-encoded because this is
         // decided before the first SSE frame and applies to the whole turn.
@@ -672,6 +677,7 @@ async function dispatchChatCompletions(
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
+        ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       const toolLoopGen = runToolLoop(processed, {
         mcpTools,
@@ -780,6 +786,7 @@ async function dispatchChatCompletions(
         signal: request.signal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
+        ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
       });
       let attemptProcessed: ProcessedRequest = processed;
       let attemptAdapterProvider = adapterProvider;
@@ -864,6 +871,7 @@ async function dispatchChatCompletions(
       signal: request.signal,
       isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
       modelPolicy: processed.modelPolicy ?? null,
+      ...(processed.freeLane ? { onAttemptFailure: observeFreeLaneAttemptFailure } : {}),
     });
     let attemptProcessed: ProcessedRequest = processed;
     let attemptAdapterProvider = nonStreamAdapterProvider;

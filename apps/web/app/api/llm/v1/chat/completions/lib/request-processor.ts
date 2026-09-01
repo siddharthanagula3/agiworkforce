@@ -69,11 +69,20 @@ import {
   taskFamilyRoutingStageEnabled,
 } from '@agiworkforce/routing';
 import type {
+  AutoRouteDecision,
   RoutingAttachment,
   RoutingTaskType,
   TaskFamily,
   TaskFamilySignals,
 } from '@agiworkforce/routing';
+import { freeLaneObserves, resolveFreeLaneMode } from '@/lib/services/free-lane/mode';
+import { ROUTE_LANES, type FreeLanePlan, type RouteLane } from '@/lib/services/free-lane/plan';
+import {
+  FREE_LANE_SELECTION,
+  activateFreeLane,
+  buildFreeCapacityUnavailableResponse,
+  resolveFreeLaneOutcome,
+} from '@/lib/services/free-lane/stage';
 import { trimMessagesToContextWindow, type ContextTrimResult } from './context-window';
 import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
 import type { AuthGateSuccess } from './auth-gate';
@@ -625,6 +634,15 @@ export type ProcessedRequest = {
    */
   modelPolicy?: ModelAccessPolicy | null;
   subscriptionTier?: string;
+  /**
+   * Set only when the free lane actually dispatched this request.
+   *
+   * Carries the candidate set and the one runtime snapshot taken for this
+   * request, so managed failover can re-enter the stage synchronously with the
+   * failed routes excluded instead of rotating onto a paid candidate.
+   */
+  freeLane?: FreeLanePlan;
+  routeLane?: RouteLane;
   routePlanId?: string;
   retries?: number;
   resolvedTaskType: RoutingTaskType;
@@ -1149,6 +1167,11 @@ export function resolveWebCloudModelRoute(
     estimatedOutputTokens?: number;
     taskFamily?: TaskFamily | null;
   },
+  /**
+   * Reorder-only slot preference for THIS request. Omitted on every call but
+   * the free lane's own, so nothing else can be moved by it.
+   */
+  preferSlots?: readonly string[],
 ) {
   return resolveAutoRoute({
     selection: model,
@@ -1156,6 +1179,7 @@ export function resolveWebCloudModelRoute(
     subscriptionTier,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
+    ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
     ...(usage?.budgetRemainingCents !== undefined
       ? { budgetRemainingCents: usage.budgetRemainingCents }
       : {}),
@@ -2046,18 +2070,63 @@ export async function processRequest(
       ).family
     : null;
 
-  const routeDecision = resolveWebCloudModelRoute(
+  const routeUsage = {
+    ...(routeBudgetRemainingCents !== undefined
+      ? { budgetRemainingCents: routeBudgetRemainingCents }
+      : {}),
+    estimatedInputTokens: routeEstimatedInputTokens,
+    taskFamily: routeTaskFamily,
+  };
+
+  const baseRouteDecision = resolveWebCloudModelRoute(
     chatRequest.model,
     subscription.plan_tier,
     resolvedTaskType,
-    {
-      ...(routeBudgetRemainingCents !== undefined
-        ? { budgetRemainingCents: routeBudgetRemainingCents }
-        : {}),
-      estimatedInputTokens: routeEstimatedInputTokens,
-      taskFamily: routeTaskFamily,
-    },
+    routeUsage,
   );
+
+  // The free lane is a stage OVER this resolver's output, so it re-runs the same
+  // admission for the economy alias and ranks what that admits. Paid tiers never
+  // enter it: `tierAllowedSlots` is what keeps free capacity off paid traffic and
+  // paid traffic off free pools, and it is applied per tier inside the resolver.
+  const freeLane = activateFreeLane({
+    configuredMode: resolveFreeLaneMode(),
+    isFreePlan: isFreePlanTier(subscription.plan_tier),
+  });
+  const freeLaneMode = freeLane.mode;
+  // The slot preference rides this branch and no other, so it reaches the
+  // resolver only for an exact-`free` plan with the lane switched on. The base
+  // decision above never receives it, which is what keeps every other tier —
+  // including the ones `normalizeTier` folds into `free` — byte-identical.
+  const freeLaneRouteDecision = freeLaneObserves(freeLaneMode)
+    ? resolveWebCloudModelRoute(
+        FREE_LANE_SELECTION,
+        subscription.plan_tier,
+        resolvedTaskType,
+        routeUsage,
+        freeLane.preferSlots,
+      )
+    : null;
+  const freeLaneNowMs = Date.now();
+  const freeLaneOutcome = await resolveFreeLaneOutcome({
+    mode: freeLaneMode,
+    requestId,
+    nowMs: freeLaneNowMs,
+    freeRouteDecision: freeLaneRouteDecision?.status === 'selected' ? freeLaneRouteDecision : null,
+    dispatchedRouteId: baseRouteDecision.status === 'selected' ? baseRouteDecision.routeId : null,
+  });
+
+  if (freeLaneOutcome.kind === 'stranded') {
+    return {
+      ok: false,
+      response: buildFreeCapacityUnavailableResponse(freeLaneOutcome.decision, freeLaneNowMs),
+    };
+  }
+
+  const freeLanePlan = freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.plan : null;
+  const routeDecision: AutoRouteDecision =
+    freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.routeDecision : baseRouteDecision;
+
   if (routeDecision.status === 'unavailable') {
     logger.warn(
       {
@@ -2928,11 +2997,16 @@ export async function processRequest(
     // workspace may not run never enters the failover plan, so no rotation can
     // land on it. An empty list is a rotation-free request served by the
     // primary model, which the gate above already admitted.
-    fallbackModels: freeTrialEnabled
-      ? []
-      : routeDecision.fallbacks
-          .map((fallback) => fallback.modelKey)
-          .filter((modelKey) => fallbackAllowedByPolicy(modelKey)),
+    // A free-lane dispatch keeps its plan: `routeDecision.fallbacks` is the
+    // stage's ranked tail, every member already verified zero-cost, so rotation
+    // cannot leave the lane. The trial path stays rotation-free as before.
+    fallbackModels:
+      freeTrialEnabled && !freeLanePlan
+        ? []
+        : routeDecision.fallbacks
+            .map((fallback) => fallback.modelKey)
+            .filter((modelKey) => fallbackAllowedByPolicy(modelKey)),
+    ...(freeLanePlan ? { freeLane: freeLanePlan, routeLane: ROUTE_LANES.free } : {}),
     // Carried, not re-read: the OpenRouter route-retry inside managed failover
     // is outside the plan above and must answer to this same snapshot.
     modelPolicy: workspaceModelPolicy,
