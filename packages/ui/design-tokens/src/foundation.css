@@ -37,10 +37,25 @@
     --n-950: #101216;
     --n-1000: #080a0c;
 
+    /* The dark chat surfaces sit on a second, deliberately untinted ramp. It is
+     * tuned against a pure-black ground, so folding it into --n-* above would
+     * move every dark surface. Held as bare HSL channel triplets because its
+     * consumers compose them as hsl(var(--x) / a). chat.css reads these; it no
+     * longer declares them. */
+    --neutral-0: 0 0% 0%;
+    --neutral-1: 0 0% 5.1%;
+    --neutral-2: 0 0% 9.4%;
+    --neutral-3: 0 0% 12.9%;
+    --neutral-4: 0 0% 18.4%;
+    --neutral-5: 0 0% 18.8%;
+    --neutral-6: 0 0% 24.7%;
+    --neutral-fg-1: 0 0% 100%;
+    --neutral-fg-2: 0 0% 68.6%;
+    --neutral-fg-3: 0 0% 60.8%;
+
     /* ---- layer 2: semantic roles, light --------------------------------- */
     /* --background, --foreground, --border and --destructive-text hold bare HSL
-     * channel triplets, read as hsl(var(--x)); dark resolves them through the
-     * --neutral-* ramp in chat.css until that ramp rebases onto --n-*. */
+     * channel triplets, read as hsl(var(--x)). */
     --background: 40 23% 97%;
     --foreground: 222.2 84% 4.9%;
     --border: 214.3 31.8% 91.4%;

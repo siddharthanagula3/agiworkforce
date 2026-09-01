@@ -34,9 +34,6 @@ function parseDarkModeVar(cssContent: string, varName: string): string | null {
 const cssPath = path.resolve(__dirname, '../globals.css');
 const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
-const tokensPath = path.resolve(__dirname, '../../../../packages/ui/design-tokens/src/chat.css');
-const tokensContent = fs.readFileSync(tokensPath, 'utf-8');
-
 const foundationPath = path.resolve(
   __dirname,
   '../../../../packages/ui/design-tokens/src/foundation.css',
@@ -49,7 +46,7 @@ const darkVar = (varName: string): string | null =>
   parseDarkModeVar(cssContent, varName) ?? parseDarkModeVar(foundationContent, varName);
 
 const PRIMITIVES: Record<string, string> = Object.fromEntries(
-  [...tokensContent.matchAll(/^\s*(--neutral-[a-z0-9-]+):\s*([^;]+);/gm)].map((m) => [
+  [...foundationContent.matchAll(/^\s*(--neutral-[a-z0-9-]+):\s*([^;]+);/gm)].map((m) => [
     m[1]!,
     m[2]!.trim(),
   ]),

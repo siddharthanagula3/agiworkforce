@@ -93,7 +93,7 @@ function token(block: string, name: string): string {
 }
 
 const PRIMITIVES: Record<string, string> = Object.fromEntries(
-  [...chatCss.matchAll(/^\s*(--neutral-[a-z0-9-]+):\s*([^;]+);/gm)].map((m) => [
+  [...foundationCss.matchAll(/^\s*(--neutral-[a-z0-9-]+):\s*([^;]+);/gm)].map((m) => [
     m[1]!,
     m[2]!.trim(),
   ]),
@@ -594,6 +594,25 @@ describe('foundation layer', () => {
       );
       expect(webBase.dark, `${name} still declared in the globals.css dark block`).not.toMatch(
         declaration,
+      );
+    }
+  });
+
+  it('is the only declaration site for the dark chat ramp', () => {
+    expect(Object.keys(PRIMITIVES).length).toBeGreaterThan(0);
+    expect(chatCss, 'chat.css declares a --neutral-* primitive again').not.toMatch(
+      /^\s*--neutral-[a-z0-9-]+\s*:/m,
+    );
+  });
+
+  it('every surface that loads chat.css also loads foundation.css', () => {
+    // chat.css resolves its dark palette through the --neutral-* ramp above, so
+    // a surface importing one without the other renders dark mode unstyled.
+    for (const sheet of ['apps/web/app/globals.css', 'apps/desktop/src/styles/globals.css']) {
+      const css = readFileSync(resolve(repoRoot, sheet), 'utf8');
+      if (!css.includes('design-tokens/chat.css')) continue;
+      expect(css, `${sheet} imports chat.css without foundation.css`).toContain(
+        'design-tokens/foundation.css',
       );
     }
   });
