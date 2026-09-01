@@ -90,7 +90,7 @@ function rustTestModuleStart(lines) {
 const BUDGETS = [
   {
     file: 'packages/ai/provider-runtime/src/base-url.ts',
-    max: 14,
+    max: 15,
     why: 'ALLOWED_MANAGED_PROVIDER_HOSTS — the canonical managed-provider SSRF allowlist.',
   },
   {

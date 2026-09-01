@@ -135,6 +135,12 @@
       "purpose": "Google AI API adapter behind @agiworkforce/provider-protocol."
     },
     {
+      "name": "@agiworkforce/providers-groq",
+      "path": "packages/ai/providers/groq",
+      "kind": "package",
+      "purpose": "Groq API adapter behind @agiworkforce/provider-protocol."
+    },
+    {
       "name": "@agiworkforce/providers-lmstudio",
       "path": "packages/ai/providers/lmstudio",
       "kind": "package",
@@ -151,6 +157,12 @@
       "path": "packages/ai/providers/moonshot",
       "kind": "package",
       "purpose": "Moonshot API adapter behind @agiworkforce/provider-protocol."
+    },
+    {
+      "name": "@agiworkforce/providers-nvidia",
+      "path": "packages/ai/providers/nvidia",
+      "kind": "package",
+      "purpose": "NVIDIA NIM API adapter behind @agiworkforce/provider-protocol."
     },
     {
       "name": "@agiworkforce/providers-ollama",
@@ -181,6 +193,18 @@
       "path": "packages/ai/providers/qwen",
       "kind": "package",
       "purpose": "Qwen API adapter behind @agiworkforce/provider-protocol."
+    },
+    {
+      "name": "@agiworkforce/providers-vercel-gateway",
+      "path": "packages/ai/providers/vercel-gateway",
+      "kind": "package",
+      "purpose": "Vercel AI Gateway adapter behind @agiworkforce/provider-protocol."
+    },
+    {
+      "name": "@agiworkforce/providers-workers-ai",
+      "path": "packages/ai/providers/workers-ai",
+      "kind": "package",
+      "purpose": "Cloudflare Workers AI adapter fronted by the AI Gateway OpenAI-compatible endpoint."
     },
     {
       "name": "@agiworkforce/providers-xai",

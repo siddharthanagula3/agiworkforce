@@ -503,6 +503,39 @@
       "taskRouting": {},
       "canonicalization": {},
       "defaultModel": "minimax-m3"
+    },
+    "groq": {
+      "label": "Groq",
+      "sseDelimiter": "\n\n",
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "modelPrefixes": [],
+      "aliases": ["groq"],
+      "defaultModel": "",
+      "taskRouting": {},
+      "canonicalization": {}
+    },
+    "workers_ai": {
+      "label": "Cloudflare Workers AI",
+      "sseDelimiter": "\n\n",
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "modelPrefixes": [],
+      "aliases": ["workers_ai", "workers-ai", "cloudflare"],
+      "defaultModel": "",
+      "taskRouting": {},
+      "canonicalization": {}
+    },
+    "vercel_gateway": {
+      "label": "Vercel AI Gateway",
+      "sseDelimiter": "\n\n",
+      "tokenMultiplier": { "prompt": 1, "completion": 1 },
+      "defaultPricing": { "inputPerMillion": 0, "outputPerMillion": 0 },
+      "modelPrefixes": [],
+      "aliases": ["vercel_gateway", "vercel-gateway", "vercel"],
+      "defaultModel": "",
+      "taskRouting": {},
+      "canonicalization": {}
     }
   },
   "models": {
