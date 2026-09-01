@@ -39,9 +39,11 @@ beforeEach(() => {
 
 describe('POST /api/chat/sync — artifact indexing', () => {
   it('indexes an applied assistant message pushed from another surface', async () => {
-    queryMock.mockResolvedValueOnce([
-      { kind: 'applied', id: ASSISTANT_MESSAGE_ID, server_version: '1', current: null },
-    ]);
+    queryMock.mockImplementation(async (sql: string) =>
+      String(sql).includes('insert into web_messages')
+        ? [{ kind: 'applied', id: ASSISTANT_MESSAGE_ID, server_version: '1', current: null }]
+        : [],
+    );
 
     const res = await POST(
       postReq({
@@ -69,10 +71,14 @@ describe('POST /api/chat/sync — artifact indexing', () => {
   });
 
   it('does not index a user message or a tombstoned assistant message', async () => {
-    queryMock.mockResolvedValueOnce([
-      { kind: 'applied', id: USER_MESSAGE_ID, server_version: '1', current: null },
-      { kind: 'applied', id: ASSISTANT_MESSAGE_ID, server_version: '2', current: null },
-    ]);
+    queryMock.mockImplementation(async (sql: string) =>
+      String(sql).includes('insert into web_messages')
+        ? [
+            { kind: 'applied', id: USER_MESSAGE_ID, server_version: '1', current: null },
+            { kind: 'applied', id: ASSISTANT_MESSAGE_ID, server_version: '2', current: null },
+          ]
+        : [],
+    );
 
     const res = await POST(
       postReq({

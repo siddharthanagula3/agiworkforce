@@ -5,9 +5,36 @@ import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkfo
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
+import {
+  lockConversationThread,
+  messageExists,
+  resolveAnsweredParentId,
+  setActiveLeaf,
+} from '@/app/api/chat/conversations/[id]/messages/lib/message-thread';
 import type { ProcessedRequest } from './request-processor';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
+
+// parent_id is absent from the on-conflict set-list for the same reason it is
+// in INSERT_MESSAGE_SQL: lineage is decided once, by the insert that created
+// the row. A retry re-asserts the payload, never the tree.
+const INSERT_ASSISTANT_TURN_SQL = `insert into web_messages
+         (id, conversation_id, role, content, model, provider, input_tokens, output_tokens, metadata, parent_id)
+       select $1::uuid, c.id, 'assistant', $3::text, $4::text, $5::text,
+              $6::integer, $7::integer, $8::jsonb, $11::uuid
+         from public.web_conversations c
+        where c.id = $2::uuid
+          and c.user_id = $9
+          and c.organization_id is not distinct from $10::uuid
+          and c.deleted_at is null
+       on conflict (id) do update
+          set content = excluded.content,
+              model = excluded.model,
+              provider = excluded.provider,
+              input_tokens = excluded.input_tokens,
+              output_tokens = excluded.output_tokens,
+              metadata = web_messages.metadata || excluded.metadata
+        where web_messages.conversation_id = excluded.conversation_id`;
 
 export interface AssistantTurnSnapshot {
   content: string;
@@ -84,38 +111,66 @@ export async function persistAssistantTurn(params: {
     metadata[INTERACTIVE_CARDS_METADATA_KEY] = interactiveCards;
   }
 
+  const db = getNeonDb();
+  const threadScope = {
+    conversationId,
+    userId,
+    organizationId: processed.organizationId ?? null,
+  };
+  const insertParams = (parentId: string | null): unknown[] => [
+    messageId,
+    conversationId,
+    snapshot.content,
+    snapshot.model,
+    snapshot.provider,
+    Math.max(0, Math.trunc(snapshot.inputTokens)),
+    Math.max(0, Math.trunc(snapshot.outputTokens)),
+    JSON.stringify(metadata),
+    userId,
+    threadScope.organizationId,
+    parentId,
+  ];
+
   try {
-    const affected = await getNeonDb().execute(
-      `insert into web_messages
-         (id, conversation_id, role, content, model, provider, input_tokens, output_tokens, metadata)
-       select $1::uuid, c.id, 'assistant', $3::text, $4::text, $5::text,
-              $6::integer, $7::integer, $8::jsonb
-         from public.web_conversations c
-        where c.id = $2::uuid
-          and c.user_id = $9
-          and c.organization_id is not distinct from $10::uuid
-          and c.deleted_at is null
-       on conflict (id) do update
-          set content = excluded.content,
-              model = excluded.model,
-              provider = excluded.provider,
-              input_tokens = excluded.input_tokens,
-              output_tokens = excluded.output_tokens,
-              metadata = web_messages.metadata || excluded.metadata
-        where web_messages.conversation_id = excluded.conversation_id`,
-      [
-        messageId,
-        conversationId,
-        snapshot.content,
-        snapshot.model,
-        snapshot.provider,
-        Math.max(0, Math.trunc(snapshot.inputTokens)),
-        Math.max(0, Math.trunc(snapshot.outputTokens)),
-        JSON.stringify(metadata),
-        userId,
-        processed.organizationId ?? null,
-      ],
+    const [conversation] = await db.query<{ active_leaf_message_id: string | null }>(
+      `select active_leaf_message_id
+         from web_conversations
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $3
+          and deleted_at is null
+        limit 1`,
+      [conversationId, userId, threadScope.organizationId],
     );
+
+    // A conversation nobody has branched takes the single statement it always
+    // has, and a conversation this request cannot see falls through it to the
+    // same zero-row no-op rather than to a lock that would throw.
+    const affected =
+      (conversation?.active_leaf_message_id ?? null) === null
+        ? await db.execute(INSERT_ASSISTANT_TURN_SQL, insertParams(null))
+        : await db.transaction(async (tx) => {
+            const lockedLeafMessageId = await lockConversationThread(tx, threadScope);
+            // The branch this request read was undone before it owned the lock,
+            // so the conversation is linear again and takes the linear write.
+            if (lockedLeafMessageId === null) {
+              return tx.execute(INSERT_ASSISTANT_TURN_SQL, insertParams(null));
+            }
+
+            // Probed before the insert: afterwards the row exists either way,
+            // and a replay is no longer distinguishable from a first write.
+            const alreadyWritten = await messageExists(tx, conversationId, messageId);
+            const parentId = await resolveAnsweredParentId(tx, conversationId, lockedLeafMessageId);
+            const written = await tx.execute(INSERT_ASSISTANT_TURN_SQL, insertParams(parentId));
+
+            // A replay must not drag the visible path back onto a turn the
+            // reader has already moved past: a cloud agent run can settle long
+            // after the client saved this same row and the conversation went on.
+            if (written > 0 && !alreadyWritten) {
+              await setActiveLeaf(tx, threadScope, messageId);
+            }
+            return written;
+          });
 
     // Same fire-and-forget contract as the client-save path
     // (scheduleArtifactIndexing in messages/route.ts): a discovery aid, never a
@@ -126,7 +181,7 @@ export async function persistAssistantTurn(params: {
     // would violate web_artifact_index's FK on message_id.
     if (affected > 0) {
       scheduleArtifactIndexing({
-        db: getNeonDb(),
+        db,
         userId,
         conversationId,
         messageId,
