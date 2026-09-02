@@ -33,6 +33,12 @@ const WHILE_YOU_WAIT = [
     body: 'Use your provider accounts on supported Desktop, CLI, and VS Code releases with visible labels.',
     href: '/byok',
   },
+  {
+    meta: 'Team',
+    title: 'Team pricing',
+    body: 'Self-serve checkout for the Team tier, open today without an enterprise contract.',
+    href: '/pricing',
+  },
 ];
 
 export default function WaitlistPage() {
