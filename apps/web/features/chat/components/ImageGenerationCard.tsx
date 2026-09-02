@@ -32,6 +32,7 @@ import {
   MoreHorizontal,
   Send,
 } from 'lucide-react';
+import { useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   getImageAspectOptionsForModel,
@@ -670,6 +671,9 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
   const [copied, setCopied] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  const morePanelRef = useRef<HTMLDivElement>(null);
+  const closeMore = useCallback(() => setShowMore(false), []);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -697,6 +701,16 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showMore]);
+
+  // role="menu" promises Escape-to-close, arrow navigation and focus return
+  // to the trigger; outside-click alone left a keyboard user with no way to
+  // dismiss the panel short of tabbing through it or blurring the page.
+  useMenuKeyboard({
+    open: showMore,
+    onClose: closeMore,
+    panelRef: morePanelRef,
+    triggerRef: moreTriggerRef,
+  });
 
   return (
     <div className="mt-3 w-full max-w-[420px]">
@@ -770,17 +784,26 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
         {/* More (download lives here too) */}
         <div className="relative" ref={moreRef}>
           <button
+            ref={moreTriggerRef}
             type="button"
             onClick={() => setShowMore((p) => !p)}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
             aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={showMore}
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
           {showMore && (
-            <div className="absolute bottom-full left-0 z-50 mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+            <div
+              ref={morePanelRef}
+              role="menu"
+              aria-label="More actions"
+              className="absolute bottom-full left-0 z-50 mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+            >
               <button
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   handleDownload();
                   setShowMore(false);
@@ -792,6 +815,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
               </button>
               <button
                 type="button"
+                role="menuitem"
                 onClick={() => {
                   onShare();
                   setShowMore(false);
