@@ -1,13 +1,20 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import {
+  Button,
+  ButtonRow,
+  Eyebrow,
+  Prose,
+  Section,
+  Stack,
+} from '@/features/marketing/components/system';
+import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
 
 export const metadata = buildMetadata({
-  title: 'MCP Reference Servers',
+  title: 'MCP reference servers',
   description:
-    'A short hand-picked list of stdio MCP servers Desktop can install. This is not a browsable registry — use the official MCP registry for that.',
+    'A short hand-picked list of stdio MCP servers Desktop can install. This is not a browsable registry, use the official MCP registry for that.',
   path: '/connectors/mcp-directory',
 });
 
@@ -17,120 +24,119 @@ const REFERENCE_MCPS = [
     description: 'Read and write files on your local machine.',
     pkg: '@modelcontextprotocol/server-filesystem',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['stdio', 'local'],
+    tags: 'stdio · local',
   },
   {
     name: 'Git',
     description: 'Repository status, diffs, branches, and commits.',
     pkg: 'mcp-server-git',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['stdio', 'developer'],
+    tags: 'stdio · developer',
   },
   {
     name: 'GitHub',
     description: 'Repos, issues, and pull requests via the GitHub API.',
     pkg: '@modelcontextprotocol/server-github',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['stdio', 'developer'],
+    tags: 'stdio · developer',
   },
   {
     name: 'Postgres',
     description: 'Query and manage PostgreSQL databases.',
     pkg: '@modelcontextprotocol/server-postgres',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['stdio', 'database'],
+    tags: 'stdio · database',
   },
   {
     name: 'Slack',
     description: 'Post messages and read channels via the Slack API.',
     pkg: '@modelcontextprotocol/server-slack',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['stdio', 'productivity'],
+    tags: 'stdio · productivity',
   },
   {
     name: 'Memory',
     description: 'Persistent knowledge-graph storage for long-term context.',
     pkg: '@modelcontextprotocol/server-memory',
     url: 'https://github.com/modelcontextprotocol/servers',
-    tags: ['stdio', 'data'],
+    tags: 'stdio · data',
   },
 ];
 
 export default function McpDirectoryPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section className="agi-page-hero">
-          <Link href="/connectors" className="agi-cta-ghost" style={{ paddingTop: 0 }}>
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            Back to Connectors
-          </Link>
-          <h1 className="agi-page-h1" style={{ marginTop: 18 }}>
-            MCP reference servers.
-          </h1>
-          <p className="agi-page-lede">
-            This is a short hand-picked list, not a registry &mdash; we do not host a browsable or
-            searchable MCP directory, and there is no plan date for one. Every server below is a
-            stdio process, so it runs on Desktop or the CLI, not in the browser. Desktop&rsquo;s
-            built-in server browser installs each of these by name. To search the full catalogue of
-            community servers, use the official MCP registry.
-          </p>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Installable from Desktop &middot; stdio</p>
-          <div className="agi-route-grid">
-            {REFERENCE_MCPS.map((mcp) => (
-              <a
-                key={mcp.name}
-                href={mcp.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="agi-route-card"
-              >
-                <span className="agi-route-meta">{mcp.tags.join(' / ')}</span>
-                <span className="agi-route-title">{mcp.name}</span>
-                <span className="agi-route-body">{mcp.description}</span>
-                <code className="agi-route-body" style={{ marginTop: 10, fontSize: '0.78em' }}>
-                  {mcp.pkg}
-                </code>
-                <span
-                  className="agi-cta-ghost"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 18 }}
-                >
-                  View reference repo
-                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-
-        <section className="agi-section">
-          <div className="agi-launch-cta">
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <Section id="mcp-directory-hero" labelledBy="agi-mcp-directory-title" size="lg">
+          <Stack gap="loose">
             <div>
-              <h2 className="agi-launch-title">Bring your own tools.</h2>
-              <p className="agi-launch-body">
-                The official MCP registry lists hundreds of community-contributed servers. We do not
-                mirror, curate, or sign any of them. On the web, the custom connector dialog accepts
-                a remote HTTP or SSE MCP endpoint and your own token; stdio servers like the ones
-                above have no URL, so add those from Desktop or the CLI instead.
-              </p>
+              <Eyebrow>Connectors · MCP reference servers</Eyebrow>
+              <h1 className="agi-ds-h1" id="agi-mcp-directory-title">
+                A short list, not a registry.
+              </h1>
             </div>
-            <a
-              href="https://modelcontextprotocol.io/registry/about"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="agi-cta-primary"
-            >
-              Open MCP Registry
-            </a>
-          </div>
-        </section>
+            <Prose size="lg">
+              We do not host a browsable or searchable MCP directory, and there is no plan date for
+              one. Every server below is a stdio process, so it runs on Desktop or the CLI, not in
+              the browser. Desktop&rsquo;s built-in server browser installs each of these by name.
+              To search the full catalogue of community servers, use the official MCP registry.
+            </Prose>
+            <ButtonRow>
+              <Button href="https://modelcontextprotocol.io/registry/about">
+                Open the MCP registry
+              </Button>
+              <Button href="/connectors" variant="secondary">
+                Back to connectors
+              </Button>
+            </ButtonRow>
+          </Stack>
+        </Section>
 
-        <MarketingFooter />
+        <Section
+          id="reference-servers"
+          labelledBy="agi-mcp-directory-servers-title"
+          rule
+          ground="2"
+        >
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Installable from Desktop · stdio</Eyebrow>
+              <h2 className="agi-ds-h2" id="agi-mcp-directory-servers-title">
+                The reference servers.
+              </h2>
+            </div>
+            <LinkGrid
+              items={REFERENCE_MCPS.map((mcp) => ({
+                meta: mcp.tags,
+                title: mcp.name,
+                href: mcp.url,
+                external: true,
+                body: (
+                  <>
+                    {mcp.description} <code>{mcp.pkg}</code>
+                  </>
+                ),
+              }))}
+            />
+          </Stack>
+        </Section>
+
+        <Section id="mcp-directory-close" labelledBy="agi-mcp-directory-close-title" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-mcp-directory-close-title">
+              Bring your own tools.
+            </h2>
+            <Prose>
+              The official MCP registry lists hundreds of community-contributed servers. We do not
+              mirror, curate, or sign any of them. On the web, the custom connector dialog accepts a
+              remote HTTP or SSE MCP endpoint and your own token; stdio servers like the ones above
+              have no URL, so add those from Desktop or the CLI instead.
+            </Prose>
+          </Stack>
+        </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
