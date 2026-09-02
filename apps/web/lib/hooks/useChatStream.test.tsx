@@ -1759,6 +1759,50 @@ describe('useChatStream', () => {
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
+  it('keeps the streamed-in partial answer when an ordinary (non-durable) stream dies mid-response', async () => {
+    const encoder = new TextEncoder();
+    let pulls = 0;
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === '/api/llm/v1/chat/completions') {
+        return new Response(
+          new ReadableStream({
+            pull(controller) {
+              if (pulls === 0) {
+                pulls += 1;
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({
+                      choices: [
+                        { delta: { content: 'Here is the partial answer before things broke.' } },
+                      ],
+                    })}\n\n`,
+                  ),
+                );
+                return;
+              }
+              controller.error(new TypeError('network connection lost'));
+            },
+          }),
+          { status: 200, headers: new Headers() },
+        );
+      }
+      return new Response(JSON.stringify({ message: { id: 'saved-x' } }), { status: 200 });
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('tell me something long', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+
+    const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+    expect(assistant?.content).toContain('Here is the partial answer before things broke.');
+    expect(assistant?.content).toContain('Error: Could not reach the server.');
+    expect(assistant?.error).toBe(true);
+  });
+
   it('does not surface a late failed request in the conversation opened afterward', async () => {
     let finishRequest!: (response: Response) => void;
     vi.mocked(fetch).mockImplementationOnce(
