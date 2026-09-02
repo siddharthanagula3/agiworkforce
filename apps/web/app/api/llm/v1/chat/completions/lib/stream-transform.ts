@@ -367,6 +367,40 @@ export async function buildStreamResponse(
                 };
               } else if (
                 event.type === 'content_block_start' &&
+                event.content_block?.type === 'web_fetch_tool_result'
+              ) {
+                if (event.index !== undefined) {
+                  activeBlockTypes.set(event.index, 'web_fetch_tool_result');
+                }
+                const fetchResult = event.content_block.content as
+                  | { type?: string; url?: unknown; error_code?: unknown }
+                  | undefined;
+                const isFetchError = fetchResult?.type === 'web_fetch_tool_result_error';
+                const fetchContent = isFetchError
+                  ? `Web fetch failed: ${
+                      typeof fetchResult?.error_code === 'string'
+                        ? fetchResult.error_code
+                        : 'unknown_error'
+                    }`
+                  : `Fetched ${typeof fetchResult?.url === 'string' ? fetchResult.url : 'page'}`;
+                transformedEvent = {
+                  choices: [
+                    {
+                      delta: {
+                        x_tool_result: {
+                          tool_call_id: event.content_block.tool_use_id,
+                          name: 'web_fetch',
+                          content: fetchContent,
+                          is_error: isFetchError,
+                        },
+                      },
+                      index: 0,
+                    },
+                  ],
+                  model: responseModelName,
+                };
+              } else if (
+                event.type === 'content_block_start' &&
                 event.content_block?.type === 'thinking'
               ) {
                 if (event.index !== undefined) {
