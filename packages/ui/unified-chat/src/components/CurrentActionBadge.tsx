@@ -89,58 +89,55 @@ function getIcon(entry: ActionTrailEntry) {
   }
 }
 
+type StatusRole = 'info' | 'warning' | 'success' | 'danger' | 'muted';
+
+const STATUS_ROLE_CLASSES: Record<
+  StatusRole,
+  { bg: string; border: string; text: string; icon: string }
+> = {
+  info: {
+    bg: 'bg-info-fill/10',
+    border: 'border-info-fill/30',
+    text: 'text-info-text',
+    icon: 'text-info-text',
+  },
+  warning: {
+    bg: 'bg-warning-fill/10',
+    border: 'border-warning-fill/30',
+    text: 'text-warning-text',
+    icon: 'text-warning-text',
+  },
+  success: {
+    bg: 'bg-success-fill/10',
+    border: 'border-success-fill/30',
+    text: 'text-success-text',
+    icon: 'text-success-text',
+  },
+  danger: {
+    bg: 'bg-danger-fill/10',
+    border: 'border-danger-fill/30',
+    text: 'text-danger-text',
+    icon: 'text-danger-text',
+  },
+  muted: {
+    bg: 'bg-muted-foreground/10',
+    border: 'border-muted-foreground/30',
+    text: 'text-muted-foreground',
+    icon: 'text-muted-foreground',
+  },
+};
+
+const TYPE_STATUS_ROLE: Record<ActionTrailEntryType, StatusRole> = {
+  thinking: 'info',
+  searching: 'info',
+  coding: 'info',
+  running: 'warning',
+  completed: 'success',
+  error: 'danger',
+};
+
 function getColorClasses(type: ActionTrailEntryType) {
-  switch (type) {
-    case 'thinking':
-      return {
-        bg: 'bg-purple-500/10',
-        border: 'border-purple-500/30',
-        text: 'text-purple-700 dark:text-purple-400',
-        icon: 'text-purple-700 dark:text-purple-400',
-      };
-    case 'searching':
-      return {
-        bg: 'bg-teal-500/10',
-        border: 'border-teal-500/30',
-        text: 'text-teal-700 dark:text-teal-400',
-        icon: 'text-teal-700 dark:text-teal-400',
-      };
-    case 'coding':
-      return {
-        bg: 'bg-blue-500/10',
-        border: 'border-blue-500/30',
-        text: 'text-blue-700 dark:text-blue-400',
-        icon: 'text-blue-700 dark:text-blue-400',
-      };
-    case 'running':
-      return {
-        bg: 'bg-amber-500/10',
-        border: 'border-amber-500/30',
-        text: 'text-amber-700 dark:text-amber-400',
-        icon: 'text-amber-700 dark:text-amber-400',
-      };
-    case 'completed':
-      return {
-        bg: 'bg-emerald-500/10',
-        border: 'border-emerald-500/30',
-        text: 'text-emerald-700 dark:text-emerald-400',
-        icon: 'text-emerald-700 dark:text-emerald-400',
-      };
-    case 'error':
-      return {
-        bg: 'bg-rose-500/10',
-        border: 'border-rose-500/30',
-        text: 'text-rose-700 dark:text-rose-400',
-        icon: 'text-rose-700 dark:text-rose-400',
-      };
-    default:
-      return {
-        bg: 'bg-muted-foreground/10',
-        border: 'border-muted-foreground/30',
-        text: 'text-muted-foreground',
-        icon: 'text-muted-foreground',
-      };
-  }
+  return STATUS_ROLE_CLASSES[TYPE_STATUS_ROLE[type] ?? 'muted'];
 }
 
 interface CurrentActionBadgeProps {
