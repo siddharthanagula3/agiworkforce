@@ -1,19 +1,7 @@
-/**
- * The budget covers the durable HANDOFF only — queue delivery, workflow boot
- * and the step's first line. It must never cover the provider call, so the
- * workflow writes {@link DURABLE_STREAM_OPEN_FRAME} before it does any work.
- * Removing that write silently puts model latency back inside this budget.
- */
 export const DURABLE_FIRST_EVENT_TIMEOUT_MS = 12_000;
 
-/**
- * A stalled handoff means the workflow never reached its first line, so the
- * turn it degrades is safe to run inline. Every later turn in this window
- * skips the probe rather than paying the timeout again.
- */
 export const DURABLE_STALL_COOLDOWN_MS = 60_000;
 
-/** An SSE comment: proves the stream is live without projecting a turn event. */
 export const DURABLE_STREAM_OPEN_FRAME = ': durable-open\n\n';
 
 let coolingDownUntilMs = 0;
