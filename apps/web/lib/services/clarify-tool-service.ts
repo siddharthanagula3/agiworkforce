@@ -52,13 +52,6 @@ export interface ClarifyOfferContext {
   research: boolean;
 }
 
-/**
- * Explicit intent and supplied material are deterministic, unlike a tool
- * description a fast model can talk itself past: a request already carrying
- * search/research, a URL, an attachment, a code fence, a long body, or an
- * opening verb like "summarize" is never missing the thing this tool exists
- * to collect, so the tool is not even offered on that turn.
- */
 export function shouldOfferClarifyTool(context: ClarifyOfferContext): boolean {
   if (context.webSearch || context.research) return false;
   const trimmed = context.userMessage.trim();
