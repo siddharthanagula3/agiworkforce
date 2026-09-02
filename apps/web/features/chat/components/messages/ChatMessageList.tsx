@@ -74,10 +74,6 @@ const STREAM_ERROR_PARTIAL_PREFIX = 'Response may be incomplete';
 const STREAM_ERROR_NO_RESPONSE_PREFIX = 'No response was returned';
 const STREAM_ERROR_CONNECTION_DETAIL = 'the connection to the model was interrupted.';
 
-/**
- * A turn that streamed nothing before it failed was not cut short, it never
- * started, so it does not get the "may be incomplete" wording.
- */
 function streamErrorNoticeMessage(message: ChatMessage): string {
   const prefix = hasVisibleContent(message.content)
     ? STREAM_ERROR_PARTIAL_PREFIX
