@@ -46,6 +46,18 @@ const CONVERSATIONS_LIST_RATE_LIMIT_STATUS = 429;
 const CONVERSATIONS_LIST_RETRY_BASE_DELAY_MS = 1_000;
 const CONVERSATIONS_LIST_RETRY_MAX_DELAY_MS = 30_000;
 const CONVERSATIONS_LIST_RETRY_MAX_ATTEMPTS = 5;
+const CONVERSATION_NOT_FOUND_STATUSES = new Set([404, 403]);
+const CONVERSATION_NOT_FOUND_MESSAGE =
+  'This conversation is unavailable. It may have been deleted.';
+const CONVERSATION_LOAD_RETRY_MESSAGE =
+  "Couldn't load this conversation. Check your connection and try again.";
+
+function conversationLoadErrorMessage(err: unknown): string {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === 'number' && CONVERSATION_NOT_FOUND_STATUSES.has(status)
+    ? CONVERSATION_NOT_FOUND_MESSAGE
+    : CONVERSATION_LOAD_RETRY_MESSAGE;
+}
 
 function parseRetryAfterMs(header: string | null): number | null {
   if (!header) return null;
@@ -120,6 +132,7 @@ interface UseConversationsReturn {
    * reaction" to a new user with an empty list.
    */
   listError: string | null;
+  getConversationLoadError: () => string | null;
   hasMoreConversations: boolean;
   isLoadingMoreConversations: boolean;
   fetchConversations: () => Promise<void>;
@@ -172,6 +185,8 @@ export function useConversations(): UseConversationsReturn {
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [isOpeningConversation, setIsOpeningConversation] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+  const conversationLoadErrorRef = useRef<string | null>(null);
+  const getConversationLoadError = useCallback(() => conversationLoadErrorRef.current, []);
   const loadSequenceRef = useRef(0);
   const listRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRetryAttemptRef = useRef(0);
@@ -334,6 +349,7 @@ export function useConversations(): UseConversationsReturn {
 
       setIsOpeningConversation(true);
       setError(null);
+      conversationLoadErrorRef.current = null;
 
       try {
         const headers = await getAuthHeaders();
@@ -351,7 +367,9 @@ export function useConversations(): UseConversationsReturn {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error?.message || 'Failed to load conversation');
+            const loadError = new Error(errorData.error?.message || 'Failed to load conversation');
+            (loadError as { status?: number }).status = response.status;
+            throw loadError;
           }
 
           const page = ManagedCloudConversationResponseSchema.parse(await response.json());
@@ -426,6 +444,7 @@ export function useConversations(): UseConversationsReturn {
         return true;
       } catch (err) {
         if (cancelled()) return true;
+        conversationLoadErrorRef.current = conversationLoadErrorMessage(err);
         setError(toUserMessage(err, 'Failed to load conversation'), id);
         return false;
       } finally {
@@ -551,6 +570,7 @@ export function useConversations(): UseConversationsReturn {
     isLoading: isFetchingConversations || isCreatingConversation || isOpeningConversation,
     error,
     listError,
+    getConversationLoadError,
     hasMoreConversations,
     isLoadingMoreConversations,
     fetchConversations,
