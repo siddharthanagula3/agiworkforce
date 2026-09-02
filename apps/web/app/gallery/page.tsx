@@ -4,7 +4,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { GalleryClient } from './GalleryClient';
 
 export const metadata = buildMetadata({
-  title: 'Gallery',
+  title: 'Gallery: artifacts built with AGI',
   description:
     'Browse artifacts you have built with AGI, or explore curated examples to spark your next idea.',
   path: '/gallery',
@@ -12,16 +12,12 @@ export const metadata = buildMetadata({
 
 export default function GalleryPage() {
   return (
-    <div data-design="agi">
-      <main>
-        <div className="agi-shell">
-          <Header />
-        </div>
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
         <GalleryClient />
       </main>
-      <div className="agi-shell">
-        <MarketingFooter />
-      </div>
+      <MarketingFooter />
     </div>
   );
 }
