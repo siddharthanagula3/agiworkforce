@@ -7,6 +7,7 @@ export function ProductFrame({
   width,
   height,
   caption,
+  priority,
 }: {
   light: string;
   dark: string;
@@ -14,6 +15,7 @@ export function ProductFrame({
   width: number;
   height: number;
   caption?: readonly string[];
+  priority?: boolean;
 }) {
   return (
     <figure className="agi-ds-frame">
@@ -25,6 +27,7 @@ export function ProductFrame({
         width={width}
         height={height}
         sizes="(max-width: 900px) 100vw, 50vw"
+        priority={priority}
       />
       <Image
         className="agi-ds-frame-media"
@@ -35,6 +38,7 @@ export function ProductFrame({
         width={width}
         height={height}
         sizes="(max-width: 900px) 100vw, 50vw"
+        priority={priority}
       />
       {caption ? (
         <figcaption className="agi-ds-frame-caption">

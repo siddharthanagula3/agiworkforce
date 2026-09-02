@@ -41,6 +41,7 @@ export default function ProjectsFeaturePage() {
               width={2880}
               height={1800}
               caption={['Projects', 'Workspace']}
+              priority
             />
           }
         />

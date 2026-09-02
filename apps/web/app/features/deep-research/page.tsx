@@ -39,6 +39,7 @@ export default function DeepResearchPage() {
               width={2392}
               height={1402}
               caption={['Deep research', 'Report']}
+              priority
             />
           }
         />
