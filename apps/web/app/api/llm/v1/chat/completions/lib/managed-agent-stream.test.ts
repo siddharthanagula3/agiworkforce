@@ -245,6 +245,26 @@ describe('managed agent stream', () => {
     );
   });
 
+  it('leaves the delivery marker alone on a released turn the provider rejected', async () => {
+    events.length = 0;
+    finalize.mockClear();
+    delivered.mockClear();
+
+    const stream = buildManagedAgentStream({
+      generator: failedGenerator(),
+      processed,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+    });
+
+    await readAll(stream);
+
+    expect(finalize).toHaveBeenCalledWith(expect.objectContaining({ cancelled: true }));
+    expect(delivered).not.toHaveBeenCalled();
+    expect(events).not.toContain('delivered');
+  });
+
   it('records all observed provider tokens for a free-tier tool loop before completion', async () => {
     events.length = 0;
     settleFreeTrialRequest.mockClear();

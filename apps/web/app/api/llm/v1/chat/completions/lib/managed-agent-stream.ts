@@ -259,7 +259,7 @@ export function buildManagedAgentStream(
                 : input.completionReason,
               reportedFailure ? 'failed' : 'completed',
             );
-            if (input.processed.managedUsage) {
+            if (input.processed.managedUsage && !reportedFailure) {
               await markManagedUsageClientDelivered(input.processed.managedUsage).catch((error) => {
                 logger.warn(
                   { error, requestId: input.processed.requestId },
