@@ -15,5 +15,6 @@ cd "${REPO_ROOT}"
 
 echo "Building Next.js..."
 pnpm --filter @agiworkforce/web build:next-only
+node apps/web/scripts/verify-built-css.mjs
 
 echo "Build complete!"
