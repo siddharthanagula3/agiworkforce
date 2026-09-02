@@ -55,11 +55,32 @@ export function createClarifyToolDefinition() {
     function: {
       name: CLARIFY_TOOL_NAME,
       description:
-        'Ask the user to choose between concrete options when their request is genuinely ' +
-        'ambiguous and the answer changes materially depending on the choice. Renders as ' +
-        'selectable controls, so every option must be one the user can pick without typing. ' +
-        'Do not use it to confirm something you can reasonably assume, to ask permission, or ' +
-        'to ask a question whose options you cannot enumerate — answer directly instead.',
+        'A last resort: most requests, even open-ended ones, have a reasonable default ' +
+        'reading, so answer directly rather than calling this tool. Call it only when a ' +
+        'piece of information the request cannot proceed without is genuinely missing and ' +
+        'cannot be inferred or defaulted, such as a bare "plan my trip" with no destination, ' +
+        'dates, or budget stated anywhere, or when the user explicitly asks to be given ' +
+        'choices. Renders as selectable controls, so every option must be one the user can ' +
+        'pick without typing. ' +
+        'Do not call it when the request already names an explicit action such as search, ' +
+        'summarize, write, explain, or code, and the message already supplies what that ' +
+        'action needs: do that action now, and if you had to pick among reasonable ' +
+        'interpretations, state the choice in your answer instead of asking first. In ' +
+        'particular, when summarizing a pasted document, produce a general summary of its ' +
+        'key points; do not ask whether to format it as bullets or prose, or whether to ' +
+        'focus on a general overview versus a specific angle such as risk or legal exposure, ' +
+        'pick the fuller and more useful default and say so. A pasted contract or other legal ' +
+        'or financial document is not special: summarize it and answer any specific part the ' +
+        'user named, such as a termination or renewal clause, in that same answer, rather ' +
+        'than confirming scope or depth first. When searching or researching an open-ended ' +
+        'topic, cover it at a reasonable breadth; do not ask which provider, category, or ' +
+        'slice to prioritize. ' +
+        'Do not use it to confirm something you can reasonably assume, to ask permission, to ' +
+        'offer a format, tone, or delivery preference when a sensible default exists, to break ' +
+        'a task into optional next steps, or to ask a question whose options you cannot ' +
+        'enumerate; answer directly instead. Reserve it for requests that truly fork into ' +
+        'materially different deliverables with no reasonable default, such as a one-line ' +
+        'request with no stated topic, format, or constraints at all.',
       parameters: {
         type: 'object',
         properties: {
