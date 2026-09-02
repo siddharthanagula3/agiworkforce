@@ -4,6 +4,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
+import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Community: where to find AGI',
@@ -20,10 +21,10 @@ export default function CommunityPage() {
           id="agi-community-title"
           eyebrow="Community"
           title="Where to find us."
-          lede="We do not run a Discord, a forum, or a Slack workspace yet. Follow the changelog for what ships, and email contact@agiworkforce.com for everything else. A real human reads it."
+          lede={`We do not run a Discord, a forum, or a Slack workspace yet. Follow the changelog for what ships, and email ${CONTACT_EMAIL} for everything else. A real human reads it.`}
           ctas={[
             { href: '/changelog', label: 'Follow the changelog' },
-            { href: 'mailto:contact@agiworkforce.com', label: 'Email us', variant: 'secondary' },
+            { href: contactMailto(), label: 'Email us', variant: 'secondary' },
           ]}
         />
 
@@ -43,8 +44,8 @@ export default function CommunityPage() {
                 {
                   meta: 'Email',
                   title: 'Email us',
-                  href: 'mailto:contact@agiworkforce.com',
-                  body: 'contact@agiworkforce.com. A real human reads it. Use it for billing, partnerships, press, and anything the changelog does not answer.',
+                  href: contactMailto(),
+                  body: `${CONTACT_EMAIL}. A real human reads it. Use it for billing, partnerships, press, and anything the changelog does not answer.`,
                   external: true,
                 },
                 {

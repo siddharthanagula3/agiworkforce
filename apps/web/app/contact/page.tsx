@@ -5,6 +5,7 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { Prose, Section, Stack } from '@/features/marketing/components/system';
+import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export default function ContactPage() {
   const [draftOpened, setDraftOpened] = useState(false);
@@ -48,14 +49,14 @@ export default function ContactPage() {
           lede={
             <>
               Everything below is plain email. No hosted form, no ticket system. For sales
-              conversations, head to contact sales. For everything else, contact@agiworkforce.com
+              conversations, head to contact sales. For everything else, {CONTACT_EMAIL}
               reaches a person who reads it.
             </>
           }
           ctas={[
             {
-              href: 'mailto:contact@agiworkforce.com',
-              label: 'Email contact@agiworkforce.com',
+              href: contactMailto(),
+              label: `Email ${CONTACT_EMAIL}`,
               variant: 'primary',
             },
             { href: '/contact-sales', label: 'Contact sales', variant: 'secondary' },
@@ -70,8 +71,8 @@ export default function ContactPage() {
               </h2>
               <Prose>
                 This composer is a convenience, not a form: the button opens a pre-filled draft in
-                your own email app, addressed to contact@agiworkforce.com. Nothing you type here is
-                sent or stored by this site.
+                your own email app, addressed to {CONTACT_EMAIL}. Nothing you type here is sent or
+                stored by this site.
               </Prose>
             </div>
 
@@ -81,7 +82,7 @@ export default function ContactPage() {
                   <h3 className="agi-ds-h3">Email draft opened.</h3>
                   <Prose size="sm">
                     The message sends from your mail app, not from this page. If no draft appeared,
-                    email contact@agiworkforce.com directly.
+                    email {CONTACT_EMAIL} directly.
                   </Prose>
                 </Stack>
               </div>
@@ -153,11 +154,7 @@ export default function ContactPage() {
                   >
                     {pending ? 'Opening…' : 'Open email draft'}
                   </button>
-                  <a
-                    href="mailto:contact@agiworkforce.com"
-                    className="agi-ds-btn"
-                    data-variant="secondary"
-                  >
+                  <a href={contactMailto()} className="agi-ds-btn" data-variant="secondary">
                     Or just email us
                   </a>
                 </div>
