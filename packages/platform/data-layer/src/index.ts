@@ -1,10 +1,12 @@
-
 export type {
   AuthAdapter,
   AuthProvider,
   DataLayerConfig,
   DatabaseAdapter,
   DatabaseConnectionConfig,
+  DatabaseConnectionErrorEvent,
+  DatabaseConnectionErrorListener,
+  DatabaseConnectionErrorScope,
   DatabaseProvider,
   RealtimeAdapter,
   RealtimeProvider,

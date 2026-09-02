@@ -1,5 +1,10 @@
+import type { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DataLayerConfigError, type DatabaseAdapter } from '../types';
+import {
+  DataLayerConfigError,
+  type DatabaseAdapter,
+  type DatabaseConnectionErrorEvent,
+} from '../types';
 
 type Call = { sql: string; params?: unknown[] };
 type QueryResp = { rows: unknown[]; rowCount: number | null };
@@ -13,6 +18,8 @@ interface MockState {
   ended: number;
   poolConstructions: number;
   lastPoolConfig: unknown;
+  pools: EventEmitter[];
+  clients: EventEmitter[];
 }
 
 const state: MockState = {
@@ -24,6 +31,8 @@ const state: MockState = {
   ended: 0,
   poolConstructions: 0,
   lastPoolConfig: undefined,
+  pools: [],
+  clients: [],
 };
 
 beforeEach(() => {
@@ -35,28 +44,42 @@ beforeEach(() => {
   state.ended = 0;
   state.poolConstructions = 0;
   state.lastPoolConfig = undefined;
+  state.pools = [];
+  state.clients = [];
 });
 
-vi.mock('@neondatabase/serverless', () => {
-  class MockPool {
+/**
+ * Both halves extend the real `EventEmitter` on purpose: an `error` emitted
+ * with nothing listening has to throw here exactly as it does in production,
+ * or the regression this file guards is untestable.
+ */
+vi.mock('@neondatabase/serverless', async () => {
+  const { EventEmitter: NodeEventEmitter } = await import('node:events');
+  class MockClient extends NodeEventEmitter {
+    async query(sql: string, params?: unknown[]) {
+      state.clientCalls.push({ sql, ...(params !== undefined ? { params } : {}) });
+      return state.clientQueryHandler(sql, params);
+    }
+    release() {
+      state.released += 1;
+    }
+  }
+  class MockPool extends NodeEventEmitter {
     constructor(config: unknown) {
+      super();
       state.poolConstructions += 1;
       state.lastPoolConfig = config;
+      state.pools.push(this);
     }
     async query(sql: string, params?: unknown[]) {
       state.poolCalls.push({ sql, ...(params !== undefined ? { params } : {}) });
       return state.poolQueryHandler(sql, params);
     }
     async connect() {
-      return {
-        query: async (sql: string, params?: unknown[]) => {
-          state.clientCalls.push({ sql, ...(params !== undefined ? { params } : {}) });
-          return state.clientQueryHandler(sql, params);
-        },
-        release: () => {
-          state.released += 1;
-        },
-      };
+      const client = new MockClient();
+      state.clients.push(client);
+      this.emit('connect', client);
+      return client;
     }
     async end() {
       state.ended += 1;
@@ -561,5 +584,97 @@ describe('NeonDatabaseAdapter constructor / raw', () => {
     expect(pool).toBeDefined();
     expect(typeof (pool as { connect?: unknown }).connect).toBe('function');
     expect(typeof (pool as { end?: unknown }).end).toBe('function');
+  });
+});
+
+describe('NeonDatabaseAdapter connection transport errors', () => {
+  const CONNECTION_STRING = 'postgresql://u:p@ep.neon.tech/db';
+
+  async function warmedAdapter(events: DatabaseConnectionErrorEvent[]) {
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: CONNECTION_STRING,
+      applicationName: 'agi-web',
+      onConnectionError: (event) => events.push(event),
+    });
+    await adapter.query('select 1');
+    return adapter;
+  }
+
+  it('reports an idle-connection failure instead of letting the pool emit throw', async () => {
+    const events: DatabaseConnectionErrorEvent[] = [];
+    await warmedAdapter(events);
+    const error = new Error('write EPIPE');
+
+    expect(() => state.pools[0]?.emit('error', error)).not.toThrow();
+    expect(events).toEqual([{ scope: 'pool', applicationName: 'agi-web', error }]);
+  });
+
+  it('reports a failure on a checked-out client, which the pool leaves unguarded', async () => {
+    const events: DatabaseConnectionErrorEvent[] = [];
+    const adapter = await warmedAdapter(events);
+    await adapter.transaction(async () => null);
+    const error = new Error('socket hang up');
+
+    expect(() => state.clients[0]?.emit('error', error)).not.toThrow();
+    expect(events).toEqual([{ scope: 'client', applicationName: 'agi-web', error }]);
+  });
+
+  it('reports the driver ErrorEvent shape, which is not an Error at all', async () => {
+    const events: DatabaseConnectionErrorEvent[] = [];
+    await warmedAdapter(events);
+    const errorEvent = { type: 'error' };
+
+    expect(() => state.pools[0]?.emit('error', errorEvent)).not.toThrow();
+    expect(events[0]?.error).toBe(errorEvent);
+  });
+
+  it('reports one idle failure once, not twice as it travels client then pool', async () => {
+    const events: DatabaseConnectionErrorEvent[] = [];
+    const adapter = await warmedAdapter(events);
+    await adapter.transaction(async () => null);
+    const error = new Error('connection terminated unexpectedly');
+
+    state.clients[0]?.emit('error', error);
+    state.pools[0]?.emit('error', error);
+
+    expect(events).toEqual([{ scope: 'client', applicationName: 'agi-web', error }]);
+  });
+
+  it('falls back to console rather than dropping the failure when nothing is wired', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const adapter = new NeonDatabaseAdapter({ connectionString: CONNECTION_STRING });
+    await adapter.query('select 1');
+
+    expect(() => state.pools[0]?.emit('error', new Error('reset by peer'))).not.toThrow();
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
+
+  it('survives a reporter that throws, so logging cannot become the crash', async () => {
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: CONNECTION_STRING,
+      onConnectionError: () => {
+        throw new Error('logger transport is down');
+      },
+    });
+    await adapter.query('select 1');
+
+    expect(() => state.pools[0]?.emit('error', new Error('reset by peer'))).not.toThrow();
+  });
+
+  it('guards a pool the withUser child inherits rather than reattaching per scope', async () => {
+    const events: DatabaseConnectionErrorEvent[] = [];
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: CONNECTION_STRING,
+      unsafeAllowUnverifiedJwtSubject: true,
+      onConnectionError: (event) => events.push(event),
+    });
+    await adapter.query('select 1');
+    await adapter.withUser(makeJwt({ sub: 'user-42' })).query('select 1');
+    const error = new Error('write EPIPE');
+
+    expect(state.poolConstructions).toBe(1);
+    state.pools[0]?.emit('error', error);
+    expect(events).toEqual([{ scope: 'pool', error }]);
   });
 });

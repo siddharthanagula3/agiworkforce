@@ -66,6 +66,8 @@ import type { Pool, PoolClient, QueryResult } from '@neondatabase/serverless';
 import {
   type DatabaseAdapter,
   type DatabaseConnectionConfig,
+  type DatabaseConnectionErrorEvent,
+  type DatabaseConnectionErrorScope,
   DataLayerConfigError,
 } from '../types';
 
@@ -271,6 +273,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
   private boundOrgId: string | null = null;
   private disposed = false;
   private ownsPool: boolean;
+  private readonly reportedErrors = new WeakSet<object>();
 
   constructor(private config: NeonDatabaseAdapterConfig) {
     if (config.pool) {
@@ -282,20 +285,68 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
     } else {
       this.poolPromise = (async () => {
         const mod = await loadNeon();
-        return new mod.Pool({
-          connectionString: config.connectionString,
-          connectionTimeoutMillis: config.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS,
-          ...(config.poolSize !== undefined ? { max: config.poolSize } : {}),
-          ...(config.statementTimeoutMs !== undefined
-            ? { statement_timeout: config.statementTimeoutMs }
-            : {}),
-          ...(config.queryTimeoutMs !== undefined ? { query_timeout: config.queryTimeoutMs } : {}),
-          ...(config.applicationName !== undefined
-            ? { application_name: config.applicationName }
-            : {}),
-        });
+        return this.guardTransportErrors(
+          new mod.Pool({
+            connectionString: config.connectionString,
+            connectionTimeoutMillis: config.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS,
+            ...(config.poolSize !== undefined ? { max: config.poolSize } : {}),
+            ...(config.statementTimeoutMs !== undefined
+              ? { statement_timeout: config.statementTimeoutMs }
+              : {}),
+            ...(config.queryTimeoutMs !== undefined
+              ? { query_timeout: config.queryTimeoutMs }
+              : {}),
+            ...(config.applicationName !== undefined
+              ? { application_name: config.applicationName }
+              : {}),
+          }),
+        );
       })();
       this.ownsPool = true;
+    }
+  }
+
+  /**
+   * Both halves are load-bearing, and removing either reinstates a process
+   * kill. `pg-pool` keeps an `error` listener on a client only while it sits
+   * idle — it strips it on checkout and restores it on release — and the
+   * driver's client re-emits every transport failure whether or not a query is
+   * in flight. An unlistened `error` event is a throw in Node, so a Neon
+   * WebSocket dropping under a warm serverless instance took the function down
+   * with `Unhandled error. ()` instead of failing the one query.
+   *
+   * Listening for anything other than `error` sets the driver's
+   * `hasFetchUnsupportedListeners`, which opts `pool.query` out of the
+   * `poolQueryViaFetch` transport. That flag is off by default and unset here,
+   * so this costs nothing today, but it is the reason to weigh before turning
+   * it on.
+   */
+  private guardTransportErrors(pool: Pool): Pool {
+    pool.on('error', (error: unknown) => this.reportTransportError('pool', error));
+    pool.on('connect', (client: PoolClient) => {
+      client.on('error', (error: unknown) => this.reportTransportError('client', error));
+    });
+    return pool;
+  }
+
+  private reportTransportError(scope: DatabaseConnectionErrorScope, error: unknown): void {
+    if (typeof error === 'object' && error !== null) {
+      if (this.reportedErrors.has(error)) return;
+      this.reportedErrors.add(error);
+    }
+    const event: DatabaseConnectionErrorEvent = {
+      scope,
+      error,
+      ...(this.config.applicationName !== undefined
+        ? { applicationName: this.config.applicationName }
+        : {}),
+    };
+    const report = this.config.onConnectionError;
+    try {
+      if (report) report(event);
+      else console.error('neon connection transport error', event);
+    } catch {
+      // A reporter that throws must not become the crash this exists to stop.
     }
   }
 

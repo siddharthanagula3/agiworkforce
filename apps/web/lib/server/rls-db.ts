@@ -9,6 +9,7 @@ import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { RLS_POOL_TUNING } from '@/lib/server/db-pool-tuning';
+import { reportDatabaseConnectionError } from '@/lib/server/db-connection-error';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import {
   resolveActiveOrganizationId,
@@ -23,6 +24,7 @@ function getRlsCapableDb(): DatabaseAdapter {
       provider: 'neon',
       applicationName: 'agi-web-rls',
       unsafeAllowUnverifiedJwtSubject: true,
+      onConnectionError: reportDatabaseConnectionError,
       ...RLS_POOL_TUNING,
     });
   }
