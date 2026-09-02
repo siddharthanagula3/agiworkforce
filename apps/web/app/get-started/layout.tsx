@@ -1,13 +1,15 @@
 import { Metadata } from 'next';
 
+const TITLE = 'Get started: from zero to a working chat';
+const DESCRIPTION =
+  'AGI Web works today in the browser, the CLI ships signed archives for macOS, Linux, and Windows, and Desktop has a Linux build pending its signature check. Mobile, Chrome, and VS Code are not shipped yet.';
+
 export const metadata: Metadata = {
-  title: 'Getting Started',
-  description:
-    'AGI Web works today in the browser. Desktop and the CLI are released. Mobile, Chrome, and VS Code are coming soon.',
+  title: TITLE,
+  description: DESCRIPTION,
   openGraph: {
-    title: 'Getting Started',
-    description:
-      'Start with AGI Web, Desktop, or the CLI today. Mobile, Chrome, and VS Code are coming soon.',
+    title: TITLE,
+    description: DESCRIPTION,
     type: 'website',
     url: 'https://agiworkforce.com/get-started',
     images: [
@@ -15,7 +17,7 @@ export const metadata: Metadata = {
         url: '/api/og',
         width: 1200,
         height: 630,
-        alt: 'Getting Started with AGI',
+        alt: 'Getting started with AGI',
       },
     ],
   },
