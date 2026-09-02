@@ -71,7 +71,7 @@ import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
-import type { AgentTaskState, ResearchStep } from '@agiworkforce/types';
+import type { AgentEventEnvelope, AgentTaskState, ResearchStep } from '@agiworkforce/types';
 import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
 import {
   linearTail,
@@ -606,6 +606,16 @@ function stringifyApprovalInput(input: Record<string, unknown> | undefined): str
   }
 }
 
+function normalizeSourceUrlKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 function projectPendingTurn(turn: PendingTurn) {
   return CloudToolApprovalProjectionSchema.parse({
     schemaVersion: 1,
@@ -887,6 +897,30 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const patchMessageMeta = (patch: Partial<MessageMetadata>) => {
     const current = findConversationMessage(conversationId, assistantMessageId)?.metadata;
     updateMessage(assistantMessageId, { metadata: { ...current, ...patch } }, conversationId);
+  };
+
+  const applySourceListEvent = (event: AgentEventEnvelope['event']) => {
+    if (event.type !== 'source-list' || event.sources.length === 0) return;
+    const existing = Array.isArray(currentSearchResults)
+      ? currentSearchResults
+      : (currentSearchResults?.results ?? []);
+    const seen = new Set(existing.map((result) => normalizeSourceUrlKey(result.url)));
+    const additions = event.sources
+      .filter((source) => {
+        const key = normalizeSourceUrlKey(source.url);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((source) => ({
+        url: source.url,
+        title: source.title || source.url,
+        snippet: source.snippet ?? '',
+      }));
+    if (additions.length === 0) return;
+    const merged = [...existing, ...additions];
+    currentSearchResults = merged;
+    setSearchResults(assistantMessageId, merged, conversationId);
   };
 
   // The stream ending is itself the terminal signal: a run that never emitted a
@@ -1357,6 +1391,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                     ? 'error'
                     : 'stop';
           }
+          applySourceListEvent(envelope.event);
           currentAgentActivity = collapseDuplicateAgentActivityErrors(
             applyAgentActivityEvent(currentAgentActivity, humanizeAgentEventEnvelope(envelope)),
           );
@@ -1492,6 +1527,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 agentEnvelope.event.delta,
               ).pending;
             }
+            applySourceListEvent(agentEnvelope.event);
             currentAgentActivity = collapseDuplicateAgentActivityErrors(
               applyAgentActivityEvent(
                 currentAgentActivity,
