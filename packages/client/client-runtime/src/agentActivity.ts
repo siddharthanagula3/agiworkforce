@@ -257,7 +257,7 @@ function urlFetchHostname(input: unknown): string | undefined {
 
 function humanizeToolFailureSummary(raw: string | undefined, input: unknown): string | undefined {
   const match = raw ? FETCH_FAILURE_PATTERN.exec(raw) : null;
-  if (!match) return oneLineSummary(raw);
+  if (!match) return raw ? GENERIC_TOOL_FAILURE : undefined;
   const code = match[1] ?? '';
   const detail = match[2] ?? '';
   const phrase = FETCH_FAILURE_PHRASES[code] ?? GENERIC_TOOL_FAILURE;
@@ -288,17 +288,6 @@ function isToolUnavailableByPolicy(raw: string | undefined): boolean {
 
 const CODE_EXECUTION_UNAVAILABLE_NOTICE =
   'Code execution was not available for this request, so the answer was written without running code.';
-
-const ONE_LINE_SUMMARY_MAX_LENGTH = 140;
-
-function oneLineSummary(text: string | undefined): string | undefined {
-  if (!text) return undefined;
-  const collapsed = text.replace(/\s+/g, ' ').trim();
-  if (!collapsed) return undefined;
-  return collapsed.length > ONE_LINE_SUMMARY_MAX_LENGTH
-    ? `${collapsed.slice(0, ONE_LINE_SUMMARY_MAX_LENGTH - 1)}…`
-    : collapsed;
-}
 
 function stopStatus(reason: AgentEventStopReason): AgentActivityRunStatus {
   if (reason === 'error') return 'failed';
