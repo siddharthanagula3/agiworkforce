@@ -11,6 +11,7 @@ import {
   Input,
   Button,
   ScrollArea,
+  useConfirmAction,
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
@@ -116,6 +117,8 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     }
   }, [open, user?.id, loadSearchHistory]);
 
+  const { confirm: confirmClearHistory, dialog: clearHistoryDialog } = useConfirmAction();
+
   const handleClearHistory = useCallback(async () => {
     if (!user?.id) return;
 
@@ -128,6 +131,15 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
       toast.error('Failed to clear search history');
     }
   }, [user?.id]);
+
+  const requestClearHistory = useCallback(() => {
+    confirmClearHistory({
+      title: 'Clear search history?',
+      description: 'This removes your recent searches. This cannot be undone.',
+      confirmLabel: 'Clear',
+      onConfirm: handleClearHistory,
+    });
+  }, [confirmClearHistory, handleClearHistory]);
 
   const handleSuggestionClick = useCallback((suggestion: string) => {
     setQuery(suggestion);
@@ -516,7 +528,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={handleClearHistory}
+                        onClick={requestClearHistory}
                         className="h-7 px-2 text-xs text-muted-foreground hover:text-danger"
                       >
                         <Trash2 className="mr-1 h-3 w-3" />
@@ -677,6 +689,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
               to close
             </p>
           </div>
+          {clearHistoryDialog}
         </DialogContent>
       </Dialog>
     </ErrorBoundary>
