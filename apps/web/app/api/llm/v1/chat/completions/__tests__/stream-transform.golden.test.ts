@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -221,7 +220,12 @@ describe('buildStreamResponse golden fixture · Anthropic-native raw SSE', () =>
         choices: [
           {
             delta: {
-              x_tool_status: { type: 'server_tool_use', name: 'web_search', status: 'searching' },
+              x_tool_status: {
+                type: 'server_tool_use',
+                name: 'web_search',
+                status: 'searching',
+                status_phrase: 'Searching the web',
+              },
             },
             index: 0,
           },
