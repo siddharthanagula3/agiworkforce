@@ -100,7 +100,11 @@ const StreamingMarkdownContent = dynamic(
 
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
-import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
+import {
+  extractArtifacts,
+  extractCodeBlocks,
+  removeArtifactBlocks,
+} from '../../utils/artifact-detector';
 import {
   extractTrailingUnclosedBlock,
   isRenderableArtifact,
@@ -893,15 +897,23 @@ const MessageBubbleComponent = function MessageBubble({
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
+  const messageCodeBlocks = useMemo(
+    () => (isUser ? [] : extractCodeBlocks(message.content)),
+    [isUser, message.content],
+  );
   const extractedArtifacts = useMemo(() => {
     if (isUser) return [];
     // Pass message context so derived ids are deterministic + cross-surface
     // stable (the shared derivation keys on conversationId:messageId:ordinal).
-    return extractArtifacts(message.content, {
-      conversationId: artifactConversationId,
-      messageId: message.id,
-    });
-  }, [message.content, isUser, artifactConversationId, message.id]);
+    return extractArtifacts(
+      message.content,
+      {
+        conversationId: artifactConversationId,
+        messageId: message.id,
+      },
+      messageCodeBlocks,
+    );
+  }, [message.content, isUser, artifactConversationId, message.id, messageCodeBlocks]);
 
   // Live artifact streaming (Claude parity): while this assistant message is
   // still streaming and its buffer ends in an UNCLOSED renderable fence, parse
@@ -913,10 +925,10 @@ const MessageBubbleComponent = function MessageBubble({
   // streaming overlay clears — a seamless handoff to the Preview tab.
   const streamingBlock = useMemo(() => {
     if (isUser || !message.isStreaming) return null;
-    const block = extractTrailingUnclosedBlock(message.content);
+    const block = extractTrailingUnclosedBlock(message.content, messageCodeBlocks);
     if (!block || !isRenderableArtifact(block.language, block.content)) return null;
     return block;
-  }, [isUser, message.isStreaming, message.content]);
+  }, [isUser, message.isStreaming, message.content, messageCodeBlocks]);
 
   useStreamingArtifactSync({
     messageId: message.id,
