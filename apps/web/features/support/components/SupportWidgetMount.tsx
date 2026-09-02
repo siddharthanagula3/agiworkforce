@@ -2,7 +2,6 @@
 
 import { useCallback, useId, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { useConsentBannerClearance } from '../hooks/useConsentBannerClearance';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import { isSupportWidgetVisible, resolveSupportSurface } from '../lib/route-visibility';
 import { SupportLauncher } from './SupportLauncher';
@@ -18,7 +17,6 @@ export function SupportWidgetMount() {
   const [open, setOpen] = useState(false);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const panelId = useId();
-  const clearance = useConsentBannerClearance();
   const reducedMotion = usePrefersReducedMotion();
 
   const close = useCallback(() => {
@@ -47,7 +45,6 @@ export function SupportWidgetMount() {
       {...(surface === 'marketing' ? { 'data-design': 'agi' } : {})}
       data-support-widget=""
       data-reduced-motion={reducedMotion ? 'true' : 'false'}
-      style={{ ['--support-clearance' as string]: `${String(clearance)}px` }}
     >
       {open ? <SupportPanel surface={surface} panelId={panelId} onClose={close} /> : null}
       {/* The ref is load-bearing, not decoration: `close()` focuses it, which is

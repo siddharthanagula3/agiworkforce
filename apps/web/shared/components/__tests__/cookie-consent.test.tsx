@@ -56,7 +56,10 @@ beforeEach(() => {
 
 afterEach(() => {
   window.localStorage.clear();
+  document.documentElement.style.removeProperty('--agi-consent-inset');
 });
+
+const consentInset = () => document.documentElement.style.getPropertyValue('--agi-consent-inset');
 
 describe('cookie-consent seam', () => {
   it('defaults to opt-in, so an undecided visitor gets no analytics', () => {
@@ -201,6 +204,90 @@ describe('CookieConsent banner drives the gate', () => {
     walk(webRoot);
 
     expect(offenders, 'GoogleAnalytics must only be mounted by AnalyticsConsentGate').toEqual([]);
+  });
+
+  it('closing records necessary-only rather than leaving the visitor undecided', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(
+        <>
+          <CookieConsent />
+          <AnalyticsConsentGate trackingId={TRACKING_ID} />
+        </>,
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+      const close = await screen.findByRole('button', {
+        name: 'Close and reject non-essential cookies',
+      });
+      await act(async () => {
+        fireEvent.click(close);
+      });
+
+      expect(readCookiePreferences()).toEqual({ necessary: true, analytics: false });
+      await waitFor(() => expect(gaScripts()).toHaveLength(0));
+      expect(screen.queryByRole('button', { name: 'Allow analytics' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Dismissing used to write nothing at all, so the banner came back on every
+  // reload and covered the composer again each time.
+  it('stays gone on the next visit after the banner was closed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const first = render(<CookieConsent />);
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Close and reject non-essential cookies' }),
+        );
+      });
+      first.unmount();
+
+      render(<CookieConsent />);
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(screen.queryByRole('button', { name: 'Allow analytics' })).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Close and reject non-essential cookies' }),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The banner is fixed at z-50 over the composer. Both shells end at
+  // `--agi-consent-inset`, so publishing it while up and releasing it once
+  // answered is what keeps the composer out from under the card.
+  it('publishes its height while up and releases it once answered', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
+      expect(consentInset(), 'nothing to clear before the banner appears').toBe('');
+
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+      expect(consentInset(), 'the shells need a height to end at while it is up').not.toBe('');
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Necessary only' }));
+      });
+
+      await waitFor(() =>
+        expect(consentInset(), 'an answered banner must give the space back').toBe(''),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not re-prompt a visitor who already decided', async () => {
