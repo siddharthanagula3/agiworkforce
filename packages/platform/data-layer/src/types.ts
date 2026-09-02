@@ -33,8 +33,6 @@
  * - Add a unit test in `src/__tests__/`.
  */
 
-/**
- */
 export type DatabaseConnectionErrorScope = 'pool' | 'client';
 
 export interface DatabaseConnectionErrorEvent {
@@ -52,8 +50,6 @@ export interface DatabaseConnectionConfig {
   statementTimeoutMs?: number;
   queryTimeoutMs?: number;
   applicationName?: string;
-  /**
-   */
   onConnectionError?: DatabaseConnectionErrorListener;
 }
 
