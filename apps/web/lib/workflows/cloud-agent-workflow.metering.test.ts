@@ -155,12 +155,20 @@ describe('durable invocation rebuilds the request on the side its reservation ca
 
     const processed = processedHandedToLoop();
     expect(processed.managedUsage).toMatchObject({
-      db,
+      // The service-pool db never binds request.jwt.claim.sub, so this must be
+      // the run's claimed-user-scoped wrapper (createClaimedUserScopedDb), not
+      // the raw db handed to executeCloudAgentWorkflowInvocation.
+      db: expect.objectContaining({
+        query: expect.any(Function),
+        execute: expect.any(Function),
+        transaction: expect.any(Function),
+      }),
       userId: 'user-1',
       idempotencyKey: 'agi.chat.web.send.paid-turn-1',
       leaseToken: '0190a000-0000-7000-8000-000000000002',
       estimatedCostCents: 12,
     });
+    expect(processed.managedUsage?.db).not.toBe(db);
     // The discriminant is a transport detail and must not leak into the
     // reservation the billing services are handed.
     expect(processed.managedUsage).not.toHaveProperty('kind');
