@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Button } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import {
   useCheckpointStore,
@@ -53,20 +54,20 @@ function BranchNavigatorComponent({
 
   return (
     <div className="inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1 py-0.5">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon"
         onClick={handlePrev}
         disabled={currentIndex <= 0}
         aria-label="Previous branch"
         className={cn(
-          'flex h-4 w-4 items-center justify-center rounded transition-colors',
-          currentIndex <= 0
-            ? 'cursor-not-allowed text-muted-foreground'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          'h-6 w-6 text-muted-foreground hover:bg-accent hover:text-foreground',
+          currentIndex <= 0 && 'cursor-not-allowed',
         )}
       >
-        <ChevronLeft size={10} />
-      </button>
+        <ChevronLeft size={14} />
+      </Button>
 
       <span
         className="min-w-[28px] cursor-default px-0.5 text-center font-mono text-[12px] text-muted-foreground"
@@ -75,20 +76,20 @@ function BranchNavigatorComponent({
         {displayIndex}/{total}
       </span>
 
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="icon"
         onClick={handleNext}
         disabled={currentIndex >= total - 1}
         aria-label="Next branch"
         className={cn(
-          'flex h-4 w-4 items-center justify-center rounded transition-colors',
-          currentIndex >= total - 1
-            ? 'cursor-not-allowed text-muted-foreground'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          'h-6 w-6 text-muted-foreground hover:bg-accent hover:text-foreground',
+          currentIndex >= total - 1 && 'cursor-not-allowed',
         )}
       >
-        <ChevronRight size={10} />
-      </button>
+        <ChevronRight size={14} />
+      </Button>
     </div>
   );
 }
