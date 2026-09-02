@@ -1588,11 +1588,18 @@ const ChatMessageListComponent = ({
         className="h-full"
       />
 
-      {/* Scroll-to-bottom FAB · shown when user has scrolled up */}
+      {/* Scroll-to-bottom FAB · shown when user has scrolled up. Its screen
+          position is fixed regardless of scroll offset, so the fade behind it
+          is load-bearing: without it the circle sits directly on top of
+          whatever transcript line happens to be there. */}
       <AnimatePresence>
         {userScrolledUp && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-            <div className="pointer-events-auto">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex h-24 items-end justify-center">
+            <div
+              className="absolute inset-0 bg-gradient-to-t from-[var(--chat-bg)] via-[var(--chat-bg)]/85 to-transparent"
+              aria-hidden="true"
+            />
+            <div className="pointer-events-auto relative mb-3">
               <ScrollToBottomButton
                 onClick={() => followBottom(prefersReducedMotion ? 'auto' : 'smooth')}
               />
