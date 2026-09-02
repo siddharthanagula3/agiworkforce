@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { SessionExpiredActions } from './SessionExpiredActions';
 
 export const metadata = buildMetadata({
@@ -10,33 +11,36 @@ export const metadata = buildMetadata({
 
 export default function SessionExpiredPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <section className="agi-page-hero">
-          <p className="agi-section-eyebrow">Signed out</p>
-          <h1 className="agi-page-h1">Your session expired.</h1>
-          <p className="agi-page-lede">
-            Sign-ins last a limited time, so this happens on its own after a while. Nothing you
-            saved was lost.
-          </p>
-        </section>
+    <div data-design="agi" className="agi-ds-page">
+      <main id="main-content">
+        <Section size="sm">
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>Signed out</Eyebrow>
+              <h1 className="agi-ds-h1">Your session expired.</h1>
+            </div>
+            <Prose>
+              Sign-ins last a limited time, so this happens on its own after a while. Nothing you
+              saved was lost.
+            </Prose>
+            <SessionExpiredActions />
+          </Stack>
+        </Section>
 
-        <section className="agi-page-section">
-          <SessionExpiredActions />
-        </section>
-
-        <section className="agi-page-section">
-          <h2 className="agi-section-h2">Why this happens</h2>
-          <p className="agi-page-p">
-            A session ends when it reaches its lifetime, when you sign out on another device, or
-            after a long stretch of inactivity. Signing in again issues a fresh one; you do not need
-            to clear anything or reinstall.
-          </p>
-          <p className="agi-page-p">
-            If you are sent back here immediately after signing in, third-party cookies are usually
-            the cause. Allow cookies for this site, then try again.
-          </p>
-        </section>
+        <Section size="sm" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2">Why this happens.</h2>
+            <Prose>
+              A session ends when it reaches its lifetime, when you sign out on another device, or
+              after a long stretch of inactivity. Signing in again issues a fresh one; you do not
+              need to clear anything or reinstall.
+            </Prose>
+            <Prose>
+              If you are sent back here immediately after signing in, third-party cookies are
+              usually the cause. Allow cookies for this site, then try again.
+            </Prose>
+          </Stack>
+        </Section>
       </main>
     </div>
   );
