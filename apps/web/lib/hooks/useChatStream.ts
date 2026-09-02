@@ -63,6 +63,7 @@ import {
 import {
   INTERACTIVE_CARD_RESPONSE_PATH,
   RESPONDABLE_INTERACTIVE_CARD_KIND,
+  interactiveCardNeedsResume,
   type InteractiveCardResponseRequest,
 } from '@/app/api/interactive-cards/response-contract';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -70,7 +71,7 @@ import { FALLBACK_REASON_HEADER } from '@/lib/chat-fallback-reason';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
-import type { ResearchStep } from '@agiworkforce/types';
+import type { AgentTaskState, ResearchStep } from '@agiworkforce/types';
 import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
 import {
   linearTail,
@@ -93,6 +94,11 @@ import {
   CONTINUE_GENERATION_INSTRUCTION,
   isMessageContinuable,
 } from '@/features/chat/lib/continue-generation';
+import {
+  collapseDuplicateAgentActivityErrors,
+  humanizeAgentEventEnvelope,
+  isTerminalAgentEventEnvelope,
+} from '@/features/chat/lib/agent-activity-notice';
 import { repairContinuationSeam, SEAM_INSPECTION_WINDOW } from '@agiworkforce/unified-chat';
 import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
@@ -164,6 +170,7 @@ export interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
   stopGeneration: (conversationId?: string) => void;
   continueGeneration: (assistantMessageId: string) => Promise<void>;
+  resumeInteractiveCardTurn: (assistantMessageId: string) => Promise<void>;
   resolveToolApproval: (
     assistantMessageId: string,
     toolCallId: string,
@@ -612,6 +619,13 @@ export function useToolApprovalResolver(): ResolveToolApprovalFn | null {
   return useContext(ToolApprovalContext);
 }
 
+type ResumeInteractiveCardTurnFn = UseChatStreamReturn['resumeInteractiveCardTurn'];
+const InteractiveCardResumeContext = createContext<ResumeInteractiveCardTurnFn | null>(null);
+export const InteractiveCardResumeProvider = InteractiveCardResumeContext.Provider;
+export function useInteractiveCardResume(): ResumeInteractiveCardTurnFn | null {
+  return useContext(InteractiveCardResumeContext);
+}
+
 export interface InteractiveCardResponseBinding {
   conversationId: string;
   messageId: string;
@@ -672,6 +686,11 @@ function settledInteractiveCardTurn(message: Message): ApiMessage | null {
     .map(describeSettledInteractiveCard)
     .filter((entry): entry is string => entry !== null);
   return settled.length > 0 ? { role: 'user', content: settled.join('\n\n') } : null;
+}
+
+function hasResumableInteractiveCard(message: Message | undefined): boolean {
+  if (!message || message.role !== 'assistant' || message.isStreaming) return false;
+  return (message.metadata?.interactiveCards ?? []).some(interactiveCardNeedsResume);
 }
 
 const inFlightCardResponses = new Set<string>();
@@ -1280,59 +1299,86 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       currentCloudAgentRun?.lastSequence ?? -1,
       currentAgentActivity?.lastSequence ?? -1,
     );
-    const followed = await client.followRun(runHandle.runId, {
-      afterSequence,
-      pollIntervalMs: DURABLE_RUN_POLL_INTERVAL_MS,
-      onEvent: (envelope) => {
-        if (envelope.event.type === 'text-delta' && envelope.event.delta) {
-          const reconciled = reconcileManagedCloudPublicText(
-            unacknowledgedPublicText,
-            envelope.event.delta,
-          );
-          unacknowledgedPublicText = reconciled.pending;
-          if (reconciled.unmatchedIncoming) {
-            fullAssistantContent += reconciled.unmatchedIncoming;
-            coalescedAppends.append('content', assistantMessageId, reconciled.unmatchedIncoming);
+    const terminalFollowAbort = new AbortController();
+    let sawTerminalAgentEvent = false;
+
+    let runState: AgentTaskState;
+    let lastKnownSequence = afterSequence;
+    let cancellationRequestedAt: string | null | undefined;
+
+    try {
+      const followed = await client.followRun(runHandle.runId, {
+        afterSequence,
+        pollIntervalMs: DURABLE_RUN_POLL_INTERVAL_MS,
+        signal: terminalFollowAbort.signal,
+        onEvent: (envelope) => {
+          if (envelope.event.type === 'text-delta' && envelope.event.delta) {
+            const reconciled = reconcileManagedCloudPublicText(
+              unacknowledgedPublicText,
+              envelope.event.delta,
+            );
+            unacknowledgedPublicText = reconciled.pending;
+            if (reconciled.unmatchedIncoming) {
+              fullAssistantContent += reconciled.unmatchedIncoming;
+              coalescedAppends.append('content', assistantMessageId, reconciled.unmatchedIncoming);
+            }
           }
-        }
-        if (envelope.event.type === 'stop') {
-          finishReason =
-            envelope.event.reason === 'max-tokens'
-              ? 'length'
-              : envelope.event.reason === 'cancelled'
-                ? 'stopped'
-                : envelope.event.reason === 'error'
-                  ? 'error'
-                  : 'stop';
-        }
-        currentAgentActivity = applyAgentActivityEvent(currentAgentActivity, envelope);
-        patchMessageMeta({ agentActivity: currentAgentActivity });
-        publishCloudRunReference({ lastSequence: envelope.sequence });
-      },
-      onSnapshot: (snapshot) => {
-        publishCloudRunReference({
-          lastSequence: snapshot.nextAfterSequence,
-          state: snapshot.run.state,
-          cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
-        });
-      },
-    });
+          if (envelope.event.type === 'stop') {
+            finishReason =
+              envelope.event.reason === 'max-tokens'
+                ? 'length'
+                : envelope.event.reason === 'cancelled'
+                  ? 'stopped'
+                  : envelope.event.reason === 'error'
+                    ? 'error'
+                    : 'stop';
+          }
+          currentAgentActivity = collapseDuplicateAgentActivityErrors(
+            applyAgentActivityEvent(currentAgentActivity, humanizeAgentEventEnvelope(envelope)),
+          );
+          patchMessageMeta({ agentActivity: currentAgentActivity });
+          publishCloudRunReference({ lastSequence: envelope.sequence });
+          if (isTerminalAgentEventEnvelope(envelope)) {
+            sawTerminalAgentEvent = true;
+            terminalFollowAbort.abort();
+          }
+        },
+        onSnapshot: (snapshot) => {
+          publishCloudRunReference({
+            lastSequence: snapshot.nextAfterSequence,
+            state: snapshot.run.state,
+            cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
+          });
+        },
+      });
+      lastKnownSequence = followed.lastSequence;
+      runState = followed.run.state;
+      cancellationRequestedAt = followed.run.cancellationRequestedAt;
+    } catch (error) {
+      const isAbortError =
+        typeof error === 'object' &&
+        error !== null &&
+        (error as { name?: unknown }).name === 'AbortError';
+      if (!sawTerminalAgentEvent || !isAbortError) throw error;
+      lastKnownSequence = currentAgentActivity?.lastSequence ?? afterSequence;
+      runState = 'failed';
+    }
 
     coalescedAppends.flush();
     publishCloudRunReference({
-      lastSequence: followed.lastSequence,
-      state: followed.run.state,
-      cancellationRequestedAt: followed.run.cancellationRequestedAt,
+      lastSequence: lastKnownSequence,
+      state: runState,
+      ...(cancellationRequestedAt !== undefined ? { cancellationRequestedAt } : {}),
     });
-    if (followed.run.state === 'failed') {
+    if (runState === 'failed') {
       finishRunningTools('failed', 'The managed agent run failed.');
-    } else if (followed.run.state !== 'awaiting_input' && followed.run.state !== 'paused') {
+    } else if (runState !== 'awaiting_input' && runState !== 'paused') {
       finishRunningTools();
     }
     setSearching(assistantMessageId, false, conversationId);
     setExecutingCode(assistantMessageId, false, conversationId);
     if (finishReason) patchMessageMeta({ finishReason });
-    if (followed.run.state !== 'awaiting_input' && followed.run.state !== 'paused') {
+    if (runState !== 'awaiting_input' && runState !== 'paused') {
       settleAgentActivity();
     }
     persistAssistant(fullAssistantContent);
@@ -1422,7 +1468,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 agentEnvelope.event.delta,
               ).pending;
             }
-            currentAgentActivity = applyAgentActivityEvent(currentAgentActivity, agentEnvelope);
+            currentAgentActivity = collapseDuplicateAgentActivityErrors(
+              applyAgentActivityEvent(
+                currentAgentActivity,
+                humanizeAgentEventEnvelope(agentEnvelope),
+              ),
+            );
             patchMessageMeta({ agentActivity: currentAgentActivity });
             publishCloudRunReference({ lastSequence: agentEnvelope.sequence });
           }
@@ -2285,7 +2336,8 @@ export function useChatStream(): UseChatStreamReturn {
         : store.messages;
       const messageIndex = conversationMessages.findIndex((m) => m.id === assistantMessageId);
       const message = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
-      if (!message || !isMessageContinuable(message)) return;
+      const resumingCard = hasResumableInteractiveCard(message);
+      if (!message || (!isMessageContinuable(message) && !resumingCard)) return;
 
       if (!conversationId) {
         setError('No active conversation. Please create a new conversation first.');
@@ -2321,7 +2373,9 @@ export function useChatStream(): UseChatStreamReturn {
             const settled = settledInteractiveCardTurn(m);
             return settled ? [turn, settled] : [turn];
           });
-        apiMessages.push({ role: 'user', content: CONTINUE_GENERATION_INSTRUCTION });
+        if (!resumingCard) {
+          apiMessages.push({ role: 'user', content: CONTINUE_GENERATION_INSTRUCTION });
+        }
 
         const seedContent = message.content;
         const seedTools = message.metadata?.tools?.map((t) => ({ ...t }));
@@ -2475,6 +2529,47 @@ export function useChatStream(): UseChatStreamReturn {
     ],
   );
 
+  const resumeInteractiveCardTurn = useCallback(
+    async (assistantMessageId: string): Promise<void> => {
+      const store = useChatStore.getState();
+      const conversationId = store.activeConversationId;
+      if (!conversationId) return;
+      const message = findConversationMessage(conversationId, assistantMessageId);
+      if (!message || !hasResumableInteractiveCard(message)) return;
+      if (message.metadata?.interactiveCardsResumed) return;
+
+      const nextMetadata: MessageMetadata = { ...message.metadata, interactiveCardsResumed: true };
+      updateMessage(assistantMessageId, { metadata: nextMetadata }, conversationId);
+
+      const isTemporaryConversation = Boolean(
+        store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
+      );
+      if (!isTemporaryConversation) {
+        try {
+          const token = await getToken();
+          if (token) {
+            await saveMessageToDb(
+              conversationId,
+              {
+                id: assistantMessageId,
+                role: 'assistant',
+                content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                model: message.model,
+                metadata: nextMetadata,
+              },
+              async () => token,
+            );
+          }
+        } catch (error) {
+          notifyPersistenceFailure('assistant', error);
+        }
+      }
+
+      await continueGeneration(assistantMessageId);
+    },
+    [continueGeneration, updateMessage, getToken],
+  );
+
   const stopGeneration = useCallback(
     (conversationId?: string) => {
       const targetConversationId = conversationId ?? useChatStore.getState().activeConversationId;
@@ -2503,6 +2598,7 @@ export function useChatStream(): UseChatStreamReturn {
     sendMessage,
     stopGeneration,
     continueGeneration,
+    resumeInteractiveCardTurn,
     resolveToolApproval,
     isStreaming,
   };
