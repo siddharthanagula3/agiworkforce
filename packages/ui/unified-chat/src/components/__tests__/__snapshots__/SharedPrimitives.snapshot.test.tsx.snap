@@ -54,7 +54,9 @@ exports[`shared-primitive DOM snapshots > locks the GeneratedFileCard rendered s
           Snapshot report
         </span>
         <span
+          aria-live="polite"
           class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
+          role="status"
         >
           <svg
             aria-hidden="true"
