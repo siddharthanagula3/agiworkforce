@@ -235,7 +235,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             border: '1px solid rgba(239,68,68,0.3)',
             background: 'rgba(239,68,68,0.08)',
             fontSize: 12,
-            color: '#f87171',
+            color: 'var(--agi-error)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -251,7 +251,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               background: 'transparent',
               border: 0,
               padding: 0,
-              color: '#f87171',
+              color: 'var(--agi-error)',
               fontSize: 12,
               cursor: 'pointer',
               textDecoration: 'underline',
@@ -285,7 +285,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             padding: '32px 16px',
             textAlign: 'center',
             cursor: 'pointer',
-            background: isDragging ? 'rgba(200,137,42,0.05)' : 'transparent',
+            background: isDragging ? 'var(--agi-amber-soft)' : 'transparent',
             transition: 'border-color 0.15s, background 0.15s',
           }}
         >
@@ -396,6 +396,9 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                     confirmLabel: 'Remove file',
                     onConfirm: () => handleDelete(file),
                   });
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
                 }}
                 style={{
                   flexShrink: 0,
