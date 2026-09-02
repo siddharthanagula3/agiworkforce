@@ -63,6 +63,15 @@ function useCardResponseChannel(
   return { conversationId, messageId };
 }
 
+function useCardSubmissionError(cardId: string): string | undefined {
+  return useChatStore(
+    (state) =>
+      state.messages.find((message) =>
+        message.metadata?.interactiveCards?.some((card) => card.cardId === cardId),
+      )?.metadata?.interactiveCardSubmissionErrors?.[cardId],
+  );
+}
+
 function useCardTurnResume(
   card: InteractiveCard,
   channel: Omit<InteractiveCardResponseBinding, 'cardId'> | null,
@@ -103,6 +112,7 @@ interface SingleCardProps {
 const SingleCard = memo(function SingleCard({ card }: SingleCardProps) {
   const renderer = resolveInteractiveCardRenderer(WEB_CARD_REGISTRY, card);
   const channel = useCardResponseChannel(card.cardId);
+  const submissionError = useCardSubmissionError(card.cardId);
   useCardResponseDeadline(card);
   useCardTurnResume(card, channel);
   const canRespond = channel !== null && interactiveCardAcceptsResponse(card);
@@ -127,6 +137,7 @@ const SingleCard = memo(function SingleCard({ card }: SingleCardProps) {
           ctx: {
             canRespond,
             ...(canRespond ? { onRespond } : {}),
+            ...(submissionError ? { submissionError } : {}),
             onOpenUrl: openMapSearchProviderUrl,
           },
         })}
