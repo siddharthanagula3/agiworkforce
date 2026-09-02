@@ -524,3 +524,39 @@ describe('run outcome versus stop reason', () => {
     expect(state.status).toBe('cancelled');
   });
 });
+
+describe('tool failure summaries', () => {
+  it('replaces a raw exception with a generic summary but keeps the raw text on error', () => {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(0, {
+        type: 'tool-execution-start',
+        toolCallId: 'call-1',
+        name: 'search_docs',
+        category: 'connector',
+        summary: 'Using Docs connector',
+        input: {},
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(1, {
+        type: 'tool-execution-end',
+        toolCallId: 'call-1',
+        name: 'search_docs',
+        output: "TypeError: Cannot read properties of undefined (reading 'access_token')",
+        isError: true,
+        elapsedMs: 10,
+      }),
+    );
+
+    const entry = state.entries[0];
+    expect(entry).toMatchObject({
+      kind: 'tool',
+      status: 'failed',
+      summary: 'The tool failed',
+      error: "TypeError: Cannot read properties of undefined (reading 'access_token')",
+    });
+    expect(JSON.stringify(entry?.summary)).not.toContain('access_token');
+  });
+});
