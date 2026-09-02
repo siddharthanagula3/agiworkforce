@@ -149,6 +149,14 @@ interface SendMessageOptions {
    * the answer that is already there.
    */
   regenerateParentMessageId?: string;
+  /**
+   * The caller painted this turn under a client-generated placeholder id
+   * because the real conversation did not exist yet (the fresh-chat send
+   * path). Resolves to the server id once the create call lands, or null if
+   * it never does; `sendMessage` renames the placeholder to that id before
+   * touching the network.
+   */
+  ensureConversationId?: () => Promise<string | null>;
 }
 
 const CLIENT_MESSAGE_ID_PATTERN =
@@ -888,6 +896,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (!currentAgentActivity) return;
     if (currentAgentActivity.status !== 'running') return;
     if (suspended) return;
+    if (streamErrorInfo) {
+      currentAgentActivity = finishAgentActivityLocally(currentAgentActivity, {
+        status: 'failed',
+        completedAtMs: Date.now(),
+        error: streamErrorInfo.message,
+      });
+      patchMessageMeta({ agentActivity: currentAgentActivity });
+      return;
+    }
     currentAgentActivity = {
       ...currentAgentActivity,
       entries: currentAgentActivity.entries.map((entry) =>
@@ -1969,7 +1986,7 @@ export function useChatStream(): UseChatStreamReturn {
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
       if (!content.trim() && !options.attachments?.length) return false;
 
-      const conversationId = options.conversationId || useChatStore.getState().activeConversationId;
+      let conversationId = options.conversationId || useChatStore.getState().activeConversationId;
       if (!conversationId) {
         console.error('[useChatStream] No conversation ID available');
         setError('No active conversation. Please create a new conversation first.');
@@ -2000,18 +2017,10 @@ export function useChatStream(): UseChatStreamReturn {
         if (!token) throw new Error('Not authenticated');
         return token;
       };
-      let authToken: string;
-      try {
-        authToken = await getAuthToken();
-      } catch {
-        setError('Your session has expired. Please sign in again.', conversationId);
-        return false;
-      }
 
       // Regenerate answers a user message that is already here, so this send
       // creates no user message at all: the new answer becomes a sibling of the
-      // old one under the same question. The turn is committed the moment the
-      // flow starts — there is nothing to persist first and nothing to undo.
+      // old one under the same question.
       const regenerateParentId = options.regenerateParentMessageId;
       // Stamping local parents is what gives the row about to be written
       // something to branch FROM, so it has to run before that row exists and
@@ -2034,6 +2043,7 @@ export function useChatStream(): UseChatStreamReturn {
       const userMessageParentId = regenerateParentId
         ? undefined
         : resolveUserMessageParentId(conversationId, options.userMessageParentId);
+      const threadsThisWrite = !regenerateParentId && userMessageParentId !== undefined;
 
       const isTemporaryConversation = Boolean(
         useChatStore
@@ -2050,10 +2060,11 @@ export function useChatStream(): UseChatStreamReturn {
         }
       };
 
-      if (regenerateParentId) {
-        reportTurnCommitted();
-      } else {
-        const threadsThisWrite = userMessageParentId !== undefined;
+      // Everything below is synchronous: the user bubble and the assistant
+      // placeholder both paint before the first await, so the turn is on
+      // screen in the same frame as the click. Persistence is reconciled
+      // once the network catches up.
+      if (!regenerateParentId) {
         const userMessage: Message = {
           id: userMessageId,
           role: 'user',
@@ -2067,44 +2078,12 @@ export function useChatStream(): UseChatStreamReturn {
         if (threadsThisWrite) {
           useChatStore.getState().setActiveLeaf(conversationId, userMessageId);
         }
-
-        if (!isTemporaryConversation) {
-          try {
-            const saved = await saveMessageToDb(
-              conversationId,
-              {
-                id: userMessageId,
-                role: 'user',
-                content: content.trim(),
-                metadata: userMetadata,
-                ...(threadsThisWrite ? { parentId: userMessageParentId } : {}),
-              },
-              getAuthToken,
-            );
-            if (saved.id !== userMessageId) {
-              updateMessage(userMessageId, { id: saved.id }, conversationId);
-              turnAnchorId = saved.id;
-              if (threadsThisWrite) {
-                useChatStore.getState().setActiveLeaf(conversationId, saved.id);
-              }
-            }
-            reportTurnCommitted();
-          } catch (error) {
-            notifyPersistenceFailure('user', error);
-            deleteMessage(userMessageId, conversationId);
-            useChatStore.getState().setActiveLeaf(conversationId, restoreLeafId);
-            setError('Your message was not saved, so no model was called.', conversationId);
-            return false;
-          }
-        } else {
-          reportTurnCommitted();
-        }
       }
 
       const abortController = beginConversationRequest(conversationId);
 
       const assistantMessageId = resolveClientMessageId(options.assistantMessageId);
-      const assistantParentId = resolveAssistantParentId(conversationId, turnAnchorId);
+      let assistantParentId = resolveAssistantParentId(conversationId, turnAnchorId);
       const assistantStartedAtMs = Date.now();
       const assistantMessage: Message = {
         id: assistantMessageId,
@@ -2132,6 +2111,85 @@ export function useChatStream(): UseChatStreamReturn {
       startStreaming(assistantMessageId, conversationId);
       setLoading(true, conversationId);
       setError(null, conversationId);
+
+      const abandonTurn = () => {
+        stopStreaming(conversationId);
+        setLoading(false, conversationId);
+        deleteMessage(assistantMessageId, conversationId);
+        if (!regenerateParentId) {
+          deleteMessage(userMessageId, conversationId);
+        }
+        useChatStore.getState().setActiveLeaf(conversationId, restoreLeafId);
+        endConversationRequest(conversationId, abortController);
+      };
+
+      if (options.ensureConversationId) {
+        let realConversationId: string | null = null;
+        try {
+          realConversationId = await options.ensureConversationId();
+        } catch {
+          realConversationId = null;
+        }
+        if (!realConversationId) {
+          abandonTurn();
+          setError('Could not start the conversation.', conversationId);
+          return false;
+        }
+        if (realConversationId !== conversationId) {
+          if (abortControllersRef.current.get(conversationId) === abortController) {
+            abortControllersRef.current.delete(conversationId);
+            abortControllersRef.current.set(realConversationId, abortController);
+          }
+          useChatStore.getState().renameConversationId(conversationId, realConversationId);
+          conversationId = realConversationId;
+        }
+      }
+
+      let authToken: string;
+      try {
+        authToken = await getAuthToken();
+      } catch {
+        abandonTurn();
+        setError('Your session has expired. Please sign in again.', conversationId);
+        return false;
+      }
+
+      if (regenerateParentId) {
+        reportTurnCommitted();
+      } else if (!isTemporaryConversation) {
+        try {
+          const saved = await saveMessageToDb(
+            conversationId,
+            {
+              id: userMessageId,
+              role: 'user',
+              content: content.trim(),
+              metadata: userMetadata,
+              ...(threadsThisWrite ? { parentId: userMessageParentId } : {}),
+            },
+            getAuthToken,
+          );
+          if (saved.id !== userMessageId) {
+            updateMessage(userMessageId, { id: saved.id }, conversationId);
+            turnAnchorId = saved.id;
+            if (threadsThisWrite) {
+              useChatStore.getState().setActiveLeaf(conversationId, saved.id);
+            }
+            if (assistantParentId) {
+              assistantParentId = saved.id;
+              updateMessage(assistantMessageId, { parentId: saved.id }, conversationId);
+            }
+          }
+          reportTurnCommitted();
+        } catch (error) {
+          notifyPersistenceFailure('user', error);
+          abandonTurn();
+          setError('Your message was not saved, so no model was called.', conversationId);
+          return false;
+        }
+      } else {
+        reportTurnCommitted();
+      }
 
       try {
         const currentMessages = readConversationMessages(conversationId);
