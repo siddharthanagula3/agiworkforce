@@ -350,6 +350,50 @@ describe('assembleOpenAIWireResponse (non-streaming)', () => {
       (response['choices'] as Array<{ message: { content: null } }>)[0]?.message.content,
     ).toBeNull();
   });
+
+  it('carries google grounding sources into search_results, same as native web_search_tool_result', () => {
+    const chunks: StreamChunk[] = [
+      { type: 'text-delta', delta: 'Grounded answer.' },
+      {
+        type: 'server-tool-result',
+        toolUseId: 'gemini-grounding-1',
+        payload: {
+          type: 'gemini_grounding_result',
+          results: [
+            { type: 'web_search_result', url: 'https://example.com/a', title: 'A', position: 1 },
+          ],
+        },
+      },
+      { type: 'stop', reason: 'end_turn' },
+    ];
+
+    const response = assembleOpenAIWireResponse(chunks, {
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      id: 'chatcmpl-grounding',
+      wireMode: 'legacy-web',
+    });
+
+    expect(response['search_results']).toEqual([
+      {
+        content: [
+          { type: 'web_search_result', url: 'https://example.com/a', title: 'A', position: 1 },
+        ],
+      },
+    ]);
+  });
+
+  it('omits search_results when no grounding or web_search_tool_result payload was ingested', () => {
+    const response = assembleOpenAIWireResponse(
+      [
+        { type: 'text-delta', delta: 'No search here.' },
+        { type: 'stop', reason: 'end_turn' },
+      ],
+      { model: FIXTURE_MODEL_ID, now: NOW, id: 'chatcmpl-no-search', wireMode: 'legacy-web' },
+    );
+
+    expect(response['search_results']).toBeUndefined();
+  });
 });
 
 describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () => {
