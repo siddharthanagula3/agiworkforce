@@ -141,7 +141,7 @@ const SCENARIOS: Scenario[] = [
     caveat:
       'A trigger can read and report; it cannot edit a file or run a shell command, so remediation still lands on an engineer. You also have to write the runbook each trigger follows, because AGI will not discover your clients’ processes on your behalf.',
     meta: `CLI · ${SURFACE_STATUS.cli}`,
-    status: SURFACE_STATUS.cli,
+    status: 'No AGI account required for this route',
     href: '/cli',
     hrefLabel: 'How the CLI runs unattended',
   },
