@@ -81,6 +81,11 @@ import type {
   ComposerMentionCommit,
   ComposerMentionConfig,
 } from '@agiworkforce/unified-chat/composer-editor';
+import {
+  clearPendingDraft,
+  parkPendingDraft,
+  restorablePendingDraft,
+} from '@features/chat/lib/pending-composer-draft';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -372,7 +377,14 @@ function splitSlashCommand(value: string): { token: string; argument: string } |
 
 /** The text a command should leave behind once its token is consumed. */
 function stripSlashCommandToken(value: string): string {
-  return splitSlashCommand(value)?.argument ?? value;
+  const parsed = splitSlashCommand(value);
+  if (parsed) return parsed.argument;
+  // The menu opens on anything the draft predicate accepts, which includes a
+  // lone `/` that `splitSlashCommand` cannot parse — it wants a token to read.
+  // Returning the whole value for those wrote the slash straight back on
+  // commit, so the menu closed and the token stayed in the message. A draft
+  // with no parseable token has no argument to keep either.
+  return isSlashCommandDraft(value) ? '' : value;
 }
 
 const SLASH_COMMAND_PREFIX = '/';
@@ -1214,6 +1226,7 @@ const ChatComposerNewComponent = ({
     // AUDIT-FIX STR-23: a sent/cleared composer must not leave a stale parked
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
+    if (!conversationId) clearPendingDraft();
     clearAttachments();
     // Deep Research and style are persistent options. Managed Web search is an
     // ambient capability and is re-derived from the selected model/deployment.
@@ -2290,7 +2303,11 @@ const ChatComposerNewComponent = ({
    * `draftsByConversation`, so a reload still starts on an empty composer.
    */
   useEffect(() => {
-    writeComposerMessage(useChatStore.getState().getDraftContent(conversationId));
+    const parked = useChatStore.getState().getDraftContent(conversationId);
+    // A saved conversation owns its draft outright. The unsaved surface does
+    // not — its slot is shared by every new chat, so it is only the same draft
+    // when the user stepped back to it. See pending-composer-draft.
+    writeComposerMessage(conversationId ? parked : restorablePendingDraft(parked));
     return () => {
       const outgoing = messageRef.current;
       if (outgoing.trim()) {
@@ -2298,6 +2315,11 @@ const ChatComposerNewComponent = ({
       } else {
         clearDraftContent(conversationId);
       }
+      // Only ever park text, never the absence of it. The new chat the user
+      // opened in between leaves this surface empty on its way out, and
+      // parking that would wipe the draft the step back is coming for. A sent
+      // draft is discarded explicitly instead, in clearComposerState.
+      if (!conversationId && outgoing.trim()) parkPendingDraft(outgoing);
     };
   }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
 
@@ -2307,8 +2329,17 @@ const ChatComposerNewComponent = ({
    * mount was why a failed send looked like the message had simply vanished:
    * the same instance stays mounted for an existing chat, and a brand-new chat
    * mounts its replacement BEFORE the save fails. Never overwrite live typing.
+   *
+   * Only a draft that ARRIVES while this composer is on screen is a handback.
+   * One that was already parked when it mounted belongs to the surface the
+   * user just left, and on the unsaved surface that is the previous new chat's
+   * text; restoring it here would hand it forward and undo the rule the mount
+   * path applies.
    */
+  const seenParkedDraftRef = useRef(parkedDraft);
   useEffect(() => {
+    if (parkedDraft === seenParkedDraftRef.current) return;
+    seenParkedDraftRef.current = parkedDraft;
     if (!parkedDraft || messageRef.current.trim()) return;
     writeComposerMessage(parkedDraft);
   }, [parkedDraft, writeComposerMessage]);

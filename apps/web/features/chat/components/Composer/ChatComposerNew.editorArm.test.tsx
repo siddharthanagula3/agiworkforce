@@ -151,6 +151,7 @@ beforeEach(() => {
   useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
   // Composer toggles and drafts live in the chat store, so they outlive a
   // render and would otherwise leak an image mode or a skill into the next test.
+  window.sessionStorage.clear();
   useChatStore.setState({
     composerTogglesByConversation: {},
     draftsByConversation: {},
@@ -442,5 +443,87 @@ describe('editor arm · paste and drop', () => {
     act(() => editor().onPasteDecision?.({ kind: 'files', files: [textFile('notes.txt', 'x')] }));
 
     expect(editor().existingFileNames).toContain('notes.txt');
+  });
+});
+
+/**
+ * The menu opens on anything the draft predicate accepts, including a lone
+ * slash the command parser cannot read. Committing from that state used to
+ * write the slash back, so the menu closed and the token stayed put, and the
+ * next thing typed landed behind it as "//search".
+ */
+describe('editor arm · committing from a bare slash', () => {
+  it('consumes the slash instead of writing it back', async () => {
+    useSettingsStore.setState({
+      customCommands: [{ id: 'noop', name: 'noop', description: 'No body', template: '' }],
+    });
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    type('/');
+    // The mount restore already wrote an empty document, so only the write the
+    // commit itself makes can prove the token was consumed.
+    editorHandle.setText.mockClear();
+    pickMenuRow(/\/noop/);
+
+    expect(editorHandle.setText).toHaveBeenCalledExactlyOnceWith('');
+    await waitFor(() => expect(editorHandle.focus).toHaveBeenCalled());
+  });
+
+  it('still keeps the argument when the token is complete', () => {
+    useSettingsStore.setState({
+      customCommands: [
+        { id: 'brief', name: 'brief', description: 'Brief', template: 'Write a brief' },
+      ],
+    });
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    type('/brief');
+    editorHandle.setText.mockClear();
+    pickMenuRow(/\/brief/);
+
+    expect(editorHandle.setText).toHaveBeenCalledExactlyOnceWith('Write a brief');
+  });
+});
+
+/**
+ * The whole journey happens on the unsaved surface, so both of these read the
+ * same draft slot and demand opposite answers. What separates them is how the
+ * user got there: a new chat is a push, a return is a history step.
+ */
+describe('editor arm · the unsaved surface draft', () => {
+  function mount() {
+    return render(<ChatComposerNew onSend={vi.fn()} />);
+  }
+
+  it('withholds the draft from a new chat and hands it back on the way back', () => {
+    const typed = 'half-typed draft that belongs to this chat';
+    const composing = mount();
+    type(typed);
+    composing.unmount();
+
+    // The new chat the user opened on purpose starts blank.
+    editorHandle.setText.mockClear();
+    const newChat = mount();
+    expect(editorHandle.setText).toHaveBeenCalledExactlyOnceWith('');
+    newChat.unmount();
+
+    // Stepping back to the surface they left returns what was on it.
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    editorHandle.setText.mockClear();
+    mount();
+    expect(editorHandle.setText).toHaveBeenCalledExactlyOnceWith(typed);
+  });
+
+  it('does not resurrect a draft that was already sent', () => {
+    const composing = mount();
+    type('ship it');
+    submit();
+    composing.unmount();
+
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    editorHandle.setText.mockClear();
+    mount();
+
+    expect(editorHandle.setText).toHaveBeenCalledExactlyOnceWith('');
   });
 });
