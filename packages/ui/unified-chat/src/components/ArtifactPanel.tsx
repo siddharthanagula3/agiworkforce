@@ -26,7 +26,7 @@ import {
 import { artifactDownloadFile } from '../lib/artifact-download';
 import { SCRIPTS_BLOCKED_NOTICE } from '../lib/artifact-preview-capability';
 import { useSameDocumentScriptSupport } from '../hooks/useSameDocumentScriptSupport';
-import { Button } from '@agiworkforce/ui';
+import { Button, useMenuKeyboard } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
 import { ChartArtifact } from './artifact-components/ChartArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
@@ -243,13 +243,21 @@ function DropdownMenu({
   onPublish: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const close = useCallback(() => setOpen(false), []);
+
+  useMenuKeyboard({ open, onClose: close, panelRef, triggerRef });
 
   return (
     <div className="relative">
       <Button
+        ref={triggerRef}
         variant="ghost"
         size="icon"
         aria-label="More options"
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
         className="h-7 w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
       >
@@ -258,8 +266,11 @@ function DropdownMenu({
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
+          <div className="fixed inset-0 z-10" onClick={close} aria-hidden />
           <div
+            ref={panelRef}
+            role="menu"
+            aria-label="Artifact options"
             className={cn(
               'absolute right-0 top-full mt-1 z-20 min-w-[140px]',
               'rounded-[var(--chat-radius-md)] border border-[var(--chat-border)]',
@@ -268,6 +279,8 @@ function DropdownMenu({
             )}
           >
             <button
+              type="button"
+              role="menuitem"
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-1.5 text-sm',
                 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
@@ -275,13 +288,15 @@ function DropdownMenu({
               )}
               onClick={() => {
                 onDownload();
-                setOpen(false);
+                close();
               }}
             >
               <Download size={13} />
               Download
             </button>
             <button
+              type="button"
+              role="menuitem"
               className={cn(
                 'flex w-full items-center gap-2 px-3 py-1.5 text-sm',
                 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
@@ -289,7 +304,7 @@ function DropdownMenu({
               )}
               onClick={() => {
                 onPublish();
-                setOpen(false);
+                close();
               }}
             >
               <Globe size={13} />
