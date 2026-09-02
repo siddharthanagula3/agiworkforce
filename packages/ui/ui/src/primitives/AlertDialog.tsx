@@ -49,12 +49,16 @@ function AlertDialogContent({ className, ref, ...props }: AlertDialogContentProp
   // after close while the settings modal it came from stayed open, so a
   // keyboard reader was dropped out of the modal entirely.
   const openerRef = React.useRef<HTMLElement | null>(null);
+  const { onOpenAutoFocus } = props;
 
-  const captureOpener = React.useCallback((event: Event) => {
-    const active = document.activeElement;
-    openerRef.current = active instanceof HTMLElement ? active : null;
-    props.onOpenAutoFocus?.(event as never);
-  }, []);
+  const captureOpener = React.useCallback(
+    (event: Event) => {
+      const active = document.activeElement;
+      openerRef.current = active instanceof HTMLElement ? active : null;
+      onOpenAutoFocus?.(event as never);
+    },
+    [onOpenAutoFocus],
+  );
 
   const restoreFocus = React.useCallback((event: Event) => {
     if (event.defaultPrevented) return;
