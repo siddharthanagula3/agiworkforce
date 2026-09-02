@@ -32,7 +32,7 @@ describe('waitlist surfaces point their off-the-list promise at a route that exi
     );
     openModal();
 
-    const finePrint = document.querySelector('.agi-waitlist-finePrint');
+    const finePrint = document.querySelector('.agi-ds-hint');
     expect(finePrint).not.toBeNull();
     expect(finePrint?.textContent).not.toMatch(BARE_UNSUBSCRIBE_PROMISE);
     expect(finePrint?.querySelector(`a[href="${WITHDRAWAL_ROUTE}"]`)).not.toBeNull();

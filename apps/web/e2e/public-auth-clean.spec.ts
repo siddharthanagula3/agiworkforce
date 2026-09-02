@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 async function assertNoSignedOutMeCalls(
   page: import('@playwright/test').Page,
   route: string,
-  titleSelector = '.agi-auth-title',
+  titleSelector = '.agi-ds-auth-brand h2',
 ) {
   const meFailures: string[] = [];
 

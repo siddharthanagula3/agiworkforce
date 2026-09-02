@@ -133,9 +133,9 @@ export function RightsRequestForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="agi-rights-form">
-      <div className="agi-rights-field">
-        <label htmlFor={typeId} className="agi-rights-label">
+    <form onSubmit={handleSubmit} noValidate className="agi-ds-form">
+      <div className="agi-ds-field">
+        <label htmlFor={typeId} className="agi-ds-field-label">
           Which right are you exercising?
         </label>
         <select
@@ -144,7 +144,7 @@ export function RightsRequestForm() {
           required
           value={requestType}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setRequestType(event.target.value);
             if (state === 'error') {
@@ -160,11 +160,11 @@ export function RightsRequestForm() {
             </option>
           ))}
         </select>
-        {selected ? <p className="agi-rights-hint">{selected.hint}</p> : null}
+        {selected ? <p className="agi-ds-hint">{selected.hint}</p> : null}
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={emailId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={emailId} className="agi-ds-field-label">
           Email address we should reply to
         </label>
         <input
@@ -176,7 +176,7 @@ export function RightsRequestForm() {
           spellCheck={false}
           value={email}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setEmail(event.target.value);
             if (state === 'error') {
@@ -185,15 +185,15 @@ export function RightsRequestForm() {
             }
           }}
         />
-        <p className="agi-rights-hint">
+        <p className="agi-ds-hint">
           Stored in plain text, because a request we cannot reply to is not a request we can honour.
           It is used to answer you and for nothing else, and it is erased with your account if you
           have one.
         </p>
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={detailsId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={detailsId} className="agi-ds-field-label">
           Details (optional)
         </label>
         <textarea
@@ -203,23 +203,28 @@ export function RightsRequestForm() {
           maxLength={4000}
           value={details}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => setDetails(event.target.value)}
         />
-        <p className="agi-rights-hint">
+        <p className="agi-ds-hint">
           Do not paste passwords, API keys, or anything you would not want stored. This box is saved
           verbatim.
         </p>
       </div>
 
       {state === 'error' && errorMsg ? (
-        <p id={errorId} role="alert" aria-live="polite" className="agi-rights-error">
+        <p id={errorId} role="alert" aria-live="polite" className="agi-ds-form-error">
           {errorMsg}
         </p>
       ) : null}
 
-      <div className="agi-cta-row">
-        <button type="submit" className="agi-cta-ghost" disabled={state === 'submitting'}>
+      <div className="agi-ds-btn-row">
+        <button
+          type="submit"
+          className="agi-ds-btn"
+          data-variant="primary"
+          disabled={state === 'submitting'}
+        >
           {state === 'submitting' ? 'Recording…' : 'Record my request'}
         </button>
       </div>

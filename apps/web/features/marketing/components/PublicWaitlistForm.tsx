@@ -69,14 +69,14 @@ export function PublicWaitlistForm({
 
   if (state === 'success') {
     return (
-      <p className="agi-waitlist-inline-success" role="status">
+      <p className="agi-ds-form-success" role="status">
         {successMessage}
       </p>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="agi-waitlist-inline">
+    <form onSubmit={handleSubmit} noValidate className="agi-ds-form-row">
       <label htmlFor={emailId} className="sr-only">
         Email address
       </label>
@@ -92,7 +92,8 @@ export function PublicWaitlistForm({
         disabled={state === 'submitting'}
         aria-invalid={state === 'error'}
         aria-describedby={state === 'error' && errorMsg ? errorId : undefined}
-        className="agi-waitlist-inline-input"
+        className="agi-ds-input"
+        style={{ flex: '1 1 240px' }}
         onChange={(e) => {
           setEmail(e.target.value);
           if (state === 'error') {
@@ -115,13 +116,14 @@ export function PublicWaitlistForm({
       />
       <button
         type="submit"
-        className="agi-waitlist-inline-submit"
+        className="agi-ds-btn"
+        data-variant="primary"
         disabled={state === 'submitting'}
       >
         {state === 'submitting' ? 'Joining…' : ctaLabel}
       </button>
       {state === 'error' && errorMsg ? (
-        <p id={errorId} role="alert" aria-live="polite" className="agi-waitlist-inline-error">
+        <p id={errorId} role="alert" aria-live="polite" className="agi-ds-form-error">
           {errorMsg}
         </p>
       ) : null}

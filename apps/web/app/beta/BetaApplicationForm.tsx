@@ -135,9 +135,9 @@ export function BetaApplicationForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="agi-rights-form">
-      <div className="agi-rights-field">
-        <label htmlFor={nameId} className="agi-rights-label">
+    <form onSubmit={handleSubmit} noValidate className="agi-ds-form">
+      <div className="agi-ds-field">
+        <label htmlFor={nameId} className="agi-ds-field-label">
           Your name
         </label>
         <input
@@ -149,11 +149,12 @@ export function BetaApplicationForm() {
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           autoComplete="name"
+          className="agi-ds-input"
         />
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={emailId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={emailId} className="agi-ds-field-label">
           Email
         </label>
         <input
@@ -165,11 +166,12 @@ export function BetaApplicationForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
+          className="agi-ds-input"
         />
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={roleId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={roleId} className="agi-ds-field-label">
           What best describes your work?
         </label>
         <select
@@ -178,6 +180,7 @@ export function BetaApplicationForm() {
           required
           value={role}
           onChange={(e) => setRole(e.target.value)}
+          className="agi-ds-input"
         >
           <option value="">Select…</option>
           {ROLES.map((entry) => (
@@ -188,8 +191,8 @@ export function BetaApplicationForm() {
         </select>
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={companyId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={companyId} className="agi-ds-field-label">
           Company <span>(optional)</span>
         </label>
         <input
@@ -200,27 +203,29 @@ export function BetaApplicationForm() {
           value={company}
           onChange={(e) => setCompany(e.target.value)}
           autoComplete="organization"
+          className="agi-ds-input"
         />
       </div>
 
-      <fieldset className="agi-rights-field">
-        <legend className="agi-rights-label">Which would you actually use?</legend>
+      <fieldset className="agi-ds-fieldset">
+        <legend className="agi-ds-fieldset-legend">Which would you actually use?</legend>
         {SURFACES.map((surface) => (
-          <label key={surface.id} className="agi-rights-check">
+          <label key={surface.id} className="agi-ds-consent-item-label">
             <input
               type="checkbox"
               name="surfaces"
               value={surface.id}
               checked={surfaces.includes(surface.id)}
               onChange={() => toggleSurface(surface.id)}
+              className="agi-ds-checkbox"
             />
             {surface.label}
           </label>
         ))}
       </fieldset>
 
-      <div className="agi-rights-field">
-        <label htmlFor={useCaseId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={useCaseId} className="agi-ds-field-label">
           What would you use it for? <span>(optional)</span>
         </label>
         <textarea
@@ -230,11 +235,12 @@ export function BetaApplicationForm() {
           maxLength={MAX_USE_CASE}
           value={useCase}
           onChange={(e) => setUseCase(e.target.value)}
+          className="agi-ds-input"
         />
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={discordId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={discordId} className="agi-ds-field-label">
           Discord handle <span>(optional)</span>
         </label>
         <input
@@ -244,16 +250,17 @@ export function BetaApplicationForm() {
           maxLength={64}
           value={discordHandle}
           onChange={(e) => setDiscordHandle(e.target.value)}
+          className="agi-ds-input"
         />
       </div>
 
       {errorMsg ? (
-        <p id={errorId} role="alert" className="agi-rights-error">
+        <p id={errorId} role="alert" className="agi-ds-form-error">
           {errorMsg}
         </p>
       ) : null}
 
-      <button type="submit" className="agi-cta-primary" disabled={submitting}>
+      <button type="submit" className="agi-ds-btn" data-variant="primary" disabled={submitting}>
         {submitting ? 'Sending…' : 'Apply to test'}
       </button>
     </form>

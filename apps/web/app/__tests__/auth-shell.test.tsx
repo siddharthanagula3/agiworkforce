@@ -31,7 +31,7 @@ describe('AuthShell', () => {
       </AuthShell>,
     );
 
-    const card = screen.getByTestId('clerk-card').closest('.agi-auth-card');
+    const card = screen.getByTestId('clerk-card').closest('.agi-ds-auth-card');
     const brand = screen.getByRole('complementary', { name: 'Why AGI' });
     expect(card).not.toBeNull();
     expect(card!.compareDocumentPosition(brand) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

@@ -163,9 +163,9 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="agi-rights-form">
-      <div className="agi-rights-field">
-        <label htmlFor={urlId} className="agi-rights-label">
+    <form onSubmit={handleSubmit} noValidate className="agi-ds-form">
+      <div className="agi-ds-field">
+        <label htmlFor={urlId} className="agi-ds-field-label">
           Link to the material
         </label>
         <input
@@ -176,21 +176,21 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           spellCheck={false}
           value={contentUrl}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setContentUrl(event.target.value);
             clearError();
           }}
         />
-        <p className="agi-rights-hint">
+        <p className="agi-ds-hint">
           The full URL of the shared conversation or published artifact. The form checks that it
           still resolves to something public before it records anything: a description alone cannot
           identify the material.
         </p>
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={nameId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={nameId} className="agi-ds-field-label">
           Your full name
         </label>
         <input
@@ -200,7 +200,7 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           required
           value={reporterName}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setReporterName(event.target.value);
             clearError();
@@ -208,8 +208,8 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
         />
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={emailId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={emailId} className="agi-ds-field-label">
           Email address we should reply to
         </label>
         <input
@@ -221,7 +221,7 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           spellCheck={false}
           value={reporterEmail}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setReporterEmail(event.target.value);
             clearError();
@@ -229,8 +229,8 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
         />
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={phoneId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={phoneId} className="agi-ds-field-label">
           Telephone number
         </label>
         <input
@@ -241,7 +241,7 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           required
           value={reporterPhone}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setReporterPhone(event.target.value);
             clearError();
@@ -249,8 +249,8 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
         />
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={addressId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={addressId} className="agi-ds-field-label">
           Mailing address
         </label>
         <textarea
@@ -261,20 +261,20 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           maxLength={500}
           value={reporterAddress}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setReporterAddress(event.target.value);
             clearError();
           }}
         />
-        <p className="agi-rights-hint">
+        <p className="agi-ds-hint">
           Your name, address, phone, and email are forwarded to the operator and, if the publisher
           counter-notifies, they see the notice. Send only what you are willing to have passed on.
         </p>
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={holderId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={holderId} className="agi-ds-field-label">
           Rights holder, if not you (optional)
         </label>
         <input
@@ -284,13 +284,13 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           maxLength={200}
           value={rightsHolder}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => setRightsHolder(event.target.value)}
         />
       </div>
 
-      <div className="agi-rights-field">
-        <label htmlFor={workId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={workId} className="agi-ds-field-label">
           The work you say is infringed
         </label>
         <textarea
@@ -301,39 +301,40 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           maxLength={2000}
           value={workDescription}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setWorkDescription(event.target.value);
             clearError();
           }}
         />
-        <p className="agi-rights-hint">
+        <p className="agi-ds-hint">
           Describe the copyrighted work or trademark, and where the original can be seen. A
           registration number helps but is not required.
         </p>
       </div>
 
-      <fieldset className="agi-rights-field">
-        <legend className="agi-rights-label">Statements</legend>
+      <fieldset className="agi-ds-fieldset">
+        <legend className="agi-ds-fieldset-legend">Statements</legend>
         {STATEMENTS.map((statement) => (
-          <label key={statement.id} className="agi-rights-hint" style={{ display: 'block' }}>
+          <label key={statement.id} className="agi-ds-consent-item-label">
             <input
               type="checkbox"
               name={statement.id}
               checked={affirmed[statement.id]}
               disabled={state === 'submitting'}
+              className="agi-ds-checkbox"
               onChange={(event) => {
                 setAffirmed((current) => ({ ...current, [statement.id]: event.target.checked }));
                 clearError();
               }}
-            />{' '}
+            />
             {statement.label}
           </label>
         ))}
       </fieldset>
 
-      <div className="agi-rights-field">
-        <label htmlFor={signatureId} className="agi-rights-label">
+      <div className="agi-ds-field">
+        <label htmlFor={signatureId} className="agi-ds-field-label">
           Signature
         </label>
         <input
@@ -343,25 +344,28 @@ export function CopyrightNoticeForm({ reportedUrl }: { reportedUrl: string }) {
           required
           value={signature}
           disabled={state === 'submitting'}
-          className="agi-rights-input"
+          className="agi-ds-input"
           onChange={(event) => {
             setSignature(event.target.value);
             clearError();
           }}
         />
-        <p className="agi-rights-hint">
-          Typing your full name here counts as an electronic signature.
-        </p>
+        <p className="agi-ds-hint">Typing your full name here counts as an electronic signature.</p>
       </div>
 
       {state === 'error' && errorMsg ? (
-        <p role="alert" aria-live="polite" className="agi-rights-error">
+        <p role="alert" aria-live="polite" className="agi-ds-form-error">
           {errorMsg}
         </p>
       ) : null}
 
-      <div className="agi-cta-row">
-        <button type="submit" className="agi-cta-ghost" disabled={state === 'submitting'}>
+      <div className="agi-ds-btn-row">
+        <button
+          type="submit"
+          className="agi-ds-btn"
+          data-variant="primary"
+          disabled={state === 'submitting'}
+        >
           {state === 'submitting' ? 'Recording…' : 'Send notice'}
         </button>
       </div>
