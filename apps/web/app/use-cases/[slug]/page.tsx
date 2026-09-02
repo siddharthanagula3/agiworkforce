@@ -62,6 +62,7 @@ export default async function UseCaseDetailPage({ params }: Props) {
                 width={entry.visual.width}
                 height={entry.visual.height}
                 caption={entry.visual.caption}
+                priority
               />
             ) : undefined
           }

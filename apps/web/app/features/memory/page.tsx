@@ -39,6 +39,7 @@ export default function MemoryFeaturePage() {
               width={1720}
               height={1360}
               caption={['Settings', 'Memory']}
+              priority
             />
           }
         />

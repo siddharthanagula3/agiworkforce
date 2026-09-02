@@ -39,6 +39,7 @@ export default function ArtifactsFeaturePage() {
               width={2880}
               height={1800}
               caption={['Library', 'Generated files']}
+              priority
             />
           }
         />
