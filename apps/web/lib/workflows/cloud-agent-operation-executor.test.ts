@@ -147,4 +147,96 @@ describe('durable cloud agent operation executor', () => {
     ).rejects.toThrow('database unavailable');
     expect(receiptMocks.fail).not.toHaveBeenCalled();
   });
+
+  it('replaces a raw provider JSON error body with a summary before recording or rethrowing it', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'acquired',
+      operationId: '0190a000-0000-7000-8000-000000000002',
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+      attempt: 1,
+    });
+    receiptMocks.fail.mockResolvedValue(undefined);
+    const rawProviderError = new Error(
+      '400 {"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}',
+    );
+
+    const rejection = await executeCloudAgentOperation(db, {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      retrySafety: 'unsafe',
+      payload: {},
+      resultSchema: ResultSchema,
+      execute: vi.fn().mockRejectedValue(rawProviderError),
+    }).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect((rejection as Error).message).not.toContain('"type":"error"');
+    expect((rejection as Error).cause).toBe(rawProviderError);
+    expect(receiptMocks.fail).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: (rejection as Error).message,
+        }),
+      }),
+    );
+  });
+
+  it('replaces a raw Zod issues array error message the same way', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'acquired',
+      operationId: '0190a000-0000-7000-8000-000000000002',
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+      attempt: 1,
+    });
+    receiptMocks.fail.mockResolvedValue(undefined);
+
+    const rejection = await executeCloudAgentOperation(db, {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      retrySafety: 'unsafe',
+      payload: {},
+      resultSchema: ResultSchema,
+      execute: vi.fn().mockResolvedValue({ answer: 'not-a-number' }),
+    }).catch((error: unknown) => error);
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect((rejection as Error).message.startsWith('[')).toBe(false);
+  });
+
+  it('keeps a human-authored failure message unchanged', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'acquired',
+      operationId: '0190a000-0000-7000-8000-000000000002',
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+      attempt: 1,
+    });
+    receiptMocks.fail.mockResolvedValue(undefined);
+
+    await expect(
+      executeCloudAgentOperation(db, {
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+        billingIdempotencyKey: 'agi.chat.web.request-1',
+        operationKey: 'provider:1',
+        operationKind: 'provider',
+        retrySafety: 'unsafe',
+        payload: {},
+        resultSchema: ResultSchema,
+        execute: vi.fn().mockRejectedValue(new Error('Model is overloaded')),
+      }),
+    ).rejects.toThrow('Model is overloaded');
+    expect(receiptMocks.fail).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        error: expect.objectContaining({ message: 'Model is overloaded' }),
+      }),
+    );
+  });
 });
