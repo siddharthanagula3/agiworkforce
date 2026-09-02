@@ -43,7 +43,7 @@ export function clearPendingDraft(): void {
 /**
  * The draft this arrival is entitled to. Empty unless the user stepped back or
  * forward to get here; reading it spends that step, so a composer mounted by a
- * push cannot inherit the answer. `inMemory` wins when it is present — a soft
+ * push cannot inherit the answer. `inMemory` wins when it is present, since a
  * navigation keeps the store, and it is the fresher of the two.
  */
 export function restorablePendingDraft(inMemory: string): string {
