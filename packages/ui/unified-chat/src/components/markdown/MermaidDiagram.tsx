@@ -61,6 +61,17 @@ export function clearMermaidSvgCache(): void {
   svgCache.clear();
 }
 
+const SVG_VIEWBOX_HEIGHT = /viewBox="[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+([\d.]+)"/;
+
+function cachedDiagramHeight(source: string): number | null {
+  const svg = svgCache.get(source);
+  if (!svg) return null;
+  const match = SVG_VIEWBOX_HEIGHT.exec(svg);
+  if (!match) return null;
+  const height = Number(match[1]);
+  return Number.isFinite(height) && height > 0 ? height : null;
+}
+
 let mermaidModule: Promise<typeof import('mermaid')> | null = null;
 
 function loadMermaid(): Promise<typeof import('mermaid')> {
@@ -213,8 +224,14 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     );
   }
 
+  const reservedHeight = cachedDiagramHeight(source);
+
   return (
-    <figure className={className} data-mermaid={ready ? 'rendering' : 'pending'}>
+    <figure
+      className={className}
+      data-mermaid={ready ? 'rendering' : 'pending'}
+      style={reservedHeight ? { minHeight: reservedHeight } : undefined}
+    >
       {ready ? (
         <p role="status" className="mermaid-pending">
           Drawing diagram…

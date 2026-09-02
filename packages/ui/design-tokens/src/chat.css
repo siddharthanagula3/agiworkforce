@@ -238,6 +238,11 @@
   margin: 1rem 0;
 }
 
+.mermaid-block[data-mermaid='pending'],
+.mermaid-block[data-mermaid='rendering'] {
+  min-height: 160px;
+}
+
 .mermaid-diagram {
   overflow-x: auto;
 }
