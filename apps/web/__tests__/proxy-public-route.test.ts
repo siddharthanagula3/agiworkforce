@@ -91,6 +91,49 @@ describe('web proxy', () => {
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
   });
 
+  it('leaves / alone with no session cookie', async () => {
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(new NextRequest('http://localhost/'), {} as never);
+
+    expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+  });
+
+  it('leaves / alone when __client_uat is 0', async () => {
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/', { headers: { Cookie: '__client_uat=0' } }),
+      {} as never,
+    );
+
+    expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+  });
+
+  it('rewrites / to /chat when __client_uat is a nonzero timestamp', async () => {
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/', { headers: { Cookie: '__client_uat=1700000000' } }),
+      {} as never,
+    );
+
+    expect(response?.headers.get('x-middleware-rewrite')).toBe('http://localhost/chat');
+  });
+
+  it('does not treat an anonymous clerk dev-browser cookie as a signed-in session', async () => {
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/', {
+        headers: { Cookie: '__clerk_db_jwt=anonymous-dev-browser-token' },
+      }),
+      {} as never,
+    );
+
+    expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+  });
+
   it('runs the post-login acceptance checkpoint through Clerk session middleware', async () => {
     const { proxy } = await import('../proxy');
 
