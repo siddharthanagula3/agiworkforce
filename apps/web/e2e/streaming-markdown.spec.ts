@@ -25,7 +25,7 @@ const ZERO = 0;
 
 const COMPOSER_LABEL = /message input/i;
 const STOP_BUTTON_LABEL = /stop the current response/i;
-const CONSENT_DISMISS_LABEL = 'Ask me later';
+const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const SCROLL_TO_BOTTOM_LABEL = 'Scroll to bottom';
 const STREAMING_ARTIFACT_CHIP_LABEL = 'Show artifact being written';
 const THINKING_PLACEHOLDER = 'Thinking...';

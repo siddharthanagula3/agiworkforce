@@ -27,7 +27,7 @@ const MESSAGE_VARIANTS_OFF = 'off';
 
 const COMPOSER_LABEL = /message input/i;
 const STOP_BUTTON_LABEL = /stop the current response/i;
-const CONSENT_DISMISS_LABEL = 'Ask me later';
+const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const REGENERATE_LABEL = 'Regenerate response';
 const PREVIOUS_VARIANT_LABEL = 'Previous response';
 const NEXT_VARIANT_LABEL = 'Next response';
