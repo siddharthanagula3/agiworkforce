@@ -50,6 +50,7 @@ import type {
   ThinkingBlock,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { classifyError } from '@agiworkforce/provider-runtime';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import type { ToolLoopFailoverPlan } from './tool-loop';
 import {
@@ -57,6 +58,7 @@ import {
   toolResultEvent,
   trimToolResultHistory,
 } from './tool-loop';
+import { mapClassifiedUpstreamError } from './upstream-error-copy';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
 import {
   accumulateObservedProviderUsage,
@@ -214,6 +216,10 @@ function sseData(payload: unknown): string {
 
 function sseDone(): string {
   return `data: [DONE]\n\n`;
+}
+
+function safeUpstreamErrorMessage(err: unknown, provider: string): string {
+  return mapClassifiedUpstreamError(classifyError(err), provider).message;
 }
 
 /**
@@ -1429,6 +1435,7 @@ export async function* runResearchLoop(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        const safeMessage = safeUpstreamErrorMessage(err, servingProcessed.provider);
         logger.error(
           { provider: processed.provider, round, error: msg },
           '[research-loop] gathering turn failed',
@@ -1444,7 +1451,7 @@ export async function* runResearchLoop(
               choices: [
                 {
                   delta: {
-                    content: `Deep research failed before any results were gathered: ${msg}`,
+                    content: `Deep research failed before any results were gathered: ${safeMessage}`,
                   },
                   index: 0,
                 },
@@ -1452,13 +1459,13 @@ export async function* runResearchLoop(
               model: responseModel,
             }),
           );
-          await persistRun('failed', '', msg);
+          await persistRun('failed', '', safeMessage);
           yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
           yield encoder.encode(sseDone());
           return;
         }
         // Partial material exists: keep it and synthesize what we have.
-        lastTurnError = msg;
+        lastTurnError = safeMessage;
         cutShortReason = 'a web search round failed mid-run';
         break;
       }
@@ -1569,6 +1576,7 @@ export async function* runResearchLoop(
       await persistRun('completed', synthesis.canonicalText);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      const safeMessage = safeUpstreamErrorMessage(err, servingProcessed.provider);
       logger.error(
         { provider: processed.provider, error: msg },
         '[research-loop] synthesis failed',
@@ -1581,7 +1589,7 @@ export async function* runResearchLoop(
           choices: [
             {
               delta: {
-                content: `\n\nDeep research gathered ${sources.size} source${sources.size === 1 ? '' : 's'} but failed while writing the report: ${msg}`,
+                content: `\n\nDeep research gathered ${sources.size} source${sources.size === 1 ? '' : 's'} but failed while writing the report: ${safeMessage}`,
               },
               index: 0,
             },
@@ -1591,7 +1599,7 @@ export async function* runResearchLoop(
       );
       const cumulative = sources.toSearchResultsEvent(responseModel);
       if (cumulative) yield encoder.encode(cumulative);
-      await persistRun('failed', '', msg);
+      await persistRun('failed', '', safeMessage);
       yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'error' }));
       yield encoder.encode(sseDone());
       return;
