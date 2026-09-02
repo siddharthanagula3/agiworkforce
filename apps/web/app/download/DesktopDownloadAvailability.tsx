@@ -247,7 +247,16 @@ export function DesktopDownloadAvailability() {
         </li>
         <li className="agi-ds-card p-5">
           <p className="text-sm font-semibold">Windows</p>
-          <p className="mt-2 text-sm agi-ds-muted">Windows installer not published</p>
+
+          <div
+            role="status"
+            aria-label="Windows downloads unavailable"
+            aria-live="polite"
+            className="agi-ds-card mt-3 p-4"
+          >
+            <p className="text-sm">Windows installer not published.</p>
+            <Alternatives />
+          </div>
         </li>
         <li className="agi-ds-card p-5">
           <p className="text-sm font-semibold">Linux x64</p>
