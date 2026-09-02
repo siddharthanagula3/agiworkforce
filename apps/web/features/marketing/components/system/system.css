@@ -1144,7 +1144,7 @@
   content: '✓';
   position: absolute;
   left: 0;
-  color: var(--agi-success);
+  color: var(--agi-ink);
   font-weight: 700;
 }
 

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { Header } from '@shared/components/layout/Header';
-import { Eyebrow, Ledger, type LedgerRow } from './system';
+import { Container, Eyebrow, Ledger, type LedgerRow } from './system';
 import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 const ACCOUNT_LEDGER: readonly LedgerRow[] = [
@@ -61,26 +61,28 @@ export function AuthShell({
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header minimal />
-      <section className="agi-ds-auth-split">
-        <div className="agi-ds-auth-card">{children}</div>
-        <aside className="agi-ds-auth-brand" aria-label="Why AGI">
-          <h2 className="agi-ds-h2">{title}</h2>
-          <p className="agi-ds-prose" data-size="lg" style={{ marginTop: 14 }}>
-            {lede}
-          </p>
-          <ul className="agi-ds-auth-points" style={{ marginTop: 22 }}>
-            {points.map((point) => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
-          <div className="agi-ds-card p-5" style={{ width: 'min(100%, 31rem)', marginTop: 28 }}>
-            <Eyebrow>What this account gives you today</Eyebrow>
-            <div style={{ marginTop: 12 }}>
-              <Ledger rows={ACCOUNT_LEDGER} caption="Surface availability" />
+      <Container>
+        <section className="agi-ds-auth-split">
+          <div className="agi-ds-auth-card">{children}</div>
+          <aside className="agi-ds-auth-brand" aria-label="Why AGI">
+            <h2 className="agi-ds-h2">{title}</h2>
+            <p className="agi-ds-prose" data-size="lg" style={{ marginTop: 14 }}>
+              {lede}
+            </p>
+            <ul className="agi-ds-auth-points" style={{ marginTop: 22 }}>
+              {points.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+            <div className="agi-ds-card p-5" style={{ width: 'min(100%, 31rem)', marginTop: 28 }}>
+              <Eyebrow>What this account gives you today</Eyebrow>
+              <div style={{ marginTop: 12 }}>
+                <Ledger rows={ACCOUNT_LEDGER} caption="Surface availability" />
+              </div>
             </div>
-          </div>
-        </aside>
-      </section>
+          </aside>
+        </section>
+      </Container>
     </div>
   );
 }
