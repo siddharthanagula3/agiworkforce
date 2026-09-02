@@ -88,7 +88,7 @@ describe('composer mobile density', () => {
 
     // The mic was 44px and set the row's height by itself; the "+" beside it
     // was 36px. Both now match below sm and keep their old size above it.
-    expect(screen.getByRole('button', { name: /More options/ })).toHaveClass(
+    expect(screen.getByRole('button', { name: /Add attachments and tools/ })).toHaveClass(
       'h-8',
       'w-8',
       'sm:h-9',

@@ -220,7 +220,7 @@ test.describe('authenticated primary workflows', () => {
 
     const composer = page.getByRole('textbox', { name: /message input/i });
     await expect(composer).toBeEditable({ timeout: 20_000 });
-    await page.getByRole('button', { name: 'More options', exact: true }).click();
+    await page.getByRole('button', { name: 'Add attachments and tools', exact: true }).click();
     const createImageButton = page.getByRole('button', { name: /create image/i });
     await expect(createImageButton).not.toContainText(/checking|upgrade/i, { timeout: 20_000 });
     await createImageButton.click();

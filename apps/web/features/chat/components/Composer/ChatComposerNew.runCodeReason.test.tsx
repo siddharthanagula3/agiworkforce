@@ -55,7 +55,7 @@ describe('composer · disabled Run code row explains itself', () => {
 
   it('gives the greyed-out row a reason instead of an empty tooltip', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /More options/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add attachments and tools/ }));
 
     const runCode = screen.getByRole('button', { name: 'Run code' });
 
@@ -69,7 +69,7 @@ describe('composer · disabled Run code row explains itself', () => {
       featureFlags: { advanced_model_access: true, code_execution: true },
     });
     render(<ChatComposerNew onSend={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /More options/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add attachments and tools/ }));
 
     const runCode = screen.getByRole('button', { name: 'Run code' });
 
