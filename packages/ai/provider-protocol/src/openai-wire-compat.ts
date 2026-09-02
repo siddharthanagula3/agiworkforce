@@ -620,6 +620,27 @@ export class OpenAIWireAssembler {
         } else if (payload?.type === 'gemini_grounding_result') {
           const results = (capSearchResultPayload(payload) as { results?: unknown }).results;
           out.push(this.chunkEnvelope({ x_search_results: { content: results } }, null));
+        } else if (payload?.type === 'web_fetch_tool_result') {
+          const result = (
+            payload as { content?: { type?: unknown; url?: unknown; error_code?: unknown } }
+          ).content;
+          const isError = result?.type === 'web_fetch_tool_result_error';
+          const content = isError
+            ? `Web fetch failed: ${typeof result?.error_code === 'string' ? result.error_code : 'unknown_error'}`
+            : `Fetched ${typeof result?.url === 'string' ? result.url : 'page'}`;
+          out.push(
+            this.chunkEnvelope(
+              {
+                x_tool_result: {
+                  tool_call_id: chunk.toolUseId,
+                  name: 'web_fetch',
+                  content,
+                  is_error: isError,
+                },
+              },
+              null,
+            ),
+          );
         }
         break;
       }
