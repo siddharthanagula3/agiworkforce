@@ -69,7 +69,7 @@ describe('AgentActivityTimeline', () => {
 
     const trigger = screen.getByRole('button', { name: /hide agent activity/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    expect(trigger.textContent).toContain('Searching official sources');
+    expect(trigger.textContent).toContain('Reading 1 source');
     expect(trigger.textContent).not.toMatch(/Working for|\bs\b · |Done in/i);
     expect(screen.getByText('Official agent documentation')).toBeTruthy();
     expect(screen.getByText('example.com')).toBeTruthy();
