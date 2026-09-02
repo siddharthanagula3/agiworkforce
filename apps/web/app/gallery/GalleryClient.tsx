@@ -11,6 +11,7 @@ import type { Artifact } from '@/features/chat/stores/artifacts-store';
 import { useArtifactIndex } from '@/features/chat/hooks/use-artifact-index';
 import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPreview';
 import type { ArtifactData } from '@/features/chat/components/artifacts/ArtifactPreview';
+import { Eyebrow, Prose } from '@/features/marketing/components/system';
 
 // ---------------------------------------------------------------------------
 // Inspiration examples (curated, static)
@@ -308,17 +309,6 @@ function matchesSearch(query: string, fields: (string | undefined)[]): boolean {
   return fields.some((field) => field?.toLowerCase().includes(query));
 }
 
-const controlStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  background: 'var(--agi-bg-2)',
-  border: '1px solid var(--agi-rule)',
-  borderRadius: 9,
-  color: 'var(--agi-ink)',
-  fontSize: 13,
-  fontFamily: 'inherit',
-  outline: 'none',
-};
-
 function NoMatchesState({ onClear }: { onClear: () => void }) {
   return (
     <div
@@ -335,14 +325,21 @@ function NoMatchesState({ onClear }: { onClear: () => void }) {
       }}
     >
       <Layers size={32} color="var(--agi-ink-faint)" />
-      <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--agi-ink-2)', margin: 0 }}>
+      <p
+        style={{
+          fontSize: 'var(--agi-text-md)',
+          fontWeight: 500,
+          color: 'var(--agi-ink-2)',
+          margin: 0,
+        }}
+      >
         No artifacts match your search.
       </p>
       <button
         type="button"
         onClick={onClear}
         style={{
-          fontSize: 13,
+          fontSize: 'var(--agi-text-sm)',
           fontWeight: 600,
           color: 'var(--agi-ink)',
           textDecoration: 'underline',
@@ -514,7 +511,7 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
         >
           <span
             style={{
-              fontSize: 14,
+              fontSize: 'var(--agi-text-sm)',
               fontWeight: 600,
               color: 'var(--agi-ink)',
               lineHeight: 1.35,
@@ -524,7 +521,7 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
           </span>
           <span
             style={{
-              fontSize: 12,
+              fontSize: 'var(--agi-text-xs)',
               fontWeight: 500,
               color: 'var(--agi-ink-2)',
               background: 'var(--agi-bg-2)',
@@ -540,7 +537,7 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
         </div>
         <span
           style={{
-            fontSize: 12,
+            fontSize: 'var(--agi-text-xs)',
             color: 'var(--agi-ink-quiet)',
             lineHeight: 1.5,
           }}
@@ -606,7 +603,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
           <h2
             style={{
               margin: 0,
-              fontSize: 20,
+              fontSize: 'var(--agi-text-lg)',
               fontWeight: 700,
               color: 'var(--agi-ink)',
               letterSpacing: '-0.01em',
@@ -614,7 +611,13 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
           >
             What do you want to create?
           </h2>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--agi-ink-quiet)' }}>
+          <p
+            style={{
+              margin: '6px 0 0',
+              fontSize: 'var(--agi-text-sm)',
+              color: 'var(--agi-ink-quiet)',
+            }}
+          >
             Pick a starting point. You can describe the details next.
           </p>
         </div>
@@ -651,9 +654,14 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
                 (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-rule)';
               }}
             >
-              <span style={{ fontSize: 22 }}>{cat.icon}</span>
+              <span style={{ fontSize: 'var(--agi-text-lg)' }}>{cat.icon}</span>
               <span
-                style={{ fontSize: 13, fontWeight: 600, color: 'var(--agi-ink)', lineHeight: 1.3 }}
+                style={{
+                  fontSize: 'var(--agi-text-sm)',
+                  fontWeight: 600,
+                  color: 'var(--agi-ink)',
+                  lineHeight: 1.3,
+                }}
               >
                 {cat.label}
               </span>
@@ -768,7 +776,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
             <p
               style={{
                 margin: '0 0 4px',
-                fontSize: 12,
+                fontSize: 'var(--agi-text-xs)',
                 color: 'var(--agi-ink-quiet)',
                 fontWeight: 600,
                 textTransform: 'uppercase',
@@ -780,7 +788,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
             <h2
               style={{
                 margin: 0,
-                fontSize: 19,
+                fontSize: 'var(--agi-text-lg)',
                 fontWeight: 700,
                 color: 'var(--agi-ink)',
                 letterSpacing: '-0.01em',
@@ -835,7 +843,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
             border: '1px solid var(--agi-rule)',
             borderRadius: 10,
             color: 'var(--agi-ink)',
-            fontSize: 14,
+            fontSize: 'var(--agi-text-sm)',
             fontFamily: 'inherit',
             resize: 'vertical',
             outline: 'none',
@@ -858,7 +866,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              fontSize: 13,
+              fontSize: 'var(--agi-text-sm)',
               color: 'var(--agi-ink-quiet)',
               textDecoration: 'underline',
               padding: 0,
@@ -875,7 +883,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
               border: 'none',
               borderRadius: 9,
               color: 'var(--agi-bg)',
-              fontSize: 14,
+              fontSize: 'var(--agi-text-sm)',
               fontWeight: 600,
               cursor: 'pointer',
             }}
@@ -963,7 +971,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
           <span
             style={{
               flex: 1,
-              fontSize: 14,
+              fontSize: 'var(--agi-text-sm)',
               fontWeight: 600,
               color: 'var(--agi-ink)',
               minWidth: 0,
@@ -976,7 +984,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
           </span>
           <span
             style={{
-              fontSize: 12,
+              fontSize: 'var(--agi-text-xs)',
               fontWeight: 500,
               color: 'var(--agi-ink-2)',
               background: 'var(--agi-bg-2)',
@@ -1040,7 +1048,7 @@ function TabButton({
         borderRadius: 8,
         border: 'none',
         fontFamily: 'inherit',
-        fontSize: 13,
+        fontSize: 'var(--agi-text-sm)',
         fontWeight: 500,
         cursor: 'pointer',
         background: active ? 'var(--agi-ink)' : 'transparent',
@@ -1259,79 +1267,39 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
         }}
       >
         {/* Page header */}
-        <div
-          style={{
-            maxWidth: 1100,
-            margin: '0 auto',
-            padding: '56px 32px 0',
-          }}
-        >
+        <div className="agi-ds-container" style={{ paddingTop: 56 }}>
           {/* Title row with New Artifact button (Fix 33) */}
           <div
             style={{
               display: 'flex',
-              alignItems: 'flex-start',
+              alignItems: 'center',
               justifyContent: 'space-between',
               gap: 16,
               flexWrap: 'wrap',
               marginBottom: 8,
             }}
           >
-            <h1
-              style={{
-                fontFamily: 'var(--serif, Georgia, serif)',
-                fontSize: 'clamp(2rem, 4vw, 3rem)',
-                fontWeight: 500,
-                letterSpacing: '-0.02em',
-                color: 'var(--agi-ink)',
-                margin: 0,
-              }}
-            >
-              Artifacts
-            </h1>
+            <div>
+              <Eyebrow>Gallery</Eyebrow>
+              <h1 className="agi-ds-h1">Artifacts</h1>
+            </div>
             <button
               type="button"
               onClick={() => setOverlay({ kind: 'category' })}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 7,
-                padding: '9px 18px',
-                background: 'transparent',
-                border: '1px solid var(--agi-ink)',
-                borderRadius: 10,
-                color: 'var(--agi-ink)',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                marginTop: 8,
-                transition: 'background 150ms',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'var(--agi-bg-2)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'transparent';
-              }}
+              className="agi-ds-btn"
+              data-variant="secondary"
             >
               <Plus size={14} />
               New Artifact
             </button>
           </div>
 
-          <p
-            style={{
-              fontSize: 15,
-              color: 'var(--agi-ink-2)',
-              margin: '0 0 36px',
-              maxWidth: 560,
-              lineHeight: 1.6,
-            }}
-          >
-            Browse artifacts you have built in conversations, or explore curated examples to spark
-            your next idea.
-          </p>
+          <div style={{ marginBottom: 36 }}>
+            <Prose>
+              Browse artifacts you have built in conversations, or explore curated examples to spark
+              your next idea.
+            </Prose>
+          </div>
 
           {/* Tabs */}
           <div
@@ -1358,28 +1326,22 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
           </div>
 
           {/* Search + filters */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              flexWrap: 'wrap',
-              marginBottom: 32,
-            }}
-          >
+          <div className="agi-ds-form-row" style={{ alignItems: 'center', marginBottom: 32 }}>
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search artifacts"
               aria-label="Search artifacts"
-              style={{ ...controlStyle, flex: '1 1 240px', minWidth: 200, boxSizing: 'border-box' }}
+              className="agi-ds-input"
+              style={{ flex: '1 1 240px', minWidth: 200, boxSizing: 'border-box' }}
             />
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
               aria-label="Filter by type"
-              style={controlStyle}
+              className="agi-ds-input"
+              style={{ width: 'auto' }}
             >
               <option value="all">All types</option>
               {typeOptions.map((type) => (
@@ -1393,7 +1355,8 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value as DateFilter)}
                 aria-label="Filter by date"
-                style={controlStyle}
+                className="agi-ds-input"
+                style={{ width: 'auto' }}
               >
                 {DATE_FILTER_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1411,7 +1374,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
-                  fontSize: 13,
+                  fontSize: 'var(--agi-text-sm)',
                   color: 'var(--agi-ink-quiet)',
                   textDecoration: 'underline',
                   padding: 0,
@@ -1424,13 +1387,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
         </div>
 
         {/* Tab content */}
-        <div
-          style={{
-            maxWidth: 1100,
-            margin: '0 auto',
-            padding: '0 32px 80px',
-          }}
-        >
+        <div className="agi-ds-container" style={{ paddingBottom: 80 }}>
           {/* Your artifacts tab */}
           {activeTab === 'yours' && (
             <>
@@ -1458,7 +1415,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                   <Layers size={32} color="var(--agi-ink-faint)" />
                   <p
                     style={{
-                      fontSize: 15,
+                      fontSize: 'var(--agi-text-md)',
                       fontWeight: 500,
                       color: 'var(--agi-ink-2)',
                       margin: 0,
@@ -1466,7 +1423,13 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                   >
                     Artifacts you create in conversations will appear here.
                   </p>
-                  <p style={{ fontSize: 13, color: 'var(--agi-ink-quiet)', margin: 0 }}>
+                  <p
+                    style={{
+                      fontSize: 'var(--agi-text-sm)',
+                      color: 'var(--agi-ink-quiet)',
+                      margin: 0,
+                    }}
+                  >
                     Try asking AGI to build an HTML component, write a script, or create a diagram.
                   </p>
                   <button
@@ -1474,7 +1437,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                     onClick={() => setOverlay({ kind: 'category' })}
                     style={{
                       marginTop: 8,
-                      fontSize: 13,
+                      fontSize: 'var(--agi-text-sm)',
                       fontWeight: 600,
                       color: 'var(--agi-ink)',
                       textDecoration: 'underline',
