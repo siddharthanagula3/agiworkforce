@@ -192,47 +192,6 @@
   background-size: 100% 1px;
 }
 
-[data-design='agi'] .agi-ds-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--agi-space-1);
-  min-height: 40px;
-  padding-inline: var(--agi-space-3);
-  border: 1px solid transparent;
-  border-radius: var(--agi-radius-control);
-  font-family: var(--agi-font);
-  font-size: var(--agi-text-sm);
-  font-weight: 500;
-  line-height: 1;
-  text-decoration: none;
-  cursor: pointer;
-  transition:
-    background-color var(--agi-dur-hover) var(--agi-ease-expo),
-    border-color var(--agi-dur-hover) var(--agi-ease-expo),
-    color var(--agi-dur-hover) var(--agi-ease-expo);
-}
-
-[data-design='agi'] .agi-ds-btn[data-variant='primary'] {
-  background: var(--agi-ink);
-  color: var(--agi-ground);
-}
-
-[data-design='agi'] .agi-ds-btn[data-variant='primary']:hover {
-  background: var(--agi-ink-2);
-}
-
-[data-design='agi'] .agi-ds-btn[data-variant='secondary'] {
-  background: transparent;
-  border-color: var(--agi-rule-strong);
-  color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-ds-btn[data-variant='secondary']:hover {
-  border-color: var(--agi-ink);
-}
-
-[data-design='agi'] .agi-ds-btn:focus-visible,
 [data-design='agi'] .agi-ds-link:focus-visible,
 [data-design='agi'] .agi-ds-theme-toggle:focus-visible,
 [data-design='agi'] .agi-ds-navlink:focus-visible {
@@ -826,7 +785,6 @@
   }
 
   [data-design='agi'] .agi-ds-link,
-  [data-design='agi'] .agi-ds-btn,
   [data-design='agi'] .agi-ds-frame,
   [data-design='agi'] .agi-ds-lane-panel,
   [data-design='agi'] .agi-ds-lane-rail-item,
