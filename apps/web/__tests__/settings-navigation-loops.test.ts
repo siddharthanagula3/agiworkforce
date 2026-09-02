@@ -137,7 +137,7 @@ describe('CRIT-008 route graph', () => {
 
   it('offers a signed-out /apps visitor sign-in, and never routes them back to /integrations', () => {
     const integrations = readFileSync(join(APP_DIR, 'integrations', 'page.tsx'), 'utf8');
-    expect(integrations).toContain('href="/apps"');
+    expect(integrations).toContain("href: '/apps'");
 
     // /apps no longer forces navigation at all: it renders an explanation with
     // a sign-in link, so it contributes no redirect edge. The loop this guards
