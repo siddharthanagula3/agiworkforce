@@ -1,6 +1,14 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useMemo,
+  memo,
+} from 'react';
 import {
   Plus,
   X,
@@ -1222,6 +1230,19 @@ const ChatComposerNewComponent = ({
     setMessage(next);
     composerEditorRef.current?.setText(next);
   }, []);
+
+  // The server-rendered textarea is a real, natively interactive form
+  // control, so a click, a typed draft and even Enter can land in the DOM
+  // before hydration attaches the controlled onChange. Once it does, the
+  // next render would otherwise force the DOM value back to the still-empty
+  // `message` state and erase what was typed. Adopt it instead.
+  useLayoutEffect(() => {
+    const node = textareaRef.current;
+    if (!node || !node.value || messageRef.current) return;
+    writeComposerMessage(node.value);
+    const end = node.value.length;
+    node.setSelectionRange(end, end);
+  }, [writeComposerMessage]);
 
   const appendComposerMessage = useCallback((suffix: string) => {
     messageRef.current += suffix;
