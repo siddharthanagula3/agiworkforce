@@ -305,6 +305,7 @@
 
 [data-design='agi'] .agi-ds-frame {
   display: block;
+  align-self: start;
   margin: 0;
   border: 1px solid var(--agi-frame);
   border-radius: var(--agi-radius-frame);
