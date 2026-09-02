@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Ledger, Section, Stack } from '@/features/marketing/components/system';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
@@ -73,77 +75,55 @@ const FORTHCOMING: { item: string; detail: string; quarter: string }[] = [
 
 export default function ChangelogPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-changelog-title"
+          eyebrow="Changelog"
+          title="Every shipped feature is dated."
+          lede="Every 'in progress' item is named openly. We do not backdate, we do not pre-announce, and we do not list things we are not actively maintaining."
+          ctas={[]}
+        />
 
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Changelog.</h1>
-          <p className="agi-page-lede">
-            Every shipped feature is dated. Every &ldquo;in progress&rdquo; item is named openly.
-            <strong>
-              {' '}
-              We do not backdate, we do not pre-announce, and we do not list things we are not
-              actively maintaining.
-            </strong>
-          </p>
-        </section>
-
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Releases, newest first</p>
-          <table className="agi-ledger">
-            <tbody>
-              {RELEASES.map((r) => (
-                <tr key={r.date}>
-                  <td style={{ width: '20%', verticalAlign: 'top' }}>{r.date}</td>
-                  <td>
-                    <div style={{ fontWeight: 600, color: 'var(--agi-ink)', marginBottom: 6 }}>
-                      {r.headline}
-                    </div>
-                    {r.body.map((line, idx) => (
-                      <p
-                        key={idx}
-                        style={{
-                          margin: idx === 0 ? '0' : '8px 0 0',
-                          color: 'var(--agi-ink-2)',
-                          fontSize: 14,
-                          lineHeight: 1.55,
-                        }}
-                      >
-                        {line}
-                      </p>
+        <Section id="releases" labelledBy="agi-changelog-releases-title" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-changelog-releases-title">
+              Releases, newest first.
+            </h2>
+            <Ledger
+              caption="Releases"
+              rows={RELEASES.map((release) => ({
+                label: release.date,
+                value: (
+                  <Stack gap="tight">
+                    <strong>{release.headline}</strong>
+                    {release.body.map((line) => (
+                      <span key={line}>{line}</span>
                     ))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+                  </Stack>
+                ),
+              }))}
+            />
+          </Stack>
+        </Section>
 
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Forthcoming</p>
-          <table className="agi-ledger">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Status</th>
-                <th>Target</th>
-              </tr>
-            </thead>
-            <tbody>
-              {FORTHCOMING.map((f) => (
-                <tr key={f.item}>
-                  <td style={{ width: '25%' }}>{f.item}</td>
-                  <td>{f.detail}</td>
-                  <td style={{ width: '15%', color: 'var(--agi-ink-quiet)' }}>{f.quarter}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-
-        <MarketingFooter />
+        <Section id="forthcoming" labelledBy="agi-changelog-forthcoming-title" rule ground="2">
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-changelog-forthcoming-title">
+              Forthcoming.
+            </h2>
+            <Ledger
+              caption="Forthcoming"
+              rows={FORTHCOMING.map((row) => ({
+                label: row.item,
+                value: `${row.detail} Target: ${row.quarter}.`,
+              }))}
+            />
+          </Stack>
+        </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
