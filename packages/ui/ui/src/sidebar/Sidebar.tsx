@@ -24,7 +24,7 @@ import {
 } from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
-import { Menu, MenuItem, MenuSeparator } from './Menu';
+import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
 import { SearchOverlay } from './SearchOverlay';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
 import { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
@@ -281,6 +281,11 @@ export function Sidebar(props: SidebarProps) {
       }
       if (internalSearchOpen) return;
       if (visible.length === 0) return;
+      // A row's own "..." menu owns arrow/home/end navigation while it is
+      // open (see Menu.tsx) - without this guard, this bubble-phase list
+      // handler can still act on the same keystroke, moving list focus out
+      // from under the open menu and taking real DOM focus with it.
+      if (isMenuPanelOpen()) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         pendingFocusRef.current = true;

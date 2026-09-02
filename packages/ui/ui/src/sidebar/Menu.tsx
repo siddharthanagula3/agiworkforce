@@ -184,7 +184,15 @@ export function Menu({
     computePosition();
   }, [open, menuStyle, computePosition]);
 
-  useEffect(() => {
+  // A plain useEffect is a passive effect: React defers it to run after paint,
+  // on a separate task from the click that opened the menu. A key press fired
+  // right after that click (a fast real user, or any programmatic focus+key
+  // pair with no artificial gap between them) can be processed by the browser
+  // before this listener is attached, so it falls through uncaught to the
+  // sidebar's own bubble-phase arrow-key handler. useIsomorphicLayoutEffect
+  // runs synchronously in the same commit as the `open` state change, before
+  // the browser can process any subsequent input event, closing that window.
+  useIsomorphicLayoutEffect(() => {
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
@@ -246,10 +254,12 @@ export function Menu({
     };
   }, [open, computePosition, focusItem, menuItems]);
 
-  useEffect(() => {
+  // Synchronous for the same reason as the listener registration above: a
+  // setTimeout(0) auto-focus left a window where the very first key of a
+  // fast interaction landed before any item had real DOM focus.
+  useIsomorphicLayoutEffect(() => {
     if (!open) return;
-    const id = window.setTimeout(() => focusItem(0), 0);
-    return () => window.clearTimeout(id);
+    focusItem(0);
   }, [open, focusItem]);
 
   const panel = open ? (
