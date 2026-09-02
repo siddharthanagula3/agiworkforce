@@ -52,7 +52,7 @@ export default function PartnersPage() {
             { href: contactMailto('Partnership enquiry'), label: 'Email partnerships' },
             { href: '/apps', label: 'See tools & connectors' },
           ]}
-          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
+          modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · hosted by us']}
         />
 
         <section className="agi-fl-section" aria-labelledby="agi-partners-opps-title">

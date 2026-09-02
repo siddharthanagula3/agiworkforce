@@ -39,7 +39,7 @@ export default function HelpPage() {
             <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
               <li>Local · on-device</li>
               <li>BYOK · your keys</li>
-              <li>Cloud · public alpha</li>
+              <li>Cloud · hosted by us</li>
             </ul>
           </div>
         </section>
@@ -81,7 +81,7 @@ export default function HelpPage() {
             {
               meta: 'Plans',
               title: 'See pricing',
-              body: 'Local and BYOK are free. Managed cloud is public alpha, open by default (metered). Current details live on the pricing page.',
+              body: 'Local and BYOK are free. Managed cloud is open by default (metered). Current details live on the pricing page.',
               href: '/pricing',
             },
           ]}

@@ -78,7 +78,7 @@ export default function EnterprisePage() {
             },
             {
               label: 'AGI Cloud',
-              note: 'Hosted and metered by us. Public alpha, not generally available.',
+              note: 'Hosted and metered by us. Not generally available.',
             },
           ]}
           visual={
@@ -146,7 +146,7 @@ export default function EnterprisePage() {
             },
             {
               k: 'Service levels',
-              v: 'Managed cloud is a public alpha. Response and uptime numbers are planned targets rather than binding commitments. See the SLA page for exactly which is which.',
+              v: 'Response and uptime numbers are planned targets rather than binding commitments. See the SLA page for exactly which is which.',
             },
             {
               k: 'MSA',

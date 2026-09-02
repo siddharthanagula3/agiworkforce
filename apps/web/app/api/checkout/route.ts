@@ -78,7 +78,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   if (!CHECKOUT_ENABLED || !getOptionalEnv('STRIPE_SECRET_KEY')) {
     throw createError.validation(
-      'Paid-plan checkout is not available yet. Local and BYOK are free; managed cloud is in public alpha.',
+      'Paid-plan checkout is not available yet. Local and BYOK are free.',
     );
   }
 

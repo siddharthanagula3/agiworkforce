@@ -45,7 +45,7 @@ const ROUTE_LEDGER = [
     glyph: '●',
     summary: 'Hosted capacity, open by default.',
     facts: [
-      'Public alpha: sign in and start, no waitlist',
+      'Sign in and start, no waitlist',
       'Shared across Web, Mobile and Desktop',
       'AGI-owned routing with clear labels',
       'Usage metered and transparent',
@@ -173,7 +173,7 @@ export function RouteFlow({
         <ul className="agi-rf-modes" aria-hidden="true">
           <li>Local · on-device</li>
           <li>BYOK · direct to provider</li>
-          <li>Cloud · public alpha</li>
+          <li>Cloud · hosted by us</li>
         </ul>
       </div>
 

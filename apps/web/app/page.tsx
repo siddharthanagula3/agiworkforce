@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'AGI | One AI Workspace. Six Surfaces. Your Rules.',
   description:
-    'The AI application suite for six surfaces. Local models, your own keys, or AGI managed cloud (public alpha). You see the route before anything leaves your device.',
+    'The AI application suite for six surfaces. Local models, your own keys, or AGI managed cloud. You see the route before anything leaves your device.',
   keywords: [
     'AI workspace',
     'multi-provider AI',

@@ -8,7 +8,7 @@ import { FinalCta, FlagshipHero } from '@/features/marketing/components/Flagship
 export const metadata = buildMetadata({
   title: 'AGI for Teams: seats, roles, and the workspace console',
   description:
-    'How team membership works in AGI: seats held by members and pending invitations, the owner, admin, member and viewer roles, invitations as expiring private links, shared projects and connectors, and the workspace console that sets approved models and integrations on public-alpha managed cloud.',
+    'How team membership works in AGI: seats held by members and pending invitations, the owner, admin, member and viewer roles, invitations as expiring private links, shared projects and connectors, and the workspace console that sets approved models and integrations on managed cloud.',
   path: '/teams',
 });
 
@@ -91,7 +91,7 @@ export default function TeamsPage() {
           modeRibbon={[
             `Seats · from ${MIN_PURCHASABLE_SEATS}`,
             'Roles · owner, admin, member, viewer',
-            'Cloud · public alpha',
+            'Cloud · hosted by us',
           ]}
           modeRibbonLabel="What a Team workspace includes"
           visual={<WorkspaceConsolePanel />}

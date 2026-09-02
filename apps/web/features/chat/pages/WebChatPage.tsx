@@ -1124,7 +1124,7 @@ export default function WebChatPage() {
     setShowNotifBanner(false);
   }, []);
 
-  // Managed cloud is public-alpha-open: a signed-in user already reaches it.
+  // Managed cloud is open by default: a signed-in user already reaches it.
   // The upgrade dialog only sells higher hosted capacity, it is not an access
   // gate, so opening it simply shows the plan comparison (no waitlist).
   const handleOpenUpgradeDialog = useCallback((targetTier: UpgradeTarget | null = null) => {

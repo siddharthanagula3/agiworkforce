@@ -3,16 +3,16 @@ id: managed-cloud
 title: AGI managed cloud
 path: /docs
 category: managed-cloud
-tags: managed cloud, hosted, public alpha, waitlist, usage, metered, capacity, quota, limit
-updated: 2026-08-05
+tags: managed cloud, hosted, open by default, waitlist, usage, metered, capacity, quota, limit
+updated: 2026-09-01
 scope: public
 ---
 
-## Public alpha, open by default
+## Open by default
 
-AGI managed cloud is in public alpha and open by default. Sign in and start — there
-is no waitlist for managed cloud and no invite code. Team and Enterprise tiers, with
-organization seats, SSO, and admin controls, are the only waitlisted tiers.
+AGI managed cloud is open by default. Sign in and start: there is no waitlist for
+managed cloud and no invite code. Team and Enterprise tiers, with organization
+seats, SSO, and admin controls, are the only waitlisted tiers.
 
 ## How usage works
 

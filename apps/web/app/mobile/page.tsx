@@ -10,12 +10,12 @@ import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
   description:
-    'AGI Mobile runs chat on your phone in Local Mode by default. Chats, memory, projects, and files stay on-device unless you choose otherwise. AGI managed cloud is in public alpha.',
+    'AGI Mobile runs chat on your phone in Local Mode by default. Chats, memory, projects, and files stay on-device unless you choose otherwise.',
   alternates: { canonical: 'https://agiworkforce.com/mobile' },
   openGraph: {
     title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
     description:
-      'On-device Local chat by default. Your data stays on the phone unless you explicitly choose otherwise. AGI managed cloud is public alpha.',
+      'On-device Local chat by default. Your data stays on the phone unless you explicitly choose otherwise.',
     type: 'website',
     url: 'https://agiworkforce.com/mobile',
     images: [{ url: '/api/og', width: 1200, height: 630, alt: 'AGI app preview' }],
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
-    description: `Local Mode by default. AGI managed cloud is public alpha. ${LAUNCH.publicLabel}.`,
+    description: `Local Mode by default. ${LAUNCH.publicLabel}.`,
     images: ['/api/og'],
   },
 };

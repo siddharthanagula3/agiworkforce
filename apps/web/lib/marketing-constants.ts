@@ -30,12 +30,11 @@ export const NOTIFY_CTA = {
 } as const;
 
 export const POSITIONING = {
-  wedge:
-    'Try AGI on the web. Local and BYOK for serious work. Managed cloud, open in public alpha.',
+  wedge: 'Try AGI on the web. Local and BYOK for serious work. Managed cloud, open by default.',
   trustBoundary:
-    'Website users can use AGI managed cloud in public alpha, with a small free Auto Economy cap and higher-capacity paid plans rolling out. Local and BYOK are supported on desktop and developer surfaces. Managed cloud is open by default, not invite-only.',
+    'Website users can use AGI managed cloud, with a small free Auto Economy cap and higher-capacity paid plans rolling out. Local and BYOK are supported on desktop and developer surfaces. Managed cloud is open by default, not invite-only.',
   cloudInvite:
-    'Managed cloud is open in public alpha; higher capacity is a paid subscription, not an invite.',
+    'Managed cloud is open by default; higher capacity is a paid subscription, not an invite.',
 } as const;
 
 export const BYOK_SURFACES = {
