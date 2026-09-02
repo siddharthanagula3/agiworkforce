@@ -1974,6 +1974,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         return { suspended, pendingCalls, runHandle };
       }
     }
+    flushContentBuffer(true);
+    if (inThinkingBlock) {
+      closeThinkingSegment();
+      inThinkingBlock = false;
+    }
     throw terminalError;
   } finally {
     coalescedAppends.flush();
@@ -3116,7 +3121,10 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     return;
   }
 
-  const errorContent = buildAssistantErrorContent(errorMessage);
+  const priorContent = currentMessage?.content;
+  const errorContent = priorContent
+    ? `${priorContent}\n\n${buildAssistantErrorContent(errorMessage)}`
+    : buildAssistantErrorContent(errorMessage);
   updateMessage(
     assistantMessageId,
     {
