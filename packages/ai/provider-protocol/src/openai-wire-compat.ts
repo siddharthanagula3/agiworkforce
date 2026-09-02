@@ -462,16 +462,23 @@ export class OpenAIWireAssembler {
         return;
       case 'server-tool-use':
         return;
-      case 'server-tool-result':
+      case 'server-tool-result': {
         if (
-          (this.wireMode === 'legacy-web' || this.wireMode === 'openai-passthrough') &&
-          typeof chunk.payload === 'object' &&
-          chunk.payload !== null &&
-          (chunk.payload as { type?: unknown }).type === 'web_search_tool_result'
+          (this.wireMode !== 'legacy-web' && this.wireMode !== 'openai-passthrough') ||
+          typeof chunk.payload !== 'object' ||
+          chunk.payload === null
         ) {
+          return;
+        }
+        const payloadType = (chunk.payload as { type?: unknown }).type;
+        if (payloadType === 'web_search_tool_result') {
           this.searchResults.push(capSearchResultPayload(chunk.payload));
+        } else if (payloadType === 'gemini_grounding_result') {
+          const capped = capSearchResultPayload(chunk.payload) as { results?: unknown };
+          this.searchResults.push({ content: capped.results });
         }
         return;
+      }
       case 'citation-delta':
         if (this.wireMode === 'legacy-web') this.citations.push(chunk.payload);
         return;
