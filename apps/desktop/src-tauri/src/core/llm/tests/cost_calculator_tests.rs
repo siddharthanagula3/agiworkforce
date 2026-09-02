@@ -163,6 +163,10 @@ mod tests {
     use crate::core::llm::models_config::ModelEntry;
     use crate::core::llm::Provider;
 
+    const DEEPSEEK_FLASH_INPUT_PER_1M: f64 = 0.44;
+    const DEEPSEEK_FLASH_OUTPUT_PER_1M: f64 = 1.32;
+    const MILLION: f64 = 1_000_000.0;
+
     fn catalog_model(
         provider: Provider,
         predicate: impl Fn(&ModelEntry) -> bool,
@@ -198,7 +202,8 @@ mod tests {
     fn test_low_cost_deepseek_model_cost() {
         let calc = CostCalculator::new();
         let model = catalog_model(Provider::DeepSeek, |entry| {
-            entry.input_cost == 0.14 && entry.output_cost == 0.28
+            entry.input_cost == DEEPSEEK_FLASH_INPUT_PER_1M
+                && entry.output_cost == DEEPSEEK_FLASH_OUTPUT_PER_1M
         });
         let cost = calc.calculate(
             Provider::DeepSeek,
@@ -207,9 +212,11 @@ mod tests {
             1_000_000,
             super::priced_on(),
         );
+        let expected = DEEPSEEK_FLASH_INPUT_PER_1M + DEEPSEEK_FLASH_OUTPUT_PER_1M;
         assert!(
-            (cost - 0.42).abs() < 1e-9,
-            "Expected $0.42 for the selected DeepSeek model, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "Expected ${} for the selected DeepSeek model, got ${}",
+            expected,
             cost
         );
     }
@@ -362,7 +369,9 @@ mod tests {
     #[test]
     fn test_cost_only_input_tokens() {
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::DeepSeek, |entry| entry.input_cost == 0.14);
+        let model = catalog_model(Provider::DeepSeek, |entry| {
+            entry.input_cost == DEEPSEEK_FLASH_INPUT_PER_1M
+        });
         let cost = calc.calculate(
             Provider::DeepSeek,
             &model.id,
@@ -370,9 +379,11 @@ mod tests {
             0,
             super::priced_on(),
         );
+        let expected = DEEPSEEK_FLASH_INPUT_PER_1M * 500_000.0 / MILLION;
         assert!(
-            (cost - 0.07).abs() < 1e-9,
-            "Expected $0.07 for 500k input-only tokens, got ${}",
+            (cost - expected).abs() < 1e-9,
+            "Expected ${} for 500k input-only tokens, got ${}",
+            expected,
             cost
         );
     }
@@ -380,7 +391,9 @@ mod tests {
     #[test]
     fn test_cost_only_output_tokens() {
         let calc = CostCalculator::new();
-        let model = catalog_model(Provider::DeepSeek, |entry| entry.output_cost == 0.28);
+        let model = catalog_model(Provider::DeepSeek, |entry| {
+            entry.output_cost == DEEPSEEK_FLASH_OUTPUT_PER_1M
+        });
         let cost = calc.calculate(
             Provider::DeepSeek,
             &model.id,
@@ -389,8 +402,9 @@ mod tests {
             super::priced_on(),
         );
         assert!(
-            (cost - 0.28).abs() < 1e-9,
-            "Expected $0.28 for 1M output-only tokens, got ${}",
+            (cost - DEEPSEEK_FLASH_OUTPUT_PER_1M).abs() < 1e-9,
+            "Expected ${} for 1M output-only tokens, got ${}",
+            DEEPSEEK_FLASH_OUTPUT_PER_1M,
             cost
         );
     }
@@ -399,7 +413,8 @@ mod tests {
     fn test_more_expensive_model_costs_more() {
         let calc = CostCalculator::new();
         let cheap_model = catalog_model(Provider::DeepSeek, |entry| {
-            entry.input_cost == 0.14 && entry.output_cost == 0.28
+            entry.input_cost == DEEPSEEK_FLASH_INPUT_PER_1M
+                && entry.output_cost == DEEPSEEK_FLASH_OUTPUT_PER_1M
         });
         let expensive_model = catalog_model(Provider::Anthropic, |entry| {
             entry.input_cost == 5.0 && entry.output_cost == 25.0
