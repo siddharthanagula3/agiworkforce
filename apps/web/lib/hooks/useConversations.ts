@@ -42,9 +42,25 @@ export function readLoadedMessageMetadata(value: unknown): Message['metadata'] {
 
 const CONVERSATIONS_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 const PROJECT_CONVERSATIONS_PAGE_SIZE = MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE;
+const CONVERSATIONS_LIST_RATE_LIMIT_STATUS = 429;
+const CONVERSATIONS_LIST_RETRY_BASE_DELAY_MS = 1_000;
+const CONVERSATIONS_LIST_RETRY_MAX_DELAY_MS = 30_000;
+const CONVERSATIONS_LIST_RETRY_MAX_ATTEMPTS = 5;
 
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const dateMs = Date.parse(header);
+  return Number.isFinite(dateMs) ? Math.max(0, dateMs - Date.now()) : null;
+}
+
+// getToken is not reference-stable across renders while Clerk settles; a ref
+// keeps getAuthHeaders (and everything derived from it) stable instead.
 function useConversationAuthHeaders() {
   const { getToken, isLoaded, isSignedIn } = useAuth();
+  const getTokenRef = useRef(getToken);
+  getTokenRef.current = getToken;
   const getAuthHeaders = useCallback(async () => {
     if (!isLoaded) {
       throw new Error('Authentication is still loading');
@@ -52,7 +68,7 @@ function useConversationAuthHeaders() {
     if (!isSignedIn) {
       throw new Error('Not authenticated');
     }
-    const token = await getToken();
+    const token = await getTokenRef.current();
     if (!token) {
       throw new Error('Not authenticated');
     }
@@ -60,7 +76,7 @@ function useConversationAuthHeaders() {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     };
-  }, [getToken, isLoaded, isSignedIn]);
+  }, [isLoaded, isSignedIn]);
 
   return { getAuthHeaders, isLoaded, isSignedIn };
 }
@@ -157,10 +173,22 @@ export function useConversations(): UseConversationsReturn {
   const [isOpeningConversation, setIsOpeningConversation] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const loadSequenceRef = useRef(0);
+  const listRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listRetryAttemptRef = useRef(0);
 
+  const clearScheduledListRetry = useCallback(() => {
+    if (listRetryTimeoutRef.current === null) return;
+    clearTimeout(listRetryTimeoutRef.current);
+    listRetryTimeoutRef.current = null;
+  }, []);
+
+  useEffect(() => clearScheduledListRetry, [clearScheduledListRetry]);
+
+  // A background list failure writes only listError, never the shared
+  // chat-turn error, so it never paints the page-level turn banner.
   const fetchConversations = useCallback(async () => {
+    clearScheduledListRetry();
     setIsFetchingConversations(true);
-    setError(null);
     setListError(null);
 
     try {
@@ -173,23 +201,36 @@ export function useConversations(): UseConversationsReturn {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (
+          response.status === CONVERSATIONS_LIST_RATE_LIMIT_STATUS &&
+          listRetryAttemptRef.current < CONVERSATIONS_LIST_RETRY_MAX_ATTEMPTS
+        ) {
+          const attempt = listRetryAttemptRef.current;
+          listRetryAttemptRef.current = attempt + 1;
+          const delay =
+            parseRetryAfterMs(response.headers.get('retry-after')) ??
+            Math.min(
+              CONVERSATIONS_LIST_RETRY_BASE_DELAY_MS * 2 ** attempt,
+              CONVERSATIONS_LIST_RETRY_MAX_DELAY_MS,
+            );
+          listRetryTimeoutRef.current = setTimeout(() => void fetchConversations(), delay);
+        }
         throw new Error(errorData.error?.message || 'Failed to fetch conversations');
       }
 
       const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
       const conversationList: Conversation[] = data.conversations.map(toWebConversation);
 
+      listRetryAttemptRef.current = 0;
       setConversations(conversationList);
       nextOffsetRef.current = data.nextOffset;
       setHasMoreConversations(data.hasMore);
     } catch (err) {
-      const message = toUserMessage(err, 'Failed to fetch conversations');
-      setError(message);
-      setListError(message);
+      setListError(toUserMessage(err, 'Failed to fetch conversations'));
     } finally {
       setIsFetchingConversations(false);
     }
-  }, [getAuthHeaders, isLoaded, isSignedIn, setConversations, setError]);
+  }, [clearScheduledListRetry, getAuthHeaders, isLoaded, isSignedIn, setConversations]);
 
   const loadMoreConversations = useCallback(async () => {
     if (!isLoaded || !isSignedIn || isLoadingMoreConversations || !hasMoreConversations) {
