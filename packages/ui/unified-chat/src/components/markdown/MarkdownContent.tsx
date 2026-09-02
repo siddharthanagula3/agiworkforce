@@ -105,6 +105,8 @@ function isNavigableImageSource(src: string): boolean {
   return protocol === 'http' || protocol === 'https';
 }
 
+const IMAGE_LOADING_PLACEHOLDER_CLASS = 'aspect-[4/3] w-full max-w-sm';
+
 const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?: string }) => {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
 
@@ -150,9 +152,14 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
     </>
   );
 
+  const wrapperClassName = cn(
+    'relative my-2 inline-block max-w-full align-top',
+    status === 'loading' && IMAGE_LOADING_PLACEHOLDER_CLASS,
+  );
+
   if (!navigable) {
     return (
-      <span className="relative my-2 inline-block max-w-full align-top" title={title || alt}>
+      <span className={wrapperClassName} title={title || alt}>
         {picture}
       </span>
     );
@@ -163,7 +170,7 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
       href={src}
       target="_blank"
       rel="noopener noreferrer"
-      className="relative my-2 inline-block max-w-full align-top no-underline"
+      className={cn(wrapperClassName, 'no-underline')}
       title={title || alt || 'Open image in a new tab'}
       aria-label={alt ? `Open image in a new tab: ${alt}` : 'Open image in a new tab'}
     >
