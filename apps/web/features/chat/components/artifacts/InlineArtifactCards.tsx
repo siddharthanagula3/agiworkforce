@@ -98,8 +98,15 @@ function extLabel(artifact: ArtifactData): string {
     csv: 'CSV',
     json: 'JSON',
     document: 'DOC',
+    mermaid: 'Mermaid',
   };
-  return (map[raw] || raw || 'file').toUpperCase().slice(0, 6);
+  // A mapped label is already the exact casing meant for display - forcing
+  // it through the fallback's uppercase+slice(6) is what turned "Mermaid"
+  // into "MERMAI". Only the unmapped fallback needs that truncation guard,
+  // since it is the one case where `raw` is an arbitrary, unbounded string.
+  const mapped = map[raw];
+  if (mapped) return mapped;
+  return (raw || 'file').toUpperCase().slice(0, 6);
 }
 
 /** Icon for each artifact type. Exported for reuse in the artifact viewer header. */
@@ -147,9 +154,63 @@ function badgeClass(type: ArtifactData['type']): string {
   }
 }
 
+/**
+ * Mermaid gets a distinct card shape instead of ArtifactFullCard's 80px side
+ * thumbnail: a diagram shrunk to 32px of width and scaled back up reads as an
+ * unreadable grey blob, which is what the thumbnail path produced. Claude and
+ * ChatGPT both show the actual diagram at message width, so this renders the
+ * real MermaidDiagram full-width under a compact title row instead of a
+ * preview of it. `interactive={false}` keeps its own "Show source" toggle
+ * from nesting a second button inside this card's click target - opening the
+ * artifact panel (via the outer button) is the only click target here.
+ */
+function MermaidFullCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group w-full flex flex-col overflow-hidden rounded-xl border border-border/40',
+        'bg-muted/30 hover:bg-muted/50 transition-colors text-left',
+      )}
+      aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
+    >
+      <div className="flex items-center gap-2 min-w-0 px-3 py-2.5">
+        <TypeIcon type={artifact.type} className="h-4 w-4 text-muted-foreground" />
+        <span className="flex-1 truncate text-sm font-medium text-foreground leading-tight">
+          {artifact.title || 'Untitled'}
+        </span>
+        <span className="text-[12px] text-muted-foreground truncate">
+          {kindLabel(artifact.type)} · {extLabel(artifact)}
+        </span>
+        <span
+          className={cn(
+            'shrink-0 inline-block rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase leading-tight tracking-wide',
+            badgeClass(artifact.type),
+          )}
+        >
+          {typeBadge(artifact.type)}
+        </span>
+        <ChevronRight
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden="true"
+        />
+      </div>
+      {/* max-height + internal scroll keeps a tall diagram from growing the
+          card past the message column; width always fits since MermaidDiagram
+          scales its svg to 100% of this container. */}
+      <div
+        className="pointer-events-none max-h-[320px] overflow-y-auto border-t border-border/30 bg-background px-4 py-3"
+        aria-hidden="true"
+      >
+        <MermaidDiagram source={artifact.content} interactive={false} className="mermaid-block" />
+      </div>
+    </button>
+  );
+}
+
 function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
   const mounted = useMounted();
-  const canRenderMermaid = mounted && artifact.type === 'mermaid';
   const canRender = mounted && ['html', 'react', 'svg'].includes(artifact.type);
   const generatedFileSummary = summarizeGeneratedFileBundle({
     computeSession: artifact.computeSession,
@@ -165,6 +226,10 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
     artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
   );
 
+  if (mounted && artifact.type === 'mermaid') {
+    return <MermaidFullCard artifact={artifact} onClick={onClick} />;
+  }
+
   return (
     <button
       type="button"
@@ -177,27 +242,7 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
     >
       {/* Preview area · 80px wide on the left */}
       <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-r border-border/30">
-        {canRenderMermaid ? (
-          <div
-            className="pointer-events-none h-full w-full overflow-hidden bg-background"
-            aria-hidden="true"
-          >
-            <div
-              style={{
-                width: '250%',
-                height: '250%',
-                transform: 'scale(0.4)',
-                transformOrigin: 'top left',
-              }}
-            >
-              <MermaidDiagram
-                source={artifact.content}
-                interactive={false}
-                className="mermaid-block"
-              />
-            </div>
-          </div>
-        ) : canRender ? (
+        {canRender ? (
           <iframe
             title={artifact.title || 'Artifact preview'}
             // 80px static thumbnail, same reasoning as the gallery grid: no

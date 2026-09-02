@@ -144,6 +144,18 @@ const SVG_ALLOWED_ATTRS = new Set([
   'patternTransform',
 ]);
 
+// Same case-folding bug the tag allowlist above already had to work around:
+// the comparison lowercases the attribute name, so keys like viewBox,
+// preserveAspectRatio, refX/refY, markerWidth/markerHeight and the
+// gradient/pattern *Units/*Transform pairs never matched their own
+// lowercased selves and were stripped from every sanitized SVG. Losing
+// viewBox meant a diagram had no way to scale into a narrower box - the root
+// <svg>'s default overflow: hidden clipped it instead. Losing refX/refY/
+// markerWidth/markerHeight left arrowhead markers with only spec defaults
+// (3x3, no offset), which drew a mermaid edge's arrowhead as a distorted loop
+// instead of a triangle.
+const SVG_ALLOWED_ATTR_KEYS = new Set([...SVG_ALLOWED_ATTRS].map((attr) => attr.toLowerCase()));
+
 /**
  * Safely sanitize an SVG string by stripping disallowed tags/attributes.
  *
@@ -170,7 +182,7 @@ export function sanitizeSvg(raw: string): string {
       const attrs = Array.from(node.attributes);
       for (const attr of attrs) {
         const name = attr.name.toLowerCase();
-        if (!SVG_ALLOWED_ATTRS.has(name)) {
+        if (!SVG_ALLOWED_ATTR_KEYS.has(name)) {
           node.removeAttribute(attr.name);
         }
         if (name === 'href' || name === 'xlink:href') {
