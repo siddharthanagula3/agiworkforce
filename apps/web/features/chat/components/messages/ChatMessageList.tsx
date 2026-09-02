@@ -1,6 +1,14 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
+import React, {
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useCallback,
+  useMemo,
+  memo,
+} from 'react';
 import { MessageSearch } from './MessageSearch';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
@@ -1190,23 +1198,42 @@ const ChatMessageListComponent = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [closeSearch, searchOpen]);
 
+  const scrollFrameRef = useRef<number | null>(null);
+  const pendingScrollBehaviorRef = useRef<ScrollBehavior>('smooth');
+  const anchoringRef = useRef(false);
+  const anchorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopAnchoring = useCallback(() => {
+    anchoringRef.current = false;
+    if (anchorTimerRef.current === null) return;
+    clearTimeout(anchorTimerRef.current);
+    anchorTimerRef.current = null;
+  }, []);
+
+  /**
+   * Returning to the live answer is an intent, not a single jump. The rows the
+   * reader scrolled past are unmounted, so the list scrolls to where it
+   * *estimates* the bottom is; they then mount, measure taller, and the bottom
+   * moves further down. Every programmatic scroll-to-bottom arms the same
+   * anchor here, so `handleScroll`'s own `scroll` events — native smooth-scroll
+   * fires one per animation frame short of the target — never read as the user
+   * scrolling away before the target is actually reached.
+   */
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
       const listApi = listApiRef.current;
-      if (!listApi || virtualRowCount === 0) return;
+      if (!listApi?.element || virtualRowCount === 0) return;
+      anchoringRef.current = true;
+      if (anchorTimerRef.current !== null) clearTimeout(anchorTimerRef.current);
+      anchorTimerRef.current = setTimeout(stopAnchoring, ANCHOR_SETTLE_TIMEOUT_MS);
       listApi.scrollToRow({
         align: 'end',
         behavior,
         index: virtualRowCount - 1,
       });
     },
-    [virtualRowCount],
+    [virtualRowCount, stopAnchoring],
   );
-
-  const scrollFrameRef = useRef<number | null>(null);
-  const pendingScrollBehaviorRef = useRef<ScrollBehavior>('smooth');
-  const anchoringRef = useRef(false);
-  const anchorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const requestScrollToBottom = useCallback(
     (behavior: ScrollBehavior) => {
@@ -1224,31 +1251,30 @@ const ChatMessageListComponent = ({
     [scrollToBottom],
   );
 
-  const stopAnchoring = useCallback(() => {
-    anchoringRef.current = false;
-    if (anchorTimerRef.current === null) return;
-    clearTimeout(anchorTimerRef.current);
-    anchorTimerRef.current = null;
-  }, []);
-
   /**
-   * Returning to the live answer is an intent, not a single jump. The rows the
-   * reader scrolled past are unmounted, so the list scrolls to where it
-   * *estimates* the bottom is; they then mount, measure taller, and the bottom
-   * moves further down. The corrective pass that follows every measurement is
-   * the layout effect below, and it is gated on `userScrolledUp` — so the
-   * control has to clear that flag, and the scroll events its own scrolling
-   * raises must not set it again before the content has stopped growing.
+   * The list's imperative handle exists a render before its underlying
+   * element is mounted (react-window populates the ref via a callback-ref
+   * state update, one commit behind). A layout effect can land in that gap,
+   * so this tries the synchronous path first and only defers through the
+   * rAF-coalesced one when the element isn't attached yet.
    */
+  const scrollToBottomFast = useCallback(
+    (behavior: ScrollBehavior) => {
+      if (listApiRef.current?.element) {
+        scrollToBottom(behavior);
+        return;
+      }
+      requestScrollToBottom(behavior);
+    },
+    [scrollToBottom, requestScrollToBottom],
+  );
+
   const followBottom = useCallback(
     (behavior: ScrollBehavior) => {
-      anchoringRef.current = true;
-      if (anchorTimerRef.current !== null) clearTimeout(anchorTimerRef.current);
-      anchorTimerRef.current = setTimeout(stopAnchoring, ANCHOR_SETTLE_TIMEOUT_MS);
       setUserScrolledUp(false);
       requestScrollToBottom(behavior);
     },
-    [requestScrollToBottom, stopAnchoring],
+    [requestScrollToBottom],
   );
 
   useEffect(
@@ -1274,7 +1300,7 @@ const ChatMessageListComponent = ({
   }, [stopAnchoring]);
 
   const isStreamingNow = Boolean(lastMessage?.isStreaming);
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Paging to another variant is not a new turn arriving, so it must not send
     // the reader to the bottom: they are comparing two answers to the same
     // question, and the place to be is the point where the two differ. A leaf
@@ -1298,6 +1324,10 @@ const ChatMessageListComponent = ({
     if (userScrolledUp) return;
     const behavior: ScrollBehavior =
       messages.length === 1 || isStreamingNow || prefersReducedMotion ? 'auto' : 'smooth';
+    if (behavior === 'auto') {
+      scrollToBottomFast('auto');
+      return;
+    }
     requestScrollToBottom(behavior);
   }, [
     activeLeafId,
@@ -1309,6 +1339,7 @@ const ChatMessageListComponent = ({
     isStreamingNow,
     prefersReducedMotion,
     userScrolledUp,
+    scrollToBottomFast,
     requestScrollToBottom,
     conversationId,
   ]);
@@ -1318,7 +1349,7 @@ const ChatMessageListComponent = ({
     messageCount: messages.length,
     viewportHeight,
   });
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previous = measuredLayoutRef.current;
     measuredLayoutRef.current = {
       contentHeight: estimatedContentHeight,
@@ -1330,14 +1361,8 @@ const ChatMessageListComponent = ({
       previous.contentHeight !== estimatedContentHeight ||
       previous.viewportHeight !== viewportHeight;
     if (!layoutChanged || previous.messageCount !== messages.length || userScrolledUp) return;
-    requestScrollToBottom('auto');
-  }, [
-    estimatedContentHeight,
-    messages.length,
-    requestScrollToBottom,
-    userScrolledUp,
-    viewportHeight,
-  ]);
+    scrollToBottomFast('auto');
+  }, [estimatedContentHeight, messages.length, scrollToBottomFast, userScrolledUp, viewportHeight]);
 
   const isGenerating = Boolean(isLoading || lastMessage?.isStreaming);
   const [streamAnnouncement, setStreamAnnouncement] = useState('');
