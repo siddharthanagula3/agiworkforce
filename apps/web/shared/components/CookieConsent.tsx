@@ -93,7 +93,7 @@ export const CookieConsent = () => {
         <div
           ref={bannerRef}
           data-design="agi"
-          className="agi-ds-consent"
+          className="agi-ds-consent agi-modal-scope"
           role="region"
           aria-label="Cookie consent"
         >
