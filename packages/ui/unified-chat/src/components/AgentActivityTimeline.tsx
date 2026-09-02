@@ -342,7 +342,7 @@ function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'pr
           <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
         )}
       </span>
-      <p className="break-words text-sm text-foreground/90">{entry.summary}</p>
+      <p className="break-words text-sm text-foreground">{entry.summary}</p>
       {entry.detail && (
         <details className="mt-1 text-xs text-muted-foreground">
           <summary className="cursor-pointer select-none rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -367,7 +367,7 @@ function StaticRow({
           className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
           aria-hidden="true"
         />
-        <p className="text-sm text-foreground/90">
+        <p className="text-sm text-foreground">
           Found {entry.sources.length} source{entry.sources.length === 1 ? '' : 's'}
         </p>
         <SourceLinks entry={entry} />
@@ -390,7 +390,7 @@ function StaticRow({
           className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
           aria-hidden="true"
         />
-        <p className="mb-1 text-sm text-foreground/90">Created a file</p>
+        <p className="mb-1 text-sm text-foreground">Created a file</p>
         {href ? (
           <a
             href={href}
@@ -414,7 +414,7 @@ function StaticRow({
           className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
           aria-hidden="true"
         />
-        <p className="text-sm text-foreground/90">{entry.summary}</p>
+        <p className="text-sm text-foreground">{entry.summary}</p>
         {entry.beforeTokens !== undefined && entry.afterTokens !== undefined && (
           <p className="mt-0.5 text-[12px] text-muted-foreground">
             {TOKEN_NUMBER_FORMAT.format(entry.beforeTokens)} →{' '}
