@@ -283,6 +283,42 @@ function formatDuration(ms: number): string {
   return `${(ms / 60_000).toFixed(1)}m`;
 }
 
+const TOOL_ERROR_LABEL_PREFIX = /^Tool error:\s*/;
+const TRUST_FENCE_WITH_SENTINEL =
+  /^<([a-zA-Z][\w-]*)\b[^>]*>\n<!--[^\n]*-->\n([\s\S]*)\n<\/\1>\s*$/;
+const SEALED_ENVELOPE = /^<([a-zA-Z][\w-]*)\b[^>]*>([\s\S]*)<\/\1>\s*$/;
+const STACK_FRAME_LINE = /^\s*at\s+\S/;
+const FENCE_ENTITY = /&lt;|&gt;|&amp;/g;
+const FENCE_ENTITY_DECODE: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&amp;': '&' };
+const MAX_ERROR_DISPLAY_CHARS = 500;
+const NO_ERROR_DETAIL_TEXT = 'The tool failed without further details.';
+
+function stripTrustFence(text: string): string {
+  const fenced = TRUST_FENCE_WITH_SENTINEL.exec(text);
+  if (fenced) return fenced[2] ?? '';
+  const sealed = SEALED_ENVELOPE.exec(text);
+  if (sealed) return sealed[2] ?? '';
+  return text;
+}
+
+function stripStackFrames(text: string): string {
+  const lines = text.split('\n');
+  const firstFrame = lines.findIndex((line) => STACK_FRAME_LINE.test(line));
+  if (firstFrame <= 0) return text;
+  return lines.slice(0, firstFrame).join('\n');
+}
+
+export function humanizeToolErrorText(raw: string): string {
+  let text = raw.trim().replace(TOOL_ERROR_LABEL_PREFIX, '');
+  text = stripTrustFence(text.trim()).trim();
+  text = text.replace(FENCE_ENTITY, (entity) => FENCE_ENTITY_DECODE[entity] ?? entity);
+  text = stripStackFrames(text).trim();
+  if (!text) return NO_ERROR_DETAIL_TEXT;
+  return text.length > MAX_ERROR_DISPLAY_CHARS
+    ? `${text.slice(0, MAX_ERROR_DISPLAY_CHARS).trimEnd()}…`
+    : text;
+}
+
 const ToolCallCardComponent = ({
   id,
   name,
@@ -333,6 +369,10 @@ const ToolCallCardComponent = ({
   const codeBlock = useMemo(() => detectCodeBlock(name, args), [name, args]);
   const requestDiff = useMemo(() => (codeBlock ? null : detectFileDiff(args)), [codeBlock, args]);
   const resultDiff = useMemo(() => detectResultDiff(result, args), [result, args]);
+  const displayError = useMemo(() => {
+    const raw = errorDetail ?? error;
+    return raw ? humanizeToolErrorText(raw) : undefined;
+  }, [errorDetail, error]);
 
   const durationLabel =
     status === 'running' && startedAt != null
@@ -445,13 +485,13 @@ const ToolCallCardComponent = ({
           </div>
         )}
 
-        {(errorDetail ?? error) && (
+        {displayError && (
           <div>
             <p className="text-[12px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Error
             </p>
             <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-red-400 scrollbar-thin">
-              {errorDetail ?? error}
+              {displayError}
             </pre>
           </div>
         )}
