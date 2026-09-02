@@ -173,7 +173,7 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
       sections.push(
         'When a claim in your answer comes from a search result or a page you fetched, mark it ' +
           'with a bracketed number, e.g. [1], in the order those sources first appear, or write ' +
-          'the claim as a markdown link straight to that source URL — the app turns either form ' +
+          'the claim as a markdown link straight to that source URL. The app turns either form ' +
           'into a clickable citation for the exact source. Reuse the same number for a source ' +
           'cited again. Do this for every source you used, including a single fetched page, not ' +
           'only when there are several.',
