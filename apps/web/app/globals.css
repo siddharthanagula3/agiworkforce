@@ -9012,6 +9012,21 @@ html[data-contrast='more'] *:focus-visible {
   border-radius: var(--agi-radius-frame);
 }
 
+[data-design='agi'] .agi-ds-card {
+  border-radius: var(--agi-radius-frame);
+  border: 1px solid var(--agi-rule);
+  background: var(--agi-ground-2);
+  color: var(--agi-ink);
+}
+
+[data-design='agi'] .agi-ds-card[data-tone='danger'] {
+  border-color: var(--agi-error);
+}
+
+[data-design='agi'] .agi-ds-muted {
+  color: var(--agi-ink-2);
+}
+
 @media (max-width: 767px) {
   [data-design='agi'].agi-ds-consent {
     padding: 0;

@@ -121,7 +121,7 @@ export function CliDownloadAvailability() {
           aria-label="Checking CLI downloads"
           aria-live="polite"
           aria-busy="true"
-          className="mt-6 rounded-xl border border-border bg-card p-4 text-sm text-card-foreground"
+          className="agi-ds-card mt-6 p-4 text-sm"
         >
           Checking the CLI release channel…
         </div>
@@ -129,15 +129,10 @@ export function CliDownloadAvailability() {
 
       {availability.state === 'available' && (
         <div className="mt-6">
-          <p className="mb-4 text-sm text-muted-foreground">
-            agi CLI · version {availability.version}
-          </p>
+          <p className="mb-4 text-sm agi-ds-muted">agi CLI · version {availability.version}</p>
           <ul className="grid list-none gap-3 p-0 md:grid-cols-3" aria-label="CLI archives">
             {availability.downloads.map((download) => (
-              <li
-                key={download.platform}
-                className="rounded-2xl border border-border bg-card p-5 text-card-foreground"
-              >
+              <li key={download.platform} className="agi-ds-card p-5">
                 <p className="text-sm font-semibold">
                   {PLATFORM_LABELS[download.platform] ?? download.platform}
                 </p>
@@ -160,7 +155,7 @@ export function CliDownloadAvailability() {
           role="status"
           aria-label="CLI downloads unavailable"
           aria-live="polite"
-          className="mt-6 rounded-xl border border-border bg-card p-4 text-card-foreground"
+          className="agi-ds-card mt-6 p-4"
         >
           <p className="text-sm">No published CLI archive is available right now.</p>
           <Link href="/cli" className="agi-ds-btn mt-4" data-variant="secondary">
@@ -174,7 +169,8 @@ export function CliDownloadAvailability() {
           role="status"
           aria-label="CLI download check failed"
           aria-live="polite"
-          className="mt-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-card-foreground"
+          className="agi-ds-card mt-6 p-4"
+          data-tone="danger"
         >
           <p className="text-sm">We could not verify the CLI archives.</p>
           <button
