@@ -11,7 +11,9 @@ import 'server-only';
  *     condemns the ONE provider account whose managed key was refused and
  *     therefore skips that provider's remaining routes instead of replaying
  *     the same rejected key — never on aborts, safety stops, context or
- *     invalid-model errors, or billing errors;
+ *     invalid-model errors, or billing errors — or, under the narrow
+ *     conditions `isRotatableRequestRejection` states, on a request the
+ *     provider itself refused;
  *   - before the first byte reaches the client — route.ts's rotation point
  *     is `startProviderStream`'s first-chunk peek, so a rotated attempt has
  *     by construction produced NO content (failed-attempt text cannot leak);
@@ -41,6 +43,7 @@ import 'server-only';
  */
 
 import { classifyError, CredentialFailoverState } from '@agiworkforce/provider-runtime';
+import { isAutoModeModelId } from '@agiworkforce/types';
 import { canAccessModel } from '@/lib/model-tiers';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import { canFailoverToOpenRouter } from '@/lib/services/aggregator-routing';
@@ -87,8 +90,46 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
  */
 const NEVER_ROTATE_CATEGORIES: ReadonlySet<string> = new Set(['billing_exhausted', 'safety']);
 
+/**
+ * The one rejection class that rotates without being in
+ * `FAILOVER_ELIGIBLE_CATEGORIES`, under conditions narrow enough that it cannot
+ * become general 4xx rotation.
+ *
+ * A provider that refuses the request itself (a tool declaration it will not
+ * parse, a parameter it does not know) fails EVERY attempt on that route and no
+ * other. The user did not choose that route: Auto did, from a plan whose other
+ * candidates are just as able to answer. Retrying the same rejected body on a
+ * route the caller picked would be pointless, and rotating after a step has
+ * already streamed content would splice two models into one answer, so both are
+ * excluded.
+ *
+ * `invalid_model` stays out of rotation entirely, as it always has, and this
+ * does not widen `FAILOVER_ELIGIBLE_CATEGORIES`, which still governs every
+ * caller that reports no step context.
+ */
+const REQUEST_REJECTION_CATEGORY = 'client_error';
+const REQUEST_REJECTION_STATUS = 400;
+const FIRST_PROVIDER_STEP = 1;
+
 export function isNeverRotateCategory(category: string): boolean {
   return NEVER_ROTATE_CATEGORIES.has(category);
+}
+
+/** What the caller knows about where in the turn the failure happened. */
+export interface FailoverStepContext {
+  /** 1-based provider step. Rotation for a rejected request needs the first. */
+  step: number;
+}
+
+function isRotatableRequestRejection(
+  processed: ProcessedRequest,
+  classified: ReturnType<typeof classifyError>,
+  context: FailoverStepContext | undefined,
+): boolean {
+  if (!context || context.step !== FIRST_PROVIDER_STEP) return false;
+  if (classified.category !== REQUEST_REJECTION_CATEGORY) return false;
+  if (classified.status !== REQUEST_REJECTION_STATUS) return false;
+  return isAutoModeModelId(processed.requestedModel);
 }
 
 export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): boolean {
@@ -188,7 +229,7 @@ export function createFailoverPlan(
       retryAfterSeconds?: number;
     }) => void;
   },
-): { next: (error: unknown) => FailoverAttempt | null } {
+): { next: (error: unknown, context?: FailoverStepContext) => FailoverAttempt | null } {
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
   const mustStayOnProvider = requestCarriesTools(processed);
@@ -369,7 +410,7 @@ export function createFailoverPlan(
   };
 
   return {
-    next: (error: unknown): FailoverAttempt | null => {
+    next: (error: unknown, context?: FailoverStepContext): FailoverAttempt | null => {
       if (options.signal.aborted) return null;
       const classified = classifyError(error);
       const category = classified.category;
@@ -403,7 +444,13 @@ export function createFailoverPlan(
         return null;
       }
       const credentialRotation = credentialFailover.recordFailure(latestView.provider, category);
-      if (!credentialRotation && !isFailoverEligibleError(error, options.signal)) return null;
+      if (
+        !credentialRotation &&
+        !isFailoverEligibleError(error, options.signal) &&
+        !isRotatableRequestRejection(processed, classified, context)
+      ) {
+        return null;
+      }
 
       if (freeLane) {
         const fromRouteId = latestRouteId;
