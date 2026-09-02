@@ -30,12 +30,22 @@ const VOID_HTML_TAGS: ReadonlySet<string> = new Set([
   'wbr',
 ]);
 
-const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
-const HTML_TAG_PATTERN = /<(\/)?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/)?>/g;
+const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/;
+const HTML_BOGUS_COMMENT_PATTERN = /<!(?!--)[^>]*>/;
+const HTML_TAG_PATTERN =
+  /<(?<closing>\/)?(?<name>[a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(?<selfClosing>\/)?>/;
+const HTML_TOKEN_PATTERN = new RegExp(
+  [HTML_COMMENT_PATTERN, HTML_BOGUS_COMMENT_PATTERN, HTML_TAG_PATTERN]
+    .map((pattern) => pattern.source)
+    .join('|'),
+  'g',
+);
 
 const HASH_OFFSET_BASIS = 0x811c9dc5;
 const HASH_PRIME = 0x01000193;
 const HASH_RADIX = 36;
+
+type HtmlTagTokenGroups = Partial<Record<'closing' | 'name' | 'selfClosing', string>>;
 
 interface SourceSpan {
   readonly start: { readonly offset?: number | undefined };
@@ -92,27 +102,16 @@ function collectRawHtml(node: ParsedNode, into: string[]): void {
   for (const child of node.children ?? []) collectRawHtml(child, into);
 }
 
-function stripHtmlComments(markup: string): string {
-  let previous = markup;
-  let current = markup.replace(HTML_COMMENT_PATTERN, '');
-  while (current !== previous) {
-    previous = current;
-    current = current.replace(HTML_COMMENT_PATTERN, '');
-  }
-  return current;
-}
-
 function htmlTagBalance(node: ParsedNode): number {
   const fragments: string[] = [];
   collectRawHtml(node, fragments);
   if (fragments.length === 0) return 0;
 
-  const markup = stripHtmlComments(fragments.join(LINE_FEED));
   let balance = 0;
-  for (const match of markup.matchAll(HTML_TAG_PATTERN)) {
-    const [, closing, name, selfClosing] = match;
-    if (selfClosing) continue;
-    if (VOID_HTML_TAGS.has((name ?? '').toLowerCase())) continue;
+  for (const token of fragments.join(LINE_FEED).matchAll(HTML_TOKEN_PATTERN)) {
+    const { closing, name, selfClosing }: HtmlTagTokenGroups = token.groups ?? {};
+    if (!name || selfClosing) continue;
+    if (VOID_HTML_TAGS.has(name.toLowerCase())) continue;
     balance += closing ? -1 : 1;
   }
   return balance;
