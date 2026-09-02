@@ -316,7 +316,12 @@ export interface ToolLoopStepBudgetCheckpoint {
 }
 
 export interface ToolLoopProviderStepResult {
-  lines: Array<{ line: string; publicTextDelta?: string }>;
+  lines: Array<{
+    line: string;
+    publicTextDelta?: string;
+    serverToolStart?: ServerToolStartSignal;
+    serverToolResult?: ServerToolResultSignal;
+  }>;
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
   textContent: string;
