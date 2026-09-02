@@ -1,5 +1,7 @@
 import type { ResearchSource } from '../stores/research-panel-store';
 
+const TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|mc_[ce]id)$/i;
+
 function normalizeUrlKey(url: string | undefined): string | null {
   const trimmed = url?.trim();
   if (!trimmed) return null;
@@ -7,7 +9,11 @@ function normalizeUrlKey(url: string | undefined): string | null {
     const u = new URL(trimmed);
     const host = u.hostname.toLowerCase().replace(/^www\./, '');
     const path = u.pathname.replace(/\/+$/, '');
-    return `${host}${path}${u.search}`;
+    const params = Array.from(u.searchParams.entries())
+      .filter(([key]) => !TRACKING_PARAM_PATTERN.test(key))
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const query = params.map(([key, value]) => `${key}=${value}`).join('&');
+    return `${host}${path}${query ? `?${query}` : ''}`;
   } catch {
     return trimmed.toLowerCase();
   }
