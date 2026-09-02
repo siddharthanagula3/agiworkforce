@@ -513,6 +513,68 @@ describe('tool-loop web_search integration', () => {
     }
   });
 
+  it('dedupes accumulated web_search sources that only differ by a tracking query parameter', async () => {
+    factoryMocks.streamRequest
+      .mockResolvedValueOnce(
+        toolCallStream('web_search', { query: 'first query' }, 'call_tracking_dup_1'),
+      )
+      .mockResolvedValueOnce(
+        toolCallStream('web_search', { query: 'second query' }, 'call_tracking_dup_2'),
+      )
+      .mockResolvedValueOnce(finalAnswerStream('Combined findings. [1][2]'));
+
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      const results =
+        call === 1
+          ? [{ title: 'Canonical Page', url: 'https://news.example/story', snippet: 'first' }]
+          : [
+              {
+                title: 'Canonical Page via newsletter',
+                url: 'https://news.example/story?utm_source=newsletter&utm_campaign=weekly',
+                snippet: 'tracked',
+              },
+              { title: 'A Different Page', url: 'https://news.example/other', snippet: 'other' },
+            ];
+      return new Response(JSON.stringify({ results }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+    try {
+      const output = await collect(
+        runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
+      );
+
+      const searchResultsEvents = output
+        .split('\n')
+        .filter((line) => line.startsWith('data: {'))
+        .map(
+          (line) =>
+            JSON.parse(line.slice('data: '.length)) as {
+              choices?: Array<{
+                delta?: { x_search_results?: { content?: Array<{ url: string }> } };
+              }>;
+            },
+        )
+        .map((payload) => payload.choices?.[0]?.delta?.x_search_results?.content)
+        .filter((content): content is Array<{ url: string }> => Array.isArray(content));
+
+      const finalSources = searchResultsEvents[searchResultsEvents.length - 1] ?? [];
+      expect(finalSources.map((s) => s.url)).toEqual([
+        'https://news.example/story',
+        'https://news.example/other',
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('searchResultsEvent emits the research-loop-compatible shape: no tool field, snippet as encrypted_content', () => {
     const line = searchResultsEvent(
       [
