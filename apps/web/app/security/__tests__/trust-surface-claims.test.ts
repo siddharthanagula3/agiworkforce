@@ -84,7 +84,7 @@ describe('trust surface — the honest-gap sections stay present', () => {
     const source = read('trust');
     expect(source).toContain('LAST_REVIEWED');
     expect(source).toContain('NEXT_REVIEW');
-    expect(source.match(/asOf: '\d{4}-\d{2}-\d{2}'/gu)?.length ?? 0).toBeGreaterThan(10);
+    expect(source.match(/As of \d{4}-\d{2}-\d{2}/gu)?.length ?? 0).toBeGreaterThan(10);
   });
 
   it('/sla does not promise a named human or a contractual commitment', () => {
