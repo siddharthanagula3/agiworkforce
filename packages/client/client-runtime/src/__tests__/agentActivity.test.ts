@@ -301,6 +301,58 @@ describe('portable agent activity projection', () => {
     expect(next.startedAtMs).toBe(5_000);
   });
 
+  it('closes the writing-response row when a tool call interrupts generation, in order', () => {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(0, { type: 'text-delta', delta: 'Let me check that for you. ' }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(1, {
+        type: 'tool-execution-start',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Searching official sources',
+        input: { query: 'official agent documentation' },
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(2, {
+        type: 'tool-execution-end',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        output: { matches: 1 },
+        isError: false,
+        elapsedMs: 50,
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(3, { type: 'text-delta', delta: 'Here is the answer.' }),
+    );
+
+    expect(state.entries).toHaveLength(3);
+    expect(state.entries[0]).toMatchObject({
+      kind: 'progress',
+      summary: 'Writing response',
+      status: 'completed',
+      completedAtMs: 1_100,
+    });
+    expect(state.entries[1]).toMatchObject({
+      kind: 'tool',
+      id: 'tool:search-1',
+      status: 'completed',
+    });
+    expect(state.entries[2]).toMatchObject({
+      kind: 'progress',
+      summary: 'Writing response',
+      status: 'running',
+    });
+    expect(state.entries[0]!.id).not.toBe(state.entries[2]!.id);
+  });
+
   it('records a terminal error without exposing reasoning or text deltas as activity rows', () => {
     let state = applyAgentActivityEvent(
       undefined,
