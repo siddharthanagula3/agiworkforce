@@ -105,7 +105,7 @@ export function ProjectCard({
           'group relative flex w-full flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
           'hover:bg-[var(--chat-surface-hover)] focus-within:ring-2 focus-within:ring-[var(--chat-accent-secondary)]',
           active
-            ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_rgba(218,119,86,0.18)]'
+            ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--chat-accent-primary)_18%,transparent)]'
             : 'border-[var(--chat-border)]',
           className,
         )}
