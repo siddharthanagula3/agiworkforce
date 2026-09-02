@@ -10,6 +10,7 @@ import type {
   ToolResultBlock,
   ToolUseBlock,
 } from '@agiworkforce/types';
+import { toolStatusPhrase } from './tool-status-phrases';
 
 export interface OpenAIWireToolCall {
   id: string;
@@ -586,9 +587,17 @@ export class OpenAIWireAssembler {
               : chunk.name === 'web_fetch'
                 ? 'fetching'
                 : 'running';
+        const statusPhrase = toolStatusPhrase(chunk.name);
         out.push(
           this.chunkEnvelope(
-            { x_tool_status: { type: 'server_tool_use', name: chunk.name, status } },
+            {
+              x_tool_status: {
+                type: 'server_tool_use',
+                name: chunk.name,
+                status,
+                ...(statusPhrase ? { status_phrase: statusPhrase } : {}),
+              },
+            },
             null,
           ),
         );
