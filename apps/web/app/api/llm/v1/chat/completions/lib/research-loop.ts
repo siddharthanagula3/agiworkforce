@@ -465,6 +465,17 @@ export interface ResearchSourceEntry {
   snippet?: string;
 }
 
+function normalizeSourceUrlKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const path = parsed.pathname.replace(/\/+$/, '');
+    return `${host}${path}${parsed.search}`;
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
 /**
  * Cumulative, URL-deduped source list with stable 1-based positions
  * (insertion order). Re-emitted in full after every round so the client's
@@ -476,14 +487,15 @@ export class SourceAggregator {
   add(entry: { url?: unknown; title?: unknown; snippet?: unknown }): boolean {
     const url = typeof entry.url === 'string' ? entry.url.trim() : '';
     if (!url) return false;
-    const existing = this.byUrl.get(url);
+    const key = normalizeSourceUrlKey(url);
+    const existing = this.byUrl.get(key);
     if (existing) {
       // Backfill a better title/snippet if a later result has one.
       if (!existing.title && typeof entry.title === 'string') existing.title = entry.title;
       if (!existing.snippet && typeof entry.snippet === 'string') existing.snippet = entry.snippet;
       return false;
     }
-    this.byUrl.set(url, {
+    this.byUrl.set(key, {
       url,
       title: typeof entry.title === 'string' && entry.title ? entry.title : url,
       snippet: typeof entry.snippet === 'string' && entry.snippet ? entry.snippet : undefined,
