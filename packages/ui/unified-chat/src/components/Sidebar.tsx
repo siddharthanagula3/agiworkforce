@@ -126,13 +126,6 @@ export function Sidebar() {
           new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'code' } }),
         ),
     },
-    {
-      id: 'settings',
-      icon: <Settings size={18} strokeWidth={1.75} />,
-      label: 'Settings',
-      action: () =>
-        window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'open-settings' } })),
-    },
   ];
 
   const viewToNavId: Record<string, string> = {
