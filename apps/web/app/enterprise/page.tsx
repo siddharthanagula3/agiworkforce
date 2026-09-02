@@ -229,7 +229,7 @@ export default function EnterprisePage() {
           eyebrow="Start the evaluation"
           title="You can start before you talk to us."
           body="Local and BYOK need no contract, no trial, and no seat, so a reviewer can run the product on their own hardware or their own provider key while procurement is still reading. Send the questionnaire whenever you are ready and you will get direct answers, including the ones where the answer is 'not yet'."
-          ctas={[{ href: '/download', label: 'Get AGI Desktop' }]}
+          ctas={[{ href: '/download', label: "See what's live" }]}
         />
 
         <MarketingFooter />

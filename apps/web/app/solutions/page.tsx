@@ -43,7 +43,7 @@ export default function SolutionsPage() {
           titleLines={['Every page below is a different', 'way into the same workspace.']}
           em="the same workspace"
           lede="This page is an index and argues nothing on its own. Each card names the job its page was written for, and behind all of them sits one workspace: the same chat, the same projects, the same connectors, and the same approval prompts."
-          ctas={[{ href: '/download', label: 'Get AGI Desktop' }]}
+          ctas={[{ href: '/download', label: "See what's live" }]}
           modeRibbon={[]}
           visual={
             <ProductFrame

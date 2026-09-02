@@ -42,7 +42,7 @@ export default function StartupsPage() {
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Get AGI Desktop
+              Get the CLI
             </Link>
             <Link href="/pricing" className="agi-fl-cta agi-fl-cta--ghost">
               See Pricing
@@ -107,7 +107,7 @@ export default function StartupsPage() {
           title="Start free, route deliberately."
           body="Run Local and BYOK from day one at no platform cost (Desktop and the CLI are released) and turn on managed cloud whenever you want hosted compute."
           ctas={[
-            { href: '/download', label: 'Get AGI Desktop' },
+            { href: '/download', label: "See what's live" },
             { href: '/cli', label: 'Install the CLI' },
             { href: '/pricing', label: 'See plans' },
           ]}
