@@ -159,12 +159,10 @@ function withoutPreparingProgress(entries: AgentActivityEntry[]): AgentActivityE
     : entries;
 }
 
-function hasRealActiveEntry(entries: readonly AgentActivityEntry[]): boolean {
+function hasRealActivityEntry(entries: readonly AgentActivityEntry[]): boolean {
   return entries.some(
     (entry) =>
-      entry.id !== PREPARING_PROGRESS_ID &&
-      (entry.kind === 'tool' || entry.kind === 'progress') &&
-      (entry.status === 'running' || entry.status === 'awaiting-approval'),
+      entry.id !== PREPARING_PROGRESS_ID && (entry.kind === 'tool' || entry.kind === 'progress'),
   );
 }
 
@@ -358,7 +356,7 @@ export function applyAgentActivityEvent(
 
   next = applyAgentEvent(next, envelope);
 
-  const hasRealActivity = hasRealActiveEntry(next.entries);
+  const hasRealActivity = hasRealActivityEntry(next.entries);
   if (next.status !== 'running' || hasRealActivity) {
     next.entries = withoutPreparingProgress(next.entries);
   } else if (!next.entries.some((entry) => entry.id === PREPARING_PROGRESS_ID)) {
