@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import { X, Code, Layers, Plus } from 'lucide-react';
 import {
   useArtifactsStore,
@@ -1128,8 +1129,9 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
     setMounted(true);
   }, []);
 
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const artifacts = useArtifactsStore((s) => s.artifacts);
-  const { artifacts: indexedArtifacts } = useArtifactIndex();
+  const { artifacts: indexedArtifacts, loaded: indexLoaded } = useArtifactIndex();
 
   /**
    * The gallery's set = locally-derived artifacts ⊕ the account-wide index.
@@ -1180,6 +1182,22 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
     }
     return [...byId.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }, [artifacts, indexedArtifacts]);
+
+  const [tabDefaulted, setTabDefaulted] = useState(false);
+
+  // The default view has to be something to look at. Deciding this before the
+  // index has settled would judge a signed-in visitor's history by a fetch
+  // that has not landed yet, so it waits for auth and the index to both
+  // report in, then decides once: a signed-out visitor, or one whose account
+  // has nothing yet, sees the curated examples instead of an empty box. It
+  // only runs once, so it never overrides a tab the visitor picked themself.
+  useEffect(() => {
+    if (tabDefaulted || !mounted || !authLoaded || !indexLoaded) return;
+    if (!isSignedIn || sortedArtifacts.length === 0) {
+      setActiveTab('inspiration');
+    }
+    setTabDefaulted(true);
+  }, [tabDefaulted, mounted, authLoaded, indexLoaded, isSignedIn, sortedArtifacts.length]);
 
   const normalizedQuery = query.trim().toLowerCase();
 
