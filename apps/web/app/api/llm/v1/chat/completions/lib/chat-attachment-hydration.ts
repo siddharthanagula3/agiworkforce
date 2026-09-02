@@ -46,14 +46,33 @@ export class ChatAttachmentHydrationError extends Error {
  * the request threw away the user's question and every other attachment with
  * it, and named none of them - so the reader could not tell which file to
  * remove or re-attach. Each failure becomes a note the model can answer around.
+ *
+ * A file attached on an earlier turn is weaker still: the reader cannot act on
+ * it at all, because the message carrying it has already been sent. Once one
+ * stored blob rotted, every later turn re-resolved it and died the same way,
+ * and the only way out was abandoning the conversation. So a historical failure
+ * never reaches the reader as an error - it degrades to this note and the turn
+ * proceeds. Only the turn being sent right now can still fail, because that is
+ * the only one whose files the reader can still change.
  */
-function unreadableAttachment(filename: string, reason: string): string {
-  return `[attachment unavailable \u2014 ${filename} could not be read: ${reason}]`;
+function unavailableAttachment(filename: string, note: string): string {
+  return `[attachment unavailable: ${filename} ${note}]`;
 }
 
-const ATTACHMENT_DELETED_REASON = 'it was deleted from your Library';
-const ATTACHMENT_BYTES_MISSING_REASON = 'it is registered but its stored bytes are missing';
-const ATTACHMENT_INTEGRITY_REASON = 'it failed its storage integrity check';
+const ATTACHMENT_REMOVED_NOTE = 'was removed from your Library. Attach it again to include it.';
+const ATTACHMENT_UNREADABLE_NOTE = 'could not be loaded. Attach it again to include it.';
+const ATTACHMENT_UNSUPPORTED_NOTE = 'is not a file type this chat can read.';
+const ATTACHMENT_FOREIGN_NOTE = 'is not available to this account.';
+const ATTACHMENT_OVER_BUDGET_NOTE =
+  'was left out because this conversation has reached its attachment limit.';
+
+/**
+ * Reached before the asset row is read, so there is no filename to print and
+ * inventing one that looks like a filename would be worse than saying less.
+ * Stopping here also bounds the lookups a single request can ask for.
+ */
+const UNNAMED_UNAVAILABLE_NOTE =
+  '[an earlier attachment was left out because this conversation has reached its attachment limit]';
 
 function filenameFromMetadata(metadata: Record<string, unknown>, fallback: string): string {
   const filename = metadata['filename'];
@@ -77,27 +96,20 @@ function joinNotebookSource(value: unknown): string {
  * A notebook's `outputs[].data` carries rendered images as base64 blobs. Sending the raw
  * file would spend the whole request attachment budget on pixels the model cannot use, so
  * only sources and textual outputs cross the wire.
+ *
+ * Null means the bytes are not a notebook at all; an empty string means a notebook with
+ * nothing to say. The caller separates them because only the first is a failure.
  */
-function extractNotebookText(data: Buffer, filename: string): string {
+function extractNotebookText(data: Buffer): string | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data));
   } catch {
-    throw new ChatAttachmentHydrationError(
-      400,
-      'unreadable_attachment',
-      `${filename} is not a readable Jupyter notebook.`,
-    );
+    return null;
   }
 
   const cells = (parsed as { cells?: unknown } | null)?.cells;
-  if (!Array.isArray(cells)) {
-    throw new ChatAttachmentHydrationError(
-      400,
-      'unreadable_attachment',
-      `${filename} does not contain notebook cells.`,
-    );
-  }
+  if (!Array.isArray(cells)) return null;
 
   const parts: string[] = [];
   for (const rawCell of cells) {
@@ -141,136 +153,203 @@ function extractNotebookText(data: Buffer, filename: string): string {
   return `${text.slice(0, MAX_NOTEBOOK_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
 }
 
+type AttachmentSlot = {
+  messageIndex: number;
+  partIndex: number;
+  assetId: string;
+  fromCurrentTurn: boolean;
+  resolved?: AttachmentReferencePart;
+};
+
+function collectAttachmentSlots(messages: HydratableMessage[]): AttachmentSlot[] {
+  let currentTurnIndex = -1;
+  for (let index = 0; index < messages.length; index += 1) {
+    if (messages[index]?.role === 'user') currentTurnIndex = index;
+  }
+
+  const slots: AttachmentSlot[] = [];
+  for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
+    const content = messages[messageIndex]?.content;
+    if (!Array.isArray(content)) continue;
+    for (let partIndex = 0; partIndex < content.length; partIndex += 1) {
+      const part = content[partIndex];
+      const assetId = part?.file?.asset_id;
+      if (part?.type !== 'file' || !assetId) continue;
+      slots.push({
+        messageIndex,
+        partIndex,
+        assetId,
+        fromCurrentTurn: messageIndex === currentTurnIndex,
+      });
+    }
+  }
+  return slots;
+}
+
 export async function hydrateChatAttachments(
   messages: HydratableMessage[],
   userId: string,
 ): Promise<void> {
+  const slots = collectAttachmentSlots(messages);
+  if (slots.length === 0) return;
+
   let attachmentCount = 0;
   let totalBytes = 0;
 
-  for (const message of messages) {
-    if (!Array.isArray(message.content)) continue;
-    const hydrated: AttachmentReferencePart[] = [];
+  /**
+   * The turn being sent goes first so that history cannot spend the budget it
+   * needs. Charging in message order let a long conversation starve the file
+   * the reader just attached, and reported it as that file being too large.
+   */
+  const ordered = [
+    ...slots.filter((slot) => slot.fromCurrentTurn),
+    ...slots.filter((slot) => !slot.fromCurrentTurn),
+  ];
 
-    for (const part of message.content) {
-      const assetId = part.file?.asset_id;
-      if (part.type !== 'file' || !assetId) {
-        hydrated.push(part);
-        continue;
-      }
-      if (message.role !== 'user') {
-        throw new ChatAttachmentHydrationError(
-          400,
-          'invalid_attachment_role',
-          'Only user messages can include file attachments.',
-        );
-      }
+  for (const slot of ordered) {
+    const live = slot.fromCurrentTurn;
+    const degrade = (filename: string, note: string): void => {
+      slot.resolved = { type: 'text', text: unavailableAttachment(filename, note) };
+    };
 
-      attachmentCount += 1;
-      if (attachmentCount > MAX_REQUEST_ATTACHMENT_COUNT) {
+    if (messages[slot.messageIndex]?.role !== 'user') {
+      slot.resolved = { type: 'text', text: UNNAMED_UNAVAILABLE_NOTE };
+      continue;
+    }
+
+    attachmentCount += 1;
+    if (attachmentCount > MAX_REQUEST_ATTACHMENT_COUNT) {
+      if (live) {
         throw new ChatAttachmentHydrationError(
           413,
           'too_many_attachments',
-          `A chat request can include at most ${MAX_REQUEST_ATTACHMENT_COUNT} stored attachments.`,
+          `You can attach up to ${MAX_REQUEST_ATTACHMENT_COUNT} files to one message.`,
         );
       }
+      slot.resolved = { type: 'text', text: UNNAMED_UNAVAILABLE_NOTE };
+      continue;
+    }
 
-      const asset = await getMediaAssetById(assetId);
+    const asset = await getMediaAssetById(slot.assetId);
 
-      if (asset && asset.userId !== userId) {
+    if (asset && asset.userId !== userId) {
+      if (live) {
         throw new ChatAttachmentHydrationError(
           404,
           'attachment_not_found',
           'An attached file is unavailable or does not belong to this account.',
         );
       }
+      degrade(`attachment-${slot.assetId}`, ATTACHMENT_FOREIGN_NOTE);
+      continue;
+    }
 
-      if (!asset || asset.deletedAt || !asset.storagePathname) {
-        hydrated.push({
-          type: 'text',
-          text: unreadableAttachment(
-            asset
-              ? filenameFromMetadata(asset.metadata, `attachment-${asset.id}`)
-              : `attachment-${assetId}`,
-            ATTACHMENT_DELETED_REASON,
-          ),
-        });
-        continue;
-      }
-      const filename = filenameFromMetadata(asset.metadata, `attachment-${asset.id}`);
-      if (!isSupportedChatAttachment(filename, asset.mimeType)) {
+    if (!asset || asset.deletedAt || !asset.storagePathname) {
+      degrade(
+        asset
+          ? filenameFromMetadata(asset.metadata, `attachment-${asset.id}`)
+          : `attachment-${slot.assetId}`,
+        ATTACHMENT_REMOVED_NOTE,
+      );
+      continue;
+    }
+
+    const filename = filenameFromMetadata(asset.metadata, `attachment-${asset.id}`);
+    if (!isSupportedChatAttachment(filename, asset.mimeType)) {
+      if (live) {
         throw new ChatAttachmentHydrationError(
           400,
           'unsupported_attachment',
-          `${filename} is not a supported chat attachment.`,
+          `${filename} is not a file type this chat can read.`,
         );
       }
+      degrade(filename, ATTACHMENT_UNSUPPORTED_NOTE);
+      continue;
+    }
 
-      const object = await readStoredMedia(asset.storagePathname);
-      if (!object) {
-        hydrated.push({
-          type: 'text',
-          text: unreadableAttachment(filename, ATTACHMENT_BYTES_MISSING_REASON),
-        });
-        continue;
-      }
-      if (asset.byteSize != null && object.data.byteLength !== asset.byteSize) {
-        hydrated.push({
-          type: 'text',
-          text: unreadableAttachment(filename, ATTACHMENT_INTEGRITY_REASON),
-        });
-        continue;
-      }
-      totalBytes += object.data.byteLength;
-      if (totalBytes > MAX_REQUEST_ATTACHMENT_BYTES) {
+    const object = await readStoredMedia(asset.storagePathname);
+    if (!object) {
+      degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
+      continue;
+    }
+    if (asset.byteSize != null && object.data.byteLength !== asset.byteSize) {
+      degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
+      continue;
+    }
+
+    if (totalBytes + object.data.byteLength > MAX_REQUEST_ATTACHMENT_BYTES) {
+      if (live) {
         throw new ChatAttachmentHydrationError(
           413,
           'attachment_context_too_large',
-          'Stored attachments in this conversation exceed the 18 MiB provider-safe request limit.',
+          'The files attached to this message are too large to send together. Remove one and try again.',
         );
       }
+      degrade(filename, ATTACHMENT_OVER_BUDGET_NOTE);
+      continue;
+    }
+    totalBytes += object.data.byteLength;
 
-      if (isChatImageMimeType(asset.mimeType)) {
-        hydrated.push({
-          type: 'image_url',
-          image_url: {
-            url: `data:${asset.mimeType};base64,${object.data.toString('base64')}`,
-          },
-        });
-        continue;
-      }
+    if (isChatImageMimeType(asset.mimeType)) {
+      slot.resolved = {
+        type: 'image_url',
+        image_url: {
+          url: `data:${asset.mimeType};base64,${object.data.toString('base64')}`,
+        },
+      };
+      continue;
+    }
 
-      if (isNotebookAttachment(filename, asset.mimeType)) {
-        const notebookText = extractNotebookText(object.data, filename);
-        if (!notebookText) {
-          hydrated.push({
-            type: 'text',
-            text: `[${filename} contains no readable notebook cells]`,
-          });
-          continue;
+    if (isNotebookAttachment(filename, asset.mimeType)) {
+      const notebookText = extractNotebookText(object.data);
+      if (notebookText === null) {
+        if (live) {
+          throw new ChatAttachmentHydrationError(
+            400,
+            'unreadable_attachment',
+            `${filename} is not a readable Jupyter notebook.`,
+          );
         }
-        hydrated.push({
-          type: 'file',
-          file: {
-            filename,
-            mime_type: 'text/plain',
-            file_data: `data:text/plain;base64,${Buffer.from(notebookText, 'utf8').toString('base64')}`,
-          },
-        });
+        degrade(filename, ATTACHMENT_UNREADABLE_NOTE);
         continue;
       }
-
-      const mimeType = normalizeChatDocumentMimeType(asset.mimeType);
-      hydrated.push({
+      if (!notebookText) {
+        slot.resolved = {
+          type: 'text',
+          text: `[${filename} contains no readable notebook cells]`,
+        };
+        continue;
+      }
+      slot.resolved = {
         type: 'file',
         file: {
           filename,
-          mime_type: mimeType,
-          file_data: `data:${mimeType};base64,${object.data.toString('base64')}`,
+          mime_type: 'text/plain',
+          file_data: `data:text/plain;base64,${Buffer.from(notebookText, 'utf8').toString('base64')}`,
         },
-      });
+      };
+      continue;
     }
 
-    message.content = hydrated;
+    const mimeType = normalizeChatDocumentMimeType(asset.mimeType);
+    slot.resolved = {
+      type: 'file',
+      file: {
+        filename,
+        mime_type: mimeType,
+        file_data: `data:${mimeType};base64,${object.data.toString('base64')}`,
+      },
+    };
+  }
+
+  const bySlot = new Map<string, AttachmentSlot>();
+  for (const slot of slots) bySlot.set(`${slot.messageIndex}:${slot.partIndex}`, slot);
+
+  for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
+    const message = messages[messageIndex];
+    if (!message || !Array.isArray(message.content)) continue;
+    message.content = message.content.map(
+      (part, partIndex) => bySlot.get(`${messageIndex}:${partIndex}`)?.resolved ?? part,
+    );
   }
 }
