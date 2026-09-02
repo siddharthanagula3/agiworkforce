@@ -1,9 +1,12 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Prose, Section, Stack } from '@/features/marketing/components/system';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
-  title: 'Writing',
+  title: 'Writing: engineering notes, not content marketing',
   description:
     'We post when we have something to say. Engineering deep-dives, security postures, design notes.',
   path: '/blog',
@@ -11,39 +14,31 @@ export const metadata = buildMetadata({
 
 export default function BlogPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Writing.</h1>
-          <p className="agi-page-lede">
-            We post when we have something to say.{' '}
-            <strong>
-              Engineering deep-dives, security postures, and design notes · not content marketing.
-            </strong>{' '}
-            Posts will appear here when they exist.
-          </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Until then</p>
-          <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Read the{' '}
-            <a href="/changelog" style={{ color: 'var(--agi-ink)' }}>
-              changelog
-            </a>{' '}
-            for what shipped, the{' '}
-            <a href="/about" style={{ color: 'var(--agi-ink)' }}>
-              about page
-            </a>{' '}
-            for who we are, and the{' '}
-            <a href="/security" style={{ color: 'var(--agi-ink)' }}>
-              security page
-            </a>{' '}
-            for the operational posture.
-          </p>
-        </section>
-        <MarketingFooter />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-blog-title"
+          eyebrow="Writing"
+          title="We post when we have something to say."
+          lede="Engineering deep-dives, security postures, and design notes, not content marketing. Posts will appear here when they exist."
+          ctas={[]}
+        />
+
+        <Section id="until-then" labelledBy="agi-blog-until-title" rule>
+          <Stack>
+            <h2 className="agi-ds-h2" id="agi-blog-until-title">
+              Until then.
+            </h2>
+            <Prose>
+              Read the <Link href="/changelog">changelog</Link> for what shipped, the{' '}
+              <Link href="/about">about page</Link> for who we are, and the{' '}
+              <Link href="/security">security page</Link> for the operational posture.
+            </Prose>
+          </Stack>
+        </Section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
