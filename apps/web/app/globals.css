@@ -4011,7 +4011,7 @@ html[data-contrast='more'] *:focus-visible {
   --agi-code-function: #245b96;
   --agi-code-type: #176555;
   --agi-header-sheen: rgba(22, 22, 26, 0.04);
-  --agi-selection-bg: rgba(127, 83, 15, 0.22);
+  --agi-selection-bg: rgba(111, 71, 9, 0.22);
   --agi-selection-text: var(--agi-ink);
   color: var(--agi-ink);
 }
