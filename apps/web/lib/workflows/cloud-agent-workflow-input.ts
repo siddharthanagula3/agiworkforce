@@ -120,6 +120,7 @@ const McpToolSchema = z
     toolName: z.string().min(1),
     description: z.string(),
     origin: z.enum(['operator', 'connector']).optional(),
+    serverLabel: z.string().optional(),
     inputSchema: z.record(z.string(), z.unknown()),
   })
   .strict();
