@@ -4,6 +4,7 @@ import type {
   ResponseOutputFunctionCallItem,
   ResponseOutputItem,
   ResponseOutputMessageItem,
+  ResponseWebSearchAction,
   ResponseWebSearchCallItem,
   ResponsesStreamEvent,
 } from './responses-types';
@@ -23,6 +24,7 @@ interface OpenItem {
 interface WebSearchState {
   id: string;
   status?: ResponseWebSearchCallItem['status'];
+  sources: Set<string>;
 }
 
 export interface OpenAIResponsesStreamDiagnostics {
@@ -74,6 +76,11 @@ function stripOpenAITrackingParam(url: string): string {
   } catch {
     return url;
   }
+}
+
+function actionSources(action: ResponseWebSearchAction | undefined): string[] {
+  if (!action || action.type !== 'search') return [];
+  return (action.sources ?? []).map((source) => stripOpenAITrackingParam(source.url));
 }
 
 function mapIncompleteReason(
@@ -225,9 +232,10 @@ export async function* translateOpenAIResponsesStream(
   }
 
   function updateWebSearch(outputIndex: number, item: ResponseWebSearchCallItem): WebSearchState {
-    const state = webSearches.get(outputIndex) ?? { id: item.id };
+    const state = webSearches.get(outputIndex) ?? { id: item.id, sources: new Set<string>() };
     state.id = item.id;
     state.status = item.status;
+    for (const url of actionSources(item.action)) state.sources.add(url);
     webSearches.set(outputIndex, state);
     return state;
   }
@@ -240,10 +248,11 @@ export async function* translateOpenAIResponsesStream(
     const states = [...webSearches.values()];
     const first = states[0];
     if (!first) return undefined;
-    const content = [...citationTitles.entries()].map(([url, title]) => ({
+    const urls = [...new Set(states.flatMap((state) => [...state.sources]))];
+    const content = urls.map((url) => ({
       type: 'web_search_result',
       url,
-      title,
+      title: citationTitles.get(url) ?? url,
     }));
     return {
       type: 'server-tool-result',
