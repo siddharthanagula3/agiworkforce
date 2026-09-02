@@ -17,6 +17,7 @@ import {
   type UIPlanTier,
   type UsageMeter,
 } from '@agiworkforce/types';
+import { useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { useSettingsStore } from '../stores/settingsStore';
 import { Tooltip } from './ui/Tooltip';
@@ -177,14 +178,12 @@ export function UserProfile({ collapsed }: UserProfileProps) {
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open]);
+  useMenuKeyboard({
+    open,
+    onClose: () => setOpen(false),
+    panelRef: popoverRef,
+    triggerRef,
+  });
 
   function handleUpgradePlan() {
     window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } }));
@@ -211,7 +210,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
         open && 'bg-[var(--chat-surface-hover)]',
         collapsed && 'justify-center px-0',
       )}
-      aria-haspopup="dialog"
+      aria-haspopup="menu"
       aria-expanded={open}
     >
       {avatar}
@@ -242,7 +241,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
       {open && (
         <div
           ref={popoverRef}
-          role="dialog"
+          role="menu"
           aria-label="Account menu"
           className={cn(
             'absolute bottom-full mb-1 left-0 z-50 w-64',
@@ -399,6 +398,8 @@ function MenuButton({
 }: MenuButtonProps) {
   return (
     <button
+      type="button"
+      role="menuitem"
       onClick={onClick}
       className={cn(
         'flex w-full items-center gap-2 rounded-[var(--chat-radius-sm)] px-2 py-1.5 transition-colors',
