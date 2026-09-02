@@ -51,7 +51,7 @@ export default function StartupsPage() {
           <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
             <li>Local · free forever</li>
             <li>BYOK · provider rates</li>
-            <li>Cloud · public alpha</li>
+            <li>Cloud · hosted by us</li>
           </ul>
           <div className="agi-fl-hero-console" aria-hidden="true">
             <ProductFrame
@@ -80,7 +80,7 @@ export default function StartupsPage() {
             {
               meta: 'Cost',
               title: 'Cheap experiments',
-              body: 'Local mode is free. BYOK pays providers at their public rates. Managed compute is opt-in (public alpha), never the default.',
+              body: 'Local mode is free. BYOK pays providers at their public rates. Managed compute is opt-in, never the default.',
             },
           ]}
         />
@@ -105,7 +105,7 @@ export default function StartupsPage() {
         <FinalCta
           eyebrow="Start now"
           title="Start free, route deliberately."
-          body="Run Local and BYOK from day one at no platform cost (Desktop and the CLI are released) and turn on public-alpha managed cloud whenever you want hosted compute."
+          body="Run Local and BYOK from day one at no platform cost (Desktop and the CLI are released) and turn on managed cloud whenever you want hosted compute."
           ctas={[
             { href: '/download', label: 'Get AGI Desktop' },
             { href: '/cli', label: 'Install the CLI' },

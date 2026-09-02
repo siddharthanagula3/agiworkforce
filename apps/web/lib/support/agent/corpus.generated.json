@@ -245,7 +245,7 @@
         "onboarding",
         "install"
       ],
-      "updated": "2026-08-13",
+      "updated": "2026-09-01",
       "source": "content/support/getting-started.md",
       "chunks": [
         {
@@ -253,7 +253,7 @@
           "ordinal": 0,
           "heading": "Create an account and start a chat",
           "headingPath": "Getting started with AGI › Create an account and start a chat",
-          "text": "Sign up at agiworkforce.com, then open the chat surface and send your first message.\nA new account can use AGI managed cloud straight away — managed cloud is in public\nalpha and open by default, so there is no waitlist and no invite code to redeem."
+          "text": "Sign up at agiworkforce.com, then open the chat surface and send your first message.\nA new account can use AGI managed cloud straight away: managed cloud is open by\ndefault, so there is no waitlist and no invite code to redeem."
         },
         {
           "id": "getting-started#1",
@@ -336,7 +336,7 @@
       "tags": [
         "managed cloud",
         "hosted",
-        "public alpha",
+        "open by default",
         "waitlist",
         "usage",
         "metered",
@@ -344,15 +344,15 @@
         "quota",
         "limit"
       ],
-      "updated": "2026-08-05",
+      "updated": "2026-09-01",
       "source": "content/support/managed-cloud.md",
       "chunks": [
         {
           "id": "managed-cloud#0",
           "ordinal": 0,
-          "heading": "Public alpha, open by default",
-          "headingPath": "AGI managed cloud › Public alpha, open by default",
-          "text": "AGI managed cloud is in public alpha and open by default. Sign in and start — there\nis no waitlist for managed cloud and no invite code. Team and Enterprise tiers, with\norganization seats, SSO, and admin controls, are the only waitlisted tiers."
+          "heading": "Open by default",
+          "headingPath": "AGI managed cloud › Open by default",
+          "text": "AGI managed cloud is open by default. Sign in and start: there is no waitlist for\nmanaged cloud and no invite code. Team and Enterprise tiers, with organization\nseats, SSO, and admin controls, are the only waitlisted tiers."
         },
         {
           "id": "managed-cloud#1",

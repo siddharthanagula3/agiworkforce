@@ -4,15 +4,15 @@ title: Getting started with AGI
 path: /help
 category: getting-started
 tags: getting started, first steps, setup, sign in, new account, onboarding, install
-updated: 2026-08-13
+updated: 2026-09-01
 scope: public
 ---
 
 ## Create an account and start a chat
 
 Sign up at agiworkforce.com, then open the chat surface and send your first message.
-A new account can use AGI managed cloud straight away — managed cloud is in public
-alpha and open by default, so there is no waitlist and no invite code to redeem.
+A new account can use AGI managed cloud straight away: managed cloud is open by
+default, so there is no waitlist and no invite code to redeem.
 
 ## The three trust modes
 

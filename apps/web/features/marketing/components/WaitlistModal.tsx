@@ -115,7 +115,7 @@ function WaitlistDialog({
             <DialogTitle className="agi-waitlist-title">You&rsquo;re on the list.</DialogTitle>
             <DialogDescription className="agi-waitlist-lede">
               We&rsquo;ll email you when the Enterprise program opens for your requirements. Managed
-              Cloud is already open in public alpha, and current availability for Local and BYOK is
+              Cloud is already open by default, and current availability for Local and BYOK is
               listed on each surface page. Changed your mind? Record a withdrawal at{' '}
               <a href="/privacy/requests" className="agi-consent-notice-link">
                 /privacy/requests
@@ -128,8 +128,8 @@ function WaitlistDialog({
             <p className="agi-waitlist-eyebrow">Enterprise · early access</p>
             <DialogTitle className="agi-waitlist-title">Discuss Enterprise access</DialogTitle>
             <DialogDescription className="agi-waitlist-lede">
-              Managed Cloud is open in public alpha. Team pricing and current checkout availability
-              are shown on Pricing. This list is for contract-scoped Enterprise requirements such as
+              Managed Cloud is open by default. Team pricing and current checkout availability are
+              shown on Pricing. This list is for contract-scoped Enterprise requirements such as
               SSO, custom retention, and governance controls · no account required.
             </DialogDescription>
 

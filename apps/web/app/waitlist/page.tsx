@@ -7,7 +7,7 @@ import { Reveal } from '@/features/marketing/components/Reveal';
 export const metadata = buildMetadata({
   title: 'AGI Cloud is open: Enterprise governance early access',
   description:
-    'AGI managed cloud is in public alpha and open by default: sign in and start, no waitlist. Pricing shows current Team checkout availability. Join the list for contract-scoped Enterprise SSO, custom retention, and governance requirements.',
+    'AGI managed cloud is open by default: sign in and start, no waitlist. Pricing shows current Team checkout availability. Join the list for contract-scoped Enterprise SSO, custom retention, and governance requirements.',
   path: '/waitlist',
 });
 
@@ -37,7 +37,7 @@ export default function WaitlistPage() {
 
         <section className="agi-fl-hero" aria-labelledby="agi-waitlist-h1">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <p className="agi-fl-eyebrow">AGI Cloud · public alpha</p>
+          <p className="agi-fl-eyebrow">AGI Cloud</p>
           <h1 id="agi-waitlist-h1" className="agi-fl-h1" style={{ maxWidth: '16ch' }}>
             <span className="agi-fl-h1-line">Managed compute,</span>{' '}
             <span className="agi-fl-h1-line">
@@ -45,7 +45,7 @@ export default function WaitlistPage() {
             </span>
           </h1>
           <p className="agi-fl-lede">
-            AGI managed cloud is in public alpha and open by default:{' '}
+            AGI managed cloud is open by default:{' '}
             <a href="/get-started" className="agi-fl-surface-link">
               sign in and start
             </a>

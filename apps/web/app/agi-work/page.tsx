@@ -142,7 +142,7 @@ export default function AgiWorkPage() {
           title="Give AGI Work its first goal."
           body="The composer toggle appears on Pro plans and above; on a plan without the capability the control never renders, so nothing breaks at send time. Once it is there, every run you start is readable end to end at /tasks: goal, plan, tool calls, approvals, and outputs."
           ctas={[{ href: '/pricing', label: 'See which plans include AGI Work' }]}
-          stamp="AGI Work runs on AGI Managed Cloud, which is in public alpha: runs can fail or stall, and behaviour may change."
+          stamp="AGI Work runs on AGI Managed Cloud: runs can fail or stall, and behaviour may change."
         />
 
         <MarketingFooter />

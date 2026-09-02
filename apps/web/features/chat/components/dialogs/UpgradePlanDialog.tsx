@@ -33,7 +33,7 @@ interface UpgradePlanDialogProps {
   targetTier?: UpgradeTarget | null;
   /**
    * Called when the user picks a paid tier. Wires to the real Stripe checkout
-   * flow on the parent. Managed cloud itself is public-alpha-open; this upgrade
+   * flow on the parent. Managed cloud itself is open by default; this upgrade
    * only buys higher hosted capacity, it is not an access gate.
    */
   onUpgrade: (plan: UpgradeTarget, annual: boolean) => void;
@@ -322,8 +322,8 @@ export function UpgradePlanDialog({
                 {focusedPlanLabel ? `Upgrade to ${focusedPlanLabel}` : 'Upgrade your plan'}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Managed cloud is open in public alpha; sign in and start now. Upgrade for higher
-                hosted capacity. Local and BYOK stay free on Desktop and CLI.
+                Managed cloud is open by default; sign in and start now. Upgrade for higher hosted
+                capacity. Local and BYOK stay free on Desktop and CLI.
               </p>
             </div>
             {/* Billing toggle (only meaningful for paid plans) */}
@@ -396,8 +396,8 @@ export function UpgradePlanDialog({
         {/* Footer note */}
         <div className="border-t border-border/60 px-6 py-4">
           <p className="text-center text-[12px] text-muted-foreground">
-            Managed cloud is in public alpha and open by default. Paid tiers add higher hosted
-            capacity. Local and BYOK always remain free on Desktop and CLI.
+            Managed cloud is open by default. Paid tiers add higher hosted capacity. Local and BYOK
+            always remain free on Desktop and CLI.
           </p>
         </div>
       </DialogContent>
