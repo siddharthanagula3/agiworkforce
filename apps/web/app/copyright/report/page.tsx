@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Prose, Section, Stack } from '@/features/marketing/components/system';
+import { Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_SUBJECTS, contactMailto } from '@/lib/legal-constants';
 import { buildMetadata } from '@/lib/seo/metadata';
