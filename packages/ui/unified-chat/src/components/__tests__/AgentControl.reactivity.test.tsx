@@ -41,7 +41,11 @@ describe('AgentControl reactive state', () => {
 
     act(() => useAgentControlStore.getState().setMode('conversation-1', 'auto'));
 
-    expect(screen.getByRole('button', { name: 'Agent mode: Edit automatically' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', {
+        name: 'Agent mode: Edit automatically (overriding project default)',
+      }),
+    ).toBeTruthy();
   });
 
   it('updates the compact effort slider when the conversation override changes', () => {
