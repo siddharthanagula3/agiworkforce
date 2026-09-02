@@ -7,6 +7,7 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 import { VerifyDeviceClient } from '@/app/verify/verify-client';
+import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
 const CARD_STYLE = {
   maxWidth: '30rem',
@@ -41,7 +42,7 @@ function VerifyEmailBody({ email }: { email: string | null }) {
             <Link href="/forgot-password" className="agi-ds-link">
               open the sign-in recovery flow
             </Link>
-            . You can also email contact@agiworkforce.com for account help.
+            . You can also email {CONTACT_EMAIL} for account help.
           </Prose>
         </Stack>
         <ButtonRow>
