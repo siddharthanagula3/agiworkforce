@@ -1470,7 +1470,7 @@ export async function* runResearchLoop(
         break;
       }
 
-      totalSearches += Math.max(1, roundSearchEvents);
+      totalSearches += roundSearchEvents;
       yield encoder.encode(toolStatusEvent('completed', responseModel, round));
       markPlanSteps(roundStepIds, 'completed');
       yield planEvent();
