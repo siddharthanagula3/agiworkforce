@@ -7,11 +7,6 @@ export interface UpstreamErrorShape {
   message: string;
 }
 
-/**
- * The only place a provider failure is turned into words a user reads. The raw
- * upstream text names our tool declarations, request internals and provider
- * account state, so it belongs in the log and nowhere else.
- */
 export function mapClassifiedUpstreamError(
   classified: ClassifiedError,
   provider: string,

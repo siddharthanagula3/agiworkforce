@@ -90,23 +90,6 @@ const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
  */
 const NEVER_ROTATE_CATEGORIES: ReadonlySet<string> = new Set(['billing_exhausted', 'safety']);
 
-/**
- * The one rejection class that rotates without being in
- * `FAILOVER_ELIGIBLE_CATEGORIES`, under conditions narrow enough that it cannot
- * become general 4xx rotation.
- *
- * A provider that refuses the request itself (a tool declaration it will not
- * parse, a parameter it does not know) fails EVERY attempt on that route and no
- * other. The user did not choose that route: Auto did, from a plan whose other
- * candidates are just as able to answer. Retrying the same rejected body on a
- * route the caller picked would be pointless, and rotating after a step has
- * already streamed content would splice two models into one answer, so both are
- * excluded.
- *
- * `invalid_model` stays out of rotation entirely, as it always has, and this
- * does not widen `FAILOVER_ELIGIBLE_CATEGORIES`, which still governs every
- * caller that reports no step context.
- */
 const REQUEST_REJECTION_CATEGORY = 'client_error';
 const REQUEST_REJECTION_STATUS = 400;
 const FIRST_PROVIDER_STEP = 1;
@@ -115,9 +98,7 @@ export function isNeverRotateCategory(category: string): boolean {
   return NEVER_ROTATE_CATEGORIES.has(category);
 }
 
-/** What the caller knows about where in the turn the failure happened. */
 export interface FailoverStepContext {
-  /** 1-based provider step. Rotation for a rejected request needs the first. */
   step: number;
 }
 

@@ -377,15 +377,8 @@ describe('WCAG 2.1 AA contrast ratios · large text and graphics (>= 3:1)', () =
 });
 
 describe('the marketing stage amber clears AA through its own tint', () => {
-  // .agi-dev-badge paints --agi-amber on a --agi-amber-soft pill, so the label
-  // never meets a stage ground directly: it meets a 12% wash of itself over
-  // that ground. #7f530f measured 4.48:1 against the composite axe read on
-  // Home and 4.18:1 over the pearl stage's darkest ground, failing 12px mono
-  // text in both themes.
   const STAGES = ['warm', 'pearl'] as const;
 
-  // Each stage's tokens are split across two rules: one block tunes ink and
-  // amber for both light stages, and each stage then declares its own grounds.
   const stageCascade = (stage: string): string => {
     const selector = `[data-design='agi'] .agi-stage--${stage}`;
     const blocks: string[] = [];
@@ -419,7 +412,6 @@ describe('the marketing stage amber clears AA through its own tint', () => {
     return { rgb: parts.slice(0, 3), alpha: parts[3]! };
   };
 
-  // What the browser paints for a translucent background over an opaque one.
   const compositeOver = (tint: { rgb: number[]; alpha: number }, ground: string): string => {
     const base = channels(ground);
     return `#${tint.rgb
