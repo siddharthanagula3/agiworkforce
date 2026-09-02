@@ -39,7 +39,7 @@ import {
 import { generatedFileTrustBoundary } from '../MessageGeneratedFiles';
 import { GeneratedFileCard } from '../GeneratedFileCard';
 import { ArtifactRenderer, type NativeExportFormat } from '../ArtifactRenderer';
-import { Button } from '@agiworkforce/ui';
+import { Button, useConfirmAction } from '@agiworkforce/ui';
 
 type OriginFilter = 'all' | 'generated' | 'uploaded';
 type KindFilter = 'all' | 'image' | 'video' | 'file';
@@ -220,11 +220,10 @@ export function LibraryView({
   const [mutationErrors, setMutationErrors] = useState<Record<string, string>>({});
   const [unavailableIds, setUnavailableIds] = useState<ReadonlySet<string>>(() => new Set());
   const [viewDeleted, setViewDeleted] = useState(false);
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const { confirm: confirmDelete, dialog: confirmDeleteDialog } = useConfirmAction();
   const [confirmingPermanentDeleteId, setConfirmingPermanentDeleteId] = useState<string | null>(
     null,
   );
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [permanentlyDeletingId, setPermanentlyDeletingId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [openArtifactIds, setOpenArtifactIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -378,7 +377,6 @@ export function LibraryView({
 
   const handleDelete = useCallback(
     async (id: string) => {
-      setDeletingId(id);
       setMutationErrors((prev) => {
         const next = { ...prev };
         delete next[id];
@@ -388,14 +386,11 @@ export function LibraryView({
         const res = await transport.deleteItem(id);
         await requireSuccessfulMutation(res);
         setPage((prev) => ({ ...prev, items: prev.items.filter((it) => it.id !== id) }));
-        setConfirmingDeleteId(null);
       } catch (err) {
         setMutationErrors((prev) => ({
           ...prev,
           [id]: err instanceof Error ? err.message : String(err),
         }));
-      } finally {
-        setDeletingId(null);
       }
     },
     [transport],
@@ -501,6 +496,7 @@ export function LibraryView({
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6" data-testid="library-view">
+      {confirmDeleteDialog}
       <header className="flex flex-col gap-1">
         <h1 className="font-[var(--chat-font-serif)] text-[28px] font-medium text-[var(--chat-text-primary)]">
           Library
@@ -712,38 +708,18 @@ export function LibraryView({
                       </button>
                     </div>
                   )
-                ) : confirmingDeleteId === item.id ? (
-                  <div
-                    className="rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-2"
-                    role="group"
-                    aria-label={`Delete ${item.file_name}`}
-                  >
-                    <p className="text-xs text-[var(--chat-text-secondary)]">
-                      Move to Recently deleted? You can restore it for 30 days.
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setConfirmingDeleteId(null)}
-                        disabled={deletingId === item.id}
-                        className="text-xs font-medium text-[var(--chat-text-secondary)] underline underline-offset-2 disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(item.id)}
-                        disabled={deletingId === item.id}
-                        className="text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2 disabled:opacity-50"
-                      >
-                        {deletingId === item.id ? 'Deleting…' : 'Move to Recently deleted'}
-                      </button>
-                    </div>
-                  </div>
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setConfirmingDeleteId(item.id)}
+                    onClick={() =>
+                      confirmDelete({
+                        title: `Delete “${item.file_name}”?`,
+                        description:
+                          'This moves the file to Recently deleted. You can restore it for 30 days before it is permanently removed.',
+                        confirmLabel: 'Delete',
+                        onConfirm: () => handleDelete(item.id),
+                      })
+                    }
                     className="flex min-h-6 self-start items-center gap-1 py-1 text-xs font-medium text-[var(--chat-destructive-text)] underline underline-offset-2"
                     aria-label={`Delete ${item.file_name}`}
                   >

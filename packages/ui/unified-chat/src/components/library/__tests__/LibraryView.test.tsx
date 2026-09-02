@@ -145,7 +145,7 @@ describe('shared LibraryView', () => {
     expect(screen.getByText(/restore it for 30 days/i)).toBeTruthy();
     expect(transport.deleteItem).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move to Recently deleted' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(transport.deleteItem).toHaveBeenCalledWith('asset-1'));
     await waitFor(() => expect(screen.queryByText('quarterly-report.pdf')).toBeNull());
   });
