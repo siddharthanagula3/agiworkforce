@@ -571,6 +571,24 @@ function validCanonicalSources(sources: FetchedSource[]): FetchedSource[] {
   });
 }
 
+const SOURCE_URL_TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|msclkid|ref|mc_[ce]id)$/i;
+
+function normalizedSourceUrlKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    if (parsed.pathname.length > 1) {
+      parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+    }
+    for (const key of Array.from(new Set(parsed.searchParams.keys()))) {
+      if (SOURCE_URL_TRACKING_PARAM_PATTERN.test(key)) parsed.searchParams.delete(key);
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 function urlFetchDomainPhrase(args: Record<string, unknown> | undefined): string | undefined {
   const raw = args?.['url'];
   if (typeof raw !== 'string') return undefined;
@@ -2178,18 +2196,20 @@ export async function* runToolLoop(
 
       const turnSourceCount = () => fetchedSources.length + searchedSources.length;
 
-      if (
-        source &&
-        turnSourceCount() < turnSourceBudget &&
-        !fetchedSources.some((s) => s.url === source.url)
-      ) {
-        fetchedSources.push(source);
-        sourcesAdded = true;
+      if (source && turnSourceCount() < turnSourceBudget) {
+        const sourceKey = normalizedSourceUrlKey(source.url);
+        if (!fetchedSources.some((s) => normalizedSourceUrlKey(s.url) === sourceKey)) {
+          fetchedSources.push(source);
+          sourcesAdded = true;
+        }
       }
 
       for (const s of sources ?? []) {
         if (turnSourceCount() >= turnSourceBudget) break;
-        if (!searchedSources.some((existing) => existing.url === s.url)) {
+        const sourceKey = normalizedSourceUrlKey(s.url);
+        if (
+          !searchedSources.some((existing) => normalizedSourceUrlKey(existing.url) === sourceKey)
+        ) {
           searchedSources.push(s);
           searchSourcesAdded = true;
         }
