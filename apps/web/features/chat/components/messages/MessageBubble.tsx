@@ -2448,7 +2448,7 @@ const MessageBubbleComponent = function MessageBubble({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align={isUser ? 'end' : 'start'}>
                     {/* Edit moved OUT of this menu into the persistent hover
-                        action row above, same convention as Branch below — one
+                        action row above, same convention as Branch below: one
                         control, one place. Do not re-add it here. */}
                     {/*
                       Report an answer as harmful or inaccurate. The web app had

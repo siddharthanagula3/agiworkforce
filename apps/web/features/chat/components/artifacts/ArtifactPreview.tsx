@@ -1339,7 +1339,7 @@ if (__AgiApp) {
           {/* RIGHT: controls composed per artifact type (claude.ai parity).
               - renderable (html/react/svg): Copy · Download · Refresh · Open · Fullscreen · Close
               - mermaid: Copy · Download (+ SVG once rendered) · Open · Fullscreen · Close (no
-                Refresh — the client-side renderer has no frame to re-mount)
+                Refresh: the client-side renderer has no frame to re-mount)
               - binary doc (pdf/docx): Download · Refresh · Close  (no Copy — content is an opaque data URI)
               - code / markdown doc: Copy · Download · Close
               External + Fullscreen collapse on narrow (375px) widths. */}
@@ -1668,7 +1668,7 @@ if (__AgiApp) {
               </div>
             ))}
 
-          {/* Preview: Mermaid — client-side renderer, no sandbox iframe needed. */}
+          {/* Preview: Mermaid, client-side renderer, no sandbox iframe needed. */}
           {showPreview &&
             isMermaid &&
             (activeContent.trim().length === 0 ? (
@@ -1995,7 +1995,7 @@ if (__AgiApp) {
           </TabsContent>
         )}
 
-        {/* Preview Tab · Mermaid — client-side renderer, no sandbox iframe. */}
+        {/* Preview Tab · Mermaid, client-side renderer, no sandbox iframe. */}
         {isMermaid && (
           <TabsContent value="preview" className="m-0 p-0">
             {renderMermaidPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
