@@ -53,7 +53,7 @@ describe('/apps navigation', () => {
       join(__dirname, '..', 'integrations', 'page.tsx'),
       'utf8',
     );
-    expect(integrationsSource).toContain('href="/apps"');
+    expect(integrationsSource).toContain("href: '/apps'");
 
     for (const call of replace.mock.calls) {
       expect(String(call[0]).startsWith('/integrations')).toBe(false);
