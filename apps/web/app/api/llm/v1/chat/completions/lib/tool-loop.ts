@@ -1149,12 +1149,24 @@ export async function collectProviderStream(stream: ReadableStream): Promise<{
         if (Array.isArray(searchResultsContent) && pendingServerWebSearchTools.length > 0) {
           const now = Date.now();
           const sources = serverToolResultSources(searchResultsContent);
-          serverToolResults = pendingServerWebSearchTools.splice(0).map((pending) => ({
-            toolCallId: pending.toolCallId,
-            name: pending.name,
-            sources,
-            elapsedMs: Math.max(0, now - pending.startedAt),
-          }));
+          const resolved = pendingServerWebSearchTools.splice(0);
+          const attributed = resolved[0];
+          if (attributed) {
+            serverToolResults = [
+              {
+                toolCallId: attributed.toolCallId,
+                name: attributed.name,
+                sources,
+                elapsedMs: Math.max(0, now - attributed.startedAt),
+              },
+              ...resolved.slice(1).map((pending) => ({
+                toolCallId: pending.toolCallId,
+                name: pending.name,
+                sources: [] as FetchedSource[],
+                elapsedMs: Math.max(0, now - pending.startedAt),
+              })),
+            ];
+          }
         }
 
         lines.push({ line: raw + '\n', publicTextDelta, serverToolStart, serverToolResults });
