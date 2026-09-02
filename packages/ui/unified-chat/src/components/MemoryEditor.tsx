@@ -274,7 +274,7 @@ export function MemoryEditor({
                         type="button"
                         onClick={() => onBeginEdit(fact)}
                         disabled={fact.pending}
-                        className="text-left text-sm text-[var(--chat-text-primary)] focus:outline-none disabled:cursor-default"
+                        className="text-left text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)] disabled:cursor-default"
                         aria-label={`Edit memory: ${fact.text}`}
                       >
                         {fact.text}
