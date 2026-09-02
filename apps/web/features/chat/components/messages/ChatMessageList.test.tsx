@@ -780,9 +780,16 @@ describe('ChatMessageList Continue Generation', () => {
     expect(continueButton()).toBeInTheDocument();
   });
 
-  it("shows Continue for a user-stopped last message with partial content ('stopped')", () => {
-    render(<ChatMessageList messages={truncatedThread('stopped')} onContinue={vi.fn()} />);
-    expect(continueButton()).toBeInTheDocument();
+  it("shows the stopped notice, not Continue, for a user-stopped last message with partial content ('stopped')", () => {
+    render(
+      <ChatMessageList
+        messages={truncatedThread('stopped')}
+        onContinue={vi.fn()}
+        onRegenerate={vi.fn()}
+      />,
+    );
+    expect(continueButton()).not.toBeInTheDocument();
+    expect(screen.getByText('Response stopped.')).toBeInTheDocument();
   });
 
   it('calls onContinue with the last assistant message id', () => {
