@@ -12,6 +12,7 @@ import {
   SurfaceStatus,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Mobile: local chat that stays on your phone',
@@ -44,7 +45,7 @@ export default function MobilePage() {
             <SurfaceStatus
               state="absent"
               name="AGI Mobile"
-              detail="No listing on the App Store or Google Play. The runtimes and drawer described below are built and running on-device; neither store submission is published."
+              detail={`${SURFACE_STATUS.mobile}. No listing on the App Store or Google Play. The runtimes and drawer described below are built and running on-device; neither store submission is published.`}
             />
           </Stack>
         </Section>
