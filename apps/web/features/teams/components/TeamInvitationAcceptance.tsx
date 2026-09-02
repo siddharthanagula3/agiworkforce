@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useAuth } from '@clerk/nextjs';
 import { CheckCircle2, MailCheck, ShieldCheck, XCircle } from 'lucide-react';
 import { z } from 'zod';
