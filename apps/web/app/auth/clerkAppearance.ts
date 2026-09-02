@@ -2,8 +2,7 @@
 // instead of duplicating their hex codes. AuthShell always renders the sign-in
 // card inside that scope, so these are never evaluated outside it. `var()` is
 // Clerk's documented pattern for a value that must track a CSS custom
-// property. The primary fill is the ledger system's ink-on-ground pairing
-// (--agi-button-bg / --agi-button-ink), not the retired amber accent.
+// property.
 export const agiClerkAppearance = {
   variables: {
     colorPrimary: 'var(--agi-button-bg)',
