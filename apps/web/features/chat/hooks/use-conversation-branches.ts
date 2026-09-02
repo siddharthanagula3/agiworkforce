@@ -12,6 +12,8 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { toUserMessage } from '@/lib/user-error-message';
+import { logger } from '@shared/lib/logger';
 import { toast } from 'sonner';
 
 type BranchGroupsByMessageId = Readonly<Record<string, ManagedCloudConversationBranchGroup>>;
@@ -66,9 +68,7 @@ export function useConversationBranches(
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        toast.error(
-          error instanceof Error ? error.message : 'Could not load conversation branches',
-        );
+        logger.warn('[useConversationBranches] Failed to load branch groups', error);
       });
 
     return () => controller.abort();
@@ -117,9 +117,7 @@ export function useConversationBranches(
         toast.success('Conversation branch created');
         router.push(`/chat/${conversation.id}`);
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : 'Could not create conversation branch',
-        );
+        toast.error(toUserMessage(error, 'Could not create conversation branch'));
       } finally {
         setBranchingMessageId(null);
       }
