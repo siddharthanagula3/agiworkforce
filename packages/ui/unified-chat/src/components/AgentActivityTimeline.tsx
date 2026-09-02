@@ -563,9 +563,7 @@ export function AgentActivityTimeline({
                     requiresApproval={entry.status === 'awaiting-approval'}
                     args={asRecord(entry.input)}
                     result={connectRequest ? undefined : asResult(entry.output)}
-                    error={
-                      connectRequest || entry.error === entry.summary ? undefined : entry.error
-                    }
+                    errorDetail={connectRequest ? undefined : entry.error}
                     elapsedMs={entry.elapsedMs}
                     startedAt={entry.status === 'running' ? entry.startedAtMs : undefined}
                     kind={categoryToKind(entry.category)}

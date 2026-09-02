@@ -23,6 +23,7 @@ export interface ToolCallCardProps {
   showParameters?: boolean;
   result?: string;
   error?: string;
+  errorDetail?: string;
   elapsedMs?: number;
   startedAt?: number;
   kind?: InlineToolKind;
@@ -291,6 +292,7 @@ const ToolCallCardComponent = ({
   showParameters = true,
   result,
   error,
+  errorDetail,
   elapsedMs,
   startedAt,
   kind,
@@ -353,7 +355,9 @@ const ToolCallCardComponent = ({
     showApprovalPrompt ||
     showExpiredApproval ||
     (showParameters && (hasArgs || commandText)) ||
-    result ? (
+    result ||
+    errorDetail ||
+    error ? (
       <div className="space-y-2 -m-4 p-2">
         {showExpiredApproval && (
           <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-border">
@@ -440,18 +444,18 @@ const ToolCallCardComponent = ({
           </div>
         )}
 
-        {error && (
+        {(errorDetail ?? error) && (
           <div>
             <p className="text-[12px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Error
             </p>
             <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-red-400 scrollbar-thin">
-              {error}
+              {errorDetail ?? error}
             </pre>
           </div>
         )}
 
-        {showParameters && !hasArgs && !commandText && !result && !error && (
+        {showParameters && !hasArgs && !commandText && !result && !error && !errorDetail && (
           <p className="text-xs text-muted-foreground italic px-1">No parameters</p>
         )}
       </div>
