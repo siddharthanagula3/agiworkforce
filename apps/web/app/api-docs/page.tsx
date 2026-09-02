@@ -1,10 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 
 export const metadata = buildMetadata({
-  title: 'API docs',
+  title: 'API docs: the OpenAI-compatible gateway',
   description:
     'API reference for the AGI gateway. OpenAI-compatible endpoints, BYOK across providers.',
   path: '/api-docs',
@@ -12,63 +13,63 @@ export const metadata = buildMetadata({
 
 export default function ApiDocsPage() {
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">API docs.</h1>
-          <p className="agi-page-lede">
-            OpenAI-compatible endpoints. Bring your own key, route to any of the wired providers,
-            stream tokens back.{' '}
-            <strong>The gateway is the same engine the apps use; the API just exposes it.</strong>
-          </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Quick start</p>
-          <div className="agi-terminal">
-            <div className="agi-terminal-bar">curl example</div>
-            <pre className="agi-terminal-pre">
-              <span className="agi-terminal-prompt">$ </span>curl
-              https://agiworkforce.com/api/llm/v1/chat/completions {'\\'}
-              {'\n'}
-              {'    '}-H &quot;Authorization: Bearer $YOUR_KEY&quot; {'\\'}
-              {'\n'}
-              {'    '}-H &quot;Content-Type: application/json&quot; {'\\'}
-              {'\n'}
-              {'    '}-d &apos;{'{'} &quot;model&quot;: &quot;auto&quot;, &quot;messages&quot;: [
-              {'{'}&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;hello&quot;{'}'}]{' '}
-              {'}'}&apos;
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-api-docs-title"
+          eyebrow="API docs"
+          title="OpenAI-compatible endpoints."
+          lede="Bring your own key, route to any of the wired providers, stream tokens back. The gateway is the same engine the apps use; the API just exposes it."
+          ctas={[]}
+        />
+
+        <Section id="quickstart" labelledBy="agi-api-docs-quickstart-title" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-api-docs-quickstart-title">
+              Quick start.
+            </h2>
+            <pre className="agi-ds-prose" data-size="sm" style={{ overflowX: 'auto' }}>
+              {`$ curl https://agiworkforce.com/api/llm/v1/chat/completions \\
+    -H "Authorization: Bearer $YOUR_KEY" \\
+    -H "Content-Type: application/json" \\
+    -d '{ "model": "auto", "messages": [{"role":"user","content":"hello"}] }'`}
             </pre>
-          </div>
-          <p className="agi-page-lede" style={{ marginTop: 16, marginBottom: 0 }}>
-            Two credentials reach this API and they are not interchangeable. An AGI API key (
-            <code>sk_live_…</code>, issued under Settings → API Keys) authenticates the model
-            catalog, audio transcriptions, and the credit balance. Chat completions and embeddings
-            take a session bearer token. Every operation in the bundle below names the credential it
-            accepts.
-          </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">Reference</p>
-          <p className="agi-page-lede" style={{ marginTop: 0, marginBottom: 24 }}>
-            The OpenAPI 3 bundle is published. It describes every endpoint that ships and the
-            credential each one takes. There is no Postman collection and no client SDK — call the
-            REST endpoints directly.
-          </p>
-          <div className="agi-cta-row">
-            <a href="/openapi.json" className="agi-cta-primary">
-              OpenAPI bundle
-            </a>
-            <Link href="/docs/byok-env" className="agi-cta-ghost">
-              BYOK setup
-            </Link>
-            <Link href="/waitlist" className="agi-cta-ghost">
-              Enterprise SSO early access →
-            </Link>
-          </div>
-        </section>
-        <MarketingFooter condensed />
+            <Prose>
+              Two credentials reach this API and they are not interchangeable. An AGI API key (
+              <code>sk_live_…</code>, issued under Settings, API Keys) authenticates the model
+              catalog, audio transcriptions, and the credit balance. Chat completions and embeddings
+              take a session bearer token. Every operation in the bundle below names the credential
+              it accepts.
+            </Prose>
+          </Stack>
+        </Section>
+
+        <Section id="reference" labelledBy="agi-api-docs-reference-title" rule ground="2">
+          <Stack gap="loose">
+            <div>
+              <h2 className="agi-ds-h2" id="agi-api-docs-reference-title">
+                Reference.
+              </h2>
+              <Prose>
+                The OpenAPI 3 bundle is published. It describes every endpoint that ships and the
+                credential each one takes. There is no Postman collection and no client SDK, call
+                the REST endpoints directly.
+              </Prose>
+            </div>
+            <ButtonRow>
+              <Button href="/openapi.json">OpenAPI bundle</Button>
+              <Button href="/docs/byok-env" variant="secondary">
+                BYOK setup
+              </Button>
+              <Button href="/waitlist" variant="secondary">
+                Enterprise SSO early access
+              </Button>
+            </ButtonRow>
+          </Stack>
+        </Section>
       </main>
+      <MarketingFooter condensed />
     </div>
   );
 }
