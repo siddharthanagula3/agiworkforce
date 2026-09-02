@@ -11,7 +11,6 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { POSITIONING } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Get started: from zero to a working chat',
@@ -35,7 +34,11 @@ export default function GetStartedPage() {
           lede={
             <>
               Five minutes from zero to a working chat across multiple providers.{' '}
-              <strong>{POSITIONING.trustBoundary}</strong>
+              <strong>
+                Website users can use AGI managed cloud, with a small free cap (called Auto Economy)
+                and higher-capacity paid plans rolling out. Local and BYOK are supported on desktop
+                and developer surfaces. Managed cloud is open by default, not invite-only.
+              </strong>
             </>
           }
           ctas={[
