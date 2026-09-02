@@ -7,6 +7,7 @@ import { CheckCircle2, MailCheck, ShieldCheck, XCircle } from 'lucide-react';
 import { z } from 'zod';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Button, ButtonRow, Eyebrow, Stack } from '@/features/marketing/components/system';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -89,173 +90,159 @@ export function TeamInvitationAcceptance() {
   }
 
   const cardStyle = {
-    background: 'var(--bg-elev)',
-    border: '1px solid var(--settings-border, var(--border))',
-    borderRadius: 'var(--radius-xl)',
-    boxShadow: '0 24px 80px color-mix(in srgb, #000 24%, transparent)',
+    background: 'var(--agi-card)',
+    border: '1px solid var(--agi-rule-strong)',
+    borderRadius: 'var(--agi-radius-frame)',
+    boxShadow: '0 24px 80px var(--agi-shadow)',
     margin: '72px auto 96px',
     maxWidth: 560,
     padding: 'clamp(24px, 5vw, 42px)',
   } as const;
 
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
         <section style={cardStyle} aria-labelledby="team-invitation-title">
-          <div
-            aria-hidden="true"
-            style={{
-              alignItems: 'center',
-              background:
-                'color-mix(in srgb, var(--chat-accent-primary, #c8892a) 14%, transparent)',
-              borderRadius: 16,
-              color: 'var(--chat-accent-primary-text)',
-              display: 'flex',
-              height: 48,
-              justifyContent: 'center',
-              marginBottom: 22,
-              width: 48,
-            }}
-          >
-            <MailCheck size={24} />
-          </div>
-          <p className="agi-fl-eyebrow" style={{ marginBottom: 10 }}>
-            AGI Team invitation
-          </p>
-          <h1
-            id="team-invitation-title"
-            style={{
-              color: 'var(--text-1)',
-              fontFamily: 'var(--serif)',
-              fontSize: 'clamp(30px, 5vw, 44px)',
-              fontWeight: 500,
-              letterSpacing: '-0.03em',
-              lineHeight: 1.05,
-              margin: 0,
-            }}
-          >
-            Join the workspace
-          </h1>
-
-          {!tokenReady || !isLoaded ? (
-            <p role="status" style={{ color: 'var(--text-3)', lineHeight: 1.6, marginTop: 20 }}>
-              Checking your invitation…
-            </p>
-          ) : completion ? (
-            <div style={{ marginTop: 24 }}>
-              <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
-                {completion.action === 'accept' ? (
-                  <CheckCircle2 color="var(--success, #22c55e)" size={22} />
-                ) : (
-                  <XCircle color="var(--text-3)" size={22} />
-                )}
-                <p style={{ color: 'var(--text-1)', fontSize: 16, fontWeight: 650, margin: 0 }}>
-                  {completion.action === 'accept'
-                    ? `Invitation accepted${completion.role ? ` as ${completion.role}` : ''}.`
-                    : 'Invitation declined.'}
-                </p>
-              </div>
-              {completion.action === 'accept' ? (
-                <a
-                  href="/settings/team"
-                  className="agi-fl-cta agi-fl-cta--primary"
-                  style={{ display: 'inline-flex', marginTop: 22 }}
-                >
-                  Open Team settings
-                </a>
-              ) : (
-                <Link
-                  href="/"
-                  className="agi-fl-cta agi-fl-cta--primary"
-                  style={{ display: 'inline-flex', marginTop: 22 }}
-                >
-                  Return to AGI
-                </Link>
-              )}
-            </div>
-          ) : !token ? (
-            <div style={{ marginTop: 22 }}>
-              <p role="alert" style={{ color: 'var(--text-2)', lineHeight: 1.6 }}>
-                This invitation link is missing or incomplete. Ask the workspace administrator for a
-                new private link.
-              </p>
-              <Link href="/" className="agi-fl-cta agi-fl-cta--secondary">
-                Return to AGI
-              </Link>
-            </div>
-          ) : !isSignedIn ? (
-            <div style={{ marginTop: 22 }}>
-              <p style={{ color: 'var(--text-2)', lineHeight: 1.6 }}>
-                Sign in with the exact email address that received this invitation. Your private
-                token stays in this browser tab while you authenticate.
-              </p>
-              <div className="agi-fl-cta-row">
-                <Link href="/login?redirectTo=%2Finvite" className="agi-fl-cta agi-fl-cta--primary">
-                  Sign in to continue
-                </Link>
-                <Link
-                  href="/signup?redirectTo=%2Finvite"
-                  className="agi-fl-cta agi-fl-cta--secondary"
-                >
-                  Create account
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginTop: 22 }}>
-              <p style={{ color: 'var(--text-2)', lineHeight: 1.6 }}>
-                Accepting adds this account to the workspace with the role chosen by its
-                administrator and makes it active. You can switch back to Personal or another
-                workspace from the account menu.
-              </p>
+          <Stack gap="loose">
+            <div>
               <div
+                aria-hidden="true"
                 style={{
-                  alignItems: 'flex-start',
-                  background: 'var(--bg-base)',
-                  border: '1px solid var(--settings-border, var(--border))',
-                  borderRadius: 'var(--radius-lg)',
-                  color: 'var(--text-3)',
+                  alignItems: 'center',
+                  background: 'var(--agi-ground-2)',
+                  border: '1px solid var(--agi-rule)',
+                  borderRadius: 16,
+                  color: 'var(--agi-ink)',
                   display: 'flex',
-                  fontSize: 13,
-                  gap: 10,
-                  lineHeight: 1.55,
-                  margin: '20px 0',
-                  padding: 14,
+                  height: 48,
+                  justifyContent: 'center',
+                  marginBottom: 22,
+                  width: 48,
                 }}
               >
-                <ShieldCheck size={18} style={{ flexShrink: 0 }} />
-                The invitation is bound to the invited email. A forwarded link cannot grant access
-                to a different signed-in account.
+                <MailCheck size={24} />
               </div>
-              {error ? (
-                <p role="alert" style={{ color: 'var(--settings-destructive-text)' }}>
-                  {error}
-                </p>
-              ) : null}
-              <div className="agi-fl-cta-row">
-                <button
-                  type="button"
-                  className="agi-fl-cta agi-fl-cta--primary"
-                  disabled={pendingAction !== null}
-                  onClick={() => void respond('accept')}
-                >
-                  {pendingAction === 'accept' ? 'Joining…' : 'Accept invitation'}
-                </button>
-                <button
-                  type="button"
-                  className="agi-fl-cta agi-fl-cta--secondary"
-                  disabled={pendingAction !== null}
-                  onClick={() => void respond('decline')}
-                >
-                  {pendingAction === 'decline' ? 'Declining…' : 'Decline'}
-                </button>
-              </div>
+              <Eyebrow>AGI team invitation</Eyebrow>
+              <h1 className="agi-ds-h1" id="team-invitation-title">
+                Join the workspace.
+              </h1>
             </div>
-          )}
+
+            {!tokenReady || !isLoaded ? (
+              <p className="agi-ds-prose" data-size="sm" role="status">
+                Checking your invitation…
+              </p>
+            ) : completion ? (
+              <Stack gap="tight">
+                <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
+                  {completion.action === 'accept' ? (
+                    <CheckCircle2 color="var(--agi-success)" size={22} />
+                  ) : (
+                    <XCircle color="var(--agi-ink-2)" size={22} />
+                  )}
+                  <p className="agi-ds-prose" style={{ margin: 0, fontWeight: 650 }}>
+                    {completion.action === 'accept'
+                      ? `Invitation accepted${completion.role ? ` as ${completion.role}` : ''}.`
+                      : 'Invitation declined.'}
+                  </p>
+                </div>
+                {completion.action === 'accept' ? (
+                  <ButtonRow>
+                    <Button href="/settings/team">Open team settings</Button>
+                  </ButtonRow>
+                ) : (
+                  <ButtonRow>
+                    <Button href="/">Return to AGI</Button>
+                  </ButtonRow>
+                )}
+              </Stack>
+            ) : !token ? (
+              <Stack gap="tight">
+                <p className="agi-ds-prose" data-size="sm" role="alert">
+                  This invitation link is missing or incomplete. Ask the workspace administrator for
+                  a new private link.
+                </p>
+                <ButtonRow>
+                  <Button href="/" variant="secondary">
+                    Return to AGI
+                  </Button>
+                </ButtonRow>
+              </Stack>
+            ) : !isSignedIn ? (
+              <Stack gap="tight">
+                <p className="agi-ds-prose" data-size="sm">
+                  Sign in with the exact email address that received this invitation. Your private
+                  token stays in this browser tab while you authenticate.
+                </p>
+                <ButtonRow>
+                  <Button href="/login?redirectTo=%2Finvite">Sign in to continue</Button>
+                  <Button href="/signup?redirectTo=%2Finvite" variant="secondary">
+                    Create account
+                  </Button>
+                </ButtonRow>
+              </Stack>
+            ) : (
+              <Stack gap="tight">
+                <p className="agi-ds-prose" data-size="sm">
+                  Accepting adds this account to the workspace with the role chosen by its
+                  administrator and makes it active. You can switch back to Personal or another
+                  workspace from the account menu.
+                </p>
+                <div
+                  style={{
+                    alignItems: 'flex-start',
+                    background: 'var(--agi-ground-2)',
+                    border: '1px solid var(--agi-rule)',
+                    borderRadius: 'var(--agi-radius-frame)',
+                    color: 'var(--agi-ink-2)',
+                    display: 'flex',
+                    fontSize: 13,
+                    gap: 10,
+                    lineHeight: 1.55,
+                    padding: 14,
+                  }}
+                >
+                  <ShieldCheck size={18} style={{ flexShrink: 0 }} />
+                  The invitation is bound to the invited email. A forwarded link cannot grant access
+                  to a different signed-in account.
+                </div>
+                {error ? (
+                  <p
+                    className="agi-ds-prose"
+                    data-size="sm"
+                    role="alert"
+                    style={{ color: 'var(--agi-error)' }}
+                  >
+                    {error}
+                  </p>
+                ) : null}
+                <ButtonRow>
+                  <button
+                    type="button"
+                    className="agi-ds-btn"
+                    data-variant="primary"
+                    disabled={pendingAction !== null}
+                    onClick={() => void respond('accept')}
+                  >
+                    {pendingAction === 'accept' ? 'Joining…' : 'Accept invitation'}
+                  </button>
+                  <button
+                    type="button"
+                    className="agi-ds-btn"
+                    data-variant="secondary"
+                    disabled={pendingAction !== null}
+                    onClick={() => void respond('decline')}
+                  >
+                    {pendingAction === 'decline' ? 'Declining…' : 'Decline'}
+                  </button>
+                </ButtonRow>
+              </Stack>
+            )}
+          </Stack>
         </section>
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }
