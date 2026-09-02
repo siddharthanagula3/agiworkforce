@@ -24,7 +24,7 @@ describe('inline tool-call demo harness', () => {
   it('stays unreachable in production builds', () => {
     vi.stubEnv('NODE_ENV', 'production');
     try {
-      expect(InlineToolCallDemoPage()).toBeNull();
+      expect(() => InlineToolCallDemoPage()).toThrow(/NEXT_HTTP_ERROR_FALLBACK;404/);
     } finally {
       vi.unstubAllEnvs();
     }
