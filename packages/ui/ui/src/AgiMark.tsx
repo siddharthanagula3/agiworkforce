@@ -31,7 +31,7 @@ export function AgiMark({
   size = 24,
   mono = false,
   spinning = false,
-  accent = 'currentColor',
+  accent = 'var(--agi-amber, currentColor)',
   ariaLabel,
   className,
   style,
