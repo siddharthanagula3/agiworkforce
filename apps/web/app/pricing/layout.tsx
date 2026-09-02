@@ -1,9 +1,14 @@
+// `app/pricing/page.tsx` is a client component, so it cannot export
+// `metadata` itself; this layout is pricing's only metadata source.
 import { Metadata } from 'next';
 
+const TITLE = 'Pricing: what each plan and each route costs';
+const DESCRIPTION =
+  'AGI public alpha pricing for Free, Basic, Pro, Max 5x, Max 15x, Team, and Enterprise, with Local and BYOK choices kept separate from managed cloud.';
+
 export const metadata: Metadata = {
-  title: 'Pricing | AGI Cloud, Local, and BYOK plans',
-  description:
-    'AGI public alpha pricing for Free, Basic, Pro, Max 5x, Max 15x, Team, and Enterprise, with Local and BYOK choices kept separate from Managed Cloud.',
+  title: TITLE,
+  description: DESCRIPTION,
   keywords: [
     'AI pricing',
     'AI agent plans',
@@ -15,9 +20,8 @@ export const metadata: Metadata = {
     'enterprise AI',
   ],
   openGraph: {
-    title: 'Pricing | AGI Cloud, Local, and BYOK plans',
-    description:
-      'Compare Free, Basic, Pro, Max 5x, Max 15x, Team, and Enterprise while keeping Local and BYOK separate from Managed Cloud.',
+    title: TITLE,
+    description: DESCRIPTION,
     type: 'website',
     url: 'https://agiworkforce.com/pricing',
     images: [
@@ -31,8 +35,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pricing | AGI Cloud, Local, and BYOK plans',
-    description: 'Compare AGI Managed Cloud plans and the separate Local and BYOK choices.',
+    title: TITLE,
+    description: DESCRIPTION,
     images: ['/api/og'],
     creator: '@agiworkforce',
   },
