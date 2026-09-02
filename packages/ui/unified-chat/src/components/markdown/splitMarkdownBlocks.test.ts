@@ -403,11 +403,27 @@ describe('splitMarkdownBlocks — boundary safety', () => {
     expect(split.tail).toBe('Penultimate paragraph.\n\nTrailing paragraph.');
   });
 
-  it('strips a comment that only becomes visible after an inner comment is removed', () => {
+  it('counts a tag that a comment beside a bogus comment leaves exposed', () => {
+    const tailSource = lines(
+      '<!-- lead --><!<!-- inner -->-- outer <div> -->',
+      '',
+      'After comment.',
+      '',
+      'Penultimate paragraph.',
+      '',
+      'Trailing paragraph.',
+    );
+    const split = settleFully(lines('Before comment.', '', tailSource));
+
+    expect(split.settled.map((block) => block.source)).toEqual(['Before comment.\n\n']);
+    expect(split.tail).toBe(tailSource);
+  });
+
+  it('counts nothing for void or self-closing tags inside an html comment', () => {
     const source = lines(
       'Before comment.',
       '',
-      '<!-- lead --><!<!-- inner -->-- outer <div> -->',
+      '<!-- <br> <my-el /> --><span>after the comment</span>',
       '',
       'After comment.',
       '',
@@ -419,6 +435,24 @@ describe('splitMarkdownBlocks — boundary safety', () => {
 
     expect(split.settled).toHaveLength(3);
     expect(split.tail).toBe('Penultimate paragraph.\n\nTrailing paragraph.');
+  });
+
+  it('counts a tag after an unterminated comment, so the block holding it never settles', () => {
+    const source = lines(
+      'Before comment.',
+      '',
+      'Prose with <!-- never closed <div> inside it.',
+      '',
+      'After comment.',
+      '',
+      'Penultimate paragraph.',
+      '',
+      'Trailing paragraph.',
+    );
+    const split = settleFully(source);
+
+    expect(split.settled.map((block) => block.source)).toEqual(['Before comment.\n\n']);
+    expect(split.tail.startsWith('Prose with <!-- never closed <div> inside it.')).toBe(true);
   });
 
   it('ignores container tags that only appear inside a code fence', () => {
