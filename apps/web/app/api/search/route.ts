@@ -231,11 +231,6 @@ async function handleGet(request: NextRequest) {
     msgParams.push(endDate);
   }
 
-  // The four scopes below (sessions, projects, files, messages) are
-  // independent reads with no data dependency between them, so running them
-  // sequentially only ever added their round trips together. In practice the
-  // message scan is the slow one — Promise.all overlaps it with the other
-  // three instead of paying for it on top of them.
   const [sessionRows, projectRows, fileRows, messageRows] = await Promise.all([
     db.query<SessionRow>(
       `select id, title, created_at, updated_at
