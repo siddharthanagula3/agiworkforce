@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Header } from '@shared/components/layout/Header';
 import { SuccessState } from '@shared/components/SuccessState';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 import { toUserMessage } from '@/lib/user-error-message';
 
 interface DeviceAuthorizationDetails {
@@ -235,9 +236,11 @@ function DeviceForm() {
     }
   }
 
+  const cardStyle = { maxWidth: '30rem', width: '100%', marginInline: 'auto' } as const;
+
   if (approved) {
     return (
-      <section className="agi-device-auth-card" aria-labelledby="device-auth-title">
+      <section aria-labelledby="device-auth-title" style={cardStyle}>
         <h1 id="device-auth-title" className="sr-only">
           {t('auth:device.approvedTitle')}
         </h1>
@@ -256,137 +259,212 @@ function DeviceForm() {
   }
 
   return (
-    <section className="agi-device-auth-card" aria-labelledby="device-auth-title">
-      <p className="agi-section-eyebrow">{t('auth:device.eyebrow')}</p>
-      <h1 id="device-auth-title" className="agi-device-auth-title">
-        {t('auth:device.title')}
-      </h1>
-      <p className="agi-device-auth-lede">
-        {t('auth:device.lede')} <strong>{t('auth:device.ledeWarning')}</strong>
-      </p>
-      {isLoaded && !isSignedIn ? (
-        <div role="alert" className="agi-device-auth-alert agi-device-auth-alert--error">
-          {t('auth:device.signInFirst')} <Link href={signInHref}>{t('common:navSignIn')}</Link>
+    <section aria-labelledby="device-auth-title" style={cardStyle}>
+      <Stack gap="loose">
+        <div>
+          <Eyebrow>{t('auth:device.eyebrow')}</Eyebrow>
+          <h1 className="agi-ds-h1" id="device-auth-title">
+            {t('auth:device.title')}
+          </h1>
         </div>
-      ) : null}
-      {isLoaded && isSignedIn ? (
-        <div className="agi-device-auth-account" aria-label={t('auth:device.accountRegion')}>
-          <div>
-            <span>{t('auth:device.approvingAs')}</span>
-            <strong>{accountName || accountEmail || t('auth:device.signedInFallback')}</strong>
-            {accountEmail && accountEmail !== accountName ? <small>{accountEmail}</small> : null}
-          </div>
-          <button
-            type="button"
-            onClick={() => void onSwitchAccount()}
-            disabled={switchingAccount}
-            // .agi-device-auth-account button (globals.css) renders this as
-            // zero-padding text at 0.76rem — under the 24px target minimum in
-            // the block axis. The pseudo-element grows the hit area without
-            // touching the visual, matching AttachmentPreview.tsx's pattern.
-            className="relative before:absolute before:-inset-2 before:content-['']"
+        <Prose>
+          {t('auth:device.lede')} <strong>{t('auth:device.ledeWarning')}</strong>
+        </Prose>
+        {isLoaded && !isSignedIn ? (
+          <div
+            role="alert"
+            style={{
+              border: '1px solid var(--agi-rule)',
+              borderRadius: 'var(--agi-radius-frame)',
+              color: 'var(--agi-error)',
+              padding: 'var(--agi-space-2)',
+              fontSize: 'var(--agi-text-sm)',
+            }}
           >
-            {switchingAccount ? t('auth:device.switching') : t('auth:device.useDifferentAccount')}
-          </button>
-        </div>
-      ) : null}
-      <form onSubmit={onSubmit} className="agi-device-auth-form">
-        <label htmlFor="device-code">{t('auth:device.codeLabel')}</label>
-        <input
-          id="device-code"
-          name="user_code"
-          type="text"
-          value={code}
-          onChange={(e) => {
-            setCode(formatUserCode(e.target.value));
-            setMessage(null);
-            setTermsReviewHref(null);
-          }}
-          required
-          placeholder="ABCD-1234"
-          autoComplete="off"
-          inputMode="text"
-          pattern="[A-Z0-9]{4}-[A-Z0-9]{4}"
-          maxLength={9}
-          className="agi-device-auth-code"
-        />
-        {lookupState === 'loading' ? (
-          <p role="status" className="agi-device-auth-lookup">
-            {t('auth:device.verifyingApp')}
-          </p>
+            {t('auth:device.signInFirst')}{' '}
+            <Link href={signInHref} className="agi-ds-link">
+              {t('common:navSignIn')}
+            </Link>
+          </div>
         ) : null}
-        {lookupState === 'error' && lookupError ? (
-          <p role="alert" className="agi-device-auth-lookup">
-            {lookupError}
-          </p>
+        {isLoaded && isSignedIn ? (
+          <div className="agi-ds-account-row" aria-label={t('auth:device.accountRegion')}>
+            <div>
+              <span
+                style={{
+                  display: 'block',
+                  fontSize: 'var(--agi-text-xs)',
+                  color: 'var(--agi-ink-2)',
+                }}
+              >
+                {t('auth:device.approvingAs')}
+              </span>
+              <strong style={{ color: 'var(--agi-ink)' }}>
+                {accountName || accountEmail || t('auth:device.signedInFallback')}
+              </strong>
+              {accountEmail && accountEmail !== accountName ? (
+                <small style={{ display: 'block', color: 'var(--agi-ink-2)' }}>
+                  {accountEmail}
+                </small>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => void onSwitchAccount()}
+              disabled={switchingAccount}
+              // Zero-padding text at 0.76rem falls under the 24px target minimum
+              // in the block axis. The pseudo-element grows the hit area without
+              // touching the visual, matching AttachmentPreview.tsx's pattern.
+              className="relative before:absolute before:-inset-2 before:content-[''] agi-ds-link"
+              style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer' }}
+            >
+              {switchingAccount ? t('auth:device.switching') : t('auth:device.useDifferentAccount')}
+            </button>
+          </div>
         ) : null}
-        {lookupState === 'ready' && details ? (
-          <section className="agi-device-auth-request" aria-labelledby="device-auth-request-title">
-            <span>{t('auth:device.verifiedRequestingApp')}</span>
-            <h2 id="device-auth-request-title">{details.client.name}</h2>
-            <p>{t('auth:device.approvalGrants')}</p>
-            <ul>
-              {details.scopes.map((scope) => (
-                <li key={scope.id}>
-                  <strong>{scope.label}</strong>
-                  <small>{scope.description}</small>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-        {message && (
-          <p role={message.type === 'error' ? 'alert' : 'status'} data-message-type={message.type}>
-            {message.text}
-          </p>
-        )}
-        {termsReviewHref ? (
-          <Link href={termsReviewHref} className="agi-link">
-            Review current policies
-          </Link>
-        ) : null}
-        <button
-          type="submit"
-          disabled={
-            loading ||
-            !hasCompleteCode ||
-            !isLoaded ||
-            (isLoaded && !isSignedIn) ||
-            lookupState !== 'ready'
-          }
-          className="agi-cta-primary agi-device-auth-submit"
+        <form
+          onSubmit={onSubmit}
+          style={{ display: 'grid', gap: 'var(--agi-space-2)', width: '100%' }}
         >
-          {!isLoaded
-            ? t('auth:device.checking')
-            : isSignedIn
-              ? loading
-                ? t('auth:device.approving')
-                : lookupState === 'loading'
-                  ? t('auth:device.verifyingRequest')
-                  : t('auth:device.approve')
-              : t('auth:device.signInRequired')}
-        </button>
-      </form>
-      <div className="agi-device-auth-note">
-        <strong>{t('auth:device.cloudNoteHeading')}</strong> {t('auth:device.cloudNoteBody')}
-        {!isDesktopSurface ? (
-          <>
-            {' '}
-            <Link href="/pricing">{t('auth:device.comparePlans')}</Link>
-          </>
-        ) : null}
-      </div>
-      <p className="agi-device-auth-cancel">
-        {isDesktopSurface ? (
-          t('auth:device.closeToCancel')
-        ) : (
-          <Link href="/">{t('common:cancel')}</Link>
-        )}
-      </p>
-      <p className="agi-device-auth-legal">
-        {t('auth:device.legalPrefix')} <Link href="/terms">{t('auth:device.termsLink')}</Link>{' '}
-        {t('auth:and')} <Link href="/privacy">{t('auth:device.privacyLink')}</Link>.
-      </p>
+          <label
+            htmlFor="device-code"
+            style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}
+          >
+            {t('auth:device.codeLabel')}
+          </label>
+          <input
+            id="device-code"
+            name="user_code"
+            type="text"
+            value={code}
+            onChange={(e) => {
+              setCode(formatUserCode(e.target.value));
+              setMessage(null);
+              setTermsReviewHref(null);
+            }}
+            required
+            placeholder="ABCD-1234"
+            autoComplete="off"
+            inputMode="text"
+            pattern="[A-Z0-9]{4}-[A-Z0-9]{4}"
+            maxLength={9}
+            className="agi-ds-code-input"
+          />
+          {lookupState === 'loading' ? (
+            <p role="status" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}>
+              {t('auth:device.verifyingApp')}
+            </p>
+          ) : null}
+          {lookupState === 'error' && lookupError ? (
+            <p role="alert" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-error)' }}>
+              {lookupError}
+            </p>
+          ) : null}
+          {lookupState === 'ready' && details ? (
+            <section
+              aria-labelledby="device-auth-request-title"
+              style={{
+                display: 'grid',
+                gap: 'var(--agi-space-1)',
+                padding: 'var(--agi-space-2) var(--agi-space-3)',
+                border: '1px solid var(--agi-rule)',
+                borderRadius: 'var(--agi-radius-frame)',
+              }}
+            >
+              <span style={{ fontSize: 'var(--agi-text-xs)', color: 'var(--agi-ink-2)' }}>
+                {t('auth:device.verifiedRequestingApp')}
+              </span>
+              <h2 id="device-auth-request-title" className="agi-ds-h3">
+                {details.client.name}
+              </h2>
+              <p style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-2)' }}>
+                {t('auth:device.approvalGrants')}
+              </p>
+              <ul style={{ display: 'grid', gap: 'var(--agi-space-1)', margin: 0, padding: 0 }}>
+                {details.scopes.map((scope) => (
+                  <li key={scope.id} style={{ listStyle: 'none' }}>
+                    <strong style={{ color: 'var(--agi-ink)' }}>{scope.label}</strong>{' '}
+                    <small style={{ color: 'var(--agi-ink-2)' }}>{scope.description}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {message && (
+            <p
+              role={message.type === 'error' ? 'alert' : 'status'}
+              data-message-type={message.type}
+              style={{
+                fontSize: 'var(--agi-text-sm)',
+                color: message.type === 'error' ? 'var(--agi-error)' : 'var(--agi-ink)',
+              }}
+            >
+              {message.text}
+            </p>
+          )}
+          {termsReviewHref ? (
+            <Link href={termsReviewHref} className="agi-ds-link">
+              Review current policies
+            </Link>
+          ) : null}
+          <button
+            type="submit"
+            disabled={
+              loading ||
+              !hasCompleteCode ||
+              !isLoaded ||
+              (isLoaded && !isSignedIn) ||
+              lookupState !== 'ready'
+            }
+            className="agi-ds-btn"
+            data-variant="primary"
+          >
+            {!isLoaded
+              ? t('auth:device.checking')
+              : isSignedIn
+                ? loading
+                  ? t('auth:device.approving')
+                  : lookupState === 'loading'
+                    ? t('auth:device.verifyingRequest')
+                    : t('auth:device.approve')
+                : t('auth:device.signInRequired')}
+          </button>
+        </form>
+        <Prose size="sm">
+          <strong style={{ color: 'var(--agi-ink)' }}>{t('auth:device.cloudNoteHeading')}</strong>{' '}
+          {t('auth:device.cloudNoteBody')}
+          {!isDesktopSurface ? (
+            <>
+              {' '}
+              <Link href="/pricing" className="agi-ds-link">
+                {t('auth:device.comparePlans')}
+              </Link>
+            </>
+          ) : null}
+        </Prose>
+        <p style={{ fontSize: 'var(--agi-text-sm)', textAlign: 'center' }}>
+          {isDesktopSurface ? (
+            t('auth:device.closeToCancel')
+          ) : (
+            <Link href="/" className="agi-ds-link">
+              {t('common:cancel')}
+            </Link>
+          )}
+        </p>
+        <p
+          style={{ fontSize: 'var(--agi-text-xs)', color: 'var(--agi-ink-2)', textAlign: 'center' }}
+        >
+          {t('auth:device.legalPrefix')}{' '}
+          <Link href="/terms" className="agi-ds-link">
+            {t('auth:device.termsLink')}
+          </Link>{' '}
+          {t('auth:and')}{' '}
+          <Link href="/privacy" className="agi-ds-link">
+            {t('auth:device.privacyLink')}
+          </Link>
+          .
+        </p>
+      </Stack>
     </section>
   );
 }
@@ -397,18 +475,31 @@ function DeviceAuthContent() {
 
   if (isDesktopSurface) {
     return (
-      <main className="agi-device-auth-desktop-shell" data-testid="desktop-device-auth-shell">
-        <div className="agi-device-auth-stage">
-          <DeviceForm />
-        </div>
+      <main
+        style={{
+          minHeight: '100vh',
+          display: 'grid',
+          placeItems: 'center',
+          padding: 'var(--agi-space-4) var(--agi-gutter)',
+          background: 'var(--agi-ground)',
+        }}
+        data-testid="desktop-device-auth-shell"
+      >
+        <DeviceForm />
       </main>
     );
   }
 
   return (
-    <main className="agi-shell">
+    <main id="main-content">
       <Header minimal />
-      <div className="agi-device-auth-stage">
+      <div
+        style={{
+          display: 'grid',
+          placeItems: 'center',
+          padding: 'var(--agi-section-y-md) var(--agi-gutter)',
+        }}
+      >
         <DeviceForm />
       </div>
       <MarketingFooter />
@@ -418,7 +509,7 @@ function DeviceAuthContent() {
 
 export default function AuthDevicePage() {
   return (
-    <div data-design="agi">
+    <div data-design="agi" className="agi-ds-page">
       <Suspense fallback={null}>
         <DeviceAuthContent />
       </Suspense>
