@@ -381,6 +381,7 @@ export function CheckpointManager({
                       <button
                         type="button"
                         title="Restore to this checkpoint"
+                        aria-label="Restore to this checkpoint"
                         disabled={restoring}
                         onClick={() => setConfirm({ open: true, type: 'restore', checkpoint })}
                         className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
@@ -391,6 +392,7 @@ export function CheckpointManager({
                         <button
                           type="button"
                           title="Fork from this checkpoint"
+                          aria-label="Fork from this checkpoint"
                           onClick={() => handleFork(checkpoint)}
                           className="rounded p-1 text-muted-foreground hover:text-foreground"
                         >
@@ -400,6 +402,7 @@ export function CheckpointManager({
                       <button
                         type="button"
                         title="Delete checkpoint"
+                        aria-label="Delete checkpoint"
                         onClick={() => setConfirm({ open: true, type: 'delete', checkpoint })}
                         className="rounded p-1 text-muted-foreground hover:text-danger"
                       >
