@@ -11,8 +11,6 @@ export interface ProjectedCloudAgentWorkflowEvent {
   sse: string;
 }
 
-// This projector rebuilds the wire from named deltas rather than forwarding
-// the chunk verbatim; a delta absent here never reaches the durable stream.
 function extractGeneratedFilesDeltas(
   chunk: Uint8Array,
 ): ReturnType<typeof parseGeneratedFilesDelta> {
@@ -29,7 +27,7 @@ function extractGeneratedFilesDeltas(
         files.push(...parseGeneratedFilesDelta(choice.delta?.x_generated_files));
       }
     } catch {
-      // Non-JSON/custom SSE lines carry no generated-file delta.
+      continue;
     }
   }
   return files;
