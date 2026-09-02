@@ -139,11 +139,27 @@ export interface StartAgentActivityLocallyOptions {
 
 const LOCAL_START_PROGRESS_ID = 'progress:local-starting';
 const GENERATION_PROGRESS_ID = 'progress:generation';
+const PREPARING_PROGRESS_ID = 'progress:preparing';
 
 function withoutGenerationProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
   return entries.some((entry) => entry.id === GENERATION_PROGRESS_ID)
     ? entries.filter((entry) => entry.id !== GENERATION_PROGRESS_ID)
     : entries;
+}
+
+function withoutPreparingProgress(entries: AgentActivityEntry[]): AgentActivityEntry[] {
+  return entries.some((entry) => entry.id === PREPARING_PROGRESS_ID)
+    ? entries.filter((entry) => entry.id !== PREPARING_PROGRESS_ID)
+    : entries;
+}
+
+function hasRealActiveEntry(entries: readonly AgentActivityEntry[]): boolean {
+  return entries.some(
+    (entry) =>
+      entry.id !== PREPARING_PROGRESS_ID &&
+      (entry.kind === 'tool' || entry.kind === 'progress') &&
+      (entry.status === 'running' || entry.status === 'awaiting-approval'),
+  );
 }
 
 export function startAgentActivityLocally(
@@ -277,6 +293,32 @@ export function applyAgentActivityEvent(
     updatedAtMs: envelope.emittedAtMs,
     entries: previous.entries,
   };
+
+  next = applyAgentEvent(next, envelope);
+
+  const hasRealActivity = hasRealActiveEntry(next.entries);
+  if (next.status !== 'running' || hasRealActivity) {
+    next.entries = withoutPreparingProgress(next.entries);
+  } else if (!next.entries.some((entry) => entry.id === PREPARING_PROGRESS_ID)) {
+    next.entries = [
+      ...next.entries,
+      {
+        kind: 'progress',
+        id: PREPARING_PROGRESS_ID,
+        progressId: 'preparing',
+        summary: 'Preparing',
+        status: 'running',
+        startedAtMs: envelope.emittedAtMs,
+      },
+    ];
+  }
+  return next;
+}
+
+function applyAgentEvent(
+  next: AgentActivityState,
+  envelope: AgentEventEnvelope,
+): AgentActivityState {
   const event = envelope.event;
 
   switch (event.type) {
