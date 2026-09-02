@@ -94,6 +94,17 @@ export async function beginMcpAuthorization(
   const state = generateOAuthState();
   const provider = new McpOAuthClientProvider({ mcpUrl, state });
 
+  if (!provider.redirectUrl) {
+    return {
+      status: 'error',
+      reason: 'no-client-identity',
+      message:
+        'This deployment has no public HTTPS origin configured, so it cannot publish a client ' +
+        'identity or receive an OAuth callback. Set CONNECTOR_OAUTH_REDIRECT_BASE_URL to a public ' +
+        'HTTPS URL.',
+    };
+  }
+
   let result: Awaited<ReturnType<typeof auth>>;
   try {
     result = await auth(provider, {
