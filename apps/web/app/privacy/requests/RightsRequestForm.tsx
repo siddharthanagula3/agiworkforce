@@ -110,9 +110,9 @@ export function RightsRequestForm() {
 
   if (reference) {
     return (
-      <div className="agi-callout" role="status">
-        <h3 className="agi-callout-h">Request recorded, reference {reference}</h3>
-        <p className="agi-callout-p">
+      <div className="agi-ds-stack" data-gap="tight" role="status">
+        <h3 className="agi-ds-h3">Request recorded, reference {reference}</h3>
+        <p className="agi-ds-prose" data-size="sm">
           Keep that reference; quoting it saves you describing the request again.{' '}
           {operatorNotified ? (
             <>
