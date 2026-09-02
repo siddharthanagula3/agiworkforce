@@ -67,7 +67,7 @@ describe('TeamInvitationAcceptance', () => {
       }),
     );
     expect(window.sessionStorage.getItem('agi.team.invitation-token')).toBeNull();
-    const teamSettingsLink = screen.getByRole('link', { name: 'Open Team settings' });
+    const teamSettingsLink = screen.getByRole('link', { name: 'Open team settings' });
     expect(teamSettingsLink).toHaveAttribute('href', '/settings/team');
     expect(teamSettingsLink).not.toHaveAttribute('data-next-link');
   });

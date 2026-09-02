@@ -148,7 +148,9 @@ export function TeamInvitationAcceptance() {
                 </div>
                 {completion.action === 'accept' ? (
                   <ButtonRow>
-                    <Button href="/settings/team">Open team settings</Button>
+                    <a href="/settings/team" className="agi-ds-btn" data-variant="primary">
+                      Open team settings
+                    </a>
                   </ButtonRow>
                 ) : (
                   <ButtonRow>
