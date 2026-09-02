@@ -35,6 +35,9 @@ import { parseGeminiStream, translateGeminiStream } from './stream';
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
 
+const HEADERS_TIMEOUT_MS = 30_000;
+const GROUNDED_HEADERS_TIMEOUT_MS = 120_000;
+
 const GOOGLE_AUTH_METHODS: readonly AuthMethod[] = [
   {
     kind: 'api-key',
@@ -97,10 +100,14 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
         '',
       )}/v1beta/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
 
+      const hasServerSideTools = (req.rawVendorTools?.length ?? 0) > 0;
+      const headersTimeoutMs = hasServerSideTools
+        ? GROUNDED_HEADERS_TIMEOUT_MS
+        : HEADERS_TIMEOUT_MS;
+
       let res: Response;
       try {
-        const HEADERS_TIMEOUT_MS = 30_000;
-        const combinedSignal = AbortSignal.any([signal, AbortSignal.timeout(HEADERS_TIMEOUT_MS)]);
+        const combinedSignal = AbortSignal.any([signal, AbortSignal.timeout(headersTimeoutMs)]);
         res = await fetchFn(url, {
           method: 'POST',
           headers: {
