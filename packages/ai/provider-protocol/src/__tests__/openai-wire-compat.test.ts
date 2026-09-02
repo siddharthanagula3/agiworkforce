@@ -245,7 +245,12 @@ describe('OpenAIWireAssembler streaming', () => {
     });
 
     expect((started.at(-1) as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
-      x_tool_status: { type: 'server_tool_use', name: 'web_search', status: 'searching' },
+      x_tool_status: {
+        type: 'server_tool_use',
+        name: 'web_search',
+        status: 'searching',
+        status_phrase: 'Searching the web',
+      },
     });
     expect((completed[0] as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
       x_search_results: {
