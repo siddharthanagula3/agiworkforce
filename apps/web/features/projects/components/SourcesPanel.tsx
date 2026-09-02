@@ -17,6 +17,24 @@ type SortOrder = 'newest' | 'oldest';
 
 type LoadState = 'loading' | 'loaded' | 'error';
 
+const SOURCES_LOAD_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Timed out loading sources.')), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 type UploadState =
   | { status: 'idle' }
   | { status: 'uploading'; fileName: string; progress: number }
@@ -42,13 +60,14 @@ export function SourcesPanel({ projectId }: Props) {
   const [addSourcesOpen, setAddSourcesOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [retryToken, setRetryToken] = useState(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoadState('loading');
-    listProjectKnowledgeFiles(projectId)
+    withTimeout(listProjectKnowledgeFiles(projectId), SOURCES_LOAD_TIMEOUT_MS)
       .then((loadedFiles) => {
         if (cancelled) return;
         setFiles(loadedFiles);
@@ -60,7 +79,7 @@ export function SourcesPanel({ projectId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, retryToken]);
 
   async function handleDelete(file: ProjectKnowledgeFile) {
     const previous = files;
@@ -198,16 +217,36 @@ export function SourcesPanel({ projectId }: Props) {
 
       {/* Error state */}
       {loadState === 'error' && (
-        <p
+        <div
           style={{
-            fontSize: 12,
-            color: 'var(--agi-ink-2)',
-            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 10,
             padding: '40px 0',
           }}
         >
-          Failed to load sources.
-        </p>
+          <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', textAlign: 'center', margin: 0 }}>
+            Failed to load sources.
+          </p>
+          <button
+            type="button"
+            data-testid="sources-retry"
+            onClick={() => setRetryToken((token) => token + 1)}
+            style={{
+              padding: '6px 16px',
+              borderRadius: 9999,
+              border: '1px solid var(--agi-rule-strong)',
+              background: 'transparent',
+              color: 'var(--agi-ink-2)',
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       {/* Empty state (ChatGPT-style) */}

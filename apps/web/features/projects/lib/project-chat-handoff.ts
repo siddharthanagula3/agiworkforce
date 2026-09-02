@@ -32,6 +32,26 @@ const ProjectChatHandoffSchema = z.object({
           deliverable: z.string().max(20_000).optional(),
         })
         .optional(),
+      mcpContext: z
+        .object({
+          prompt: z
+            .object({
+              connectorId: z.string(),
+              name: z.string(),
+              arguments: z.record(z.string()).optional(),
+            })
+            .optional(),
+          resources: z
+            .array(
+              z.object({
+                connectorId: z.string(),
+                uri: z.string(),
+                name: z.string().optional(),
+              }),
+            )
+            .optional(),
+        })
+        .optional(),
     })
     .strict(),
 });
@@ -69,7 +89,7 @@ export function saveProjectChatHandoff(
     projectId: input.projectId,
     attachmentCount: input.attachments?.length ?? 0,
     skillId: input.skillId,
-    meta: { ...input.meta, projectId: input.projectId, workMode: 'agiwork' },
+    meta: { ...input.meta, projectId: input.projectId },
   });
   if (input.attachments?.length) pendingAttachments.set(id, [...input.attachments]);
   try {
