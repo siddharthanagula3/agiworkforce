@@ -1,9 +1,9 @@
 'use client';
 
 import { useAuth } from '@clerk/nextjs';
-import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Button, ButtonRow, Eyebrow, Prose, Stack } from '@/features/marketing/components/system';
 
 const RETURN_PATH = '/auth/chrome-extension';
 const SIGN_IN_PATH = `/login?redirectTo=${encodeURIComponent(RETURN_PATH)}`;
@@ -12,48 +12,58 @@ export default function ChromeExtensionAuthCompletePage() {
   const { isLoaded, isSignedIn } = useAuth();
 
   return (
-    <div data-design="agi">
-      <main className="agi-shell">
-        <Header minimal />
-        <div className="agi-device-auth-stage">
-          <section className="agi-device-auth-card" aria-labelledby="chrome-auth-title">
-            <p className="agi-section-eyebrow">AGI for Chrome</p>
-            <h1 id="chrome-auth-title" className="agi-device-auth-title">
-              {!isLoaded
-                ? 'Checking your account.'
-                : isSignedIn
-                  ? 'Chrome is connected.'
-                  : 'Sign in to continue.'}
-            </h1>
+    <div data-design="agi" className="agi-ds-page">
+      <Header minimal />
+      <main id="main-content">
+        <section
+          aria-labelledby="chrome-auth-title"
+          style={{
+            maxWidth: '30rem',
+            width: '100%',
+            marginInline: 'auto',
+            padding: 'var(--agi-section-y-md) var(--agi-gutter)',
+          }}
+        >
+          <Stack gap="loose">
+            <div>
+              <Eyebrow>AGI for Chrome</Eyebrow>
+              <h1 className="agi-ds-h1" id="chrome-auth-title">
+                {!isLoaded
+                  ? 'Checking your account.'
+                  : isSignedIn
+                    ? 'Chrome is connected.'
+                    : 'Sign in to continue.'}
+              </h1>
+            </div>
             {!isLoaded ? (
-              <p role="status" className="agi-device-auth-lede">
+              <p className="agi-ds-prose" role="status">
                 Checking your AGI Cloud session…
               </p>
             ) : isSignedIn ? (
-              <>
-                <p role="status" className="agi-device-auth-lede">
+              <Stack gap="tight">
+                <p className="agi-ds-prose" role="status">
                   Your AGI Cloud session is ready for the browser extension.
                 </p>
-                <div className="agi-device-auth-note">
+                <Prose size="sm">
                   Return to Chrome, then close and reopen the AGI side panel to refresh your
                   account.
-                </div>
-              </>
+                </Prose>
+              </Stack>
             ) : (
-              <>
-                <p role="alert" className="agi-device-auth-lede">
+              <Stack gap="tight">
+                <p className="agi-ds-prose" role="alert">
                   Sign in on the web so OAuth and your existing AGI session can be securely shared
                   with the extension.
                 </p>
-                <Link className="agi-cta-primary agi-device-auth-submit" href={SIGN_IN_PATH}>
-                  Sign in to AGI Cloud
-                </Link>
-              </>
+                <ButtonRow>
+                  <Button href={SIGN_IN_PATH}>Sign in to AGI Cloud</Button>
+                </ButtonRow>
+              </Stack>
             )}
-          </section>
-        </div>
-        <MarketingFooter />
+          </Stack>
+        </section>
       </main>
+      <MarketingFooter />
     </div>
   );
 }
