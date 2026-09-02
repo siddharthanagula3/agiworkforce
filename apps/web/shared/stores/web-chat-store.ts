@@ -1064,12 +1064,12 @@ export const useChatStore = create<ChatState>()(
               if (fromId === toId) return state;
               const messagesByConversation = { ...state.messagesByConversation };
               if (fromId in messagesByConversation) {
-                messagesByConversation[toId] = messagesByConversation[fromId];
+                messagesByConversation[toId] = messagesByConversation[fromId] ?? [];
                 delete messagesByConversation[fromId];
               }
               const activeLeafByConversation = { ...state.activeLeafByConversation };
               if (fromId in activeLeafByConversation) {
-                activeLeafByConversation[toId] = activeLeafByConversation[fromId];
+                activeLeafByConversation[toId] = activeLeafByConversation[fromId] ?? null;
                 delete activeLeafByConversation[fromId];
               }
               const streamingConversationIds = state.streamingConversationIds.map((id) =>
