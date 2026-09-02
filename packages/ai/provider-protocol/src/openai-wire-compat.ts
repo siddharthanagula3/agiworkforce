@@ -256,6 +256,37 @@ function legacyWebFinishReason(reason: Extract<StreamChunk, { type: 'stop' }>['r
   return reason;
 }
 
+/**
+ * Ceiling on sources a single web-search tool call renders to the client,
+ * enforced here because this is the one place every provider-native search
+ * payload (Anthropic `web_search_tool_result`, OpenAI's equivalent, Google's
+ * `gemini_grounding_result`) passes through on its way to the wire — none of
+ * those providers accept a per-call result-count request parameter, so the
+ * cap can only be applied on the way out. Matches the generic (Perplexity)
+ * tool's own `WEB_SEARCH_MAX_RESULTS` in apps/web/lib/web-search/web-search-tool.ts.
+ */
+export const WEB_SEARCH_RESULT_RENDER_CAP = 5;
+
+function capSearchResultPayload(payload: unknown): unknown {
+  if (typeof payload !== 'object' || payload === null) return payload;
+  const type = (payload as { type?: unknown }).type;
+  if (type === 'web_search_tool_result') {
+    const content = (payload as { content?: unknown }).content;
+    if (Array.isArray(content) && content.length > WEB_SEARCH_RESULT_RENDER_CAP) {
+      return { ...payload, content: content.slice(0, WEB_SEARCH_RESULT_RENDER_CAP) };
+    }
+    return payload;
+  }
+  if (type === 'gemini_grounding_result') {
+    const results = (payload as { results?: unknown }).results;
+    if (Array.isArray(results) && results.length > WEB_SEARCH_RESULT_RENDER_CAP) {
+      return { ...payload, results: results.slice(0, WEB_SEARCH_RESULT_RENDER_CAP) };
+    }
+    return payload;
+  }
+  return payload;
+}
+
 export interface OpenAIWireUsage {
   prompt_tokens: number;
   completion_tokens: number;
@@ -437,7 +468,7 @@ export class OpenAIWireAssembler {
           chunk.payload !== null &&
           (chunk.payload as { type?: unknown }).type === 'web_search_tool_result'
         ) {
-          this.searchResults.push(chunk.payload);
+          this.searchResults.push(capSearchResultPayload(chunk.payload));
         }
         return;
       case 'citation-delta':
@@ -569,9 +600,9 @@ export class OpenAIWireAssembler {
         if (payload?.type === 'code_execution_tool_result') {
           out.push(this.chunkEnvelope({ x_code_result: chunk.payload }, null));
         } else if (payload?.type === 'web_search_tool_result') {
-          out.push(this.chunkEnvelope({ x_search_results: chunk.payload }, null));
+          out.push(this.chunkEnvelope({ x_search_results: capSearchResultPayload(payload) }, null));
         } else if (payload?.type === 'gemini_grounding_result') {
-          const results = (payload as { results?: unknown }).results;
+          const results = (capSearchResultPayload(payload) as { results?: unknown }).results;
           out.push(this.chunkEnvelope({ x_search_results: { content: results } }, null));
         }
         break;
