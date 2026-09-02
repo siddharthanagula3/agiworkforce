@@ -209,6 +209,11 @@ const markdownComponents: Components = {
   ul: ({ children }) => <ul className="mb-3 list-disc pl-6">{children}</ul>,
   ol: ({ children }) => <ol className="mb-3 list-decimal pl-6">{children}</ol>,
   li: ({ children }) => <li className="mb-1">{children}</li>,
+  blockquote: ({ children }) => (
+    <blockquote className="mb-3 border-l-2 border-border pl-4 text-muted-foreground [&>:last-child]:mb-0">
+      {children}
+    </blockquote>
+  ),
   table: ({ children }) => (
     <div className="my-3 overflow-x-auto">
       <table className="w-full border-collapse text-sm">{children}</table>
