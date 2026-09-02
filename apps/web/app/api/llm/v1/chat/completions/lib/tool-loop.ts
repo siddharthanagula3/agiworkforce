@@ -57,6 +57,7 @@ import type {
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { mapClassifiedUpstreamError } from './upstream-error-copy';
+import type { FailoverStepContext } from './managed-failover';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
@@ -396,7 +397,10 @@ export interface ToolLoopOptions {
 }
 
 export interface ToolLoopFailoverPlan {
-  next: (error: unknown) => { provider: string; processed: ProcessedRequest } | null;
+  next: (
+    error: unknown,
+    context?: FailoverStepContext,
+  ) => { provider: string; processed: ProcessedRequest } | null;
 }
 
 export interface ToolLoopPolicy {
@@ -1720,7 +1724,7 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof ProviderStreamDeadlineError) throw err;
-        const nextAttempt = options.failover?.next(err);
+        const nextAttempt = options.failover?.next(err, { step });
         if (!nextAttempt) throw err;
         servingProcessed = nextAttempt.processed;
       }

@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { listCanonicalModels } from '@agiworkforce/types';
 
@@ -31,6 +30,8 @@ vi.mock('./request-processor', () => ({
 
 import { createFailoverPlan, buildFailoverAttemptView } from './managed-failover';
 import type { ProcessedRequest } from './request-processor';
+
+const FIRST_STEP = 1;
 
 function httpError(status: number, message = `upstream ${status}`): Error {
   return Object.assign(new Error(message), { status });
@@ -173,6 +174,49 @@ describe('rotation eligibility (gateway parity)', () => {
     const processed = makeProcessed();
     (processed.llmRequest as { tools?: unknown[] }).tools = [{ name: 'web_search' }];
     expect(makePlan(processed).next(httpError(503))).toBeNull();
+  });
+
+  it('rotates an auto-routed request the provider refused, on the first step', () => {
+    const attempt = makePlan(makeProcessed()).next(httpError(400, 'bad request'), {
+      step: FIRST_STEP,
+    });
+
+    expect(attempt?.model).toBe('candidate-a');
+  });
+
+  it('leaves an explicitly selected model on the rejection the caller asked for', () => {
+    const processed = makeProcessed({
+      requestedModel: ANTHROPIC_FAILOVER_MODEL,
+      originalModel: ANTHROPIC_FAILOVER_MODEL,
+    });
+
+    expect(
+      makePlan(processed).next(httpError(400, 'bad request'), { step: FIRST_STEP }),
+    ).toBeNull();
+  });
+
+  it('will not splice a second model into an answer a later step already started', () => {
+    expect(
+      makePlan(makeProcessed()).next(httpError(400, 'bad request'), { step: FIRST_STEP + 1 }),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['not found (404)', httpError(404, 'no such route')],
+    ['unprocessable (422)', httpError(422, 'unprocessable entity')],
+  ])('does not extend the rejection rotation to %s', (_label, error) => {
+    expect(makePlan(makeProcessed()).next(error, { step: FIRST_STEP })).toBeNull();
+  });
+
+  it.each([
+    ['unauthorized (401)', httpError(401, 'authentication error (401)')],
+    ['forbidden (403)', httpError(403, 'permission denied')],
+  ])('leaves %s on provider condemnation, which the step context does not change', (_, error) => {
+    const withContext = makePlan(makeProcessed()).next(error, { step: FIRST_STEP });
+    const withoutContext = makePlan(makeProcessed()).next(error);
+
+    expect(withContext?.model).toBe(withoutContext?.model);
+    expect(withContext?.processed.fallbackReason).toBe('managed_failover');
   });
 
   it('rotates a tool-bearing request to a same-provider fallback', () => {
