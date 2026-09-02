@@ -583,6 +583,20 @@
   padding-block: var(--agi-section-y-sm) var(--agi-space-4);
 }
 
+[data-design='agi'] .agi-ds-footer--condensed {
+  padding-block: var(--agi-space-4);
+}
+
+[data-design='agi'] .agi-ds-footer--condensed .agi-ds-footer-legal {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+[data-design='agi'] .agi-ds-footer-link-status {
+  color: var(--agi-ink-2);
+}
+
 [data-design='agi'] .agi-ds-footer-cols {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
