@@ -263,6 +263,7 @@ export interface MessageMetadata {
    * widget, never the answer.
    */
   interactiveCards?: InteractiveCard[];
+  interactiveCardsResumed?: boolean;
   /**
    * Safe cross-surface projection of a suspended approval checkpoint. The
    * server-owned run remains authoritative; null explicitly clears stale

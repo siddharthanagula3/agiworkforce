@@ -10,10 +10,12 @@ import {
 } from '@agiworkforce/types';
 import {
   interactiveCardAcceptsResponse,
+  interactiveCardNeedsResume,
   interactiveCardResponseDeadlineMs,
 } from '@/app/api/interactive-cards/response-contract';
 import {
   respondToInteractiveCard,
+  useInteractiveCardResume,
   type InteractiveCardResponseBinding,
   type WebInteractiveCardKind,
 } from '@/lib/hooks/useChatStream';
@@ -61,6 +63,21 @@ function useCardResponseChannel(
   return { conversationId, messageId };
 }
 
+function useCardTurnResume(
+  card: InteractiveCard,
+  channel: Omit<InteractiveCardResponseBinding, 'cardId'> | null,
+): void {
+  const resumeCardTurn = useInteractiveCardResume();
+  const needsResume = card.recognized && interactiveCardNeedsResume(card);
+  const conversationId = channel?.conversationId;
+  const messageId = channel?.messageId;
+
+  useEffect(() => {
+    if (!needsResume || !conversationId || !messageId || !resumeCardTurn) return;
+    void resumeCardTurn(messageId);
+  }, [needsResume, conversationId, messageId, resumeCardTurn]);
+}
+
 function useCardResponseDeadline(card: InteractiveCard): void {
   const [, setElapsedDeadlines] = useState(0);
   const deadlineMs = interactiveCardResponseDeadlineMs(card);
@@ -87,6 +104,7 @@ const SingleCard = memo(function SingleCard({ card }: SingleCardProps) {
   const renderer = resolveInteractiveCardRenderer(WEB_CARD_REGISTRY, card);
   const channel = useCardResponseChannel(card.cardId);
   useCardResponseDeadline(card);
+  useCardTurnResume(card, channel);
   const canRespond = channel !== null && interactiveCardAcceptsResponse(card);
 
   if (renderer && card.recognized) {
