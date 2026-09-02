@@ -32,8 +32,7 @@ const VOID_HTML_TAGS: ReadonlySet<string> = new Set([
 
 const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/;
 const HTML_BOGUS_COMMENT_PATTERN = /<!(?!--)[^>]*>/;
-const HTML_TAG_PATTERN =
-  /<(?<closing>\/)?(?<name>[a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(?<selfClosing>\/)?>/;
+const HTML_TAG_PATTERN = /<(\/)?([a-zA-Z][a-zA-Z0-9-]*)\b[^>]*?(\/)?>/;
 const HTML_TOKEN_PATTERN = new RegExp(
   [HTML_COMMENT_PATTERN, HTML_BOGUS_COMMENT_PATTERN, HTML_TAG_PATTERN]
     .map((pattern) => pattern.source)
@@ -44,8 +43,6 @@ const HTML_TOKEN_PATTERN = new RegExp(
 const HASH_OFFSET_BASIS = 0x811c9dc5;
 const HASH_PRIME = 0x01000193;
 const HASH_RADIX = 36;
-
-type HtmlTagTokenGroups = Partial<Record<'closing' | 'name' | 'selfClosing', string>>;
 
 interface SourceSpan {
   readonly start: { readonly offset?: number | undefined };
@@ -109,7 +106,7 @@ function htmlTagBalance(node: ParsedNode): number {
 
   let balance = 0;
   for (const token of fragments.join(LINE_FEED).matchAll(HTML_TOKEN_PATTERN)) {
-    const { closing, name, selfClosing }: HtmlTagTokenGroups = token.groups ?? {};
+    const [, closing, name, selfClosing] = token;
     if (!name || selfClosing) continue;
     if (VOID_HTML_TAGS.has(name.toLowerCase())) continue;
     balance += closing ? -1 : 1;
