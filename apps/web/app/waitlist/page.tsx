@@ -88,13 +88,11 @@ export default function WaitlistPage() {
           <Stack gap="tight">
             <PublicWaitlistForm source="website" ctaLabel="Request org/SSO early access" />
             <Prose size="sm">
-              One email when enterprise org/SSO features land, sent by a person, nothing here mails
-              this list automatically, so there is no unsubscribe link in a message to click. No
-              marketing drip. To come off the list, record a withdrawal at{' '}
+              To come off the list, record a withdrawal at{' '}
               <Link href="/privacy/requests" className="agi-ds-link">
                 /privacy/requests
               </Link>
-              . It needs no account, and a person removes your address.
+              . It needs no account.
             </Prose>
           </Stack>
         </Section>
