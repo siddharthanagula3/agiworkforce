@@ -10,7 +10,7 @@ import { addFallbackReasonHeader } from '@/lib/chat-fallback-reason';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import { observeFreeLaneSettlement } from '@/lib/services/free-lane/runtime-state-service';
 import type { StreamChunk } from '@agiworkforce/types';
-import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
+import { OpenAIWireAssembler, toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
 import { canPersistAssistantTurn, persistAssistantTurn } from './assistant-turn-persistence';
 import {
@@ -316,6 +316,7 @@ export async function buildStreamResponse(
                       : toolName === 'web_fetch'
                         ? 'fetching'
                         : 'running';
+                const statusPhrase = toolStatusPhrase(toolName);
                 transformedEvent = {
                   choices: [
                     {
@@ -324,6 +325,7 @@ export async function buildStreamResponse(
                           type: 'server_tool_use',
                           name: toolName,
                           status: toolStatus,
+                          ...(statusPhrase ? { status_phrase: statusPhrase } : {}),
                         },
                       },
                       index: 0,

@@ -115,6 +115,8 @@ export {
   assembleOpenAIWireResponse,
 } from './openai-wire-compat';
 
+export { toolStatusPhrase } from './tool-status-phrases';
+
 export { toProviderApiModelId } from './provider-model-id';
 export type {
   OpenAIWireChatRequest,
