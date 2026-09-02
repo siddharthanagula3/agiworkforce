@@ -58,7 +58,7 @@ import {
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import type { VariantInfo } from '@/features/chat/lib/messageThread';
-import { ACTION_BUTTON_SIZE } from './messageActionRow';
+import { ACTION_BUTTON_SIZE, ACTION_ROW_MIN_HEIGHT } from './messageActionRow';
 import { variantDeleteConfirm } from './variantDeleteConfirm';
 import { VariantPager } from './VariantPager';
 import { toast } from 'sonner';
@@ -2205,11 +2205,13 @@ const MessageBubbleComponent = function MessageBubble({
           {/* Model name · shown under completed assistant messages, hidden while streaming.
               Read from top-level message.model first (set by useChatStream), then fall
               back to message.metadata.model (set on messages loaded from DB). */}
-          {!isUser && !message.isStreaming && (message.model ?? message.metadata?.model) && (
+          {!isUser && (message.model ?? message.metadata?.model) && (
             <div className="mt-1.5 text-[12px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-              {getManagedModelPresentationLabel(message.model ?? message.metadata?.model, {
-                freePool: isFreeRouteLane(message.metadata?.routeLane),
-              })}
+              {message.isStreaming
+                ? ' '
+                : getManagedModelPresentationLabel(message.model ?? message.metadata?.model, {
+                    freePool: isFreeRouteLane(message.metadata?.routeLane),
+                  })}
             </div>
           )}
 
@@ -2218,7 +2220,7 @@ const MessageBubbleComponent = function MessageBubble({
               USER actions are HOVER-ONLY. Do not invert this. */}
           {/* The editor carries its own Cancel / Save, so the transcript action
               row would only offer a second, conflicting set of controls. */}
-          {!message.isStreaming && !isEditing && (
+          {!isEditing && (
             <div
               className={cn(
                 // AUDIT-FIX GOV-30: `opacity-0 group-hover:opacity-100` with no
@@ -2228,192 +2230,208 @@ const MessageBubbleComponent = function MessageBubble({
                 // row the moment focus enters it. The row also stays flex-wrap
                 // so the larger touch targets (GOV-38) cannot overflow a phone.
                 'mt-2 flex flex-wrap items-center gap-1 transition-opacity',
+                ACTION_ROW_MIN_HEIGHT,
                 isUser
                   ? 'justify-end opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                   : 'opacity-100',
               )}
             >
-              {/* CLR-03: `message.timestamp` was carried as data and used only
-                  for memo comparisons, so nothing on this surface ever said when
-                  a message was sent. `title` carries the full date because the
-                  visible label is clock-time only. */}
-              <time
-                data-testid="message-timestamp"
-                dateTime={message.timestamp.toISOString()}
-                title={message.timestamp.toLocaleString()}
-                className="px-1 text-[12px] tabular-nums text-[var(--chat-text-muted)]"
-              >
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </time>
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={ACTION_BUTTON_SIZE}
-                      onClick={handleCopy}
-                      aria-label={copied ? 'Message copied' : 'Copy message'}
-                    >
-                      {copied ? (
-                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Copy</TooltipContent>
-                </Tooltip>
-
-                {isUser && onEdit && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={ACTION_BUTTON_SIZE}
-                        onClick={handleBeginEdit}
-                        aria-label="Edit message"
-                      >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Edit</TooltipContent>
-                  </Tooltip>
-                )}
-
-                {onPin && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          ACTION_BUTTON_SIZE,
-                          message.metadata?.isPinned && 'text-amber-500',
-                        )}
-                        onClick={() => onPin(message.id)}
-                        aria-label={message.metadata?.isPinned ? 'Unpin message' : 'Pin message'}
-                        aria-pressed={Boolean(message.metadata?.isPinned)}
-                      >
-                        <Pin
-                          className={cn(
-                            'h-3.5 w-3.5',
-                            message.metadata?.isPinned && 'fill-current',
-                          )}
-                          aria-hidden="true"
-                        />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{message.metadata?.isPinned ? 'Unpin' : 'Pin'}</TooltipContent>
-                  </Tooltip>
-                )}
-
-                {!isUser && isReadAloudSupported && onReadAloud && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={ACTION_BUTTON_SIZE}
-                        onClick={() => onReadAloud(message.id, message.content)}
-                        aria-label={isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
-                        aria-pressed={isReadingAloud}
-                      >
-                        {isReadingAloud ? (
-                          <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-                        ) : (
-                          <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {isReadingAloud ? 'Stop reading' : 'Read aloud'}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                {!isUser && (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(
-                            ACTION_BUTTON_SIZE,
-                            responseRating === 'up' && 'text-[var(--chat-accent-primary-text)]',
-                          )}
-                          onClick={() => rateResponse('up')}
-                          aria-label="Good response"
-                          aria-pressed={responseRating === 'up'}
-                        >
-                          <ThumbsUp
-                            className={cn('h-3.5 w-3.5', responseRating === 'up' && 'fill-current')}
-                            aria-hidden="true"
-                          />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {responseRating === 'up' ? 'Remove rating' : 'Good response'}
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(
-                            ACTION_BUTTON_SIZE,
-                            responseRating === 'down' && 'text-[var(--chat-accent-primary-text)]',
-                          )}
-                          onClick={() => rateResponse('down')}
-                          aria-label="Bad response"
-                          aria-pressed={responseRating === 'down'}
-                        >
-                          <ThumbsDown
-                            className={cn(
-                              'h-3.5 w-3.5',
-                              responseRating === 'down' && 'fill-current',
-                            )}
-                            aria-hidden="true"
-                          />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {responseRating === 'down' ? 'Remove rating' : 'Bad response'}
-                      </TooltipContent>
-                    </Tooltip>
-                  </>
-                )}
-
-                {/* Variants sit immediately before Regenerate, which is the
-                    control that produces them, and in the same slot on a user
-                    message's hover row for the revisions Edit produces. */}
-                {variantPager}
-
-                {/* Regenerate — primary action for assistant messages */}
-                {!isUser &&
-                  onRegenerate &&
-                  message.metadata?.toolType !== 'image-generation' &&
-                  message.metadata?.toolType !== 'video-generation' && (
+              {!message.isStreaming && (
+                <>
+                  {/* CLR-03: `message.timestamp` was carried as data and used only
+                      for memo comparisons, so nothing on this surface ever said when
+                      a message was sent. `title` carries the full date because the
+                      visible label is clock-time only. */}
+                  <time
+                    data-testid="message-timestamp"
+                    dateTime={message.timestamp.toISOString()}
+                    title={message.timestamp.toLocaleString()}
+                    className="px-1 text-[12px] tabular-nums text-[var(--chat-text-muted)]"
+                  >
+                    {message.timestamp.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </time>
+                  <TooltipProvider delayDuration={300}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           className={ACTION_BUTTON_SIZE}
-                          onClick={() => onRegenerate(message.id)}
-                          aria-label="Regenerate response"
+                          onClick={handleCopy}
+                          aria-label={copied ? 'Message copied' : 'Copy message'}
                         >
-                          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                          {copied ? (
+                            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                          )}
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Regenerate</TooltipContent>
+                      <TooltipContent>Copy</TooltipContent>
                     </Tooltip>
-                  )}
 
-                {/*
+                    {isUser && onEdit && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={ACTION_BUTTON_SIZE}
+                            onClick={handleBeginEdit}
+                            aria-label="Edit message"
+                          >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit</TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {onPin && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              ACTION_BUTTON_SIZE,
+                              message.metadata?.isPinned && 'text-amber-500',
+                            )}
+                            onClick={() => onPin(message.id)}
+                            aria-label={
+                              message.metadata?.isPinned ? 'Unpin message' : 'Pin message'
+                            }
+                            aria-pressed={Boolean(message.metadata?.isPinned)}
+                          >
+                            <Pin
+                              className={cn(
+                                'h-3.5 w-3.5',
+                                message.metadata?.isPinned && 'fill-current',
+                              )}
+                              aria-hidden="true"
+                            />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {message.metadata?.isPinned ? 'Unpin' : 'Pin'}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {!isUser && isReadAloudSupported && onReadAloud && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={ACTION_BUTTON_SIZE}
+                            onClick={() => onReadAloud(message.id, message.content)}
+                            aria-label={
+                              isReadingAloud ? 'Stop reading message' : 'Read message aloud'
+                            }
+                            aria-pressed={isReadingAloud}
+                          >
+                            {isReadingAloud ? (
+                              <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                            ) : (
+                              <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isReadingAloud ? 'Stop reading' : 'Read aloud'}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+
+                    {!isUser && (
+                      <>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                ACTION_BUTTON_SIZE,
+                                responseRating === 'up' && 'text-[var(--chat-accent-primary-text)]',
+                              )}
+                              onClick={() => rateResponse('up')}
+                              aria-label="Good response"
+                              aria-pressed={responseRating === 'up'}
+                            >
+                              <ThumbsUp
+                                className={cn(
+                                  'h-3.5 w-3.5',
+                                  responseRating === 'up' && 'fill-current',
+                                )}
+                                aria-hidden="true"
+                              />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {responseRating === 'up' ? 'Remove rating' : 'Good response'}
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                ACTION_BUTTON_SIZE,
+                                responseRating === 'down' &&
+                                  'text-[var(--chat-accent-primary-text)]',
+                              )}
+                              onClick={() => rateResponse('down')}
+                              aria-label="Bad response"
+                              aria-pressed={responseRating === 'down'}
+                            >
+                              <ThumbsDown
+                                className={cn(
+                                  'h-3.5 w-3.5',
+                                  responseRating === 'down' && 'fill-current',
+                                )}
+                                aria-hidden="true"
+                              />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {responseRating === 'down' ? 'Remove rating' : 'Bad response'}
+                          </TooltipContent>
+                        </Tooltip>
+                      </>
+                    )}
+
+                    {/* Variants sit immediately before Regenerate, which is the
+                    control that produces them, and in the same slot on a user
+                    message's hover row for the revisions Edit produces. */}
+                    {variantPager}
+
+                    {/* Regenerate — primary action for assistant messages */}
+                    {!isUser &&
+                      onRegenerate &&
+                      message.metadata?.toolType !== 'image-generation' &&
+                      message.metadata?.toolType !== 'video-generation' && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={ACTION_BUTTON_SIZE}
+                              onClick={() => onRegenerate(message.id)}
+                              aria-label="Regenerate response"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Regenerate</TooltipContent>
+                        </Tooltip>
+                      )}
+
+                    {/*
                   Branch / fork — a persistent icon in the action row, not a
                   dropdown entry (shell-nav-ia-gap-08). Manus puts "Continue in
                   new task" directly under every completed response; this was the
@@ -2422,73 +2440,73 @@ const MessageBubbleComponent = function MessageBubble({
                   on a response this is now a persistent affordance. It is NOT
                   duplicated in the menu below — one control, one place.
                 */}
-                {onBranch && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={ACTION_BUTTON_SIZE}
-                        disabled={isBranching}
-                        onClick={() => onBranch(message.id)}
-                        aria-label={
-                          isBranching ? 'Creating branch…' : 'Branch conversation from here'
-                        }
-                      >
-                        <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {isBranching
-                        ? 'Creating branch…'
-                        : 'Branch conversation: this chat stays unchanged'}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                    {onBranch && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={ACTION_BUTTON_SIZE}
+                            disabled={isBranching}
+                            onClick={() => onBranch(message.id)}
+                            aria-label={
+                              isBranching ? 'Creating branch…' : 'Branch conversation from here'
+                            }
+                          >
+                            <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isBranching
+                            ? 'Creating branch…'
+                            : 'Branch conversation: this chat stays unchanged'}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
 
-                {/* More actions menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={ACTION_BUTTON_SIZE}
-                      aria-label="More message actions"
-                    >
-                      <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align={isUser ? 'end' : 'start'}>
-                    {/* Edit moved OUT of this menu into the persistent hover
+                    {/* More actions menu */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={ACTION_BUTTON_SIZE}
+                          aria-label="More message actions"
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align={isUser ? 'end' : 'start'}>
+                        {/* Edit moved OUT of this menu into the persistent hover
                         action row above, same convention as Branch below: one
                         control, one place. Do not re-add it here. */}
-                    {/*
+                        {/*
                       Report an answer as harmful or inaccurate. The web app had
                       no such action: the only routes out were a general
                       feedback link and a refusal APPEAL, which is the opposite
                       complaint. Assistant messages only — reporting your own
                       message to us is not a thing.
                     */}
-                    {!isUser && (
-                      <DropdownMenuItem
-                        disabled={reportState !== 'idle'}
-                        onClick={() => void reportMessage()}
-                      >
-                        <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
-                        {reportState === 'sent'
-                          ? 'Reported'
-                          : reportState === 'sending'
-                            ? 'Reporting…'
-                            : 'Report this response'}
-                      </DropdownMenuItem>
-                    )}
-                    {/* Branch moved OUT of this menu into the persistent action
+                        {!isUser && (
+                          <DropdownMenuItem
+                            disabled={reportState !== 'idle'}
+                            onClick={() => void reportMessage()}
+                          >
+                            <Flag className="mr-2 h-4 w-4" aria-hidden="true" />
+                            {reportState === 'sent'
+                              ? 'Reported'
+                              : reportState === 'sending'
+                                ? 'Reporting…'
+                                : 'Report this response'}
+                          </DropdownMenuItem>
+                        )}
+                        {/* Branch moved OUT of this menu into the persistent action
                         row above (shell-nav-ia-gap-08). Do not re-add it here. */}
-                    {message.metadata?.tokensUsed ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <div className="px-2 py-1.5">
-                          {/*
+                        {message.metadata?.tokensUsed ? (
+                          <>
+                            <DropdownMenuSeparator />
+                            <div className="px-2 py-1.5">
+                              {/*
                             Token breakdown for the turn. `tokensUsed` comes
                             from the PERSISTED message row via `toChatMessage`
                             (no terminal usage stream frame exists — one was
@@ -2499,48 +2517,50 @@ const MessageBubbleComponent = function MessageBubble({
                             below stays hidden until that policy changes. It is
                             typed in CENTS, hence the /100.
                           */}
-                          <TokenUsageDisplay
-                            variant="detailed"
-                            tokensUsed={message.metadata.tokensUsed}
-                            inputTokens={message.metadata.inputTokens}
-                            outputTokens={message.metadata.outputTokens}
-                            model={message.metadata.model}
-                            cost={
-                              typeof message.metadata.cost === 'number'
-                                ? message.metadata.cost / 100
-                                : undefined
-                            }
-                          />
-                          {typeof message.metadata.totalDurationMs === 'number' && (
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {(message.metadata.totalDurationMs / 1000).toFixed(1)}s
+                              <TokenUsageDisplay
+                                variant="detailed"
+                                tokensUsed={message.metadata.tokensUsed}
+                                inputTokens={message.metadata.inputTokens}
+                                outputTokens={message.metadata.outputTokens}
+                                model={message.metadata.model}
+                                cost={
+                                  typeof message.metadata.cost === 'number'
+                                    ? message.metadata.cost / 100
+                                    : undefined
+                                }
+                              />
+                              {typeof message.metadata.totalDurationMs === 'number' && (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {(message.metadata.totalDurationMs / 1000).toFixed(1)}s
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </>
-                    ) : null}
-                    {(onDelete || canDeleteVariant) && <DropdownMenuSeparator />}
-                    {canDeleteVariant && (
-                      <DropdownMenuItem
-                        onClick={handleDeleteVariantWithConfirm}
-                        className="text-danger focus:text-danger"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Delete this response and what follows
-                      </DropdownMenuItem>
-                    )}
-                    {onDelete && (
-                      <DropdownMenuItem
-                        onClick={handleDeleteWithConfirm}
-                        className="text-danger focus:text-danger"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                        Delete
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TooltipProvider>
+                          </>
+                        ) : null}
+                        {(onDelete || canDeleteVariant) && <DropdownMenuSeparator />}
+                        {canDeleteVariant && (
+                          <DropdownMenuItem
+                            onClick={handleDeleteVariantWithConfirm}
+                            className="text-danger focus:text-danger"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Delete this response and what follows
+                          </DropdownMenuItem>
+                        )}
+                        {onDelete && (
+                          <DropdownMenuItem
+                            onClick={handleDeleteWithConfirm}
+                            className="text-danger focus:text-danger"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TooltipProvider>
+                </>
+              )}
             </div>
           )}
         </div>
