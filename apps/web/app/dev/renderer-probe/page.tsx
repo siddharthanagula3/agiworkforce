@@ -1,5 +1,7 @@
 'use client';
 
+import { notFound } from 'next/navigation';
+
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 
 const SPECIMEN = `# Heading one
@@ -64,6 +66,10 @@ Final paragraph after all fences.
 `;
 
 export default function RendererProbe() {
+  if (process.env.NODE_ENV === 'production') {
+    notFound();
+  }
+
   return (
     <main data-probe-root className="bg-surface-page p-6">
       <MarkdownContent content={SPECIMEN} />

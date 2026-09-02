@@ -1,5 +1,7 @@
 'use client';
 
+import { notFound } from 'next/navigation';
+
 import {
   InlineToolCall,
   InlineToolCallGroup,
@@ -42,7 +44,7 @@ const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
 
 export default function InlineToolCallDemoPage() {
   if (process.env.NODE_ENV === 'production') {
-    return null;
+    notFound();
   }
 
   return (
