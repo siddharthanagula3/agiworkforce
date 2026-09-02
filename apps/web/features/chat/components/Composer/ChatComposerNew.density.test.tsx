@@ -69,7 +69,7 @@ describe('composer mobile density', () => {
   });
 
   it('pins the empty textarea to the mobile resting height, not the desktop one', () => {
-    // jsdom reports no media match, which is the desktop branch — the same one
+    // jsdom reports no media match, which is the desktop branch, the same one
     // the first-paint test in ChatComposerNew.test.tsx measures. Pin the mobile
     // branch explicitly so the JS height and the classes cannot drift apart.
     vi.stubGlobal(

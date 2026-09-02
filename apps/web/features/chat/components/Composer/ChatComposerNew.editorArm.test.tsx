@@ -16,7 +16,7 @@ import { ChatComposerNew } from './ChatComposerNew';
 
 /**
  * The editor arm is exercised against a double rather than against TipTap: what
- * this suite is proving is the ROUTING — that each of the writers the composer
+ * this suite is proving is the ROUTING: that each of the writers the composer
  * owns reaches the imperative handle instead of only the mirrored state, and
  * that the menu adapters answer the plugin correctly. The real editor is mounted
  * by `__tests__/ComposerInput.test.tsx`, and the handle's own semantics are

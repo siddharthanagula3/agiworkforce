@@ -380,7 +380,7 @@ function stripSlashCommandToken(value: string): string {
   const parsed = splitSlashCommand(value);
   if (parsed) return parsed.argument;
   // The menu opens on anything the draft predicate accepts, which includes a
-  // lone `/` that `splitSlashCommand` cannot parse — it wants a token to read.
+  // lone `/` that `splitSlashCommand` cannot parse, since it wants a token.
   // Returning the whole value for those wrote the slash straight back on
   // commit, so the menu closed and the token stayed in the message. A draft
   // with no parseable token has no argument to keep either.
@@ -2305,7 +2305,7 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     const parked = useChatStore.getState().getDraftContent(conversationId);
     // A saved conversation owns its draft outright. The unsaved surface does
-    // not — its slot is shared by every new chat, so it is only the same draft
+    // not. Its slot is shared by every new chat, so it is only the same draft
     // when the user stepped back to it. See pending-composer-draft.
     writeComposerMessage(conversationId ? parked : restorablePendingDraft(parked));
     return () => {

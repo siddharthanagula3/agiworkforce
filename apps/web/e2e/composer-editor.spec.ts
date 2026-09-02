@@ -5,7 +5,7 @@ import { signIn } from './qa-capability-harness';
 /**
  * The editor arm of the composer, pinned per-navigation with `?composer=` so
  * both implementations run against one build. Everything asserted here is
- * behaviour the textarea already had — this spec is the parity gate, not a
+ * behaviour the textarea already had. This spec is the parity gate, not a
  * feature description.
  */
 const CHAT_EDITOR_URL = '/chat?composer=editor';
@@ -39,7 +39,7 @@ async function pinEditorArm(page: Page): Promise<void> {
 
 /**
  * `[data-composer-textarea]` is carried by BOTH arms, so waiting on it alone
- * returns as soon as the server-rendered textarea paints — while the gate
+ * returns as soon as the server-rendered textarea paints, while the gate
  * resolves post-hydration and the editor is still two commits away. Anything
  * typed in that window goes to the arm on its way out. Wait for the
  * contenteditable specifically.
@@ -53,7 +53,7 @@ async function openComposer(page: Page) {
   await composer.click();
   // Every claim below is about what typing does to an empty composer. A draft
   // restored into this conversation would silently prepend itself and, for the
-  // slash case, take the token out of shape — so say so here rather than
+  // slash case, take the token out of shape, so say so here rather than
   // failing later on a symptom.
   expect(await composerText(page)).toBe('');
   return composer;

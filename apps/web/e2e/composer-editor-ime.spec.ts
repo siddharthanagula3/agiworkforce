@@ -2,9 +2,9 @@ import { test, expect, type CDPSession, type Page } from '@playwright/test';
 import { signIn } from './qa-capability-harness';
 
 /**
- * Enter mid-composition must not send. jsdom cannot see this — a composition is
- * a browser-level state, not a React event — so it is asserted here, driven
- * through CDP's Input domain. The Playwright config is chromium-only, which is
+ * Enter mid-composition must not send. jsdom cannot see this, because a
+ * composition is browser state, not a React event, so it is asserted here and
+ * driven through CDP's Input domain. The Playwright config is chromium-only, which is
  * what makes a CDP-based spec safe to keep in the default run.
  */
 const CHAT_EDITOR_URL = '/chat?composer=editor';
@@ -38,7 +38,7 @@ async function beginComposition(cdp: CDPSession, text: string) {
   });
 }
 
-/** Accept the candidate — composition ends and the text becomes real. */
+/** Accept the candidate: composition ends and the text becomes real. */
 async function commitComposition(cdp: CDPSession, text: string) {
   await cdp.send('Input.insertText', { text });
 }
