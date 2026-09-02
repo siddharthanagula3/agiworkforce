@@ -178,7 +178,7 @@ function progressFromActivity(
     return {
       id: `${messageId}:${entry.id}`,
       label: entry.summary || humanizeToolName(entry.name),
-      detail: entry.error,
+      detail: entry.error === entry.summary ? undefined : entry.error,
       status: entry.status,
     };
   }
