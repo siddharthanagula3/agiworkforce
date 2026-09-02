@@ -35,6 +35,7 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ['undici'],
   experimental: {
+    turbopackFileSystemCacheForBuild: false,
     optimizePackageImports: [
       'lucide-react',
       'date-fns',
