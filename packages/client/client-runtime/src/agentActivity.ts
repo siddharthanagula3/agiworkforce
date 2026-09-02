@@ -186,6 +186,17 @@ function stringifyError(value: unknown): string | undefined {
   }
 }
 
+const ONE_LINE_SUMMARY_MAX_LENGTH = 140;
+
+function oneLineSummary(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  if (!collapsed) return undefined;
+  return collapsed.length > ONE_LINE_SUMMARY_MAX_LENGTH
+    ? `${collapsed.slice(0, ONE_LINE_SUMMARY_MAX_LENGTH - 1)}…`
+    : collapsed;
+}
+
 function stopStatus(reason: AgentEventStopReason): AgentActivityRunStatus {
   if (reason === 'error') return 'failed';
   if (reason === 'cancelled') return 'cancelled';
@@ -349,12 +360,16 @@ export function applyAgentActivityEvent(
     case 'tool-execution-end': {
       const id = `tool:${event.toolCallId}`;
       const index = next.entries.findIndex((entry) => entry.id === id);
+      const failureSummary = event.isError
+        ? oneLineSummary(stringifyError(event.output))
+        : undefined;
       if (index >= 0) {
         next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
           ...entry,
           name: event.name,
           output: event.output,
           status: event.isError ? 'failed' : 'completed',
+          summary: failureSummary ?? entry.summary,
           ...(event.isError
             ? { error: stringifyError(event.output) ?? 'Tool execution failed' }
             : {}),
@@ -370,7 +385,7 @@ export function applyAgentActivityEvent(
             toolCallId: event.toolCallId,
             name: event.name,
             category: 'other',
-            summary: event.name,
+            summary: failureSummary ?? event.name,
             status: event.isError ? 'failed' : 'completed',
             output: event.output,
             ...(event.isError
