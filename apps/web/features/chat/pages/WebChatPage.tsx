@@ -80,20 +80,7 @@ import {
   hasSelfServeUpgradePath,
 } from '@agiworkforce/types';
 import { accountInitial, normalizeDisplayName } from '@agiworkforce/utils/display-name';
-import {
-  Menu,
-  Share2,
-  PanelsTopLeft,
-  Bell,
-  X as XIcon,
-  Settings,
-  ChevronUp,
-  CreditCard,
-  Download,
-  HelpCircle,
-  Keyboard,
-  LogOut,
-} from '@agiworkforce/icons';
+import { Menu, Share2, PanelsTopLeft, Bell, X as XIcon, ChevronUp } from '@agiworkforce/icons';
 import { Button, Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
@@ -116,17 +103,9 @@ import {
 } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  shortcutLabel,
-} from '@agiworkforce/ui';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@agiworkforce/ui';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
-import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
+import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
 import { EnhancedExportDialog } from '../components/dialogs/EnhancedExportDialog';
@@ -159,21 +138,10 @@ import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/A
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import type { ResearchPlanDecision } from '../components/research/ResearchActivity';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
-import { UpgradePlanDialog, type UpgradeTarget } from '../components/dialogs/UpgradePlanDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import { toast } from 'sonner';
 import { safeClipboard } from '@shared/utils/browser-utils';
-import {
-  upgradeToBasicPlan,
-  upgradeToProPlan,
-  upgradeToMaxPlan,
-  upgradeToMax15xPlan,
-} from '@features/billing/services/stripe-payments';
-import {
-  UpgradeConfirmDialog,
-  type UpgradeConfirmRequest,
-} from '@features/billing/components/UpgradeConfirmDialog';
-import { billingOwnerPlanChangeMessage } from '@features/billing/lib/subscription-owner-presentation';
+import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
 import {
   buildAcceptedHandoffSystemMessage,
   buildWebLocalToByokPreview,
@@ -959,9 +927,6 @@ export default function WebChatPage() {
   // Whether CreateProjectDialog was opened from the composer picker (select the
   // new project as chat scope) vs the sidebar (navigate to the project page).
   const [createProjectFromComposer, setCreateProjectFromComposer] = useState(false);
-  const [upgradePlanOpen, setUpgradePlanOpen] = useState(false);
-  const [upgradePlanTarget, setUpgradePlanTarget] = useState<UpgradeTarget | null>(null);
-  const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
   const imageTranscriptRecoveries = useImageTranscriptRecoveryStore((state) => state.recoveries);
   const setImageTranscriptRecovery = useImageTranscriptRecoveryStore((state) => state.setRecovery);
   const removeImageTranscriptRecovery = useImageTranscriptRecoveryStore(
@@ -1111,13 +1076,16 @@ export default function WebChatPage() {
   const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
   const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
 
-  // Managed cloud is open by default: a signed-in user already reaches it.
-  // The upgrade dialog only sells higher hosted capacity, it is not an access
-  // gate, so opening it simply shows the plan comparison (no waitlist).
-  const handleOpenUpgradeDialog = useCallback((targetTier: UpgradeTarget | null = null) => {
-    setUpgradePlanTarget(targetTier);
-    setUpgradePlanOpen(true);
-  }, []);
+  // Shared with WebAppShell's account menu (useUpgradePlanFlow) so the
+  // dialog, mid-cycle confirm, and the real Stripe checkout call cannot
+  // drift between the two surfaces.
+  const { openUpgradeDialog: handleOpenUpgradeDialog, upgradeDialogs } = useUpgradePlanFlow({
+    user,
+    subscription,
+    currentTier: subscription?.tier,
+    billingPolicyReady,
+    openSettings,
+  });
 
   const handlePaywallRecovery = useCallback(
     (_messageId: string, requiredTier: string, recoveryAction: MediaPaywallRecoveryAction) => {
@@ -1130,67 +1098,6 @@ export default function WebChatPage() {
       );
     },
     [handleOpenUpgradeDialog, openSettings],
-  );
-
-  // Route the upgrade CTA to the real Stripe checkout flow (same service the
-  // billing dashboard uses). No waitlist email capture.
-  const handleUpgradePlan = useCallback(
-    async (plan: UpgradeTarget, annual: boolean) => {
-      if (!user) {
-        toast.error('Please sign in to upgrade.');
-        return;
-      }
-      setUpgradePlanOpen(false);
-      setUpgradePlanTarget(null);
-      const billingPeriod = annual ? 'yearly' : 'monthly';
-      const hasActivePaidPlan =
-        subscription != null &&
-        !['free', 'local-only', 'byok'].includes(subscription.tier) &&
-        ['active', 'trialing'].includes(subscription.status);
-      // A mid-cycle upgrade charges the saved card immediately with no Stripe
-      // screen, so confirm the exact prorated amount first instead of charging
-      // silently. UpgradeConfirmDialog owns the preview + the actual charge.
-      if (hasActivePaidPlan) {
-        if (!billingPolicyReady) {
-          toast.error('Billing details are still loading. Please try again in a moment.');
-          return;
-        }
-        if (subscription?.subscription_source !== 'stripe') {
-          toast.error(billingOwnerPlanChangeMessage(subscription?.subscription_source));
-          openSettings('billing');
-          return;
-        }
-        setUpgradeConfirm({ plan, billingInterval: billingPeriod });
-        return;
-      }
-      const toastId = toast.loading('Redirecting to checkout...');
-      try {
-        if (plan === 'basic') {
-          await upgradeToBasicPlan({ userId: user.id, userEmail: user.email || '' });
-        } else if (plan === 'pro') {
-          await upgradeToProPlan({
-            userId: user.id,
-            userEmail: user.email || '',
-            billingPeriod,
-          });
-        } else if (plan === 'max') {
-          await upgradeToMaxPlan({
-            userId: user.id,
-            userEmail: user.email || '',
-            billingPeriod: 'monthly',
-          });
-        } else if (plan === 'max_15x') {
-          await upgradeToMax15xPlan({ userId: user.id, userEmail: user.email || '' });
-        }
-        // On success the service redirects to Stripe; the dismiss below only
-        // runs if navigation has not yet replaced the page.
-        toast.dismiss(toastId);
-      } catch (err) {
-        toast.dismiss(toastId);
-        toast.error(toUserMessage(err, 'Failed to start checkout.'));
-      }
-    },
-    [billingPolicyReady, openSettings, subscription, user],
   );
 
   /**
@@ -4737,55 +4644,21 @@ export default function WebChatPage() {
   } = resolveChatAccountDisplay(user, subscription?.tier, billingPolicyReady);
 
   // Shared between the expanded footer's dropdown and the collapsed rail's
-  // compact trigger, so the two never drift into different menus.
+  // compact trigger, and with WebAppShell's account menu via the shared
+  // AccountMenuItems component, so none of them can drift into a different
+  // menu.
   const accountMenuItems = (
-    <>
-      {!isAccountLoading && user?.email && (
-        <>
-          <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
-            {user.email}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-        </>
-      )}
-      <WorkspaceMenuItems onManage={() => openSettings('team')} />
-      {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
-      <DropdownMenuItem onClick={() => openSettings('general')}>
-        <Settings className="mr-2 h-4 w-4" />
-        {t('common:settings')}
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => router.push('/help')}>
-        <HelpCircle className="mr-2 h-4 w-4" />
-        {t('common:navGetHelp')}
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      {/* Hidden once there is nothing left to buy — this menu offered
-          "Upgrade" to max_15x accounts, which reads as a billing error next
-          to the plan badge in the same sidebar. */}
-      {hasSelfServeUpgradePath(subscriptionTier) ? (
-        <DropdownMenuItem onClick={() => handleOpenUpgradeDialog()}>
-          <CreditCard className="mr-2 h-4 w-4" />
-          {t('common:navUpgrade')}
-        </DropdownMenuItem>
-      ) : null}
-      <DropdownMenuItem onClick={() => router.push('/download')}>
-        <Download className="mr-2 h-4 w-4" />
-        {t('common:navGetApps')}
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => setKeyboardShortcutsOpen(true)}>
-        <Keyboard className="mr-2 h-4 w-4" />
-        {t('common:navKeyboardShortcuts')}
-        <span className="ml-auto text-[12px] text-muted-foreground">{shortcutLabel('/')}</span>
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        onClick={() => void handleLogout()}
-        className="text-danger focus:text-danger"
-      >
-        <LogOut className="mr-2 h-4 w-4" />
-        {t('common:navLogOut')}
-      </DropdownMenuItem>
-    </>
+    <AccountMenuItems
+      email={isAccountLoading ? null : user?.email}
+      onManageWorkspace={() => openSettings('team')}
+      onOpenSettings={() => openSettings('general')}
+      onOpenHelp={() => router.push('/help')}
+      onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
+      showUpgrade={hasSelfServeUpgradePath(subscriptionTier)}
+      onUpgrade={() => handleOpenUpgradeDialog()}
+      onDownloadApps={() => router.push('/download')}
+      onLogout={() => void handleLogout()}
+    />
   );
 
   // footerSlot: web-specific account menu + free-plan nudge.
@@ -5321,16 +5194,7 @@ export default function WebChatPage() {
           createProjectFromComposer ? (project) => setActiveProject(project.id) : undefined
         }
       />
-      <UpgradePlanDialog
-        open={upgradePlanOpen}
-        onOpenChange={(open) => {
-          setUpgradePlanOpen(open);
-          if (!open) setUpgradePlanTarget(null);
-        }}
-        currentTier={currentTier}
-        targetTier={upgradePlanTarget}
-        onUpgrade={(plan, annual) => void handleUpgradePlan(plan, annual)}
-      />
+      {upgradeDialogs}
       <ShareConversationDialog
         key={displayedConversationId ?? 'empty-conversation'}
         open={shareDialogOpen}
@@ -5342,14 +5206,6 @@ export default function WebChatPage() {
         onOpenChange={setExportDialogOpen}
         session={exportSession}
         messages={exportMessages}
-      />
-      <UpgradeConfirmDialog
-        request={upgradeConfirm}
-        onCancel={() => setUpgradeConfirm(null)}
-        onConfirmed={() => {
-          setUpgradeConfirm(null);
-          toast.success('Your plan has been upgraded.');
-        }}
       />
       {/* Project settings dialog — opened from the sidebar project row context menu */}
       {projectForSettings && (

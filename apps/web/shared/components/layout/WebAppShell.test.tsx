@@ -73,6 +73,21 @@ vi.mock('@/features/workspaces/components/WorkspaceMenuItems', () => ({
   WorkspaceMenuItems: () => null,
 }));
 
+// The account menu's Upgrade item drives the same upgrade flow as
+// WebChatPage (dialog, mid-cycle confirm, real Stripe checkout call) via
+// this shared hook. Stubbed for the same reason WorkspaceMenuItems is: this
+// is a layout test, not a billing-flow one.
+vi.mock('@features/billing/hooks/use-upgrade-plan-flow', () => ({
+  useUpgradePlanFlow: () => ({ openUpgradeDialog: vi.fn(), upgradeDialogs: null }),
+}));
+
+// Same reasoning as the upgrade flow above — the shortcuts reference dialog
+// pulls in the settings store's shortcut-preference wiring, which this
+// layout test has no reason to stand up.
+vi.mock('@/features/chat/components/dialogs/KeyboardShortcutsDialog', () => ({
+  KeyboardShortcutsDialog: () => null,
+}));
+
 vi.mock('@agiworkforce/ui', async () => {
   const React = await import('react');
   return {
@@ -169,12 +184,20 @@ vi.mock('@agiworkforce/ui', async () => {
     DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     DropdownMenuLabel: () => null,
     DropdownMenuSeparator: () => null,
+    // The collapsed rail's account trigger wraps itself in a Tooltip so a
+    // hovered avatar-only button still names itself; passthrough fragments
+    // keep that trigger and its menu in the tree without pulling in Radix.
+    Tooltip: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    TooltipTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    TooltipContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    TooltipProvider: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
     // shell-nav-ia-gap-01: the shell's destructive confirms (delete conversation,
     // delete project) go through the shared AlertDialog wrapper instead of
     // window.confirm. Stable identity so the shell's useCallback deps do not
     // churn on every render, matching the real hook.
     useConfirm: () => confirmStub,
     keepOpenForMenuEscape: menuEscape.keepOpenForMenuEscape,
+    shortcutLabel: (key: string) => key,
   };
 });
 
