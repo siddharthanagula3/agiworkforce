@@ -48,11 +48,6 @@ beforeEach(() => {
   state.clients = [];
 });
 
-/**
- * Both halves extend the real `EventEmitter` on purpose: an `error` emitted
- * with nothing listening has to throw here exactly as it does in production,
- * or the regression this file guards is untestable.
- */
 vi.mock('@neondatabase/serverless', async () => {
   const { EventEmitter: NodeEventEmitter } = await import('node:events');
   class MockClient extends NodeEventEmitter {

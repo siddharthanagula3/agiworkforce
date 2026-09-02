@@ -34,8 +34,6 @@
  */
 
 /**
- * Which side of the pool raised a transport failure: `pool` is a connection
- * that failed while idle, `client` one that failed while checked out.
  */
 export type DatabaseConnectionErrorScope = 'pool' | 'client';
 
@@ -55,9 +53,6 @@ export interface DatabaseConnectionConfig {
   queryTimeoutMs?: number;
   applicationName?: string;
   /**
-   * Where a connection-transport failure is reported. Adapters must never let
-   * one reach the process as an unhandled `error` event, so a missing listener
-   * falls back to `console.error` rather than dropping it.
    */
   onConnectionError?: DatabaseConnectionErrorListener;
 }
