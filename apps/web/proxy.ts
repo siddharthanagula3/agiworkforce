@@ -82,11 +82,6 @@ function hasBrowserSessionCookie(request: NextRequest): boolean {
   return isBrowserSessionCookiePresent(request.cookies.getAll());
 }
 
-// Prerendering '/' means the marketing page can no longer call auth() itself
-// to branch on sign-in state, so the branch moves here: a signed-in visitor
-// is rewritten to the chat root (URL stays '/'), a signed-out one gets the
-// static landing page. WebChatRoot behind '/chat' renders the identical tree
-// app/page.tsx used to render inline for a signed-in user.
 function buildHomeResponse(request: NextRequest): NextResponse {
   const nonce = btoa(crypto.randomUUID());
   const csp = buildCspWithNonce(nonce);
