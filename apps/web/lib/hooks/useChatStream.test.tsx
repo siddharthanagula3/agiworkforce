@@ -131,7 +131,7 @@ describe('useChatStream', () => {
   });
 
   describe('auth failure at send time', () => {
-    it('surfaces an error and adds no message when the token is unavailable', async () => {
+    it('surfaces an error but keeps the optimistically painted message when the token is unavailable', async () => {
       authMocks.getToken.mockResolvedValueOnce(null);
       const fetchSpy = vi.fn();
       vi.stubGlobal('fetch', fetchSpy);
@@ -147,7 +147,7 @@ describe('useChatStream', () => {
       expect(fetchSpy).not.toHaveBeenCalled();
       expect(
         useChatStore.getState().messages.some((m) => m.content === 'this must not vanish silently'),
-      ).toBe(false);
+      ).toBe(true);
     });
   });
 
@@ -241,7 +241,7 @@ describe('useChatStream', () => {
       await vi.waitFor(() => expect(calls).toEqual(['save:user', 'provider', 'save:assistant']));
     });
 
-    it('never calls the provider when the durable user-row write fails', async () => {
+    it('never calls the provider when the durable user-row write fails, though the optimistic message stays painted', async () => {
       useChatStore.setState({
         activeConversationId: persistedConversation.id,
         conversations: [persistedConversation],
@@ -270,7 +270,7 @@ describe('useChatStream', () => {
           .messagesByConversation[
             persistedConversation.id
           ]?.some((message) => message.content === 'do not bill this'),
-      ).toBe(false);
+      ).toBe(true);
       expect(useChatStore.getState().error).toBe(
         'Your message was not saved, so no model was called.',
       );
@@ -633,6 +633,7 @@ describe('useChatStream', () => {
         });
       });
 
+      await vi.waitFor(() => expect(resolveResponse).toBeTypeOf('function'));
       resolveResponse?.(new Response('data: [DONE]\n\n', { status: 200 }));
       await send;
 
@@ -675,6 +676,7 @@ describe('useChatStream', () => {
         });
       });
 
+      await vi.waitFor(() => expect(resolveResponse).toBeTypeOf('function'));
       resolveResponse?.(
         new Response('data: [DONE]\n\n', { status: 200, headers: managedRunHeaders() }),
       );
@@ -729,6 +731,7 @@ describe('useChatStream', () => {
       expect(assistant?.metadata?.cloudAgentRun).toEqual({
         runId: MANAGED_RUN_ID,
         runPath: MANAGED_RUN_PATH,
+        state: 'ready_for_review',
         lastSequence: 0,
       });
     });
