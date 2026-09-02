@@ -154,9 +154,8 @@ export default function GetStartedPage() {
             </ButtonRow>
           </Stack>
         </Section>
-
-        <MarketingFooter />
       </main>
+      <MarketingFooter />
     </div>
   );
 }
