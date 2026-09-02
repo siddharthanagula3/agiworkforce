@@ -7,6 +7,58 @@ export function citationHref(oneBasedIndex: number): string {
   return `#chat-citation-${oneBasedIndex}`;
 }
 
+const TRACKING_PARAM_PATTERN = /^(utm_[a-z_]+|fbclid|gclid|mc_[ce]id)$/i;
+
+function normalizeCitationUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const path = parsed.pathname.replace(/\/+$/, '');
+    const params = Array.from(parsed.searchParams.entries())
+      .filter(([key]) => !TRACKING_PARAM_PATTERN.test(key))
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const query = params.map(([key, value]) => `${key}=${value}`).join('&');
+    return `${host}${path}${query ? `?${query}` : ''}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves a plain inline link's href to a delivered source's 1-based
+ * position, the same numbering `linkifyCitationMarkers` gives a `[n]`
+ * marker, so a source cited both ways in one message gets one number.
+ * Comparison ignores scheme, `www.`, a trailing slash, and tracking query
+ * parameters (utm_*, fbclid, gclid, mc_cid/mc_eid) so a link the model
+ * decorated with its own tracking params still matches a clean source URL.
+ */
+export function findCitationIndexForUrl(
+  href: string,
+  citations: readonly { url: string }[],
+): number | undefined {
+  const target = normalizeCitationUrl(href);
+  if (!target) return undefined;
+  for (let i = 0; i < citations.length; i++) {
+    if (normalizeCitationUrl(citations[i].url) === target) return i + 1;
+  }
+  return undefined;
+}
+
+export function stripTrackingParams(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  const trackingKeys = Array.from(new Set(parsed.searchParams.keys())).filter((key) =>
+    TRACKING_PARAM_PATTERN.test(key),
+  );
+  if (trackingKeys.length === 0) return url;
+  trackingKeys.forEach((key) => parsed.searchParams.delete(key));
+  return parsed.toString();
+}
+
 function splitInlineCode(segment: string): string[] {
   return segment.split(/(`+[^`]*`+)/);
 }

@@ -12,7 +12,12 @@ import { MermaidDiagram } from './MermaidDiagram';
 import { HighlightedCode } from './HighlightedCode';
 import { REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
-import { CITATION_HREF_PATTERN, linkifyCitationMarkers } from './citationMarkers';
+import {
+  CITATION_HREF_PATTERN,
+  findCitationIndexForUrl,
+  linkifyCitationMarkers,
+  stripTrackingParams,
+} from './citationMarkers';
 import { CitationChip, CitationsContext, useMarkdownCitations } from './CitationChip';
 import type { MarkdownCitation } from './CitationChip';
 import type { Components } from 'react-markdown';
@@ -183,14 +188,21 @@ const MarkdownLink = ({ href, children }: { href?: string; children?: React.Reac
     const index = Number(citationMatch[1]);
     const citation = citations[index - 1];
     if (citation) return <CitationChip index={index} citation={citation} />;
+  } else {
+    const inlineIndex = findCitationIndexForUrl(href, citations);
+    if (inlineIndex !== undefined) {
+      const citation = citations[inlineIndex - 1];
+      if (citation) return <CitationChip index={inlineIndex} citation={citation} />;
+    }
   }
+  const cleanHref = stripTrackingParams(href);
   // A fragment points inside this same document - a heading link, or a
   // citation whose source went missing. Opening it in a new tab lands the
   // reader on a blank page instead of the thing they asked to see.
-  const samePage = href.startsWith(FRAGMENT_PREFIX);
+  const samePage = cleanHref.startsWith(FRAGMENT_PREFIX);
   return (
     <a
-      href={href}
+      href={cleanHref}
       className="text-primary hover:underline"
       {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
     >
