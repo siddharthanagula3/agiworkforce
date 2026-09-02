@@ -174,18 +174,25 @@ export function AnchoredComposerMenu({
 
   // The panel opened with no focus inside it and no Escape handling, so a
   // keyboard user could open it and neither reach its contents nor dismiss it.
-  useEffect(() => {
+  // Synchronous (not a setTimeout(0) passive effect): a key pressed right
+  // after open, before the deferred timer ever ran, used to find no item
+  // holding focus and misfire the wrap-around math against index -1.
+  useLayoutEffect(() => {
     if (!open || !mounted || !autoFocusFirstItem) return;
     const node = contentRef?.current ?? internalRef.current;
-    const id = window.setTimeout(() => {
-      focusableItems(node)[0]?.focus();
-    }, 0);
-    return () => window.clearTimeout(id);
+    focusableItems(node)[0]?.focus();
   }, [open, mounted, contentRef, autoFocusFirstItem]);
 
   // Capture phase: a surrounding list (the sidebar) runs its own arrow-key
-  // navigation on a bubble-phase listener and must lose this race.
-  useEffect(() => {
+  // navigation on a bubble-phase listener and must lose this race. A plain
+  // useEffect is a passive effect deferred until after paint, on a separate
+  // task from the click that opened the menu - a key pressed in that gap (a
+  // fast real user, or any programmatic open+key pair with no gap between
+  // them) reaches the browser before this listener attaches, so it falls
+  // through uncaught to whatever ambient handler is already listening.
+  // useLayoutEffect runs synchronously in the same commit as the `open`
+  // state change, before the browser can process a subsequent input event.
+  useLayoutEffect(() => {
     if (!open || !mounted) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
