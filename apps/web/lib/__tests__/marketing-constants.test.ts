@@ -104,21 +104,24 @@ describe('surface availability', () => {
     expect(SURFACE_STATUS.desktop).toContain(shippedVersion('apps/desktop/package.json'));
   });
 
-  // A version number in a manifest is not a release. This assertion used to read
-  // `expect(SURFACE_STATUS.cli).toContain(shippedVersion('apps/cli/npm/package.json'))`
-  // — which passed while the page claimed "Released · v1.7.1" for a crate that
-  // `apps/cli/Cargo.toml` marks `publish = false` and that 404s on the registry.
-  // The manifest is what a surface WOULD ship as; `publish = false` is whether it
-  // ships at all, so that is what the public claim has to follow.
-  it('does not call the CLI released while its crate refuses to publish', () => {
-    const cargo = readFileSync(resolve(repoRoot, 'apps/cli/Cargo.toml'), 'utf8');
-    const publishable = !/^\s*publish\s*=\s*false\s*$/m.test(cargo);
+  // `publish = false` in apps/cli/Cargo.toml keeps the crate off crates.io. It
+  // says nothing about whether the CLI is downloadable, and this assertion used
+  // to read the flag as if it did. What /download actually offers is signed
+  // GitHub release archives under the `v-cli-` tag, resolved at request time by
+  // lib/releases/github-cli-releases.ts, so that is the channel the public claim
+  // has to follow.
+  it('calls the CLI available because /download serves signed release archives', () => {
+    const releases = readFileSync(
+      resolve(repoRoot, 'apps/web/lib/releases/github-cli-releases.ts'),
+      'utf8',
+    );
 
-    if (publishable) {
-      expect(SURFACE_STATUS.cli).toContain(shippedVersion('apps/cli/npm/package.json'));
-    } else {
-      expect(SURFACE_STATUS.cli).toBe(COMING_SOON_LABEL);
-    }
+    expect(releases).toContain("CLI_RELEASE_TAG_PREFIX = 'v-cli-'");
+    expect(SURFACE_STATUS.cli).not.toBe(COMING_SOON_LABEL);
+  });
+
+  it('pins no CLI version in the registry, because the release endpoint owns it', () => {
+    expect(SURFACE_STATUS.cli).not.toMatch(/\d+\.\d+\.\d+/);
   });
 
   it('keeps the surfaces with no release tag marked unreleased', () => {
