@@ -29,7 +29,11 @@ export default function ApiDocsPage() {
             <h2 className="agi-ds-h2" id="agi-api-docs-quickstart-title">
               Quick start.
             </h2>
-            <pre className="agi-ds-prose" data-size="sm" style={{ overflowX: 'auto' }}>
+            <pre
+              className="agi-ds-prose"
+              data-size="sm"
+              style={{ maxWidth: '100%', overflowX: 'auto' }}
+            >
               {`$ curl https://agiworkforce.com/api/llm/v1/chat/completions \\
     -H "Authorization: Bearer $YOUR_KEY" \\
     -H "Content-Type: application/json" \\
