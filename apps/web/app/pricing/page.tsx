@@ -823,11 +823,6 @@ export default function PricingPage() {
             <Prose size="lg" className="agi-ds-reveal">
               {t('heroLede')}
             </Prose>
-            {/* CHECKOUT_ENABLED is an incident-response kill switch (see its
-                definition above): when it trips, every paid-plan button below
-                disables itself with no other visible change, which reads as a
-                broken page rather than a deliberate pause. State the reason once,
-                here, where it holds regardless of which audience tab is open. */}
             {!CHECKOUT_ENABLED ? (
               <p role="status" className="agi-ds-prose" data-size="sm">
                 Checkout is temporarily unavailable. Please try again later. Existing plans and
@@ -839,11 +834,6 @@ export default function PricingPage() {
 
         <section className="agi-ds-section" aria-label="Plans" style={{ paddingTop: 0 }}>
           <Container>
-            {/* ──────────── Audience + billing-cadence controls ─────────────
-                Both toggles are the same kind of thing — "which prices am I
-                looking at" — so they share a row. The cadence one only appears
-                for individual plans; Team carries its own cadence next to its
-                seat count, because seats and cadence are bought together. */}
             <div className="agi-ds-tier-controls">
               <div className="agi-ds-tier-toggle" role="group" aria-label={t('audienceLabel')}>
                 <button
@@ -909,7 +899,6 @@ export default function PricingPage() {
               ) : null}
             </div>
 
-            {/* ─────────────── Team & Enterprise (centerpiece) ──────────── */}
             <section aria-label={t('audienceBusiness')} hidden={audience !== 'business'}>
               <h2 className="sr-only">{t('audienceBusiness')}</h2>
               <div className="agi-ds-tier-grid" data-columns="2">
@@ -1005,9 +994,6 @@ export default function PricingPage() {
                       step={1}
                       value={teamSeats}
                       onChange={(event) => {
-                        // Clamp here as well as server-side: the number input still
-                        // lets a keyboard user type 0 or a huge value, and the total
-                        // shown must never disagree with what checkout will charge.
                         const parsed = Number.parseInt(event.target.value, 10);
                         if (!Number.isFinite(parsed)) {
                           setTeamSeats(MIN_PURCHASABLE_SEATS);
@@ -1036,10 +1022,6 @@ export default function PricingPage() {
                     <span className="agi-ds-tier-price">{t('custom')}</span>
                     <span className="agi-ds-tier-price-sub">{t('customPricingSub')}</span>
                   </p>
-                  {/* Stated inline rather than through pricing.json's
-                      `enterpriseBody` key, which still frames SSO/SCIM as a
-                      "roadmap"; that i18n string is shared across locales and
-                      outside this surface's owned files. */}
                   <Prose size="sm">
                     SSO, SCIM, and audit are shipped and entitlement-gated; we scope capacity, data
                     retention, and rollout to how your org actually works. Reach out and we will
@@ -1055,15 +1037,6 @@ export default function PricingPage() {
                       {t('enterpriseFeature2')}
                     </li>
                     <li>
-                      {/* Stated inline: pricing.json's `enterpriseFeature3` still
-                          calls SSO/audit/retention a "roadmap" item, but SSO
-                          sign-in and SCIM directory sync are implemented and gated
-                          on `enterprise_controls` (see AdminConsolePage.tsx's
-                          "Implemented — entitlement-gated" Identity row, plus
-                          /api/admin/sso and /api/scim/v2); only org-configurable
-                          retention remains contract-scoped. That i18n key is shared
-                          across 11 locales and outside this surface's owned files,
-                          so correct it (or retire it) in packages/ui/i18n. */}
                       <CheckIcon />
                       SSO, SCIM directory sync, and audit logs: shipped, gated on the Enterprise
                       plan&apos;s entitlement. Retention windows stay contract-scoped.
@@ -1082,12 +1055,8 @@ export default function PricingPage() {
               </div>
             </section>
 
-            {/* ──────────────────── Individual cloud on-ramp ────────────────── */}
             <section aria-label={t('audienceIndividual')} hidden={audience !== 'individual'}>
               <h2 className="sr-only">{t('audienceIndividual')}</h2>
-              {/* The audience tab above already says which plans these are; a second
-                  headline and two lines of prose only delayed the prices. The name
-                  moves to aria-label so the section keeps an accessible name. */}
 
               {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
                 <p role="status" className="agi-ds-prose" data-size="sm">
@@ -1126,11 +1095,6 @@ export default function PricingPage() {
                       <CheckIcon />
                       {t('freeFeature3')}
                     </li>
-                    {/* Local and BYOK are $0 trust modes, not plans anyone buys.
-                        They were two more zero-price cards a visitor had to read
-                        past before reaching a price; as a line here they stay
-                        visible without spending a column. /local and /byok carry
-                        the full story. */}
                     <li>
                       <CheckIcon />
                       {t('freeLocalByok')}
@@ -1143,7 +1107,6 @@ export default function PricingPage() {
                   </div>
                 </article>
 
-                {/* Basic is available across the customer app surfaces. */}
                 {isPlanSelectableOnSurface('basic', 'web') && (
                   <article className="agi-ds-tier">
                     <h3 className="agi-ds-h3">{basic.label}</h3>
@@ -1229,19 +1192,7 @@ export default function PricingPage() {
                   </div>
                 </article>
 
-                {/* Max 5x and Max 15x share one card. They are the same plan at two
-                    capacities, and splitting them pushed the individual grid to five
-                    cards inside a four-card layout. The selector keeps both buyable
-                    without spending a column on each. */}
                 <article className="agi-ds-tier">
-                  {/* Name and capacity selector share one row. The selector used to
-                      sit on its own line below, which read as a second control
-                      rather than as part of the plan's identity — and every label
-                      said "Max": the heading, and both buttons. The family name
-                      carries "Max" once and the buttons carry only the multiplier
-                      they switch, so the row states the plan and its two capacities
-                      without repeating itself. The full catalog label still appears
-                      on the CTA, which is where the exact product name matters. */}
                   <div className="agi-ds-tier-head">
                     <h3 className="agi-ds-h3">{t('maxFamilyName')}</h3>
                     <div
@@ -1305,7 +1256,6 @@ export default function PricingPage() {
           </Container>
         </section>
 
-        {/* ───────────────────────── Plan comparison ────────────────────── */}
         <section className="agi-ds-section" aria-labelledby="pricing-compare-title" data-rule="top">
           <Container>
             <Eyebrow>{t('compareEyebrow')}</Eyebrow>
@@ -1313,16 +1263,8 @@ export default function PricingPage() {
               {t('compareHeading')}
             </h2>
             <Prose size="lg">{t('compareSubheading')}</Prose>
-            {/* Fifteen columns and ten rows is a reference, not a thing anyone
-                reads on the way to choosing a plan - and at 390px it was 2065px
-                wide inside a 350px window, roughly six screens of sideways
-                scrolling. A native details element keeps it one keystroke away,
-                stays open on the pages that deep-link into it, and needs no
-                JavaScript to work. */}
             <details className="agi-ds-compare-disclosure">
               <summary className="agi-ds-compare-summary">
-                {/* Not the section heading repeated - that sits directly above
-                    this control. This names what opening it reveals. */}
                 <span>Full capability table</span>
                 <span className="agi-ds-compare-summary-hint">
                   {comparablePlanCount} plans across {COMPARISON_COLUMNS.length} capabilities
@@ -1375,12 +1317,6 @@ export default function PricingPage() {
           </Container>
         </section>
 
-        {/* ──────────────────── Models included, by plan ────────────────────
-            This table is generated live from `tierAllowedModels` in the
-            canonical catalog through the same `canAccessModelForSubscriptionTier`
-            gate the model picker and the server enforce (see
-            `modelAccessByProvider` above) — never a hand-typed model list, so it
-            cannot drift from what a plan actually unlocks. */}
         <section className="agi-ds-section" aria-labelledby="pricing-models-title" data-rule="top">
           <Container>
             <Eyebrow>Models</Eyebrow>
