@@ -1,17 +1,46 @@
 @layer base {
-  :where(.code-block-body) {
-    color-scheme: dark;
-    background-color: #111827;
-    color: #e5e7eb;
+  :where(.code-block-container) {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--chat-code-border);
   }
 
-  :where(.dark) :where(.code-block-body) {
-    background-color: #030712;
+  :where(.code-block-header-bar) {
+    background-color: var(--chat-code-header-bg);
+    border-bottom: 1px solid var(--chat-code-border);
+  }
+
+  :where(.code-block-lang-label) {
+    color: var(--chat-code-lang-label);
+    font-family: var(--chat-font-mono);
+    font-size: 12px;
+    text-transform: lowercase;
+  }
+
+  :where(.code-block-body) {
+    background-color: var(--chat-code-bg);
+    color: var(--chat-code-text);
   }
 
   :where(.code-block-body) :where(pre) {
     margin: 0;
     padding: 1rem;
     overflow-x: auto;
+  }
+
+  :where(.shiki-token) {
+    color: var(--shiki-light);
+    background-color: var(--shiki-light-bg, transparent);
+    font-style: var(--shiki-light-font-style, normal);
+    font-weight: var(--shiki-light-font-weight, normal);
+    text-decoration: var(--shiki-light-text-decoration, none);
+  }
+
+  :where(.dark) :where(.shiki-token) {
+    color: var(--shiki-dark);
+    background-color: var(--shiki-dark-bg, transparent);
+    font-style: var(--shiki-dark-font-style, normal);
+    font-weight: var(--shiki-dark-font-weight, normal);
+    text-decoration: var(--shiki-dark-text-decoration, none);
   }
 }

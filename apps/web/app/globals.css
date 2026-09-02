@@ -1063,25 +1063,30 @@
     color: var(--chat-text-primary);
   }
 
-  /* Code block styling - matches desktop oneDark theme */
+  /* Code block styling - surface, header, border and text all read the
+     --chat-code-* tokens so the block follows the active theme instead of
+     the dark chrome that used to be pinned in both themes. */
   .code-block-container {
-    @apply my-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700/50;
-    background-color: #111827; /* gray-900 - dark code bg */
+    @apply my-3 rounded-xl overflow-hidden;
+    border: 1px solid var(--chat-code-border);
   }
 
   .code-block-header-bar {
-    @apply flex items-center justify-between px-4 py-2.5 bg-gray-800 dark:bg-gray-900 border-b border-gray-700/50;
+    @apply flex items-center justify-between px-4 py-2.5;
+    background-color: var(--chat-code-header-bg);
+    border-bottom: 1px solid var(--chat-code-border);
+  }
+
+  .code-block-lang-label {
+    color: var(--chat-code-lang-label);
+    font-size: 12px;
+    text-transform: lowercase;
   }
 
   .code-block-body {
-    @apply bg-gray-900 dark:bg-gray-950 font-mono;
-    /* AUDIT-FIX ART-8: the background is pinned dark in BOTH themes, but no
-       foreground was set - in light mode the text inherited --chat-text-primary
-       (#1a1a1a) for ~1.2:1 contrast, i.e. every fenced code block was invisible.
-       Pin the light foreground to match the pinned background rather than
-       lightening the background (which would break the dark-theme design).
-       Left unset on `code` so the highlight.js theme (ART-9) can colour tokens. */
-    color: #e5e7eb; /* gray-200 on gray-900 - ~13:1 */
+    @apply font-mono;
+    background-color: var(--chat-code-bg);
+    color: var(--chat-code-text);
     font-size: 13px; /* desktop .code-block-content code: text-[13px] */
     line-height: 1.5;
   }
