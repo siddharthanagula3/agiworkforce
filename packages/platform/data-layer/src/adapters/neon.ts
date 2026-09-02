@@ -136,9 +136,9 @@ let _neonModule: NeonModule | null = null;
  * traffic, credentials included, over an unencrypted socket to somebody else's
  * machine.
  */
-function applyLocalWebSocketProxy(neon: NeonModule): void {
+function applyLocalWebSocketProxy(neon: NeonModule): boolean {
   const proxy = process.env['AGI_DATABASE_WS_PROXY']?.trim();
-  if (!proxy) return;
+  if (!proxy) return false;
 
   const host = proxy.split(':')[0] ?? '';
   const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
@@ -160,6 +160,21 @@ function applyLocalWebSocketProxy(neon: NeonModule): void {
   neon.neonConfig.useSecureWebSocket = false;
   neon.neonConfig.pipelineTLS = false;
   neon.neonConfig.pipelineConnect = false;
+  return true;
+}
+
+/**
+ * Routes one-shot `pool.query()` calls over HTTP fetch instead of a
+ * WebSocket, so unbound queries hold no idle socket between invocations.
+ * The driver disables this whenever the Pool carries a
+ * `connect`/`acquire`/`release`/`remove` listener; `guardTransportErrors`
+ * wires each client directly instead, so it stays eligible. Transactions
+ * still call `pool.connect()` onto the WebSocket client regardless. Off
+ * under the local WS proxy, which has no Neon HTTP endpoint to fetch.
+ */
+function applyPoolQueryViaFetch(neon: NeonModule, usingLocalProxy: boolean): void {
+  if (usingLocalProxy) return;
+  neon.neonConfig.poolQueryViaFetch = true;
 }
 
 async function loadNeon(): Promise<NeonModule> {
@@ -179,7 +194,8 @@ async function loadNeon(): Promise<NeonModule> {
   // Applied BEFORE the cache is populated. Caching first would mean a refused
   // proxy config throws once and is then silently skipped on every later call,
   // leaving the driver pointed at the real host with nobody told.
-  applyLocalWebSocketProxy(loaded);
+  const usingLocalProxy = applyLocalWebSocketProxy(loaded);
+  applyPoolQueryViaFetch(loaded, usingLocalProxy);
   _neonModule = loaded;
   return _neonModule;
 }
@@ -245,6 +261,13 @@ function decodeJwtSub(jwt: string): string {
 
 const DEFAULT_CONNECTION_TIMEOUT_MS = 10_000;
 
+/**
+ * Below the driver's own 10s default so a pool sitting idle across a
+ * Vercel invocation gap closes its socket instead of handing the next
+ * invocation a connection that already died in the freeze.
+ */
+const DEFAULT_IDLE_TIMEOUT_MS = 5_000;
+
 export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
   pool?: Pool;
   poolPromise?: Promise<Pool>;
@@ -274,6 +297,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
   private disposed = false;
   private ownsPool: boolean;
   private readonly reportedErrors = new WeakSet<object>();
+  private readonly guardedClients = new WeakSet<PoolClient>();
 
   constructor(private config: NeonDatabaseAdapterConfig) {
     if (config.pool) {
@@ -289,6 +313,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
           new mod.Pool({
             connectionString: config.connectionString,
             connectionTimeoutMillis: config.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS,
+            idleTimeoutMillis: DEFAULT_IDLE_TIMEOUT_MS,
             ...(config.poolSize !== undefined ? { max: config.poolSize } : {}),
             ...(config.statementTimeoutMs !== undefined
               ? { statement_timeout: config.statementTimeoutMs }
@@ -308,10 +333,25 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
 
   private guardTransportErrors(pool: Pool): Pool {
     pool.on('error', (error: unknown) => this.reportTransportError('pool', error));
-    pool.on('connect', (client: PoolClient) => {
-      client.on('error', (error: unknown) => this.reportTransportError('client', error));
-    });
     return pool;
+  }
+
+  /**
+   * `pool.connect()` can hand back either a brand-new client or one already
+   * wired on an earlier checkout, so this attaches at most once per client
+   * — attaching on the Pool's own `connect` event instead would disqualify
+   * {@link applyPoolQueryViaFetch}'s fast path for every pool sharing this
+   * driver module. The pool strips its own idle-error listener off a client
+   * for as long as it is checked out, so without this a transport error
+   * during that window is unhandled and crashes the process.
+   */
+  private async checkoutClient(pool: Pool): Promise<PoolClient> {
+    const client = await pool.connect();
+    if (!this.guardedClients.has(client)) {
+      this.guardedClients.add(client);
+      client.on('error', (error: unknown) => this.reportTransportError('client', error));
+    }
+    return client;
   }
 
   private reportTransportError(scope: DatabaseConnectionErrorScope, error: unknown): void {
@@ -372,7 +412,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
         throw withStatementContext(err, sql);
       }
     }
-    const client = await pool.connect();
+    const client = await this.checkoutClient(pool);
     try {
       await this.beginRlsScope(client);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
@@ -400,7 +440,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
         throw withStatementContext(err, sql);
       }
     }
-    const client = await pool.connect();
+    const client = await this.checkoutClient(pool);
     try {
       await this.beginRlsScope(client);
       const result = (await client.query(sql, params as unknown[])) as QueryResult;
@@ -420,7 +460,7 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
 
   async transaction<T>(fn: (tx: DatabaseAdapter) => Promise<T>): Promise<T> {
     const pool = await this.getPool();
-    const client = await pool.connect();
+    const client = await this.checkoutClient(pool);
     try {
       await this.beginRlsScope(client);
       const tx = new NeonTransactionAdapter(client);
