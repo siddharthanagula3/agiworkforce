@@ -73,7 +73,9 @@ export function BrowserActivityBadge({
               : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15',
       )}
       title={lastAction ?? currentPageTitle ?? label}
-      aria-label="Open browser activity"
+      aria-label={`${label}, open browser activity`}
+      role="status"
+      aria-live="polite"
     >
       {!extensionConnected ? (
         <WifiOff className="h-3 w-3" />
