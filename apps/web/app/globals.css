@@ -7256,8 +7256,9 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 [data-design='agi'] .agi-waitlist-inline-input:focus-visible {
-  border-color: var(--agi-amber);
-  box-shadow: 0 0 0 3px var(--agi-amber-soft);
+  border-color: var(--agi-ink);
+  outline: 2px solid var(--agi-ink);
+  outline-offset: 2px;
 }
 
 [data-design='agi'] .agi-waitlist-inline-submit {
@@ -7295,9 +7296,8 @@ html[data-contrast='more'] *:focus-visible {
   margin: 0;
   padding: 14px 18px;
   border: 1px solid var(--agi-rule-strong);
-  border-left: 2px solid var(--agi-amber);
   border-radius: 10px;
-  background: var(--agi-amber-soft);
+  background: var(--agi-ground-2);
   font-size: 14.5px;
   line-height: 1.55;
   color: var(--agi-ink);
