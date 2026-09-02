@@ -1680,41 +1680,56 @@ export default function WebChatPage() {
         parkUnsentDraft(targetConversationId, content);
         return false;
       };
+      let clientConvId: string | null = null;
+      let resolvedFreshConvId: string | null = null;
+      // The placeholder never became a real conversation: hand the surface
+      // back to the empty-chat state instead of stranding it on a dead id,
+      // and park the draft where that state reads it from.
+      const releaseUnresolvedPlaceholder = () => {
+        if (!clientConvId || resolvedFreshConvId) return;
+        if (!urlConversationId) {
+          setBareChatSessionId((current) => (current === clientConvId ? null : current));
+        }
+        targetConversationId = null;
+      };
       try {
         // Project scope for a NEW conversation: the composer's send meta is the
         // value the user saw at submit time; fall back to the shared store for
         // sends that do not originate from the composer picker flow.
         const sendProjectId =
           options.meta?.projectId !== undefined ? options.meta.projectId : activeProjectId;
-        let freshConvId: string | null = null;
-        const convId =
-          options.conversationId ||
-          urlConversationId ||
-          bareChatSessionId ||
-          (await createConversation(NEW_CHAT_TITLE, activeModelId, sendProjectId).then((c) => {
-            if (c) {
-              freshConvId = c.id;
+        const existingConvId = options.conversationId || urlConversationId || bareChatSessionId;
+        // No conversation yet: paint the turn under a client-only id right now
+        // so the optimistic bubble and the "Preparing" indicator render before
+        // the create call (and the /chat/[id] navigation it triggers) even
+        // starts. `sendMessage`'s `ensureConversationId` below renames this
+        // placeholder to the server id once `createConversation` resolves.
+        clientConvId = existingConvId ? null : crypto.randomUUID();
+        const convId = existingConvId || clientConvId!;
+        if (clientConvId) {
+          setActiveConversation(clientConvId);
+          if (!urlConversationId) setBareChatSessionId(clientConvId);
+        }
+        targetConversationId = convId;
+
+        const ensureConversationId = clientConvId
+          ? async (): Promise<string | null> => {
+              const c = await createConversation(NEW_CHAT_TITLE, activeModelId, sendProjectId);
+              if (!c) return null;
+              resolvedFreshConvId = c.id;
               // The composer's toggles live under the pending key until this
               // conversation exists. Move them now, before the send reads them
               // and before the route swaps — otherwise a chat started in Video
               // or Image mode reverts to text the moment it gets an id.
               adoptPendingComposerToggles(c.id);
               if (!urlConversationId) setBareChatSessionId(c.id);
+              // Navigate to the canonical /chat/[id] URL after the first message
+              // so the conversation is bookmarkable and survives a page refresh.
+              // Use replace so the empty /chat entry is removed from history.
+              router.replace(`/chat/${c.id}`);
               return c.id;
             }
-            return null;
-          }));
-
-        if (!convId) return abandonSend();
-        targetConversationId = convId;
-        if (!urlConversationId) setBareChatSessionId(convId);
-
-        // Navigate to the canonical /chat/[id] URL after the first message so the
-        // conversation is bookmarkable and survives a page refresh. Use replace so
-        // the empty /chat entry is removed from browser history.
-        if (freshConvId) {
-          router.replace(`/chat/${freshConvId}`);
-        }
+          : undefined;
 
         const resolvedAttachments = options.attachments?.length
           ? await uploadChatAttachments(options.attachments)
@@ -1732,6 +1747,7 @@ export default function WebChatPage() {
             userMessageId: options.userMessageId,
             assistantMessageId: options.assistantMessageId,
             conversationId: convId,
+            ensureConversationId,
             onTurnCommitted:
               replacementTurnCommitted || options.onTurnCommitted
                 ? () => {
@@ -1767,15 +1783,22 @@ export default function WebChatPage() {
         if (pendingEdit && replace) {
           pendingEditRollbackRef.current = null;
           const committed = await replace(pendingEdit.rollbackIds, doSend);
-          if (!committed) return abandonSend();
+          if (!committed) {
+            releaseUnresolvedPlaceholder();
+            return abandonSend();
+          }
           return true;
         }
-        if (!(await doSend())) return abandonSend();
+        if (!(await doSend())) {
+          releaseUnresolvedPlaceholder();
+          return abandonSend();
+        }
         return true;
       } catch (error) {
         const message = toUserMessage(error, 'Could not attach the selected files.');
         setChatError(message, targetConversationId ?? undefined);
         toast.error(message);
+        releaseUnresolvedPlaceholder();
         return abandonSend();
       } finally {
         // Release the guard once the send has fully settled (or bailed). By now
@@ -1789,6 +1812,7 @@ export default function WebChatPage() {
       urlConversationId,
       bareChatSessionId,
       createConversation,
+      setActiveConversation,
       adoptPendingComposerToggles,
       sendMessage,
       activeModelId,

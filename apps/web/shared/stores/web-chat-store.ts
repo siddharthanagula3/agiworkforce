@@ -597,6 +597,13 @@ interface ChatState {
     messages: Message[],
     activeLeafMessageId?: string | null,
   ) => void;
+  /**
+   * Repoints every per-conversation bucket from a client-generated id to the
+   * server id that turned out to name the same conversation -- the fresh-chat
+   * send path paints its optimistic turn under a local id before the create
+   * call resolves, and this is the reconciliation once it does.
+   */
+  renameConversationId: (fromId: string, toId: string) => void;
 
   // Actions - Message thread (in-thread response variants)
   /**
@@ -1049,6 +1056,53 @@ export const useChatStore = create<ChatState>()(
             },
             undefined,
             'chat/setActiveConversationWithMessages',
+          ),
+
+        renameConversationId: (fromId, toId) =>
+          set(
+            (state) => {
+              if (fromId === toId) return state;
+              const messagesByConversation = { ...state.messagesByConversation };
+              if (fromId in messagesByConversation) {
+                messagesByConversation[toId] = messagesByConversation[fromId];
+                delete messagesByConversation[fromId];
+              }
+              const activeLeafByConversation = { ...state.activeLeafByConversation };
+              if (fromId in activeLeafByConversation) {
+                activeLeafByConversation[toId] = activeLeafByConversation[fromId];
+                delete activeLeafByConversation[fromId];
+              }
+              const streamingConversationIds = state.streamingConversationIds.map((id) =>
+                id === fromId ? toId : id,
+              );
+              const loadingConversationIds = state.loadingConversationIds.map((id) =>
+                id === fromId ? toId : id,
+              );
+              const activeConversationId =
+                state.activeConversationId === fromId ? toId : state.activeConversationId;
+              return {
+                messagesByConversation,
+                activeLeafByConversation,
+                streamingConversationIds,
+                loadingConversationIds,
+                activeConversationId,
+                messages:
+                  activeConversationId === toId
+                    ? resolveVisibleThread(
+                        messagesByConversation[toId] ?? [],
+                        activeLeafByConversation[toId] ?? null,
+                      )
+                    : state.messages,
+                isLoading: deriveIsLoading({
+                  ...state,
+                  activeConversationId,
+                  loadingConversationIds,
+                  streamingConversationIds,
+                }),
+              };
+            },
+            undefined,
+            'chat/renameConversationId',
           ),
 
         // Messages
