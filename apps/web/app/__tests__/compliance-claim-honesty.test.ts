@@ -19,15 +19,25 @@ function collect(dir: string, matches: (entry: string) => boolean, found: string
   return found;
 }
 
+const USE_CASE_CONTENT_FILE = path.join(
+  MARKETING_DIR,
+  'components',
+  'pages',
+  'business',
+  'use-cases-content.ts',
+);
+
 const PAGES = [
   ...collect(APP_DIR, (entry) => entry === 'page.tsx'),
   ...collect(
     MARKETING_DIR,
     (entry) => entry.endsWith('.tsx') && !entry.includes('.test.') && !entry.includes('.spec.'),
   ),
+  USE_CASE_CONTENT_FILE,
 ].sort();
 
 function routeOf(file: string): string {
+  if (file === USE_CASE_CONTENT_FILE) return '/use-cases/it-providers';
   if (path.basename(file) !== 'page.tsx') return path.relative(WEB_ROOT, file);
   const rel = path.relative(APP_DIR, path.dirname(file));
   return rel === '' ? '/' : `/${rel}`;
