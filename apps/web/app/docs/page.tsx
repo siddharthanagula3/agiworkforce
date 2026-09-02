@@ -85,7 +85,7 @@ export default function DocsPage() {
           id="agi-docs-title"
           eyebrow="Get started"
           title="Welcome to AGI."
-          lede="AGI is a multi-surface AI workspace: one account across six surfaces, three routing modes (Local, BYOK, and Cloud), and a consistent API for tools, memory, and connectors."
+          lede="AGI is a multi-surface AI workspace: one account across CLI and Web today, three routing modes (Local, BYOK, and Cloud), and a consistent API for tools, memory, and connectors."
           ctas={[]}
         />
 
