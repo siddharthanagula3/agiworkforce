@@ -128,10 +128,7 @@ export function SharedLinksSection() {
       </div>
 
       {error ? (
-        <div
-          role="alert"
-          style={{ color: 'var(--chat-accent-primary-text, #8b5f1d)', fontSize: 13 }}
-        >
+        <div role="alert" style={{ color: 'var(--chat-accent-primary-text)', fontSize: 13 }}>
           {error}{' '}
           <button type="button" onClick={() => void load()} style={actionButtonStyle}>
             Retry
@@ -231,7 +228,7 @@ export function SharedLinksSection() {
                     disabled={busy}
                     style={{
                       ...actionButtonStyle,
-                      color: 'var(--chat-accent-primary-text, #8b5f1d)',
+                      color: 'var(--chat-accent-primary-text)',
                       cursor: busy ? 'not-allowed' : 'pointer',
                     }}
                   >

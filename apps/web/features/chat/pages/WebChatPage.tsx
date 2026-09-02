@@ -4894,7 +4894,7 @@ export default function WebChatPage() {
                     setChatError(null);
                     void handleRegenerateMessage(retryableTurnId);
                   }}
-                  className="shrink-0 rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-800 transition-colors hover:bg-red-100 dark:border-red-500/40 dark:text-red-100 dark:hover:bg-red-500/20"
+                  className="shrink-0 rounded-md border border-destructive/40 px-2 py-1 text-xs font-semibold text-danger transition-colors hover:bg-destructive/5"
                 >
                   Retry
                 </button>
@@ -4902,7 +4902,7 @@ export default function WebChatPage() {
               <button
                 type="button"
                 onClick={() => setChatError(null)}
-                className="rounded-md p-1 text-red-600 transition-colors hover:bg-red-100 hover:text-red-900 dark:text-red-200 dark:hover:bg-red-500/20 dark:hover:text-white"
+                className="rounded-md p-1 text-danger transition-colors hover:bg-destructive/5"
                 aria-label="Dismiss chat error"
               >
                 <XIcon className="h-4 w-4" aria-hidden="true" />

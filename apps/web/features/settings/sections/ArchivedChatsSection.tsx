@@ -212,10 +212,7 @@ export function ArchivedChatsSection() {
       </div>
 
       {error ? (
-        <div
-          role="alert"
-          style={{ color: 'var(--chat-accent-primary-text, #8b5f1d)', fontSize: 13 }}
-        >
+        <div role="alert" style={{ color: 'var(--chat-accent-primary-text)', fontSize: 13 }}>
           {error}{' '}
           <button type="button" onClick={() => void loadFirstPage()} style={actionButtonStyle}>
             Retry
@@ -308,7 +305,7 @@ export function ArchivedChatsSection() {
                     disabled={busy || streaming}
                     style={{
                       ...actionButtonStyle,
-                      color: 'var(--chat-accent-primary-text, #8b5f1d)',
+                      color: 'var(--chat-accent-primary-text)',
                       cursor: busy || streaming ? 'not-allowed' : 'pointer',
                     }}
                   >
@@ -340,7 +337,7 @@ export function ArchivedChatsSection() {
             disabled={actionId !== null || hasStreamingChat}
             style={{
               ...actionButtonStyle,
-              color: 'var(--chat-accent-primary-text, #8b5f1d)',
+              color: 'var(--chat-accent-primary-text)',
               cursor: actionId !== null || hasStreamingChat ? 'not-allowed' : 'pointer',
             }}
           >

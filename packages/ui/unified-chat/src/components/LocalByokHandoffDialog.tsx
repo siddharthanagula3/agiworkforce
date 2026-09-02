@@ -92,10 +92,7 @@ export function LocalByokHandoffDialog({
                 {localLabel}
               </Badge>
               <span className="text-muted-foreground">to</span>
-              <Badge
-                variant="outline"
-                className="gap-1 border-cyan-500/40 text-cyan-700 dark:text-cyan-300"
-              >
+              <Badge variant="outline" className="gap-1 border-cyan-500/40 text-info-text">
                 <FileCheck2 className="h-3 w-3" />
                 {targetProviderLabel ? `${targetLabel} · ${targetProviderLabel}` : targetLabel}
               </Badge>
@@ -176,14 +173,14 @@ export function LocalByokHandoffDialog({
                     className={cn(
                       'mt-2 text-lg font-semibold',
                       findings.length > 0 || unscannedContextCount > 0
-                        ? 'text-amber-700 dark:text-amber-300'
+                        ? 'text-warning-text'
                         : 'text-emerald-700 dark:text-emerald-300',
                     )}
                   >
                     {findings.length}
                   </div>
                   {unscannedContextCount > 0 && (
-                    <div className="mt-1 text-xs text-amber-700 dark:text-amber-200">
+                    <div className="mt-1 text-xs text-warning-text">
                       {unscannedContextCount}{' '}
                       {unscannedContextCount === 1 ? 'selected file was' : 'selected files were'}{' '}
                       not content-scanned
@@ -206,14 +203,14 @@ export function LocalByokHandoffDialog({
               )}
 
               {notice && (
-                <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">
+                <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-warning-text">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{notice}</span>
                 </div>
               )}
 
               {blocked && (
-                <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">
+                <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-warning-text">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
                     Secret findings block this {flowNoun}.{' '}
@@ -236,7 +233,7 @@ export function LocalByokHandoffDialog({
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge
                             variant="outline"
-                            className="border-amber-500/40 text-amber-700 dark:text-amber-200"
+                            className="border-amber-500/40 text-warning-text"
                           >
                             {finding.severity}
                           </Badge>
@@ -264,7 +261,7 @@ export function LocalByokHandoffDialog({
                       className={cn(
                         'inline-flex items-center gap-1 text-xs',
                         unscannedContextCount > 0
-                          ? 'text-amber-700 dark:text-amber-200'
+                          ? 'text-warning-text'
                           : 'text-emerald-700 dark:text-emerald-300',
                       )}
                     >

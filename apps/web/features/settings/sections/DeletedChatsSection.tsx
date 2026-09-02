@@ -138,10 +138,7 @@ export function DeletedChatsSection() {
       </div>
 
       {error ? (
-        <div
-          role="alert"
-          style={{ color: 'var(--chat-accent-primary-text, #8b5f1d)', fontSize: 13 }}
-        >
+        <div role="alert" style={{ color: 'var(--chat-accent-primary-text)', fontSize: 13 }}>
           {error}{' '}
           <button type="button" onClick={() => void loadFirstPage()} style={actionButtonStyle}>
             Retry

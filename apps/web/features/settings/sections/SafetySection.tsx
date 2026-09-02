@@ -83,7 +83,7 @@ export function SafetySection() {
           role={error ? 'alert' : 'status'}
           style={{
             margin: '8px 0 0',
-            color: error ? 'var(--chat-accent-primary-text, #8b5f1d)' : 'var(--text-3)',
+            color: error ? 'var(--chat-accent-primary-text)' : 'var(--text-3)',
             fontSize: 12,
           }}
         >
