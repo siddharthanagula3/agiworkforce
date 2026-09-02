@@ -128,7 +128,6 @@ const PORTAL_OVERLAYS = [
   'packages/ui/ui/src/primitives/Menubar.tsx',
   'packages/ui/ui/src/primitives/Popover.tsx',
   'packages/ui/ui/src/primitives/Select.tsx',
-  'packages/ui/ui/src/primitives/Toast.tsx',
   'packages/ui/ui/src/primitives/Tooltip.tsx',
 ];
 
