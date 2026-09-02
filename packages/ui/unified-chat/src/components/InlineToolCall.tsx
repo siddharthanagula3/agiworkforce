@@ -202,7 +202,7 @@ function StatusIndicator({ status }: { status: InlineToolCallStatus }) {
       <CircleAlert
         size={14}
         strokeWidth={2}
-        className="text-[color:var(--state-danger,#ef4444)]"
+        className="text-[color:var(--chat-destructive-text)]"
         aria-hidden="true"
       />
     );
@@ -212,7 +212,7 @@ function StatusIndicator({ status }: { status: InlineToolCallStatus }) {
       <CircleSlash
         size={14}
         strokeWidth={2}
-        className="text-[color:var(--state-warning,#f59e0b)]"
+        className="text-[color:var(--chat-warning-fg)]"
         aria-hidden="true"
       />
     );
@@ -239,9 +239,9 @@ function labelSuffix(status: InlineToolCallStatus, errorMessage?: string): strin
 function colorClassForStatus(status: InlineToolCallStatus): string {
   switch (status) {
     case 'error':
-      return 'text-[color:var(--state-danger,#ef4444)]';
+      return 'text-[color:var(--chat-destructive-text)]';
     case 'partial':
-      return 'text-[color:var(--state-warning,#f59e0b)]';
+      return 'text-[color:var(--chat-warning-fg)]';
     case 'pending':
       return 'text-[color:var(--chat-text-muted,#8b8680)]';
     case 'running':
