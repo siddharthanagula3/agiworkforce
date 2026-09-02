@@ -1,6 +1,27 @@
 import type { ReactNode } from 'react';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { Header } from '@shared/components/layout/Header';
+import { Eyebrow, Ledger, type LedgerRow } from './system';
+import { SURFACE_STATUS } from '@/lib/marketing-constants';
+
+const ACCOUNT_LEDGER: readonly LedgerRow[] = [
+  { label: 'Web', value: `${SURFACE_STATUS.web}: sign in here to pick up where you left off.` },
+  {
+    label: 'CLI',
+    value: `${SURFACE_STATUS.cli}: five signed v1.0.0 archives on /download, same account.`,
+  },
+  {
+    label: 'Desktop',
+    value:
+      'A Linux build exists as a release artifact and is pending its signature check. No macOS or Windows date yet.',
+    quiet: true,
+  },
+  {
+    label: 'Mobile',
+    value: 'Not shipped: no listing on the App Store or Google Play.',
+    quiet: true,
+  },
+];
 
 export function AuthShell({
   title,
@@ -22,9 +43,7 @@ export function AuthShell({
           <section className="agi-auth-embedded-frame" aria-label="AGI Desktop Cloud sign-in">
             <header className="agi-auth-embedded-header">
               <div className="agi-auth-embedded-brand">
-                <span className="agi-auth-orbit agi-auth-orbit--compact" aria-hidden="true">
-                  <AgiMark size={26} spinning />
-                </span>
+                <AgiMark size={26} />
                 <span>AGI Desktop</span>
               </div>
               <span className="agi-auth-secure-badge">Secure Cloud sign-in</span>
@@ -46,30 +65,15 @@ export function AuthShell({
           <aside className="agi-auth-brand" aria-label="Why AGI">
             <h2 className="agi-auth-title">{title}</h2>
             <p className="agi-auth-lede">{lede}</p>
-            <div className="agi-auth-continuity">
-              <p className="agi-auth-continuity-title">One account. Three surfaces.</p>
-              <ul className="agi-auth-surface-list" aria-label="AGI account surfaces">
-                {[
-                  ['Web', 'Start here'],
-                  ['Desktop', 'Continue securely'],
-                  ['Mobile', 'Stay in sync'],
-                ].map(([surface, description]) => (
-                  <li key={surface}>
-                    <span className="agi-auth-surface-node" aria-hidden="true" />
-                    <span>
-                      <strong>{surface}</strong>
-                      <small>{description}</small>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
             <ul className="agi-auth-points">
               {points.map((point) => (
                 <li key={point}>{point}</li>
               ))}
             </ul>
-            <p className="agi-auth-meta">Web · Desktop · Mobile · CLI · Chrome · VS Code</p>
+            <div className="agi-auth-continuity">
+              <Eyebrow>What this account gives you today</Eyebrow>
+              <Ledger rows={ACCOUNT_LEDGER} caption="Surface availability" />
+            </div>
           </aside>
         </section>
       </main>
