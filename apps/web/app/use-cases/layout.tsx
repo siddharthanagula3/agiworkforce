@@ -1,9 +1,12 @@
 import type { Metadata } from 'next';
 
+const TITLE = 'Use cases: startups, consultants, sales, and IT providers';
+const DESCRIPTION =
+  'How AGI is used across startups, consulting firms, IT service providers, and sales teams: one page per job, each opening on the surface that job runs on.';
+
 export const metadata: Metadata = {
-  title: 'Use Cases',
-  description:
-    'See how teams use AGI for AI automation across startups, consulting firms, IT service providers, and sales teams. Real workflows, real results.',
+  title: TITLE,
+  description: DESCRIPTION,
   keywords: [
     'AI automation use cases',
     'AI for business',
@@ -14,9 +17,8 @@ export const metadata: Metadata = {
     'enterprise AI automation',
   ],
   openGraph: {
-    title: 'Use Cases',
-    description:
-      'How real teams use AGI across startups, consulting firms, IT service providers, and sales teams.',
+    title: TITLE,
+    description: DESCRIPTION,
     type: 'website',
     url: 'https://agiworkforce.com/use-cases',
     images: [
@@ -24,15 +26,14 @@ export const metadata: Metadata = {
         url: '/api/og',
         width: 1200,
         height: 630,
-        alt: 'AGI Use Cases',
+        alt: 'AGI use cases',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Use Cases',
-    description:
-      'How real teams use AGI across startups, consulting firms, IT service providers, and sales teams.',
+    title: TITLE,
+    description: DESCRIPTION,
     images: ['/api/og'],
     creator: '@agiworkforce',
   },
